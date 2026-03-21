@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.WorkerRegistryMapper">
+    <resultMap id="WorkerRegistryResultMap" type="com.example.batch.console.domain.entity.WorkerRegistryEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="worker_code" property="workerCode"/>
+        <result column="worker_group" property="workerGroup"/>
+        <result column="status" property="status"/>
+        <result column="heartbeat_at" property="heartbeatAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="WorkerRegistryResultMap">
+        select *
+        from batch.worker_registry
+        where tenant_id = #{tenantId}
+        <if test="workerGroup != null and workerGroup != ''">
+            and worker_group = #{workerGroup}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by id desc
+    </select>
+</mapper>

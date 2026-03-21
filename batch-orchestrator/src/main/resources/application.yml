@@ -1,0 +1,81 @@
+server:
+  port: ${BATCH_ORCHESTRATOR_PORT:8082}
+
+spring:
+  application:
+    name: batch-orchestrator
+  datasource:
+    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
+    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
+    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  flyway:
+    enabled: true
+    default-schema: batch
+    schemas:
+      - batch
+      - quartz
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.batch.orchestrator.domain
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  outbox:
+    batch-size: ${BATCH_OUTBOX_BATCH_SIZE:100}
+    poll-interval-millis: ${BATCH_OUTBOX_POLL_INTERVAL_MILLIS:5000}
+    retry-delay-seconds: ${BATCH_OUTBOX_RETRY_DELAY_SECONDS:60}
+  partition-lease:
+    expire-seconds: ${BATCH_PARTITION_LEASE_EXPIRE_SECONDS:60}
+    reclaim-interval-millis: ${BATCH_PARTITION_LEASE_RECLAIM_INTERVAL_MILLIS:15000}
+  retry:
+    batch-size: ${BATCH_RETRY_BATCH_SIZE:100}
+    poll-interval-millis: ${BATCH_RETRY_POLL_INTERVAL_MILLIS:10000}
+    fixed-delay-seconds: ${BATCH_RETRY_FIXED_DELAY_SECONDS:60}
+    exponential-multiplier: ${BATCH_RETRY_EXPONENTIAL_MULTIPLIER:2}
+    max-delay-seconds: ${BATCH_RETRY_MAX_DELAY_SECONDS:3600}
+    default-max-retry-count: ${BATCH_RETRY_DEFAULT_MAX_RETRY_COUNT:3}
+  resource-scheduler:
+    waiting-dispatch-batch-size: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE:100}
+    waiting-dispatch-interval-millis: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS:10000}
+  file-governance:
+    latency:
+      enabled: ${BATCH_FILE_GOVERNANCE_LATENCY_ENABLED:true}
+      poll-interval-millis: ${BATCH_FILE_GOVERNANCE_LATENCY_POLL_INTERVAL_MILLIS:30000}
+      arrival-delay-threshold-seconds: ${BATCH_FILE_GOVERNANCE_ARRIVAL_DELAY_THRESHOLD_SECONDS:600}
+      processing-delay-threshold-seconds: ${BATCH_FILE_GOVERNANCE_PROCESSING_DELAY_THRESHOLD_SECONDS:900}
+      sample-size: ${BATCH_FILE_GOVERNANCE_SAMPLE_SIZE:20}
+    archive:
+      enabled: ${BATCH_FILE_GOVERNANCE_ARCHIVE_ENABLED:true}
+      cleanup-interval-millis: ${BATCH_FILE_GOVERNANCE_ARCHIVE_CLEANUP_INTERVAL_MILLIS:60000}
+      cleanup-batch-size: ${BATCH_FILE_GOVERNANCE_ARCHIVE_CLEANUP_BATCH_SIZE:100}
+      retention-days: ${BATCH_FILE_GOVERNANCE_ARCHIVE_RETENTION_DAYS:7}
+    reconcile:
+      enabled: ${BATCH_FILE_GOVERNANCE_RECONCILE_ENABLED:true}
+      poll-interval-millis: ${BATCH_FILE_GOVERNANCE_RECONCILE_POLL_INTERVAL_MILLIS:60000}
+      batch-size: ${BATCH_FILE_GOVERNANCE_RECONCILE_BATCH_SIZE:200}
+      default-tenant-id: ${BATCH_FILE_GOVERNANCE_RECONCILE_DEFAULT_TENANT_ID:default-tenant}
+      prefix: ${BATCH_FILE_GOVERNANCE_RECONCILE_PREFIX:}
+      include-temporary-objects: ${BATCH_FILE_GOVERNANCE_RECONCILE_INCLUDE_TEMPORARY_OBJECTS:false}
+  storage:
+    minio:
+      endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
+      bucket: ${BATCH_MINIO_BUCKET:batch-dev}
+  mq:
+    topics:
+      import-dispatch: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
+      export-dispatch: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
+      dispatch-dispatch: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
+      task-result: ${BATCH_TOPIC_TASK_RESULT:batch.task.result}
+      task-retry: ${BATCH_TOPIC_TASK_RETRY:batch.task.retry}
+      dead-letter: ${BATCH_TOPIC_DEAD_LETTER:batch.task.dead-letter}

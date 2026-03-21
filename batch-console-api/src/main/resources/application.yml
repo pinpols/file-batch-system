@@ -1,0 +1,36 @@
+server:
+  port: ${BATCH_CONSOLE_API_PORT:8080}
+
+spring:
+  application:
+    name: batch-console-api
+  datasource:
+    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
+    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
+    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
+    driver-class-name: org.postgresql.Driver
+  ai:
+    openai-sdk:
+      api-key: ${OPENAI_API_KEY:}
+  security:
+    user:
+      name: ${BATCH_CONSOLE_USERNAME:admin}
+      password: ${BATCH_CONSOLE_PASSWORD:admin123}
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.batch.console.domain
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  console:
+    ai-enabled: ${BATCH_CONSOLE_AI_ENABLED:false}
+    trigger:
+      base-url: ${BATCH_TRIGGER_BASE_URL:http://localhost:8081}
+    orchestrator:
+      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}

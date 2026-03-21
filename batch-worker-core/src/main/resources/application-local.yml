@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: batch-worker-core
+  kafka:
+    bootstrap-servers: localhost:9092
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  worker:
+    heartbeat-interval-seconds: 15

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.FilePipelineStepRunMapper">
+    <select id="selectByQuery" resultType="map">
+        select
+            id,
+            pipeline_instance_id,
+            step_code,
+            stage_code,
+            run_seq,
+            step_status,
+            input_summary,
+            output_summary,
+            error_code,
+            error_message,
+            retry_count,
+            duration_ms,
+            started_at,
+            finished_at
+        from batch.pipeline_step_run
+        where 1 = 1
+        <if test="pipelineInstanceId != null">
+            and pipeline_instance_id = #{pipelineInstanceId}
+        </if>
+        <if test="stepCode != null and stepCode != ''">
+            and step_code = #{stepCode}
+        </if>
+        <if test="stageCode != null and stageCode != ''">
+            and stage_code = #{stageCode}
+        </if>
+        <if test="stepStatus != null and stepStatus != ''">
+            and step_status = #{stepStatus}
+        </if>
+        order by pipeline_instance_id desc, id desc
+    </select>
+</mapper>

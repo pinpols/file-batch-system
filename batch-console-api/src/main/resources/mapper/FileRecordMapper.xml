@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.FileRecordMapper">
+    <resultMap id="FileRecordResultMap" type="com.example.batch.console.domain.entity.FileRecordEntity">
+        <id column="id" property="id"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="FileRecordResultMap">
+        select *
+        from batch.file_record
+        where tenant_id = #{tenantId}
+        <if test="fileId != null">
+            and id = #{fileId}
+        </if>
+        <if test="bizType != null and bizType != ''">
+            and biz_type = #{bizType}
+        </if>
+        <if test="fileStatus != null and fileStatus != ''">
+            and file_status = #{fileStatus}
+        </if>
+        <if test="fileName != null and fileName != ''">
+            and file_name ilike concat('%', #{fileName}, '%')
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
+        <if test="fromTime != null">
+            and created_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and created_at &lt;= #{toTime}
+        </if>
+        order by id desc
+    </select>
+</mapper>

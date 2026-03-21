@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.PendingCatchUpMapper">
+    <resultMap id="PendingCatchUpResultMap" type="com.example.batch.console.domain.entity.PendingCatchUpEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="request_id" property="requestId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="request_status" property="requestStatus"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="PendingCatchUpResultMap">
+        select *
+        from batch.trigger_request
+        where tenant_id = #{tenantId}
+          and trigger_type = 'CATCH_UP'
+          and request_status = 'ACCEPTED'
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="requestId != null and requestId != ''">
+            and request_id = #{requestId}
+        </if>
+        order by id desc
+    </select>
+</mapper>

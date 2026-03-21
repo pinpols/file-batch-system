@@ -1,0 +1,54 @@
+package com.example.batch.orchestrator.controller;
+
+import com.example.batch.orchestrator.application.service.FileGovernanceService;
+import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/internal/files")
+@RequiredArgsConstructor
+public class FileGovernanceController {
+
+    private final FileGovernanceService fileGovernanceService;
+
+    @PostMapping("/{fileId}/archive")
+    public FileOperationResponse archive(@PathVariable Long fileId, @RequestBody FileOperationRequest request) {
+        return new FileOperationResponse(fileGovernanceService.archiveFile(toCommand(fileId, request)));
+    }
+
+    @PostMapping("/{fileId}/delete")
+    public FileOperationResponse delete(@PathVariable Long fileId, @RequestBody FileOperationRequest request) {
+        return new FileOperationResponse(fileGovernanceService.deleteFile(toCommand(fileId, request)));
+    }
+
+    @PostMapping("/{fileId}/redispatch")
+    public FileOperationResponse redispatch(@PathVariable Long fileId, @RequestBody FileOperationRequest request) {
+        return new FileOperationResponse(fileGovernanceService.redispatchFile(toCommand(fileId, request)));
+    }
+
+    private FileGovernanceCommand toCommand(Long fileId, FileOperationRequest request) {
+        return new FileGovernanceCommand(
+                request.tenantId(),
+                fileId,
+                request.channelCode(),
+                request.operatorId(),
+                request.traceId(),
+                request.reason()
+        );
+    }
+
+    public record FileOperationRequest(String tenantId,
+                                       String channelCode,
+                                       String operatorId,
+                                       String traceId,
+                                       String reason) {
+    }
+
+    public record FileOperationResponse(String status) {
+    }
+}

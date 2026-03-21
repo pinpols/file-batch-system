@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.TriggerRequestMapper">
+    <resultMap id="TriggerRequestResultMap" type="com.example.batch.orchestrator.domain.entity.TriggerRequestEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="request_id" property="requestId"/>
+        <result column="trigger_type" property="triggerType"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="dedup_key" property="dedupKey"/>
+        <result column="request_status" property="requestStatus"/>
+        <result column="related_job_instance_id" property="relatedJobInstanceId"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByTenantAndRequestId" resultMap="TriggerRequestResultMap">
+        select *
+        from batch.trigger_request
+        where tenant_id = #{tenantId}
+          and request_id = #{requestId}
+    </select>
+
+    <update id="updateAcceptance">
+        update batch.trigger_request
+        set request_status = #{requestStatus},
+            related_job_instance_id = #{relatedJobInstanceId},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and request_id = #{requestId}
+    </update>
+</mapper>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.FileChannelConfigMapper">
+    <select id="selectByQuery" resultType="map">
+        select
+            id,
+            tenant_id,
+            channel_code,
+            channel_name,
+            channel_type,
+            target_endpoint,
+            auth_type,
+            config_json,
+            receipt_policy,
+            timeout_seconds,
+            enabled,
+            created_at,
+            updated_at
+        from batch.file_channel_config
+        where tenant_id = #{tenantId}
+        <if test="channelCode != null and channelCode != ''">
+            and channel_code = #{channelCode}
+        </if>
+        <if test="channelType != null and channelType != ''">
+            and channel_type = #{channelType}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+        order by id desc
+    </select>
+</mapper>

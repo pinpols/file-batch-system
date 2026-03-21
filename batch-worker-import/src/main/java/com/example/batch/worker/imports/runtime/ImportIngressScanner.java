@@ -1,0 +1,217 @@
+package com.example.batch.worker.imports.runtime;
+
+import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
+import com.example.batch.worker.imports.config.MinioStorageProperties;
+import com.example.batch.worker.imports.config.MinioImportScannerProperties;
+import io.minio.BucketExistsArgs;
+import io.minio.ListObjectsArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.Result;
+import io.minio.messages.Item;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ImportIngressScanner {
+
+    private final PlatformFileRuntimeRepository runtimeRepository;
+    private final ImportWorkerConfiguration workerConfiguration;
+    private final MinioImportScannerProperties scannerProperties;
+    private final MinioStorageProperties minioStorageProperties;
+    private final Map<String, ObservedObjectState> observedObjects = new ConcurrentHashMap<>();
+
+    /**
+     * 扫描器只负责“安全发现 + 登记”，不绕过 Trigger/Orchestrator 直接起任务。
+     */
+    @Scheduled(fixedDelayString = "${batch.worker.import.scanner.poll-interval-millis:30000}")
+    public void scan() {
+        if (!scannerProperties.isEnabled() || !StringUtils.hasText(workerConfiguration.tenantId())) {
+            return;
+        }
+        ensureBucket();
+        Map<String, ObjectSnapshot> snapshots = listSnapshots();
+        Set<String> currentObjects = new HashSet<>(snapshots.keySet());
+        for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
+            tryRegister(entry.getValue(), currentObjects);
+        }
+        observedObjects.keySet().removeIf(existing -> !currentObjects.contains(existing));
+    }
+
+    private void tryRegister(ObjectSnapshot snapshot, Set<String> currentObjects) {
+        if (snapshot == null || snapshot.objectName().endsWith(".done")) {
+            return;
+        }
+        if (scannerProperties.isRequireDoneFile() && !currentObjects.contains(resolveDoneMarker(snapshot.objectName()))) {
+            return;
+        }
+        if (!isStable(snapshot)) {
+            return;
+        }
+        if (runtimeRepository.existsFileRecordByStoragePath(
+                workerConfiguration.tenantId(),
+                minioStorageProperties.getBucket(),
+                snapshot.objectName())) {
+            return;
+        }
+        String fileName = snapshot.objectName().contains("/")
+                ? snapshot.objectName().substring(snapshot.objectName().lastIndexOf('/') + 1)
+                : snapshot.objectName();
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("scanner", "minio-import");
+        metadata.put("doneRequired", scannerProperties.isRequireDoneFile());
+        metadata.put("stabilityWindowSeconds", scannerProperties.getStabilityWindowSeconds());
+        metadata.put("etag", snapshot.etag());
+        metadata.put("lastModified", snapshot.lastModified());
+        metadata.put("detectedAt", Instant.now().toString());
+        Long fileId = runtimeRepository.createFileRecord(
+                workerConfiguration.tenantId(),
+                null,
+                scannerProperties.getDefaultBizType(),
+                "INPUT",
+                fileName,
+                fileName,
+                resolveFileFormatType(fileName),
+                "UTF-8",
+                snapshot.size(),
+                "NONE",
+                null,
+                "S3",
+                snapshot.objectName(),
+                minioStorageProperties.getBucket(),
+                null,
+                LocalDate.now(),
+                scannerProperties.getSourceType(),
+                snapshot.objectName(),
+                "RECEIVED",
+                "import-scan-" + sanitizeTrace(fileName),
+                metadata
+        );
+        runtimeRepository.appendAudit(
+                fileId,
+                workerConfiguration.tenantId(),
+                "RECEIVE_SCAN",
+                "SUCCESS",
+                "SYSTEM",
+                "import-ingress-scanner",
+                "import-scan-" + sanitizeTrace(fileName),
+                snapshot.objectName(),
+                metadata
+        );
+        log.info("import file registered by scanner: tenantId={}, fileId={}, objectName={}",
+                workerConfiguration.tenantId(), fileId, snapshot.objectName());
+    }
+
+    private boolean isStable(ObjectSnapshot snapshot) {
+        if (scannerProperties.getStabilityWindowSeconds() <= 0) {
+            return true;
+        }
+        ObservedObjectState existing = observedObjects.get(snapshot.objectName());
+        Instant now = Instant.now();
+        if (existing == null || existing.size() != snapshot.size() || !Objects.equals(existing.etag(), snapshot.etag())) {
+            observedObjects.put(snapshot.objectName(), new ObservedObjectState(snapshot.size(), snapshot.etag(), now));
+            return false;
+        }
+        return existing.firstObservedAt().plusSeconds(scannerProperties.getStabilityWindowSeconds()).isBefore(now);
+    }
+
+    private Map<String, ObjectSnapshot> listSnapshots() {
+        Map<String, ObjectSnapshot> snapshots = new HashMap<>();
+        int count = 0;
+        try {
+            Iterable<Result<Item>> objects = minioClient().listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(minioStorageProperties.getBucket())
+                            .prefix(scannerProperties.getPrefix())
+                            .recursive(true)
+                            .build()
+            );
+            for (Result<Item> result : objects) {
+                if (count >= scannerProperties.getBatchSize()) {
+                    break;
+                }
+                Item item = result.get();
+                snapshots.put(item.objectName(), new ObjectSnapshot(
+                        item.objectName(),
+                        item.size(),
+                        item.etag(),
+                        item.lastModified() == null ? null : item.lastModified().toInstant()
+                ));
+                count++;
+            }
+            return snapshots;
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to scan minio ingress objects", exception);
+        }
+    }
+
+    private String resolveDoneMarker(String objectName) {
+        int dotIndex = objectName.lastIndexOf('.');
+        if (dotIndex > objectName.lastIndexOf('/')) {
+            return objectName.substring(0, dotIndex) + ".done";
+        }
+        return objectName + ".done";
+    }
+
+    private String resolveFileFormatType(String fileName) {
+        String lower = fileName == null ? "" : fileName.toLowerCase();
+        if (lower.endsWith(".csv")) {
+            return "DELIMITED";
+        }
+        if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+            return "EXCEL";
+        }
+        if (lower.endsWith(".xml")) {
+            return "XML";
+        }
+        if (lower.endsWith(".json")) {
+            return "JSON";
+        }
+        return "BINARY";
+    }
+
+    private String sanitizeTrace(String fileName) {
+        return fileName == null ? "object" : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    private void ensureBucket() {
+        try {
+            boolean exists = minioClient().bucketExists(
+                    BucketExistsArgs.builder().bucket(minioStorageProperties.getBucket()).build()
+            );
+            if (!exists) {
+                minioClient().makeBucket(MakeBucketArgs.builder().bucket(minioStorageProperties.getBucket()).build());
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to ensure import scanner bucket", exception);
+        }
+    }
+
+    private MinioClient minioClient() {
+        return MinioClient.builder()
+                .endpoint(minioStorageProperties.getEndpoint())
+                .credentials(minioStorageProperties.getAccessKey(), minioStorageProperties.getSecretKey())
+                .build();
+    }
+
+    private record ObjectSnapshot(String objectName, long size, String etag, Instant lastModified) {
+    }
+
+    private record ObservedObjectState(long size, String etag, Instant firstObservedAt) {
+    }
+}

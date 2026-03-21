@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.DeadLetterTaskMapper">
+    <resultMap id="DeadLetterTaskResultMap" type="com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="source_id" property="sourceId"/>
+        <result column="dead_letter_reason" property="deadLetterReason"/>
+        <result column="payload_ref" property="payloadRef"/>
+        <result column="replay_status" property="replayStatus"/>
+        <result column="replay_count" property="replayCount"/>
+        <result column="last_replay_at" property="lastReplayAt"/>
+        <result column="last_replay_result" property="lastReplayResult"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.dead_letter_task (
+            tenant_id,
+            source_type,
+            source_id,
+            dead_letter_reason,
+            payload_ref,
+            replay_status,
+            replay_count,
+            last_replay_at,
+            last_replay_result,
+            trace_id
+        ) values (
+            #{tenantId},
+            #{sourceType},
+            #{sourceId},
+            #{deadLetterReason},
+            #{payloadRef},
+            #{replayStatus},
+            #{replayCount},
+            #{lastReplayAt},
+            #{lastReplayResult},
+            #{traceId}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="DeadLetterTaskResultMap">
+        select *
+        from batch.dead_letter_task
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <update id="markReplaying">
+        update batch.dead_letter_task
+        set replay_status = #{targetStatus},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and replay_status = #{expectedStatus}
+    </update>
+
+    <update id="markReplaySuccess">
+        update batch.dead_letter_task
+        set replay_status = 'SUCCESS',
+            replay_count = #{replayCount},
+            last_replay_at = #{lastReplayAt},
+            last_replay_result = #{lastReplayResult},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="markReplayFailure">
+        update batch.dead_letter_task
+        set replay_status = #{targetStatus},
+            replay_count = #{replayCount},
+            last_replay_at = #{lastReplayAt},
+            last_replay_result = #{lastReplayResult},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+</mapper>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.RetryScheduleMapper">
+    <resultMap id="RetryScheduleResultMap" type="com.example.batch.orchestrator.domain.entity.RetryScheduleEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="related_type" property="relatedType"/>
+        <result column="related_id" property="relatedId"/>
+        <result column="retry_policy" property="retryPolicy"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="max_retry_count" property="maxRetryCount"/>
+        <result column="next_retry_at" property="nextRetryAt"/>
+        <result column="retry_status" property="retryStatus"/>
+        <result column="dedup_key" property="dedupKey"/>
+        <result column="last_error_code" property="lastErrorCode"/>
+        <result column="last_error_message" property="lastErrorMessage"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.RetryScheduleEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.retry_schedule (
+            tenant_id,
+            related_type,
+            related_id,
+            retry_policy,
+            retry_count,
+            max_retry_count,
+            next_retry_at,
+            retry_status,
+            dedup_key,
+            last_error_code,
+            last_error_message
+        ) values (
+            #{tenantId},
+            #{relatedType},
+            #{relatedId},
+            #{retryPolicy},
+            #{retryCount},
+            #{maxRetryCount},
+            #{nextRetryAt},
+            #{retryStatus},
+            #{dedupKey},
+            #{lastErrorCode},
+            #{lastErrorMessage}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="RetryScheduleResultMap">
+        select *
+        from batch.retry_schedule
+        where id = #{id}
+    </select>
+
+    <select id="selectByQuery" resultMap="RetryScheduleResultMap">
+        select *
+        from batch.retry_schedule
+        where 1 = 1
+        <if test="tenantId != null and tenantId != ''">
+            and tenant_id = #{tenantId}
+        </if>
+        <if test="retryStatus != null and retryStatus != ''">
+            and retry_status = #{retryStatus}
+        </if>
+        <if test="dueBefore != null">
+            and next_retry_at &lt;= #{dueBefore}
+        </if>
+        order by next_retry_at asc, id asc
+        <if test="batchSize != null and batchSize &gt; 0">
+            limit #{batchSize}
+        </if>
+    </select>
+
+    <update id="markRunning">
+        update batch.retry_schedule
+        set retry_status = 'RUNNING',
+            updated_at = current_timestamp
+        where id = #{id}
+          and retry_status = #{fromStatus}
+    </update>
+
+    <update id="markSuccess">
+        update batch.retry_schedule
+        set retry_status = 'SUCCESS',
+            updated_at = current_timestamp
+        where id = #{id}
+    </update>
+
+    <update id="markFailed">
+        update batch.retry_schedule
+        set retry_status = #{retryStatus},
+            last_error_code = #{lastErrorCode},
+            last_error_message = #{lastErrorMessage},
+            next_retry_at = #{nextRetryAt},
+            updated_at = current_timestamp
+        where id = #{id}
+    </update>
+</mapper>

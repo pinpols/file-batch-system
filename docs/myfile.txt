@@ -1,0 +1,9 @@
+本地连接信息是：
+
+平台库：jdbc:postgresql://localhost:5432/batch_platform
+业务库：jdbc:postgresql://localhost:5432/batch_business
+Kafka：localhost:9092
+MinIO API：http://localhost:9000
+MinIO Console：http://localhost:9001
+MinIO 用户名：minioadmin
+MinIO 密码：minioadmin123

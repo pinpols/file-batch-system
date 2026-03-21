@@ -1,0 +1,56 @@
+server:
+  port: ${BATCH_WORKER_EXPORT_PORT:8084}
+
+spring:
+  application:
+    name: batch-worker-export
+  main:
+    web-application-type: none
+  datasource:
+    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
+    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
+    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.batch.worker.exports.domain
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  orchestrator:
+    base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
+  worker:
+    type: EXPORT
+    lease:
+      renew-interval-millis: ${BATCH_WORKER_LEASE_RENEW_INTERVAL_MILLIS:10000}
+    task-client:
+      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
+    export:
+      worker-code: ${BATCH_WORKER_EXPORT_CODE:export-node-1}
+      worker-type: EXPORT
+      default-stage: PREPARE
+      batch-size: 100
+      tenant-id: ${BATCH_WORKER_EXPORT_TENANT_ID:default-tenant}
+      heartbeat-interval-millis: ${BATCH_WORKER_EXPORT_HEARTBEAT_INTERVAL_MILLIS:15000}
+      topic: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
+      consumer-group-id: ${BATCH_WORKER_EXPORT_CONSUMER_GROUP_ID:batch-worker-export}
+  datasource:
+    business:
+      url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}
+      username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
+      password: ${BATCH_BUSINESS_DB_PASSWORD:batch_pass_123}
+      schema: ${BATCH_BUSINESS_DB_SCHEMA:biz}
+  storage:
+    minio:
+      endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
+      bucket: ${BATCH_MINIO_BUCKET:batch-dev}
