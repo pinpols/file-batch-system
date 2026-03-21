@@ -1,0 +1,52 @@
+server:
+  port: 8084
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:15432/batch_platform
+    username: batch_user
+    password: batch_pass_123
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: localhost:9092
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.batch.worker.exports.domain
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  orchestrator:
+    base-url: http://localhost:8082
+  worker:
+    type: EXPORT
+    lease:
+      renew-interval-millis: 10000
+    task-client:
+      base-url: http://localhost:8082
+    export:
+      worker-code: export-node-1
+      worker-type: EXPORT
+      default-stage: PREPARE
+      batch-size: 100
+      tenant-id: default-tenant
+      heartbeat-interval-millis: 15000
+      topic: batch.task.dispatch.export
+      consumer-group-id: batch-worker-export
+  datasource:
+    business:
+      url: jdbc:postgresql://localhost:15432/batch_business
+      username: batch_user
+      password: batch_pass_123
+      schema: biz
+  storage:
+    minio:
+      endpoint: http://localhost:9000
+      access-key: minioadmin
+      secret-key: minioadmin123
+      bucket: batch-dev

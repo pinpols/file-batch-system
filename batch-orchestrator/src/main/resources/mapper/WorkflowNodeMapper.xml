@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.WorkflowNodeMapper">
+    <resultMap id="WorkflowNodeResultMap" type="com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity">
+        <id column="id" property="id"/>
+        <result column="workflow_definition_id" property="workflowDefinitionId"/>
+        <result column="node_code" property="nodeCode"/>
+        <result column="node_name" property="nodeName"/>
+        <result column="node_type" property="nodeType"/>
+        <result column="related_job_code" property="relatedJobCode"/>
+        <result column="related_pipeline_code" property="relatedPipelineCode"/>
+        <result column="worker_group" property="workerGroup"/>
+        <result column="window_code" property="windowCode"/>
+        <result column="node_order" property="nodeOrder"/>
+        <result column="retry_policy" property="retryPolicy"/>
+        <result column="retry_max_count" property="retryMaxCount"/>
+        <result column="timeout_seconds" property="timeoutSeconds"/>
+        <result column="node_params" property="nodeParams"/>
+        <result column="enabled" property="enabled"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByWorkflowDefinitionIdAndNodeCode" resultMap="WorkflowNodeResultMap">
+        select *
+        from batch.workflow_node
+        where workflow_definition_id = #{workflowDefinitionId}
+          and node_code = #{nodeCode}
+          and enabled = true
+        limit 1
+    </select>
+
+    <select id="selectByWorkflowDefinitionId" resultMap="WorkflowNodeResultMap">
+        select *
+        from batch.workflow_node
+        where workflow_definition_id = #{workflowDefinitionId}
+          and enabled = true
+        order by node_order asc, id asc
+    </select>
+</mapper>

@@ -1,0 +1,19 @@
+package com.example.batch.worker.core.domain;
+
+import java.time.OffsetDateTime;
+import lombok.Data;
+
+@Data
+public class WorkerRegistration {
+
+    private String workerId;
+    private String tenantId;
+    private String workerType;
+    private String workerGroup;
+    private String status;
+    private String host;
+    private Integer port;
+    private Boolean active;
+    private OffsetDateTime registeredAt;
+    private OffsetDateTime lastHeartbeatAt;
+}

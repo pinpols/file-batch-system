@@ -1,0 +1,6 @@
+batch:
+  worker:
+    dispatch:
+      worker-type: DISPATCH
+      default-stage: PREPARE
+      batch-size: 100

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.DeadLetterTaskMapper">
+    <resultMap id="DeadLetterTaskResultMap" type="com.example.batch.console.domain.entity.DeadLetterTaskEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="source_id" property="sourceId"/>
+        <result column="dead_letter_reason" property="deadLetterReason"/>
+        <result column="payload_ref" property="payloadRef"/>
+        <result column="replay_status" property="replayStatus"/>
+        <result column="replay_count" property="replayCount"/>
+        <result column="last_replay_at" property="lastReplayAt"/>
+        <result column="last_replay_result" property="lastReplayResult"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="DeadLetterTaskResultMap">
+        select *
+        from batch.dead_letter_task
+        where tenant_id = #{tenantId}
+        <if test="sourceType != null and sourceType != ''">
+            and source_type = #{sourceType}
+        </if>
+        <if test="replayStatus != null and replayStatus != ''">
+            and replay_status = #{replayStatus}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
+        order by id desc
+    </select>
+</mapper>

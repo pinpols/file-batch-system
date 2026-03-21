@@ -1,0 +1,142 @@
+-- =========================================================
+-- V4 - Create runtime tables
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS batch.trigger_request (
+    id                       BIGSERIAL PRIMARY KEY,
+    tenant_id                VARCHAR(64)  NOT NULL,
+    request_id               VARCHAR(128) NOT NULL,
+    trigger_type             VARCHAR(32)  NOT NULL,
+    job_code                 VARCHAR(128) NOT NULL,
+    biz_date                 DATE,
+    dedup_key                VARCHAR(256) NOT NULL,
+    request_payload_hash     VARCHAR(128),
+    request_status           VARCHAR(32)  NOT NULL,
+    related_job_instance_id  BIGINT,
+    trace_id                 VARCHAR(128),
+    created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_trigger_request_tenant_request UNIQUE (tenant_id, request_id),
+    CONSTRAINT uk_trigger_request_tenant_dedup UNIQUE (tenant_id, dedup_key),
+    CONSTRAINT ck_trigger_request_type CHECK (trigger_type IN ('API', 'MANUAL', 'EVENT', 'CATCH_UP', 'SCHEDULED')),
+    CONSTRAINT ck_trigger_request_status CHECK (request_status IN ('ACCEPTED', 'DUPLICATE', 'REJECTED', 'LAUNCHED'))
+);
+
+CREATE TABLE IF NOT EXISTS batch.job_instance (
+    id                       BIGSERIAL PRIMARY KEY,
+    tenant_id                VARCHAR(64)  NOT NULL,
+    job_definition_id        BIGINT       NOT NULL REFERENCES batch.job_definition(id),
+    trigger_request_id       BIGINT       REFERENCES batch.trigger_request(id),
+    job_code                 VARCHAR(128) NOT NULL,
+    instance_no              VARCHAR(128) NOT NULL,
+    biz_date                 DATE,
+    trigger_type             VARCHAR(32)  NOT NULL,
+    instance_status          VARCHAR(32)  NOT NULL,
+    queue_code               VARCHAR(128),
+    worker_group             VARCHAR(128),
+    priority                 INTEGER      NOT NULL DEFAULT 5,
+    dedup_key                VARCHAR(256) NOT NULL,
+    version                  BIGINT       NOT NULL DEFAULT 0,
+    expected_partition_count INTEGER      NOT NULL DEFAULT 0,
+    success_partition_count  INTEGER      NOT NULL DEFAULT 0,
+    failed_partition_count   INTEGER      NOT NULL DEFAULT 0,
+    trace_id                 VARCHAR(128),
+    params_snapshot          JSONB,
+    started_at               TIMESTAMPTZ,
+    finished_at              TIMESTAMPTZ,
+    created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_job_instance_tenant_instance_no UNIQUE (tenant_id, instance_no),
+    CONSTRAINT uk_job_instance_tenant_dedup UNIQUE (tenant_id, dedup_key),
+    CONSTRAINT ck_job_instance_trigger_type CHECK (trigger_type IN ('SCHEDULED', 'API', 'MANUAL', 'EVENT', 'CATCH_UP')),
+    CONSTRAINT ck_job_instance_status CHECK (instance_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PARTIAL_FAILED', 'SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')),
+    CONSTRAINT ck_job_instance_priority CHECK (priority BETWEEN 1 AND 9),
+    CONSTRAINT ck_job_instance_expected_partition_count CHECK (expected_partition_count >= 0),
+    CONSTRAINT ck_job_instance_success_partition_count CHECK (success_partition_count >= 0),
+    CONSTRAINT ck_job_instance_failed_partition_count CHECK (failed_partition_count >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS batch.job_partition (
+    id                       BIGSERIAL PRIMARY KEY,
+    tenant_id                VARCHAR(64)  NOT NULL,
+    job_instance_id          BIGINT       NOT NULL REFERENCES batch.job_instance(id),
+    partition_no             INTEGER      NOT NULL,
+    partition_key            VARCHAR(256),
+    partition_status         VARCHAR(32)  NOT NULL,
+    worker_group             VARCHAR(128),
+    worker_code              VARCHAR(128),
+    lease_expire_at          TIMESTAMPTZ,
+    retry_count              INTEGER      NOT NULL DEFAULT 0,
+    business_key             VARCHAR(256),
+    idempotency_key          VARCHAR(512),
+    input_snapshot           JSONB,
+    output_summary           JSONB,
+    started_at               TIMESTAMPTZ,
+    finished_at              TIMESTAMPTZ,
+    created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_job_partition_instance_no UNIQUE (job_instance_id, partition_no),
+    CONSTRAINT uk_job_partition_idempotency_key UNIQUE (tenant_id, idempotency_key),
+    CONSTRAINT ck_job_partition_status CHECK (partition_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING', 'SUCCESS', 'FAILED', 'RETRYING', 'CANCELLED', 'TERMINATED')),
+    CONSTRAINT ck_job_partition_no CHECK (partition_no >= 0),
+    CONSTRAINT ck_job_partition_retry_count CHECK (retry_count >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS batch.job_task (
+    id                       BIGSERIAL PRIMARY KEY,
+    tenant_id                VARCHAR(64)  NOT NULL,
+    job_instance_id          BIGINT       NOT NULL REFERENCES batch.job_instance(id),
+    job_partition_id         BIGINT       REFERENCES batch.job_partition(id),
+    task_type                VARCHAR(32)  NOT NULL DEFAULT 'EXECUTION',
+    task_seq                 INTEGER      NOT NULL DEFAULT 1,
+    task_status              VARCHAR(32)  NOT NULL,
+    assigned_worker_code     VARCHAR(128),
+    task_payload             JSONB,
+    result_summary           JSONB,
+    error_code               VARCHAR(64),
+    error_message            VARCHAR(2048),
+    started_at               TIMESTAMPTZ,
+    finished_at              TIMESTAMPTZ,
+    created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_job_task_partition_seq UNIQUE (job_partition_id, task_seq),
+    CONSTRAINT ck_job_task_type CHECK (task_type IN ('EXECUTION', 'COMPENSATION', 'REPLAY')),
+    CONSTRAINT ck_job_task_status CHECK (task_status IN ('CREATED', 'READY', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED')),
+    CONSTRAINT ck_job_task_seq CHECK (task_seq > 0)
+);
+
+CREATE TABLE IF NOT EXISTS batch.workflow_run (
+    id                       BIGSERIAL PRIMARY KEY,
+    tenant_id                VARCHAR(64)  NOT NULL,
+    workflow_definition_id   BIGINT       NOT NULL REFERENCES batch.workflow_definition(id),
+    related_job_instance_id  BIGINT       REFERENCES batch.job_instance(id),
+    biz_date                 DATE,
+    run_status               VARCHAR(32)  NOT NULL,
+    current_node_code        VARCHAR(128),
+    trace_id                 VARCHAR(128),
+    started_at               TIMESTAMPTZ,
+    finished_at              TIMESTAMPTZ,
+    created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_workflow_run_status CHECK (run_status IN ('CREATED', 'RUNNING', 'SUCCESS', 'FAILED', 'TERMINATED'))
+);
+
+CREATE TABLE IF NOT EXISTS batch.workflow_node_run (
+    id                       BIGSERIAL PRIMARY KEY,
+    workflow_run_id          BIGINT       NOT NULL REFERENCES batch.workflow_run(id),
+    node_code                VARCHAR(128) NOT NULL,
+    node_type                VARCHAR(32)  NOT NULL,
+    run_seq                  INTEGER      NOT NULL DEFAULT 1,
+    node_status              VARCHAR(32)  NOT NULL,
+    retry_count              INTEGER      NOT NULL DEFAULT 0,
+    error_code               VARCHAR(64),
+    error_message            VARCHAR(1024),
+    started_at               TIMESTAMPTZ,
+    finished_at              TIMESTAMPTZ,
+    duration_ms              BIGINT       NOT NULL DEFAULT 0,
+    CONSTRAINT uk_workflow_node_run UNIQUE (workflow_run_id, node_code, run_seq),
+    CONSTRAINT ck_workflow_node_run_type CHECK (node_type IN ('TASK', 'GATEWAY', 'FILE_STEP', 'START', 'END')),
+    CONSTRAINT ck_workflow_node_run_status CHECK (node_status IN ('READY', 'RUNNING', 'SUCCESS', 'FAILED', 'SKIPPED')),
+    CONSTRAINT ck_workflow_node_run_retry CHECK (retry_count >= 0),
+    CONSTRAINT ck_workflow_node_run_duration CHECK (duration_ms >= 0)
+);

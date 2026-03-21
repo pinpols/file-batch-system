@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.OutboxEventMapper">
+    <resultMap id="OutboxEventResultMap" type="com.example.batch.orchestrator.domain.entity.OutboxEventEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="aggregate_type" property="aggregateType"/>
+        <result column="aggregate_id" property="aggregateId"/>
+        <result column="event_type" property="eventType"/>
+        <result column="event_key" property="eventKey"/>
+        <result column="payload_json" property="payloadJson"/>
+        <result column="publish_status" property="publishStatus"/>
+        <result column="publish_attempt" property="publishAttempt"/>
+        <result column="next_publish_at" property="nextPublishAt"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.OutboxEventEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.outbox_event (
+            tenant_id,
+            aggregate_type,
+            aggregate_id,
+            event_type,
+            event_key,
+            payload_json,
+            publish_status,
+            publish_attempt,
+            next_publish_at,
+            trace_id
+        ) values (
+            #{tenantId},
+            #{aggregateType},
+            #{aggregateId},
+            #{eventType},
+            #{eventKey},
+            #{payloadJson},
+            #{publishStatus},
+            #{publishAttempt},
+            #{nextPublishAt},
+            #{traceId}
+        )
+    </insert>
+
+    <select id="selectPending" resultMap="OutboxEventResultMap">
+        select *
+        from batch.outbox_event
+        where 1 = 1
+        <if test="tenantId != null and tenantId != ''">
+            and tenant_id = #{tenantId}
+        </if>
+          and publish_status in ('NEW', 'FAILED')
+          and (next_publish_at is null or next_publish_at <= current_timestamp)
+        <if test="aggregateType != null and aggregateType != ''">
+            and aggregate_type = #{aggregateType}
+        </if>
+        <if test="publishStatus != null and publishStatus != ''">
+            and publish_status = #{publishStatus}
+        </if>
+        order by id asc
+    </select>
+
+    <update id="markPublishing">
+        update batch.outbox_event
+        set publish_status = 'PUBLISHING',
+            publish_attempt = publish_attempt + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and publish_status in ('NEW', 'FAILED')
+    </update>
+
+    <update id="markPublished">
+        update batch.outbox_event
+        set publish_status = 'PUBLISHED',
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="markFailed">
+        update batch.outbox_event
+        set publish_status = 'FAILED',
+            next_publish_at = #{nextPublishAt},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+</mapper>

@@ -1,0 +1,28 @@
+package com.example.batch.orchestrator.mapper;
+
+import com.example.batch.orchestrator.domain.entity.WorkflowRunEntity;
+import com.example.batch.orchestrator.domain.query.WorkflowRunQuery;
+import java.util.List;
+import org.apache.ibatis.annotations.Param;
+
+public interface WorkflowRunMapper {
+
+    int insert(WorkflowRunEntity entity);
+
+    WorkflowRunEntity selectByRelatedJobInstanceId(@Param("tenantId") String tenantId,
+                                                   @Param("relatedJobInstanceId") Long relatedJobInstanceId);
+
+    List<WorkflowRunEntity> selectByQuery(WorkflowRunQuery query);
+
+    int updateStatus(@Param("tenantId") String tenantId,
+                     @Param("id") Long id,
+                     @Param("runStatus") String runStatus,
+                     @Param("currentNodeCode") String currentNodeCode,
+                     @Param("finishedAt") java.time.Instant finishedAt);
+
+    int markRunning(@Param("tenantId") String tenantId,
+                    @Param("id") Long id,
+                    @Param("runStatus") String runStatus,
+                    @Param("currentNodeCode") String currentNodeCode,
+                    @Param("startedAt") java.time.Instant startedAt);
+}

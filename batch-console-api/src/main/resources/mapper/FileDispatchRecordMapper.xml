@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.FileDispatchRecordMapper">
+    <select id="selectByQuery" resultType="map">
+        select
+            id,
+            tenant_id,
+            file_id,
+            pipeline_instance_id,
+            channel_code,
+            dispatch_target,
+            dispatch_status,
+            dispatch_attempt,
+            receipt_code,
+            receipt_status,
+            external_request_id,
+            error_code,
+            error_message,
+            dispatched_at,
+            ack_at,
+            created_at,
+            updated_at
+        from batch.file_dispatch_record
+        where tenant_id = #{tenantId}
+        <if test="fileId != null">
+            and file_id = #{fileId}
+        </if>
+        <if test="channelCode != null and channelCode != ''">
+            and channel_code = #{channelCode}
+        </if>
+        <if test="dispatchStatus != null and dispatchStatus != ''">
+            and dispatch_status = #{dispatchStatus}
+        </if>
+        <if test="receiptStatus != null and receiptStatus != ''">
+            and receipt_status = #{receiptStatus}
+        </if>
+        <if test="fromTime != null">
+            and created_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and created_at &lt;= #{toTime}
+        </if>
+        order by id desc
+    </select>
+</mapper>

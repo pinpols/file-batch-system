@@ -1,0 +1,44 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:15432/batch_platform
+    username: batch_user
+    password: batch_pass_123
+    driver-class-name: org.postgresql.Driver
+  quartz:
+    job-store-type: jdbc
+    jdbc:
+      initialize-schema: never
+    properties:
+      org:
+        quartz:
+          scheduler:
+            instanceName: BatchTriggerScheduler
+          jobStore:
+            tablePrefix: quartz.QRTZ_
+            driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+            isClustered: true
+  flyway:
+    enabled: true
+    default-schema: batch
+    schemas:
+      - batch
+      - quartz
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  orchestrator:
+    base-url: http://localhost:8082
+  trigger:
+    runtime:
+      misfire-catch-up-threshold-seconds: 60

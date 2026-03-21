@@ -1,0 +1,8 @@
+batch:
+  worker:
+    import:
+      worker-type: IMPORT
+      default-stage: RECEIVE
+      batch-size: 100
+      tenant-id: default-tenant
+      poll-interval-millis: 3000

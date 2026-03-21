@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper">
+    <resultMap id="WorkflowNodeRunResultMap" type="com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity">
+        <id column="id" property="id"/>
+        <result column="workflow_run_id" property="workflowRunId"/>
+        <result column="node_code" property="nodeCode"/>
+        <result column="node_type" property="nodeType"/>
+        <result column="run_seq" property="runSeq"/>
+        <result column="node_status" property="nodeStatus"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="duration_ms" property="durationMs"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.workflow_node_run (
+            workflow_run_id,
+            node_code,
+            node_type,
+            run_seq,
+            node_status,
+            retry_count,
+            error_code,
+            error_message,
+            started_at,
+            finished_at,
+            duration_ms
+        ) values (
+            #{workflowRunId},
+            #{nodeCode},
+            #{nodeType},
+            #{runSeq},
+            #{nodeStatus},
+            #{retryCount},
+            #{errorCode},
+            #{errorMessage},
+            #{startedAt},
+            #{finishedAt},
+            #{durationMs}
+        )
+    </insert>
+
+    <select id="selectLatestByWorkflowRunIdAndNodeCode" resultMap="WorkflowNodeRunResultMap">
+        select *
+        from batch.workflow_node_run
+        where workflow_run_id = #{workflowRunId}
+          and node_code = #{nodeCode}
+        order by run_seq desc
+        limit 1
+    </select>
+
+    <update id="updateStatus">
+        update batch.workflow_node_run
+        set node_status = #{nodeStatus},
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            duration_ms = #{durationMs},
+            finished_at = #{finishedAt}
+        where id = #{id}
+    </update>
+
+    <select id="selectByWorkflowRunId" resultMap="WorkflowNodeRunResultMap">
+        select *
+        from batch.workflow_node_run
+        where workflow_run_id = #{workflowRunId}
+        order by run_seq asc
+    </select>
+</mapper>

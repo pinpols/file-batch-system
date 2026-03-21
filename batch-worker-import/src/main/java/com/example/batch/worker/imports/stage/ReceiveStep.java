@@ -1,0 +1,147 @@
+package com.example.batch.worker.imports.stage;
+
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.imports.domain.ImportPayload;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import com.example.batch.worker.imports.domain.ImportJobContext;
+import com.example.batch.worker.imports.domain.ImportStage;
+import com.example.batch.worker.imports.domain.ImportStageResult;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+@Component
+public class ReceiveStep implements ImportStageStep {
+
+    private final PlatformFileRuntimeRepository runtimeRepository;
+    private final ObjectMapper objectMapper;
+
+    public ReceiveStep(PlatformFileRuntimeRepository runtimeRepository, ObjectMapper objectMapper) {
+        this.runtimeRepository = runtimeRepository;
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public ImportStage stage() {
+        return ImportStage.RECEIVE;
+    }
+
+    @Override
+    public ImportStageResult execute(ImportJobContext context) {
+        if (context == null || !StringUtils.hasText(context.getTenantId()) || !StringUtils.hasText(context.getRawPayload())) {
+            return ImportStageResult.failure(stage(), "IMPORT_RECEIVE_INVALID", "tenantId or payload is blank");
+        }
+        ImportPayload importPayload = resolvePayload(context);
+        Long existingFileId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        if (existingFileId == null) {
+            String traceId = String.valueOf(context.getAttributes().getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId()));
+            String fileFormatType = normalizeFileFormat(importPayload.fileFormatType(), context.getRawPayload());
+            String fileName = resolveFileName(importPayload, fileFormatType, traceId);
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("templateCode", importPayload.templateCode());
+            metadata.put("sourceType", defaultText(importPayload.sourceType(), "UPLOAD"));
+            metadata.put("headerRows", importPayload.headerRows());
+            metadata.put("footerRows", importPayload.footerRows());
+            metadata.put("taskId", context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
+            metadata.put("withHeader", importPayload.withHeader());
+            if (importPayload.metadata() != null) {
+                metadata.putAll(importPayload.metadata());
+            }
+            Long fileId = runtimeRepository.createFileRecord(
+                    context.getTenantId(),
+                    importPayload.fileCode(),
+                    defaultText(importPayload.bizType(), context.getJobCode()),
+                    "INPUT",
+                    fileName,
+                    defaultText(importPayload.originalFileName(), fileName),
+                    fileFormatType,
+                    defaultText(importPayload.charset(), "UTF-8"),
+                    context.getRawPayload().getBytes().length,
+                    defaultText(importPayload.checksumType(), "NONE"),
+                    importPayload.checksumValue(),
+                    defaultText(importPayload.storageType(), "LOCAL"),
+                    defaultText(importPayload.storagePath(), "ingress/" + context.getTenantId() + "/" + traceId + "/" + fileName),
+                    importPayload.storageBucket(),
+                    null,
+                    parseBizDate(context.getBizDate()),
+                    defaultText(importPayload.sourceType(), "UPLOAD"),
+                    importPayload.sourceRef(),
+                    "RECEIVED",
+                    traceId,
+                    metadata
+            );
+            context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
+            context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, runtimeRepository.loadFileRecord(context.getTenantId(), fileId));
+            runtimeRepository.bindFileToPipelineInstance(
+                    runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
+                    fileId
+            );
+            context.setFileId(String.valueOf(fileId));
+        }
+        context.getAttributes().put("importPayload", importPayload);
+        return ImportStageResult.success(stage());
+    }
+
+    private ImportPayload resolvePayload(ImportJobContext context) {
+        Object existing = context.getAttributes().get("importPayload");
+        if (existing instanceof ImportPayload importPayload) {
+            return importPayload;
+        }
+        String rawPayload = context.getRawPayload();
+        if (!StringUtils.hasText(rawPayload) || !rawPayload.trim().startsWith("{")) {
+            return new ImportPayload(null, null, null, null, null, null, null, null, null, null, null,
+                    null, null, null, null, null, null, null, null, null, null, null, Map.of());
+        }
+        try {
+            ImportPayload importPayload = objectMapper.readValue(rawPayload, ImportPayload.class);
+            return importPayload == null ? new ImportPayload(null, null, null, null, null, null, null, null, null, null, null,
+                    null, null, null, null, null, null, null, null, null, null, null, Map.of()) : importPayload;
+        } catch (Exception ignored) {
+            return new ImportPayload(null, null, null, null, null, null, null, null, null, null, null,
+                    null, null, null, null, null, null, null, null, null, null, null, Map.of());
+        }
+    }
+
+    private String resolveFileName(ImportPayload payload, String fileFormatType, String traceId) {
+        if (StringUtils.hasText(payload.fileName())) {
+            return payload.fileName();
+        }
+        return "import-" + traceId + switch (fileFormatType) {
+            case "JSON" -> ".json";
+            case "DELIMITED" -> ".csv";
+            case "EXCEL" -> ".xlsx";
+            default -> ".dat";
+        };
+    }
+
+    private String normalizeFileFormat(String fileFormatType, String rawPayload) {
+        if (StringUtils.hasText(fileFormatType)) {
+            return fileFormatType.toUpperCase();
+        }
+        if (rawPayload != null && rawPayload.trim().startsWith("{")) {
+            return "JSON";
+        }
+        if (rawPayload != null && rawPayload.contains(",")) {
+            return "DELIMITED";
+        }
+        return "JSON";
+    }
+
+    private LocalDate parseBizDate(String bizDate) {
+        if (!StringUtils.hasText(bizDate)) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(bizDate);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String defaultText(String value, String fallback) {
+        return StringUtils.hasText(value) ? value : fallback;
+    }
+}

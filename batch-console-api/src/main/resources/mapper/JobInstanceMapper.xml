@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.JobInstanceMapper">
+    <resultMap id="JobInstanceResultMap" type="com.example.batch.console.domain.entity.JobInstanceEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="instance_no" property="instanceNo"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="instance_status" property="instanceStatus"/>
+        <result column="queue_code" property="queueCode"/>
+        <result column="worker_group" property="workerGroup"/>
+        <result column="priority" property="priority"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="instanceStatus != null and instanceStatus != ''">
+            and instance_status = #{instanceStatus}
+        </if>
+        order by id desc
+    </select>
+</mapper>

@@ -1,0 +1,79 @@
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:15432/batch_platform
+    username: batch_user
+    password: batch_pass_123
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: localhost:9092
+  flyway:
+    enabled: true
+    default-schema: batch
+    schemas:
+      - batch
+      - quartz
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.batch.orchestrator.domain
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  outbox:
+    batch-size: 100
+    poll-interval-millis: 5000
+    retry-delay-seconds: 60
+  partition-lease:
+    expire-seconds: 60
+    reclaim-interval-millis: 15000
+  retry:
+    batch-size: 100
+    poll-interval-millis: 10000
+    fixed-delay-seconds: 60
+    exponential-multiplier: 2
+    max-delay-seconds: 3600
+    default-max-retry-count: 3
+  resource-scheduler:
+    waiting-dispatch-batch-size: 100
+    waiting-dispatch-interval-millis: 10000
+  file-governance:
+    latency:
+      enabled: true
+      poll-interval-millis: 30000
+      arrival-delay-threshold-seconds: 600
+      processing-delay-threshold-seconds: 900
+      sample-size: 20
+    archive:
+      enabled: true
+      cleanup-interval-millis: 60000
+      cleanup-batch-size: 100
+      retention-days: 7
+    reconcile:
+      enabled: true
+      poll-interval-millis: 60000
+      batch-size: 200
+      default-tenant-id: default-tenant
+      prefix:
+      include-temporary-objects: false
+  storage:
+    minio:
+      endpoint: http://localhost:9000
+      access-key: minioadmin
+      secret-key: minioadmin123
+      bucket: batch-dev
+  mq:
+    topics:
+      import-dispatch: batch.task.dispatch.import
+      export-dispatch: batch.task.dispatch.export
+      dispatch-dispatch: batch.task.dispatch.dispatch
+      task-result: batch.task.result
+      task-retry: batch.task.retry
+      dead-letter: batch.task.dead-letter

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.JobExecutionLogMapper">
+    <resultMap id="JobExecutionLogResultMap" type="com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_instance_id" property="jobInstanceId"/>
+        <result column="job_partition_id" property="jobPartitionId"/>
+        <result column="log_level" property="logLevel"/>
+        <result column="log_type" property="logType"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="message" property="message"/>
+        <result column="detail_ref" property="detailRef"/>
+        <result column="extra_json" property="extraJson"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.job_execution_log (
+            tenant_id,
+            job_instance_id,
+            job_partition_id,
+            log_level,
+            log_type,
+            trace_id,
+            message,
+            detail_ref,
+            extra_json
+        ) values (
+            #{tenantId},
+            #{jobInstanceId},
+            #{jobPartitionId},
+            #{logLevel},
+            #{logType},
+            #{traceId},
+            #{message},
+            #{detailRef},
+            #{extraJson}
+        )
+    </insert>
+
+    <select id="selectByQuery" resultMap="JobExecutionLogResultMap">
+        select *
+        from batch.job_execution_log
+        where tenant_id = #{tenantId}
+        <if test="jobInstanceId != null">
+            and job_instance_id = #{jobInstanceId}
+        </if>
+        <if test="jobPartitionId != null">
+            and job_partition_id = #{jobPartitionId}
+        </if>
+        <if test="logType != null and logType != ''">
+            and log_type = #{logType}
+        </if>
+        order by id desc
+    </select>
+</mapper>

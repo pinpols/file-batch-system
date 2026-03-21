@@ -1,0 +1,61 @@
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:15432/batch_platform
+    username: batch_user
+    password: batch_pass_123
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: localhost:9092
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.batch.worker.imports.domain
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  orchestrator:
+    base-url: http://localhost:8082
+  worker:
+    type: IMPORT
+    lease:
+      renew-interval-millis: 10000
+    task-client:
+      base-url: http://localhost:8082
+    import:
+      worker-code: import-node-1
+      worker-type: IMPORT
+      default-stage: RECEIVE
+      batch-size: 100
+      tenant-id: default-tenant
+      heartbeat-interval-millis: 15000
+      topic: batch.task.dispatch.import
+      consumer-group-id: batch-worker-import
+      scanner:
+        enabled: true
+        poll-interval-millis: 30000
+        batch-size: 200
+        prefix: ingress/
+        require-done-file: false
+        stability-window-seconds: 30
+        source-type: SYSTEM
+        default-biz-type: IMPORT_SCAN
+  datasource:
+    business:
+      url: jdbc:postgresql://localhost:15432/batch_business
+      username: batch_user
+      password: batch_pass_123
+      schema: biz
+  storage:
+    minio:
+      endpoint: http://localhost:9000
+      access-key: minioadmin
+      secret-key: minioadmin123
+      bucket: batch-dev

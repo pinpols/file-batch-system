@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.JobPartitionMapper">
+    <resultMap id="JobPartitionResultMap" type="com.example.batch.orchestrator.domain.entity.JobPartitionEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_instance_id" property="jobInstanceId"/>
+        <result column="partition_no" property="partitionNo"/>
+        <result column="partition_key" property="partitionKey"/>
+        <result column="partition_status" property="partitionStatus"/>
+        <result column="worker_group" property="workerGroup"/>
+        <result column="worker_code" property="workerCode"/>
+        <result column="lease_expire_at" property="leaseExpireAt"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="business_key" property="businessKey"/>
+        <result column="idempotency_key" property="idempotencyKey"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="JobPartitionResultMap">
+        select *
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+        <if test="jobInstanceId != null">
+            and job_instance_id = #{jobInstanceId}
+        </if>
+        <if test="partitionStatus != null and partitionStatus != ''">
+            and partition_status = #{partitionStatus}
+        </if>
+        order by id desc
+    </select>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobPartitionEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.job_partition (
+            tenant_id,
+            job_instance_id,
+            partition_no,
+            partition_key,
+            partition_status,
+            worker_group,
+            worker_code,
+            lease_expire_at,
+            retry_count,
+            business_key,
+            idempotency_key
+        ) values (
+            #{tenantId},
+            #{jobInstanceId},
+            #{partitionNo},
+            #{partitionKey},
+            #{partitionStatus},
+            #{workerGroup},
+            #{workerCode},
+            #{leaseExpireAt},
+            #{retryCount},
+            #{businessKey},
+            #{idempotencyKey}
+        )
+    </insert>
+
+    <select id="selectByTenantAndJobInstanceIdAndPartitionNo" resultMap="JobPartitionResultMap">
+        select *
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+          and partition_no = #{partitionNo}
+    </select>
+
+    <select id="selectById" resultMap="JobPartitionResultMap">
+        select *
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <update id="claimPartition">
+        update batch.job_partition
+        set worker_code = #{workerCode},
+            partition_status = #{toStatus},
+            lease_expire_at = #{leaseExpireAt},
+            started_at = coalesce(started_at, current_timestamp),
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and partition_status = #{fromStatus}
+    </update>
+
+    <update id="renewLease">
+        update batch.job_partition
+        set lease_expire_at = #{leaseExpireAt},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and worker_code = #{workerCode}
+    </update>
+
+    <update id="markRetrying">
+        update batch.job_partition
+        set partition_status = 'RETRYING',
+            retry_count = #{retryCount},
+            worker_code = null,
+            lease_expire_at = null,
+            finished_at = null,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="markStatus">
+        update batch.job_partition
+        set partition_status = #{partitionStatus},
+            worker_code = case when #{partitionStatus} = 'RUNNING' then worker_code else null end,
+            lease_expire_at = case when #{partitionStatus} = 'RUNNING' then lease_expire_at else null end,
+            finished_at = case
+                when #{partitionStatus} in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED') then current_timestamp
+                else finished_at
+            end,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <select id="selectExpiredLeases" resultMap="JobPartitionResultMap">
+        select *
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+          and partition_status in ('READY', 'RUNNING')
+          and lease_expire_at is not null
+          and lease_expire_at < current_timestamp
+        order by id asc
+    </select>
+
+    <select id="selectExpiredLeasesGlobal" resultMap="JobPartitionResultMap">
+        select *
+        from batch.job_partition
+        where partition_status in ('READY', 'RUNNING')
+          and lease_expire_at is not null
+          and lease_expire_at < current_timestamp
+        order by id asc
+    </select>
+
+    <select id="selectWaitingPartitionsGlobal" resultMap="JobPartitionResultMap">
+        select *
+        from batch.job_partition
+        where partition_status = 'WAITING'
+        order by id asc
+        limit #{batchSize}
+    </select>
+
+    <update id="resetForDispatch">
+        update batch.job_partition
+        set partition_status = 'READY',
+            worker_code = null,
+            lease_expire_at = null,
+            started_at = null,
+            finished_at = null,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="promoteStatus">
+        update batch.job_partition
+        set partition_status = #{toStatus},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and partition_status = #{fromStatus}
+    </update>
+
+    <select id="countActiveByTenant" resultType="long">
+        select count(1)
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+          and partition_status in ('WAITING', 'READY', 'RUNNING', 'RETRYING')
+    </select>
+
+    <select id="countActiveByTenantAndWorkerGroup" resultType="long">
+        select count(1)
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+          and worker_group = #{workerGroup}
+          and partition_status in ('WAITING', 'READY', 'RUNNING', 'RETRYING')
+    </select>
+</mapper>

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.JobInstanceMapper">
+    <resultMap id="JobInstanceResultMap" type="com.example.batch.orchestrator.domain.entity.JobInstanceEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_definition_id" property="jobDefinitionId"/>
+        <result column="trigger_request_id" property="triggerRequestId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="instance_no" property="instanceNo"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="trigger_type" property="triggerType"/>
+        <result column="instance_status" property="instanceStatus"/>
+        <result column="queue_code" property="queueCode"/>
+        <result column="worker_group" property="workerGroup"/>
+        <result column="priority" property="priority"/>
+        <result column="dedup_key" property="dedupKey"/>
+        <result column="version" property="version"/>
+        <result column="expected_partition_count" property="expectedPartitionCount"/>
+        <result column="success_partition_count" property="successPartitionCount"/>
+        <result column="failed_partition_count" property="failedPartitionCount"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByInstanceNo" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and instance_no = #{instanceNo}
+    </select>
+
+    <select id="selectById" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <select id="selectByTenantAndDedupKey" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and dedup_key = #{dedupKey}
+    </select>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobInstanceEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.job_instance (
+            tenant_id,
+            job_definition_id,
+            trigger_request_id,
+            job_code,
+            instance_no,
+            biz_date,
+            trigger_type,
+            instance_status,
+            queue_code,
+            worker_group,
+            priority,
+            dedup_key,
+            version,
+            expected_partition_count,
+            success_partition_count,
+            failed_partition_count,
+            trace_id
+        ) values (
+            #{tenantId},
+            #{jobDefinitionId},
+            #{triggerRequestId},
+            #{jobCode},
+            #{instanceNo},
+            #{bizDate},
+            #{triggerType},
+            #{instanceStatus},
+            #{queueCode},
+            #{workerGroup},
+            #{priority},
+            #{dedupKey},
+            #{version},
+            #{expectedPartitionCount},
+            #{successPartitionCount},
+            #{failedPartitionCount},
+            #{traceId}
+        )
+    </insert>
+
+    <select id="selectByQuery" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="instanceStatus != null and instanceStatus != ''">
+            and instance_status = #{instanceStatus}
+        </if>
+        order by id desc
+    </select>
+
+    <update id="updateProgress">
+        update batch.job_instance
+        set instance_status = #{instanceStatus},
+            success_partition_count = #{successPartitionCount},
+            failed_partition_count = #{failedPartitionCount},
+            finished_at = #{finishedAt},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="markRunning">
+        update batch.job_instance
+        set instance_status = #{instanceStatus},
+            expected_partition_count = #{expectedPartitionCount},
+            started_at = coalesce(started_at, #{startedAt}),
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="updateExpectedPartitionCount">
+        update batch.job_instance
+        set expected_partition_count = #{expectedPartitionCount},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <select id="countActiveByTenant" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and instance_status in ('WAITING', 'READY', 'RUNNING')
+    </select>
+
+    <select id="countActiveByTenantAndQueueCode" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and queue_code = #{queueCode}
+          and instance_status in ('WAITING', 'READY', 'RUNNING')
+    </select>
+</mapper>

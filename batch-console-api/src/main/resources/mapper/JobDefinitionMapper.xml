@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.JobDefinitionMapper">
+    <resultMap id="JobDefinitionResultMap" type="com.example.batch.console.domain.entity.JobDefinitionEntity">
+        <id column="id" property="id"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="JobDefinitionResultMap">
+        select *
+        from batch.job_definition
+        where tenant_id = #{tenantId}
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="jobType != null and jobType != ''">
+            and job_type = #{jobType}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+        order by id desc
+    </select>
+</mapper>

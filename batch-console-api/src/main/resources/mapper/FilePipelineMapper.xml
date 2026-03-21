@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.FilePipelineMapper">
+    <select id="selectByQuery" resultType="map">
+        select
+            id,
+            tenant_id,
+            pipeline_definition_id,
+            pipeline_code,
+            pipeline_type,
+            file_id,
+            related_job_instance_id,
+            current_stage,
+            last_success_stage,
+            run_status,
+            trace_id,
+            started_at,
+            finished_at,
+            created_at,
+            updated_at
+        from batch.pipeline_instance
+        where tenant_id = #{tenantId}
+        <if test="fileId != null">
+            and file_id = #{fileId}
+        </if>
+        <if test="pipelineInstanceId != null">
+            and id = #{pipelineInstanceId}
+        </if>
+        <if test="pipelineType != null and pipelineType != ''">
+            and pipeline_type = #{pipelineType}
+        </if>
+        <if test="runStatus != null and runStatus != ''">
+            and run_status = #{runStatus}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
+        <if test="fromTime != null">
+            and created_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and created_at &lt;= #{toTime}
+        </if>
+        order by id desc
+    </select>
+</mapper>

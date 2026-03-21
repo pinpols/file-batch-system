@@ -1,0 +1,6 @@
+batch:
+  worker:
+    export:
+      worker-type: EXPORT
+      default-stage: PREPARE
+      batch-size: 100

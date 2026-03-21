@@ -1,0 +1,34 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:15432/batch_platform
+    username: batch_user
+    password: batch_pass_123
+    driver-class-name: org.postgresql.Driver
+  ai:
+    openai-sdk:
+      api-key: ${OPENAI_API_KEY:}
+  security:
+    user:
+      name: admin
+      password: admin123
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.batch.console.domain
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+batch:
+  console:
+    ai-enabled: false
+    trigger:
+      base-url: http://localhost:8081
+    orchestrator:
+      base-url: http://localhost:8082
