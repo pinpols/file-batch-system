@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.exports.mapper.business.SettlementExportMapper">
+    <select id="selectBatch" resultType="map">
+        select *
+        from biz.settlement_batch
+        where tenant_id = #{tenantId}
+          and batch_no = #{batchNo}
+    </select>
+
+    <select id="selectDetailsByBatchId" resultType="map">
+        select *
+        from biz.settlement_detail
+        where tenant_id = #{tenantId}
+          and batch_id = #{batchId}
+        order by id asc
+    </select>
+
+    <update id="updateBatchExported">
+        update biz.settlement_batch
+        set batch_status = 'EXPORTED',
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{batchId}
+    </update>
+
+    <update id="updateDetailsExported">
+        update biz.settlement_detail
+        set exported_version = greatest(exported_version, #{exportVersion}),
+            settlement_status = case
+                when settlement_status in ('READY', 'SETTLED') then 'EXPORTED'
+                else settlement_status
+            end,
+            source_trace_id = coalesce(#{traceId}, source_trace_id),
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and batch_id = #{batchId}
+    </update>
+</mapper>

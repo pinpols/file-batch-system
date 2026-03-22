@@ -1,0 +1,251 @@
+package com.example.batch.worker.imports.infrastructure;
+
+import com.example.batch.common.enums.ErrorSinkType;
+import com.example.batch.common.enums.SkipAction;
+import com.example.batch.common.enums.SkipThresholdMode;
+import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.imports.config.ImportSkipProperties;
+import com.example.batch.worker.imports.domain.ImportBadRecord;
+import com.example.batch.worker.imports.domain.ImportJobContext;
+import com.example.batch.worker.imports.domain.ImportStage;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+@Service
+@RequiredArgsConstructor
+public class ImportRecordGovernanceService {
+
+    private static final String BAD_RECORDS_KEY = "badRecords";
+
+    private final ImportSkipProperties skipProperties;
+    private final PlatformFileRuntimeRepository runtimeRepository;
+    private final ImportErrorOutputStorage errorOutputStorage;
+
+    public boolean isSkipEnabled() {
+        return skipProperties != null && skipProperties.enabled();
+    }
+
+    public boolean isSkippable(String errorCode) {
+        if (!isSkipEnabled() || !StringUtils.hasText(errorCode)) {
+            return false;
+        }
+        Set<String> allowedErrorCodes = resolveAllowedErrorCodes();
+        return allowedErrorCodes.isEmpty() || allowedErrorCodes.contains(errorCode);
+    }
+
+    public boolean shouldFailOnSkip(String errorCode) {
+        SkipAction action = resolveSkipAction();
+        return action == SkipAction.FAIL_BATCH && isSkippable(errorCode);
+    }
+
+    public boolean shouldManualReview() {
+        return resolveSkipAction() == SkipAction.MANUAL_REVIEW;
+    }
+
+    public void recordSkippedRecord(ImportJobContext context,
+                                   ImportStage stage,
+                                   Long recordNo,
+                                   String errorCode,
+                                   String errorMessage,
+                                   Object rawRecord) {
+        recordBadRecord(context, stage, recordNo, errorCode, errorMessage, rawRecord, true);
+    }
+
+    public void recordFailedRecord(ImportJobContext context,
+                                   ImportStage stage,
+                                   Long recordNo,
+                                   String errorCode,
+                                   String errorMessage,
+                                   Object rawRecord) {
+        recordBadRecord(context, stage, recordNo, errorCode, errorMessage, rawRecord, false);
+    }
+
+    public void recordThresholdViolation(ImportJobContext context, ImportStage stage, String errorCode, String message) {
+        recordBadRecord(context, stage, null, errorCode, message, null, false);
+        context.getAttributes().put("skipThresholdExceeded", true);
+    }
+
+    public boolean withinThreshold(ImportJobContext context) {
+        if (!isSkipEnabled()) {
+            return true;
+        }
+        long skippedCount = numberValue(context.getAttributes().get("skippedCount"));
+        long totalCount = numberValue(context.getAttributes().get("totalCount"));
+        SkipThresholdMode mode = resolveThresholdMode();
+        if (mode == SkipThresholdMode.PERCENTAGE) {
+            double rate = totalCount <= 0 ? 0D : (double) skippedCount / (double) totalCount;
+            return rate <= Math.max(0D, skipProperties.maxSkipRate());
+        }
+        return skippedCount <= Math.max(0, skipProperties.maxSkipCount());
+    }
+
+    public void finalizeErrorOutput(ImportJobContext context) {
+        List<ImportBadRecord> badRecords = badRecords(context);
+        if (badRecords.isEmpty()) {
+            return;
+        }
+        Long fileId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        if (fileId == null || !StringUtils.hasText(context.getTenantId())) {
+            return;
+        }
+        String errorOutputPath = null;
+        ErrorSinkType sinkType = resolveErrorSinkType();
+        if (sinkType == ErrorSinkType.ERROR_FILE || sinkType == ErrorSinkType.BOTH) {
+            errorOutputPath = errorOutputStorage.writeErrorOutput(context.getTenantId(), String.valueOf(fileId), badRecords);
+        }
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("badRecordCount", badRecords.size());
+        metadata.put("successCount", numberValue(context.getAttributes().get("successCount")));
+        metadata.put("skippedCount", numberValue(context.getAttributes().get("skippedCount")));
+        metadata.put("failedCount", numberValue(context.getAttributes().get("failedCount")));
+        metadata.put("totalCount", numberValue(context.getAttributes().get("totalCount")));
+        metadata.put("skipThresholdExceeded", Boolean.TRUE.equals(context.getAttributes().get("skipThresholdExceeded")));
+        metadata.put("manualReviewRequired", Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")) || shouldManualReview());
+        if (StringUtils.hasText(errorOutputPath)) {
+            metadata.put("errorOutputPath", errorOutputPath);
+        }
+        runtimeRepository.updateFileMetadata(fileId, metadata);
+        runtimeRepository.appendAudit(
+                fileId,
+                context.getTenantId(),
+                "BAD_RECORD_GOVERNANCE",
+                "SUCCESS",
+                "SYSTEM",
+                context.getWorkerId(),
+                stringValue(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
+                "import-error-output",
+                metadata
+        );
+    }
+
+    private void recordBadRecord(ImportJobContext context,
+                                 ImportStage stage,
+                                 Long recordNo,
+                                 String errorCode,
+                                 String errorMessage,
+                                 Object rawRecord,
+                                 boolean skipped) {
+        ImportBadRecord badRecord = new ImportBadRecord();
+        badRecord.setRecordNo(recordNo);
+        badRecord.setStageCode(stage == null ? null : stage.name());
+        badRecord.setErrorCode(errorCode);
+        badRecord.setErrorMessage(errorMessage);
+        badRecord.setRawRecord(rawRecord);
+        badRecord.setSkipped(skipped);
+        badRecord.setSkipAction(resolveSkipAction().getCode());
+        badRecords(context).add(badRecord);
+
+        if (skipped) {
+            increment(context, "skippedCount");
+        } else {
+            increment(context, "failedCount");
+        }
+
+        Long fileId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        Long pipelineInstanceId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        Long pipelineStepRunId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
+        runtimeRepository.insertFileErrorRecord(
+                fileId,
+                pipelineInstanceId,
+                pipelineStepRunId,
+                recordNo,
+                errorCode,
+                errorMessage,
+                stage == null ? null : stage.name(),
+                skipped,
+                resolveSkipAction().getCode(),
+                rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord
+        );
+
+        if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
+            context.getAttributes().put("manualReviewRequired", true);
+        }
+        if (!skipped) {
+            context.getAttributes().put("lastBadRecord", badRecord);
+        }
+        context.getAttributes().put("lastProcessedRecordNo", recordNo);
+        context.getAttributes().put("lastErrorCode", errorCode);
+        context.getAttributes().put("lastErrorMessage", errorMessage);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ImportBadRecord> badRecords(ImportJobContext context) {
+        Object existing = context.getAttributes().get(BAD_RECORDS_KEY);
+        if (existing instanceof List<?> list) {
+            List<ImportBadRecord> resolved = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof ImportBadRecord badRecord) {
+                    resolved.add(badRecord);
+                }
+            }
+            if (!resolved.isEmpty()) {
+                return resolved;
+            }
+        }
+        List<ImportBadRecord> created = new ArrayList<>();
+        context.getAttributes().put(BAD_RECORDS_KEY, created);
+        return created;
+    }
+
+    private long increment(ImportJobContext context, String key) {
+        long value = numberValue(context.getAttributes().get(key)) + 1;
+        context.getAttributes().put(key, value);
+        return value;
+    }
+
+    private long numberValue(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return 0L;
+        }
+        String text = String.valueOf(value);
+        if (!StringUtils.hasText(text)) {
+            return 0L;
+        }
+        return Long.parseLong(text);
+    }
+
+    private Set<String> resolveAllowedErrorCodes() {
+        if (!StringUtils.hasText(skipProperties.skipErrorCodes())) {
+            return Set.of();
+        }
+        Set<String> codes = new HashSet<>();
+        for (String item : skipProperties.skipErrorCodes().split(",")) {
+            String code = item.trim();
+            if (StringUtils.hasText(code)) {
+                codes.add(code);
+            }
+        }
+        return codes;
+    }
+
+    private SkipThresholdMode resolveThresholdMode() {
+        SkipThresholdMode mode = SkipThresholdMode.fromCode(skipProperties.thresholdMode());
+        return mode == null ? SkipThresholdMode.ABSOLUTE : mode;
+    }
+
+    private SkipAction resolveSkipAction() {
+        SkipAction action = SkipAction.fromCode(skipProperties.skipAction());
+        return action == null ? SkipAction.CONTINUE : action;
+    }
+
+    private ErrorSinkType resolveErrorSinkType() {
+        ErrorSinkType sinkType = ErrorSinkType.fromCode(skipProperties.errorSinkType());
+        return sinkType == null ? ErrorSinkType.BOTH : sinkType;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+}

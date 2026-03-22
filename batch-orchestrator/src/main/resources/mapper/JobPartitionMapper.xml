@@ -14,6 +14,8 @@
         <result column="retry_count" property="retryCount"/>
         <result column="business_key" property="businessKey"/>
         <result column="idempotency_key" property="idempotencyKey"/>
+        <result column="input_snapshot" property="inputSnapshot"/>
+        <result column="output_summary" property="outputSummary"/>
         <result column="started_at" property="startedAt"/>
         <result column="finished_at" property="finishedAt"/>
         <result column="created_at" property="createdAt"/>
@@ -46,7 +48,9 @@
             lease_expire_at,
             retry_count,
             business_key,
-            idempotency_key
+            idempotency_key,
+            input_snapshot,
+            output_summary
         ) values (
             #{tenantId},
             #{jobInstanceId},
@@ -58,7 +62,9 @@
             #{leaseExpireAt},
             #{retryCount},
             #{businessKey},
-            #{idempotencyKey}
+            #{idempotencyKey},
+            #{inputSnapshot},
+            #{outputSummary}
         )
     </insert>
 
@@ -105,6 +111,22 @@
             worker_code = null,
             lease_expire_at = null,
             finished_at = null,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="updateOutputSummary">
+        update batch.job_partition
+        set output_summary = #{outputSummary},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <update id="updateInputSnapshot">
+        update batch.job_partition
+        set input_snapshot = #{inputSnapshot},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}

@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.dispatchs.mapper.FileDispatchMapper">
+    <select id="selectFileRecord" resultType="map">
+        select *
+        from batch.file_record
+        where tenant_id = #{tenantId}
+          and id = #{fileId}
+    </select>
+
+    <select id="selectChannelConfig" resultType="map">
+        select *
+        from batch.file_channel_config
+        where tenant_id = #{tenantId}
+          and channel_code = #{channelCode}
+    </select>
+
+    <select id="selectLatestDispatchRecord" resultType="map">
+        select *
+        from batch.file_dispatch_record
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and channel_code = #{channelCode}
+        order by id desc
+        limit 1
+    </select>
+
+    <insert id="insertDispatchRecord">
+        insert into batch.file_dispatch_record (
+            tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target, dispatch_status,
+            dispatch_attempt, receipt_code, receipt_status, external_request_id
+        ) values (
+            #{tenantId}, #{fileId}, #{pipelineInstanceId}, #{channelCode}, #{dispatchTarget}, 'CREATED',
+            1, #{receiptCode}, #{receiptStatus}, #{externalRequestId}
+        )
+    </insert>
+
+    <update id="incrementAttempt">
+        update batch.file_dispatch_record
+        set dispatch_attempt = dispatch_attempt + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and channel_code = #{channelCode}
+    </update>
+
+    <update id="markSent">
+        update batch.file_dispatch_record
+        set dispatch_status = 'SENT',
+            external_request_id = #{externalRequestId},
+            receipt_code = coalesce(#{receiptCode}, receipt_code),
+            receipt_status = #{receiptStatus},
+            dispatched_at = current_timestamp,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and channel_code = #{channelCode}
+    </update>
+
+    <update id="markAcked">
+        update batch.file_dispatch_record
+        set dispatch_status = 'ACKED',
+            receipt_status = 'SUCCESS',
+            receipt_code = #{receiptCode},
+            ack_at = current_timestamp,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and channel_code = #{channelCode}
+    </update>
+
+    <update id="markFailed">
+        update batch.file_dispatch_record
+        set dispatch_status = 'FAILED',
+            receipt_status = 'FAILED',
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and channel_code = #{channelCode}
+    </update>
+
+    <update id="markCompensated">
+        update batch.file_dispatch_record
+        set dispatch_status = 'COMPENSATED',
+            receipt_status = case
+                when receipt_status = 'SUCCESS' then receipt_status
+                else 'FAILED'
+            end,
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and channel_code = #{channelCode}
+    </update>
+</mapper>

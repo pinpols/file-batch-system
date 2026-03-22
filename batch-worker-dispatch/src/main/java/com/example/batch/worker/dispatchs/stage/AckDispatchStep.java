@@ -51,6 +51,12 @@ public class AckDispatchStep implements DispatchStageStep {
                     receiptCode == null ? "ACK-" + fileId : receiptCode
             );
             if (updated <= 0) {
+                context.getAttributes().put(
+                        PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE,
+                        Boolean.TRUE.equals(context.getAttributes().get("retryRequested"))
+                                ? DispatchStage.RETRY.name()
+                                : DispatchStage.COMPENSATE.name()
+                );
                 return DispatchStageResult.failure(stage(), "DISPATCH_ACK_FAILED", "failed to mark acked");
             }
             runtimeRepository.updateFileStatus(fileId, "DISPATCHED", buildFileMetadata(dispatchPayload, context, receiptCode));

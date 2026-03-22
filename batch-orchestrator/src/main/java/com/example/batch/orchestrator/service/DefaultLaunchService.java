@@ -6,6 +6,7 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowRunStatus;
@@ -25,8 +26,6 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.domain.entity.TriggerRequestEntity;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.domain.entity.WorkflowRunEntity;
@@ -41,7 +40,12 @@ import com.example.batch.orchestrator.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,8 +61,6 @@ public class DefaultLaunchService implements LaunchService {
     private final JobDefinitionRepository jobDefinitionRepository;
     private final WorkflowDefinitionRepository workflowDefinitionRepository;
     private final JobInstanceMapper jobInstanceMapper;
-    private final JobPartitionMapper jobPartitionMapper;
-    private final JobTaskMapper jobTaskMapper;
     private final WorkflowRunMapper workflowRunMapper;
     private final WorkflowNodeRunMapper workflowNodeRunMapper;
     private final SchedulePlanBuilder schedulePlanBuilder;
@@ -99,6 +101,7 @@ public class DefaultLaunchService implements LaunchService {
         }
 
         String traceId = request.traceId() == null || request.traceId().isBlank() ? IdGenerator.newTraceId() : request.traceId();
+        Map<String, Object> effectiveParams = mergeLaunchParams(jobDefinition, request.params());
 
         JobInstanceEntity jobInstance = new JobInstanceEntity();
         jobInstance.setTenantId(request.tenantId());
@@ -109,6 +112,13 @@ public class DefaultLaunchService implements LaunchService {
         jobInstance.setBizDate(request.bizDate());
         jobInstance.setTriggerType(request.triggerType().code());
         jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
+        jobInstance.setBatchNo(resolveBatchNo(request.bizDate(), effectiveParams));
+        jobInstance.setOperatorId(resolveOperatorId(effectiveParams));
+        jobInstance.setRerunFlag(resolveRerunFlag(request.triggerType(), effectiveParams));
+        jobInstance.setRetryFlag(resolveRetryFlag(effectiveParams));
+        jobInstance.setRerunReason(resolveRerunReason(effectiveParams));
+        jobInstance.setRelatedFileId(resolveRelatedFileId(effectiveParams));
+        jobInstance.setParentInstanceId(resolveParentInstanceId(effectiveParams));
         jobInstance.setQueueCode(jobDefinition.getQueueCode());
         jobInstance.setWorkerGroup(jobDefinition.getWorkerGroup());
         jobInstance.setPriority(jobDefinition.getPriority() == null ? 5 : jobDefinition.getPriority());
@@ -118,6 +128,11 @@ public class DefaultLaunchService implements LaunchService {
         jobInstance.setSuccessPartitionCount(0);
         jobInstance.setFailedPartitionCount(0);
         jobInstance.setTraceId(traceId);
+        jobInstance.setParamsSnapshot(buildParamsSnapshot(jobDefinition, request, effectiveParams, traceId));
+        jobInstance.setResultSummary(null);
+        jobInstance.setDeadlineAt(resolveDeadlineAt(request.bizDate(), effectiveParams));
+        jobInstance.setExpectedDurationSeconds(resolveExpectedDurationSeconds(jobDefinition, effectiveParams));
+        jobInstance.setSlaAlertedAt(null);
         jobInstanceMapper.insert(jobInstance);
 
         WorkflowRunEntity workflowRun = new WorkflowRunEntity();
@@ -128,7 +143,7 @@ public class DefaultLaunchService implements LaunchService {
         workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
         List<WorkflowDagService.DagNodeResolution> initialNodes = workflowDagService.resolveInitialNodes(
                 workflowDefinition.getId(),
-                buildPayloadJson(request.params())
+                buildPayloadJson(effectiveParams)
         );
         workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
         workflowRun.setTraceId(traceId);
@@ -136,7 +151,7 @@ public class DefaultLaunchService implements LaunchService {
 
         Instant startedAt = Instant.now();
         bootstrapWorkflowRuns(workflowRun.getId(), startedAt);
-        initializeDispatchRuntime(request, traceId, jobInstance, workflowRun, initialNodes, startedAt);
+        initializeDispatchRuntime(request, effectiveParams, traceId, jobInstance, workflowRun, initialNodes, startedAt);
 
         triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(), BatchStatusConstants.LAUNCHED, jobInstance.getId());
         return new LaunchResponse(jobInstance.getInstanceNo(), traceId);
@@ -146,6 +161,7 @@ public class DefaultLaunchService implements LaunchService {
      * Launch 只负责初始化运行态和任务分发，不把 Kafka 当状态事实来源。
      */
     private void initializeDispatchRuntime(LaunchRequest request,
+                                           Map<String, Object> effectiveParams,
                                            String traceId,
                                            JobInstanceEntity jobInstance,
                                            WorkflowRunEntity workflowRun,
@@ -153,7 +169,7 @@ public class DefaultLaunchService implements LaunchService {
                                            Instant startedAt) {
         boolean dispatchable = true;
         int partitionCount;
-        String sourcePayload = buildPayloadJson(request.params());
+        String sourcePayload = buildPayloadJson(effectiveParams);
         if (initialNodes != null && !initialNodes.isEmpty()) {
             partitionCount = 0;
             for (WorkflowDagService.DagNodeResolution initialNode : initialNodes) {
@@ -173,7 +189,7 @@ public class DefaultLaunchService implements LaunchService {
                     request.tenantId(),
                     request.jobCode(),
                     request.bizDate().toString(),
-                    request.params()
+                    effectiveParams
             ));
             ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
             if (decision.isFailFast()) {
@@ -185,7 +201,7 @@ public class DefaultLaunchService implements LaunchService {
                     jobInstance.getId(),
                     decision.getPartitionStatus()
             );
-            createTasksAndMaybeOutboxEvents(request, traceId, jobInstance, plan, partitions, decision);
+            createTasksAndMaybeOutboxEvents(request, effectiveParams, traceId, jobInstance, plan, partitions, decision);
             partitionCount = partitions.size();
             dispatchable = decision.isDispatchable();
         }
@@ -193,6 +209,7 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private void createTasksAndMaybeOutboxEvents(LaunchRequest request,
+                                                 Map<String, Object> effectiveParams,
                                                  String traceId,
                                                  JobInstanceEntity jobInstance,
                                                  SchedulePlan plan,
@@ -202,9 +219,14 @@ public class DefaultLaunchService implements LaunchService {
             return;
         }
         for (JobPartitionEntity partition : partitions) {
-            JobTaskEntity task = buildTask(request, jobInstance, plan, partition, decision);
+            JobTaskEntity task = buildTask(request, jobInstance, plan, partition, decision, effectiveParams);
             taskExecutionService.createTask(task);
-            if (decision.isDispatchable() && releasePartitionForDispatch(partition, task)) {
+            if (decision.isDispatchable() && partitionLifecycleService.releaseForDispatch(
+                    partition,
+                    task,
+                    com.example.batch.common.enums.PartitionStatus.CREATED.code(),
+                    TaskStatus.CREATED.code()
+            )) {
                 taskDispatchOutboxService.writeDispatchEvent(
                         jobInstance,
                         task,
@@ -220,7 +242,8 @@ public class DefaultLaunchService implements LaunchService {
                                     JobInstanceEntity jobInstance,
                                     SchedulePlan plan,
                                     JobPartitionEntity partition,
-                                    ResourceSchedulingDecision decision) {
+                                    ResourceSchedulingDecision decision,
+                                    Map<String, Object> effectiveParams) {
         JobTaskEntity task = new JobTaskEntity();
         task.setTenantId(request.tenantId());
         task.setJobInstanceId(jobInstance.getId());
@@ -231,7 +254,7 @@ public class DefaultLaunchService implements LaunchService {
         task.setTaskStatus(decision == null || decision.getTaskStatus() == null
                 ? TaskStatus.READY.code()
                 : decision.getTaskStatus());
-        task.setTaskPayload(buildPayloadJson(request.params()));
+        task.setTaskPayload(buildPayloadJson(effectiveParams));
         return task;
     }
 
@@ -315,13 +338,18 @@ public class DefaultLaunchService implements LaunchService {
                                    boolean dispatchable,
                                    Instant startedAt) {
         if (dispatchable) {
-            jobInstanceMapper.markRunning(
+            int updated = jobInstanceMapper.markRunning(
                     tenantId,
                     jobInstance.getId(),
                     stateMachine.transition(jobInstance, "START").toState(),
                     partitionCount,
-                    startedAt
+                    startedAt,
+                    jobInstance.getVersion()
             );
+            if (updated <= 0) {
+                throw new BizException(ResultCode.STATE_CONFLICT, "job instance launch transition conflict");
+            }
+            jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
             workflowRunMapper.markRunning(
                     tenantId,
                     workflowRun.getId(),
@@ -331,13 +359,18 @@ public class DefaultLaunchService implements LaunchService {
             );
             return;
         }
-        jobInstanceMapper.markRunning(
+        int updated = jobInstanceMapper.markRunning(
                 tenantId,
                 jobInstance.getId(),
                 JobInstanceStatus.WAITING.code(),
                 partitionCount,
-                null
+                null,
+                jobInstance.getVersion()
         );
+        if (updated <= 0) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "job instance waiting transition conflict");
+        }
+        jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
         workflowRunMapper.markRunning(
                 tenantId,
                 workflowRun.getId(),
@@ -352,6 +385,27 @@ public class DefaultLaunchService implements LaunchService {
         return JsonUtils.toJson(payload);
     }
 
+    private String buildParamsSnapshot(JobDefinitionRecord jobDefinition,
+                                       LaunchRequest request,
+                                       Map<String, Object> effectiveParams,
+                                       String traceId) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("jobDefinitionId", jobDefinition == null ? null : jobDefinition.getId());
+        snapshot.put("jobCode", request.jobCode());
+        snapshot.put("triggerType", request.triggerType() == null ? null : request.triggerType().code());
+        snapshot.put("traceId", traceId);
+        snapshot.put("priorityOrder", List.of("defaultParams", "requestParams", "effectiveParams"));
+        snapshot.put("paramSchema", jobDefinition == null || jobDefinition.getParamSchema() == null
+                ? Map.of()
+                : jobDefinition.getParamSchema());
+        snapshot.put("defaultParams", jobDefinition == null || jobDefinition.getDefaultParams() == null
+                ? Map.of()
+                : jobDefinition.getDefaultParams());
+        snapshot.put("requestParams", request.params() == null ? Map.of() : request.params());
+        snapshot.put("effectiveParams", effectiveParams == null ? Map.of() : effectiveParams);
+        return JsonUtils.toJson(snapshot);
+    }
+
     private String resolveInitialCurrentNode(List<WorkflowDagService.DagNodeResolution> initialNodes) {
         if (initialNodes == null || initialNodes.isEmpty()) {
             return WorkflowNodeCode.START.code();
@@ -364,37 +418,6 @@ public class DefaultLaunchService implements LaunchService {
             activeNodes.add(initialNode.nodeCode());
         }
         return activeNodes.isEmpty() ? WorkflowNodeCode.START.code() : String.join(",", activeNodes);
-    }
-
-    private boolean releasePartitionForDispatch(JobPartitionEntity partition, JobTaskEntity task) {
-        if (partition == null || task == null) {
-            return false;
-        }
-        if (jobPartitionMapper.promoteStatus(
-                partition.getTenantId(),
-                partition.getId(),
-                com.example.batch.common.enums.PartitionStatus.CREATED.code(),
-                com.example.batch.common.enums.PartitionStatus.READY.code()
-        ) <= 0) {
-            return false;
-        }
-        if (jobTaskMapper.promoteStatus(
-                task.getTenantId(),
-                task.getId(),
-                TaskStatus.CREATED.code(),
-                TaskStatus.READY.code()
-        ) <= 0) {
-            return false;
-        }
-        JobPartitionEntity readyPartition = jobPartitionMapper.selectById(partition.getTenantId(), partition.getId());
-        JobTaskEntity readyTask = jobTaskMapper.selectById(task.getTenantId(), task.getId());
-        if (readyPartition != null) {
-            partition.setPartitionStatus(readyPartition.getPartitionStatus());
-        }
-        if (readyTask != null) {
-            task.setTaskStatus(readyTask.getTaskStatus());
-        }
-        return true;
     }
 
     private void validate(LaunchRequest request) {
@@ -413,5 +436,201 @@ public class DefaultLaunchService implements LaunchService {
         if (request.triggerType() == null) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "triggerType is required");
         }
+    }
+
+    private Map<String, Object> mergeLaunchParams(JobDefinitionRecord jobDefinition, Map<String, Object> runtimeParams) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (jobDefinition != null && jobDefinition.getDefaultParams() != null) {
+            merged.putAll(jobDefinition.getDefaultParams());
+        }
+        if (runtimeParams != null) {
+            merged.putAll(runtimeParams);
+        }
+        return merged;
+    }
+
+    private Integer resolveExpectedDurationSeconds(JobDefinitionRecord jobDefinition, Map<String, Object> params) {
+        Integer explicitValue = firstPositiveInt(
+                params.get("expectedDurationSeconds"),
+                params.get("expected_duration_seconds"),
+                params.get("expectedDuration"),
+                params.get("slaExpectedDurationSeconds")
+        );
+        if (explicitValue != null) {
+            return explicitValue;
+        }
+        if (jobDefinition != null && jobDefinition.getTimeoutSeconds() != null && jobDefinition.getTimeoutSeconds() > 0) {
+            return jobDefinition.getTimeoutSeconds();
+        }
+        return 0;
+    }
+
+    private String resolveBatchNo(LocalDate bizDate, Map<String, Object> params) {
+        Object explicitValue = firstNonNull(params.get("batchNo"), params.get("batch_no"), params.get("batchCode"));
+        if (explicitValue != null && !String.valueOf(explicitValue).isBlank()) {
+            return String.valueOf(explicitValue).trim();
+        }
+        return bizDate == null ? null : bizDate.toString();
+    }
+
+    private String resolveOperatorId(Map<String, Object> params) {
+        Object explicitValue = firstNonNull(params.get("operatorId"), params.get("operator"), params.get("userId"));
+        return explicitValue == null ? null : String.valueOf(explicitValue).trim();
+    }
+
+    private boolean resolveRerunFlag(TriggerType triggerType, Map<String, Object> params) {
+        if (toBoolean(params.get("rerunFlag"))) {
+            return true;
+        }
+        String operationType = textValue(params.get("operationType"));
+        return TriggerType.CATCH_UP == triggerType
+                || "RERUN".equalsIgnoreCase(operationType)
+                || "JOB_RERUN".equalsIgnoreCase(operationType)
+                || "BATCH_RERUN".equalsIgnoreCase(operationType);
+    }
+
+    private boolean resolveRetryFlag(Map<String, Object> params) {
+        if (toBoolean(params.get("retryFlag"))) {
+            return true;
+        }
+        String operationType = textValue(params.get("operationType"));
+        return "RETRY".equalsIgnoreCase(operationType)
+                || "PARTITION_RETRY".equalsIgnoreCase(operationType)
+                || "DLQ_REPLAY".equalsIgnoreCase(operationType);
+    }
+
+    private String resolveRerunReason(Map<String, Object> params) {
+        Object explicitValue = firstNonNull(params.get("rerunReason"), params.get("reason"));
+        return explicitValue == null ? null : String.valueOf(explicitValue).trim();
+    }
+
+    private Long resolveRelatedFileId(Map<String, Object> params) {
+        return toPositiveLong(firstNonNull(params.get("relatedFileId"), params.get("fileId"), params.get("sourceFileId")));
+    }
+
+    private Long resolveParentInstanceId(Map<String, Object> params) {
+        return toPositiveLong(firstNonNull(params.get("parentInstanceId"), params.get("targetInstanceId")));
+    }
+
+    private Instant resolveDeadlineAt(LocalDate bizDate, Map<String, Object> params) {
+        Instant explicitDeadline = parseDeadlineInstant(firstNonNull(
+                params.get("deadlineAt"),
+                params.get("deadline"),
+                params.get("slaDeadlineAt")
+        ), bizDate);
+        if (explicitDeadline != null) {
+            return explicitDeadline;
+        }
+        return parseDeadlineInstant(params.get("deadlineTime"), bizDate);
+    }
+
+    private Object firstNonNull(Object... candidates) {
+        for (Object candidate : candidates) {
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private Integer firstPositiveInt(Object... candidates) {
+        for (Object candidate : candidates) {
+            Integer value = toPositiveInt(candidate);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private Integer toPositiveInt(Object candidate) {
+        if (candidate instanceof Number number) {
+            int value = number.intValue();
+            return value > 0 ? value : null;
+        }
+        if (candidate == null) {
+            return null;
+        }
+        String text = String.valueOf(candidate).trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            int value = Integer.parseInt(text);
+            return value > 0 ? value : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Long toPositiveLong(Object candidate) {
+        if (candidate instanceof Number number) {
+            long value = number.longValue();
+            return value > 0 ? value : null;
+        }
+        if (candidate == null) {
+            return null;
+        }
+        String text = String.valueOf(candidate).trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            long value = Long.parseLong(text);
+            return value > 0 ? value : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private boolean toBoolean(Object candidate) {
+        if (candidate instanceof Boolean bool) {
+            return bool;
+        }
+        return "true".equalsIgnoreCase(textValue(candidate))
+                || "1".equals(textValue(candidate))
+                || "Y".equalsIgnoreCase(textValue(candidate));
+    }
+
+    private String textValue(Object candidate) {
+        if (candidate == null) {
+            return null;
+        }
+        String text = String.valueOf(candidate).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private Instant parseDeadlineInstant(Object value, LocalDate bizDate) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime.atZone(ZoneId.systemDefault()).toInstant();
+        }
+        if (value instanceof LocalTime localTime) {
+            LocalDate effectiveDate = bizDate == null ? LocalDate.now() : bizDate;
+            return effectiveDate.atTime(localTime).atZone(ZoneId.systemDefault()).toInstant();
+        }
+        String text = String.valueOf(value).trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return Instant.parse(text);
+        } catch (Exception ignored) {
+        }
+        try {
+            return LocalDateTime.parse(text).atZone(ZoneId.systemDefault()).toInstant();
+        } catch (Exception ignored) {
+        }
+        try {
+            LocalDate effectiveDate = bizDate == null ? LocalDate.now() : bizDate;
+            return effectiveDate.atTime(LocalTime.parse(text)).atZone(ZoneId.systemDefault()).toInstant();
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 }

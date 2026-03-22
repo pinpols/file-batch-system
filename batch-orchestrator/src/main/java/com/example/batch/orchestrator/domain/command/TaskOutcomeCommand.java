@@ -4,6 +4,7 @@ public record TaskOutcomeCommand(
         String tenantId,
         Long taskId,
         boolean success,
+        String resultSummary,
         String errorCode,
         String errorMessage
 ) {

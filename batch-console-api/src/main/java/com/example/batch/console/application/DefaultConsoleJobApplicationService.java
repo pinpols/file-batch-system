@@ -4,8 +4,10 @@ import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.request.CatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensateRequest;
+import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
 import com.example.batch.console.web.request.TriggerRequest;
@@ -32,11 +34,12 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     private final ConsoleTriggerClientProperties triggerClientProperties;
     private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleTenantGuard tenantGuard;
 
     @Override
     public String trigger(TriggerRequest request, String idempotencyKey) {
         return delegateLaunch(
-                request.getTenantId(),
+                resolveTenant(request.getTenantId()),
                 request.getJobCode(),
                 request.getBizDate(),
                 resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL),
@@ -46,50 +49,87 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     }
 
     @Override
-    public String compensate(CompensateRequest request, String idempotencyKey) {
-        Map<String, Object> params = new LinkedHashMap<>();
-        params.put("operationType", "COMPENSATE");
-        params.put("targetInstanceNo", request.getTargetInstanceNo());
-        params.put("reason", request.getReason());
-        return delegateLaunch(
-                request.getTenantId(),
+    public String compensation(CompensationCommandRequest request, String idempotencyKey) {
+        return submitCompensation(new CompensationPayload(
+                resolveTenant(request.getTenantId()),
+                request.getCompensationType(),
+                request.getTargetId(),
+                request.getTargetInstanceNo(),
                 request.getJobCode(),
-                request.getBizDate(),
-                TriggerType.MANUAL,
-                params,
-                idempotencyKey
-        );
+                parseOptionalBizDate(request.getBizDate()),
+                request.getBatchNo(),
+                request.getRelatedFileId(),
+                request.getChannelCode(),
+                request.getReason(),
+                request.getOperatorId(),
+                request.getApprovalId(),
+                request.getStrategy(),
+                null
+        ), idempotencyKey);
+    }
+
+    @Override
+    public String compensate(CompensateRequest request, String idempotencyKey) {
+        return submitCompensation(new CompensationPayload(
+                resolveTenant(request.getTenantId()),
+                request.getCompensationType() == null || request.getCompensationType().isBlank() ? "JOB" : request.getCompensationType(),
+                request.getTargetId(),
+                request.getTargetInstanceNo(),
+                request.getJobCode(),
+                parseOptionalBizDate(request.getBizDate()),
+                request.getBatchNo(),
+                request.getRelatedFileId(),
+                request.getChannelCode(),
+                request.getReason(),
+                request.getOperatorId(),
+                request.getApprovalId(),
+                request.getStrategy(),
+                null
+        ), idempotencyKey);
     }
 
     @Override
     public String rerun(RerunRequest request, String idempotencyKey) {
-        Map<String, Object> params = new LinkedHashMap<>();
-        params.put("operationType", "RERUN");
-        params.put("targetInstanceNo", request.getTargetInstanceNo());
-        params.put("reason", request.getReason());
-        return delegateLaunch(
-                request.getTenantId(),
+        String compensationType = (request.getTargetId() != null
+                || (request.getTargetInstanceNo() != null && !request.getTargetInstanceNo().isBlank()))
+                ? "JOB"
+                : "BATCH";
+        return submitCompensation(new CompensationPayload(
+                resolveTenant(request.getTenantId()),
+                compensationType,
+                request.getTargetId(),
+                request.getTargetInstanceNo(),
                 request.getJobCode(),
-                request.getBizDate(),
-                TriggerType.CATCH_UP,
-                params,
-                idempotencyKey
-        );
+                parseOptionalBizDate(request.getBizDate()),
+                request.getBatchNo(),
+                request.getRelatedFileId(),
+                null,
+                request.getReason(),
+                request.getOperatorId(),
+                request.getApprovalId(),
+                request.getStrategy(),
+                null
+        ), idempotencyKey);
     }
 
     @Override
     public String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey) {
-        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
-        restClient.post()
-                .uri("/internal/dead-letters/{deadLetterId}/replay", request.getDeadLetterId())
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
-                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-                .body(new DeadLetterReplayPayload(request.getTenantId()))
-                .retrieve()
-                .toBodilessEntity();
-        return "REPLAY_ACCEPTED";
+        return submitCompensation(new CompensationPayload(
+                resolveTenant(request.getTenantId()),
+                "DLQ",
+                request.getDeadLetterId(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                request.getReason(),
+                request.getOperatorId(),
+                request.getApprovalId(),
+                request.getStrategy(),
+                null
+        ), idempotencyKey);
     }
 
     @Override
@@ -104,7 +144,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         params.put("reason", request.getReason());
         params.put("scheduledAt", request.getScheduledAt());
         return delegateLaunch(
-                request.getTenantId(),
+                resolveTenant(request.getTenantId()),
                 request.getJobCode(),
                 request.getBizDate(),
                 TriggerType.CATCH_UP,
@@ -114,9 +154,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     }
 
     private String approvePendingCatchUpRequest(CatchUpApprovalRequest request, String idempotencyKey) {
-        if (request.getTenantId() == null || request.getTenantId().isBlank()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
-        }
+        String tenantId = resolveTenant(request.getTenantId());
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(triggerClientProperties.getBaseUrl()).build();
         CommonResponse<LaunchResponse> response = restClient.post()
@@ -125,7 +163,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
                 .body(new CatchUpApprovalPayload(
-                        request.getTenantId(),
+                        tenantId,
                         request.getRequestId(),
                         request.getReason()
                 ))
@@ -170,6 +208,24 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         return response.data().instanceNo();
     }
 
+    private String submitCompensation(CompensationPayload payload, String idempotencyKey) {
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        CommonResponse<CompensationResponse> response = restClient.post()
+                .uri("/internal/compensations")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+                .body(payload.withTraceId(requestMetadata.traceId()))
+                .retrieve()
+                .body(new org.springframework.core.ParameterizedTypeReference<CommonResponse<CompensationResponse>>() {
+                });
+        if (response == null || response.data() == null) {
+            throw new BizException(ResultCode.SYSTEM_ERROR, "orchestrator returned empty compensation response");
+        }
+        return response.data().commandNo();
+    }
+
     private TriggerType resolveTriggerType(String triggerTypeValue, TriggerType defaultTriggerType) {
         if (triggerTypeValue == null || triggerTypeValue.isBlank()) {
             return defaultTriggerType;
@@ -179,6 +235,10 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         } catch (IllegalArgumentException exception) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "unsupported triggerType: " + triggerTypeValue);
         }
+    }
+
+    private String resolveTenant(String requestTenantId) {
+        return tenantGuard.resolveTenant(requestTenantId);
     }
 
     @SuppressWarnings("unchecked")
@@ -201,6 +261,13 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         }
     }
 
+    private LocalDate parseOptionalBizDate(String bizDate) {
+        if (bizDate == null || bizDate.isBlank()) {
+            return null;
+        }
+        return parseBizDate(bizDate);
+    }
+
     private record TriggerLaunchPayload(
             String tenantId,
             String jobCode,
@@ -217,6 +284,42 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     ) {
     }
 
-    private record DeadLetterReplayPayload(String tenantId) {
+    private record CompensationPayload(
+            String tenantId,
+            String compensationType,
+            Long targetId,
+            String targetInstanceNo,
+            String jobCode,
+            LocalDate bizDate,
+            String batchNo,
+            Long relatedFileId,
+            String channelCode,
+            String reason,
+            String operatorId,
+            String approvalId,
+            String strategy,
+            String traceId
+    ) {
+        private CompensationPayload withTraceId(String currentTraceId) {
+            return new CompensationPayload(
+                    tenantId,
+                    compensationType,
+                    targetId,
+                    targetInstanceNo,
+                    jobCode,
+                    bizDate,
+                    batchNo,
+                    relatedFileId,
+                    channelCode,
+                    reason,
+                    operatorId,
+                    approvalId,
+                    strategy,
+                    currentTraceId
+            );
+        }
+    }
+
+    private record CompensationResponse(String commandNo) {
     }
 }

@@ -36,8 +36,6 @@ batch:
     dispatch:
       worker-code: ${BATCH_WORKER_DISPATCH_CODE:dispatch-node-1}
       worker-type: DISPATCH
-      default-stage: PREPARE
-      batch-size: 100
       tenant-id: ${BATCH_WORKER_DISPATCH_TENANT_ID:default-tenant}
       heartbeat-interval-millis: ${BATCH_WORKER_DISPATCH_HEARTBEAT_INTERVAL_MILLIS:15000}
       topic: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}

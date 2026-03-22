@@ -10,5 +10,9 @@ public interface WorkerRegistryRepository extends CrudRepository<WorkerRegistryR
 
     List<WorkerRegistryRecord> findByTenantIdAndStatus(String tenantId, String status);
 
+    long countByTenantIdAndWorkerGroupAndStatus(String tenantId, String workerGroup, String status);
+
+    long countByTenantIdAndStatus(String tenantId, String status);
+
     WorkerRegistryRecord findFirstByTenantIdAndWorkerCode(String tenantId, String workerCode);
 }

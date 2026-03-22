@@ -10,6 +10,7 @@ public class OutboxProperties {
     private int batchSize = 100;
     private long pollIntervalMillis = 5000L;
     private long retryDelaySeconds = 60L;
+    private int maxRetryAttempts = 5;
     private String producerName = "batch-orchestrator";
     private String defaultTopic = "batch.outbox.event";
 }

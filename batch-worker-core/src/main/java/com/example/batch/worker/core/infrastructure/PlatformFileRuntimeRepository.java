@@ -3,54 +3,44 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.JsonUtils;
-import java.sql.PreparedStatement;
+import com.example.batch.worker.core.domain.PipelineStepDefinition;
+import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
+import java.util.Set;
+import com.example.batch.worker.core.mapper.PlatformFileRuntimeMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Repository
+@RequiredArgsConstructor
 public class PlatformFileRuntimeRepository {
 
-    private final JdbcTemplate jdbcTemplate;
-
-    public PlatformFileRuntimeRepository(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
-    }
+    private final PlatformFileRuntimeMapper platformFileRuntimeMapper;
 
     public Map<String, Object> loadFileRecord(String tenantId, Long fileId) {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return Map.of();
         }
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "select * from batch.file_record where tenant_id = ? and id = ?",
-                tenantId, fileId
-        );
-        return rows.isEmpty() ? Map.of() : rows.get(0);
+        Map<String, Object> fileRecord = platformFileRuntimeMapper.selectFileRecord(params("tenantId", tenantId, "fileId", fileId));
+        return fileRecord == null ? Map.of() : fileRecord;
     }
 
     public boolean existsFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(storagePath)) {
             return false;
         }
-        Long count = jdbcTemplate.queryForObject("""
-                select count(1)
-                from batch.file_record
-                where tenant_id = ?
-                  and coalesce(storage_bucket, '') = coalesce(?, '')
-                  and storage_path = ?
-                """,
-                Long.class,
-                tenantId,
-                storageBucket,
-                storagePath
+        Long count = platformFileRuntimeMapper.countFileRecordByStoragePath(
+                params("tenantId", tenantId, "storageBucket", storageBucket, "storagePath", storagePath)
         );
         return count != null && count > 0;
     }
@@ -59,79 +49,58 @@ public class PlatformFileRuntimeRepository {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(templateCode)) {
             return Map.of();
         }
-        StringBuilder sql = new StringBuilder("""
-                select *
-                from batch.file_template_config
-                where tenant_id = ?
-                  and template_code = ?
-                  and enabled = true
-                """);
-        if (StringUtils.hasText(templateType)) {
-            sql.append(" and template_type = ? ");
-        }
-        sql.append(" order by version desc limit 1 ");
-        List<Map<String, Object>> rows = StringUtils.hasText(templateType)
-                ? jdbcTemplate.queryForList(sql.toString(), tenantId, templateCode, templateType)
-                : jdbcTemplate.queryForList(sql.toString(), tenantId, templateCode);
-        return rows.isEmpty() ? Map.of() : rows.get(0);
+        Map<String, Object> templateConfig = platformFileRuntimeMapper.selectLatestTemplateConfig(
+                params("tenantId", tenantId, "templateCode", templateCode, "templateType", templateType)
+        );
+        return templateConfig == null ? Map.of() : templateConfig;
     }
 
     public Map<String, Object> loadChannelConfig(String tenantId, String channelCode) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(channelCode)) {
             return Map.of();
         }
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                """
-                select *
-                from batch.file_channel_config
-                where tenant_id = ?
-                  and channel_code = ?
-                  and enabled = true
-                """,
-                tenantId, channelCode
+        Map<String, Object> channelConfig = platformFileRuntimeMapper.selectChannelConfig(
+                params("tenantId", tenantId, "channelCode", channelCode)
         );
-        return rows.isEmpty() ? Map.of() : rows.get(0);
+        return channelConfig == null ? Map.of() : channelConfig;
     }
 
     public Long ensurePipelineDefinition(String tenantId,
                                          String pipelineCode,
                                          String pipelineType,
                                          String workerGroup,
-                                         String description) {
+                                         String description,
+                                         List<PipelineStepTemplate> defaultSteps) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(pipelineCode) || !StringUtils.hasText(pipelineType)) {
             return null;
         }
-        List<Map<String, Object>> existing = jdbcTemplate.queryForList(
-                """
-                select id
-                from batch.pipeline_definition
-                where tenant_id = ?
-                  and pipeline_code = ?
-                order by version desc
-                limit 1
-                """,
-                tenantId, pipelineCode
+        Long pipelineDefinitionId = platformFileRuntimeMapper.selectLatestPipelineDefinitionId(
+                params("tenantId", tenantId, "pipelineCode", pipelineCode)
         );
-        if (!existing.isEmpty()) {
-            return toLong(existing.get(0).get("id"));
+        if (pipelineDefinitionId == null) {
+            Map<String, Object> paramMap = params(
+                    "tenantId", tenantId,
+                    "pipelineCode", pipelineCode,
+                    "pipelineName", pipelineCode,
+                    "pipelineType", pipelineType,
+                    "workerGroup", workerGroup,
+                    "description", description
+            );
+            platformFileRuntimeMapper.insertPipelineDefinition(paramMap);
+            pipelineDefinitionId = toLong(paramMap.get("id"));
         }
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbcTemplate.update(connection -> {
-            PreparedStatement statement = connection.prepareStatement("""
-                    insert into batch.pipeline_definition (
-                        tenant_id, pipeline_code, pipeline_name, pipeline_type,
-                        worker_group, version, enabled, description
-                    ) values (?, ?, ?, ?, ?, 1, true, ?)
-                    """, new String[] {"id"});
-            statement.setString(1, tenantId);
-            statement.setString(2, pipelineCode);
-            statement.setString(3, pipelineCode);
-            statement.setString(4, pipelineType);
-            statement.setString(5, workerGroup);
-            statement.setString(6, description);
-            return statement;
-        }, keyHolder);
-        return keyHolder.getKey() == null ? null : keyHolder.getKey().longValue();
+        ensurePipelineStepDefinitions(pipelineDefinitionId, defaultSteps);
+        return pipelineDefinitionId;
+    }
+
+    public List<PipelineStepDefinition> loadPipelineSteps(Long pipelineDefinitionId) {
+        if (pipelineDefinitionId == null) {
+            return List.of();
+        }
+        List<Map<String, Object>> rows = platformFileRuntimeMapper.selectPipelineStepDefinitions(
+                params("pipelineDefinitionId", pipelineDefinitionId, "enabledOnly", true)
+        );
+        return mapPipelineStepDefinitions(rows);
     }
 
     public Long createPipelineInstance(String tenantId,
@@ -145,64 +114,33 @@ public class PlatformFileRuntimeRepository {
         if (!StringUtils.hasText(tenantId) || pipelineDefinitionId == null) {
             return null;
         }
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbcTemplate.update(connection -> {
-            PreparedStatement statement = connection.prepareStatement("""
-                    insert into batch.pipeline_instance (
-                        tenant_id, pipeline_definition_id, pipeline_code, pipeline_type,
-                        file_id, related_job_instance_id, current_stage, run_status,
-                        trace_id, started_at, created_at, updated_at
-                    ) values (?, ?, ?, ?, ?, ?, ?, 'RUNNING', ?, current_timestamp, current_timestamp, current_timestamp)
-                    """, new String[] {"id"});
-            statement.setString(1, tenantId);
-            statement.setLong(2, pipelineDefinitionId);
-            statement.setString(3, pipelineCode);
-            statement.setString(4, pipelineType);
-            if (fileId == null) {
-                statement.setObject(5, null);
-            } else {
-                statement.setLong(5, fileId);
-            }
-            if (relatedJobInstanceId == null) {
-                statement.setObject(6, null);
-            } else {
-                statement.setLong(6, relatedJobInstanceId);
-            }
-            statement.setString(7, currentStage);
-            statement.setString(8, traceId);
-            return statement;
-        }, keyHolder);
-        return keyHolder.getKey() == null ? null : keyHolder.getKey().longValue();
+        Map<String, Object> paramMap = params(
+                "tenantId", tenantId,
+                "pipelineDefinitionId", pipelineDefinitionId,
+                "pipelineCode", pipelineCode,
+                "pipelineType", pipelineType,
+                "fileId", fileId,
+                "relatedJobInstanceId", relatedJobInstanceId,
+                "currentStage", currentStage,
+                "traceId", traceId
+        );
+        platformFileRuntimeMapper.insertPipelineInstance(paramMap);
+        return toLong(paramMap.get("id"));
     }
 
     public void bindFileToPipelineInstance(Long pipelineInstanceId, Long fileId) {
         if (pipelineInstanceId == null || fileId == null) {
             return;
         }
-        jdbcTemplate.update("""
-                update batch.pipeline_instance
-                set file_id = ?,
-                    updated_at = current_timestamp
-                where id = ?
-                """,
-                fileId, pipelineInstanceId
-        );
+        platformFileRuntimeMapper.bindFileToPipelineInstance(params("pipelineInstanceId", pipelineInstanceId, "fileId", fileId));
     }
 
     public void updatePipelineStage(Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
         if (pipelineInstanceId == null) {
             return;
         }
-        jdbcTemplate.update("""
-                update batch.pipeline_instance
-                set current_stage = ?,
-                    last_success_stage = coalesce(?, last_success_stage),
-                    updated_at = current_timestamp
-                where id = ?
-                """,
-                currentStage,
-                lastSuccessStage,
-                pipelineInstanceId
+        platformFileRuntimeMapper.updatePipelineStage(
+                params("pipelineInstanceId", pipelineInstanceId, "currentStage", currentStage, "lastSuccessStage", lastSuccessStage)
         );
     }
 
@@ -210,16 +148,8 @@ public class PlatformFileRuntimeRepository {
         if (pipelineInstanceId == null) {
             return;
         }
-        jdbcTemplate.update("""
-                update batch.pipeline_instance
-                set current_stage = ?,
-                    last_success_stage = ?,
-                    run_status = 'SUCCESS',
-                    finished_at = current_timestamp,
-                    updated_at = current_timestamp
-                where id = ?
-                """,
-                currentStage, lastSuccessStage, pipelineInstanceId
+        platformFileRuntimeMapper.markPipelineSuccess(
+                params("pipelineInstanceId", pipelineInstanceId, "currentStage", currentStage, "lastSuccessStage", lastSuccessStage)
         );
     }
 
@@ -227,16 +157,8 @@ public class PlatformFileRuntimeRepository {
         if (pipelineInstanceId == null) {
             return;
         }
-        jdbcTemplate.update("""
-                update batch.pipeline_instance
-                set current_stage = ?,
-                    last_success_stage = ?,
-                    run_status = 'FAILED',
-                    finished_at = current_timestamp,
-                    updated_at = current_timestamp
-                where id = ?
-                """,
-                currentStage, lastSuccessStage, pipelineInstanceId
+        platformFileRuntimeMapper.markPipelineFailed(
+                params("pipelineInstanceId", pipelineInstanceId, "currentStage", currentStage, "lastSuccessStage", lastSuccessStage)
         );
     }
 
@@ -247,33 +169,18 @@ public class PlatformFileRuntimeRepository {
         if (pipelineInstanceId == null || !StringUtils.hasText(stepCode) || !StringUtils.hasText(stageCode)) {
             return null;
         }
-        Integer nextRunSeq = jdbcTemplate.queryForObject("""
-                select coalesce(max(run_seq), 0) + 1
-                from batch.pipeline_step_run
-                where pipeline_instance_id = ?
-                  and step_code = ?
-                """,
-                Integer.class,
-                pipelineInstanceId,
-                stepCode
+        Integer nextRunSeq = platformFileRuntimeMapper.selectNextStepRunSeq(
+                params("pipelineInstanceId", pipelineInstanceId, "stepCode", stepCode)
         );
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        String inputJson = toJson(inputSummary);
-        jdbcTemplate.update(connection -> {
-            PreparedStatement statement = connection.prepareStatement("""
-                    insert into batch.pipeline_step_run (
-                        pipeline_instance_id, step_code, stage_code, run_seq,
-                        step_status, input_summary, started_at
-                    ) values (?, ?, ?, ?, 'RUNNING', ?::jsonb, current_timestamp)
-                    """, new String[] {"id"});
-            statement.setLong(1, pipelineInstanceId);
-            statement.setString(2, stepCode);
-            statement.setString(3, stageCode);
-            statement.setInt(4, nextRunSeq == null ? 1 : nextRunSeq);
-            statement.setString(5, inputJson);
-            return statement;
-        }, keyHolder);
-        return keyHolder.getKey() == null ? null : keyHolder.getKey().longValue();
+        Map<String, Object> paramMap = params(
+                "pipelineInstanceId", pipelineInstanceId,
+                "stepCode", stepCode,
+                "stageCode", stageCode,
+                "runSeq", nextRunSeq == null ? 1 : nextRunSeq,
+                "inputSummaryJson", toJson(inputSummary)
+        );
+        platformFileRuntimeMapper.insertStepRun(paramMap);
+        return toLong(paramMap.get("id"));
     }
 
     public void finishStepRunSuccess(Long stepRunId, Object outputSummary) {
@@ -292,19 +199,13 @@ public class PlatformFileRuntimeRepository {
         if (stepRunId == null) {
             return;
         }
-        String outputJson = toJson(outputSummary);
-        jdbcTemplate.update("""
-                update batch.pipeline_step_run
-                set step_status = ?,
-                    output_summary = ?::jsonb,
-                    error_code = ?,
-                    error_message = ?,
-                    duration_ms = greatest(0, extract(epoch from (current_timestamp - started_at)) * 1000)::bigint,
-                    finished_at = current_timestamp
-                where id = ?
-                """,
-                status, outputJson, errorCode, truncate(errorMessage, 1024), stepRunId
-        );
+        platformFileRuntimeMapper.finishStepRun(params(
+                "stepRunId", stepRunId,
+                "status", status,
+                "outputSummaryJson", toJson(outputSummary),
+                "errorCode", errorCode,
+                "errorMessage", truncate(errorMessage, 1024)
+        ));
     }
 
     @Transactional
@@ -337,98 +238,108 @@ public class PlatformFileRuntimeRepository {
         FileStateMachine.assertInitialStatus(fileStatus);
         int nextGenerationNo = 1;
         if (StringUtils.hasText(fileCode)) {
-            Integer maxGeneration = jdbcTemplate.queryForObject("""
-                    select coalesce(max(file_generation_no), 0)
-                    from batch.file_record
-                    where tenant_id = ?
-                      and file_code = ?
-                    """,
-                    Integer.class,
-                    tenantId,
-                    fileCode
+            Integer maxGeneration = platformFileRuntimeMapper.selectMaxFileGenerationNo(
+                    params("tenantId", tenantId, "fileCode", fileCode)
             );
             nextGenerationNo = (maxGeneration == null ? 0 : maxGeneration) + 1;
-            jdbcTemplate.update("""
-                    update batch.file_record
-                    set is_latest = false,
-                        updated_at = current_timestamp
-                    where tenant_id = ?
-                      and file_code = ?
-                      and is_latest = true
-                    """,
-                    tenantId,
-                    fileCode
-            );
+            platformFileRuntimeMapper.markHistoricalFileNotLatest(params("tenantId", tenantId, "fileCode", fileCode));
         }
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        String metadataJson = toJson(metadata);
         final int finalNextGenerationNo = nextGenerationNo;
         String resolvedFileVersion = StringUtils.hasText(fileVersion) ? fileVersion : "v" + finalNextGenerationNo;
-        jdbcTemplate.update(connection -> {
-            PreparedStatement statement = connection.prepareStatement("""
-                    insert into batch.file_record (
-                        tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
-                        file_ext, file_format_type, charset, mime_type, file_size_bytes,
-                        checksum_type, checksum_value, storage_type, storage_path, storage_bucket,
-                        file_version, file_generation_no, is_latest, source_type, source_ref,
-                        file_status, biz_date, trace_id, metadata_json, created_at, updated_at
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, ?, ?, ?, ?, ?, ?::jsonb, current_timestamp, current_timestamp)
-                    """, new String[] {"id"});
-            statement.setString(1, tenantId);
-            statement.setString(2, fileCode);
-            statement.setString(3, bizType);
-            statement.setString(4, fileCategory);
-            statement.setString(5, fileName);
-            statement.setString(6, originalFileName);
-            statement.setString(7, resolveFileExt(fileName));
-            statement.setString(8, fileFormatType);
-            statement.setString(9, charset);
-            statement.setString(10, resolveMimeType(fileFormatType));
-            statement.setLong(11, Math.max(fileSizeBytes, 0L));
-            statement.setString(12, defaultText(checksumType, "NONE"));
-            statement.setString(13, checksumValue);
-            statement.setString(14, storageType);
-            statement.setString(15, storagePath);
-            statement.setString(16, storageBucket);
-            statement.setString(17, resolvedFileVersion);
-            statement.setInt(18, finalNextGenerationNo);
-            statement.setString(19, sourceType);
-            statement.setString(20, sourceRef);
-            statement.setString(21, fileStatus);
-            if (bizDate == null) {
-                statement.setObject(22, null);
-            } else {
-                statement.setObject(22, bizDate);
-            }
-            statement.setString(23, traceId);
-            statement.setString(24, metadataJson);
-            return statement;
-        }, keyHolder);
-        return keyHolder.getKey() == null ? null : keyHolder.getKey().longValue();
+        Map<String, Object> paramMap = params(
+                "tenantId", tenantId,
+                "fileCode", fileCode,
+                "bizType", bizType,
+                "fileCategory", fileCategory,
+                "fileName", fileName,
+                "originalFileName", originalFileName,
+                "fileExt", resolveFileExt(fileName),
+                "fileFormatType", fileFormatType,
+                "charset", charset,
+                "mimeType", resolveMimeType(fileFormatType),
+                "fileSizeBytes", Math.max(fileSizeBytes, 0L),
+                "checksumType", defaultText(checksumType, "NONE"),
+                "checksumValue", checksumValue,
+                "storageType", storageType,
+                "storagePath", storagePath,
+                "storageBucket", storageBucket,
+                "fileVersion", resolvedFileVersion,
+                "fileGenerationNo", finalNextGenerationNo,
+                "sourceType", sourceType,
+                "sourceRef", sourceRef,
+                "fileStatus", fileStatus,
+                "bizDate", bizDate,
+                "traceId", traceId,
+                "metadataJson", toJson(metadata)
+        );
+        platformFileRuntimeMapper.insertFileRecord(paramMap);
+        return toLong(paramMap.get("id"));
     }
 
     public void updateFileStatus(Long fileId, String fileStatus, Object metadata) {
         if (fileId == null || !StringUtils.hasText(fileStatus)) {
             return;
         }
-        String currentStatus = jdbcTemplate.query("""
-                select file_status
-                from batch.file_record
-                where id = ?
-                """, rs -> rs.next() ? rs.getString("file_status") : null, fileId);
+        String currentStatus = platformFileRuntimeMapper.selectFileStatus(params("fileId", fileId));
         if (!StringUtils.hasText(currentStatus)) {
             return;
         }
         FileStateMachine.assertTransition(currentStatus, fileStatus);
-        jdbcTemplate.update("""
-                update batch.file_record
-                set file_status = ?,
-                    metadata_json = coalesce(metadata_json, '{}'::jsonb) || coalesce(?::jsonb, '{}'::jsonb),
-                    updated_at = current_timestamp
-                where id = ?
-                """,
-                fileStatus, toJson(metadata), fileId
+        platformFileRuntimeMapper.updateFileRecordStatus(
+                params("fileId", fileId, "fileStatus", fileStatus, "metadataJson", toJson(metadata))
         );
+    }
+
+    public void updateFileMetadata(Long fileId, Object metadata) {
+        if (fileId == null) {
+            return;
+        }
+        platformFileRuntimeMapper.updateFileRecordMetadata(
+                params("fileId", fileId, "metadataJson", toJson(metadata))
+        );
+    }
+
+    public Long insertFileErrorRecord(Long fileId,
+                                      Long pipelineInstanceId,
+                                      Long pipelineStepRunId,
+                                      Long recordNo,
+                                      String errorCode,
+                                      String errorMessage,
+                                      String errorStage,
+                                      boolean skipped,
+                                      String skipAction,
+                                      Object rawRecord) {
+        Map<String, Object> paramMap = params(
+                "fileId", fileId,
+                "pipelineInstanceId", pipelineInstanceId,
+                "pipelineStepRunId", pipelineStepRunId,
+                "recordNo", recordNo,
+                "errorCode", errorCode,
+                "errorMessage", truncate(errorMessage, 1024),
+                "errorStage", errorStage,
+                "isSkipped", skipped,
+                "skipAction", skipAction,
+                "rawRecordJson", toJson(rawRecord)
+        );
+        platformFileRuntimeMapper.insertFileErrorRecord(paramMap);
+        return toLong(paramMap.get("id"));
+    }
+
+    public List<Map<String, Object>> loadFileErrorRecords(String tenantId,
+                                                          Long fileId,
+                                                          String errorCode,
+                                                          String errorStage,
+                                                          int limit) {
+        if (!StringUtils.hasText(tenantId) || limit <= 0) {
+            return List.of();
+        }
+        return platformFileRuntimeMapper.selectFileErrorRecords(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "errorCode", errorCode,
+                "errorStage", errorStage,
+                "limit", limit
+        ));
     }
 
     public void appendAudit(Long fileId,
@@ -443,22 +354,17 @@ public class PlatformFileRuntimeRepository {
         if (fileId == null || !StringUtils.hasText(tenantId) || !StringUtils.hasText(operationType) || !StringUtils.hasText(operationResult)) {
             return;
         }
-        jdbcTemplate.update("""
-                insert into batch.file_audit_log (
-                    tenant_id, file_id, operation_type, operation_result,
-                    operator_type, operator_id, trace_id, evidence_ref, detail_summary, created_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, current_timestamp)
-                """,
-                tenantId,
-                fileId,
-                operationType,
-                operationResult,
-                defaultText(operatorType, "SYSTEM"),
-                operatorId,
-                traceId,
-                evidenceRef,
-                toJson(detailSummary)
-        );
+        platformFileRuntimeMapper.insertFileAuditLog(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "operationType", operationType,
+                "operationResult", operationResult,
+                "operatorType", defaultText(operatorType, "SYSTEM"),
+                "operatorId", operatorId,
+                "traceId", traceId,
+                "evidenceRef", evidenceRef,
+                "detailSummaryJson", toJson(detailSummary)
+        ));
     }
 
     public Long toLong(Object value) {
@@ -485,6 +391,93 @@ public class PlatformFileRuntimeRepository {
         return value == null ? null : JsonUtils.toJson(value);
     }
 
+    private void ensurePipelineStepDefinitions(Long pipelineDefinitionId, List<PipelineStepTemplate> defaultSteps) {
+        if (pipelineDefinitionId == null || defaultSteps == null || defaultSteps.isEmpty()) {
+            return;
+        }
+        List<PipelineStepDefinition> existingSteps = mapPipelineStepDefinitions(
+                platformFileRuntimeMapper.selectPipelineStepDefinitions(
+                        params("pipelineDefinitionId", pipelineDefinitionId, "enabledOnly", false)
+                )
+        );
+        Set<String> existingCodes = new HashSet<>();
+        for (PipelineStepDefinition existingStep : existingSteps) {
+            existingCodes.add(existingStep.stepCode());
+        }
+        for (PipelineStepTemplate template : defaultSteps) {
+            if (template == null || !StringUtils.hasText(template.stepCode()) || existingCodes.contains(template.stepCode())) {
+                continue;
+            }
+            platformFileRuntimeMapper.insertPipelineStepDefinition(params(
+                    "pipelineDefinitionId", pipelineDefinitionId,
+                    "stepCode", template.stepCode(),
+                    "stepName", defaultText(template.stepName(), template.stepCode()),
+                    "stageCode", template.stageCode(),
+                    "stepOrder", template.stepOrder() == null ? 0 : template.stepOrder(),
+                    "implCode", template.implCode(),
+                    "stepParamsJson", toJson(template.stepParams()),
+                    "timeoutSeconds", template.timeoutSeconds() == null ? 0 : template.timeoutSeconds(),
+                    "retryPolicy", defaultText(template.retryPolicy(), "NONE"),
+                    "retryMaxCount", template.retryMaxCount() == null ? 0 : template.retryMaxCount(),
+                    "enabled", template.enabled()
+            ));
+        }
+    }
+
+    private List<PipelineStepDefinition> mapPipelineStepDefinitions(List<Map<String, Object>> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        List<PipelineStepDefinition> definitions = new ArrayList<>(rows.size());
+        for (Map<String, Object> row : rows) {
+            definitions.add(new PipelineStepDefinition(
+                    toLong(row.get("id")),
+                    toLong(row.get("pipeline_definition_id")),
+                    stringValue(row.get("step_code")),
+                    stringValue(row.get("step_name")),
+                    stringValue(row.get("stage_code")),
+                    toInteger(row.get("step_order")),
+                    stringValue(row.get("impl_code")),
+                    toMap(row.get("step_params")),
+                    toInteger(row.get("timeout_seconds")),
+                    stringValue(row.get("retry_policy")),
+                    toInteger(row.get("retry_max_count")),
+                    Boolean.TRUE.equals(row.get("enabled"))
+            ));
+        }
+        return Collections.unmodifiableList(definitions);
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String string && !string.isBlank()) {
+            return Integer.valueOf(string);
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> toMap(Object value) {
+        if (value == null) {
+            return Map.of();
+        }
+        if (value instanceof Map<?, ?> rawMap) {
+            Map<String, Object> mapped = new LinkedHashMap<>();
+            rawMap.forEach((key, rawValue) -> mapped.put(String.valueOf(key), rawValue));
+            return mapped;
+        }
+        return JsonUtils.fromJson(String.valueOf(value), Map.class);
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
     private String resolveFileExt(String fileName) {
         if (!StringUtils.hasText(fileName) || !fileName.contains(".")) {
             return null;
@@ -506,6 +499,14 @@ public class PlatformFileRuntimeRepository {
 
     private String defaultText(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private Map<String, Object> params(Object... pairs) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (int index = 0; index < pairs.length; index += 2) {
+            values.put(String.valueOf(pairs[index]), pairs[index + 1]);
+        }
+        return values;
     }
 
     private String truncate(String value, int maxLength) {

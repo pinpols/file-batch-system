@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.FileArrivalGroupMapper">
+    <resultMap id="FileArrivalGroupResultMap" type="com.example.batch.console.domain.entity.FileArrivalGroupEntity">
+        <result column="tenant_id" property="tenantId"/>
+        <result column="file_group_code" property="fileGroupCode"/>
+        <result column="wait_file_group_mode" property="waitFileGroupMode"/>
+        <result column="required_file_set" property="requiredFileSet"/>
+        <result column="arrival_timeout_action" property="arrivalTimeoutAction"/>
+        <result column="arrival_state" property="arrivalState"/>
+        <result column="expected_arrival_time" property="expectedArrivalTime"/>
+        <result column="latest_tolerable_time" property="latestTolerableTime"/>
+        <result column="arrived_count" property="arrivedCount"/>
+        <result column="triggered_count" property="triggeredCount"/>
+        <result column="timeout_count" property="timeoutCount"/>
+        <result column="waiting_count" property="waitingCount"/>
+        <result column="last_updated_at" property="lastUpdatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="FileArrivalGroupResultMap">
+        select tenant_id,
+               metadata_json -&gt;&gt; 'fileGroupCode' as file_group_code,
+               coalesce(metadata_json -&gt;&gt; 'waitFileGroupMode', 'ALL_OF') as wait_file_group_mode,
+               coalesce(metadata_json -&gt;&gt; 'requiredFileSet', '') as required_file_set,
+               coalesce(metadata_json -&gt;&gt; 'arrivalTimeoutAction', 'MANUAL_CONFIRM') as arrival_timeout_action,
+               coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') as arrival_state,
+               nullif(metadata_json -&gt;&gt; 'expectedArrivalTime', '')::timestamptz as expected_arrival_time,
+               nullif(metadata_json -&gt;&gt; 'latestTolerableTime', '')::timestamptz as latest_tolerable_time,
+               count(1) as arrived_count,
+               count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') = 'TRIGGERED') as triggered_count,
+               count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') = 'TIMEOUT') as timeout_count,
+               count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') like 'WAITING%') as waiting_count,
+               max(updated_at) as last_updated_at
+        from batch.file_record
+        where metadata_json ? 'fileGroupCode'
+          <if test="tenantId != null and tenantId != ''">
+              and tenant_id = #{tenantId}
+          </if>
+          <if test="fileGroupCode != null and fileGroupCode != ''">
+              and metadata_json -&gt;&gt; 'fileGroupCode' = #{fileGroupCode}
+          </if>
+          <if test="arrivalState != null and arrivalState != ''">
+              and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') = #{arrivalState}
+          </if>
+          <if test="fromTime != null">
+              and created_at &gt;= #{fromTime}
+          </if>
+          <if test="toTime != null">
+              and created_at &lt;= #{toTime}
+          </if>
+        group by tenant_id,
+                 metadata_json -&gt;&gt; 'fileGroupCode',
+                 coalesce(metadata_json -&gt;&gt; 'waitFileGroupMode', 'ALL_OF'),
+                 coalesce(metadata_json -&gt;&gt; 'requiredFileSet', ''),
+                 coalesce(metadata_json -&gt;&gt; 'arrivalTimeoutAction', 'MANUAL_CONFIRM'),
+                 coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL'),
+                 nullif(metadata_json -&gt;&gt; 'expectedArrivalTime', '')::timestamptz,
+                 nullif(metadata_json -&gt;&gt; 'latestTolerableTime', '')::timestamptz
+        order by last_updated_at desc, file_group_code asc
+    </select>
+</mapper>

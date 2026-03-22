@@ -37,9 +37,11 @@ public class RetryDispatchStep implements DispatchStageStep {
     public DispatchStageResult execute(DispatchJobContext context) {
         Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
         if (!(payload instanceof DispatchPayload dispatchPayload)) {
+            context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
             return DispatchStageResult.failure(stage(), "DISPATCH_RETRY_NO_PAYLOAD", "dispatch payload missing");
         }
         if (!Boolean.TRUE.equals(context.getAttributes().get("retryRequested"))) {
+            context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
             return DispatchStageResult.success(stage());
         }
         Long fileId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
@@ -67,8 +69,10 @@ public class RetryDispatchStep implements DispatchStageStep {
                     dispatchResult.message()
             );
             if (updated <= 0) {
+                context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
                 return DispatchStageResult.failure(stage(), "DISPATCH_RETRY_FAILED", "failed to mark failed");
             }
+            context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
             return DispatchStageResult.failure(stage(), "DISPATCH_RETRY_FAILED", dispatchResult.message());
         }
         int updated = fileDispatchRepository.markSent(
@@ -80,9 +84,11 @@ public class RetryDispatchStep implements DispatchStageStep {
                 dispatchResult.acknowledged() ? "SUCCESS" : dispatchResult.receiptPending() ? "PENDING" : "NONE"
         );
         if (updated <= 0) {
+            context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
             return DispatchStageResult.failure(stage(), "DISPATCH_RETRY_FAILED", "failed to mark retry sent");
         }
         context.getAttributes().put("retryRecovered", Boolean.TRUE);
+        context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.ACK.name());
         return DispatchStageResult.success(stage());
     }
 }

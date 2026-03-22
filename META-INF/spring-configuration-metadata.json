@@ -1,0 +1,543 @@
+{
+  "groups": [
+    {
+      "name": "spring.ai.openai",
+      "type": "org.springframework.ai.model.openai.autoconfigure.OpenAiConnectionProperties",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiConnectionProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech",
+      "type": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechProperties",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.options",
+      "type": "org.springframework.ai.openai.OpenAiAudioSpeechOptions",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechProperties",
+      "sourceMethod": "getOptions()"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription",
+      "type": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionProperties",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.options",
+      "type": "org.springframework.ai.openai.OpenAiAudioTranscriptionOptions",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionProperties",
+      "sourceMethod": "getOptions()"
+    },
+    {
+      "name": "spring.ai.openai.chat",
+      "type": "org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties"
+    },
+    {
+      "name": "spring.ai.openai.chat.options",
+      "type": "org.springframework.ai.openai.OpenAiChatOptions",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties",
+      "sourceMethod": "getOptions()"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.tool-choice",
+      "type": "java.lang.Object",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions",
+      "sourceMethod": "getToolChoice()"
+    },
+    {
+      "name": "spring.ai.openai.chat.output-audio",
+      "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.embedding",
+      "type": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties"
+    },
+    {
+      "name": "spring.ai.openai.embedding.options",
+      "type": "org.springframework.ai.openai.OpenAiEmbeddingOptions",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties",
+      "sourceMethod": "getOptions()"
+    },
+    {
+      "name": "spring.ai.openai.image",
+      "type": "org.springframework.ai.model.openai.autoconfigure.OpenAiImageProperties",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiImageProperties"
+    },
+    {
+      "name": "spring.ai.openai.image.options",
+      "type": "org.springframework.ai.openai.OpenAiImageOptions",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiImageProperties",
+      "sourceMethod": "getOptions()"
+    },
+    {
+      "name": "spring.ai.openai.moderation",
+      "type": "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationProperties",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationProperties"
+    },
+    {
+      "name": "spring.ai.openai.moderation.options",
+      "type": "org.springframework.ai.openai.OpenAiModerationOptions",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationProperties",
+      "sourceMethod": "getOptions()"
+    }
+  ],
+  "properties": [
+    {
+      "name": "spring.ai.openai.api-key",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiConnectionProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.api-key",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.base-url",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.options.input",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioSpeechOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.options.model",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioSpeechOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.options.response-format",
+      "type": "org.springframework.ai.openai.api.OpenAiAudioApi$SpeechRequest$AudioResponseFormat",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioSpeechOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.options.speed",
+      "type": "java.lang.Float",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioSpeechOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.options.voice",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioSpeechOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.organization-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.speech.project-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.api-key",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.base-url",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.options.granularity-type",
+      "type": "org.springframework.ai.openai.api.OpenAiAudioApi$TranscriptionRequest$GranularityType",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioTranscriptionOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.options.language",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioTranscriptionOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.options.model",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioTranscriptionOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.options.prompt",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioTranscriptionOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.options.response-format",
+      "type": "org.springframework.ai.openai.api.OpenAiAudioApi$TranscriptResponseFormat",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioTranscriptionOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.options.temperature",
+      "type": "java.lang.Float",
+      "sourceType": "org.springframework.ai.openai.OpenAiAudioTranscriptionOptions"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.organization-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionProperties"
+    },
+    {
+      "name": "spring.ai.openai.audio.transcription.project-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionProperties"
+    },
+    {
+      "name": "spring.ai.openai.base-url",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiConnectionProperties"
+    },
+    {
+      "name": "spring.ai.openai.chat.api-key",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties"
+    },
+    {
+      "name": "spring.ai.openai.chat.base-url",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties"
+    },
+    {
+      "name": "spring.ai.openai.chat.completions-path",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties",
+      "defaultValue": "\/v1\/chat\/completions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.frequency-penalty",
+      "type": "java.lang.Double",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.http-headers",
+      "type": "java.util.Map<java.lang.String,java.lang.String>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.internal-tool-execution-enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.logit-bias",
+      "type": "java.util.Map<java.lang.String,java.lang.Integer>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.logprobs",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.max-completion-tokens",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.max-tokens",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.metadata",
+      "type": "java.util.Map<java.lang.String,java.lang.String>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.model",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.n",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.output-audio",
+      "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.output-modalities",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.parallel-tool-calls",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.presence-penalty",
+      "type": "java.lang.Double",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.reasoning-effort",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.response-format",
+      "type": "org.springframework.ai.openai.api.ResponseFormat",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.seed",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.stop",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.stop-sequences",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.store",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.stream-options",
+      "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$StreamOptions",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.stream-usage",
+      "type": "java.lang.Boolean",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.temperature",
+      "type": "java.lang.Double",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.tool-callbacks",
+      "type": "java.util.List<org.springframework.ai.tool.ToolCallback>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.tool-context",
+      "type": "java.util.Map<java.lang.String,java.lang.Object>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.tool-names",
+      "type": "java.util.Set<java.lang.String>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.tools",
+      "type": "java.util.List<org.springframework.ai.openai.api.OpenAiApi$FunctionTool>",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.top-logprobs",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.top-p",
+      "type": "java.lang.Double",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.user",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.options.web-search-options",
+      "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$WebSearchOptions",
+      "sourceType": "org.springframework.ai.openai.OpenAiChatOptions"
+    },
+    {
+      "name": "spring.ai.openai.chat.organization-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties"
+    },
+    {
+      "name": "spring.ai.openai.chat.output-audio.format",
+      "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters$AudioResponseFormat",
+      "sourceType": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters"
+    },
+    {
+      "name": "spring.ai.openai.chat.output-audio.voice",
+      "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters$Voice",
+      "sourceType": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters"
+    },
+    {
+      "name": "spring.ai.openai.chat.project-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties"
+    },
+    {
+      "name": "spring.ai.openai.embedding.api-key",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties"
+    },
+    {
+      "name": "spring.ai.openai.embedding.base-url",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties"
+    },
+    {
+      "name": "spring.ai.openai.embedding.embeddings-path",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties",
+      "defaultValue": "\/v1\/embeddings"
+    },
+    {
+      "name": "spring.ai.openai.embedding.metadata-mode",
+      "type": "org.springframework.ai.document.MetadataMode",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties",
+      "defaultValue": "embed"
+    },
+    {
+      "name": "spring.ai.openai.embedding.options.dimensions",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiEmbeddingOptions"
+    },
+    {
+      "name": "spring.ai.openai.embedding.options.encoding-format",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiEmbeddingOptions"
+    },
+    {
+      "name": "spring.ai.openai.embedding.options.model",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiEmbeddingOptions"
+    },
+    {
+      "name": "spring.ai.openai.embedding.options.user",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiEmbeddingOptions"
+    },
+    {
+      "name": "spring.ai.openai.embedding.organization-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties"
+    },
+    {
+      "name": "spring.ai.openai.embedding.project-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties"
+    },
+    {
+      "name": "spring.ai.openai.image.api-key",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiImageProperties"
+    },
+    {
+      "name": "spring.ai.openai.image.base-url",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiImageProperties"
+    },
+    {
+      "name": "spring.ai.openai.image.images-path",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiImageProperties",
+      "defaultValue": "v1\/images\/generations"
+    },
+    {
+      "name": "spring.ai.openai.image.options.height",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.options.model",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.options.n",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.options.quality",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.options.response-format",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.options.size",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.options.style",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.options.user",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.options.width",
+      "type": "java.lang.Integer",
+      "sourceType": "org.springframework.ai.openai.OpenAiImageOptions"
+    },
+    {
+      "name": "spring.ai.openai.image.organization-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiImageProperties"
+    },
+    {
+      "name": "spring.ai.openai.image.project-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiImageProperties"
+    },
+    {
+      "name": "spring.ai.openai.moderation.api-key",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationProperties"
+    },
+    {
+      "name": "spring.ai.openai.moderation.base-url",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationProperties"
+    },
+    {
+      "name": "spring.ai.openai.moderation.options.model",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.openai.OpenAiModerationOptions"
+    },
+    {
+      "name": "spring.ai.openai.moderation.organization-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationProperties"
+    },
+    {
+      "name": "spring.ai.openai.moderation.project-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationProperties"
+    },
+    {
+      "name": "spring.ai.openai.organization-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiConnectionProperties"
+    },
+    {
+      "name": "spring.ai.openai.project-id",
+      "type": "java.lang.String",
+      "sourceType": "org.springframework.ai.model.openai.autoconfigure.OpenAiConnectionProperties"
+    }
+  ],
+  "hints": []
+}

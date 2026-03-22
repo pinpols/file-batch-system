@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.JobStepInstanceMapper">
+    <resultMap id="JobStepInstanceResultMap" type="com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_instance_id" property="jobInstanceId"/>
+        <result column="job_partition_id" property="jobPartitionId"/>
+        <result column="job_task_id" property="jobTaskId"/>
+        <result column="step_code" property="stepCode"/>
+        <result column="step_type" property="stepType"/>
+        <result column="step_status" property="stepStatus"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="related_file_id" property="relatedFileId"/>
+        <result column="result_summary" property="resultSummary"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="version" property="version"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.job_step_instance (
+            tenant_id,
+            job_instance_id,
+            job_partition_id,
+            job_task_id,
+            step_code,
+            step_type,
+            step_status,
+            retry_count,
+            related_file_id,
+            result_summary,
+            error_code,
+            error_message,
+            version,
+            started_at,
+            finished_at
+        ) values (
+            #{tenantId},
+            #{jobInstanceId},
+            #{jobPartitionId},
+            #{jobTaskId},
+            #{stepCode},
+            #{stepType},
+            #{stepStatus},
+            #{retryCount},
+            #{relatedFileId},
+            #{resultSummary},
+            #{errorCode},
+            #{errorMessage},
+            #{version},
+            #{startedAt},
+            #{finishedAt}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="JobStepInstanceResultMap">
+        select *
+        from batch.job_step_instance
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <select id="selectByJobTaskId" resultMap="JobStepInstanceResultMap">
+        select *
+        from batch.job_step_instance
+        where tenant_id = #{tenantId}
+          and job_task_id = #{jobTaskId}
+    </select>
+
+    <select id="selectByJobInstanceId" resultMap="JobStepInstanceResultMap">
+        select *
+        from batch.job_step_instance
+        where tenant_id = #{tenantId}
+          and job_instance_id = #{jobInstanceId}
+        order by id asc
+    </select>
+
+    <update id="markRunning">
+        update batch.job_step_instance
+        set step_status = 'RUNNING',
+            started_at = coalesce(started_at, #{startedAt}),
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+          and step_status in ('CREATED', 'WAITING', 'READY', 'RETRYING')
+    </update>
+
+    <update id="updateProgress">
+        update batch.job_step_instance
+        set step_status = #{stepStatus},
+            retry_count = #{retryCount},
+            related_file_id = coalesce(#{relatedFileId}, related_file_id),
+            result_summary = #{resultSummary},
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            finished_at = #{finishedAt},
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+    </update>
+
+    <update id="resetForRetryByJobTaskId">
+        update batch.job_step_instance
+        set step_status = 'READY',
+            retry_count = #{retryCount},
+            result_summary = null,
+            error_code = null,
+            error_message = null,
+            started_at = null,
+            finished_at = null,
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and job_task_id = #{jobTaskId}
+    </update>
+</mapper>

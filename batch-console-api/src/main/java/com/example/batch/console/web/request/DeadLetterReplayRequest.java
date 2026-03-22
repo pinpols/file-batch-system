@@ -11,4 +11,8 @@ public class DeadLetterReplayRequest {
     private String tenantId;
     @NotNull
     private Long deadLetterId;
+    private String reason;
+    private String operatorId;
+    private String approvalId;
+    private String strategy;
 }

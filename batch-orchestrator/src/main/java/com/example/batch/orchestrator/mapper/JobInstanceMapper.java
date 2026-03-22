@@ -25,17 +25,29 @@ public interface JobInstanceMapper {
                        @Param("instanceStatus") String instanceStatus,
                        @Param("successPartitionCount") Integer successPartitionCount,
                        @Param("failedPartitionCount") Integer failedPartitionCount,
-                       @Param("finishedAt") java.time.Instant finishedAt);
+                       @Param("resultSummary") String resultSummary,
+                       @Param("finishedAt") java.time.Instant finishedAt,
+                       @Param("expectedVersion") Long expectedVersion);
 
     int markRunning(@Param("tenantId") String tenantId,
                     @Param("id") Long id,
                     @Param("instanceStatus") String instanceStatus,
                     @Param("expectedPartitionCount") Integer expectedPartitionCount,
-                    @Param("startedAt") java.time.Instant startedAt);
+                    @Param("startedAt") java.time.Instant startedAt,
+                    @Param("expectedVersion") Long expectedVersion);
 
     int updateExpectedPartitionCount(@Param("tenantId") String tenantId,
                                      @Param("id") Long id,
-                                     @Param("expectedPartitionCount") Integer expectedPartitionCount);
+                                     @Param("expectedPartitionCount") Integer expectedPartitionCount,
+                                     @Param("expectedVersion") Long expectedVersion);
+
+    List<JobInstanceEntity> selectSlaViolationCandidates(@Param("limit") int limit);
+
+    long countSlaViolationCandidates();
+
+    int markSlaAlerted(@Param("tenantId") String tenantId,
+                       @Param("id") Long id,
+                       @Param("slaAlertedAt") java.time.Instant slaAlertedAt);
 
     long countActiveByTenant(@Param("tenantId") String tenantId);
 

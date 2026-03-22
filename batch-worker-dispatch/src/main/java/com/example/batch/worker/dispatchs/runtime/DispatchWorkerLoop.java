@@ -9,6 +9,7 @@ import java.net.UnknownHostException;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -18,18 +19,13 @@ import org.springframework.util.StringUtils;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class DispatchWorkerLoop {
 
     private final WorkerRuntimeFacade workerRuntimeFacade;
     private final DispatchWorkerConfiguration configuration;
     private final AtomicBoolean started = new AtomicBoolean(false);
     private volatile WorkerRegistration registration;
-
-    public DispatchWorkerLoop(WorkerRuntimeFacade workerRuntimeFacade,
-                              DispatchWorkerConfiguration configuration) {
-        this.workerRuntimeFacade = workerRuntimeFacade;
-        this.configuration = configuration;
-    }
 
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {

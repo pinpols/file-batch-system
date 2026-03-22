@@ -6,6 +6,9 @@ public record JobInstanceQuery(
         String tenantId,
         String jobCode,
         String instanceStatus,
+        String instanceNo,
+        String bizDate,
+        String traceId,
         PageRequest pageRequest
 ) {
 }

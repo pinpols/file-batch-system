@@ -15,7 +15,6 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowRunEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
@@ -38,12 +37,12 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     private final SchedulePlanBuilder schedulePlanBuilder;
     private final PartitionLifecycleService partitionLifecycleService;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
-    private final JobPartitionMapper jobPartitionMapper;
     private final JobInstanceMapper jobInstanceMapper;
-    private final JobTaskMapper jobTaskMapper;
+    private final JobPartitionMapper jobPartitionMapper;
     private final WorkflowNodeRunMapper workflowNodeRunMapper;
     private final WorkflowDagService workflowDagService;
     private final ResourceScheduler resourceScheduler;
+    private final TaskExecutionService taskExecutionService;
 
     @Override
     @Transactional
@@ -131,8 +130,13 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             task.setAssignedWorkerCode(resolveSelectedWorkerId(plan, partition));
             task.setTaskStatus(decision.getTaskStatus());
             task.setTaskPayload(taskPayload);
-            jobTaskMapper.insert(task);
-            if (decision.isDispatchable() && releasePartitionForDispatch(partition, task)) {
+            taskExecutionService.createTask(task);
+            if (decision.isDispatchable() && partitionLifecycleService.releaseForDispatch(
+                    partition,
+                    task,
+                    PartitionStatus.CREATED.code(),
+                    TaskStatus.CREATED.code()
+            )) {
                 taskDispatchOutboxService.writeDispatchEvent(
                         jobInstance,
                         task,
@@ -143,12 +147,17 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             }
         }
         int currentExpectedPartitionCount = jobInstance.getExpectedPartitionCount() == null ? 0 : jobInstance.getExpectedPartitionCount();
-        jobInstanceMapper.updateExpectedPartitionCount(
+        int updated = jobInstanceMapper.updateExpectedPartitionCount(
                 jobInstance.getTenantId(),
                 jobInstance.getId(),
-                currentExpectedPartitionCount + newPartitions.size()
+                currentExpectedPartitionCount + newPartitions.size(),
+                jobInstance.getVersion()
         );
+        if (updated <= 0) {
+            throw new IllegalStateException("job instance expected partition count update conflict");
+        }
         jobInstance.setExpectedPartitionCount(currentExpectedPartitionCount + newPartitions.size());
+        jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
         return newPartitions.size();
     }
 
@@ -330,28 +339,4 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         return Map.of();
     }
 
-    private boolean releasePartitionForDispatch(JobPartitionEntity partition, JobTaskEntity task) {
-        if (partition == null || task == null) {
-            return false;
-        }
-        if (jobPartitionMapper.promoteStatus(
-                partition.getTenantId(),
-                partition.getId(),
-                PartitionStatus.CREATED.code(),
-                PartitionStatus.READY.code()
-        ) <= 0) {
-            return false;
-        }
-        if (jobTaskMapper.promoteStatus(
-                task.getTenantId(),
-                task.getId(),
-                TaskStatus.CREATED.code(),
-                TaskStatus.READY.code()
-        ) <= 0) {
-            return false;
-        }
-        partition.setPartitionStatus(PartitionStatus.READY.code());
-        task.setTaskStatus(TaskStatus.READY.code());
-        return true;
-    }
 }

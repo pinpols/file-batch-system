@@ -36,8 +36,6 @@ batch:
     export:
       worker-code: ${BATCH_WORKER_EXPORT_CODE:export-node-1}
       worker-type: EXPORT
-      default-stage: PREPARE
-      batch-size: 100
       tenant-id: ${BATCH_WORKER_EXPORT_TENANT_ID:default-tenant}
       heartbeat-interval-millis: ${BATCH_WORKER_EXPORT_HEARTBEAT_INTERVAL_MILLIS:15000}
       topic: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}

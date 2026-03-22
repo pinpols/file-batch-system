@@ -33,6 +33,14 @@ public interface JobPartitionMapper {
                      @Param("id") Long id,
                      @Param("retryCount") Integer retryCount);
 
+    int updateOutputSummary(@Param("tenantId") String tenantId,
+                            @Param("id") Long id,
+                            @Param("outputSummary") String outputSummary);
+
+    int updateInputSnapshot(@Param("tenantId") String tenantId,
+                            @Param("id") Long id,
+                            @Param("inputSnapshot") String inputSnapshot);
+
     int markStatus(@Param("tenantId") String tenantId,
                    @Param("id") Long id,
                    @Param("partitionStatus") String partitionStatus);

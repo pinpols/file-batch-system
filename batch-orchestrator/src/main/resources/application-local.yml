@@ -31,6 +31,7 @@ batch:
     batch-size: 100
     poll-interval-millis: 5000
     retry-delay-seconds: 60
+    max-retry-attempts: 5
   partition-lease:
     expire-seconds: 60
     reclaim-interval-millis: 15000
@@ -44,6 +45,10 @@ batch:
   resource-scheduler:
     waiting-dispatch-batch-size: 100
     waiting-dispatch-interval-millis: 10000
+  sla:
+    enabled: true
+    poll-interval-millis: 30000
+    batch-size: 200
   file-governance:
     latency:
       enabled: true
@@ -63,6 +68,16 @@ batch:
       default-tenant-id: default-tenant
       prefix:
       include-temporary-objects: false
+    arrival:
+      enabled: true
+      poll-interval-millis: 30000
+      batch-size: 200
+      default-timeout-action: MANUAL_CONFIRM
+      trigger-on-complete: true
+      manual-wait-extension-seconds: 1800
+    access:
+      enabled: true
+      presign-expiry-seconds: 600
   storage:
     minio:
       endpoint: http://localhost:9000

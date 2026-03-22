@@ -33,6 +33,7 @@ batch:
     batch-size: ${BATCH_OUTBOX_BATCH_SIZE:100}
     poll-interval-millis: ${BATCH_OUTBOX_POLL_INTERVAL_MILLIS:5000}
     retry-delay-seconds: ${BATCH_OUTBOX_RETRY_DELAY_SECONDS:60}
+    max-retry-attempts: ${BATCH_OUTBOX_MAX_RETRY_ATTEMPTS:5}
   partition-lease:
     expire-seconds: ${BATCH_PARTITION_LEASE_EXPIRE_SECONDS:60}
     reclaim-interval-millis: ${BATCH_PARTITION_LEASE_RECLAIM_INTERVAL_MILLIS:15000}
@@ -46,6 +47,10 @@ batch:
   resource-scheduler:
     waiting-dispatch-batch-size: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE:100}
     waiting-dispatch-interval-millis: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS:10000}
+  sla:
+    enabled: ${BATCH_SLA_ENABLED:true}
+    poll-interval-millis: ${BATCH_SLA_POLL_INTERVAL_MILLIS:30000}
+    batch-size: ${BATCH_SLA_BATCH_SIZE:200}
   file-governance:
     latency:
       enabled: ${BATCH_FILE_GOVERNANCE_LATENCY_ENABLED:true}
@@ -65,6 +70,16 @@ batch:
       default-tenant-id: ${BATCH_FILE_GOVERNANCE_RECONCILE_DEFAULT_TENANT_ID:default-tenant}
       prefix: ${BATCH_FILE_GOVERNANCE_RECONCILE_PREFIX:}
       include-temporary-objects: ${BATCH_FILE_GOVERNANCE_RECONCILE_INCLUDE_TEMPORARY_OBJECTS:false}
+    arrival:
+      enabled: ${BATCH_FILE_GOVERNANCE_ARRIVAL_ENABLED:true}
+      poll-interval-millis: ${BATCH_FILE_GOVERNANCE_ARRIVAL_POLL_INTERVAL_MILLIS:30000}
+      batch-size: ${BATCH_FILE_GOVERNANCE_ARRIVAL_BATCH_SIZE:200}
+      default-timeout-action: ${BATCH_FILE_GOVERNANCE_ARRIVAL_DEFAULT_TIMEOUT_ACTION:MANUAL_CONFIRM}
+      trigger-on-complete: ${BATCH_FILE_GOVERNANCE_ARRIVAL_TRIGGER_ON_COMPLETE:true}
+      manual-wait-extension-seconds: ${BATCH_FILE_GOVERNANCE_ARRIVAL_MANUAL_WAIT_EXTENSION_SECONDS:1800}
+    access:
+      enabled: ${BATCH_FILE_GOVERNANCE_ACCESS_ENABLED:true}
+      presign-expiry-seconds: ${BATCH_FILE_GOVERNANCE_ACCESS_PRESIGN_EXPIRY_SECONDS:600}
   storage:
     minio:
       endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}

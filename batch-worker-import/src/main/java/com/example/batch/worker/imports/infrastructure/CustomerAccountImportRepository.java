@@ -1,64 +1,37 @@
 package com.example.batch.worker.imports.infrastructure;
 
 import com.example.batch.worker.imports.domain.CustomerImportPayload;
+import com.example.batch.worker.imports.mapper.business.CustomerAccountImportMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
-import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.util.StringUtils;
 
 @Repository
+@RequiredArgsConstructor
 public class CustomerAccountImportRepository {
 
-    private final JdbcTemplate businessJdbcTemplate;
-
-    public CustomerAccountImportRepository(@Qualifier("businessJdbcTemplate") JdbcTemplate businessJdbcTemplate) {
-        this.businessJdbcTemplate = businessJdbcTemplate;
-    }
+    private final CustomerAccountImportMapper customerAccountImportMapper;
 
     public int upsert(String tenantId, String sourceFileName, String sourceBatchNo, String sourceTraceId, CustomerImportPayload payload) {
         if (!StringUtils.hasText(tenantId) || payload == null || !StringUtils.hasText(payload.customerNo())) {
             return 0;
         }
-        String sql = """
-                insert into biz.customer_account (
-                    tenant_id,
-                    customer_no,
-                    customer_name,
-                    customer_type,
-                    certificate_no,
-                    mobile_no,
-                    email,
-                    status,
-                    source_file_name,
-                    source_batch_no,
-                    source_trace_id
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (tenant_id, customer_no) do update set
-                    customer_name = excluded.customer_name,
-                    customer_type = excluded.customer_type,
-                    certificate_no = excluded.certificate_no,
-                    mobile_no = excluded.mobile_no,
-                    email = excluded.email,
-                    status = excluded.status,
-                    source_file_name = excluded.source_file_name,
-                    source_batch_no = excluded.source_batch_no,
-                    source_trace_id = excluded.source_trace_id,
-                    updated_at = current_timestamp
-                """;
-        return businessJdbcTemplate.update(sql,
-                tenantId,
-                payload.customerNo(),
-                payload.customerName(),
-                payload.customerType(),
-                payload.certificateNo(),
-                payload.mobileNo(),
-                payload.email(),
-                normalizeStatus(payload.status()),
-                sourceFileName,
-                sourceBatchNo,
-                sourceTraceId
-        );
+        return customerAccountImportMapper.upsertCustomerAccount(params(
+                "tenantId", tenantId,
+                "customerNo", payload.customerNo(),
+                "customerName", payload.customerName(),
+                "customerType", payload.customerType(),
+                "certificateNo", payload.certificateNo(),
+                "mobileNo", payload.mobileNo(),
+                "email", payload.email(),
+                "status", normalizeStatus(payload.status()),
+                "sourceFileName", sourceFileName,
+                "sourceBatchNo", sourceBatchNo,
+                "sourceTraceId", sourceTraceId
+        ));
     }
 
     public int upsertBatch(String tenantId,
@@ -78,5 +51,13 @@ public class CustomerAccountImportRepository {
 
     private String normalizeStatus(String status) {
         return StringUtils.hasText(status) ? status : "ACTIVE";
+    }
+
+    private Map<String, Object> params(Object... pairs) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (int index = 0; index < pairs.length; index += 2) {
+            values.put(String.valueOf(pairs[index]), pairs[index + 1]);
+        }
+        return values;
     }
 }

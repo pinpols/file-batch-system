@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.WorkflowNodeRunMapper">
+    <resultMap id="WorkflowNodeRunResultMap" type="com.example.batch.console.domain.entity.WorkflowNodeRunEntity">
+        <id column="id" property="id"/>
+        <result column="workflow_run_id" property="workflowRunId"/>
+        <result column="node_code" property="nodeCode"/>
+        <result column="node_type" property="nodeType"/>
+        <result column="run_seq" property="runSeq"/>
+        <result column="node_status" property="nodeStatus"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="duration_ms" property="durationMs"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="WorkflowNodeRunResultMap">
+        select *
+        from batch.workflow_node_run
+        where 1 = 1
+        <if test="workflowRunId != null">
+            and workflow_run_id = #{workflowRunId}
+        </if>
+        <if test="nodeCode != null and nodeCode != ''">
+            and node_code = #{nodeCode}
+        </if>
+        <if test="nodeStatus != null and nodeStatus != ''">
+            and node_status = #{nodeStatus}
+        </if>
+        order by run_seq desc, id desc
+    </select>
+</mapper>

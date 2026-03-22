@@ -4,6 +4,7 @@ import com.example.batch.console.application.ConsoleFileApplicationService;
 import com.example.batch.console.support.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ArchiveFileRequest;
 import com.example.batch.console.web.request.DeleteFileRequest;
+import com.example.batch.console.web.request.FileArrivalGroupActionRequest;
 import com.example.batch.console.web.request.RedispatchFileRequest;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
@@ -39,5 +40,11 @@ public class ConsoleFileController {
     public CommonResponse<String> redispatch(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                              @Valid @RequestBody RedispatchFileRequest request) {
         return responseFactory.success(applicationService.redispatch(request, idempotencyKey));
+    }
+
+    @PostMapping("/arrival-groups/action")
+    public CommonResponse<String> operateArrivalGroup(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+                                                      @Valid @RequestBody FileArrivalGroupActionRequest request) {
+        return responseFactory.success(applicationService.operateArrivalGroup(request, idempotencyKey));
     }
 }

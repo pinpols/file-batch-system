@@ -5,6 +5,8 @@ import org.apache.ibatis.annotations.Param;
 
 public interface TriggerRequestMapper {
 
+    int insert(TriggerRequestEntity entity);
+
     TriggerRequestEntity selectByTenantAndRequestId(@Param("tenantId") String tenantId,
                                                     @Param("requestId") String requestId);
 

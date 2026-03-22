@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.FileGovernanceMapper">
+    <select id="selectFileRecord" resultType="map">
+        select *
+        from batch.file_record
+        where tenant_id = #{tenantId}
+          and id = #{fileId}
+    </select>
+
+    <select id="countActivePipelineInstances" resultType="java.lang.Long">
+        select count(1)
+        from batch.pipeline_instance
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and run_status in ('CREATED', 'RUNNING', 'COMPENSATING')
+    </select>
+
+    <select id="countPendingDispatchRecords" resultType="java.lang.Long">
+        select count(1)
+        from batch.file_dispatch_record
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+          and (dispatch_status in ('CREATED', 'SENT') or receipt_status = 'PENDING')
+    </select>
+
+    <select id="selectLatestDispatchRecord" resultType="map">
+        select *
+        from batch.file_dispatch_record
+        where tenant_id = #{tenantId}
+          and file_id = #{fileId}
+        <if test="channelCode != null and channelCode != ''">
+            and channel_code = #{channelCode}
+        </if>
+        order by id desc
+        limit 1
+    </select>
+
+    <select id="selectRelatedJobInstanceId" resultType="java.lang.Long">
+        select related_job_instance_id
+        from batch.pipeline_instance
+        where id = #{pipelineInstanceId}
+    </select>
+
+    <update id="resetDispatchRecordForRedispatch">
+        update batch.file_dispatch_record
+        set dispatch_status = 'CREATED',
+            receipt_status = 'NONE',
+            error_code = null,
+            error_message = null,
+            ack_at = null,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{dispatchRecordId}
+    </update>
+
+    <select id="selectArchivedFilesForCleanup" resultType="map">
+        select *
+        from batch.file_record
+        where file_status = 'ARCHIVED'
+          and updated_at &lt; #{cutoff}
+        order by updated_at asc
+        limit #{limit}
+    </select>
+
+    <select id="selectArrivalGovernanceCandidates" resultType="map">
+        select id,
+               tenant_id,
+               file_name,
+               file_status,
+               created_at,
+               updated_at,
+               metadata_json -&gt;&gt; 'fileGroupCode' as file_group_code,
+               metadata_json -&gt;&gt; 'waitFileGroupMode' as wait_file_group_mode,
+               metadata_json -&gt;&gt; 'requiredFileSet' as required_file_set,
+               metadata_json -&gt;&gt; 'arrivalTimeoutAction' as arrival_timeout_action,
+               metadata_json -&gt;&gt; 'arrivalState' as arrival_state,
+               metadata_json -&gt;&gt; 'arrivalReason' as arrival_reason,
+               metadata_json -&gt;&gt; 'expectedArrivalTime' as expected_arrival_time,
+               metadata_json -&gt;&gt; 'latestTolerableTime' as latest_tolerable_time,
+               metadata_json -&gt;&gt; 'triggerOnComplete' as trigger_on_complete
+        from batch.file_record
+        where metadata_json ? 'fileGroupCode'
+          and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') not in ('TRIGGERED', 'TIMEOUT')
+        order by coalesce((metadata_json -&gt;&gt; 'latestTolerableTime')::timestamptz, created_at) asc,
+                 created_at asc
+        limit #{limit}
+    </select>
+
+    <select id="selectArrivalGroupSummaries" resultType="map">
+        select tenant_id,
+               metadata_json -&gt;&gt; 'fileGroupCode' as file_group_code,
+               coalesce(metadata_json -&gt;&gt; 'waitFileGroupMode', 'ALL_OF') as wait_file_group_mode,
+               coalesce(metadata_json -&gt;&gt; 'requiredFileSet', '') as required_file_set,
+               coalesce(metadata_json -&gt;&gt; 'arrivalTimeoutAction', 'MANUAL_CONFIRM') as arrival_timeout_action,
+               coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') as arrival_state,
+               max(metadata_json -&gt;&gt; 'expectedArrivalTime') as expected_arrival_time,
+               max(metadata_json -&gt;&gt; 'latestTolerableTime') as latest_tolerable_time,
+               count(1) as arrived_count,
+               count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') = 'TRIGGERED') as triggered_count,
+               count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') = 'TIMEOUT') as timeout_count,
+               count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') like 'WAITING%') as waiting_count,
+               max(updated_at) as last_updated_at
+        from batch.file_record
+        where metadata_json ? 'fileGroupCode'
+        <if test="tenantId != null and tenantId != ''">
+            and tenant_id = #{tenantId}
+        </if>
+        <if test="fileGroupCode != null and fileGroupCode != ''">
+            and metadata_json -&gt;&gt; 'fileGroupCode' = #{fileGroupCode}
+        </if>
+        <if test="arrivalState != null and arrivalState != ''">
+            and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') = #{arrivalState}
+        </if>
+        group by tenant_id,
+                 metadata_json -&gt;&gt; 'fileGroupCode',
+                 coalesce(metadata_json -&gt;&gt; 'waitFileGroupMode', 'ALL_OF'),
+                 coalesce(metadata_json -&gt;&gt; 'requiredFileSet', ''),
+                 coalesce(metadata_json -&gt;&gt; 'arrivalTimeoutAction', 'MANUAL_CONFIRM'),
+                 coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL')
+        order by last_updated_at desc, file_group_code asc
+    </select>
+
+    <select id="selectArrivalGroupFiles" resultType="map">
+        select id,
+               tenant_id,
+               file_name,
+               file_status,
+               metadata_json,
+               metadata_json -&gt;&gt; 'fileGroupCode' as file_group_code,
+               coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') as arrival_state,
+               coalesce(metadata_json -&gt;&gt; 'arrivalTimeoutAction', 'MANUAL_CONFIRM') as arrival_timeout_action,
+               coalesce(metadata_json -&gt;&gt; 'allowEmptyRun', 'false') as allow_empty_run,
+               coalesce(metadata_json -&gt;&gt; 'allowSkipBizDate', 'false') as allow_skip_biz_date,
+               metadata_json -&gt;&gt; 'requiredFileSet' as required_file_set,
+               metadata_json -&gt;&gt; 'latestTolerableTime' as latest_tolerable_time
+        from batch.file_record
+        where tenant_id = #{tenantId}
+          and metadata_json -&gt;&gt; 'fileGroupCode' = #{fileGroupCode}
+        order by id asc
+    </select>
+
+    <select id="countArrivalDelayViolations" resultType="java.lang.Long">
+        select count(1)
+        from batch.file_record
+        where metadata_json ? 'expectedArrivalTime'
+          and created_at &gt; ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz + (#{thresholdSeconds} * interval '1 second'))
+    </select>
+
+    <select id="selectMaxArrivalDelaySeconds" resultType="java.lang.Long">
+        select coalesce(max(extract(epoch from (created_at - ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz)))), 0)::bigint
+        from batch.file_record
+        where metadata_json ? 'expectedArrivalTime'
+    </select>
+
+    <select id="selectArrivalDelaySamples" resultType="map">
+        select tenant_id,
+               id,
+               file_name,
+               created_at,
+               (metadata_json -&gt;&gt; 'expectedArrivalTime') as expected_arrival_time,
+               extract(epoch from (created_at - ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz)))::bigint as arrival_delay_seconds
+        from batch.file_record
+        where metadata_json ? 'expectedArrivalTime'
+          and created_at &gt; ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz + (#{thresholdSeconds} * interval '1 second'))
+        order by arrival_delay_seconds desc
+        limit #{limit}
+    </select>
+
+    <select id="countProcessingDelayViolations" resultType="java.lang.Long">
+        select count(1)
+        from batch.pipeline_instance
+        where run_status = 'RUNNING'
+          and started_at is not null
+          and started_at &lt; current_timestamp - (#{thresholdSeconds} * interval '1 second')
+    </select>
+
+    <select id="selectMaxProcessingDelaySeconds" resultType="java.lang.Long">
+        select coalesce(max(extract(epoch from (current_timestamp - started_at))), 0)::bigint
+        from batch.pipeline_instance
+        where run_status = 'RUNNING'
+          and started_at is not null
+    </select>
+
+    <select id="selectProcessingDelaySamples" resultType="map">
+        select tenant_id,
+               id,
+               pipeline_code,
+               pipeline_type,
+               related_job_instance_id,
+               started_at,
+               extract(epoch from (current_timestamp - started_at))::bigint as processing_delay_seconds
+        from batch.pipeline_instance
+        where run_status = 'RUNNING'
+          and started_at is not null
+          and started_at &lt; current_timestamp - (#{thresholdSeconds} * interval '1 second')
+        order by processing_delay_seconds desc
+        limit #{limit}
+    </select>
+
+    <select id="countFileRecordByStoragePath" resultType="java.lang.Long">
+        select count(1)
+        from batch.file_record
+        where tenant_id = #{tenantId}
+          and coalesce(storage_bucket, '') = coalesce(#{storageBucket}, '')
+          and storage_path = #{storagePath}
+    </select>
+
+    <insert id="insertReconciledFileRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.file_record (
+            tenant_id, file_category, file_name, original_file_name, file_ext, file_format_type,
+            charset, mime_type, file_size_bytes, checksum_type, checksum_value,
+            storage_type, storage_path, storage_bucket, file_version, file_generation_no, is_latest,
+            source_type, source_ref, file_status, biz_date, trace_id, metadata_json, created_at, updated_at
+        ) values (
+            #{tenantId}, #{fileCategory}, #{fileName}, #{fileName}, #{fileExt}, #{fileFormatType},
+            'UTF-8', #{mimeType}, #{fileSizeBytes}, 'NONE', null,
+            #{storageType}, #{storagePath}, #{storageBucket}, 'v1', 1, true,
+            #{sourceType}, null, #{fileStatus}, null, #{traceId}, #{metadataJson,jdbcType=VARCHAR}::jsonb, current_timestamp, current_timestamp
+        )
+    </insert>
+
+    <update id="updateFileStatus">
+        update batch.file_record
+        set file_status = #{nextStatus},
+            metadata_json = coalesce(metadata_json, '{}'::jsonb) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{fileId}
+    </update>
+
+    <update id="updateFileMetadata">
+        update batch.file_record
+        set metadata_json = coalesce(metadata_json, '{}'::jsonb) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{fileId}
+    </update>
+
+    <insert id="insertFileAuditLog">
+        insert into batch.file_audit_log (
+            tenant_id, file_id, operation_type, operation_result,
+            operator_type, operator_id, trace_id, detail_summary, created_at
+        ) values (
+            #{tenantId}, #{fileId}, #{operationType}, #{operationResult},
+            #{operatorType}, #{operatorId}, #{traceId}, #{detailSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+        )
+    </insert>
+</mapper>

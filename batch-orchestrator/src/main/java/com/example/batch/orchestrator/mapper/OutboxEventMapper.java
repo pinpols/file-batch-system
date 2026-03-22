@@ -19,4 +19,7 @@ public interface OutboxEventMapper {
     int markFailed(@org.apache.ibatis.annotations.Param("tenantId") String tenantId,
                    @org.apache.ibatis.annotations.Param("id") Long id,
                    @org.apache.ibatis.annotations.Param("nextPublishAt") java.time.Instant nextPublishAt);
+
+    int markGiveUp(@org.apache.ibatis.annotations.Param("tenantId") String tenantId,
+                   @org.apache.ibatis.annotations.Param("id") Long id);
 }

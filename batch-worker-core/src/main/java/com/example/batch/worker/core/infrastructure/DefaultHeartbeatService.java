@@ -4,21 +4,17 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.HeartbeatService;
 import com.example.batch.worker.core.support.WorkerRegistryService;
 import com.example.batch.worker.core.support.WorkerRuntimeState;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class DefaultHeartbeatService implements HeartbeatService {
 
     private final WorkerRegistryService workerRegistryService;
     private final WorkerRuntimeState workerRuntimeState;
-
-    public DefaultHeartbeatService(WorkerRegistryService workerRegistryService,
-                                   WorkerRuntimeState workerRuntimeState) {
-        this.workerRegistryService = workerRegistryService;
-        this.workerRuntimeState = workerRuntimeState;
-    }
 
     @Override
     public void beat(String workerId) {

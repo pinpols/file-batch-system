@@ -11,22 +11,16 @@ import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskExecutionWrapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
     private final StepExecutionAdapter stepExecutionAdapter;
     private final TaskExecutionClient taskExecutionClient;
     private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
-
-    public DefaultTaskExecutionWrapper(StepExecutionAdapter stepExecutionAdapter,
-                                      TaskExecutionClient taskExecutionClient,
-                                      ActiveTaskLeaseRegistry activeTaskLeaseRegistry) {
-        this.stepExecutionAdapter = stepExecutionAdapter;
-        this.taskExecutionClient = taskExecutionClient;
-        this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
-    }
 
     @Override
     public boolean claim(String tenantId, Long taskId, String workerId) {

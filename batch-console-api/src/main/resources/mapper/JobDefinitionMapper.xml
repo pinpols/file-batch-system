@@ -3,6 +3,26 @@
 <mapper namespace="com.example.batch.console.mapper.JobDefinitionMapper">
     <resultMap id="JobDefinitionResultMap" type="com.example.batch.console.domain.entity.JobDefinitionEntity">
         <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="job_name" property="jobName"/>
+        <result column="job_type" property="jobType"/>
+        <result column="queue_code" property="queueCode"/>
+        <result column="worker_group" property="workerGroup"/>
+        <result column="schedule_type" property="scheduleType"/>
+        <result column="schedule_expr" property="scheduleExpr"/>
+        <result column="calendar_code" property="calendarCode"/>
+        <result column="window_code" property="windowCode"/>
+        <result column="retry_policy" property="retryPolicy"/>
+        <result column="retry_max_count" property="retryMaxCount"/>
+        <result column="timeout_seconds" property="timeoutSeconds"/>
+        <result column="shard_strategy" property="shardStrategy"/>
+        <result column="execution_handler" property="executionHandler"/>
+        <result column="param_schema" property="paramSchema"/>
+        <result column="default_params" property="defaultParams"/>
+        <result column="enabled" property="enabled"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="JobDefinitionResultMap">

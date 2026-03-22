@@ -88,4 +88,12 @@
         where tenant_id = #{tenantId}
           and id = #{id}
     </update>
+
+    <update id="markGiveUp">
+        update batch.outbox_event
+        set publish_status = 'GIVE_UP',
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
 </mapper>

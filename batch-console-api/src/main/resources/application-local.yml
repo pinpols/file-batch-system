@@ -8,8 +8,12 @@ spring:
     password: batch_pass_123
     driver-class-name: org.postgresql.Driver
   ai:
-    openai-sdk:
+    openai:
+      base-url: https://api.openai.com
       api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: gpt-4o-mini
   security:
     user:
       name: admin
@@ -27,7 +31,30 @@ management:
 
 batch:
   console:
-    ai-enabled: false
+    security:
+      enabled: true
+      shared-secret: console-secret
+      tenant-header: X-Tenant-Id
+      user-header: X-Console-User
+      role-header: X-Console-Roles
+      token-header: X-Console-Token
+      default-tenant-id: default-tenant
+      allowed-tenants:
+        - default-tenant
+      default-authorities:
+        - ROLE_ADMIN
+        - ROLE_AUDITOR
+        - ROLE_CONFIG_ADMIN
+    ai:
+      enabled: false
+      model: gpt-4o-mini
+      max-prompt-length: 4000
+      max-response-length: 3000
+      allowed-users:
+        - admin
+      allowed-authorities:
+        - ROLE_ADMIN
+        - ROLE_AUDITOR
     trigger:
       base-url: http://localhost:8081
     orchestrator:

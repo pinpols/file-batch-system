@@ -15,4 +15,21 @@ public class MinioImportScannerProperties {
     private long stabilityWindowSeconds = 30L;
     private String sourceType = "SYSTEM";
     private String defaultBizType = "IMPORT_SCAN";
+    private final Arrival arrival = new Arrival();
+
+    @Data
+    public static class Arrival {
+        private boolean enabled = false;
+        private String fileGroupCode = "";
+        private String waitFileGroupMode = "ALL_OF";
+        private String requiredFileSet = "";
+        private String arrivalTimeoutAction = "MANUAL_CONFIRM";
+        private long expectedArrivalDelaySeconds = 0L;
+        private long latestTolerableDelaySeconds = 600L;
+        private boolean triggerOnComplete = true;
+        private boolean allowEmptyRun = false;
+        private boolean allowSkipBizDate = false;
+        private boolean notifyManual = true;
+        private String notifyChannels = "";
+    }
 }

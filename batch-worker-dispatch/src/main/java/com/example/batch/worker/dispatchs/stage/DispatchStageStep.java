@@ -8,5 +8,17 @@ public interface DispatchStageStep {
 
     DispatchStage stage();
 
+    default String stepCode() {
+        return "DISPATCH_" + stage().name();
+    }
+
+    default String stepName() {
+        return stepCode();
+    }
+
+    default String implCode() {
+        return stepCode();
+    }
+
     DispatchStageResult execute(DispatchJobContext context);
 }

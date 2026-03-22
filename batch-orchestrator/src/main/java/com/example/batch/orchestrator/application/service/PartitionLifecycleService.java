@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
+import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.time.Instant;
 import java.util.List;
 
@@ -18,4 +19,9 @@ public interface PartitionLifecycleService {
     JobPartitionEntity renewLease(String tenantId, Long partitionId, String workerCode, Instant leaseExpireAt);
 
     int reclaimExpiredPartitions(String tenantId);
+
+    boolean releaseForDispatch(JobPartitionEntity partition,
+                               JobTaskEntity task,
+                               String fromPartitionStatus,
+                               String fromTaskStatus);
 }

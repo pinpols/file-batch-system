@@ -31,7 +31,12 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
         }
         return queues.stream()
                 .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
-                .sorted(Comparator.comparing(queue -> !"MIXED".equalsIgnoreCase(queue.getQueueType())))
+                .sorted(Comparator
+                        .comparing((ResourceQueueRecord queue) -> !"MIXED".equalsIgnoreCase(queue.getQueueType()))
+                        .thenComparing(queue -> normalizedWeight(queue.getFairShareWeight()), Comparator.reverseOrder())
+                        .thenComparing(queue -> normalizedWeight(queue.getMaxRunningJobs()), Comparator.reverseOrder())
+                        .thenComparing(queue -> normalizedWeight(queue.getMaxRunningPartitions()), Comparator.reverseOrder())
+                        .thenComparing(ResourceQueueRecord::getQueueCode, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .findFirst()
                 .orElse(null);
     }
@@ -45,5 +50,9 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
         }
         return workerType.equalsIgnoreCase(queue.getQueueType())
                 || "MIXED".equalsIgnoreCase(queue.getQueueType());
+    }
+
+    private Integer normalizedWeight(Integer weight) {
+        return weight == null || weight <= 0 ? 1 : weight;
     }
 }
