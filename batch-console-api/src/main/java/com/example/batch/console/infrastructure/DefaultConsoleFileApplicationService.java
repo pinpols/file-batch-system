@@ -1,14 +1,14 @@
 package com.example.batch.console.infrastructure;
 
-import com.example.batch.console.application.ConsoleFileApplicationService;
+import com.example.batch.console.service.ConsoleFileApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.ArchiveFileRequest;
-import com.example.batch.console.web.request.DeleteFileRequest;
-import com.example.batch.console.web.request.PresignDownloadFileRequest;
-import com.example.batch.console.web.request.FileArrivalGroupActionRequest;
-import com.example.batch.console.web.request.RedispatchFileRequest;
+import com.example.batch.console.domain.request.ArchiveFileRequest;
+import com.example.batch.console.domain.request.DeleteFileRequest;
+import com.example.batch.console.domain.request.PresignDownloadFileRequest;
+import com.example.batch.console.domain.request.FileArrivalGroupActionRequest;
+import com.example.batch.console.domain.request.RedispatchFileRequest;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
