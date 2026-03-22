@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
+import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -39,6 +40,11 @@ public class DispatchStepExecutionAdapter extends AbstractPipelineStepExecutionA
     @Override
     protected String pipelineDescription() {
         return "Chapter 9 dispatch pipeline";
+    }
+
+    @Override
+    protected List<PipelineStepTemplate> defaultPipelineSteps() {
+        return dispatchStageExecutor.defaultStepDefinitions();
     }
 
     @Override

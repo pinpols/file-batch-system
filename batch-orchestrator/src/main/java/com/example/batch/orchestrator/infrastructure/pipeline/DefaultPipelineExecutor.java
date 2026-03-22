@@ -13,18 +13,15 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class DefaultPipelineExecutor implements PipelineExecutor {
 
     private final StepRegistry stepRegistry;
     private final WorkerRouter workerRouter;
-
-    public DefaultPipelineExecutor(StepRegistry stepRegistry, WorkerRouter workerRouter) {
-        this.stepRegistry = stepRegistry;
-        this.workerRouter = workerRouter;
-    }
 
     @Override
     public PipelineExecutionResult execute(PipelineContext context) {

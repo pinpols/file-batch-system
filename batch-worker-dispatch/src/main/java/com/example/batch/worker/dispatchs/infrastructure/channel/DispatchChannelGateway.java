@@ -2,16 +2,14 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class DispatchChannelGateway {
 
     private final List<DispatchChannelAdapter> adapters;
-
-    public DispatchChannelGateway(List<DispatchChannelAdapter> adapters) {
-        this.adapters = adapters;
-    }
 
     public DispatchResult dispatch(DispatchCommand command) {
         String channelType = command.channelConfig() == null ? null : String.valueOf(command.channelConfig().get("channel_type"));

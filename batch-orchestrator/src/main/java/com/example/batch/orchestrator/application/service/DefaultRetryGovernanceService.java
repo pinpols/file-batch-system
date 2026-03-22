@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
+import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
@@ -16,6 +17,7 @@ import com.example.batch.orchestrator.domain.query.RetryScheduleQuery;
 import com.example.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
@@ -38,6 +40,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     private final JobTaskMapper jobTaskMapper;
     private final JobPartitionMapper jobPartitionMapper;
     private final JobInstanceMapper jobInstanceMapper;
+    private final JobStepInstanceMapper jobStepInstanceMapper;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
     private final RetryGovernanceProperties retryGovernanceProperties;
 
@@ -109,6 +112,12 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 );
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public void retryPartition(String tenantId, Long partitionId, String eventKey) {
+        requeuePartition(tenantId, partitionId, eventKey);
     }
 
     @Override
@@ -188,6 +197,11 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("retry task not found"));
 
+        JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
+        if (stepInstance != null) {
+            int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
+            jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount);
+        }
         jobPartitionMapper.resetForDispatch(tenantId, partition.getId());
         jobTaskMapper.resetForRetry(tenantId, task.getId());
         taskDispatchOutboxService.writeDispatchEvent(

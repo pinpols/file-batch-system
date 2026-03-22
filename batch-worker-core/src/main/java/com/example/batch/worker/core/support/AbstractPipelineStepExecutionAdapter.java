@@ -2,6 +2,8 @@ package com.example.batch.worker.core.support;
 
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
+import com.example.batch.worker.core.domain.PipelineStepDefinition;
+import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import java.util.LinkedHashMap;
@@ -32,10 +34,15 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
                 pipelineCode,
                 pipelineType(),
                 pipelineWorkerGroup(),
-                pipelineDescription()
+                pipelineDescription(),
+                defaultPipelineSteps()
         );
         if (pipelineDefinitionId == null) {
             return new StepExecutionResponse(false, "PIPELINE_DEFINITION_MISSING", "pipeline definition missing");
+        }
+        List<PipelineStepDefinition> pipelineSteps = runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
+        if (pipelineSteps.isEmpty()) {
+            return new StepExecutionResponse(false, "PIPELINE_STEP_DEFINITION_MISSING", "pipeline step definition missing");
         }
         Long pipelineInstanceId = runtimeRepository.createPipelineInstance(
                 request.tenantId(),
@@ -44,12 +51,14 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
                 pipelineType(),
                 fileId,
                 runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
-                initialStage(),
+                resolveInitialStage(pipelineSteps),
                 traceId
         );
         attributes.put(PipelineRuntimeKeys.TRACE_ID, traceId);
         attributes.put(PipelineRuntimeKeys.PIPELINE_CODE, pipelineCode);
+        attributes.put(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID, pipelineDefinitionId);
         attributes.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
+        attributes.put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, pipelineSteps);
         attributes.putIfAbsent("jobCode", request.jobCode());
         attributes.putIfAbsent("stepCode", request.stepCode());
         attributes.putIfAbsent(PipelineRuntimeKeys.FILE_ID, fileId);
@@ -94,6 +103,11 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
 
     protected String pipelineWorkerGroup() {
         return "worker-" + pipelineType().toLowerCase();
+    }
+
+    protected String resolveInitialStage(List<PipelineStepDefinition> pipelineSteps) {
+        PipelineStepDefinition firstStep = PipelineStepFlowSupport.firstStep(pipelineSteps);
+        return firstStep == null ? initialStage() : firstStep.stageCode();
     }
 
     protected String unexpectedErrorCode() {
@@ -153,6 +167,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
     protected abstract String pipelineType();
 
     protected abstract String pipelineDescription();
+
+    protected abstract List<PipelineStepTemplate> defaultPipelineSteps();
 
     protected abstract String initialStage();
 

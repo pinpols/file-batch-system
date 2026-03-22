@@ -96,6 +96,7 @@
     <update id="updateStatus">
         update batch.job_task
         set task_status = #{taskStatus},
+            result_summary = #{resultSummary},
             error_code = #{errorCode},
             error_message = #{errorMessage},
             finished_at = case

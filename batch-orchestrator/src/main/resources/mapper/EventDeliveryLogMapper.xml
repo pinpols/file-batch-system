@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.EventDeliveryLogMapper">
+    <resultMap id="EventDeliveryLogResultMap" type="com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="outbox_event_id" property="outboxEventId"/>
+        <result column="event_type" property="eventType"/>
+        <result column="event_key" property="eventKey"/>
+        <result column="target_topic" property="targetTopic"/>
+        <result column="target_worker_id" property="targetWorkerId"/>
+        <result column="delivery_status" property="deliveryStatus"/>
+        <result column="delivery_attempt" property="deliveryAttempt"/>
+        <result column="delivery_summary" property="deliverySummary"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.event_delivery_log (
+            tenant_id,
+            outbox_event_id,
+            event_type,
+            event_key,
+            target_topic,
+            target_worker_id,
+            delivery_status,
+            delivery_attempt,
+            delivery_summary,
+            error_message,
+            trace_id
+        ) values (
+            #{tenantId},
+            #{outboxEventId},
+            #{eventType},
+            #{eventKey},
+            #{targetTopic},
+            #{targetWorkerId},
+            #{deliveryStatus},
+            #{deliveryAttempt},
+            #{deliverySummary},
+            #{errorMessage},
+            #{traceId}
+        )
+    </insert>
+
+    <select id="selectByQuery" resultMap="EventDeliveryLogResultMap">
+        select *
+        from batch.event_delivery_log
+        where 1 = 1
+        <if test="tenantId != null and tenantId != ''">
+            and tenant_id = #{tenantId}
+        </if>
+        <if test="deliveryStatus != null and deliveryStatus != ''">
+            and delivery_status = #{deliveryStatus}
+        </if>
+        <if test="eventType != null and eventType != ''">
+            and event_type = #{eventType}
+        </if>
+        <if test="eventKey != null and eventKey != ''">
+            and event_key = #{eventKey}
+        </if>
+        order by id desc
+    </select>
+</mapper>

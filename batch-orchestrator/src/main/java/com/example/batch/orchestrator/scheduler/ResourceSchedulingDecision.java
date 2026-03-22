@@ -14,6 +14,13 @@ public class ResourceSchedulingDecision {
     private String workerGroup;
     private Integer priority;
     private String priorityBand;
+    private Long fairnessScore;
+    private Integer tenantWeight;
+    private Integer queueWeight;
+    private Integer tenantActiveJobs;
+    private Integer tenantActivePartitions;
+    private Integer queueActiveJobs;
+    private Integer queueActivePartitions;
     private String partitionStatus;
     private String taskStatus;
     private WorkerRouteModel route;

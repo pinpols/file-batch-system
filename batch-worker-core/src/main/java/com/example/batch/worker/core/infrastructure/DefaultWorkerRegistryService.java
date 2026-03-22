@@ -5,16 +5,14 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
 import com.example.batch.worker.core.support.WorkerRegistryService;
 import java.time.OffsetDateTime;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class DefaultWorkerRegistryService implements WorkerRegistryService {
 
     private final WorkerRegistryClient workerRegistryClient;
-
-    public DefaultWorkerRegistryService(WorkerRegistryClient workerRegistryClient) {
-        this.workerRegistryClient = workerRegistryClient;
-    }
 
     @Override
     public WorkerRegistration register(WorkerRegistration registration) {

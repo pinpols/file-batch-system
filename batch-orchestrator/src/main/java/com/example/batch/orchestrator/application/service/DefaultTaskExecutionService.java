@@ -1,10 +1,13 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowRunEntity;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -16,6 +19,7 @@ import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -36,17 +40,22 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import org.springframework.util.StringUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class DefaultTaskExecutionService implements TaskExecutionService {
 
     private final JobTaskMapper jobTaskMapper;
     private final JobExecutionLogMapper jobExecutionLogMapper;
     private final JobPartitionMapper jobPartitionMapper;
     private final JobInstanceMapper jobInstanceMapper;
+    private final JobStepInstanceMapper jobStepInstanceMapper;
     private final WorkflowRunMapper workflowRunMapper;
     private final WorkflowNodeRunMapper workflowNodeRunMapper;
     private final PartitionLeaseProperties partitionLeaseProperties;
@@ -56,36 +65,11 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
     private final WorkflowDagService workflowDagService;
     private final WorkflowNodeDispatchService workflowNodeDispatchService;
 
-    public DefaultTaskExecutionService(JobTaskMapper jobTaskMapper,
-                                       JobExecutionLogMapper jobExecutionLogMapper,
-                                       JobPartitionMapper jobPartitionMapper,
-                                       JobInstanceMapper jobInstanceMapper,
-                                       WorkflowRunMapper workflowRunMapper,
-                                       WorkflowNodeRunMapper workflowNodeRunMapper,
-                                       PartitionLeaseProperties partitionLeaseProperties,
-                                       RetryGovernanceService retryGovernanceService,
-                                       StateMachine<Object> stateMachine,
-                                       WorkerRegistryRepository workerRegistryRepository,
-                                       WorkflowDagService workflowDagService,
-                                       WorkflowNodeDispatchService workflowNodeDispatchService) {
-        this.jobTaskMapper = jobTaskMapper;
-        this.jobExecutionLogMapper = jobExecutionLogMapper;
-        this.jobPartitionMapper = jobPartitionMapper;
-        this.jobInstanceMapper = jobInstanceMapper;
-        this.workflowRunMapper = workflowRunMapper;
-        this.workflowNodeRunMapper = workflowNodeRunMapper;
-        this.partitionLeaseProperties = partitionLeaseProperties;
-        this.retryGovernanceService = retryGovernanceService;
-        this.stateMachine = stateMachine;
-        this.workerRegistryRepository = workerRegistryRepository;
-        this.workflowDagService = workflowDagService;
-        this.workflowNodeDispatchService = workflowNodeDispatchService;
-    }
-
     @Override
     @Transactional
     public JobTaskEntity createTask(JobTaskEntity task) {
         jobTaskMapper.insert(task);
+        createStepInstance(task);
         return task;
     }
 
@@ -115,6 +99,11 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
             if (claimed <= 0) {
                 throw new IllegalStateException("partition claim failed for taskId=" + taskId);
             }
+        }
+        JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
+        if (stepInstance != null
+                && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), Instant.now(), stepInstance.getVersion()) <= 0) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "job step instance claim conflict");
         }
         return jobTaskMapper.selectById(tenantId, taskId);
     }
@@ -147,7 +136,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         if (current == null) {
             return null;
         }
-        jobTaskMapper.updateStatus(tenantId, taskId, taskStatus, errorCode, errorMessage);
+        jobTaskMapper.updateStatus(tenantId, taskId, taskStatus, null, errorCode, errorMessage);
         return jobTaskMapper.selectById(tenantId, taskId);
     }
 
@@ -172,7 +161,12 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         }
         current.setStartedAt(startedAt);
         current.setTaskStatus(TaskStatus.RUNNING.code());
-        jobTaskMapper.updateStatus(tenantId, taskId, TaskStatus.RUNNING.code(), null, null);
+        jobTaskMapper.updateStatus(tenantId, taskId, TaskStatus.RUNNING.code(), null, null, null);
+        JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
+        if (stepInstance != null
+                && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), startedAt, stepInstance.getVersion()) <= 0) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "job step instance running conflict");
+        }
         return jobTaskMapper.selectById(tenantId, taskId);
     }
 
@@ -255,6 +249,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
                 && retryGovernanceService.scheduleRetryIfNecessary(task, partition, jobInstance, command.errorCode(), command.errorMessage());
         jobTaskMapper.updateStatus(command.tenantId(), command.taskId(),
                 command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code(),
+                command.resultSummary(),
                 command.errorCode(), command.errorMessage());
         if (partition != null) {
             if (command.success()) {
@@ -268,7 +263,13 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
             } else {
                 jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.FAILED.code());
             }
+            jobPartitionMapper.updateOutputSummary(
+                    command.tenantId(),
+                    partition.getId(),
+                    buildOutputSummary(command, task)
+            );
         }
+        updateStepInstanceProgress(command, task, retryScheduled, finishedAt);
         if (jobInstance != null) {
             List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(new com.example.batch.orchestrator.domain.query.JobPartitionQuery(
                     command.tenantId(),
@@ -353,14 +354,20 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
             boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
             String instanceEvent = resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
             String instanceStatus = stateMachine.transition(jobInstance, instanceEvent).toState();
-            jobInstanceMapper.updateProgress(
+            int updated = jobInstanceMapper.updateProgress(
                     command.tenantId(),
                     jobInstance.getId(),
                     instanceStatus,
                     (int) successCount,
                     (int) failedCount,
-                    allPartitionsFinished && !dagContinues ? finishedAt : null
-                );
+                    buildJobInstanceResultSummary(jobInstance, partitions, command),
+                    allPartitionsFinished && !dagContinues ? finishedAt : null,
+                    jobInstance.getVersion()
+            );
+            if (updated <= 0) {
+                throw new BizException(ResultCode.STATE_CONFLICT, "job instance progress conflict");
+            }
+            jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
             if (workflowRun != null) {
                 String workflowEvent = resolveWorkflowEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
                 String workflowStatus = stateMachine.transition(workflowRun, workflowEvent).toState();
@@ -409,6 +416,37 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         return Instant.now();
     }
 
+    private String buildOutputSummary(TaskOutcomeCommand command, JobTaskEntity task) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("taskId", command == null ? null : command.taskId());
+        summary.put("tenantId", command == null ? null : command.tenantId());
+        summary.put("success", command != null && command.success());
+        summary.put("resultSummary", command == null ? null : command.resultSummary());
+        summary.put("errorCode", command == null ? null : command.errorCode());
+        summary.put("errorMessage", command == null ? null : command.errorMessage());
+        summary.put("taskPayload", task == null ? null : task.getTaskPayload());
+        summary.put("recordedAt", Instant.now().toString());
+        return JsonUtils.toJson(summary);
+    }
+
+    private String buildJobInstanceResultSummary(JobInstanceEntity jobInstance,
+                                                 List<JobPartitionEntity> partitions,
+                                                 TaskOutcomeCommand command) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("jobInstanceId", jobInstance == null ? null : jobInstance.getId());
+        summary.put("lastTaskId", command == null ? null : command.taskId());
+        summary.put("successPartitions", partitions == null ? 0L : partitions.stream()
+                .filter(partition -> PartitionStatus.SUCCESS.code().equals(partition.getPartitionStatus()))
+                .count());
+        summary.put("failedPartitions", partitions == null ? 0L : partitions.stream()
+                .filter(partition -> PartitionStatus.FAILED.code().equals(partition.getPartitionStatus()))
+                .count());
+        summary.put("lastErrorCode", command == null ? null : command.errorCode());
+        summary.put("lastErrorMessage", command == null ? null : command.errorMessage());
+        summary.put("updatedAt", Instant.now().toString());
+        return JsonUtils.toJson(summary);
+    }
+
     private boolean isWorkerClaimable(String tenantId, String workerCode, JobTaskEntity task) {
         if (workerCode == null || workerCode.isBlank()) {
             return false;
@@ -425,6 +463,97 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
             return true;
         }
         return partition.getWorkerGroup().equalsIgnoreCase(workerRegistry.getWorkerGroup());
+    }
+
+    private void createStepInstance(JobTaskEntity task) {
+        if (task == null || task.getId() == null) {
+            return;
+        }
+        JobStepInstanceEntity existing = jobStepInstanceMapper.selectByJobTaskId(task.getTenantId(), task.getId());
+        if (existing != null) {
+            return;
+        }
+        JobStepInstanceEntity stepInstance = new JobStepInstanceEntity();
+        stepInstance.setTenantId(task.getTenantId());
+        stepInstance.setJobInstanceId(task.getJobInstanceId());
+        stepInstance.setJobPartitionId(task.getJobPartitionId());
+        stepInstance.setJobTaskId(task.getId());
+        stepInstance.setStepCode(resolveStepCode(task));
+        stepInstance.setStepType(resolveStepType(task));
+        stepInstance.setStepStatus(task.getTaskStatus());
+        stepInstance.setRetryCount(0);
+        stepInstance.setRelatedFileId(resolveRelatedFileId(task));
+        stepInstance.setVersion(0L);
+        jobStepInstanceMapper.insert(stepInstance);
+    }
+
+    private void updateStepInstanceProgress(TaskOutcomeCommand command,
+                                            JobTaskEntity task,
+                                            boolean retryScheduled,
+                                            Instant finishedAt) {
+        if (command == null || task == null) {
+            return;
+        }
+        JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(command.tenantId(), task.getId());
+        if (stepInstance == null) {
+            return;
+        }
+        String nextStatus = retryScheduled
+                ? "RETRYING"
+                : command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code();
+        int updated = jobStepInstanceMapper.updateProgress(
+                command.tenantId(),
+                stepInstance.getId(),
+                nextStatus,
+                retryScheduled
+                        ? Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1
+                        : Optional.ofNullable(stepInstance.getRetryCount()).orElse(0),
+                resolveRelatedFileId(task, command),
+                buildOutputSummary(command, task),
+                command.errorCode(),
+                command.errorMessage(),
+                retryScheduled ? null : finishedAt,
+                stepInstance.getVersion()
+        );
+        if (updated <= 0) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "job step instance progress conflict");
+        }
+    }
+
+    private String resolveStepCode(JobTaskEntity task) {
+        String workflowNodeCode = payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeCode");
+        if (workflowNodeCode != null && !workflowNodeCode.isBlank()) {
+            return workflowNodeCode;
+        }
+        String taskType = task == null ? null : task.getTaskType();
+        Integer taskSeq = task == null ? null : task.getTaskSeq();
+        return StringUtils.hasText(taskType)
+                ? taskType + ":" + (taskSeq == null ? 1 : taskSeq)
+                : "EXECUTION:" + (taskSeq == null ? 1 : taskSeq);
+    }
+
+    private String resolveStepType(JobTaskEntity task) {
+        String workflowNodeType = payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeType");
+        if (workflowNodeType != null && !workflowNodeType.isBlank()) {
+            return workflowNodeType;
+        }
+        return task == null ? "EXECUTION" : task.getTaskType();
+    }
+
+    private Long resolveRelatedFileId(JobTaskEntity task) {
+        return firstPositiveLong(
+                payloadLongValue(task == null ? null : task.getTaskPayload(), "relatedFileId"),
+                payloadLongValue(task == null ? null : task.getTaskPayload(), "fileId"),
+                payloadLongValue(task == null ? null : task.getTaskPayload(), "sourceFileId")
+        );
+    }
+
+    private Long resolveRelatedFileId(JobTaskEntity task, TaskOutcomeCommand command) {
+        return firstPositiveLong(
+                resolveRelatedFileId(task),
+                payloadLongValue(command == null ? null : command.resultSummary(), "relatedFileId"),
+                payloadLongValue(command == null ? null : command.resultSummary(), "fileId")
+        );
     }
 
     private int nextRunSeq(Long workflowRunId, String nodeCode) {
@@ -575,6 +704,52 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
             return null;
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Long payloadLongValue(String payloadJson, String fieldName) {
+        if (payloadJson == null || payloadJson.isBlank() || fieldName == null || fieldName.isBlank()) {
+            return null;
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                Object value = ((Map<String, Object>) payloadMap).get(fieldName);
+                return toPositiveLong(value);
+            }
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+        return null;
+    }
+
+    private Long firstPositiveLong(Long... candidates) {
+        for (Long candidate : candidates) {
+            if (candidate != null && candidate > 0) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private Long toPositiveLong(Object candidate) {
+        if (candidate instanceof Number number) {
+            long value = number.longValue();
+            return value > 0 ? value : null;
+        }
+        if (candidate == null) {
+            return null;
+        }
+        String text = String.valueOf(candidate).trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            long value = Long.parseLong(text);
+            return value > 0 ? value : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private record NodePartitionProgress(int partitionCount, long successCount, long failedCount) {

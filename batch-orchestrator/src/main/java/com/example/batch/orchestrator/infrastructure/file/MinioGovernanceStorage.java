@@ -2,11 +2,13 @@ package com.example.batch.orchestrator.infrastructure.file;
 
 import com.example.batch.orchestrator.config.MinioStorageProperties;
 import io.minio.BucketExistsArgs;
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.RemoveObjectArgs;
 import io.minio.Result;
+import io.minio.http.Method;
 import io.minio.messages.Item;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -71,14 +73,35 @@ public class MinioGovernanceStorage {
         }
     }
 
-    private void ensureBucket() {
+    public String createPresignedDownloadUrl(String bucket, String objectName, int expirySeconds) {
         try {
-            boolean exists = client().bucketExists(BucketExistsArgs.builder().bucket(properties.getBucket()).build());
+            String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
+            ensureBucket(targetBucket);
+            return client().getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(targetBucket)
+                            .object(objectName)
+                            .expiry(Math.max(60, expirySeconds))
+                            .build()
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to create presigned url for object: " + objectName, exception);
+        }
+    }
+
+    private void ensureBucket() {
+        ensureBucket(properties.getBucket());
+    }
+
+    private void ensureBucket(String bucket) {
+        try {
+            boolean exists = client().bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
             if (!exists) {
-                client().makeBucket(MakeBucketArgs.builder().bucket(properties.getBucket()).build());
+                client().makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
             }
         } catch (Exception exception) {
-            throw new IllegalStateException("failed to ensure minio bucket", exception);
+            throw new IllegalStateException("failed to ensure minio bucket: " + bucket, exception);
         }
     }
 

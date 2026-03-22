@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConfigReleaseMapper">
+    <resultMap id="ConfigReleaseResultMap" type="com.example.batch.console.domain.entity.ConfigReleaseEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="config_type" property="configType"/>
+        <result column="config_key" property="configKey"/>
+        <result column="config_name" property="configName"/>
+        <result column="config_status" property="configStatus"/>
+        <result column="version_no" property="versionNo"/>
+        <result column="gray_scope" property="grayScope"/>
+        <result column="config_payload" property="configPayload"/>
+        <result column="effective_from_at" property="effectiveFromAt"/>
+        <result column="effective_to_at" property="effectiveToAt"/>
+        <result column="published_at" property="publishedAt"/>
+        <result column="rolled_back_at" property="rolledBackAt"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="ConfigReleaseResultMap">
+        select *
+        from batch.config_release
+        where tenant_id = #{tenantId}
+        <if test="configType != null and configType != ''">
+            and config_type = #{configType}
+        </if>
+        <if test="configKey != null and configKey != ''">
+            and config_key = #{configKey}
+        </if>
+        <if test="configStatus != null and configStatus != ''">
+            and config_status = #{configStatus}
+        </if>
+        <if test="versionNo != null">
+            and version_no = #{versionNo}
+        </if>
+        order by config_key asc, version_no desc, id desc
+    </select>
+
+    <select id="selectById" resultMap="ConfigReleaseResultMap">
+        select *
+        from batch.config_release
+        where tenant_id = #{tenantId}
+          and id = #{releaseId}
+    </select>
+
+    <select id="selectLatestVersionNo" resultType="java.lang.Integer">
+        select max(version_no)
+        from batch.config_release
+        where tenant_id = #{tenantId}
+          and config_type = #{configType}
+          and config_key = #{configKey}
+    </select>
+
+    <insert id="insertConfigRelease">
+        insert into batch.config_release (
+            tenant_id, config_type, config_key, config_name, config_status, version_no,
+            gray_scope, config_payload, effective_from_at, effective_to_at, created_by, updated_by,
+            created_at, updated_at
+        ) values (
+            #{tenantId}, #{configType}, #{configKey}, #{configName}, #{configStatus}, #{versionNo},
+            #{grayScopeJson,jdbcType=VARCHAR}::jsonb, #{configPayloadJson,jdbcType=VARCHAR}::jsonb,
+            #{effectiveFromAt}, #{effectiveToAt}, #{createdBy}, #{updatedBy},
+            current_timestamp, current_timestamp
+        )
+    </insert>
+
+    <update id="updateConfigReleaseStatus">
+        update batch.config_release
+        set config_status = #{nextStatus},
+            published_at = coalesce(#{publishedAt}, published_at),
+            rolled_back_at = coalesce(#{rolledBackAt}, rolled_back_at),
+            updated_by = #{updatedBy},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{releaseId}
+    </update>
+
+    <update id="updateGrayScope">
+        update batch.config_release
+        set gray_scope = #{grayScopeJson,jdbcType=VARCHAR}::jsonb,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{releaseId}
+    </update>
+</mapper>

@@ -8,24 +8,18 @@ import com.example.batch.worker.core.support.WorkerRuntimeState;
 import com.example.batch.worker.core.support.WorkerLifecycleManager;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
 
     private final WorkerRegistryService workerRegistryService;
     private final WorkerRuntimeState workerRuntimeState;
     private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
-
-    public DefaultWorkerLifecycleManager(WorkerRegistryService workerRegistryService,
-                                         WorkerRuntimeState workerRuntimeState,
-                                         ActiveTaskLeaseRegistry activeTaskLeaseRegistry) {
-        this.workerRegistryService = workerRegistryService;
-        this.workerRuntimeState = workerRuntimeState;
-        this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
-    }
 
     @Override
     public WorkerRegistration start(WorkerRegistration registration) {

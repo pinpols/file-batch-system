@@ -3,16 +3,20 @@ package com.example.batch.orchestrator.application.service;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import com.example.batch.orchestrator.config.FileGovernanceProperties;
+import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
+import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.Comparator;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +34,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     private final JobPartitionMapper jobPartitionMapper;
     private final JobInstanceMapper jobInstanceMapper;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
+    private final FileGovernanceProperties fileGovernanceProperties;
+    private final MinioGovernanceStorage minioGovernanceStorage;
 
     @Override
     @Transactional
@@ -41,6 +47,38 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     @Transactional
     public String deleteFile(FileGovernanceCommand command) {
         return changeFileStatus(command, "DELETED", "DELETE");
+    }
+
+    @Override
+    @Transactional
+    public String presignFileDownload(FileGovernanceCommand command) {
+        validateCommand(command);
+        Map<String, Object> fileRecord = fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
+        if (fileRecord.isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, "file record not found");
+        }
+        String storagePath = stringValue(fileRecord.get("storage_path"));
+        String storageBucket = stringValue(fileRecord.get("storage_bucket"));
+        if (storagePath == null || storagePath.isBlank()) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "file storage path is missing");
+        }
+        int expirySeconds = Math.max(60, fileGovernanceProperties.getAccess().getPresignExpirySeconds());
+        String presignedUrl = minioGovernanceStorage.createPresignedDownloadUrl(storageBucket, storagePath, expirySeconds);
+        Map<String, Object> auditDetail = new LinkedHashMap<>();
+        auditDetail.put("storageBucket", storageBucket);
+        auditDetail.put("storagePath", storagePath);
+        auditDetail.put("expirySeconds", expirySeconds);
+        fileGovernanceRepository.appendAudit(
+                command.tenantId(),
+                command.fileId(),
+                "PRESIGN_DOWNLOAD",
+                "SUCCESS",
+                resolveOperatorType(command.operatorId()),
+                command.operatorId(),
+                command.traceId(),
+                auditDetail
+        );
+        return presignedUrl;
     }
 
     @Override
@@ -95,6 +133,75 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 buildRedispatchDetail(dispatchRecord, task, partition, command)
         );
         return "REDISPATCH_ACCEPTED";
+    }
+
+    @Override
+    @Transactional
+    public String operateArrivalGroup(ArrivalGroupGovernanceCommand command) {
+        validateArrivalGroupCommand(command);
+        List<Map<String, Object>> groupFiles = fileGovernanceRepository.selectArrivalGroupFiles(command.tenantId(), command.fileGroupCode());
+        if (groupFiles.isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, "arrival group not found");
+        }
+        Instant now = Instant.now();
+        String action = command.action().trim().toUpperCase();
+        String nextState = switch (action) {
+            case "CONTINUE_WAITING" -> "WAITING_ARRIVAL";
+            case "SKIP_BATCH" -> "TIMEOUT";
+            case "EMPTY_RUN", "TRIGGER_NOW" -> "TRIGGERED";
+            default -> throw new BizException(ResultCode.INVALID_ARGUMENT, "unsupported arrival action: " + command.action());
+        };
+        if ("EMPTY_RUN".equals(action) && !toBoolean(groupFiles.get(0).get("allow_empty_run"))) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "arrival group does not allow empty run");
+        }
+        if ("SKIP_BATCH".equals(action) && !toBoolean(groupFiles.get(0).get("allow_skip_biz_date"))) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "arrival group does not allow skip batch");
+        }
+        long extensionSeconds = command.extendWaitSeconds() == null || command.extendWaitSeconds() <= 0
+                ? fileGovernanceProperties.getArrival().getManualWaitExtensionSeconds()
+                : command.extendWaitSeconds();
+        String latestTolerableTime = "CONTINUE_WAITING".equals(action)
+                ? now.plusSeconds(Math.max(1L, extensionSeconds)).toString()
+                : stringValue(groupFiles.get(0).get("latest_tolerable_time"));
+        for (Map<String, Object> groupFile : groupFiles) {
+            Long fileId = toLong(groupFile.get("id"));
+            if (fileId == null) {
+                continue;
+            }
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("arrivalState", nextState);
+            metadata.put("arrivalReason", "MANUAL_" + action);
+            metadata.put("arrivalCheckedAt", now.toString());
+            metadata.put("manualArrivalAction", action);
+            metadata.put("manualArrivalActionAt", now.toString());
+            metadata.put("manualArrivalOperatorId", command.operatorId());
+            metadata.put("manualArrivalReason", command.reason());
+            if ("CONTINUE_WAITING".equals(action)) {
+                metadata.put("latestTolerableTime", latestTolerableTime);
+            }
+            if ("TRIGGERED".equals(nextState)) {
+                metadata.put("arrivalTriggeredAt", now.toString());
+            }
+            if ("TIMEOUT".equals(nextState)) {
+                metadata.put("arrivalTimedOutAt", now.toString());
+            }
+            fileGovernanceRepository.updateFileMetadata(command.tenantId(), fileId, metadata);
+            fileGovernanceRepository.appendAudit(
+                    command.tenantId(),
+                    fileId,
+                    "ARRIVAL_MANUAL_" + action,
+                    "SUCCESS",
+                    resolveOperatorType(command.operatorId()),
+                    command.operatorId(),
+                    command.traceId(),
+                    metadata
+            );
+        }
+        return nextState;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     /**
@@ -201,12 +308,23 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         }
     }
 
-    private String resolveOperatorType(String operatorId) {
-        return StringUtils.hasText(operatorId) ? "USER" : "API";
+    private void validateArrivalGroupCommand(ArrivalGroupGovernanceCommand command) {
+        if (command == null) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "arrival group command is required");
+        }
+        if (!StringUtils.hasText(command.tenantId())) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
+        }
+        if (!StringUtils.hasText(command.fileGroupCode())) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "fileGroupCode is required");
+        }
+        if (!StringUtils.hasText(command.action())) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "action is required");
+        }
     }
 
-    private String stringValue(Object value) {
-        return value == null ? null : String.valueOf(value);
+    private String resolveOperatorType(String operatorId) {
+        return StringUtils.hasText(operatorId) ? "USER" : "API";
     }
 
     private Long toLong(Object value) {
@@ -218,5 +336,12 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         }
         String text = String.valueOf(value);
         return text.isBlank() ? null : Long.valueOf(text);
+    }
+
+    private boolean toBoolean(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return value != null && Boolean.parseBoolean(String.valueOf(value));
     }
 }

@@ -84,6 +84,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
         runtimeRepository.updateFileStatus(fileId, "DISPATCHING", fileMetadata);
         if (!dispatchResult.success()) {
             context.getAttributes().put("retryRequested", Boolean.TRUE);
+            context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
             fileDispatchRepository.markFailed(
                     context.getTenantId(),
                     fileId,

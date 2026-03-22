@@ -18,6 +18,8 @@ public class JobPartitionEntity {
     private Integer retryCount;
     private String businessKey;
     private String idempotencyKey;
+    private String inputSnapshot;
+    private String outputSummary;
     private Instant startedAt;
     private Instant finishedAt;
     private Instant createdAt;

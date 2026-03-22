@@ -3,16 +3,14 @@ package com.example.batch.orchestrator.infrastructure.router;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.application.route.WorkerRouter;
 import com.example.batch.orchestrator.application.route.WorkerRoutingPolicy;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class DefaultWorkerRouter implements WorkerRouter {
 
     private final WorkerRoutingPolicy workerRoutingPolicy;
-
-    public DefaultWorkerRouter(WorkerRoutingPolicy workerRoutingPolicy) {
-        this.workerRoutingPolicy = workerRoutingPolicy;
-    }
 
     @Override
     public WorkerRouteModel route(String tenantId, String jobCode, String stepCode) {

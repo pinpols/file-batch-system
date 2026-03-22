@@ -1,6 +1,7 @@
 package com.example.batch.console.application;
 
 import com.example.batch.console.web.request.CompensateRequest;
+import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.CatchUpApprovalRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
@@ -9,6 +10,8 @@ import com.example.batch.console.web.request.TriggerRequest;
 public interface ConsoleJobApplicationService {
 
     String trigger(TriggerRequest request, String idempotencyKey);
+
+    String compensation(CompensationCommandRequest request, String idempotencyKey);
 
     String compensate(CompensateRequest request, String idempotencyKey);
 

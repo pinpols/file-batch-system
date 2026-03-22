@@ -32,12 +32,19 @@ batch:
     import:
       worker-code: import-node-1
       worker-type: IMPORT
-      default-stage: RECEIVE
-      batch-size: 100
       tenant-id: default-tenant
       heartbeat-interval-millis: 15000
       topic: batch.task.dispatch.import
       consumer-group-id: batch-worker-import
+      skip:
+        enabled: false
+        threshold-mode: ABSOLUTE
+        max-skip-count: 0
+        max-skip-rate: 0.0
+        skip-error-codes: IMPORT_PARSE_LINE_INVALID,IMPORT_PARSE_JSON_INVALID,IMPORT_PARSE_TYPE_INVALID,IMPORT_VALIDATE_REQUIRED,IMPORT_VALIDATE_DUPLICATE,IMPORT_VALIDATE_TYPE_INVALID,IMPORT_VALIDATE_STATUS_INVALID,IMPORT_VALIDATE_NULL,IMPORT_VALIDATE_LENGTH,IMPORT_VALIDATE_RANGE,IMPORT_VALIDATE_REGEX,IMPORT_VALIDATE_ALLOWED_VALUES,IMPORT_VALIDATE_UNIQUE
+        skip-action: CONTINUE
+        error-sink-type: BOTH
+        error-output-retention-days: 7
       scanner:
         enabled: true
         poll-interval-millis: 30000
@@ -47,6 +54,19 @@ batch:
         stability-window-seconds: 30
         source-type: SYSTEM
         default-biz-type: IMPORT_SCAN
+        arrival:
+          enabled: false
+          file-group-code:
+          wait-file-group-mode: ALL_OF
+          required-file-set:
+          arrival-timeout-action: MANUAL_CONFIRM
+          expected-arrival-delay-seconds: 0
+          latest-tolerable-delay-seconds: 600
+          trigger-on-complete: true
+          allow-empty-run: false
+          allow-skip-biz-date: false
+          notify-manual: true
+          notify-channels:
   datasource:
     business:
       url: jdbc:postgresql://localhost:15432/batch_business

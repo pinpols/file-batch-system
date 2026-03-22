@@ -1,0 +1,52 @@
+package com.example.batch.worker.imports.infrastructure;
+
+import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.worker.imports.config.MinioStorageProperties;
+import com.example.batch.worker.imports.domain.ImportBadRecord;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+@Component
+@RequiredArgsConstructor
+public class ImportErrorOutputStorage {
+
+    private final MinioStorageProperties minioStorageProperties;
+
+    public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
+        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileId) || badRecords == null || badRecords.isEmpty()) {
+            return null;
+        }
+        String objectKey = "errors/" + tenantId + "/" + fileId + "/" + fileId + ".error.jsonl";
+        StringBuilder builder = new StringBuilder();
+        for (ImportBadRecord badRecord : badRecords) {
+            builder.append(JsonUtils.toJson(badRecord)).append('\n');
+        }
+        byte[] bytes = builder.toString().getBytes(StandardCharsets.UTF_8);
+        try {
+            minioClient().putObject(
+                    PutObjectArgs.builder()
+                            .bucket(minioStorageProperties.getBucket())
+                            .object(objectKey)
+                            .stream(new ByteArrayInputStream(bytes), bytes.length, -1)
+                            .contentType("application/x-ndjson")
+                            .build()
+            );
+            return objectKey;
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to write import error output", exception);
+        }
+    }
+
+    private MinioClient minioClient() {
+        return MinioClient.builder()
+                .endpoint(minioStorageProperties.getEndpoint())
+                .credentials(minioStorageProperties.getAccessKey(), minioStorageProperties.getSecretKey())
+                .build();
+    }
+}

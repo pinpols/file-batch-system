@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.controller;
 
 import com.example.batch.orchestrator.application.service.FileGovernanceService;
+import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,9 +27,30 @@ public class FileGovernanceController {
         return new FileOperationResponse(fileGovernanceService.deleteFile(toCommand(fileId, request)));
     }
 
+    @PostMapping("/{fileId}/presign")
+    public FileDownloadResponse presign(@PathVariable Long fileId, @RequestBody FileOperationRequest request) {
+        return new FileDownloadResponse(fileGovernanceService.presignFileDownload(toCommand(fileId, request)));
+    }
+
     @PostMapping("/{fileId}/redispatch")
     public FileOperationResponse redispatch(@PathVariable Long fileId, @RequestBody FileOperationRequest request) {
         return new FileOperationResponse(fileGovernanceService.redispatchFile(toCommand(fileId, request)));
+    }
+
+    @PostMapping("/arrival-groups/{fileGroupCode}/actions")
+    public FileOperationResponse operateArrivalGroup(@PathVariable String fileGroupCode,
+                                                     @RequestBody ArrivalGroupOperationRequest request) {
+        return new FileOperationResponse(fileGovernanceService.operateArrivalGroup(
+                new ArrivalGroupGovernanceCommand(
+                        request.tenantId(),
+                        fileGroupCode,
+                        request.action(),
+                        request.operatorId(),
+                        request.traceId(),
+                        request.reason(),
+                        request.extendWaitSeconds()
+                )
+        ));
     }
 
     private FileGovernanceCommand toCommand(Long fileId, FileOperationRequest request) {
@@ -50,5 +72,16 @@ public class FileGovernanceController {
     }
 
     public record FileOperationResponse(String status) {
+    }
+
+    public record FileDownloadResponse(String downloadUrl) {
+    }
+
+    public record ArrivalGroupOperationRequest(String tenantId,
+                                               String action,
+                                               String operatorId,
+                                               String traceId,
+                                               String reason,
+                                               Long extendWaitSeconds) {
     }
 }

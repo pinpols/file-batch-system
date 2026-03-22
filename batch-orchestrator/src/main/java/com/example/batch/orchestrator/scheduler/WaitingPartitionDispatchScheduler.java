@@ -1,9 +1,11 @@
 package com.example.batch.orchestrator.scheduler;
 
 import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import com.example.batch.orchestrator.application.service.PartitionLifecycleService;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -16,6 +18,7 @@ import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +39,7 @@ public class WaitingPartitionDispatchScheduler {
     private final WorkflowRunMapper workflowRunMapper;
     private final JobDefinitionRepository jobDefinitionRepository;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
+    private final PartitionLifecycleService partitionLifecycleService;
 
     /**
      * WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。
@@ -45,89 +49,98 @@ public class WaitingPartitionDispatchScheduler {
         List<JobPartitionEntity> waitingPartitions = jobPartitionMapper.selectWaitingPartitionsGlobal(
                 resourceSchedulerProperties.getWaitingDispatchBatchSize()
         );
-        waitingPartitions.stream()
-                .sorted(Comparator.comparingInt(this::resolvePriorityScore).reversed())
-                .forEach(this::dispatchWaitingPartition);
+        List<WaitingDispatchCandidate> candidates = new ArrayList<>();
+        for (JobPartitionEntity partition : waitingPartitions) {
+            WaitingDispatchCandidate candidate = buildCandidate(partition);
+            if (candidate != null) {
+                candidates.add(candidate);
+            }
+        }
+        Comparator<WaitingDispatchCandidate> comparator = Comparator
+                .comparingLong(WaitingDispatchCandidate::fairnessScore).reversed()
+                .thenComparing(Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
+                .thenComparingLong(WaitingDispatchCandidate::partitionId);
+        candidates.stream()
+                .sorted(comparator)
+                .forEach(candidate -> dispatchWaitingPartition(candidate.partition(), candidate.task(), candidate.jobInstance(), candidate.decision()));
     }
 
-    private void dispatchWaitingPartition(JobPartitionEntity partition) {
-            if (partition == null) {
-                return;
-            }
-            JobTaskEntity task = jobTaskMapper.selectByPartitionAndSeq(partition.getTenantId(), partition.getId(), 1);
-            if (task == null || !TaskStatus.CREATED.code().equals(task.getTaskStatus())) {
-                return;
-            }
-            JobInstanceEntity jobInstance = jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
-            if (jobInstance == null) {
-                return;
-            }
-            JobDefinitionRecord jobDefinition = jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(
-                    jobInstance.getTenantId(),
-                    jobInstance.getJobCode(),
-                    true
-            );
-            ResourceSchedulingDecision decision = resourceScheduler.schedule(buildRequest(jobInstance, partition, task, jobDefinition));
-            if (!decision.isDispatchable()) {
-                return;
-            }
-            if (jobPartitionMapper.promoteStatus(
-                    partition.getTenantId(),
-                    partition.getId(),
-                    com.example.batch.common.enums.PartitionStatus.WAITING.code(),
-                    com.example.batch.common.enums.PartitionStatus.READY.code()
-            ) <= 0) {
-                return;
-            }
-            if (jobTaskMapper.promoteStatus(
-                    task.getTenantId(),
-                    task.getId(),
-                    TaskStatus.CREATED.code(),
-                    TaskStatus.READY.code()
-            ) <= 0) {
-                return;
-            }
-            JobPartitionEntity readyPartition = jobPartitionMapper.selectById(partition.getTenantId(), partition.getId());
-            JobTaskEntity readyTask = jobTaskMapper.selectById(task.getTenantId(), task.getId());
-            taskDispatchOutboxService.writeDispatchEvent(
-                    jobInstance,
-                    readyTask,
-                    readyPartition,
-                    jobInstance.getTraceId(),
-                    task.getTenantId() + ":waiting-release:" + task.getId()
-            );
-            if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
-                jobInstanceMapper.markRunning(
-                        jobInstance.getTenantId(),
-                        jobInstance.getId(),
-                        JobInstanceStatus.RUNNING.code(),
-                        jobInstance.getExpectedPartitionCount(),
-                        Instant.now()
-                );
-            }
-            WorkflowRunEntity workflowRun = workflowRunMapper.selectByRelatedJobInstanceId(jobInstance.getTenantId(), jobInstance.getId());
-            if (workflowRun != null && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
-                workflowRunMapper.markRunning(
-                        workflowRun.getTenantId(),
-                        workflowRun.getId(),
-                        WorkflowRunStatus.RUNNING.code(),
-                        workflowRun.getCurrentNodeCode(),
-                        Instant.now()
-                );
-            }
-            log.info("waiting partition released: tenantId={}, partitionId={}, taskId={}",
-                    partition.getTenantId(), partition.getId(), task.getId());
-    }
-
-    private int resolvePriorityScore(JobPartitionEntity partition) {
+    private WaitingDispatchCandidate buildCandidate(JobPartitionEntity partition) {
         if (partition == null) {
-            return 0;
+            return null;
+        }
+        JobTaskEntity task = jobTaskMapper.selectByPartitionAndSeq(partition.getTenantId(), partition.getId(), 1);
+        if (task == null || !TaskStatus.CREATED.code().equals(task.getTaskStatus())) {
+            return null;
         }
         JobInstanceEntity jobInstance = jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
-        if (jobInstance == null || jobInstance.getPriority() == null) {
-            return 5;
+        if (jobInstance == null) {
+            return null;
         }
-        return 10 - jobInstance.getPriority();
+        JobDefinitionRecord jobDefinition = jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(
+                jobInstance.getTenantId(),
+                jobInstance.getJobCode(),
+                true
+        );
+        ResourceSchedulingDecision decision = resourceScheduler.schedule(buildRequest(jobInstance, partition, task, jobDefinition));
+        if (!decision.isDispatchable()) {
+            return null;
+        }
+        return new WaitingDispatchCandidate(partition, task, jobInstance, decision);
+    }
+
+    private void dispatchWaitingPartition(JobPartitionEntity partition,
+                                          JobTaskEntity task,
+                                          JobInstanceEntity jobInstance,
+                                          ResourceSchedulingDecision decision) {
+        if (partition == null || task == null || jobInstance == null || decision == null || !decision.isDispatchable()) {
+            return;
+        }
+        if (!partitionLifecycleService.releaseForDispatch(
+                partition,
+                task,
+                PartitionStatus.WAITING.code(),
+                TaskStatus.CREATED.code()
+        )) {
+            return;
+        }
+        taskDispatchOutboxService.writeDispatchEvent(
+                jobInstance,
+                task,
+                partition,
+                jobInstance.getTraceId(),
+                task.getTenantId() + ":waiting-release:" + task.getId()
+        );
+        if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
+            int updated = jobInstanceMapper.markRunning(
+                    jobInstance.getTenantId(),
+                    jobInstance.getId(),
+                    JobInstanceStatus.RUNNING.code(),
+                    jobInstance.getExpectedPartitionCount(),
+                    Instant.now(),
+                    jobInstance.getVersion()
+            );
+            if (updated > 0) {
+                jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+            }
+        }
+        WorkflowRunEntity workflowRun = workflowRunMapper.selectByRelatedJobInstanceId(jobInstance.getTenantId(), jobInstance.getId());
+        if (workflowRun != null && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
+            workflowRunMapper.markRunning(
+                    workflowRun.getTenantId(),
+                    workflowRun.getId(),
+                    WorkflowRunStatus.RUNNING.code(),
+                    workflowRun.getCurrentNodeCode(),
+                    Instant.now()
+            );
+        }
+        log.info("waiting partition released: tenantId={}, partitionId={}, taskId={}, fairnessScore={}, tenantWeight={}, queueWeight={}",
+                partition.getTenantId(),
+                partition.getId(),
+                task.getId(),
+                decision.getFairnessScore(),
+                decision.getTenantWeight(),
+                decision.getQueueWeight());
     }
 
     private ResourceSchedulingRequest buildRequest(JobInstanceEntity jobInstance,
@@ -144,5 +157,23 @@ public class WaitingPartitionDispatchScheduler {
         request.setRequestedPartitionCount(1);
         request.setWindowCode(jobDefinition == null ? null : jobDefinition.getWindowCode());
         return request;
+    }
+
+    private record WaitingDispatchCandidate(JobPartitionEntity partition,
+                                            JobTaskEntity task,
+                                            JobInstanceEntity jobInstance,
+                                            ResourceSchedulingDecision decision) {
+
+        private long fairnessScore() {
+            return decision == null || decision.getFairnessScore() == null ? 0L : decision.getFairnessScore();
+        }
+
+        private int priority() {
+            return jobInstance == null || jobInstance.getPriority() == null ? 5 : jobInstance.getPriority();
+        }
+
+        private long partitionId() {
+            return partition == null || partition.getId() == null ? Long.MAX_VALUE : partition.getId();
+        }
     }
 }

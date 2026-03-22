@@ -8,5 +8,17 @@ public interface ImportStageStep {
 
     ImportStage stage();
 
+    default String stepCode() {
+        return "IMPORT_" + stage().name();
+    }
+
+    default String stepName() {
+        return stepCode();
+    }
+
+    default String implCode() {
+        return stepCode();
+    }
+
     ImportStageResult execute(ImportJobContext context);
 }

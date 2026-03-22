@@ -4,16 +4,14 @@ import com.example.batch.orchestrator.domain.pipeline.Step;
 import com.example.batch.orchestrator.domain.pipeline.StepRegistry;
 import java.util.Map;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class DefaultStepRegistry implements StepRegistry {
 
     private final Map<String, Step> steps;
-
-    public DefaultStepRegistry(Map<String, Step> steps) {
-        this.steps = steps;
-    }
 
     @Override
     public Optional<Step> find(String stepCode) {

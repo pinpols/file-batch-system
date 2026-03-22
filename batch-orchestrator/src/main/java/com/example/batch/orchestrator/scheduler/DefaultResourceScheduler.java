@@ -5,7 +5,11 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.domain.entity.BatchWindowRecord;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
+import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.repository.BatchWindowRepository;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -24,6 +28,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     private final WorkerSelector workerSelector;
     private final PriorityScheduler priorityScheduler;
     private final BatchWindowRepository batchWindowRepository;
+    private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+    private final JobInstanceMapper jobInstanceMapper;
+    private final JobPartitionMapper jobPartitionMapper;
 
     /**
      * 资源调度统一收口在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。
@@ -65,6 +72,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         decision.setPartitionStatus(PartitionStatus.CREATED.code());
         decision.setTaskStatus(TaskStatus.CREATED.code());
         decision.setRoute(route);
+        enrichFairnessScore(request, queue, priority, priorityBand, decision);
         return decision;
     }
 
@@ -84,6 +92,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         decision.setPriorityBand(priorityBand);
         decision.setPartitionStatus(PartitionStatus.WAITING.code());
         decision.setTaskStatus(TaskStatus.CREATED.code());
+        enrichFairnessScore(request, queue, priority, priorityBand, decision);
         return decision;
     }
 
@@ -130,5 +139,99 @@ public class DefaultResourceScheduler implements ResourceScheduler {
             return request.getWorkerGroup();
         }
         return queue == null ? null : queue.getWorkerGroup();
+    }
+
+    private void enrichFairnessScore(ResourceSchedulingRequest request,
+                                     ResourceQueueRecord queue,
+                                     Integer priority,
+                                     String priorityBand,
+                                     ResourceSchedulingDecision decision) {
+        if (decision == null) {
+            return;
+        }
+        int tenantWeight = resolveTenantWeight(request == null ? null : request.getTenantId());
+        int queueWeight = resolveQueueWeight(queue);
+        int tenantActiveJobs = resolveTenantActiveJobs(request);
+        int tenantActivePartitions = resolveTenantActivePartitions(request);
+        int queueActiveJobs = resolveQueueActiveJobs(request, queue);
+        int queueActivePartitions = resolveQueueActivePartitions(request, queue);
+        long fairnessScore = resolveFairnessScore(priority, priorityBand, tenantWeight, queueWeight,
+                tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions);
+        decision.setTenantWeight(tenantWeight);
+        decision.setQueueWeight(queueWeight);
+        decision.setTenantActiveJobs(tenantActiveJobs);
+        decision.setTenantActivePartitions(tenantActivePartitions);
+        decision.setQueueActiveJobs(queueActiveJobs);
+        decision.setQueueActivePartitions(queueActivePartitions);
+        decision.setFairnessScore(fairnessScore);
+    }
+
+    private int resolveTenantWeight(String tenantId) {
+        if (!StringUtils.hasText(tenantId)) {
+            return 1;
+        }
+        List<TenantQuotaPolicyRecord> policies = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
+        TenantQuotaPolicyRecord policy = policies == null || policies.isEmpty() ? null : policies.get(0);
+        if (policy == null || policy.getFairShareWeight() == null || policy.getFairShareWeight() <= 0) {
+            return 1;
+        }
+        return policy.getFairShareWeight();
+    }
+
+    private int resolveQueueWeight(ResourceQueueRecord queue) {
+        if (queue == null || queue.getFairShareWeight() == null || queue.getFairShareWeight() <= 0) {
+            return 1;
+        }
+        return queue.getFairShareWeight();
+    }
+
+    private int resolveTenantActiveJobs(ResourceSchedulingRequest request) {
+        if (request == null || !StringUtils.hasText(request.getTenantId())) {
+            return 0;
+        }
+        return (int) jobInstanceMapper.countActiveByTenant(request.getTenantId());
+    }
+
+    private int resolveTenantActivePartitions(ResourceSchedulingRequest request) {
+        if (request == null || !StringUtils.hasText(request.getTenantId())) {
+            return 0;
+        }
+        return (int) jobPartitionMapper.countActiveByTenant(request.getTenantId());
+    }
+
+    private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+        if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.getQueueCode())) {
+            return 0;
+        }
+        return (int) jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.getQueueCode());
+    }
+
+    private int resolveQueueActivePartitions(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+        if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.getWorkerGroup())) {
+            return 0;
+        }
+        return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), queue.getWorkerGroup());
+    }
+
+    private long resolveFairnessScore(Integer priority,
+                                      String priorityBand,
+                                      int tenantWeight,
+                                      int queueWeight,
+                                      int tenantActiveJobs,
+                                      int tenantActivePartitions,
+                                      int queueActiveJobs,
+                                      int queueActivePartitions) {
+        long bandWeight = switch (priorityBand == null ? "" : priorityBand) {
+            case "HIGH" -> 300L;
+            case "MEDIUM" -> 200L;
+            default -> 100L;
+        };
+        int normalizedPriority = priority == null ? 5 : Math.max(1, Math.min(priority, 9));
+        long loadPenalty = (long) tenantActiveJobs + tenantActivePartitions + queueActiveJobs + queueActivePartitions;
+        return bandWeight * 10_000L
+                + (long) normalizedPriority * 1_000L
+                + (long) tenantWeight * 100L
+                + (long) queueWeight * 10L
+                - loadPenalty;
     }
 }

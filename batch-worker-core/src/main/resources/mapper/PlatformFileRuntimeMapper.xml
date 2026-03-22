@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.core.mapper.PlatformFileRuntimeMapper">
+    <select id="selectFileRecord" resultType="map">
+        select *
+        from batch.file_record
+        where tenant_id = #{tenantId}
+          and id = #{fileId}
+    </select>
+
+    <select id="countFileRecordByStoragePath" resultType="java.lang.Long">
+        select count(1)
+        from batch.file_record
+        where tenant_id = #{tenantId}
+          and coalesce(storage_bucket, '') = coalesce(#{storageBucket}, '')
+          and storage_path = #{storagePath}
+    </select>
+
+    <select id="selectLatestTemplateConfig" resultType="map">
+        select *
+        from batch.file_template_config
+        where tenant_id = #{tenantId}
+          and template_code = #{templateCode}
+          and enabled = true
+        <if test="templateType != null and templateType != ''">
+            and template_type = #{templateType}
+        </if>
+        order by version desc
+        limit 1
+    </select>
+
+    <select id="selectChannelConfig" resultType="map">
+        select *
+        from batch.file_channel_config
+        where tenant_id = #{tenantId}
+          and channel_code = #{channelCode}
+          and enabled = true
+    </select>
+
+    <select id="selectLatestPipelineDefinitionId" resultType="java.lang.Long">
+        select id
+        from batch.pipeline_definition
+        where tenant_id = #{tenantId}
+          and pipeline_code = #{pipelineCode}
+        order by version desc
+        limit 1
+    </select>
+
+    <insert id="insertPipelineDefinition" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.pipeline_definition (
+            tenant_id, pipeline_code, pipeline_name, pipeline_type,
+            worker_group, version, enabled, description
+        ) values (
+            #{tenantId}, #{pipelineCode}, #{pipelineName}, #{pipelineType},
+            #{workerGroup}, 1, true, #{description}
+        )
+    </insert>
+
+    <select id="selectPipelineStepDefinitions" resultType="map">
+        select *
+        from batch.pipeline_step_definition
+        where pipeline_definition_id = #{pipelineDefinitionId}
+        <if test="enabledOnly != null and enabledOnly">
+            and enabled = true
+        </if>
+        order by step_order asc, step_code asc
+    </select>
+
+    <insert id="insertPipelineStepDefinition" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.pipeline_step_definition (
+            pipeline_definition_id, step_code, step_name, stage_code, step_order,
+            impl_code, step_params, timeout_seconds, retry_policy, retry_max_count, enabled
+        ) values (
+            #{pipelineDefinitionId}, #{stepCode}, #{stepName}, #{stageCode}, #{stepOrder},
+            #{implCode}, #{stepParamsJson,jdbcType=VARCHAR}::jsonb, #{timeoutSeconds}, #{retryPolicy}, #{retryMaxCount}, #{enabled}
+        )
+    </insert>
+
+    <insert id="insertPipelineInstance" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.pipeline_instance (
+            tenant_id, pipeline_definition_id, pipeline_code, pipeline_type,
+            file_id, related_job_instance_id, current_stage, run_status,
+            trace_id, started_at, created_at, updated_at
+        ) values (
+            #{tenantId}, #{pipelineDefinitionId}, #{pipelineCode}, #{pipelineType},
+            #{fileId}, #{relatedJobInstanceId}, #{currentStage}, 'RUNNING',
+            #{traceId}, current_timestamp, current_timestamp, current_timestamp
+        )
+    </insert>
+
+    <update id="bindFileToPipelineInstance">
+        update batch.pipeline_instance
+        set file_id = #{fileId},
+            updated_at = current_timestamp
+        where id = #{pipelineInstanceId}
+    </update>
+
+    <update id="updatePipelineStage">
+        update batch.pipeline_instance
+        set current_stage = #{currentStage},
+            last_success_stage = coalesce(#{lastSuccessStage}, last_success_stage),
+            updated_at = current_timestamp
+        where id = #{pipelineInstanceId}
+    </update>
+
+    <update id="markPipelineSuccess">
+        update batch.pipeline_instance
+        set current_stage = #{currentStage},
+            last_success_stage = #{lastSuccessStage},
+            run_status = 'SUCCESS',
+            finished_at = current_timestamp,
+            updated_at = current_timestamp
+        where id = #{pipelineInstanceId}
+    </update>
+
+    <update id="markPipelineFailed">
+        update batch.pipeline_instance
+        set current_stage = #{currentStage},
+            last_success_stage = #{lastSuccessStage},
+            run_status = 'FAILED',
+            finished_at = current_timestamp,
+            updated_at = current_timestamp
+        where id = #{pipelineInstanceId}
+    </update>
+
+    <select id="selectNextStepRunSeq" resultType="java.lang.Integer">
+        select coalesce(max(run_seq), 0) + 1
+        from batch.pipeline_step_run
+        where pipeline_instance_id = #{pipelineInstanceId}
+          and step_code = #{stepCode}
+    </select>
+
+    <insert id="insertStepRun" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.pipeline_step_run (
+            pipeline_instance_id, step_code, stage_code, run_seq,
+            step_status, input_summary, started_at
+        ) values (
+            #{pipelineInstanceId}, #{stepCode}, #{stageCode}, #{runSeq},
+            'RUNNING', #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+        )
+    </insert>
+
+    <update id="finishStepRun">
+        update batch.pipeline_step_run
+        set step_status = #{status},
+            output_summary = #{outputSummaryJson,jdbcType=VARCHAR}::jsonb,
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            duration_ms = greatest(0, extract(epoch from (current_timestamp - started_at)) * 1000)::bigint,
+            finished_at = current_timestamp
+        where id = #{stepRunId}
+    </update>
+
+    <select id="selectMaxFileGenerationNo" resultType="java.lang.Integer">
+        select coalesce(max(file_generation_no), 0)
+        from batch.file_record
+        where tenant_id = #{tenantId}
+          and file_code = #{fileCode}
+    </select>
+
+    <update id="markHistoricalFileNotLatest">
+        update batch.file_record
+        set is_latest = false,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and file_code = #{fileCode}
+          and is_latest = true
+    </update>
+
+    <insert id="insertFileRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.file_record (
+            tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
+            file_ext, file_format_type, charset, mime_type, file_size_bytes,
+            checksum_type, checksum_value, storage_type, storage_path, storage_bucket,
+            file_version, file_generation_no, is_latest, source_type, source_ref,
+            file_status, biz_date, trace_id, metadata_json, created_at, updated_at
+        ) values (
+            #{tenantId}, #{fileCode}, #{bizType}, #{fileCategory}, #{fileName}, #{originalFileName},
+            #{fileExt}, #{fileFormatType}, #{charset}, #{mimeType}, #{fileSizeBytes},
+            #{checksumType}, #{checksumValue}, #{storageType}, #{storagePath}, #{storageBucket},
+            #{fileVersion}, #{fileGenerationNo}, true, #{sourceType}, #{sourceRef},
+            #{fileStatus}, #{bizDate}, #{traceId}, #{metadataJson,jdbcType=VARCHAR}::jsonb, current_timestamp, current_timestamp
+        )
+    </insert>
+
+    <select id="selectFileStatus" resultType="string">
+        select file_status
+        from batch.file_record
+        where id = #{fileId}
+    </select>
+
+    <update id="updateFileRecordStatus">
+        update batch.file_record
+        set file_status = #{fileStatus},
+            metadata_json = coalesce(metadata_json, '{}'::jsonb) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
+            updated_at = current_timestamp
+        where id = #{fileId}
+    </update>
+
+    <update id="updateFileRecordMetadata">
+        update batch.file_record
+        set metadata_json = coalesce(metadata_json, '{}'::jsonb) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
+            updated_at = current_timestamp
+        where id = #{fileId}
+    </update>
+
+    <insert id="insertFileErrorRecord" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.file_error_record (
+            tenant_id, file_id, pipeline_instance_id, pipeline_step_run_id, record_no,
+            error_code, error_message, error_stage, is_skipped, skip_action, raw_record, created_at
+        ) values (
+            #{tenantId}, #{fileId}, #{pipelineInstanceId}, #{pipelineStepRunId}, #{recordNo},
+            #{errorCode}, #{errorMessage}, #{errorStage}, #{isSkipped}, #{skipAction},
+            #{rawRecordJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+        )
+    </insert>
+
+    <select id="selectFileErrorRecords" resultType="map">
+        select *
+        from batch.file_error_record
+        where tenant_id = #{tenantId}
+        <if test="fileId != null">
+            and file_id = #{fileId}
+        </if>
+        <if test="errorCode != null and errorCode != ''">
+            and error_code = #{errorCode}
+        </if>
+        <if test="errorStage != null and errorStage != ''">
+            and error_stage = #{errorStage}
+        </if>
+        order by id desc
+        limit #{limit}
+    </select>
+
+    <insert id="insertFileAuditLog">
+        insert into batch.file_audit_log (
+            tenant_id, file_id, operation_type, operation_result,
+            operator_type, operator_id, trace_id, evidence_ref, detail_summary, created_at
+        ) values (
+            #{tenantId}, #{fileId}, #{operationType}, #{operationResult},
+            #{operatorType}, #{operatorId}, #{traceId}, #{evidenceRef}, #{detailSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+        )
+    </insert>
+</mapper>

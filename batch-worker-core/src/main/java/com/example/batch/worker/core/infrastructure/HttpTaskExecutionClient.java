@@ -3,6 +3,8 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.support.TaskExecutionClient;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -10,11 +12,15 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 @Component
+@RequiredArgsConstructor
 public class HttpTaskExecutionClient implements TaskExecutionClient {
 
-    private final RestClient restClient;
+    private final OrchestratorTaskClientProperties properties;
+    private final RestClient.Builder builder;
+    private RestClient restClient;
 
-    public HttpTaskExecutionClient(OrchestratorTaskClientProperties properties, RestClient.Builder builder) {
+    @PostConstruct
+    void initialize() {
         this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
     }
 

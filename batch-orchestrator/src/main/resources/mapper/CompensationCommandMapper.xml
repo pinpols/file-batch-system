@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.CompensationCommandMapper">
+    <resultMap id="CompensationCommandResultMap" type="com.example.batch.orchestrator.domain.entity.CompensationCommandEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="command_no" property="commandNo"/>
+        <result column="compensation_type" property="compensationType"/>
+        <result column="target_id" property="targetId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="batch_no" property="batchNo"/>
+        <result column="related_job_instance_id" property="relatedJobInstanceId"/>
+        <result column="related_file_id" property="relatedFileId"/>
+        <result column="approval_id" property="approvalId"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="reason" property="reason"/>
+        <result column="strategy" property="strategy"/>
+        <result column="command_status" property="commandStatus"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="result_summary" property="resultSummary"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="finished_at" property="finishedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.CompensationCommandEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into batch.compensation_command (
+            tenant_id,
+            command_no,
+            compensation_type,
+            target_id,
+            job_code,
+            biz_date,
+            batch_no,
+            related_job_instance_id,
+            related_file_id,
+            approval_id,
+            operator_id,
+            reason,
+            strategy,
+            command_status,
+            trace_id,
+            result_summary,
+            error_code,
+            error_message,
+            finished_at
+        ) values (
+            #{tenantId},
+            #{commandNo},
+            #{compensationType},
+            #{targetId},
+            #{jobCode},
+            #{bizDate},
+            #{batchNo},
+            #{relatedJobInstanceId},
+            #{relatedFileId},
+            #{approvalId},
+            #{operatorId},
+            #{reason},
+            #{strategy},
+            #{commandStatus},
+            #{traceId},
+            #{resultSummary},
+            #{errorCode},
+            #{errorMessage},
+            #{finishedAt}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="CompensationCommandResultMap">
+        select *
+        from batch.compensation_command
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <update id="updateStatus">
+        update batch.compensation_command
+        set command_status = #{commandStatus},
+            related_job_instance_id = #{relatedJobInstanceId},
+            related_file_id = #{relatedFileId},
+            result_summary = #{resultSummary},
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            finished_at = #{finishedAt}
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+</mapper>

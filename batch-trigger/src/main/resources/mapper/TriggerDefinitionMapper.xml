@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.trigger.mapper.TriggerDefinitionMapper">
+    <resultMap id="TriggerDescriptorResultMap" type="com.example.batch.trigger.support.TriggerDescriptor">
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="schedule_type" property="scheduleType"/>
+        <result column="schedule_expr" property="scheduleExpression"/>
+        <result column="timezone" property="timezone"/>
+        <result column="trigger_mode" property="triggerMode"/>
+        <result column="calendar_code" property="calendarCode"/>
+        <result column="catch_up_policy" property="catchUpPolicy"/>
+        <result column="catch_up_max_days" property="catchUpMaxDays"/>
+        <result column="enabled" property="enabled"/>
+    </resultMap>
+
+    <sql id="TriggerDefinitionBaseColumns">
+        jd.tenant_id,
+        jd.job_code,
+        jd.schedule_type,
+        jd.schedule_expr,
+        jd.timezone,
+        jd.trigger_mode,
+        jd.calendar_code,
+        coalesce(bc.catch_up_policy, 'NONE') as catch_up_policy,
+        coalesce(bc.catch_up_max_days, 0) as catch_up_max_days,
+        jd.enabled
+    </sql>
+
+    <select id="selectAllCronDefinitions" resultMap="TriggerDescriptorResultMap">
+        select
+        <include refid="TriggerDefinitionBaseColumns"/>
+        from batch.job_definition jd
+        left join batch.business_calendar bc
+          on bc.tenant_id = jd.tenant_id
+         and bc.calendar_code = jd.calendar_code
+         and bc.enabled = true
+        where jd.enabled = true
+          and jd.schedule_type = 'CRON'
+          and jd.trigger_mode in ('SCHEDULED', 'MIXED')
+        order by jd.tenant_id, jd.job_code
+    </select>
+
+    <select id="selectByJobCode" resultMap="TriggerDescriptorResultMap">
+        select
+        <include refid="TriggerDefinitionBaseColumns"/>
+        from batch.job_definition jd
+        left join batch.business_calendar bc
+          on bc.tenant_id = jd.tenant_id
+         and bc.calendar_code = jd.calendar_code
+         and bc.enabled = true
+        where jd.tenant_id = #{arg0}
+          and jd.job_code = #{arg1}
+    </select>
+</mapper>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConfigChangeLogMapper">
+    <resultMap id="ConfigChangeLogResultMap" type="com.example.batch.console.domain.entity.ConfigChangeLogEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="config_type" property="configType"/>
+        <result column="config_key" property="configKey"/>
+        <result column="version_no" property="versionNo"/>
+        <result column="change_action" property="changeAction"/>
+        <result column="change_result" property="changeResult"/>
+        <result column="operator_type" property="operatorType"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="change_summary" property="changeSummary"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="ConfigChangeLogResultMap">
+        select *
+        from batch.config_change_log
+        where tenant_id = #{tenantId}
+        <if test="configType != null and configType != ''">
+            and config_type = #{configType}
+        </if>
+        <if test="configKey != null and configKey != ''">
+            and config_key = #{configKey}
+        </if>
+        <if test="changeAction != null and changeAction != ''">
+            and change_action = #{changeAction}
+        </if>
+        order by id desc
+    </select>
+
+    <insert id="insertConfigChangeLog">
+        insert into batch.config_change_log (
+            tenant_id, config_type, config_key, version_no, change_action, change_result,
+            operator_type, operator_id, trace_id, change_summary, created_at
+        ) values (
+            #{tenantId}, #{configType}, #{configKey}, #{versionNo}, #{changeAction}, #{changeResult},
+            #{operatorType}, #{operatorId}, #{traceId}, #{changeSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+        )
+    </insert>
+</mapper>

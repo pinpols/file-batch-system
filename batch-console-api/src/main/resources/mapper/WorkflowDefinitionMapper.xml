@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.WorkflowDefinitionMapper">
+    <resultMap id="WorkflowDefinitionResultMap" type="com.example.batch.console.domain.entity.WorkflowDefinitionEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="workflow_code" property="workflowCode"/>
+        <result column="workflow_name" property="workflowName"/>
+        <result column="workflow_type" property="workflowType"/>
+        <result column="version" property="version"/>
+        <result column="enabled" property="enabled"/>
+        <result column="description" property="description"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="WorkflowDefinitionResultMap">
+        select *
+        from batch.workflow_definition
+        where 1 = 1
+        <if test="tenantId != null and tenantId != ''">
+            and tenant_id = #{tenantId}
+        </if>
+        <if test="workflowCode != null and workflowCode != ''">
+            and workflow_code = #{workflowCode}
+        </if>
+        <if test="workflowType != null and workflowType != ''">
+            and workflow_type = #{workflowType}
+        </if>
+        <if test="version != null">
+            and version = #{version}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+        order by workflow_code, version desc, id desc
+    </select>
+</mapper>

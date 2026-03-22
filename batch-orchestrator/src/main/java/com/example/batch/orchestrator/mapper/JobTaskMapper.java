@@ -23,6 +23,7 @@ public interface JobTaskMapper {
     int updateStatus(@Param("tenantId") String tenantId,
                      @Param("id") Long id,
                      @Param("taskStatus") String taskStatus,
+                     @Param("resultSummary") String resultSummary,
                      @Param("errorCode") String errorCode,
                      @Param("errorMessage") String errorMessage);
 

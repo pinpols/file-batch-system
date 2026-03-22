@@ -1,20 +1,17 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
-import com.example.batch.worker.dispatchs.domain.DispatchPayload;
-import java.util.List;
+import com.example.batch.worker.dispatchs.mapper.FileDispatchMapper;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import org.springframework.jdbc.core.JdbcTemplate;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
 @Repository
+@RequiredArgsConstructor
 public class FileDispatchRepository {
 
-    private final JdbcTemplate platformJdbcTemplate;
-
-    public FileDispatchRepository(JdbcTemplate platformJdbcTemplate) {
-        this.platformJdbcTemplate = platformJdbcTemplate;
-    }
+    private final FileDispatchMapper fileDispatchMapper;
 
     public Map<String, Object> loadFile(String tenantId, String fileId) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileId)) {
@@ -27,42 +24,28 @@ public class FileDispatchRepository {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return Map.of();
         }
-        List<Map<String, Object>> fileRows = platformJdbcTemplate.queryForList(
-                "select * from batch.file_record where tenant_id = ? and id = ?",
-                tenantId, fileId
-        );
-        return fileRows.isEmpty() ? Map.of() : fileRows.get(0);
+        Map<String, Object> fileRecord = fileDispatchMapper.selectFileRecord(params("tenantId", tenantId, "fileId", fileId));
+        return fileRecord == null ? Map.of() : fileRecord;
     }
 
     public Map<String, Object> loadChannel(String tenantId, String channelCode) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(channelCode)) {
             return Map.of();
         }
-        List<Map<String, Object>> channelRows = platformJdbcTemplate.queryForList(
-                "select * from batch.file_channel_config where tenant_id = ? and channel_code = ?",
-                tenantId, channelCode
+        Map<String, Object> channelConfig = fileDispatchMapper.selectChannelConfig(
+                params("tenantId", tenantId, "channelCode", channelCode)
         );
-        return channelRows.isEmpty() ? Map.of() : channelRows.get(0);
+        return channelConfig == null ? Map.of() : channelConfig;
     }
 
     public Map<String, Object> loadLatestDispatchRecord(String tenantId, Long fileId, String channelCode) {
         if (!StringUtils.hasText(tenantId) || fileId == null || !StringUtils.hasText(channelCode)) {
             return Map.of();
         }
-        List<Map<String, Object>> rows = platformJdbcTemplate.queryForList("""
-                select *
-                from batch.file_dispatch_record
-                where tenant_id = ?
-                  and file_id = ?
-                  and channel_code = ?
-                order by id desc
-                limit 1
-                """,
-                tenantId,
-                fileId,
-                channelCode
+        Map<String, Object> dispatchRecord = fileDispatchMapper.selectLatestDispatchRecord(
+                params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode)
         );
-        return rows.isEmpty() ? Map.of() : rows.get(0);
+        return dispatchRecord == null ? Map.of() : dispatchRecord;
     }
 
     public int insertDispatchRecord(String tenantId,
@@ -73,32 +56,20 @@ public class FileDispatchRepository {
                                     String receiptCode,
                                     String receiptStatus,
                                     String externalRequestId) {
-        String sql = """
-                insert into batch.file_dispatch_record (
-                    tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target, dispatch_status,
-                    dispatch_attempt, receipt_code, receipt_status, external_request_id
-                ) values (?, ?, ?, ?, ?, 'CREATED', 1, ?, ?, ?)
-                """;
-        return platformJdbcTemplate.update(sql,
-                tenantId,
-                fileId,
-                pipelineInstanceId,
-                channelCode,
-                dispatchTarget,
-                receiptCode,
-                receiptStatus,
-                externalRequestId
-        );
+        return fileDispatchMapper.insertDispatchRecord(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "pipelineInstanceId", pipelineInstanceId,
+                "channelCode", channelCode,
+                "dispatchTarget", dispatchTarget,
+                "receiptCode", receiptCode,
+                "receiptStatus", receiptStatus,
+                "externalRequestId", externalRequestId
+        ));
     }
 
     public int incrementAttempt(String tenantId, Long fileId, String channelCode) {
-        return platformJdbcTemplate.update("""
-                update batch.file_dispatch_record
-                set dispatch_attempt = dispatch_attempt + 1,
-                    updated_at = current_timestamp
-                where tenant_id = ? and file_id = ? and channel_code = ?
-                """,
-                tenantId, fileId, channelCode);
+        return fileDispatchMapper.incrementAttempt(params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode));
     }
 
     public int markSent(String tenantId,
@@ -107,58 +78,47 @@ public class FileDispatchRepository {
                         String externalRequestId,
                         String receiptCode,
                         String receiptStatus) {
-        return platformJdbcTemplate.update("""
-                update batch.file_dispatch_record
-                set dispatch_status = 'SENT',
-                    external_request_id = ?,
-                    receipt_code = coalesce(?, receipt_code),
-                    receipt_status = ?,
-                    dispatched_at = current_timestamp,
-                    updated_at = current_timestamp
-                where tenant_id = ? and file_id = ? and channel_code = ?
-                """,
-                externalRequestId, receiptCode, receiptStatus, tenantId, fileId, channelCode);
+        return fileDispatchMapper.markSent(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "channelCode", channelCode,
+                "externalRequestId", externalRequestId,
+                "receiptCode", receiptCode,
+                "receiptStatus", receiptStatus
+        ));
     }
 
     public int markAcked(String tenantId, Long fileId, String channelCode, String receiptCode) {
-        return platformJdbcTemplate.update("""
-                update batch.file_dispatch_record
-                set dispatch_status = 'ACKED',
-                    receipt_status = 'SUCCESS',
-                    receipt_code = ?,
-                    ack_at = current_timestamp,
-                    updated_at = current_timestamp
-                where tenant_id = ? and file_id = ? and channel_code = ?
-                """,
-                receiptCode, tenantId, fileId, channelCode);
+        return fileDispatchMapper.markAcked(
+                params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode, "receiptCode", receiptCode)
+        );
     }
 
     public int markFailed(String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
-        return platformJdbcTemplate.update("""
-                update batch.file_dispatch_record
-                set dispatch_status = 'FAILED',
-                    receipt_status = 'FAILED',
-                    error_code = ?,
-                    error_message = ?,
-                    updated_at = current_timestamp
-                where tenant_id = ? and file_id = ? and channel_code = ?
-                """,
-                errorCode, errorMessage, tenantId, fileId, channelCode);
+        return fileDispatchMapper.markFailed(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "channelCode", channelCode,
+                "errorCode", errorCode,
+                "errorMessage", errorMessage
+        ));
     }
 
     public int markCompensated(String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
-        return platformJdbcTemplate.update("""
-                update batch.file_dispatch_record
-                set dispatch_status = 'COMPENSATED',
-                    receipt_status = case
-                        when receipt_status = 'SUCCESS' then receipt_status
-                        else 'FAILED'
-                    end,
-                    error_code = ?,
-                    error_message = ?,
-                    updated_at = current_timestamp
-                where tenant_id = ? and file_id = ? and channel_code = ?
-                """,
-                errorCode, errorMessage, tenantId, fileId, channelCode);
+        return fileDispatchMapper.markCompensated(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "channelCode", channelCode,
+                "errorCode", errorCode,
+                "errorMessage", errorMessage
+        ));
+    }
+
+    private Map<String, Object> params(Object... pairs) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (int index = 0; index < pairs.length; index += 2) {
+            values.put(String.valueOf(pairs[index]), pairs[index + 1]);
+        }
+        return values;
     }
 }

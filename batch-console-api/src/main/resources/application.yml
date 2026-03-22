@@ -10,8 +10,12 @@ spring:
     password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
     driver-class-name: org.postgresql.Driver
   ai:
-    openai-sdk:
+    openai:
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
       api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
   security:
     user:
       name: ${BATCH_CONSOLE_USERNAME:admin}
@@ -29,7 +33,30 @@ management:
 
 batch:
   console:
-    ai-enabled: ${BATCH_CONSOLE_AI_ENABLED:false}
+    security:
+      enabled: ${BATCH_CONSOLE_SECURITY_ENABLED:true}
+      shared-secret: ${BATCH_CONSOLE_SHARED_SECRET:console-secret}
+      tenant-header: ${BATCH_CONSOLE_TENANT_HEADER:X-Tenant-Id}
+      user-header: ${BATCH_CONSOLE_USER_HEADER:X-Console-User}
+      role-header: ${BATCH_CONSOLE_ROLE_HEADER:X-Console-Roles}
+      token-header: ${BATCH_CONSOLE_TOKEN_HEADER:X-Console-Token}
+      default-tenant-id: ${BATCH_CONSOLE_DEFAULT_TENANT_ID:default-tenant}
+      allowed-tenants:
+        - ${BATCH_CONSOLE_ALLOWED_TENANT:default-tenant}
+      default-authorities:
+        - ROLE_ADMIN
+        - ROLE_AUDITOR
+        - ROLE_CONFIG_ADMIN
+    ai:
+      enabled: ${BATCH_CONSOLE_AI_ENABLED:false}
+      model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      max-prompt-length: ${BATCH_CONSOLE_AI_MAX_PROMPT_LENGTH:4000}
+      max-response-length: ${BATCH_CONSOLE_AI_MAX_RESPONSE_LENGTH:3000}
+      allowed-users:
+        - ${BATCH_CONSOLE_AI_ALLOWED_USER:admin}
+      allowed-authorities:
+        - ROLE_ADMIN
+        - ROLE_AUDITOR
     trigger:
       base-url: ${BATCH_TRIGGER_BASE_URL:http://localhost:8081}
     orchestrator:

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.imports.mapper.business.CustomerAccountImportMapper">
+    <insert id="upsertCustomerAccount">
+        insert into biz.customer_account (
+            tenant_id,
+            customer_no,
+            customer_name,
+            customer_type,
+            certificate_no,
+            mobile_no,
+            email,
+            status,
+            source_file_name,
+            source_batch_no,
+            source_trace_id
+        ) values (
+            #{tenantId},
+            #{customerNo},
+            #{customerName},
+            #{customerType},
+            #{certificateNo},
+            #{mobileNo},
+            #{email},
+            #{status},
+            #{sourceFileName},
+            #{sourceBatchNo},
+            #{sourceTraceId}
+        )
+        on conflict (tenant_id, customer_no) do update set
+            customer_name = excluded.customer_name,
+            customer_type = excluded.customer_type,
+            certificate_no = excluded.certificate_no,
+            mobile_no = excluded.mobile_no,
+            email = excluded.email,
+            status = excluded.status,
+            source_file_name = excluded.source_file_name,
+            source_batch_no = excluded.source_batch_no,
+            source_trace_id = excluded.source_trace_id,
+            updated_at = current_timestamp
+    </insert>
+</mapper>

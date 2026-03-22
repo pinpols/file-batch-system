@@ -14,5 +14,7 @@ public interface RetryGovernanceService {
 
     void dispatchDueRetries();
 
+    void retryPartition(String tenantId, Long partitionId, String eventKey);
+
     void replayDeadLetter(String tenantId, Long deadLetterTaskId);
 }

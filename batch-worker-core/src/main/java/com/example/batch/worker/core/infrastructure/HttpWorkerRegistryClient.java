@@ -5,16 +5,22 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import java.time.Instant;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
+@RequiredArgsConstructor
 public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
-    private final RestClient restClient;
+    private final OrchestratorWorkerClientProperties properties;
+    private final RestClient.Builder builder;
+    private RestClient restClient;
 
-    public HttpWorkerRegistryClient(OrchestratorWorkerClientProperties properties, RestClient.Builder builder) {
+    @PostConstruct
+    void initialize() {
         this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
     }
 

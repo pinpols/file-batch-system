@@ -5,6 +5,7 @@ import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.ArchiveFileRequest;
 import com.example.batch.console.web.request.DeleteFileRequest;
+import com.example.batch.console.web.request.FileArrivalGroupActionRequest;
 import com.example.batch.console.web.request.RedispatchFileRequest;
 import com.example.batch.common.constants.CommonConstants;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,28 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         );
     }
 
+    @Override
+    public String operateArrivalGroup(FileArrivalGroupActionRequest request, String idempotencyKey) {
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        FileOperationResponse response = restClient.post()
+                .uri("/internal/files/arrival-groups/{fileGroupCode}/actions", request.getFileGroupCode())
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+                .body(new ArrivalGroupOperationRequest(
+                        request.getTenantId(),
+                        request.getAction(),
+                        requestMetadata.operatorId(),
+                        requestMetadata.traceId(),
+                        request.getReason(),
+                        request.getExtendWaitSeconds()
+                ))
+                .retrieve()
+                .body(FileOperationResponse.class);
+        return response == null ? null : response.status();
+    }
+
     private String executeFileOperation(String tenantId,
                                         Long fileId,
                                         String channelCode,
@@ -74,5 +97,13 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     }
 
     private record FileOperationResponse(String status) {
+    }
+
+    private record ArrivalGroupOperationRequest(String tenantId,
+                                                String action,
+                                                String operatorId,
+                                                String traceId,
+                                                String reason,
+                                                Long extendWaitSeconds) {
     }
 }

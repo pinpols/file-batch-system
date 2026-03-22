@@ -6,6 +6,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -14,13 +15,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class ConsoleApiExceptionHandler {
 
     private final ConsoleResponseFactory responseFactory;
-
-    public ConsoleApiExceptionHandler(ConsoleResponseFactory responseFactory) {
-        this.responseFactory = responseFactory;
-    }
 
     @ExceptionHandler(BizException.class)
     public ResponseEntity<?> handleBizException(BizException exception) {

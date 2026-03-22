@@ -39,6 +39,7 @@ public class TaskController {
                         request.getTenantId(),
                         taskId,
                         request.isSuccess(),
+                        request.getResultSummary(),
                         request.getErrorCode(),
                         request.getErrorMessage()));
     }

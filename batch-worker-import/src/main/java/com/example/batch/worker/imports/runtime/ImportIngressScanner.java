@@ -79,6 +79,21 @@ public class ImportIngressScanner {
         metadata.put("etag", snapshot.etag());
         metadata.put("lastModified", snapshot.lastModified());
         metadata.put("detectedAt", Instant.now().toString());
+        if (scannerProperties.getArrival().isEnabled() && StringUtils.hasText(scannerProperties.getArrival().getFileGroupCode())
+                && StringUtils.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
+            metadata.put("fileGroupCode", scannerProperties.getArrival().getFileGroupCode());
+            metadata.put("waitFileGroupMode", scannerProperties.getArrival().getWaitFileGroupMode());
+            metadata.put("requiredFileSet", scannerProperties.getArrival().getRequiredFileSet());
+            metadata.put("arrivalTimeoutAction", scannerProperties.getArrival().getArrivalTimeoutAction());
+            metadata.put("expectedArrivalTime", Instant.now().plusSeconds(scannerProperties.getArrival().getExpectedArrivalDelaySeconds()).toString());
+            metadata.put("latestTolerableTime", Instant.now().plusSeconds(scannerProperties.getArrival().getLatestTolerableDelaySeconds()).toString());
+            metadata.put("arrivalState", "WAITING_ARRIVAL");
+            metadata.put("triggerOnComplete", scannerProperties.getArrival().isTriggerOnComplete());
+            metadata.put("allowEmptyRun", scannerProperties.getArrival().isAllowEmptyRun());
+            metadata.put("allowSkipBizDate", scannerProperties.getArrival().isAllowSkipBizDate());
+            metadata.put("notifyManual", scannerProperties.getArrival().isNotifyManual());
+            metadata.put("notifyChannels", scannerProperties.getArrival().getNotifyChannels());
+        }
         Long fileId = runtimeRepository.createFileRecord(
                 workerConfiguration.tenantId(),
                 null,
@@ -102,6 +117,24 @@ public class ImportIngressScanner {
                 "import-scan-" + sanitizeTrace(fileName),
                 metadata
         );
+        if (scannerProperties.getArrival().isEnabled() && StringUtils.hasText(scannerProperties.getArrival().getFileGroupCode())
+                && StringUtils.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
+            runtimeRepository.appendAudit(
+                    fileId,
+                    workerConfiguration.tenantId(),
+                    "ARRIVAL_REGISTER",
+                    "SUCCESS",
+                    "SYSTEM",
+                    "import-ingress-scanner",
+                    "arrival-" + sanitizeTrace(fileName),
+                    snapshot.objectName(),
+                    Map.of(
+                            "fileGroupCode", scannerProperties.getArrival().getFileGroupCode(),
+                            "requiredFileSet", scannerProperties.getArrival().getRequiredFileSet(),
+                            "arrivalState", "WAITING_ARRIVAL"
+                    )
+            );
+        }
         runtimeRepository.appendAudit(
                 fileId,
                 workerConfiguration.tenantId(),

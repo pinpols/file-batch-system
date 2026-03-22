@@ -16,6 +16,13 @@ public class JobInstanceEntity {
     private LocalDate bizDate;
     private String triggerType;
     private String instanceStatus;
+    private String batchNo;
+    private String operatorId;
+    private Boolean rerunFlag;
+    private Boolean retryFlag;
+    private String rerunReason;
+    private Long relatedFileId;
+    private Long parentInstanceId;
     private String queueCode;
     private String workerGroup;
     private Integer priority;
@@ -25,6 +32,11 @@ public class JobInstanceEntity {
     private Integer successPartitionCount;
     private Integer failedPartitionCount;
     private String traceId;
+    private String paramsSnapshot;
+    private String resultSummary;
+    private Instant deadlineAt;
+    private Integer expectedDurationSeconds;
+    private Instant slaAlertedAt;
     private Instant startedAt;
     private Instant finishedAt;
     private Instant createdAt;

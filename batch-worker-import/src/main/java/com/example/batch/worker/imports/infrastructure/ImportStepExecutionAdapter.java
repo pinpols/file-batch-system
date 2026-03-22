@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.infrastructure;
 
+import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -34,6 +35,11 @@ public class ImportStepExecutionAdapter extends AbstractPipelineStepExecutionAda
     @Override
     protected String pipelineDescription() {
         return "Chapter 9 import pipeline";
+    }
+
+    @Override
+    protected List<PipelineStepTemplate> defaultPipelineSteps() {
+        return importStageExecutor.defaultStepDefinitions();
     }
 
     @Override

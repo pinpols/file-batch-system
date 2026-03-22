@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.OutboxRetryLogMapper">
+    <select id="selectByQuery" resultType="map">
+        select *
+        from batch.event_outbox_retry
+        where 1 = 1
+        <if test="tenantId != null and tenantId != ''">
+            and tenant_id = #{tenantId}
+        </if>
+        <if test="retryStatus != null and retryStatus != ''">
+            and retry_status = #{retryStatus}
+        </if>
+        <if test="eventKey != null and eventKey != ''">
+            and event_key = #{eventKey}
+        </if>
+        order by id desc
+    </select>
+</mapper>

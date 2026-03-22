@@ -8,21 +8,24 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class MinioExportStorage {
 
-    private final MinioClient minioClient;
     private final MinioStorageProperties properties;
+    private MinioClient minioClient;
 
-    public MinioExportStorage(MinioStorageProperties properties) {
-        this.properties = properties;
+    @PostConstruct
+    void initialize() {
         this.minioClient = MinioClient.builder()
                 .endpoint(properties.getEndpoint())
                 .credentials(properties.getAccessKey(), properties.getSecretKey())

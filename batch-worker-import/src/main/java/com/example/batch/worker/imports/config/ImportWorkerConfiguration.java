@@ -6,8 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record ImportWorkerConfiguration(
         String workerCode,
         String workerType,
-        String defaultStage,
-        Integer batchSize,
         String tenantId,
         Long heartbeatIntervalMillis,
         String topic,

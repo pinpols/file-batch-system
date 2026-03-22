@@ -6,22 +6,16 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.HeartbeatService;
 import com.example.batch.worker.core.support.TaskExecutionWrapper;
 import com.example.batch.worker.core.support.WorkerLifecycleManager;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class WorkerRuntimeFacade {
 
     private final WorkerLifecycleManager workerLifecycleManager;
     private final HeartbeatService heartbeatService;
     private final TaskExecutionWrapper taskExecutionWrapper;
-
-    public WorkerRuntimeFacade(WorkerLifecycleManager workerLifecycleManager,
-                               HeartbeatService heartbeatService,
-                               TaskExecutionWrapper taskExecutionWrapper) {
-        this.workerLifecycleManager = workerLifecycleManager;
-        this.heartbeatService = heartbeatService;
-        this.taskExecutionWrapper = taskExecutionWrapper;
-    }
 
     public WorkerRegistration start(WorkerRegistration registration) {
         return workerLifecycleManager.start(registration);
