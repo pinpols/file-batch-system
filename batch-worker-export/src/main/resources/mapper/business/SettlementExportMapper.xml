@@ -8,12 +8,16 @@
           and batch_no = #{batchNo}
     </select>
 
-    <select id="selectDetailsByBatchId" resultType="map">
+    <select id="selectDetailsByBatchIdAfterId" resultType="map">
         select *
         from biz.settlement_detail
         where tenant_id = #{tenantId}
           and batch_id = #{batchId}
+          <if test="afterId != null">
+              and id &gt; #{afterId}
+          </if>
         order by id asc
+        limit #{pageSize}
     </select>
 
     <update id="updateBatchExported">

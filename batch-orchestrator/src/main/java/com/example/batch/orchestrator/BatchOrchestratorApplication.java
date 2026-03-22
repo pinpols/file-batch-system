@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @MapperScan("com.example.batch.orchestrator.mapper")
-@ConfigurationPropertiesScan("com.example.batch.orchestrator.config")
+@ConfigurationPropertiesScan(basePackages = "com.example.batch")
 @EnableScheduling
 public class BatchOrchestratorApplication {
 

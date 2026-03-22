@@ -34,6 +34,14 @@
             streaming_enabled,
             page_size,
             fetch_size,
+            chunk_size,
+            preview_masking_enabled,
+            error_line_masking_enabled,
+            log_masking_enabled,
+            content_encryption_enabled,
+            encryption_key_ref,
+            download_requires_approval,
+            masking_rule_set,
             enabled,
             version,
             description,
@@ -53,5 +61,21 @@
             and enabled = #{enabled}
         </if>
         order by template_code asc, version desc
+    </select>
+
+    <select id="selectSecurityFlagsByTemplateCode" resultType="map">
+        select preview_masking_enabled,
+               error_line_masking_enabled,
+               log_masking_enabled,
+               content_encryption_enabled,
+               encryption_key_ref,
+               download_requires_approval,
+               masking_rule_set
+        from batch.file_template_config
+        where tenant_id = #{tenantId}
+          and template_code = #{templateCode}
+          and enabled = true
+        order by version desc
+        limit 1
     </select>
 </mapper>

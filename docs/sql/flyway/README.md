@@ -108,3 +108,19 @@
 - `V5__create_file_tables.sql`
 - `V6__create_ops_tables.sql`
 - `V7__create_indexes.sql`
+- `V8`～`V10`：阶段扩展、文件错误表、AI 审计等（见目录内文件名）
+- `V11__add_sla_and_arrival_governance.sql`
+- `V12__create_compensation_and_step_runtime.sql`
+- `V13__add_chunk_size_to_file_template_config.sql`
+- `V14__add_import_preprocess_pipeline.sql`
+- `V15__scheduler_fair_share_snapshot_load.sql`
+- `V16__compensation_running_target_unique.sql`
+- `V17__file_template_security_flags.sql`
+- `V18__alert_event.sql`
+- `V19__worker_registry_drain.sql`
+- `V20__create_event_outbox_logs.sql`（由原重复 `V11` 重编号）
+- `V21__create_config_release_and_secret_version.sql`（由原重复 `V12` 重编号）
+- `V22__file_channel_type_api_push.sql`（由原重复 `V14` 重编号）
+- `V23__batch_runtime_default_parameter.sql`：默认运行参数目录表与种子数据
+
+参数说明见 [runtime-default-parameters.md](../architecture/runtime-default-parameters.md)。

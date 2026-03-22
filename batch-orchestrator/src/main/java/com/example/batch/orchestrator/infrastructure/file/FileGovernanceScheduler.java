@@ -16,12 +16,15 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
+/**
+ * Shared file governance implementation. Concrete @Scheduled wrappers delegate here so each job can
+ * evolve independently without coupling unrelated scans into a single scheduler bean.
+ */
 public class FileGovernanceScheduler {
 
     private final FileGovernanceRepository fileGovernanceRepository;
@@ -50,7 +53,6 @@ public class FileGovernanceScheduler {
     /**
      * 文件治理指标由中心定时收口，先保证延迟可见，再谈更复杂的告警策略。
      */
-    @Scheduled(fixedDelayString = "${batch.file-governance.latency.poll-interval-millis:30000}")
     public void collectLatencyMetrics() {
         if (!properties.getLatency().isEnabled()) {
             return;
@@ -86,7 +88,6 @@ public class FileGovernanceScheduler {
         }
     }
 
-    @Scheduled(fixedDelayString = "${batch.file-governance.arrival.poll-interval-millis:30000}")
     public void manageFileArrivalGroups() {
         if (!properties.getArrival().isEnabled()) {
             return;
@@ -124,7 +125,6 @@ public class FileGovernanceScheduler {
         arrivalGroupTimeoutCount.set(timeoutGroups);
     }
 
-    @Scheduled(fixedDelayString = "${batch.file-governance.archive.cleanup-interval-millis:60000}")
     public void cleanupArchivedFiles() {
         if (!properties.getArchive().isEnabled()) {
             return;
@@ -139,7 +139,6 @@ public class FileGovernanceScheduler {
         }
     }
 
-    @Scheduled(fixedDelayString = "${batch.file-governance.reconcile.poll-interval-millis:60000}")
     public void reconcileObjectStorage() {
         if (!properties.getReconcile().isEnabled()) {
             return;

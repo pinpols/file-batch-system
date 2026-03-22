@@ -26,4 +26,10 @@ public class WorkerRegistryRecord {
     private String status;
     @Column("heartbeat_at")
     private Instant heartbeatAt;
+    @Column("current_load")
+    private Integer currentLoad;
+    @Column("drain_started_at")
+    private Instant drainStartedAt;
+    @Column("drain_deadline_at")
+    private Instant drainDeadlineAt;
 }

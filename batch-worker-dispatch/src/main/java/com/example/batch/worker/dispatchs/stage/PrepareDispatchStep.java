@@ -6,6 +6,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
@@ -52,10 +53,11 @@ public class PrepareDispatchStep implements DispatchStageStep {
             if (fileRecord.isEmpty()) {
                 return DispatchStageResult.failure(stage(), "DISPATCH_PREPARE_FILE_NOT_FOUND", "file record not found");
             }
-            Map<String, Object> channelConfig = fileDispatchRepository.loadChannel(context.getTenantId(), payload.channelCode());
-            if (channelConfig.isEmpty()) {
+            Map<String, Object> channelRow = fileDispatchRepository.loadChannel(context.getTenantId(), payload.channelCode());
+            if (channelRow.isEmpty()) {
                 return DispatchStageResult.failure(stage(), "DISPATCH_PREPARE_CHANNEL_NOT_FOUND", "channel config not found");
             }
+            Map<String, Object> channelConfig = ChannelConfigMerge.merge(channelRow, objectMapper);
             context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
             context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
             context.getAttributes().put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);

@@ -2,12 +2,24 @@ package com.example.batch.worker.imports.stage;
 
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
-import com.example.batch.worker.imports.domain.CustomerImportPayload;
+import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportDataQualityService;
+import com.example.batch.worker.imports.infrastructure.ImportDataQualityService.ValidationIssue;
+import com.example.batch.worker.imports.infrastructure.ImportDataQualityService.ValidationOutcome;
+import com.example.batch.worker.imports.infrastructure.ImportDataQualityService.ValidationSession;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,9 +31,14 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class ValidateStep implements ImportStageStep {
 
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
+
     private final PlatformFileRuntimeRepository runtimeRepository;
     private final ImportRecordGovernanceService recordGovernanceService;
     private final ImportDataQualityService dataQualityService;
+    private final ImportWorkerConfiguration workerConfiguration;
+    private final ObjectMapper objectMapper;
 
     @Override
     public ImportStage stage() {
@@ -30,81 +47,136 @@ public class ValidateStep implements ImportStageStep {
 
     @Override
     public ImportStageResult execute(ImportJobContext context) {
-        Object payload = context == null ? null : context.getAttributes().get("customerPayloads");
-        if (!(payload instanceof List<?> payloads) || payloads.isEmpty()) {
-            if (numberValue(context.getAttributes().get("skippedCount")) > 0) {
-                runtimeRepository.updateFileStatus(
-                        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-                        "VALIDATED",
-                        Map.of(
-                                "validatedCount", 0,
-                                "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
-                                "badRecordCount", badRecordCount(context)
-                        )
-                );
-                return ImportStageResult.success(stage());
-            }
-            return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_NO_PAYLOAD", "customer payload missing");
+        String parsedRecordsPath = stringValue(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH));
+        if (!StringUtils.hasText(parsedRecordsPath)) {
+            return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_NO_STREAM", "parsed records path missing");
         }
-        @SuppressWarnings("unchecked")
-        List<CustomerImportPayload> customerPayloads = (List<CustomerImportPayload>) payloads;
+        return executeStreaming(context, Path.of(parsedRecordsPath));
+    }
+
+    private ImportStageResult executeStreaming(ImportJobContext context, Path parsedRecordsPath) {
+        if (!Files.exists(parsedRecordsPath)) {
+            return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_NO_STREAM", "parsed records file missing");
+        }
+        Path validatedRecordsPath = null;
         try {
-            ImportDataQualityService.ValidationOutcome validationOutcome = dataQualityService.validate(context, customerPayloads);
-            for (ImportDataQualityService.ValidationIssue issue : validationOutcome.datasetIssues()) {
-                recordValidationError(context, issue.recordNo(), issue.errorCode(), issue.errorMessage(), issue.rawRecord());
+            List<String> schemaFields = stringList(context.getAttributes().get("schemaFields"));
+            long totalCount = numberValue(context.getAttributes().get("totalCount"));
+            ValidationSession session = dataQualityService.beginValidation(context, totalCount, schemaFields);
+            dataQualityService.validateDataset(session);
+            for (ValidationIssue issue : session.datasetIssues()) {
+                recordValidationError(context, issue.recordNo() == null ? 0L : issue.recordNo(), issue.errorCode(), issue.errorMessage(), issue.rawRecord());
                 if (!recordGovernanceService.withinThreshold(context)) {
-                    return ImportStageResult.failure(stage(), "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
+                    return failStreaming(context, validatedRecordsPath, "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
                 }
             }
-            List<CustomerImportPayload> validPayloads = new ArrayList<>();
-            int validCount = 0;
-            for (int index = 0; index < payloads.size(); index++) {
-                Object item = payloads.get(index);
-                if (!(item instanceof CustomerImportPayload customerPayload)) {
-                    recordValidationError(context, index + 1L, "IMPORT_VALIDATE_TYPE", "customer payload type invalid", item);
-                    if (!recordGovernanceService.withinThreshold(context)) {
-                        return ImportStageResult.failure(stage(), "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
+            validatedRecordsPath = createValidatedFile(context);
+            int chunkSize = resolveChunkSize(context);
+            long recordNo = 0L;
+            long validatedCount = 0L;
+            long loadedCandidateCount = 0L;
+            try (BufferedReader reader = Files.newBufferedReader(parsedRecordsPath, StandardCharsets.UTF_8);
+                 BufferedWriter writer = Files.newBufferedWriter(validatedRecordsPath, StandardCharsets.UTF_8,
+                         StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+                List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
+                long chunkStartRecordNo = 1L;
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!StringUtils.hasText(line)) {
+                        continue;
                     }
-                    continue;
-                }
-                ImportDataQualityService.ValidationIssue issue = validationOutcome.recordIssues().get(index + 1L);
-                if (issue != null) {
-                    recordValidationError(context, issue.recordNo(), issue.errorCode(), issue.errorMessage(), issue.rawRecord());
-                    if (!recordGovernanceService.withinThreshold(context)) {
-                        return ImportStageResult.failure(stage(), "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
+                    recordNo++;
+                    Map<String, Object> row;
+                    try {
+                        row = objectMapper.readValue(line, MAP_TYPE);
+                    } catch (Exception exception) {
+                        recordValidationError(context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
+                        if (!recordGovernanceService.withinThreshold(context)) {
+                            return failStreaming(context, validatedRecordsPath, "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
+                        }
+                        continue;
                     }
-                    continue;
+                    if (chunk.isEmpty()) {
+                        chunkStartRecordNo = recordNo;
+                    }
+                    chunk.add(row);
+                    if (chunk.size() >= chunkSize) {
+                        ChunkProcessResult result = processChunk(context, session, chunk, chunkStartRecordNo, writer);
+                        validatedCount += result.validCount();
+                        loadedCandidateCount += result.validCount();
+                        if (!result.success()) {
+                            return failStreaming(context, validatedRecordsPath, result.errorCode(), result.errorMessage());
+                        }
+                        chunk.clear();
+                    }
                 }
-                validPayloads.add(customerPayload);
-                validCount++;
+                if (!chunk.isEmpty()) {
+                    ChunkProcessResult result = processChunk(context, session, chunk, chunkStartRecordNo, writer);
+                    validatedCount += result.validCount();
+                    loadedCandidateCount += result.validCount();
+                    if (!result.success()) {
+                        return failStreaming(context, validatedRecordsPath, result.errorCode(), result.errorMessage());
+                    }
+                }
             }
-            context.getAttributes().put("customerPayloads", validPayloads);
-            context.getAttributes().put("validatedCount", validCount);
-            context.getAttributes().put("qualityChecks", validationOutcome.appliedChecks());
+            context.getAttributes().put(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH, validatedRecordsPath.toString());
+            context.getAttributes().put("validatedCount", validatedCount);
+            context.getAttributes().put("qualityChecks", session.appliedChecks());
+            context.getAttributes().put("customerPayloadCount", loadedCandidateCount);
             if (!recordGovernanceService.withinThreshold(context)) {
-                return ImportStageResult.failure(stage(), "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
+                return failStreaming(context, validatedRecordsPath, "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
             }
             runtimeRepository.updateFileStatus(
                     runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
                     "VALIDATED",
                     Map.of(
-                            "validatedCount", validCount,
+                            "validatedCount", validatedCount,
                             "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
                             "badRecordCount", badRecordCount(context),
                             "manualReviewRequired", Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
-                            "qualityChecks", validationOutcome.appliedChecks()
+                            "qualityChecks", session.appliedChecks(),
+                            "validatedRecordsPath", validatedRecordsPath.toString()
                     )
             );
             return ImportStageResult.success(stage());
-        } catch (IllegalStateException exception) {
-            String errorCode = StringUtils.hasText(stringValue(context.getAttributes().get("lastErrorCode")))
-                    ? stringValue(context.getAttributes().get("lastErrorCode"))
-                    : "IMPORT_VALIDATE_FAILED";
-            String errorMessage = StringUtils.hasText(stringValue(context.getAttributes().get("lastErrorMessage")))
-                    ? stringValue(context.getAttributes().get("lastErrorMessage"))
-                    : exception.getMessage();
+        } catch (Exception exception) {
+            if (validatedRecordsPath != null) {
+                deleteQuietly(validatedRecordsPath);
+            }
+            return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_FAILED", exception.getMessage());
+        }
+    }
+
+    private ChunkProcessResult processChunk(ImportJobContext context,
+                                            ValidationSession session,
+                                            List<Map<String, Object>> chunk,
+                                            long chunkStartRecordNo,
+                                            BufferedWriter writer) throws Exception {
+        Map<Long, ValidationIssue> issues = dataQualityService.validateChunkRows(session, chunk, chunkStartRecordNo);
+        long validCount = 0L;
+        for (int index = 0; index < chunk.size(); index++) {
+            long recordNo = chunkStartRecordNo + index;
+            ValidationIssue issue = issues.get(recordNo);
+            if (issue != null) {
+                recordValidationError(context, recordNo, issue.errorCode(), issue.errorMessage(), issue.rawRecord());
+                if (!recordGovernanceService.withinThreshold(context)) {
+                    return ChunkProcessResult.failure("IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded", validCount);
+                }
+                continue;
+            }
+            objectMapper.writeValue(writer, chunk.get(index));
+            writer.newLine();
+            validCount++;
+        }
+        return ChunkProcessResult.success(validCount);
+    }
+
+    private ImportStageResult failStreaming(ImportJobContext context, Path validatedRecordsPath, String errorCode, String errorMessage) {
+        deleteQuietly(validatedRecordsPath);
+        if (StringUtils.hasText(errorCode) && StringUtils.hasText(errorMessage)) {
             return ImportStageResult.failure(stage(), errorCode, errorMessage);
         }
+        return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_FAILED", errorMessage);
     }
 
     private void recordValidationError(ImportJobContext context, long recordNo, String errorCode, String errorMessage, Object rawRecord) {
@@ -116,15 +188,6 @@ public class ValidateStep implements ImportStageStep {
         if (recordGovernanceService.shouldFailOnSkip(errorCode)) {
             throw new IllegalStateException("skip action FAIL_BATCH");
         }
-    }
-
-    private String resolveValidationMessage(String errorCode, CustomerImportPayload payload) {
-        return switch (errorCode) {
-            case "IMPORT_VALIDATE_REQUIRED" -> "customerNo/customerName required";
-            case "IMPORT_VALIDATE_TYPE_INVALID" -> "invalid customerType: " + payload.customerType();
-            case "IMPORT_VALIDATE_STATUS_INVALID" -> "invalid status: " + payload.status();
-            default -> errorCode;
-        };
     }
 
     private long badRecordCount(ImportJobContext context) {
@@ -149,7 +212,65 @@ public class ValidateStep implements ImportStageStep {
         return Long.parseLong(text);
     }
 
+    private List<String> stringList(Object value) {
+        if (value instanceof List<?> list) {
+            List<String> result = new ArrayList<>();
+            for (Object item : list) {
+                if (item != null && StringUtils.hasText(String.valueOf(item))) {
+                    result.add(String.valueOf(item));
+                }
+            }
+            return result;
+        }
+        return List.of();
+    }
+
     private String stringValue(Object value) {
-        return value == null ? null : String.valueOf(value);
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value);
+        return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    }
+
+    private int resolveChunkSize(ImportJobContext context) {
+        int fallback = workerConfiguration == null ? 500 : workerConfiguration.chunkSize();
+        Object templateConfigObject = context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object value = templateConfig.get("chunk_size");
+            if (value instanceof Number number) {
+                return Math.max(1, number.intValue());
+            }
+            if (value != null && StringUtils.hasText(String.valueOf(value))) {
+                return Math.max(1, Integer.parseInt(String.valueOf(value)));
+            }
+        }
+        return Math.max(1, fallback);
+    }
+
+    private Path createValidatedFile(ImportJobContext context) throws Exception {
+        String fileId = context == null ? "unknown" : String.valueOf(context.getFileId());
+        String workerId = context == null ? "worker" : String.valueOf(context.getWorkerId());
+        return Files.createTempFile(BatchFileConstants.validatedStagePrefix(fileId, workerId), BatchFileConstants.NDJSON_SUFFIX);
+    }
+
+    private void deleteQuietly(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private record ChunkProcessResult(boolean success, String errorCode, String errorMessage, long validCount) {
+        static ChunkProcessResult success(long validCount) {
+            return new ChunkProcessResult(true, null, null, validCount);
+        }
+
+        static ChunkProcessResult failure(String errorCode, String errorMessage, long validCount) {
+            return new ChunkProcessResult(false, errorCode, errorMessage, validCount);
+        }
     }
 }

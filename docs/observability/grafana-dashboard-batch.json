@@ -1,0 +1,65 @@
+{
+  "title": "Batch Platform — baseline",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "batch_alert_events (rate)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(batch_alert_events_total[5m])",
+          "legendFormat": "{{alert_type}}/{{severity}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "batch_job_sla_violation_count",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "batch_job_sla_violation_count",
+          "legendFormat": "violations"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM memory used",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "legendFormat": "{{id}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "batch_dispatch_circuits_open",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "batch_dispatch_circuits_open",
+          "legendFormat": "open circuits"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "batch_dispatch_deliveries_total (rate)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "rate(batch_dispatch_deliveries_total[5m])",
+          "legendFormat": "{{channel_type}}/{{result}}"
+        }
+      ]
+    }
+  ],
+  "uid": "batch-platform-baseline",
+  "editable": true
+}

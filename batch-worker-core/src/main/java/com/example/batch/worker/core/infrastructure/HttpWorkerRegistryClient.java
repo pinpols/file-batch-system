@@ -71,7 +71,8 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
                 null,
                 null,
                 registration.getLastHeartbeatAt() == null ? Instant.now() : registration.getLastHeartbeatAt().toInstant(),
-                null
+                null,
+                registration.getCurrentLoad()
         );
     }
 }

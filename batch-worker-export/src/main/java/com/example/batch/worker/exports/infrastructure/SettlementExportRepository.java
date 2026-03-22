@@ -22,11 +22,16 @@ public class SettlementExportRepository {
         return batch == null ? Map.of() : batch;
     }
 
-    public List<Map<String, Object>> loadDetailsByBatchId(String tenantId, Long batchId) {
-        if (!StringUtils.hasText(tenantId) || batchId == null) {
+    public List<Map<String, Object>> loadDetailsByBatchIdAfterId(String tenantId, Long batchId, Long afterId, int pageSize) {
+        if (!StringUtils.hasText(tenantId) || batchId == null || pageSize <= 0) {
             return List.of();
         }
-        return settlementExportMapper.selectDetailsByBatchId(params("tenantId", tenantId, "batchId", batchId));
+        return settlementExportMapper.selectDetailsByBatchIdAfterId(params(
+                "tenantId", tenantId,
+                "batchId", batchId,
+                "afterId", afterId,
+                "pageSize", pageSize
+        ));
     }
 
     public int markBatchExported(String tenantId, Long batchId) {

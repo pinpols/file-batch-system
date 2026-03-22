@@ -22,7 +22,17 @@ management:
       exposure:
         include: health,info,prometheus
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
+
 batch:
+  security:
+    testing-open: true
+    kms:
+      default-key-ref: DEFAULT_TEST
+      keys:
+        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   orchestrator:
     base-url: http://localhost:8082
   worker:

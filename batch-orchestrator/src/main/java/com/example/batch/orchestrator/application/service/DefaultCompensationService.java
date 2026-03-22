@@ -14,10 +14,12 @@ import com.example.batch.orchestrator.domain.entity.CompensationCommandEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.TriggerRequestEntity;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import java.time.Instant;
@@ -25,6 +27,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -36,6 +39,7 @@ public class DefaultCompensationService implements CompensationService {
     private final CompensationCommandMapper compensationCommandMapper;
     private final JobInstanceMapper jobInstanceMapper;
     private final JobStepInstanceMapper jobStepInstanceMapper;
+    private final JobTaskMapper jobTaskMapper;
     private final TriggerRequestMapper triggerRequestMapper;
     private final RetryGovernanceService retryGovernanceService;
     private final FileGovernanceService fileGovernanceService;
@@ -49,9 +53,16 @@ public class DefaultCompensationService implements CompensationService {
         String commandNo = IdGenerator.newBusinessNo("cmp");
         String traceId = StringUtils.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId();
         CompensationCommandEntity entity = buildCommandEntity(command, commandNo, traceId);
-        compensationCommandMapper.insert(entity);
+        assertNoRunningConflict(command);
+        try {
+            compensationCommandMapper.insert(entity);
+        } catch (DataIntegrityViolationException ex) {
+            throw new BizException(ResultCode.CONFLICT, "compensation command already running for this target", ex);
+        }
         try {
             Map<String, Object> result = execute(command, commandNo, traceId, entity);
+            result.put("hitCount", 1);
+            result.put("conflictCount", 0);
             compensationCommandMapper.updateStatus(
                     command.tenantId(),
                     entity.getId(),
@@ -149,19 +160,24 @@ public class DefaultCompensationService implements CompensationService {
             throw new BizException(ResultCode.NOT_FOUND, "job step instance not found");
         }
         entity.setRelatedJobInstanceId(stepInstance.getJobInstanceId());
-        if (stepInstance.getJobPartitionId() == null) {
-            throw new BizException(ResultCode.NOT_IMPLEMENTED, "step compensation without partition is not supported");
+        Long taskId = stepInstance.getJobTaskId();
+        if (taskId == null) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "step jobTaskId is required");
         }
-        retryGovernanceService.retryPartition(
+        retryGovernanceService.retryTask(
                 command.tenantId(),
-                stepInstance.getJobPartitionId(),
+                taskId,
                 command.tenantId() + ":manual-step:" + commandNo
         );
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("action", "STEP_RERUN");
         result.put("stepInstanceId", stepInstance.getId());
         result.put("jobInstanceId", stepInstance.getJobInstanceId());
-        result.put("jobPartitionId", stepInstance.getJobPartitionId());
+        JobTaskEntity task = jobTaskMapper.selectById(command.tenantId(), taskId);
+        if (task != null) {
+            result.put("jobTaskId", task.getId());
+            result.put("jobPartitionId", task.getJobPartitionId());
+        }
         result.put("traceId", traceId);
         return result;
     }
@@ -198,7 +214,8 @@ public class DefaultCompensationService implements CompensationService {
                 command.channelCode(),
                 command.operatorId(),
                 traceId,
-                command.reason()
+                command.reason(),
+                command.approvalId()
         ));
         entity.setRelatedFileId(fileId);
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -348,6 +365,7 @@ public class DefaultCompensationService implements CompensationService {
         detail.put("targetId", entity.getTargetId());
         detail.put("reason", entity.getReason());
         detail.put("operatorId", entity.getOperatorId());
+        detail.put("approvalId", entity.getApprovalId());
         detail.put("strategy", entity.getStrategy());
         if (result != null) {
             detail.put("result", result);
@@ -357,6 +375,30 @@ public class DefaultCompensationService implements CompensationService {
         }
         log.setExtraJson(JsonUtils.toJson(detail));
         taskExecutionService.appendLog(log);
+    }
+
+    private void assertNoRunningConflict(CompensationSubmitCommand command) {
+        Long targetId = resolveConflictTargetId(command);
+        if (targetId == null) {
+            return;
+        }
+        String type = normalizeType(command.compensationType());
+        int running = compensationCommandMapper.countRunningByTarget(command.tenantId(), type, targetId);
+        if (running > 0) {
+            throw new BizException(ResultCode.CONFLICT, "compensation command already running for this target");
+        }
+    }
+
+    private Long resolveConflictTargetId(CompensationSubmitCommand command) {
+        String type = normalizeType(command.compensationType());
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case "JOB", "STEP", "PARTITION", "DLQ" -> command.targetId();
+            case "FILE" -> firstNonNull(command.relatedFileId(), command.targetId());
+            default -> null;
+        };
     }
 
     private void validate(CompensationSubmitCommand command) {

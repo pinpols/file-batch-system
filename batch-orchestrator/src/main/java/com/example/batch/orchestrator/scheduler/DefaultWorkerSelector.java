@@ -40,7 +40,9 @@ public class DefaultWorkerSelector implements WorkerSelector {
         );
         WorkerRegistryRecord selected = candidates.stream()
                 .filter(candidate -> matchesResourceTag(candidate, queue))
-                .max(Comparator.comparing(WorkerRegistryRecord::getHeartbeatAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .min(Comparator
+                        .comparingInt((WorkerRegistryRecord r) -> r.getCurrentLoad() == null ? 0 : r.getCurrentLoad())
+                        .thenComparing(WorkerRegistryRecord::getHeartbeatAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .orElse(null);
         if (selected == null) {
             route.setAvailable(false);

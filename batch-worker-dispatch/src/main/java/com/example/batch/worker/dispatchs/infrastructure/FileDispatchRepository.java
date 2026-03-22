@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure;
 
 import com.example.batch.worker.dispatchs.mapper.FileDispatchMapper;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -112,6 +113,11 @@ public class FileDispatchRepository {
                 "errorCode", errorCode,
                 "errorMessage", errorMessage
         ));
+    }
+
+    public List<Map<String, Object>> listPendingReceiptPolls(int limit) {
+        int safe = Math.max(1, Math.min(limit, 500));
+        return fileDispatchMapper.listPendingReceiptPolls(params("limit", safe));
     }
 
     private Map<String, Object> params(Object... pairs) {

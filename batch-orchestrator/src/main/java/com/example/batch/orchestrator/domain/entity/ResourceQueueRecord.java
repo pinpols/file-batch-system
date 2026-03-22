@@ -33,6 +33,14 @@ public class ResourceQueueRecord {
     private String priorityPolicy;
     @Column("fair_share_weight")
     private Integer fairShareWeight;
+    @Column("fair_share_group")
+    private String fairShareGroup;
+    @Column("burst_limit")
+    private Integer burstLimit;
+    @Column("quota_reset_policy")
+    private String quotaResetPolicy;
+    @Column("group_shared_max_running_jobs")
+    private Integer groupSharedMaxRunningJobs;
     @Column("enabled")
     private Boolean enabled;
 }

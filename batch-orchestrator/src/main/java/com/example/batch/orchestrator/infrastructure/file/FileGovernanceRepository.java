@@ -25,6 +25,14 @@ public class FileGovernanceRepository {
         return fileRecord == null ? Map.of() : fileRecord;
     }
 
+    public Map<String, Object> loadTemplateSecurityForFile(String tenantId, Long fileId) {
+        if (!StringUtils.hasText(tenantId) || fileId == null) {
+            return Map.of();
+        }
+        Map<String, Object> security = fileGovernanceMapper.selectFileTemplateSecurity(params("tenantId", tenantId, "fileId", fileId));
+        return security == null ? Map.of() : security;
+    }
+
     public long countActivePipelineInstances(String tenantId, Long fileId) {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return 0L;

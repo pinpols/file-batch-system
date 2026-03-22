@@ -53,4 +53,6 @@ public interface JobInstanceMapper {
 
     long countActiveByTenantAndQueueCode(@Param("tenantId") String tenantId,
                                          @Param("queueCode") String queueCode);
+
+    long countActiveByFairShareGroup(@Param("fairShareGroup") String fairShareGroup);
 }

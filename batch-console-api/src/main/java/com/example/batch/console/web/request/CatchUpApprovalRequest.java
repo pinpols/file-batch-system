@@ -11,4 +11,5 @@ public class CatchUpApprovalRequest {
     private String bizDate;
     private String scheduledAt;
     private String reason;
+    private String approvalId;
 }

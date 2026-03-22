@@ -2,5 +2,8 @@ batch:
   worker:
     export:
       worker-type: EXPORT
-      default-stage: PREPARE
-      batch-size: 100
+      file-processing:
+        streaming-enabled: true
+        page-size: 1000
+        fetch-size: 1000
+        chunk-size: 500

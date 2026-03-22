@@ -24,7 +24,17 @@ management:
       exposure:
         include: health,info,prometheus
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
+
 batch:
+  security:
+    testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
+    kms:
+      default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
+      keys:
+        DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
   orchestrator:
     base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
   worker:
@@ -40,6 +50,14 @@ batch:
       heartbeat-interval-millis: ${BATCH_WORKER_EXPORT_HEARTBEAT_INTERVAL_MILLIS:15000}
       topic: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
       consumer-group-id: ${BATCH_WORKER_EXPORT_CONSUMER_GROUP_ID:batch-worker-export}
+      file-processing:
+        streaming-enabled: ${BATCH_WORKER_EXPORT_STREAMING_ENABLED:true}
+        page-size: ${BATCH_WORKER_EXPORT_PAGE_SIZE:1000}
+        fetch-size: ${BATCH_WORKER_EXPORT_FETCH_SIZE:1000}
+        chunk-size: ${BATCH_WORKER_EXPORT_CHUNK_SIZE:500}
+      jdbc-mapped:
+        allowed-schemas:
+          - biz
   datasource:
     business:
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}

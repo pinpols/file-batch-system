@@ -93,6 +93,15 @@
         limit #{batchSize}
     </select>
 
+    <select id="selectActiveByAssignedWorker" resultMap="JobTaskResultMap">
+        select *
+        from batch.job_task
+        where tenant_id = #{tenantId}
+          and assigned_worker_code = #{assignedWorkerCode}
+          and task_status in ('RUNNING', 'READY', 'CREATED')
+        order by id asc
+    </select>
+
     <update id="updateStatus">
         update batch.job_task
         set task_status = #{taskStatus},

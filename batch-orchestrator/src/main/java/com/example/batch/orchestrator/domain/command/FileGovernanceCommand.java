@@ -6,6 +6,7 @@ public record FileGovernanceCommand(
         String channelCode,
         String operatorId,
         String traceId,
-        String reason
+        String reason,
+        String approvalId
 ) {
 }

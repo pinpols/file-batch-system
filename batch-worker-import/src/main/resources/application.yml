@@ -24,7 +24,17 @@ management:
       exposure:
         include: health,info,prometheus
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
+
 batch:
+  security:
+    testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
+    kms:
+      default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
+      keys:
+        DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
   orchestrator:
     base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
   worker:
@@ -40,6 +50,14 @@ batch:
       heartbeat-interval-millis: ${BATCH_WORKER_IMPORT_HEARTBEAT_INTERVAL_MILLIS:15000}
       topic: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
       consumer-group-id: ${BATCH_WORKER_IMPORT_CONSUMER_GROUP_ID:batch-worker-import}
+      file-processing:
+        streaming-enabled: ${BATCH_WORKER_IMPORT_STREAMING_ENABLED:true}
+        page-size: ${BATCH_WORKER_IMPORT_PAGE_SIZE:1000}
+        fetch-size: ${BATCH_WORKER_IMPORT_FETCH_SIZE:1000}
+        chunk-size: ${BATCH_WORKER_IMPORT_CHUNK_SIZE:500}
+      jdbc-mapped:
+        allowed-schemas:
+          - biz
       skip:
         enabled: ${BATCH_WORKER_IMPORT_SKIP_ENABLED:false}
         threshold-mode: ${BATCH_WORKER_IMPORT_SKIP_THRESHOLD_MODE:ABSOLUTE}

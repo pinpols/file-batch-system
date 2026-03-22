@@ -7,6 +7,8 @@ public interface FileGovernanceMapper {
 
     Map<String, Object> selectFileRecord(Map<String, Object> params);
 
+    Map<String, Object> selectFileTemplateSecurity(Map<String, Object> params);
+
     Long countActivePipelineInstances(Map<String, Object> params);
 
     Long countPendingDispatchRecords(Map<String, Object> params);

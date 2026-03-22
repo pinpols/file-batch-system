@@ -1,5 +1,6 @@
 package com.example.batch.console.support;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -30,6 +31,7 @@ import java.io.IOException;
 public class ConsoleSecurityConfiguration {
 
     private final ConsoleSecurityProperties properties;
+    private final BatchSecurityProperties batchSecurityProperties;
 
     @Bean
     public SecurityFilterChain consoleSecurityFilterChain(HttpSecurity http) throws Exception {
@@ -40,34 +42,38 @@ public class ConsoleSecurityConfiguration {
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(new ConsoleTokenAuthenticationFilter(properties), ConsoleRequestContextFilter.class)
+                .addFilterBefore(new ConsoleTokenAuthenticationFilter(properties, batchSecurityProperties), ConsoleRequestContextFilter.class)
                 .build();
     }
 
     static class ConsoleTokenAuthenticationFilter extends OncePerRequestFilter {
 
         private final ConsoleSecurityProperties properties;
+        private final BatchSecurityProperties batchSecurityProperties;
 
-        ConsoleTokenAuthenticationFilter(ConsoleSecurityProperties properties) {
+        ConsoleTokenAuthenticationFilter(ConsoleSecurityProperties properties, BatchSecurityProperties batchSecurityProperties) {
             this.properties = properties;
+            this.batchSecurityProperties = batchSecurityProperties;
         }
 
         @Override
         protected void doFilterInternal(HttpServletRequest request,
                                         HttpServletResponse response,
                                         FilterChain filterChain) throws ServletException, IOException {
-            if (!properties.isEnabled()) {
+            if (!properties.isEnabled() && !batchSecurityProperties.isTestingOpen()) {
                 filterChain.doFilter(request, response);
                 return;
             }
-            String token = request.getHeader(properties.getTokenHeader());
-            if (token == null || !token.equals(properties.getSharedSecret())) {
-                response.sendError(HttpStatus.UNAUTHORIZED.value(), "invalid console token");
-                return;
+            if (!batchSecurityProperties.isTestingOpen()) {
+                String token = request.getHeader(properties.getTokenHeader());
+                if (token == null || !token.equals(properties.getSharedSecret())) {
+                    response.sendError(HttpStatus.UNAUTHORIZED.value(), "invalid console token");
+                    return;
+                }
             }
             String username = request.getHeader(properties.getUserHeader());
             if (username == null || username.isBlank()) {
-                username = "console-user";
+                username = batchSecurityProperties.isTestingOpen() ? "testing-console-user" : "console-user";
             }
             String tenantId = request.getHeader(properties.getTenantHeader());
             if (tenantId != null && !tenantId.isBlank() && !properties.getAllowedTenants().isEmpty()
@@ -82,7 +88,7 @@ public class ConsoleSecurityConfiguration {
                     authorities.stream().map(SimpleGrantedAuthority::getAuthority).collect(Collectors.toCollection(LinkedHashSet::new))
             );
             UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(principal, token, authorities);
+                    new UsernamePasswordAuthenticationToken(principal, batchSecurityProperties.isTestingOpen() ? "testing-open" : request.getHeader(properties.getTokenHeader()), authorities);
             SecurityContextHolder.getContext().setAuthentication(authentication);
             try {
                 filterChain.doFilter(request, response);

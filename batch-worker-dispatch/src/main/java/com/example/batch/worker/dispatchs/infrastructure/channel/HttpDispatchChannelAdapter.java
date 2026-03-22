@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.utils.JsonUtils;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import okhttp3.MediaType;
@@ -20,7 +21,11 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     @Override
     public boolean supports(String channelType) {
-        return channelType != null && "API".equalsIgnoreCase(channelType);
+        if (channelType == null) {
+            return false;
+        }
+        String u = channelType.toUpperCase(Locale.ROOT);
+        return "API".equals(u) || "API_PUSH".equals(u);
     }
 
     @Override
@@ -47,10 +52,21 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
         requestPayload.put("fileRecord", command.fileRecord());
         requestPayload.put("dispatchPayload", command.payload());
 
-        Request request = new Request.Builder()
+        Request.Builder builder = new Request.Builder()
                 .url(endpoint)
-                .post(RequestBody.create(JsonUtils.toJson(requestPayload), JSON))
-                .build();
+                .post(RequestBody.create(JsonUtils.toJson(requestPayload), JSON));
+        String ct = String.valueOf(channelConfig.getOrDefault("channel_type", ""));
+        if ("API_PUSH".equalsIgnoreCase(ct)) {
+            Object apiKey = channelConfig.get("api_push_api_key");
+            if (apiKey != null && !String.valueOf(apiKey).isBlank()) {
+                builder.addHeader("X-Api-Key", String.valueOf(apiKey).trim());
+            }
+            Object authorization = channelConfig.get("authorization");
+            if (authorization != null && !String.valueOf(authorization).isBlank()) {
+                builder.addHeader("Authorization", String.valueOf(authorization).trim());
+            }
+        }
+        Request request = builder.build();
         try (Response response = okHttpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 return new DispatchResult(false, externalRequestId, receiptCode, false, false,

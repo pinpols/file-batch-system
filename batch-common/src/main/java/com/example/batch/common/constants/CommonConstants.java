@@ -2,7 +2,7 @@ package com.example.batch.common.constants;
 
 public final class CommonConstants {
 
-    public static final String DEFAULT_TENANT_ID = "default";
+    public static final String DEFAULT_TENANT_ID = "default-tenant";
     public static final String DEFAULT_TRACE_ID_HEADER = "X-Trace-Id";
     public static final String DEFAULT_REQUEST_ID_HEADER = "X-Request-Id";
     public static final String DEFAULT_TENANT_ID_HEADER = "X-Tenant-Id";

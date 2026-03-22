@@ -10,4 +10,7 @@ public interface FileTemplateConfigMapper {
                                             @Param("templateCode") String templateCode,
                                             @Param("templateType") String templateType,
                                             @Param("enabled") Boolean enabled);
+
+    Map<String, Object> selectSecurityFlagsByTemplateCode(@Param("tenantId") String tenantId,
+                                                          @Param("templateCode") String templateCode);
 }

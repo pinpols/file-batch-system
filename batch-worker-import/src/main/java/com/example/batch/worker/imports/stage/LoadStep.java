@@ -1,24 +1,42 @@
 package com.example.batch.worker.imports.stage;
 
+import com.example.batch.common.plugin.ImportLoadContext;
+import com.example.batch.common.plugin.ImportLoadPlugin;
+import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.worker.imports.domain.CustomerImportPayload;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
-import com.example.batch.worker.imports.infrastructure.CustomerAccountImportRepository;
+import com.example.batch.worker.imports.plugin.ImportLoadPluginRegistry;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 @Component
 @RequiredArgsConstructor
 public class LoadStep implements ImportStageStep {
 
-    private final CustomerAccountImportRepository customerAccountImportRepository;
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
+
+    private final ImportLoadPluginRegistry importLoadPluginRegistry;
     private final PlatformFileRuntimeRepository runtimeRepository;
+    private final ImportWorkerConfiguration workerConfiguration;
+    private final ObjectMapper objectMapper;
 
     @Override
     public ImportStage stage() {
@@ -27,22 +45,81 @@ public class LoadStep implements ImportStageStep {
 
     @Override
     public ImportStageResult execute(ImportJobContext context) {
+        String validatedRecordsPath = stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
+        if (StringUtils.hasText(validatedRecordsPath)) {
+            return executeStreaming(context, Path.of(validatedRecordsPath));
+        }
+        return executeLegacy(context);
+    }
+
+    private ImportStageResult executeStreaming(ImportJobContext context, Path validatedRecordsPath) {
+        if (!Files.exists(validatedRecordsPath)) {
+            return executeLegacy(context);
+        }
+        try {
+            if (numberValue(context.getAttributes().get("skippedCount")) > 0 && Files.size(validatedRecordsPath) == 0L) {
+                return markLoaded(context, 0L);
+            }
+            ImportPayload importPayload = context.getAttributes().get("importPayload") instanceof ImportPayload item ? item : null;
+            Object fileRecord = context.getAttributes().get(PipelineRuntimeKeys.FILE_RECORD);
+            String sourceFileName = fileRecord instanceof Map<?, ?> row && row.get("file_name") != null
+                    ? String.valueOf(row.get("file_name"))
+                    : context.getFileId();
+            ImportLoadPlugin plugin = importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
+            ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
+            int chunkSize = resolveChunkSize(context);
+            long loadedCount = 0L;
+            try (BufferedReader reader = Files.newBufferedReader(validatedRecordsPath, StandardCharsets.UTF_8)) {
+                List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!StringUtils.hasText(line)) {
+                        continue;
+                    }
+                    chunk.add(objectMapper.readValue(line, MAP_TYPE));
+                    if (chunk.size() >= chunkSize) {
+                        loadedCount += flushChunk(plugin, loadCtx, chunk);
+                        chunk.clear();
+                    }
+                }
+                if (!chunk.isEmpty()) {
+                    loadedCount += flushChunk(plugin, loadCtx, chunk);
+                }
+            }
+            context.getAttributes().put("loadedCount", loadedCount);
+            context.getAttributes().put("successCount", numberValue(context.getAttributes().get("successCount")) + loadedCount);
+            runtimeRepository.updateFileStatus(
+                    runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+                    "LOADED",
+                    Map.of(
+                            "loadedCount", loadedCount,
+                            "successCount", numberValue(context.getAttributes().get("successCount")),
+                            "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
+                            "badRecordCount", badRecordCount(context),
+                            "manualReviewRequired", Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
+                            "loadTargetRef", resolveLoadTargetRef(context, importPayload)
+                    )
+            );
+            deleteQuietly(validatedRecordsPath);
+            deleteQuietly(resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
+            return ImportStageResult.success(stage());
+        } catch (Exception ex) {
+            return ImportStageResult.failure(stage(), "IMPORT_LOAD_FAILED", ex.getMessage());
+        }
+    }
+
+    private long flushChunk(ImportLoadPlugin plugin, ImportLoadContext loadCtx, List<Map<String, Object>> chunk) throws Exception {
+        plugin.loadChunk(loadCtx, chunk);
+        return chunk.size();
+    }
+
+    private ImportStageResult executeLegacy(ImportJobContext context) {
         Object payload = context == null ? null : context.getAttributes().get("customerPayloads");
         if (!(payload instanceof List<?> payloads) || payloads.isEmpty()) {
             if (numberValue(context.getAttributes().get("skippedCount")) > 0) {
-                runtimeRepository.updateFileStatus(
-                        runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-                        "LOADED",
-                        Map.of(
-                                "loadedCount", 0,
-                                "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
-                                "badRecordCount", badRecordCount(context),
-                                "manualReviewRequired", Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired"))
-                        )
-                );
-                return ImportStageResult.success(stage());
+                return markLoaded(context, 0L);
             }
-            return ImportStageResult.failure(stage(), "IMPORT_LOAD_NO_PAYLOAD", "customer payload missing");
+            return ImportStageResult.failure(stage(), "IMPORT_LOAD_NO_PAYLOAD", "no records to load (legacy path)");
         }
         @SuppressWarnings("unchecked")
         List<CustomerImportPayload> customerPayloads = (List<CustomerImportPayload>) payloads;
@@ -51,29 +128,96 @@ public class LoadStep implements ImportStageStep {
         String sourceFileName = fileRecord instanceof Map<?, ?> row && row.get("file_name") != null
                 ? String.valueOf(row.get("file_name"))
                 : context.getFileId();
-        int updated = customerAccountImportRepository.upsertBatch(
-                context.getTenantId(),
-                sourceFileName,
-                importPayload == null ? context.getBizDate() : importPayload.batchNo(),
-                String.valueOf(context.getAttributes().getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId())),
-                customerPayloads
-        );
-        if (updated < 0) {
-            return ImportStageResult.failure(stage(), "IMPORT_LOAD_FAILED", "load returned negative count");
+        try {
+            ImportLoadPlugin plugin = importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
+            ImportLoadContext loadCtx = buildLoadContext(context, importPayload, sourceFileName);
+            int chunkSize = resolveChunkSize(context);
+            long n = 0L;
+            List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
+            for (CustomerImportPayload customerPayload : customerPayloads) {
+                chunk.add(objectMapper.convertValue(customerPayload, MAP_TYPE));
+                if (chunk.size() >= chunkSize) {
+                    n += flushChunk(plugin, loadCtx, chunk);
+                    chunk.clear();
+                }
+            }
+            if (!chunk.isEmpty()) {
+                n += flushChunk(plugin, loadCtx, chunk);
+            }
+            context.getAttributes().put("loadedCount", n);
+            context.getAttributes().put("successCount", numberValue(context.getAttributes().get("successCount")) + n);
+            runtimeRepository.updateFileStatus(
+                    runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+                    "LOADED",
+                    Map.of(
+                            "loadedCount", n,
+                            "successCount", numberValue(context.getAttributes().get("successCount")),
+                            "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
+                            "badRecordCount", badRecordCount(context),
+                            "manualReviewRequired", Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
+                            "loadTargetRef", resolveLoadTargetRef(context, importPayload)
+                    )
+            );
+            return ImportStageResult.success(stage());
+        } catch (Exception ex) {
+            return ImportStageResult.failure(stage(), "IMPORT_LOAD_FAILED", ex.getMessage());
         }
-        context.getAttributes().put("loadedCount", customerPayloads.size());
-        context.getAttributes().put("successCount", numberValue(context.getAttributes().get("successCount")) + customerPayloads.size());
+    }
+
+    private ImportLoadContext buildLoadContext(ImportJobContext context, ImportPayload importPayload, String sourceFileName) {
+        Map<String, Object> tc = templateConfigMap(context);
+        String batchNo = importPayload == null || !StringUtils.hasText(importPayload.batchNo())
+                ? context.getBizDate()
+                : importPayload.batchNo();
+        String bizType = importPayload != null && StringUtils.hasText(importPayload.bizType())
+                ? importPayload.bizType()
+                : context.getJobCode();
+        String templateCode = importPayload != null ? importPayload.templateCode() : null;
+        return new ImportLoadContext(
+                context.getTenantId(),
+                context.getJobCode(),
+                String.valueOf(context.getAttributes().getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId())),
+                context.getWorkerId(),
+                sourceFileName,
+                batchNo,
+                bizType,
+                templateCode,
+                tc
+        );
+    }
+
+    private String resolveLoadTargetRef(ImportJobContext context, ImportPayload importPayload) {
+        Map<String, Object> tc = templateConfigMap(context);
+        Object v = tc.get("load_target_ref");
+        if (v != null && StringUtils.hasText(String.valueOf(v))) {
+            return String.valueOf(v).trim();
+        }
+        return WorkerPluginIds.IMPORT_LOAD_CUSTOMER_ACCOUNT;
+    }
+
+    private Map<String, Object> templateConfigMap(ImportJobContext context) {
+        Object o = context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (o instanceof Map<?, ?> m) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            m.forEach((k, v) -> out.put(String.valueOf(k), v));
+            return out;
+        }
+        return Map.of();
+    }
+
+    private ImportStageResult markLoaded(ImportJobContext context, long loadedCount) {
         runtimeRepository.updateFileStatus(
                 runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
                 "LOADED",
                 Map.of(
-                        "loadedCount", customerPayloads.size(),
+                        "loadedCount", loadedCount,
                         "successCount", numberValue(context.getAttributes().get("successCount")),
                         "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
                         "badRecordCount", badRecordCount(context),
                         "manualReviewRequired", Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired"))
                 )
         );
+        context.getAttributes().put("loadedCount", loadedCount);
         return ImportStageResult.success(stage());
     }
 
@@ -97,5 +241,46 @@ public class LoadStep implements ImportStageStep {
             return 0L;
         }
         return Long.parseLong(text);
+    }
+
+    private int resolveChunkSize(ImportJobContext context) {
+        int fallback = workerConfiguration == null ? 500 : workerConfiguration.chunkSize();
+        Object templateConfigObject = context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (templateConfigObject instanceof Map<?, ?> templateConfig) {
+            Object value = templateConfig.get("chunk_size");
+            if (value instanceof Number number) {
+                return Math.max(1, number.intValue());
+            }
+            if (value != null && StringUtils.hasText(String.valueOf(value))) {
+                return Math.max(1, Integer.parseInt(String.valueOf(value)));
+            }
+        }
+        return Math.max(1, fallback);
+    }
+
+    private String stringValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value);
+        return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    }
+
+    private void deleteQuietly(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private Path resolvePath(Object value) {
+        String text = stringValue(value);
+        if (!StringUtils.hasText(text)) {
+            return null;
+        }
+        return Path.of(text);
     }
 }

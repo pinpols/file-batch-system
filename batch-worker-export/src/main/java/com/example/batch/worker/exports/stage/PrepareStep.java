@@ -1,5 +1,6 @@
 package com.example.batch.worker.exports.stage;
 
+import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
@@ -7,7 +8,11 @@ import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -48,7 +53,9 @@ public class PrepareStep implements ExportStageStep {
             String fileFormatType = resolveText(templateConfig.get("file_format_type"), "JSON");
             String fileName = resolveFileName(context, payload, templateConfig, fileFormatType);
             String finalObjectName = resolveObjectName(context, payload, fileName);
-            String tempObjectName = "tmp/" + context.getTenantId() + "/" + resolveBizDate(context, payload) + "/" + fileName + ".part";
+            String tempObjectName = BatchFileConstants.tempObjectName(context.getTenantId(), resolveBizDate(context, payload), fileName);
+            Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
+            context.getAttributes().put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, exportSnapshot);
             context.getAttributes().put("fileName", fileName);
             context.getAttributes().put("exportFileFormatType", fileFormatType);
             context.getAttributes().put("objectName", finalObjectName);
@@ -72,6 +79,7 @@ public class PrepareStep implements ExportStageStep {
         String extension = switch (fileFormatType.toUpperCase()) {
             case "DELIMITED" -> ".csv";
             case "EXCEL" -> ".xlsx";
+            case "FIXED_WIDTH" -> ".txt";
             case "XML" -> ".xml";
             default -> ".json";
         };
@@ -91,7 +99,7 @@ public class PrepareStep implements ExportStageStep {
         }
         String bizType = StringUtils.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
         String bizDate = resolveBizDate(context, payload);
-        return "outbound/" + bizType + "/" + bizDate + "/" + defaultText(payload.batchNo(), "batch") + "/v1/" + fileName;
+        return BatchFileConstants.outboundObjectName(bizType, bizDate, defaultText(payload.batchNo(), "batch"), "v1", fileName);
     }
 
     private String resolveBizDate(ExportJobContext context, ExportPayload payload) {
@@ -110,5 +118,97 @@ public class PrepareStep implements ExportStageStep {
 
     private String defaultText(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    /**
+     * Snapshot contract: template / query_param_schema.exportSnapshot / payload.metadata
+     * (snapshotMode, snapshotTs, sourcePartitions).
+     */
+    private Map<String, Object> buildExportSnapshot(ExportPayload payload, Map<String, Object> templateConfig) {
+        Map<String, Object> hints = extractTemplateSnapshotHints(templateConfig);
+        Map<String, Object> meta = payload != null && payload.metadata() != null ? payload.metadata() : Map.of();
+        Map<String, Object> snap = new LinkedHashMap<>();
+        snap.put("snapshotMode", firstNonBlank(
+                stringHint(hints, "snapshotMode"),
+                stringMeta(meta, "snapshotMode"),
+                "AS_OF_BATCH"
+        ));
+        snap.put("snapshotTs", firstNonBlank(
+                stringHint(hints, "snapshotTs"),
+                stringMeta(meta, "snapshotTs"),
+                Instant.now().toString()
+        ));
+        snap.put("sourcePartitions", mergePartitions(hints.get("sourcePartitions"), meta.get("sourcePartitions")));
+        return snap;
+    }
+
+    private Map<String, Object> extractTemplateSnapshotHints(Map<String, Object> template) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (template == null || template.isEmpty()) {
+            return out;
+        }
+        putIfHasText(out, "snapshotMode", template.get("snapshot_mode"));
+        putIfHasText(out, "snapshotTs", template.get("snapshot_ts"));
+        if (template.get("source_partitions") != null) {
+            out.put("sourcePartitions", template.get("source_partitions"));
+        }
+        Object qps = template.get("query_param_schema");
+        if (qps instanceof Map<?, ?> schema) {
+            Object nested = schema.get("exportSnapshot");
+            if (nested instanceof Map<?, ?> snap) {
+                snap.forEach((k, v) -> out.put(String.valueOf(k), v));
+            }
+        }
+        return out;
+    }
+
+    private void putIfHasText(Map<String, Object> out, String key, Object value) {
+        if (value != null && StringUtils.hasText(String.valueOf(value))) {
+            out.put(key, String.valueOf(value).trim());
+        }
+    }
+
+    private String stringHint(Map<String, Object> hints, String key) {
+        Object v = hints.get(key);
+        return v == null ? null : String.valueOf(v);
+    }
+
+    private String stringMeta(Map<String, Object> meta, String key) {
+        Object v = meta.get(key);
+        return v == null ? null : String.valueOf(v);
+    }
+
+    private String firstNonBlank(String a, String b, String fallback) {
+        if (StringUtils.hasText(a)) {
+            return a;
+        }
+        if (StringUtils.hasText(b)) {
+            return b;
+        }
+        return fallback;
+    }
+
+    private List<Object> mergePartitions(Object fromTemplate, Object fromMeta) {
+        List<Object> out = new ArrayList<>();
+        appendPartitions(out, fromTemplate);
+        appendPartitions(out, fromMeta);
+        return out.isEmpty() ? List.of() : List.copyOf(out);
+    }
+
+    private void appendPartitions(List<Object> out, Object raw) {
+        if (raw == null) {
+            return;
+        }
+        if (raw instanceof List<?> list) {
+            out.addAll(list);
+            return;
+        }
+        if (raw instanceof String text && StringUtils.hasText(text)) {
+            for (String part : text.split(",")) {
+                if (StringUtils.hasText(part.trim())) {
+                    out.add(part.trim());
+                }
+            }
+        }
     }
 }

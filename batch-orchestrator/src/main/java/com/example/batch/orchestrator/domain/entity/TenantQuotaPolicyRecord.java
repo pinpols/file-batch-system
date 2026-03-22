@@ -23,6 +23,16 @@ public class TenantQuotaPolicyRecord {
     private Integer maxQpsPerTenant;
     @Column("fair_share_weight")
     private Integer fairShareWeight;
+    @Column("fair_share_group")
+    private String fairShareGroup;
+    @Column("burst_limit")
+    private Integer burstLimit;
+    @Column("partition_burst_limit")
+    private Integer partitionBurstLimit;
+    @Column("quota_reset_policy")
+    private String quotaResetPolicy;
+    @Column("group_shared_max_running_jobs")
+    private Integer groupSharedMaxRunningJobs;
     @Column("enabled")
     private Boolean enabled;
 }

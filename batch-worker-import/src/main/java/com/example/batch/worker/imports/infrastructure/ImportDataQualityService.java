@@ -1,5 +1,9 @@
 package com.example.batch.worker.imports.infrastructure;
 
+import com.example.batch.common.plugin.WorkerPluginIds;
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.utils.ContentMaskingUtils;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.imports.domain.CustomerImportPayload;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -26,22 +30,136 @@ import org.springframework.util.StringUtils;
 public class ImportDataQualityService {
 
     private final ObjectMapper objectMapper;
+    private final BatchSecurityProperties batchSecurityProperties;
 
     public ValidationOutcome validate(ImportJobContext context, List<CustomerImportPayload> payloads) {
-        Map<String, Object> ruleSet = mergedRuleSet(context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
-        LinkedHashMap<Long, ValidationIssue> recordIssues = new LinkedHashMap<>();
-        List<ValidationIssue> datasetIssues = new ArrayList<>();
-        LinkedHashSet<String> appliedChecks = new LinkedHashSet<>();
-
-        evaluateRowCount(payloads, ruleSet, datasetIssues, appliedChecks);
-        evaluateChecksum(context, ruleSet, datasetIssues, appliedChecks);
-        evaluateSchema(context, ruleSet, datasetIssues, appliedChecks);
-        evaluateRecordRules(payloads, ruleSet, recordIssues, appliedChecks);
-
-        return new ValidationOutcome(recordIssues, datasetIssues, List.copyOf(appliedChecks));
+        List<String> schemaFields = stringList(context == null ? null : context.getAttributes().get("schemaFields"));
+        ValidationSession session = beginValidation(context, payloads == null ? 0L : payloads.size(), schemaFields);
+        validateDataset(session);
+        validateChunk(session, payloads, 1L);
+        return outcome(session);
     }
 
-    private void evaluateRowCount(List<CustomerImportPayload> payloads,
+    public ValidationSession beginValidation(ImportJobContext context, long totalCount, List<String> schemaFields) {
+        Map<String, Object> ruleSet = mergedRuleSet(context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+        ImportPayload importPayload = context != null && context.getAttributes().get("importPayload") instanceof ImportPayload payload
+                ? payload
+                : null;
+        String normalizedPayload = context == null ? null : stringValue(context.getAttributes().get("normalizedPayload"));
+        return new ValidationSession(
+                context,
+                ruleSet,
+                totalCount,
+                normalizedPayload,
+                importPayload,
+                schemaFields == null ? List.of() : List.copyOf(schemaFields),
+                new LinkedHashMap<>(),
+                new ArrayList<>(),
+                new LinkedHashMap<>(),
+                new LinkedHashSet<>()
+        );
+    }
+
+    public void validateDataset(ValidationSession session) {
+        if (session == null) {
+            return;
+        }
+        evaluateRowCount(session.totalCount(), session.ruleSet(), session.datasetIssues(), session.appliedChecks());
+        evaluateChecksum(session.normalizedPayload(), session.importPayload(), session.ruleSet(), session.datasetIssues(), session.appliedChecks());
+        evaluateSchema(session.schemaFields(), session.ruleSet(), session.datasetIssues(), session.appliedChecks());
+    }
+
+    public Map<Long, ValidationIssue> validateChunk(ValidationSession session, List<CustomerImportPayload> payloads, long recordBase) {
+        if (session == null || payloads == null || payloads.isEmpty()) {
+            return Map.of();
+        }
+        List<Map<String, Object>> rows = new ArrayList<>(payloads.size());
+        for (CustomerImportPayload payload : payloads) {
+            rows.add(payloadToMap(payload));
+        }
+        return validateChunkRows(session, rows, recordBase);
+    }
+
+    public Map<Long, ValidationIssue> validateChunkRows(ValidationSession session, List<Map<String, Object>> rows, long recordBase) {
+        if (session == null || rows == null || rows.isEmpty()) {
+            return Map.of();
+        }
+        return evaluateRecordRules(rows, session.ruleSet(), session.recordIssues(), session.appliedChecks(), session.seenValues(), recordBase);
+    }
+
+    public ValidationOutcome outcome(ValidationSession session) {
+        if (session == null) {
+            return new ValidationOutcome(Map.of(), List.of(), List.of());
+        }
+        boolean logMask = logMaskingEnabled(session) && !batchSecurityProperties.isTestingOpen();
+        String ruleSet = maskingRuleSet(session);
+        return new ValidationOutcome(
+                maskRecordIssues(session.recordIssues(), logMask, ruleSet),
+                maskDatasetIssues(session.datasetIssues(), logMask, ruleSet),
+                List.copyOf(session.appliedChecks())
+        );
+    }
+
+    private boolean logMaskingEnabled(ValidationSession session) {
+        Object cfg = session.context() == null ? null : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (!(cfg instanceof Map<?, ?> map)) {
+            return false;
+        }
+        Object flag = map.get("log_masking_enabled");
+        return Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag));
+    }
+
+    private String maskingRuleSet(ValidationSession session) {
+        Object cfg = session.context() == null ? null : session.context().getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        if (!(cfg instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object rule = map.get("masking_rule_set");
+        return rule == null ? null : String.valueOf(rule);
+    }
+
+    private Map<Long, ValidationIssue> maskRecordIssues(Map<Long, ValidationIssue> issues, boolean mask, String ruleSet) {
+        if (!mask || issues == null || issues.isEmpty()) {
+            return new LinkedHashMap<>(issues);
+        }
+        Map<Long, ValidationIssue> masked = new LinkedHashMap<>();
+        for (Map.Entry<Long, ValidationIssue> entry : issues.entrySet()) {
+            ValidationIssue issue = entry.getValue();
+            masked.put(entry.getKey(), new ValidationIssue(
+                    issue.recordNo(),
+                    issue.errorCode(),
+                    ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet),
+                    maskIssueRaw(issue.rawRecord(), ruleSet)));
+        }
+        return masked;
+    }
+
+    private List<ValidationIssue> maskDatasetIssues(List<ValidationIssue> issues, boolean mask, String ruleSet) {
+        if (!mask || issues == null || issues.isEmpty()) {
+            return new ArrayList<>(issues == null ? List.of() : issues);
+        }
+        List<ValidationIssue> masked = new ArrayList<>();
+        for (ValidationIssue issue : issues) {
+            masked.add(new ValidationIssue(
+                    issue.recordNo(),
+                    issue.errorCode(),
+                    ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet),
+                    maskIssueRaw(issue.rawRecord(), ruleSet)));
+        }
+        return masked;
+    }
+
+    private Object maskIssueRaw(Object raw, String ruleSet) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof String text) {
+            return ContentMaskingUtils.maskPlainText(text, ruleSet);
+        }
+        return ContentMaskingUtils.maskPlainText(JsonUtils.toJson(raw), ruleSet);
+    }
+
+    private void evaluateRowCount(long actualCount,
                                   Map<String, Object> ruleSet,
                                   List<ValidationIssue> datasetIssues,
                                   Set<String> appliedChecks) {
@@ -50,7 +168,6 @@ public class ImportDataQualityService {
             return;
         }
         appliedChecks.add("row_count_check");
-        int actualCount = payloads == null ? 0 : payloads.size();
         Integer exactCount = integerValue(rule.get("exact"));
         Integer minCount = integerValue(firstNonNull(rule.get("min"), rule.get("minimum")));
         Integer maxCount = integerValue(firstNonNull(rule.get("max"), rule.get("maximum")));
@@ -73,7 +190,8 @@ public class ImportDataQualityService {
         }
     }
 
-    private void evaluateChecksum(ImportJobContext context,
+    private void evaluateChecksum(String normalizedPayload,
+                                  ImportPayload importPayload,
                                   Map<String, Object> ruleSet,
                                   List<ValidationIssue> datasetIssues,
                                   Set<String> appliedChecks) {
@@ -81,10 +199,6 @@ public class ImportDataQualityService {
         if (rule.isEmpty() || !enabled(rule)) {
             return;
         }
-        String normalizedPayload = context == null ? null : stringValue(context.getAttributes().get("normalizedPayload"));
-        ImportPayload importPayload = context != null && context.getAttributes().get("importPayload") instanceof ImportPayload payload
-                ? payload
-                : null;
         String configuredAlgorithm = stringValue(firstNonNull(
                 rule.get("algorithm"),
                 rule.get("checksumType"),
@@ -107,7 +221,7 @@ public class ImportDataQualityService {
         }
     }
 
-    private void evaluateSchema(ImportJobContext context,
+    private void evaluateSchema(List<String> schemaFields,
                                 Map<String, Object> ruleSet,
                                 List<ValidationIssue> datasetIssues,
                                 Set<String> appliedChecks) {
@@ -115,7 +229,6 @@ public class ImportDataQualityService {
         if (rule.isEmpty() || !enabled(rule)) {
             return;
         }
-        List<String> schemaFields = stringList(context == null ? null : context.getAttributes().get("schemaFields"));
         if (schemaFields.isEmpty()) {
             return;
         }
@@ -156,12 +269,14 @@ public class ImportDataQualityService {
         }
     }
 
-    private void evaluateRecordRules(List<CustomerImportPayload> payloads,
-                                     Map<String, Object> ruleSet,
-                                     Map<Long, ValidationIssue> recordIssues,
-                                     Set<String> appliedChecks) {
-        if (payloads == null || payloads.isEmpty()) {
-            return;
+    private Map<Long, ValidationIssue> evaluateRecordRules(List<Map<String, Object>> rows,
+                                                           Map<String, Object> ruleSet,
+                                                           Map<Long, ValidationIssue> recordIssues,
+                                                           Set<String> appliedChecks,
+                                                           Map<String, Set<String>> seenValues,
+                                                           long recordBase) {
+        if (rows == null || rows.isEmpty()) {
+            return Map.of();
         }
         Map<String, Object> nullCheck = firstMap(ruleSet, "nullCheck", "null_check");
         Map<String, Object> fieldRules = firstMap(ruleSet, "fieldRules", "field_rules");
@@ -175,11 +290,10 @@ public class ImportDataQualityService {
         if (!uniqueFields.isEmpty()) {
             appliedChecks.add("unique_check");
         }
-        Map<String, Set<String>> seenValues = new LinkedHashMap<>();
-        for (int index = 0; index < payloads.size(); index++) {
-            long recordNo = index + 1L;
-            CustomerImportPayload payload = payloads.get(index);
-            Map<String, Object> row = payloadToMap(payload);
+        LinkedHashMap<Long, ValidationIssue> chunkIssues = new LinkedHashMap<>();
+        for (int index = 0; index < rows.size(); index++) {
+            long recordNo = recordBase + index;
+            Map<String, Object> row = rows.get(index);
             ValidationIssue issue = validateNullFields(nullCheck, recordNo, row);
             if (issue == null) {
                 issue = validateFieldRules(recordNo, row, fieldRules);
@@ -189,8 +303,10 @@ public class ImportDataQualityService {
             }
             if (issue != null) {
                 recordIssues.putIfAbsent(recordNo, issue);
+                chunkIssues.putIfAbsent(recordNo, issue);
             }
         }
+        return chunkIssues;
     }
 
     private ValidationIssue validateNullFields(Map<String, Object> nullCheck, long recordNo, Map<String, Object> row) {
@@ -279,8 +395,10 @@ public class ImportDataQualityService {
     }
 
     private Map<String, Object> mergedRuleSet(Object templateConfigObject) {
-        Map<String, Object> merged = new LinkedHashMap<>(defaultRuleSet());
         Map<String, Object> templateConfig = toMap(templateConfigObject);
+        Map<String, Object> merged = usesGenericJdbcMapped(templateConfig)
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(defaultRuleSet());
         deepMerge(merged, toMap(firstNonNull(templateConfig.get("validation_rule_set"), templateConfig.get("validationRuleSet"))));
         return merged;
     }
@@ -324,6 +442,21 @@ public class ImportDataQualityService {
     private Map<String, Object> payloadToMap(CustomerImportPayload payload) {
         return objectMapper.convertValue(payload, new TypeReference<>() {
         });
+    }
+
+    private boolean usesGenericJdbcMapped(Map<String, Object> templateConfig) {
+        if (templateConfig == null || templateConfig.isEmpty()) {
+            return false;
+        }
+        Object direct = templateConfig.get("load_target_ref");
+        if (direct != null && WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(String.valueOf(direct).trim())) {
+            return true;
+        }
+        if (templateConfig.get("jdbc_mapped_import") != null) {
+            return true;
+        }
+        Map<String, Object> querySchema = toMap(templateConfig.get("query_param_schema"));
+        return querySchema.get("jdbcMappedImport") instanceof Map<?, ?>;
     }
 
     private Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
@@ -515,5 +648,17 @@ public class ImportDataQualityService {
     public record ValidationOutcome(Map<Long, ValidationIssue> recordIssues,
                                     List<ValidationIssue> datasetIssues,
                                     List<String> appliedChecks) {
+    }
+
+    public record ValidationSession(ImportJobContext context,
+                                    Map<String, Object> ruleSet,
+                                    long totalCount,
+                                    String normalizedPayload,
+                                    ImportPayload importPayload,
+                                    List<String> schemaFields,
+                                    Map<String, Set<String>> seenValues,
+                                    List<ValidationIssue> datasetIssues,
+                                    Map<Long, ValidationIssue> recordIssues,
+                                    Set<String> appliedChecks) {
     }
 }

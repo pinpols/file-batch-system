@@ -8,6 +8,8 @@
         <result column="worker_group" property="workerGroup"/>
         <result column="status" property="status"/>
         <result column="heartbeat_at" property="heartbeatAt"/>
+        <result column="drain_started_at" property="drainStartedAt"/>
+        <result column="drain_deadline_at" property="drainDeadlineAt"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="WorkerRegistryResultMap">

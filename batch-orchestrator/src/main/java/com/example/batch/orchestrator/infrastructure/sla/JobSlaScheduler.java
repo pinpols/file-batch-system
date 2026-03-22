@@ -1,7 +1,9 @@
 package com.example.batch.orchestrator.infrastructure.sla;
 
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.orchestrator.application.service.AlertEventService;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
+import com.example.batch.orchestrator.domain.dto.AlertEmitRequest;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -27,6 +29,7 @@ public class JobSlaScheduler {
     private final JobExecutionLogMapper jobExecutionLogMapper;
     private final SlaGovernanceProperties properties;
     private final MeterRegistry meterRegistry;
+    private final AlertEventService alertEventService;
     private final AtomicLong violationCount = new AtomicLong();
 
     @jakarta.annotation.PostConstruct
@@ -61,6 +64,16 @@ public class JobSlaScheduler {
             jobExecutionLogMapper.insert(logEntity);
             log.warn("job SLA violation detected: tenantId={}, jobInstanceId={}, instanceNo={}, extra={}",
                     candidate.getTenantId(), candidate.getId(), candidate.getInstanceNo(), buildExtra(candidate, now));
+            alertEventService.emit(new AlertEmitRequest(
+                    candidate.getTenantId(),
+                    "batch-orchestrator",
+                    "JOB_SLA_VIOLATION",
+                    "WARN",
+                    buildMessage(candidate, now),
+                    JsonUtils.toJson(buildExtra(candidate, now)),
+                    String.valueOf(candidate.getId()),
+                    candidate.getTraceId()
+            ));
         }
     }
 

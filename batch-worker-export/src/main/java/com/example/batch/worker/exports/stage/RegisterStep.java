@@ -6,8 +6,10 @@ import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
+import com.example.batch.worker.exports.config.MinioStorageProperties;
 import com.example.batch.worker.exports.infrastructure.SettlementExportRepository;
 import java.time.LocalDate;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -16,13 +18,24 @@ import org.springframework.util.StringUtils;
 @Component
 public class RegisterStep implements ExportStageStep {
 
+    private static final Set<String> RESERVED_METADATA_KEYS = Set.of(
+            "recordCount",
+            "totalAmount",
+            "templateCode",
+            "objectName",
+            "exportSnapshot"
+    );
+
     private final PlatformFileRuntimeRepository runtimeRepository;
     private final SettlementExportRepository settlementExportRepository;
+    private final MinioStorageProperties minioStorageProperties;
 
     public RegisterStep(PlatformFileRuntimeRepository runtimeRepository,
-                        SettlementExportRepository settlementExportRepository) {
+                          SettlementExportRepository settlementExportRepository,
+                          MinioStorageProperties minioStorageProperties) {
         this.runtimeRepository = runtimeRepository;
         this.settlementExportRepository = settlementExportRepository;
+        this.minioStorageProperties = minioStorageProperties;
     }
 
     @Override
@@ -43,14 +56,28 @@ public class RegisterStep implements ExportStageStep {
         String objectName = String.valueOf(context.getAttributes().get("objectName"));
         String fileName = String.valueOf(context.getAttributes().get("fileName"));
         String fileFormatType = String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
+        String bucket = minioStorageProperties.getBucket();
+        String expectedChecksum = nullableText(context.getAttributes().get("checksumValue"));
+        if (runtimeRepository.existsFileRecordByStoragePath(context.getTenantId(), bucket, objectName)) {
+            Map<String, Object> existing = runtimeRepository.loadFileRecordByStoragePath(context.getTenantId(), bucket, objectName);
+            String existingChecksum = nullableText(existing.get("checksum_value"));
+            if (StringUtils.hasText(expectedChecksum) && StringUtils.hasText(existingChecksum)
+                    && !expectedChecksum.equalsIgnoreCase(existingChecksum)) {
+                return ExportStageResult.failure(stage(), "EXPORT_REGISTER_CHECKSUM_CONFLICT", "existing file_record checksum differs");
+            }
+            return reuseExistingFileRecord(context, batch, existing);
+        }
+
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("recordCount", context.getAttributes().get("recordCount"));
         metadata.put("totalAmount", context.getAttributes().get("totalAmount"));
         metadata.put("templateCode", exportPayload.templateCode());
         metadata.put("objectName", objectName);
-        if (exportPayload.metadata() != null) {
-            metadata.putAll(exportPayload.metadata());
+        mergeSecurityMetadata(metadata, context.getAttributes());
+        if (context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
+            metadata.put("exportSnapshot", context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
         }
+        mergeUserMetadata(metadata, exportPayload.metadata());
         Long fileId = runtimeRepository.createFileRecord(
                 context.getTenantId(),
                 exportPayload.fileCode(),
@@ -67,7 +94,7 @@ public class RegisterStep implements ExportStageStep {
                 nullableText(context.getAttributes().get("checksumValue")),
                 "S3",
                 objectName,
-                null,
+                bucket,
                 null,
                 parseBizDate(exportPayload.bizDate(), context.getBizDate()),
                 "GENERATED",
@@ -98,6 +125,48 @@ public class RegisterStep implements ExportStageStep {
         return ExportStageResult.success(stage());
     }
 
+    private ExportStageResult reuseExistingFileRecord(ExportJobContext context,
+                                                      Map<?, ?> batch,
+                                                      Map<String, Object> existing) {
+        Long fileId = runtimeRepository.toLong(existing.get("id"));
+        if (fileId == null) {
+            return ExportStageResult.failure(stage(), "EXPORT_REGISTER_REUSE_INVALID", "existing file id missing");
+        }
+        context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
+        context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, existing);
+        context.setFileId(String.valueOf(fileId));
+        runtimeRepository.bindFileToPipelineInstance(
+                runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
+                fileId
+        );
+        Long batchId = runtimeRepository.toLong(batch.get("id"));
+        Integer exportVersion = existing.get("file_generation_no") instanceof Number number
+                ? number.intValue()
+                : 1;
+        settlementExportRepository.markBatchExported(context.getTenantId(), batchId);
+        settlementExportRepository.markDetailsExported(
+                context.getTenantId(),
+                batchId,
+                exportVersion,
+                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID))
+        );
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("reason", "STORE_TO_REGISTER_RETRY");
+        audit.put("objectName", context.getAttributes().get("objectName"));
+        runtimeRepository.appendAudit(
+                fileId,
+                context.getTenantId(),
+                "EXPORT_REGISTER",
+                "SUCCESS",
+                "SYSTEM",
+                context.getWorkerId(),
+                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
+                String.valueOf(context.getAttributes().get("objectName")),
+                audit
+        );
+        return ExportStageResult.success(stage());
+    }
+
     private LocalDate parseBizDate(String payloadBizDate, String fallbackBizDate) {
         String bizDate = StringUtils.hasText(payloadBizDate) ? payloadBizDate : fallbackBizDate;
         if (!StringUtils.hasText(bizDate)) {
@@ -116,5 +185,34 @@ public class RegisterStep implements ExportStageStep {
         }
         String text = String.valueOf(value);
         return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    }
+
+    private void mergeUserMetadata(Map<String, Object> target, Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (RESERVED_METADATA_KEYS.contains(entry.getKey())) {
+                continue;
+            }
+            target.put(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private void mergeSecurityMetadata(Map<String, Object> target, Map<String, Object> attributes) {
+        if (attributes == null || attributes.isEmpty()) {
+            return;
+        }
+        putIfPresent(target, attributes, "contentEncryptionEnabled");
+        putIfPresent(target, attributes, "encryptionKeyRef");
+        putIfPresent(target, attributes, "encryptionObjectVersion");
+        putIfPresent(target, attributes, "downloadRequiresApproval");
+    }
+
+    private void putIfPresent(Map<String, Object> target, Map<String, Object> source, String key) {
+        Object value = source.get(key);
+        if (value != null) {
+            target.put(key, value);
+        }
     }
 }

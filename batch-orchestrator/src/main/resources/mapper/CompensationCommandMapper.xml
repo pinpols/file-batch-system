@@ -89,4 +89,13 @@
         where tenant_id = #{tenantId}
           and id = #{id}
     </update>
+
+    <select id="countRunningByTarget" resultType="int">
+        select count(*)
+        from batch.compensation_command
+        where tenant_id = #{tenantId}
+          and compensation_type = #{compensationType}
+          and target_id = #{targetId}
+          and command_status = 'RUNNING'
+    </select>
 </mapper>

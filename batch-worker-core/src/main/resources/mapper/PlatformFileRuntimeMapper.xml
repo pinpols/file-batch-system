@@ -16,6 +16,16 @@
           and storage_path = #{storagePath}
     </select>
 
+    <select id="selectFileRecordByStoragePath" resultType="map">
+        select *
+        from batch.file_record
+        where tenant_id = #{tenantId}
+          and coalesce(storage_bucket, '') = coalesce(#{storageBucket}, '')
+          and storage_path = #{storagePath}
+        order by id desc
+        limit 1
+    </select>
+
     <select id="selectLatestTemplateConfig" resultType="map">
         select *
         from batch.file_template_config

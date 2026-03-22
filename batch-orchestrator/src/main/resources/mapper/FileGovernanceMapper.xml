@@ -8,6 +8,36 @@
           and id = #{fileId}
     </select>
 
+    <select id="selectFileTemplateSecurity" resultType="map">
+        select ftc.preview_masking_enabled,
+               ftc.error_line_masking_enabled,
+               ftc.log_masking_enabled,
+               ftc.content_encryption_enabled,
+               ftc.encryption_key_ref,
+               ftc.download_requires_approval,
+               ftc.masking_rule_set
+        from batch.file_record fr
+                 left join lateral (
+            select t.preview_masking_enabled,
+                   t.error_line_masking_enabled,
+                   t.log_masking_enabled,
+                   t.content_encryption_enabled,
+                   t.encryption_key_ref,
+                   t.download_requires_approval,
+                   t.masking_rule_set
+            from batch.file_template_config t
+            where t.tenant_id = fr.tenant_id
+              and fr.metadata_json ->> 'templateCode' is not null
+              and fr.metadata_json ->> 'templateCode' &lt;&gt; ''
+              and t.template_code = fr.metadata_json ->> 'templateCode'
+              and t.enabled = true
+            order by t.version desc
+            limit 1
+            ) ftc on true
+        where fr.tenant_id = #{tenantId}
+          and fr.id = #{fileId}
+    </select>
+
     <select id="countActivePipelineInstances" resultType="java.lang.Long">
         select count(1)
         from batch.pipeline_instance

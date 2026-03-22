@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.AlertEventMapper">
+
+    <insert id="insertOrMerge" parameterType="com.example.batch.orchestrator.domain.entity.AlertEventEntity">
+        insert into batch.alert_event (
+            tenant_id,
+            service_name,
+            alert_type,
+            severity,
+            title,
+            detail_json,
+            dedup_fingerprint,
+            trace_id,
+            status
+        ) values (
+            #{tenantId},
+            #{serviceName},
+            #{alertType},
+            #{severity},
+            #{title},
+            CAST(#{detailJson} AS jsonb),
+            #{dedupFingerprint},
+            #{traceId},
+            coalesce(#{status}, 'OPEN')
+        )
+        on conflict (tenant_id, dedup_fingerprint) do update set
+            title = excluded.title,
+            detail_json = excluded.detail_json,
+            trace_id = excluded.trace_id,
+            occurrence_count = batch.alert_event.occurrence_count + 1,
+            last_seen_at = current_timestamp,
+            updated_at = current_timestamp
+    </insert>
+
+    <select id="selectByQuery" resultType="com.example.batch.orchestrator.domain.entity.AlertEventEntity">
+        select *
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+        <if test="severity != null and severity != ''">
+            and severity = #{severity}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        <if test="alertType != null and alertType != ''">
+            and alert_type = #{alertType}
+        </if>
+        order by last_seen_at desc
+        limit #{limit}
+    </select>
+</mapper>

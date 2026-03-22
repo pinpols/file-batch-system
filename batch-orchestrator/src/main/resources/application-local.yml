@@ -27,6 +27,12 @@ management:
         include: health,info,prometheus
 
 batch:
+  security:
+    testing-open: true
+    kms:
+      default-key-ref: DEFAULT_TEST
+      keys:
+        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   outbox:
     batch-size: 100
     poll-interval-millis: 5000

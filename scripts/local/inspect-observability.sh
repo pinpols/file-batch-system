@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BASE_URLS="${BATCH_OBSERVABILITY_BASE_URLS:-http://localhost:8080,http://localhost:8081,http://localhost:8082}"
+REQUIRED_METRICS="${BATCH_OBSERVABILITY_REQUIRED_METRICS:-batch_alert_events_total,batch_job_sla_violation_count,batch_dispatch_deliveries_total,batch_dispatch_circuits_open}"
+KAFKA_BOOTSTRAP_SERVERS="${BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS:-${BATCH_KAFKA_BOOTSTRAP_SERVERS:-}}"
+KAFKA_GROUPS="${BATCH_OBSERVABILITY_KAFKA_GROUPS:-batch-worker-import,batch-worker-export,batch-worker-dispatch}"
+KAFKA_BIN_DIR="${BATCH_OBSERVABILITY_KAFKA_BIN_DIR:-}"
+KAFKA_LAG_THRESHOLD="${BATCH_OBSERVABILITY_KAFKA_LAG_THRESHOLD:-1000}"
+
+failures=0
+
+log() {
+  printf '%s\n' "$*"
+}
+
+fail() {
+  log "FAIL: $*"
+  failures=$((failures + 1))
+}
+
+check_health() {
+  local base_url="$1"
+  local health_body
+  if ! health_body="$(curl -fsS "${base_url%/}/actuator/health")"; then
+    fail "${base_url}: health endpoint unreachable"
+    return
+  fi
+  if [[ "${health_body}" != *'"status":"UP"'* && "${health_body}" != *'"status": "UP"'* ]]; then
+    fail "${base_url}: health status is not UP"
+  else
+    log "OK: ${base_url} health"
+  fi
+}
+
+check_metrics() {
+  local base_url="$1"
+  local metrics_body
+  if ! metrics_body="$(curl -fsS "${base_url%/}/actuator/prometheus")"; then
+    fail "${base_url}: prometheus endpoint unreachable"
+    return
+  fi
+  for metric in ${REQUIRED_METRICS//,/ }; do
+    if ! grep -Eq "^${metric}([{[:space:]]|$)" <<<"${metrics_body}"; then
+      fail "${base_url}: missing metric ${metric}"
+    fi
+  done
+  log "OK: ${base_url} metrics"
+}
+
+check_kafka_lag() {
+  if [[ -z "${KAFKA_BOOTSTRAP_SERVERS}" || -z "${KAFKA_GROUPS}" ]]; then
+    log "SKIP: kafka lag check (bootstrap servers or groups not set)"
+    return
+  fi
+
+  local kafka_consumer_groups=""
+  if [[ -n "${KAFKA_BIN_DIR}" && -x "${KAFKA_BIN_DIR%/}/kafka-consumer-groups.sh" ]]; then
+    kafka_consumer_groups="${KAFKA_BIN_DIR%/}/kafka-consumer-groups.sh"
+  elif command -v kafka-consumer-groups.sh >/dev/null 2>&1; then
+    kafka_consumer_groups="$(command -v kafka-consumer-groups.sh)"
+  else
+    log "SKIP: kafka lag check (kafka-consumer-groups.sh not found)"
+    return
+  fi
+
+  IFS=',' read -r -a groups <<<"${KAFKA_GROUPS}"
+  for group in "${groups[@]}"; do
+    local output total_lag
+    if ! output="$("${kafka_consumer_groups}" --bootstrap-server "${KAFKA_BOOTSTRAP_SERVERS}" --describe --group "${group}" 2>&1)"; then
+      fail "kafka group ${group}: describe failed"
+      log "${output}"
+      continue
+    fi
+    total_lag="$(awk 'NR > 1 && $5 ~ /^[0-9]+$/ {sum += $5} END {print sum + 0}' <<<"${output}")"
+    if [[ "${total_lag}" -gt "${KAFKA_LAG_THRESHOLD}" ]]; then
+      fail "kafka group ${group}: lag ${total_lag} exceeds threshold ${KAFKA_LAG_THRESHOLD}"
+    else
+      log "OK: kafka group ${group} lag ${total_lag}"
+    fi
+  done
+}
+
+IFS=',' read -r -a urls <<<"${BASE_URLS}"
+for url in "${urls[@]}"; do
+  check_health "${url}"
+  check_metrics "${url}"
+done
+
+check_kafka_lag
+
+if [[ "${failures}" -gt 0 ]]; then
+  log "Observability inspection failed with ${failures} issue(s)"
+  exit 1
+fi
+
+log "Observability inspection passed"

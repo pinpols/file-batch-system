@@ -24,7 +24,17 @@ management:
       exposure:
         include: health,info,prometheus
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
+
 batch:
+  security:
+    testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
+    kms:
+      default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
+      keys:
+        DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
   orchestrator:
     base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
   worker:
@@ -40,6 +50,21 @@ batch:
       heartbeat-interval-millis: ${BATCH_WORKER_DISPATCH_HEARTBEAT_INTERVAL_MILLIS:15000}
       topic: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
       consumer-group-id: ${BATCH_WORKER_DISPATCH_CONSUMER_GROUP_ID:batch-worker-dispatch}
+      circuit-breaker:
+        enabled: true
+        failure-threshold: 5
+        cooldown-millis: ${BATCH_DISPATCH_CB_COOLDOWN_MS:60000}
+      health:
+        enabled: true
+        probe-interval-millis: ${BATCH_DISPATCH_HEALTH_PROBE_INTERVAL_MS:60000}
+        max-backoff-millis: ${BATCH_DISPATCH_HEALTH_MAX_BACKOFF_MS:900000}
+        probe-channel-types:
+          - NAS
+          - OSS
+      receipt-poll:
+        enabled: true
+        interval-millis: ${BATCH_DISPATCH_RECEIPT_POLL_MS:60000}
+        batch-size: ${BATCH_DISPATCH_RECEIPT_POLL_BATCH:50}
   datasource:
     business:
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}
