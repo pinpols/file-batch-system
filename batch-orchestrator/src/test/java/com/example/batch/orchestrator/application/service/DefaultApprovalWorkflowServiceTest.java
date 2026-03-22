@@ -132,13 +132,10 @@ class DefaultApprovalWorkflowServiceTest {
 
     @Test
     void shouldMarkExecutedAfterApproval() {
-        ApprovalCommandEntity entity = pendingApproval("t1", "apr-005");
         ApprovalCommandEntity executed = pendingApproval("t1", "apr-005");
         executed.setApprovalStatus("EXECUTED");
-        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-005"))
-                .thenReturn(entity)
-                .thenReturn(executed);
         when(approvalCommandMapper.markExecuted("t1", "apr-005")).thenReturn(1);
+        when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-005")).thenReturn(executed);
 
         ApprovalWorkflowService.ApprovalRecord result = service.markExecuted("t1", "apr-005");
 

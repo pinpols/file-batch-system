@@ -221,6 +221,8 @@ class ParseStepFixtureTest {
         attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
         attrs.put(PipelineRuntimeKeys.TASK_ID, 999L);
         attrs.put("importPayload", importPayload);
+        // Enables preserveLogicalRow so rows are written as maps (fixtures need not match CustomerImportPayload).
+        attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
         context.setAttributes(attrs);
         return context;
     }
@@ -247,6 +249,8 @@ class ParseStepFixtureTest {
         attrs.put(PipelineRuntimeKeys.FILE_ID, 100L);
         attrs.put(PipelineRuntimeKeys.TASK_ID, 1000L);
         attrs.put("importPayload", importPayload);
+        attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
+        attrs.put(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD, Base64.getDecoder().decode(contentBase64));
         context.setAttributes(attrs);
         return context;
     }

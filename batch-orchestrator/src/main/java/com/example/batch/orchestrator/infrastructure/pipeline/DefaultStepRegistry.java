@@ -4,6 +4,7 @@ import com.example.batch.orchestrator.domain.pipeline.Step;
 import com.example.batch.orchestrator.domain.pipeline.StepRegistry;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.util.StringUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,9 @@ public class DefaultStepRegistry implements StepRegistry {
 
     @Override
     public Optional<Step> find(String stepCode) {
+        if (!StringUtils.hasText(stepCode)) {
+            return Optional.empty();
+        }
         return Optional.ofNullable(steps.get(stepCode));
     }
 }

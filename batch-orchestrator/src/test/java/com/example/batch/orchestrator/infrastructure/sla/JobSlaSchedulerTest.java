@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -97,7 +98,7 @@ class JobSlaSchedulerTest {
         JobInstanceEntity candidate = slaCandidate("t1", 2L, Instant.now().minusSeconds(3600));
         when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(1L);
         when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
-        when(jobInstanceMapper.markSlaAlerted("t1", 2L, any())).thenReturn(1);
+        when(jobInstanceMapper.markSlaAlerted(eq("t1"), eq(2L), any())).thenReturn(1);
         when(jobExecutionLogMapper.insert(any())).thenReturn(1);
 
         scheduler.scanViolations();
@@ -121,7 +122,7 @@ class JobSlaSchedulerTest {
 
         when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(1L);
         when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
-        when(jobInstanceMapper.markSlaAlerted("t1", 3L, any())).thenReturn(1);
+        when(jobInstanceMapper.markSlaAlerted(eq("t1"), eq(3L), any())).thenReturn(1);
         when(jobExecutionLogMapper.insert(any())).thenReturn(1);
 
         scheduler.scanViolations();
