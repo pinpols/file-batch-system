@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.stage;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
@@ -27,11 +28,14 @@ public class PreprocessStep implements ImportStageStep {
 
     private final PlatformFileRuntimeRepository runtimeRepository;
     private final BatchSecurityProperties batchSecurityProperties;
+    private final BatchObjectCryptoService cryptoService;
 
     public PreprocessStep(PlatformFileRuntimeRepository runtimeRepository,
-                          BatchSecurityProperties batchSecurityProperties) {
+                          BatchSecurityProperties batchSecurityProperties,
+                          BatchObjectCryptoService cryptoService) {
         this.runtimeRepository = runtimeRepository;
         this.batchSecurityProperties = batchSecurityProperties;
+        this.cryptoService = cryptoService;
     }
 
     @Override
@@ -64,6 +68,12 @@ public class PreprocessStep implements ImportStageStep {
             Map<String, Object> templateConfig = toStringKeyMap(templateConfigObject);
 
             byte[] rawBytes = resolveRawBytes(context, importPayload, templateConfigObject);
+            // Decrypt BATCHENC-formatted blobs produced by BatchObjectCryptoService (export-store path).
+            // This handles the KMS runtime closure: files encrypted with BatchObjectCryptoService on
+            // the export/ingress side are transparently decrypted here before the preprocess pipeline runs.
+            if (!batchSecurityProperties.isTestingOpen()) {
+                rawBytes = cryptoService.decrypt(rawBytes);
+            }
             byte[] processed = ImportPreprocessPipeline.run(rawBytes, importPayload, templateConfig, batchSecurityProperties.isTestingOpen());
 
             String formatType = resolveFileFormatType(importPayload, templateConfig);

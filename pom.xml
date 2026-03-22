@@ -83,6 +83,11 @@
                 <artifactId>okhttp</artifactId>
                 <version>${okhttp.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.wiremock</groupId>
+                <artifactId>wiremock</artifactId>
+                <version>3.9.1</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -112,4 +117,78 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <!--
+      Compliance profile — generate SBOM and third-party license report.
+      Activate with: mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party
+
+      cyclonedx-maven-plugin  : produces target/bom.json + target/bom.xml (CycloneDX v1.6 format)
+      license-maven-plugin    : produces target/generated-sources/license/THIRD-PARTY.txt per module
+                                and target/site/licenses.html in aggregate
+    -->
+    <profiles>
+        <profile>
+            <id>compliance</id>
+            <build>
+                <plugins>
+                    <!-- CycloneDX SBOM generator -->
+                    <plugin>
+                        <groupId>org.cyclonedx</groupId>
+                        <artifactId>cyclonedx-maven-plugin</artifactId>
+                        <version>2.9.1</version>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>make-aggregate-bom</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>makeAggregateBom</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <projectType>library</projectType>
+                            <schemaVersion>1.6</schemaVersion>
+                            <includeBomSerialNumber>true</includeBomSerialNumber>
+                            <includeCompileScope>true</includeCompileScope>
+                            <includeProvidedScope>false</includeProvidedScope>
+                            <includeRuntimeScope>true</includeRuntimeScope>
+                            <includeSystemScope>false</includeSystemScope>
+                            <includeTestScope>false</includeTestScope>
+                            <includeLicenseText>false</includeLicenseText>
+                            <outputReactorProjects>true</outputReactorProjects>
+                            <outputFormat>all</outputFormat>
+                            <outputName>bom</outputName>
+                        </configuration>
+                    </plugin>
+
+                    <!-- Third-party license aggregation -->
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>license-maven-plugin</artifactId>
+                        <version>2.4.0</version>
+                        <inherited>false</inherited>
+                        <executions>
+                            <execution>
+                                <id>aggregate-third-party-licenses</id>
+                                <phase>generate-resources</phase>
+                                <goals>
+                                    <goal>aggregate-add-third-party</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <outputDirectory>${project.basedir}/docs/compliance</outputDirectory>
+                            <thirdPartyFilename>THIRD-PARTY-GENERATED.txt</thirdPartyFilename>
+                            <excludedGroups>com\.example\.batch</excludedGroups>
+                            <includeTransitiveDependencies>true</includeTransitiveDependencies>
+                            <excludedScopes>test,provided,system</excludedScopes>
+                            <sortArtifactByName>true</sortArtifactByName>
+                            <useMissingFile>true</useMissingFile>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

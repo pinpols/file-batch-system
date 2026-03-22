@@ -1,0 +1,161 @@
+package com.example.batch.orchestrator.infrastructure.sla;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.example.batch.orchestrator.application.service.AlertEventService;
+import com.example.batch.orchestrator.config.SlaGovernanceProperties;
+import com.example.batch.orchestrator.domain.dto.AlertEmitRequest;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Unit test: JobSlaScheduler.scanViolations() paths.
+ */
+class JobSlaSchedulerTest {
+
+    private JobInstanceMapper jobInstanceMapper;
+    private JobExecutionLogMapper jobExecutionLogMapper;
+    private SlaGovernanceProperties properties;
+    private AlertEventService alertEventService;
+    private JobSlaScheduler scheduler;
+
+    @BeforeEach
+    void setUp() {
+        jobInstanceMapper = mock(JobInstanceMapper.class);
+        jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
+        alertEventService = mock(AlertEventService.class);
+        properties = new SlaGovernanceProperties();
+        properties.setEnabled(true);
+        properties.setBatchSize(200);
+
+        scheduler = new JobSlaScheduler(
+                jobInstanceMapper, jobExecutionLogMapper, properties,
+                new SimpleMeterRegistry(), alertEventService);
+        scheduler.initializeMeters();
+    }
+
+    @Test
+    void shouldSkipScanWhenDisabled() {
+        properties.setEnabled(false);
+
+        scheduler.scanViolations();
+
+        verify(jobInstanceMapper, never()).selectSlaViolationCandidates(anyInt());
+    }
+
+    @Test
+    void shouldDoNothingWhenNoCandidates() {
+        when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(0L);
+        when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of());
+
+        scheduler.scanViolations();
+
+        verify(jobExecutionLogMapper, never()).insert(any());
+        verify(alertEventService, never()).emit(any());
+    }
+
+    @Test
+    void shouldSkipNullCandidateInList() {
+        when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(0L);
+        when(jobInstanceMapper.selectSlaViolationCandidates(anyInt()))
+                .thenReturn(java.util.Arrays.asList(null, null));
+
+        scheduler.scanViolations();
+
+        verify(jobExecutionLogMapper, never()).insert(any());
+    }
+
+    @Test
+    void shouldSkipCandidateWhenMarkSlaAlertedReturnZero() {
+        JobInstanceEntity candidate = slaCandidate("t1", 1L, Instant.now().minusSeconds(60));
+        when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(1L);
+        when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
+        when(jobInstanceMapper.markSlaAlerted(anyString(), anyLong(), any())).thenReturn(0);
+
+        scheduler.scanViolations();
+
+        verify(jobExecutionLogMapper, never()).insert(any());
+        verify(alertEventService, never()).emit(any());
+    }
+
+    @Test
+    void shouldLogAndEmitAlertWhenDeadlineExceeded() {
+        JobInstanceEntity candidate = slaCandidate("t1", 2L, Instant.now().minusSeconds(3600));
+        when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(1L);
+        when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
+        when(jobInstanceMapper.markSlaAlerted("t1", 2L, any())).thenReturn(1);
+        when(jobExecutionLogMapper.insert(any())).thenReturn(1);
+
+        scheduler.scanViolations();
+
+        verify(jobExecutionLogMapper).insert(any());
+        verify(alertEventService).emit(any(AlertEmitRequest.class));
+    }
+
+    @Test
+    void shouldLogAndEmitAlertForExpectedDurationViolation() {
+        JobInstanceEntity candidate = new JobInstanceEntity();
+        candidate.setTenantId("t1");
+        candidate.setId(3L);
+        candidate.setInstanceNo("INST-003");
+        candidate.setJobCode("TEST_JOB");
+        candidate.setInstanceStatus("RUNNING");
+        candidate.setTraceId("trace-003");
+        // No deadline, but expectedDurationSeconds exceeded
+        candidate.setExpectedDurationSeconds(60);
+        candidate.setStartedAt(Instant.now().minusSeconds(3600)); // started 1h ago, expected 60s
+
+        when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(1L);
+        when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
+        when(jobInstanceMapper.markSlaAlerted("t1", 3L, any())).thenReturn(1);
+        when(jobExecutionLogMapper.insert(any())).thenReturn(1);
+
+        scheduler.scanViolations();
+
+        verify(jobExecutionLogMapper).insert(any());
+        verify(alertEventService).emit(any(AlertEmitRequest.class));
+    }
+
+    @Test
+    void shouldProcessMultipleCandidates() {
+        JobInstanceEntity c1 = slaCandidate("t1", 10L, Instant.now().minusSeconds(100));
+        JobInstanceEntity c2 = slaCandidate("t1", 11L, Instant.now().minusSeconds(200));
+        when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(2L);
+        when(jobInstanceMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(c1, c2));
+        when(jobInstanceMapper.markSlaAlerted(anyString(), anyLong(), any())).thenReturn(1);
+        when(jobExecutionLogMapper.insert(any())).thenReturn(1);
+
+        scheduler.scanViolations();
+
+        verify(jobExecutionLogMapper, times(2)).insert(any());
+        verify(alertEventService, times(2)).emit(any());
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static JobInstanceEntity slaCandidate(String tenantId, Long id, Instant deadlineAt) {
+        JobInstanceEntity e = new JobInstanceEntity();
+        e.setTenantId(tenantId);
+        e.setId(id);
+        e.setInstanceNo("INST-" + id);
+        e.setJobCode("JOB-" + id);
+        e.setInstanceStatus("RUNNING");
+        e.setTraceId("trace-" + id);
+        e.setDeadlineAt(deadlineAt);
+        return e;
+    }
+}

@@ -1,0 +1,255 @@
+package com.example.batch.orchestrator.application.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.exception.BizException;
+import com.example.batch.orchestrator.config.WorkerDrainProperties;
+import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import java.time.Instant;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class DefaultWorkerDrainGovernanceServiceTest {
+
+    private WorkerRegistryRepository workerRegistryRepository;
+    private JobTaskMapper jobTaskMapper;
+    private RetryGovernanceService retryGovernanceService;
+    private WorkerDrainProperties drainProperties;
+    private DefaultWorkerDrainGovernanceService service;
+
+    @BeforeEach
+    void setUp() {
+        workerRegistryRepository = mock(WorkerRegistryRepository.class);
+        jobTaskMapper = mock(JobTaskMapper.class);
+        retryGovernanceService = mock(RetryGovernanceService.class);
+        drainProperties = new WorkerDrainProperties();
+        drainProperties.setDefaultTimeoutSeconds(300);
+        service = new DefaultWorkerDrainGovernanceService(
+                workerRegistryRepository, jobTaskMapper, retryGovernanceService, drainProperties);
+    }
+
+    // ── startDrain ────────────────────────────────────────────────────────────
+
+    @Test
+    void shouldThrowWhenTenantIdIsBlankOnStartDrain() {
+        assertThatThrownBy(() -> service.startDrain("", "w1", null))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldThrowWhenWorkerCodeIsBlankOnStartDrain() {
+        assertThatThrownBy(() -> service.startDrain("t1", "", null))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldThrowWhenWorkerNotRegisteredOnStartDrain() {
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.startDrain("t1", "w1", null))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldThrowWhenWorkerAlreadyDecommissionedOnStartDrain() {
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+        registry.setStatus(WorkerRegistryStatus.DECOMMISSIONED.code());
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
+
+        assertThatThrownBy(() -> service.startDrain("t1", "w1", null))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldSetDrainingStatusWithDefaultTimeout() {
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
+        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        WorkerRegistryRecord result = service.startDrain("t1", "w1", null);
+
+        assertThat(result.getStatus()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+        assertThat(result.getDrainStartedAt()).isNotNull();
+        assertThat(result.getDrainDeadlineAt()).isNotNull();
+        assertThat(result.getDrainDeadlineAt()).isAfter(result.getDrainStartedAt());
+    }
+
+    @Test
+    void shouldUseCustomTimeoutWhenProvided() {
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
+        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.startDrain("t1", "w1", 120);
+
+        verify(workerRegistryRepository).save(any());
+    }
+
+    // ── forceOffline ─────────────────────────────────────────────────────────
+
+    @Test
+    void shouldThrowWhenTenantIdIsBlankOnForceOffline() {
+        assertThatThrownBy(() -> service.forceOffline("", "w1"))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldThrowWhenWorkerNotRegisteredOnForceOffline() {
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.forceOffline("t1", "w1"))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldMarkDecommissionedAndTakeoverTasksOnForceOffline() {
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
+        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(100L);
+        task.setTenantId("t1");
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of(task));
+
+        WorkerRegistryRecord result = service.forceOffline("t1", "w1");
+
+        assertThat(result.getStatus()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
+        verify(retryGovernanceService).retryTask(eq("t1"), eq(100L), anyString());
+    }
+
+    @Test
+    void shouldCompleteForceOfflineEvenWhenNoActiveTasks() {
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
+        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
+
+        WorkerRegistryRecord result = service.forceOffline("t1", "w1");
+
+        assertThat(result.getStatus()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
+        verify(retryGovernanceService, never()).retryTask(anyString(), anyLong(), anyString());
+    }
+
+    // ── listClaimedTasks ─────────────────────────────────────────────────────
+
+    @Test
+    void shouldThrowWhenWorkerCodeIsBlankOnListClaimedTasks() {
+        assertThatThrownBy(() -> service.listClaimedTasks("t1", ""))
+                .isInstanceOf(BizException.class);
+    }
+
+    @Test
+    void shouldReturnActiveTasksForWorker() {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setId(200L);
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of(task));
+
+        List<JobTaskEntity> tasks = service.listClaimedTasks("t1", "w1");
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getId()).isEqualTo(200L);
+    }
+
+    // ── takeoverAfterDrainTimeout ─────────────────────────────────────────────
+
+    @Test
+    void shouldDoNothingWhenTenantIdIsBlankOnTakeover() {
+        service.takeoverAfterDrainTimeout("", "w1");
+        verify(workerRegistryRepository, never()).findFirstByTenantIdAndWorkerCode(anyString(), anyString());
+    }
+
+    @Test
+    void shouldDoNothingWhenWorkerCodeIsBlankOnTakeover() {
+        service.takeoverAfterDrainTimeout("t1", "");
+        verify(workerRegistryRepository, never()).findFirstByTenantIdAndWorkerCode(anyString(), anyString());
+    }
+
+    @Test
+    void shouldDoNothingWhenRegistryNotFoundOnTakeover() {
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(null);
+
+        service.takeoverAfterDrainTimeout("t1", "w1");
+
+        verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString());
+    }
+
+    @Test
+    void shouldDoNothingWhenWorkerNotDrainingOnTakeover() {
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+        registry.setStatus(WorkerRegistryStatus.ONLINE.code());
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
+
+        service.takeoverAfterDrainTimeout("t1", "w1");
+
+        verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString());
+    }
+
+    @Test
+    void shouldTakeoverAndDecommissionWhenDrainingWorkerFound() {
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+        registry.setStatus(WorkerRegistryStatus.DRAINING.code());
+        registry.setDrainStartedAt(Instant.now().minusSeconds(600));
+        registry.setDrainDeadlineAt(Instant.now().minusSeconds(100));
+
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
+                .thenReturn(registry)
+                .thenReturn(registry);
+        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
+
+        service.takeoverAfterDrainTimeout("t1", "w1");
+
+        verify(workerRegistryRepository).save(any());
+    }
+
+    @Test
+    void shouldContinueTakeoverWhenOneTaskRetryFails() {
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
+        registry.setStatus(WorkerRegistryStatus.DRAINING.code());
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
+                .thenReturn(registry)
+                .thenReturn(registry);
+        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        JobTaskEntity task1 = new JobTaskEntity();
+        task1.setId(301L);
+        task1.setTenantId("t1");
+        JobTaskEntity task2 = new JobTaskEntity();
+        task2.setId(302L);
+        task2.setTenantId("t1");
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of(task1, task2));
+        doThrow(new RuntimeException("retry failed")).when(retryGovernanceService)
+                .retryTask(eq("t1"), eq(301L), anyString());
+
+        // Should not throw even when one retry fails
+        service.takeoverAfterDrainTimeout("t1", "w1");
+
+        verify(retryGovernanceService).retryTask(eq("t1"), eq(302L), anyString());
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static WorkerRegistryRecord onlineWorker(String tenantId, String workerCode) {
+        WorkerRegistryRecord r = new WorkerRegistryRecord();
+        r.setTenantId(tenantId);
+        r.setWorkerCode(workerCode);
+        r.setStatus(WorkerRegistryStatus.ONLINE.code());
+        return r;
+    }
+}

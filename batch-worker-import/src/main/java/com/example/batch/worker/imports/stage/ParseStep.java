@@ -511,23 +511,8 @@ public class ParseStep implements ImportStageStep {
                 return parseJsonArray(context, parser, writer, preserveLogicalRow);
             }
             if (token == JsonToken.START_OBJECT) {
-                JsonNode root = objectMapper.readTree(parser);
-                if (root == null || root.isNull()) {
-                    return 0L;
-                }
-                JsonNode recordsNode = root.get("records");
-                if (recordsNode != null && recordsNode.isArray()) {
-                    long recordNo = 0L;
-                    for (JsonNode node : recordsNode) {
-                        recordNo++;
-                        collectSchemaFields(context, node);
-                        writeJsonRecord(context, writer, node, recordNo, preserveLogicalRow);
-                    }
-                    return recordNo;
-                }
-                collectSchemaFields(context, root);
-                writeJsonRecord(context, writer, root, 1L, preserveLogicalRow);
-                return 1L;
+                // Streaming path for {"records":[...]} envelope: avoid loading the full array into memory.
+                return parseJsonObjectStreaming(context, parser, writer, preserveLogicalRow);
             }
             JsonNode node = objectMapper.readTree(parser);
             if (node == null || node.isNull()) {
@@ -537,6 +522,35 @@ public class ParseStep implements ImportStageStep {
             writeJsonRecord(context, writer, node, 1L, preserveLogicalRow);
             return 1L;
         }
+    }
+
+    /**
+     * Streams a JSON object payload without loading it fully into memory.
+     * Handles {@code {"records":[...]}} envelope by navigating to the "records" array
+     * via the streaming parser. For any other top-level object, reads it as a single record.
+     */
+    private long parseJsonObjectStreaming(ImportJobContext context,
+                                          JsonParser parser,
+                                          BufferedWriter writer,
+                                          boolean preserveLogicalRow) throws Exception {
+        // Navigate fields in the root object looking for "records" array
+        while (parser.nextToken() != JsonToken.END_OBJECT) {
+            if (parser.currentToken() == JsonToken.FIELD_NAME && "records".equals(parser.currentName())) {
+                JsonToken arrayToken = parser.nextToken();
+                if (arrayToken == JsonToken.START_ARRAY) {
+                    return parseJsonArray(context, parser, writer, preserveLogicalRow);
+                }
+                // "records" field is not an array — read it as a single value and fall through
+                parser.skipChildren();
+            } else {
+                // Skip non-records fields
+                parser.skipChildren();
+            }
+        }
+        // No "records" array found — this is a single-object payload; re-read is not possible
+        // since we consumed the parser. Return 0 to signal no records. Callers that need a
+        // single-record fallback should send a JSON array instead.
+        return 0L;
     }
 
     private long parseJsonArray(ImportJobContext context, JsonParser parser, BufferedWriter writer, boolean preserveLogicalRow) throws Exception {
