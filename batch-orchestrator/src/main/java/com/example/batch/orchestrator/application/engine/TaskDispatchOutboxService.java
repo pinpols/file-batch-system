@@ -26,11 +26,18 @@ public class TaskDispatchOutboxService {
                                    JobPartitionEntity partition,
                                    String traceId,
                                    String eventKey) {
+        Long jobPartitionId = partition != null ? partition.getId() : null;
+        String businessKey = partition != null
+                ? partition.getBusinessKey()
+                : buildFallbackBusinessKey(jobInstance, task);
+        String idempotencyKey = partition != null
+                ? partition.getIdempotencyKey()
+                : resolveIdempotencyKeyWithoutPartition(task, eventKey);
         TaskDispatchMessage message = new TaskDispatchMessage(
                 "v1",
                 task.getTenantId(),
                 jobInstance.getId(),
-                partition.getId(),
+                jobPartitionId,
                 task.getId(),
                 jobInstance.getInstanceNo(),
                 jobInstance.getJobCode(),
@@ -39,10 +46,10 @@ public class TaskDispatchOutboxService {
                 task.getTaskType(),
                 task.getAssignedWorkerCode(),
                 resolvePriorityBand(jobInstance.getPriority()),
-                partition.getBusinessKey(),
+                businessKey,
                 task.getTaskPayload(),
                 traceId,
-                partition.getIdempotencyKey(),
+                idempotencyKey,
                 Instant.now()
         );
 
@@ -57,6 +64,20 @@ public class TaskDispatchOutboxService {
         event.setPublishAttempt(0);
         event.setTraceId(traceId);
         outboxEventMapper.insert(event);
+    }
+
+    private static String buildFallbackBusinessKey(JobInstanceEntity jobInstance, JobTaskEntity task) {
+        String instanceNo = jobInstance != null && jobInstance.getInstanceNo() != null
+                ? jobInstance.getInstanceNo()
+                : "unknown";
+        return instanceNo + ":task:" + task.getId();
+    }
+
+    private static String resolveIdempotencyKeyWithoutPartition(JobTaskEntity task, String eventKey) {
+        if (eventKey != null && !eventKey.isBlank()) {
+            return eventKey;
+        }
+        return task.getTenantId() + ":task:" + task.getId();
     }
 
     private String resolvePriorityBand(Integer priority) {

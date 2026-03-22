@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS batch.file_template_config (
     streaming_enabled        BOOLEAN      NOT NULL DEFAULT TRUE,
     page_size                INTEGER      NOT NULL DEFAULT 1000,
     fetch_size               INTEGER      NOT NULL DEFAULT 1000,
+    chunk_size               INTEGER      NOT NULL DEFAULT 500,
     enabled                  BOOLEAN      NOT NULL DEFAULT TRUE,
     version                  INTEGER      NOT NULL DEFAULT 1,
     description              VARCHAR(1024),
@@ -195,6 +196,7 @@ CREATE TABLE IF NOT EXISTS batch.file_template_config (
     CONSTRAINT ck_file_template_footer_rows CHECK (footer_rows >= 0),
     CONSTRAINT ck_file_template_page_size CHECK (page_size > 0),
     CONSTRAINT ck_file_template_fetch_size CHECK (fetch_size > 0),
+    CONSTRAINT ck_file_template_chunk_size CHECK (chunk_size > 0),
     CONSTRAINT ck_file_template_version CHECK (version > 0)
 );
 

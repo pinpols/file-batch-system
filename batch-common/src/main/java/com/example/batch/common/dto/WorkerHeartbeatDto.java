@@ -12,6 +12,10 @@ public record WorkerHeartbeatDto(
         String hostIp,
         String processId,
         Instant heartbeatAt,
-        List<String> capabilityTags
+        List<String> capabilityTags,
+        Integer currentLoad
 ) {
+    public WorkerHeartbeatDto {
+        currentLoad = (currentLoad != null && currentLoad < 0) ? 0 : currentLoad;
+    }
 }

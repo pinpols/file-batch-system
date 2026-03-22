@@ -1,0 +1,51 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: batch-default
+  group_by: [alertname, team, alert_group, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 2h
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: batch-pager
+    - matchers:
+        - alert_group="dispatch"
+      receiver: batch-dispatch
+    - matchers:
+        - alert_group="sla"
+      receiver: batch-sla
+    - matchers:
+        - alert_group="capacity"
+      receiver: batch-sre
+
+receivers:
+  - name: batch-default
+    webhook_configs:
+      - url: ${BATCH_ALERT_WEBHOOK_URL:http://localhost:9001/alert}
+        send_resolved: true
+  - name: batch-pager
+    webhook_configs:
+      - url: ${BATCH_PAGER_WEBHOOK_URL:http://localhost:9001/pager}
+        send_resolved: true
+  - name: batch-dispatch
+    webhook_configs:
+      - url: ${BATCH_DISPATCH_WEBHOOK_URL:http://localhost:9001/dispatch}
+        send_resolved: true
+  - name: batch-sla
+    webhook_configs:
+      - url: ${BATCH_SLA_WEBHOOK_URL:http://localhost:9001/sla}
+        send_resolved: true
+  - name: batch-sre
+    webhook_configs:
+      - url: ${BATCH_SRE_WEBHOOK_URL:http://localhost:9001/sre}
+        send_resolved: true
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: [alertname, team, alert_group]

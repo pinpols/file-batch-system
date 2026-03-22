@@ -7,7 +7,7 @@ public interface SettlementExportMapper {
 
     Map<String, Object> selectBatch(Map<String, Object> params);
 
-    List<Map<String, Object>> selectDetailsByBatchId(Map<String, Object> params);
+    List<Map<String, Object>> selectDetailsByBatchIdAfterId(Map<String, Object> params);
 
     int updateBatchExported(Map<String, Object> params);
 

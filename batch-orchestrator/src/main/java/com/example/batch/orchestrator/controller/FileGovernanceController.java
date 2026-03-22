@@ -60,7 +60,8 @@ public class FileGovernanceController {
                 request.channelCode(),
                 request.operatorId(),
                 request.traceId(),
-                request.reason()
+                request.reason(),
+                request.approvalId()
         );
     }
 
@@ -68,7 +69,8 @@ public class FileGovernanceController {
                                        String channelCode,
                                        String operatorId,
                                        String traceId,
-                                       String reason) {
+                                       String reason,
+                                       String approvalId) {
     }
 
     public record FileOperationResponse(String status) {

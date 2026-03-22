@@ -20,6 +20,9 @@ public interface JobTaskMapper {
     List<JobTaskEntity> selectReadyTasks(@Param("tenantId") String tenantId,
                                          @Param("batchSize") int batchSize);
 
+    List<JobTaskEntity> selectActiveByAssignedWorker(@Param("tenantId") String tenantId,
+                                                     @Param("assignedWorkerCode") String assignedWorkerCode);
+
     int updateStatus(@Param("tenantId") String tenantId,
                      @Param("id") Long id,
                      @Param("taskStatus") String taskStatus,

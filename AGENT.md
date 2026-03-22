@@ -453,6 +453,7 @@ Step 可声明：
   - 核心模型、实体、查询对象、状态机、链路抽象
 - `infrastructure`
   - 技术实现、默认实现、外部组件接入
+  - `batch-console-api` 中 `*ApplicationService` 的 **`Default*` 实现类** 放在本包（接口仍在 `application`）
 - `mapper`
   - MyBatis 接口
 - `repository`

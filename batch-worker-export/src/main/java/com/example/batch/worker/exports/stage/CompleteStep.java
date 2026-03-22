@@ -35,6 +35,9 @@ public class CompleteStep implements ExportStageStep {
         Map<String, Object> fileMetadata = new LinkedHashMap<>();
         fileMetadata.put("recordCount", context.getAttributes().get("recordCount"));
         fileMetadata.put("objectName", context.getAttributes().get("objectName"));
+        if (context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
+            fileMetadata.put("exportSnapshot", context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
+        }
         runtimeRepository.updateFileStatus(fileId, nextStatus, fileMetadata);
         Map<String, Object> detailSummary = new LinkedHashMap<>();
         detailSummary.put("recordCount", context.getAttributes().get("recordCount"));

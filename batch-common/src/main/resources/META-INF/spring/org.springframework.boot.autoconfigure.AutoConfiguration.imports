@@ -1,0 +1,2 @@
+com.example.batch.common.logging.HttpRequestMdcAutoConfiguration
+com.example.batch.common.config.BatchSchedulingAutoConfiguration

@@ -2,8 +2,10 @@ package com.example.batch.orchestrator.scheduler;
 
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
+import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
+import com.example.batch.orchestrator.scheduler.quota.QuotaRuntimeStateService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,8 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
 
     private final JobPartitionMapper jobPartitionMapper;
     private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+    private final QuotaRuntimeStateService quotaRuntimeStateService;
+    private final ResourceSchedulerProperties resourceSchedulerProperties;
 
     @Override
     public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
@@ -26,22 +30,45 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
         long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(request.getTenantId());
         if (quotaPolicy != null
                 && quotaPolicy.getMaxPartitionsPerTenant() != null
-                && quotaPolicy.getMaxPartitionsPerTenant() > 0
-                && tenantActivePartitions + requestedPartitions > quotaPolicy.getMaxPartitionsPerTenant()) {
-            return ResourceCheck.waitForCapacity(
+                && quotaPolicy.getMaxPartitionsPerTenant() > 0) {
+            int pburst = quotaPolicy.getPartitionBurstLimit() == null ? 0 : Math.max(0, quotaPolicy.getPartitionBurstLimit());
+            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
+                    request.getTenantId(),
+                    "TENANT_PARTITIONS",
+                    request.getTenantId(),
+                    quotaPolicy.getQuotaResetPolicy(),
+                    quotaPolicy.getMaxPartitionsPerTenant(),
+                    pburst,
+                    tenantActivePartitions,
+                    requestedPartitions,
+                    resourceSchedulerProperties.getQuotaResetSlidingWindowHours(),
                     "TENANT_PARTITION_LIMIT",
-                    "tenant running partitions exceed quota"
+                    "tenant running partitions exceed quota (including partition burst)"
             );
+            if (!burstCheck.allowed()) {
+                return burstCheck;
+            }
         }
         if (queue != null
                 && queue.getMaxRunningPartitions() != null
                 && queue.getMaxRunningPartitions() > 0) {
             long queueActivePartitions = countQueueActivePartitions(request, queue, tenantActivePartitions);
-            if (queueActivePartitions + requestedPartitions > queue.getMaxRunningPartitions()) {
-                return ResourceCheck.waitForCapacity(
-                        "QUEUE_PARTITION_LIMIT",
-                        "resource queue running partitions exceed limit"
-                );
+            int burst = queue.getBurstLimit() == null ? 0 : Math.max(0, queue.getBurstLimit());
+            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
+                    request.getTenantId(),
+                    "QUEUE_PARTITIONS",
+                    queue.getQueueCode(),
+                    queue.getQuotaResetPolicy(),
+                    queue.getMaxRunningPartitions(),
+                    burst,
+                    queueActivePartitions,
+                    requestedPartitions,
+                    resourceSchedulerProperties.getQuotaResetSlidingWindowHours(),
+                    "QUEUE_PARTITION_LIMIT",
+                    "resource queue running partitions exceed limit"
+            );
+            if (!burstCheck.allowed()) {
+                return burstCheck;
             }
         }
         return ResourceCheck.allow();

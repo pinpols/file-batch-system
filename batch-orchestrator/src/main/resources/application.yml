@@ -28,12 +28,30 @@ management:
       exposure:
         include: health,info,prometheus
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
+
 batch:
+  security:
+    testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
+    kms:
+      default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
+      keys:
+        DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
+  scheduler:
+    snapshot-persist-enabled: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST:true}
+    snapshot-persist-ms: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST_MS:120000}
   outbox:
     batch-size: ${BATCH_OUTBOX_BATCH_SIZE:100}
     poll-interval-millis: ${BATCH_OUTBOX_POLL_INTERVAL_MILLIS:5000}
     retry-delay-seconds: ${BATCH_OUTBOX_RETRY_DELAY_SECONDS:60}
     max-retry-attempts: ${BATCH_OUTBOX_MAX_RETRY_ATTEMPTS:5}
+  worker:
+    drain:
+      default-timeout-seconds: ${BATCH_WORKER_DRAIN_TIMEOUT_SECONDS:600}
+      check-interval-millis: ${BATCH_WORKER_DRAIN_CHECK_INTERVAL_MILLIS:15000}
+      enabled: ${BATCH_WORKER_DRAIN_ENABLED:true}
   partition-lease:
     expire-seconds: ${BATCH_PARTITION_LEASE_EXPIRE_SECONDS:60}
     reclaim-interval-millis: ${BATCH_PARTITION_LEASE_RECLAIM_INTERVAL_MILLIS:15000}
@@ -47,6 +65,8 @@ batch:
   resource-scheduler:
     waiting-dispatch-batch-size: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE:100}
     waiting-dispatch-interval-millis: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS:10000}
+    quota-reset-sliding-window-hours: ${BATCH_RESOURCE_SCHEDULER_QUOTA_RESET_SLIDING_WINDOW_HOURS:24}
+    quota-reset-scan-interval-millis: ${BATCH_RESOURCE_SCHEDULER_QUOTA_RESET_SCAN_INTERVAL_MILLIS:60000}
   sla:
     enabled: ${BATCH_SLA_ENABLED:true}
     poll-interval-millis: ${BATCH_SLA_POLL_INTERVAL_MILLIS:30000}

@@ -1,0 +1,20 @@
+package com.example.batch.orchestrator.scheduler;
+
+import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
+import com.example.batch.orchestrator.scheduler.quota.QuotaRuntimeStateService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+@Component
+@RequiredArgsConstructor
+public class QuotaRuntimeResetScheduler {
+
+    private final QuotaRuntimeStateService quotaRuntimeStateService;
+    private final ResourceSchedulerProperties resourceSchedulerProperties;
+
+    @Scheduled(fixedDelayString = "${batch.resource-scheduler.quota-reset-scan-interval-millis:60000}")
+    public void reconcile() {
+        quotaRuntimeStateService.reconcileExpiredStates(resourceSchedulerProperties.getQuotaResetSlidingWindowHours());
+    }
+}

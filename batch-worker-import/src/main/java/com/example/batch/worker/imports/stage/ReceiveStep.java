@@ -2,9 +2,11 @@ package com.example.batch.worker.imports.stage;
 
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -16,11 +18,24 @@ import org.springframework.util.StringUtils;
 @Component
 public class ReceiveStep implements ImportStageStep {
 
+    private static final Set<String> RESERVED_METADATA_KEYS = Set.of(
+            "templateCode",
+            "sourceType",
+            "headerRows",
+            "footerRows",
+            "taskId",
+            "withHeader"
+    );
+
     private final PlatformFileRuntimeRepository runtimeRepository;
+    private final BatchSecurityProperties batchSecurityProperties;
     private final ObjectMapper objectMapper;
 
-    public ReceiveStep(PlatformFileRuntimeRepository runtimeRepository, ObjectMapper objectMapper) {
+    public ReceiveStep(PlatformFileRuntimeRepository runtimeRepository,
+                       BatchSecurityProperties batchSecurityProperties,
+                       ObjectMapper objectMapper) {
         this.runtimeRepository = runtimeRepository;
+        this.batchSecurityProperties = batchSecurityProperties;
         this.objectMapper = objectMapper;
     }
 
@@ -47,9 +62,8 @@ public class ReceiveStep implements ImportStageStep {
             metadata.put("footerRows", importPayload.footerRows());
             metadata.put("taskId", context.getAttributes().get(PipelineRuntimeKeys.TASK_ID));
             metadata.put("withHeader", importPayload.withHeader());
-            if (importPayload.metadata() != null) {
-                metadata.putAll(importPayload.metadata());
-            }
+            mergeSecurityMetadata(metadata, resolveTemplateSecurity(context.getTenantId(), importPayload.templateCode()));
+            mergeUserMetadata(metadata, importPayload.metadata());
             Long fileId = runtimeRepository.createFileRecord(
                     context.getTenantId(),
                     importPayload.fileCode(),
@@ -83,6 +97,25 @@ public class ReceiveStep implements ImportStageStep {
         }
         context.getAttributes().put("importPayload", importPayload);
         return ImportStageResult.success(stage());
+    }
+
+    private Map<String, Object> resolveTemplateSecurity(String tenantId, String templateCode) {
+        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(templateCode)) {
+            return Map.of();
+        }
+        Map<String, Object> template = runtimeRepository.loadLatestTemplateConfig(tenantId, templateCode, "IMPORT");
+        if (template == null || template.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> security = new LinkedHashMap<>();
+        security.put("contentEncryptionEnabled", !batchSecurityProperties.isTestingOpen() && truthy(template.get("content_encryption_enabled")));
+        security.put("encryptionKeyRef", template.get("encryption_key_ref"));
+        security.put("downloadRequiresApproval", truthy(template.get("download_requires_approval")));
+        security.put("previewMaskingEnabled", truthy(template.get("preview_masking_enabled")));
+        security.put("errorLineMaskingEnabled", truthy(template.get("error_line_masking_enabled")));
+        security.put("logMaskingEnabled", truthy(template.get("log_masking_enabled")));
+        security.put("maskingRuleSet", template.get("masking_rule_set"));
+        return security;
     }
 
     private ImportPayload resolvePayload(ImportJobContext context) {
@@ -143,5 +176,31 @@ public class ReceiveStep implements ImportStageStep {
 
     private String defaultText(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private void mergeUserMetadata(Map<String, Object> target, Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (RESERVED_METADATA_KEYS.contains(entry.getKey())) {
+                continue;
+            }
+            target.put(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private void mergeSecurityMetadata(Map<String, Object> target, Map<String, Object> security) {
+        if (security == null || security.isEmpty()) {
+            return;
+        }
+        target.putAll(security);
+    }
+
+    private boolean truthy(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return value != null && "true".equalsIgnoreCase(String.valueOf(value));
     }
 }

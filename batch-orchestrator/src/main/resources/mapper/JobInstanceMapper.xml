@@ -233,4 +233,16 @@
           and queue_code = #{queueCode}
           and instance_status in ('WAITING', 'READY', 'RUNNING')
     </select>
+
+    <select id="countActiveByFairShareGroup" resultType="long">
+        select count(1)
+        from batch.job_instance ji
+        where ji.instance_status in ('WAITING', 'READY', 'RUNNING')
+          and ji.tenant_id in (
+              select tenant_id
+              from batch.tenant_quota_policy
+              where enabled = true
+                and fair_share_group = #{fairShareGroup}
+          )
+    </select>
 </mapper>

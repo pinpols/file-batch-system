@@ -23,10 +23,14 @@ public class DefaultWorkerRegistryService implements WorkerRegistryService {
             registry = new WorkerRegistryRecord();
             registry.setTenantId(request.tenantId());
             registry.setWorkerCode(request.workerCode());
+            registry.setCurrentLoad(0);
         }
         registry.setWorkerGroup(request.workerGroup());
         registry.setStatus(resolveIncomingStatus(request, WorkerRegistryStatus.ONLINE.code(), registry.getStatus()));
         registry.setHeartbeatAt(firstHeartbeat(request));
+        if (request.currentLoad() != null) {
+            registry.setCurrentLoad(request.currentLoad());
+        }
         return workerRegistryRepository.save(registry);
     }
 
@@ -42,6 +46,9 @@ public class DefaultWorkerRegistryService implements WorkerRegistryService {
         }
         registry.setStatus(resolveHeartbeatStatus(request, registry.getStatus()));
         registry.setHeartbeatAt(firstHeartbeat(request));
+        if (request.currentLoad() != null) {
+            registry.setCurrentLoad(request.currentLoad());
+        }
         return workerRegistryRepository.save(registry);
     }
 

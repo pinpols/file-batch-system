@@ -3,6 +3,8 @@ package com.example.batch.worker.imports.infrastructure;
 import com.example.batch.common.enums.ErrorSinkType;
 import com.example.batch.common.enums.SkipAction;
 import com.example.batch.common.enums.SkipThresholdMode;
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.utils.ContentMaskingUtils;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -29,6 +31,7 @@ public class ImportRecordGovernanceService {
     private final ImportSkipProperties skipProperties;
     private final PlatformFileRuntimeRepository runtimeRepository;
     private final ImportErrorOutputStorage errorOutputStorage;
+    private final BatchSecurityProperties batchSecurityProperties;
 
     public boolean isSkipEnabled() {
         return skipProperties != null && skipProperties.enabled();
@@ -153,17 +156,32 @@ public class ImportRecordGovernanceService {
         Long fileId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
         Long pipelineInstanceId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
         Long pipelineStepRunId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
+        Object templateConfig = context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        boolean errorLineMask = false;
+        String maskingRuleSet = null;
+        if (templateConfig instanceof Map<?, ?> templateMap) {
+            Object flag = templateMap.get("error_line_masking_enabled");
+            errorLineMask = Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag));
+            Object rule = templateMap.get("masking_rule_set");
+            maskingRuleSet = rule == null ? null : String.valueOf(rule);
+        }
+        if (batchSecurityProperties.isTestingOpen()) {
+            errorLineMask = false;
+        }
+        String safeMessage = errorLineMask ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet) : errorMessage;
+        Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
+        Object safePayload = errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
         runtimeRepository.insertFileErrorRecord(
                 fileId,
                 pipelineInstanceId,
                 pipelineStepRunId,
                 recordNo,
                 errorCode,
-                errorMessage,
+                safeMessage,
                 stage == null ? null : stage.name(),
                 skipped,
                 resolveSkipAction().getCode(),
-                rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord
+                safePayload
         );
 
         if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
@@ -194,6 +212,16 @@ public class ImportRecordGovernanceService {
         List<ImportBadRecord> created = new ArrayList<>();
         context.getAttributes().put(BAD_RECORDS_KEY, created);
         return created;
+    }
+
+    private Object maskErrorPayload(Object payload, String maskingRuleSet) {
+        if (payload == null) {
+            return null;
+        }
+        if (payload instanceof String text) {
+            return ContentMaskingUtils.maskPlainText(text, maskingRuleSet);
+        }
+        return ContentMaskingUtils.maskPlainText(JsonUtils.toJson(payload), maskingRuleSet);
     }
 
     private long increment(ImportJobContext context, String key) {

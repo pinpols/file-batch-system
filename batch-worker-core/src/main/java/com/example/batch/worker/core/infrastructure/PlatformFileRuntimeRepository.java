@@ -45,6 +45,16 @@ public class PlatformFileRuntimeRepository {
         return count != null && count > 0;
     }
 
+    public Map<String, Object> loadFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {
+        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(storagePath)) {
+            return Map.of();
+        }
+        Map<String, Object> row = platformFileRuntimeMapper.selectFileRecordByStoragePath(
+                params("tenantId", tenantId, "storageBucket", storageBucket, "storagePath", storagePath)
+        );
+        return row == null ? Map.of() : row;
+    }
+
     public Map<String, Object> loadLatestTemplateConfig(String tenantId, String templateCode, String templateType) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(templateCode)) {
             return Map.of();

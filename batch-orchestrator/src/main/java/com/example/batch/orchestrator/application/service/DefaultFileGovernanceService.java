@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
@@ -36,6 +37,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     private final TaskDispatchOutboxService taskDispatchOutboxService;
     private final FileGovernanceProperties fileGovernanceProperties;
     private final MinioGovernanceStorage minioGovernanceStorage;
+    private final BatchSecurityProperties batchSecurityProperties;
 
     @Override
     @Transactional
@@ -57,6 +59,33 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         if (fileRecord.isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "file record not found");
         }
+        Map<String, Object> security = fileGovernanceRepository.loadTemplateSecurityForFile(command.tenantId(), command.fileId());
+        if (requiresDownloadApproval(security) && !StringUtils.hasText(command.approvalId())) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "approvalId is required for download on this file template");
+        }
+        if (truthy(security.get("content_encryption_enabled")) && !batchSecurityProperties.isTestingOpen()) {
+            String consolePath = "/api/console/files/" + command.fileId() + "/download?tenantId=" + command.tenantId();
+            if (StringUtils.hasText(command.approvalId())) {
+                consolePath += "&approvalId=" + command.approvalId();
+            }
+            Map<String, Object> auditDetail = new LinkedHashMap<>();
+            auditDetail.put("storageBucket", fileRecord.get("storage_bucket"));
+            auditDetail.put("storagePath", fileRecord.get("storage_path"));
+            auditDetail.put("approvalId", command.approvalId());
+            auditDetail.put("contentEncryptionEnabled", true);
+            auditDetail.put("encryptionKeyRef", security.get("encryption_key_ref"));
+            fileGovernanceRepository.appendAudit(
+                    command.tenantId(),
+                    command.fileId(),
+                    "PRESIGN_DOWNLOAD",
+                    "SUCCESS",
+                    resolveOperatorType(command.operatorId()),
+                    command.operatorId(),
+                    command.traceId(),
+                    auditDetail
+            );
+            return consolePath;
+        }
         String storagePath = stringValue(fileRecord.get("storage_path"));
         String storageBucket = stringValue(fileRecord.get("storage_bucket"));
         if (storagePath == null || storagePath.isBlank()) {
@@ -68,6 +97,14 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         auditDetail.put("storageBucket", storageBucket);
         auditDetail.put("storagePath", storagePath);
         auditDetail.put("expirySeconds", expirySeconds);
+        auditDetail.put("approvalId", command.approvalId());
+        auditDetail.put("downloadRequiresApproval", truthy(security.get("download_requires_approval")));
+        auditDetail.put("contentEncryptionEnabled", truthy(security.get("content_encryption_enabled")));
+        auditDetail.put("encryptionKeyRef", security.get("encryption_key_ref"));
+        auditDetail.put("maskingRuleSet", security.get("masking_rule_set"));
+        if (truthy(security.get("preview_masking_enabled"))) {
+            auditDetail.put("previewMaskingNote", "template enables preview masking; avoid exposing raw object bytes in UI");
+        }
         fileGovernanceRepository.appendAudit(
                 command.tenantId(),
                 command.fileId(),
@@ -202,6 +239,26 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
     private String stringValue(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    private boolean truthy(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value == null) {
+            return false;
+        }
+        return "true".equalsIgnoreCase(String.valueOf(value));
+    }
+
+    private boolean requiresDownloadApproval(Map<String, Object> security) {
+        if (batchSecurityProperties.isTestingOpen()) {
+            return false;
+        }
+        if (security == null || security.isEmpty()) {
+            return false;
+        }
+        return truthy(security.get("download_requires_approval")) || truthy(security.get("content_encryption_enabled"));
     }
 
     /**

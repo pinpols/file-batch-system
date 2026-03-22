@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.infrastructure;
 
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.worker.imports.config.MinioStorageProperties;
 import com.example.batch.worker.imports.domain.ImportBadRecord;
 import io.minio.MinioClient;
@@ -22,7 +23,7 @@ public class ImportErrorOutputStorage {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileId) || badRecords == null || badRecords.isEmpty()) {
             return null;
         }
-        String objectKey = "errors/" + tenantId + "/" + fileId + "/" + fileId + ".error.jsonl";
+        String objectKey = BatchFileConstants.ERROR_OUTPUT_PREFIX + tenantId + "/" + fileId + "/" + fileId + ".error.jsonl";
         StringBuilder builder = new StringBuilder();
         for (ImportBadRecord badRecord : badRecords) {
             builder.append(JsonUtils.toJson(badRecord)).append('\n');
@@ -34,7 +35,7 @@ public class ImportErrorOutputStorage {
                             .bucket(minioStorageProperties.getBucket())
                             .object(objectKey)
                             .stream(new ByteArrayInputStream(bytes), bytes.length, -1)
-                            .contentType("application/x-ndjson")
+                            .contentType(BatchFileConstants.CONTENT_TYPE_NDJSON)
                             .build()
             );
             return objectKey;

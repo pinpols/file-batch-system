@@ -9,6 +9,8 @@ public interface PlatformFileRuntimeMapper {
 
     Long countFileRecordByStoragePath(Map<String, Object> params);
 
+    Map<String, Object> selectFileRecordByStoragePath(Map<String, Object> params);
+
     Map<String, Object> selectLatestTemplateConfig(Map<String, Object> params);
 
     Map<String, Object> selectChannelConfig(Map<String, Object> params);

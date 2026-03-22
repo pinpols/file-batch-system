@@ -1,6 +1,7 @@
 package com.example.batch.console.web;
 
 import com.example.batch.console.application.ConsoleQueryApplicationService;
+import com.example.batch.console.domain.entity.AlertEventEntity;
 import com.example.batch.console.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.entity.FileArrivalGroupEntity;
@@ -18,6 +19,7 @@ import com.example.batch.console.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.console.domain.entity.WorkflowRunEntity;
 import com.example.batch.console.domain.view.WorkflowTopologyView;
 import com.example.batch.console.support.ConsoleResponseFactory;
+import com.example.batch.console.web.query.AlertEventQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import com.example.batch.console.web.query.OutboxRetryLogQueryRequest;
@@ -66,6 +68,11 @@ public class ConsoleQueryController {
     @GetMapping("/audits")
     public CommonResponse<List<Map<String, Object>>> audits(@Valid @ModelAttribute AuditLogQueryRequest request) {
         return responseFactory.success(applicationService.auditLogs(request));
+    }
+
+    @GetMapping("/alerts")
+    public CommonResponse<List<AlertEventEntity>> alerts(@Valid @ModelAttribute AlertEventQueryRequest request) {
+        return responseFactory.success(applicationService.alertEvents(request));
     }
 
     @GetMapping("/files")

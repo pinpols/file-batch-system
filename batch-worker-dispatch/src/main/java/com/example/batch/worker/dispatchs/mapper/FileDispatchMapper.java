@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.mapper;
 
+import java.util.List;
 import java.util.Map;
 
 public interface FileDispatchMapper {
@@ -21,4 +22,6 @@ public interface FileDispatchMapper {
     int markFailed(Map<String, Object> params);
 
     int markCompensated(Map<String, Object> params);
+
+    List<Map<String, Object>> listPendingReceiptPolls(Map<String, Object> params);
 }

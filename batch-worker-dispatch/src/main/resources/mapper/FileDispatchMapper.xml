@@ -81,6 +81,15 @@
           and channel_code = #{channelCode}
     </update>
 
+    <select id="listPendingReceiptPolls" resultType="map">
+        select *
+        from batch.file_dispatch_record
+        where dispatch_status = 'SENT'
+          and receipt_status = 'PENDING'
+        order by dispatched_at asc nulls last
+        limit #{limit}
+    </select>
+
     <update id="markCompensated">
         update batch.file_dispatch_record
         set dispatch_status = 'COMPENSATED',

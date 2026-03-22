@@ -5,6 +5,7 @@ import com.example.batch.console.support.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ArchiveFileRequest;
 import com.example.batch.console.web.request.DeleteFileRequest;
 import com.example.batch.console.web.request.FileArrivalGroupActionRequest;
+import com.example.batch.console.web.request.PresignDownloadFileRequest;
 import com.example.batch.console.web.request.RedispatchFileRequest;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
@@ -40,6 +41,12 @@ public class ConsoleFileController {
     public CommonResponse<String> redispatch(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                              @Valid @RequestBody RedispatchFileRequest request) {
         return responseFactory.success(applicationService.redispatch(request, idempotencyKey));
+    }
+
+    @PostMapping("/presign-download")
+    public CommonResponse<String> presignDownload(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+                                                    @Valid @RequestBody PresignDownloadFileRequest request) {
+        return responseFactory.success(applicationService.presignDownload(request, idempotencyKey));
     }
 
     @PostMapping("/arrival-groups/action")

@@ -17,6 +17,13 @@ public final class PipelineRuntimeKeys {
     public static final String FILE_RECORD = "fileRecord";
     public static final String TEMPLATE_CONFIG = "templateConfig";
     public static final String CHANNEL_CONFIG = "channelConfig";
+    public static final String PARSED_RECORDS_PATH = "parsedRecordsPath";
+    public static final String VALIDATED_RECORDS_PATH = "validatedRecordsPath";
+    public static final String GENERATED_FILE_PATH = "generatedFilePath";
+    /** Raw file bytes after PREPROCESS (e.g. Excel .xlsx), when text conversion would corrupt binary */
+    public static final String IMPORT_BINARY_PAYLOAD = "importBinaryPayload";
+    /** Export snapshot: snapshotMode, snapshotTs, sourcePartitions (JSON-serializable map) */
+    public static final String EXPORT_SNAPSHOT = "exportSnapshot";
 
     private PipelineRuntimeKeys() {
     }

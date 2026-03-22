@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.ApprovalCommandMapper">
+
+    <resultMap id="approvalCommandMap" type="com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="approval_no" property="approvalNo"/>
+        <result column="approval_type" property="approvalType"/>
+        <result column="action_type" property="actionType"/>
+        <result column="target_type" property="targetType"/>
+        <result column="target_id" property="targetId"/>
+        <result column="payload_json" property="payloadJson"/>
+        <result column="approval_status" property="approvalStatus"/>
+        <result column="requester_id" property="requesterId"/>
+        <result column="approver_id" property="approverId"/>
+        <result column="rejection_reason" property="rejectionReason"/>
+        <result column="approval_reason" property="approvalReason"/>
+        <result column="source_trace_id" property="sourceTraceId"/>
+        <result column="source_idempotency_key" property="sourceIdempotencyKey"/>
+        <result column="approved_at" property="approvedAt"/>
+        <result column="executed_at" property="executedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity">
+        insert into batch.approval_command (
+            tenant_id, approval_no, approval_type, action_type, target_type, target_id,
+            payload_json, approval_status, requester_id, source_trace_id, source_idempotency_key,
+            approval_reason, created_at, updated_at
+        ) values (
+            #{tenantId}, #{approvalNo}, #{approvalType}, #{actionType}, #{targetType}, #{targetId},
+            cast(#{payloadJson} as jsonb), #{approvalStatus}, #{requesterId}, #{sourceTraceId}, #{sourceIdempotencyKey},
+            #{approvalReason}, current_timestamp, current_timestamp
+        )
+    </insert>
+
+    <select id="selectByTenantAndApprovalNo" resultMap="approvalCommandMap">
+        select *
+        from batch.approval_command
+        where tenant_id = #{tenantId}
+          and approval_no = #{approvalNo}
+    </select>
+
+    <update id="markApproved">
+        update batch.approval_command
+        set approval_status = 'APPROVED',
+            approver_id = #{approverId},
+            approval_reason = #{approvalReason},
+            approved_at = current_timestamp,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and approval_no = #{approvalNo}
+          and approval_status = 'PENDING'
+    </update>
+
+    <update id="markRejected">
+        update batch.approval_command
+        set approval_status = 'REJECTED',
+            approver_id = #{approverId},
+            approval_reason = #{approvalReason},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and approval_no = #{approvalNo}
+          and approval_status = 'PENDING'
+    </update>
+
+    <update id="markExecuted">
+        update batch.approval_command
+        set approval_status = 'EXECUTED',
+            executed_at = current_timestamp,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and approval_no = #{approvalNo}
+          and approval_status = 'APPROVED'
+    </update>
+
+    <select id="selectPending" resultMap="approvalCommandMap">
+        select *
+        from batch.approval_command
+        where tenant_id = #{tenantId}
+          and approval_status = 'PENDING'
+        order by created_at asc
+        limit #{limit}
+    </select>
+</mapper>

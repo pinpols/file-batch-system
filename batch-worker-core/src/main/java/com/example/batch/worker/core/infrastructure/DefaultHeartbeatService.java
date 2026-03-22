@@ -26,6 +26,9 @@ public class DefaultHeartbeatService implements HeartbeatService {
             log.debug("skip heartbeat for unknown workerId={}", workerId);
             return;
         }
+        if (activeRegistration.getCurrentLoad() == null) {
+            activeRegistration.setCurrentLoad(0);
+        }
         activeRegistration = workerRegistryService.renew(activeRegistration);
         workerRuntimeState.put(activeRegistration);
         log.debug("worker heartbeat: workerId={}", workerId);

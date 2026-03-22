@@ -3,6 +3,8 @@ package com.example.batch.console.support;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.logging.BatchMdc;
+import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.IdGenerator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -11,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -18,6 +21,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class ConsoleRequestContextFilter extends OncePerRequestFilter {
 
     public static final String REQUEST_METADATA_ATTRIBUTE = "consoleRequestMetadata";
+
+    @Value("${spring.application.name:batch-console-api}")
+    private String applicationName;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -41,7 +47,17 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
         request.setAttribute(REQUEST_METADATA_ATTRIBUTE, metadata);
         response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
         response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
-        filterChain.doFilter(request, response);
+        try {
+            BatchMdc.put(StructuredLogField.SERVICE, applicationName);
+            BatchMdc.put(StructuredLogField.REQUEST_ID, requestId);
+            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+            if (tenantId != null && !tenantId.isBlank()) {
+                BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+            }
+            filterChain.doFilter(request, response);
+        } finally {
+            BatchMdc.clear();
+        }
     }
 
     private String resolveTenantId(String requestedTenantId) {

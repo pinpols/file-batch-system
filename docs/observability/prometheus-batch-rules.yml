@@ -1,0 +1,80 @@
+groups:
+  - name: batch-platform
+    rules:
+      - alert: BatchServiceDown
+        expr: up{job=~"batch-(console-api|trigger|orchestrator|worker-import|worker-export|worker-dispatch)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: platform
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "Prometheus target {{ $labels.instance }} for {{ $labels.job }} is not scraping successfully."
+
+      - alert: BatchSlaViolationsPresent
+        expr: batch_job_sla_violation_count > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: sla
+        annotations:
+          summary: "SLA violations detected"
+          description: "At least one SLA violation is still outstanding."
+
+      - alert: BatchAlertEventsGrowing
+        expr: increase(batch_alert_events_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Batch alert events are still being emitted"
+          description: "Alert event total increased over the last 10 minutes."
+
+      - alert: BatchDispatchCircuitsOpen
+        expr: batch_dispatch_circuits_open > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: dispatch
+        annotations:
+          summary: "Dispatch circuit breaker is open"
+          description: "One or more dispatch channels are currently in cooldown."
+
+      - alert: BatchDispatchFailureRateHigh
+        expr: sum(rate(batch_dispatch_deliveries_total{result="failure"}[5m])) / clamp_min(sum(rate(batch_dispatch_deliveries_total[5m])), 1) > 0.2
+        for: 10m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: dispatch
+        annotations:
+          summary: "Dispatch failure ratio is high"
+          description: "Failure ratio over the last 5 minutes is above 20%."
+
+      - alert: BatchHeapUsageHigh
+        expr: sum by (job) (jvm_memory_used_bytes{area="heap"}) / clamp_min(sum by (job) (jvm_memory_max_bytes{area="heap"}), 1) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: capacity
+        annotations:
+          summary: "Heap usage is high"
+          description: "Heap usage exceeds 85% for one or more batch services."
+
+      # Optional example if a Kafka exporter is present.
+      # - alert: BatchKafkaConsumerLagHigh
+      #   expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|dispatch)"} > 1000
+      #   for: 10m
+      #   labels:
+      #     severity: warning
+      #     team: batch-platform
+      #     alert_group: kafka
+      #   annotations:
+      #     summary: "Kafka consumer lag is high"
+      #     description: "Lag exceeds 1000 messages for at least one batch consumer group."

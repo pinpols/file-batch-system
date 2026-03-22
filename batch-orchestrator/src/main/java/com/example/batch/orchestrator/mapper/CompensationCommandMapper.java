@@ -20,4 +20,8 @@ public interface CompensationCommandMapper {
                      @Param("errorCode") String errorCode,
                      @Param("errorMessage") String errorMessage,
                      @Param("finishedAt") Instant finishedAt);
+
+    int countRunningByTarget(@Param("tenantId") String tenantId,
+                             @Param("compensationType") String compensationType,
+                             @Param("targetId") Long targetId);
 }

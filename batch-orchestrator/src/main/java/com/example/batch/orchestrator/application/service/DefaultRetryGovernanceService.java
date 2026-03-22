@@ -122,6 +122,20 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
     @Override
     @Transactional
+    public void retryTask(String tenantId, Long taskId, String eventKey) {
+        JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
+        if (task == null) {
+            throw new IllegalStateException("retry task not found");
+        }
+        if (task.getJobPartitionId() != null) {
+            requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
+            return;
+        }
+        requeueTaskWithoutPartition(tenantId, task, eventKey);
+    }
+
+    @Override
+    @Transactional
     public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
         DeadLetterTaskEntity deadLetterTask = deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
         if (deadLetterTask == null) {
@@ -208,6 +222,26 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 jobInstance,
                 task,
                 partition,
+                jobInstance.getTraceId(),
+                eventKey
+        );
+    }
+
+    private void requeueTaskWithoutPartition(String tenantId, JobTaskEntity task, String eventKey) {
+        JobInstanceEntity jobInstance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
+        if (jobInstance == null) {
+            throw new IllegalStateException("retry job instance not found");
+        }
+        JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
+        if (stepInstance != null) {
+            int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
+            jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount);
+        }
+        jobTaskMapper.resetForRetry(tenantId, task.getId());
+        taskDispatchOutboxService.writeDispatchEvent(
+                jobInstance,
+                task,
+                null,
                 jobInstance.getTraceId(),
                 eventKey
         );
