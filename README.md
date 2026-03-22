@@ -5,6 +5,7 @@
 - 设计文档：[批量调度系统设计说明书（完整版）-20260321.md](/Users/dengchao/Downloads/file-batch-system/批量调度系统设计说明书（完整版）-20260321.md)
 - 工程基线：[AGENT.md](/Users/dengchao/Downloads/file-batch-system/AGENT.md)
 - 本地环境：[docs/local-development.md](/Users/dengchao/Downloads/file-batch-system/docs/local-development.md)
+- Docker 部署：[docs/deployment/docker-deployment.md](/Users/dengchao/Downloads/file-batch-system/docs/deployment/docker-deployment.md)
 - 运行时模块通信：[docs/architecture/runtime-module-communication.md](/Users/dengchao/Downloads/file-batch-system/docs/architecture/runtime-module-communication.md)
 - 设计差距审计：[docs/architecture/design-gap-audit.md](/Users/dengchao/Downloads/file-batch-system/docs/architecture/design-gap-audit.md)
 - 默认运行参数基线：[docs/architecture/runtime-default-parameters.md](/Users/dengchao/Downloads/file-batch-system/docs/architecture/runtime-default-parameters.md)

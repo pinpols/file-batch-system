@@ -78,13 +78,18 @@ services:
       - "${MINIO_CONSOLE_PORT}:9001"
     volumes:
       - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/ready >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   minio-init:
     image: minio/mc:latest
     container_name: batch-minio-init
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     environment:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}

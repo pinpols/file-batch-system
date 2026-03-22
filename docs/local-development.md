@@ -22,12 +22,17 @@
 - `docker/postgres/init/001-create-schemas.sql`：数据库 schema 初始化
 - `scripts/local/init-kafka-topics.sh`：Kafka Topic 初始化
 - `scripts/local/init-minio.sh`：MinIO bucket 初始化
+- `scripts/local/start-all.sh`：一键启动本地依赖 + Java 模块
+- `scripts/local/stop-all.sh`：停止本地 Java 模块，可选停止 Docker 依赖
+- `docs/deployment/docker-deployment.md`：Docker 部署基线说明
 
 ## 启动
 
 ```bash
-docker compose up -d
+bash scripts/local/start-all.sh
 ```
+
+说明：启动脚本会等待 PostgreSQL、MinIO 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。
 
 查看状态：
 
@@ -111,7 +116,7 @@ docker exec -it batch-kafka /opt/kafka/bin/kafka-topics.sh \
 停止环境：
 
 ```bash
-docker compose down
+bash scripts/local/stop-all.sh
 ```
 
 如果需要连数据卷一起清理：
