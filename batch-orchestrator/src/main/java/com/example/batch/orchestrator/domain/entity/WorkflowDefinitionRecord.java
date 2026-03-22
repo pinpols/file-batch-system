@@ -6,7 +6,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.workflow_definition")
+@Table(schema = "batch", value = "workflow_definition")
 public class WorkflowDefinitionRecord {
 
     @Id

@@ -7,7 +7,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.quota_runtime_state")
+@Table(schema = "batch", value = "quota_runtime_state")
 public class QuotaRuntimeStateRecord {
 
     @Id

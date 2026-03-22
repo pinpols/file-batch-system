@@ -2,7 +2,9 @@ package com.example.batch.orchestrator.service;
 
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,9 @@ public class DefaultWorkerRegistryService implements WorkerRegistryService {
         if (request.currentLoad() != null) {
             registry.setCurrentLoad(request.currentLoad());
         }
+        if (request.capabilityTags() != null) {
+            registry.setCapabilityTags(JsonbString.of(JsonUtils.toJson(request.capabilityTags())));
+        }
         return workerRegistryRepository.save(registry);
     }
 
@@ -48,6 +53,9 @@ public class DefaultWorkerRegistryService implements WorkerRegistryService {
         registry.setHeartbeatAt(firstHeartbeat(request));
         if (request.currentLoad() != null) {
             registry.setCurrentLoad(request.currentLoad());
+        }
+        if (request.capabilityTags() != null) {
+            registry.setCapabilityTags(JsonbString.of(JsonUtils.toJson(request.capabilityTags())));
         }
         return workerRegistryRepository.save(registry);
     }

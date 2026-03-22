@@ -7,7 +7,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.batch_window")
+@Table(schema = "batch", value = "batch_window")
 public class BatchWindowRecord {
 
     @Id

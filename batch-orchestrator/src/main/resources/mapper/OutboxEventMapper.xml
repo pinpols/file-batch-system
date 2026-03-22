@@ -52,7 +52,7 @@
             and tenant_id = #{tenantId}
         </if>
           and publish_status in ('NEW', 'FAILED')
-          and (next_publish_at is null or next_publish_at <= current_timestamp)
+          and (next_publish_at is null or next_publish_at &lt;= current_timestamp)
         <if test="aggregateType != null and aggregateType != ''">
             and aggregate_type = #{aggregateType}
         </if>

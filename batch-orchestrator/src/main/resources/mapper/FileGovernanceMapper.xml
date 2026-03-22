@@ -110,7 +110,7 @@
                metadata_json -&gt;&gt; 'latestTolerableTime' as latest_tolerable_time,
                metadata_json -&gt;&gt; 'triggerOnComplete' as trigger_on_complete
         from batch.file_record
-        where metadata_json ? 'fileGroupCode'
+        where jsonb_exists(metadata_json, 'fileGroupCode')
           and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') not in ('TRIGGERED', 'TIMEOUT')
         order by coalesce((metadata_json -&gt;&gt; 'latestTolerableTime')::timestamptz, created_at) asc,
                  created_at asc
@@ -132,7 +132,7 @@
                count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') like 'WAITING%') as waiting_count,
                max(updated_at) as last_updated_at
         from batch.file_record
-        where metadata_json ? 'fileGroupCode'
+        where jsonb_exists(metadata_json, 'fileGroupCode')
         <if test="tenantId != null and tenantId != ''">
             and tenant_id = #{tenantId}
         </if>
@@ -173,14 +173,14 @@
     <select id="countArrivalDelayViolations" resultType="java.lang.Long">
         select count(1)
         from batch.file_record
-        where metadata_json ? 'expectedArrivalTime'
+        where jsonb_exists(metadata_json, 'expectedArrivalTime')
           and created_at &gt; ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz + (#{thresholdSeconds} * interval '1 second'))
     </select>
 
     <select id="selectMaxArrivalDelaySeconds" resultType="java.lang.Long">
         select coalesce(max(extract(epoch from (created_at - ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz)))), 0)::bigint
         from batch.file_record
-        where metadata_json ? 'expectedArrivalTime'
+        where jsonb_exists(metadata_json, 'expectedArrivalTime')
     </select>
 
     <select id="selectArrivalDelaySamples" resultType="map">
@@ -191,7 +191,7 @@
                (metadata_json -&gt;&gt; 'expectedArrivalTime') as expected_arrival_time,
                extract(epoch from (created_at - ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz)))::bigint as arrival_delay_seconds
         from batch.file_record
-        where metadata_json ? 'expectedArrivalTime'
+        where jsonb_exists(metadata_json, 'expectedArrivalTime')
           and created_at &gt; ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz + (#{thresholdSeconds} * interval '1 second'))
         order by arrival_delay_seconds desc
         limit #{limit}

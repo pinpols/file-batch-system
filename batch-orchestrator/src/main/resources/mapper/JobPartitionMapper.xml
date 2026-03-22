@@ -152,7 +152,7 @@
         where tenant_id = #{tenantId}
           and partition_status in ('READY', 'RUNNING')
           and lease_expire_at is not null
-          and lease_expire_at < current_timestamp
+          and lease_expire_at &lt; current_timestamp
         order by id asc
     </select>
 
@@ -161,7 +161,7 @@
         from batch.job_partition
         where partition_status in ('READY', 'RUNNING')
           and lease_expire_at is not null
-          and lease_expire_at < current_timestamp
+          and lease_expire_at &lt; current_timestamp
         order by id asc
     </select>
 

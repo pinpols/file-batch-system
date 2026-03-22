@@ -13,9 +13,13 @@ public record WorkerHeartbeatDto(
         String processId,
         Instant heartbeatAt,
         List<String> capabilityTags,
-        Integer currentLoad
+    Integer currentLoad
 ) {
     public WorkerHeartbeatDto {
-        currentLoad = (currentLoad != null && currentLoad < 0) ? 0 : currentLoad;
+        Integer normalizedCurrentLoad = currentLoad;
+        if (normalizedCurrentLoad == null || normalizedCurrentLoad < 0) {
+            normalizedCurrentLoad = 0;
+        }
+        currentLoad = normalizedCurrentLoad;
     }
 }

@@ -6,7 +6,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.business_calendar")
+@Table(schema = "batch", value = "business_calendar")
 public class BusinessCalendarRecord {
 
     @Id

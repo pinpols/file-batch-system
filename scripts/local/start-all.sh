@@ -10,7 +10,16 @@ cd "$ROOT"
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"
 PID_FILE="$LOG_DIR/start-all.pids"
-: >"$PID_FILE"
+PID_FILE_NEW="$(mktemp "$LOG_DIR/start-all.pids.XXXXXX")"
+trap 'rm -f "$PID_FILE_NEW"' EXIT
+
+existing_pid_for() {
+  local name="$1"
+  if [[ ! -f "$PID_FILE" ]]; then
+    return 0
+  fi
+  awk -v name="$name" '$1 == name { print $2; exit }' "$PID_FILE"
+}
 
 POSTGRES_USER="${POSTGRES_USER:-batch_user}"
 POSTGRES_DB="${POSTGRES_DB:-batch_platform}"
@@ -29,9 +38,17 @@ module_jar() {
 start_java() {
   local name="$1"
   local jar="$2"
+  local existing_pid
+  existing_pid="$(existing_pid_for "$name")"
+  if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+    echo "  跳过 ${name}（pid=${existing_pid} 仍在运行）"
+    echo "${name} ${existing_pid}" >>"$PID_FILE_NEW"
+    return 0
+  fi
+
   nohup java ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >>"$LOG_DIR/${name}.log" 2>&1 &
   local pid=$!
-  echo "${name} ${pid}" >>"$PID_FILE"
+  echo "${name} ${pid}" >>"$PID_FILE_NEW"
   echo "  已启动 ${name} pid=${pid} 日志 logs/${name}.log"
 }
 
@@ -112,6 +129,9 @@ start_java console "$(module_jar batch-console-api)"
 start_java worker-import "$(module_jar batch-worker-import)"
 start_java worker-export "$(module_jar batch-worker-export)"
 start_java worker-dispatch "$(module_jar batch-worker-dispatch)"
+
+mv "$PID_FILE_NEW" "$PID_FILE"
+trap - EXIT
 
 echo ""
 echo "全部进程已在后台运行。端口（默认）："

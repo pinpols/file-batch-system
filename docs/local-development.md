@@ -33,6 +33,7 @@ bash scripts/local/start-all.sh
 ```
 
 说明：启动脚本会等待 PostgreSQL、MinIO 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。
+如果某些 Java 模块已经在运行，脚本会跳过它们，只补启动未运行或已退出的模块。
 
 查看状态：
 

@@ -2,6 +2,14 @@ server:
   port: 8080
 
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user
@@ -10,7 +18,7 @@ spring:
   ai:
     openai:
       base-url: https://api.openai.com
-      api-key: ${OPENAI_API_KEY:}
+      api-key: ${OPENAI_API_KEY:local-dummy-openai-key}
       chat:
         options:
           model: gpt-4o-mini

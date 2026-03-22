@@ -5,9 +5,10 @@ import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+import com.example.batch.orchestrator.domain.value.JsonbString;
 
 @Data
-@Table("batch.worker_registry")
+@Table(schema = "batch", value = "worker_registry")
 public class WorkerRegistryRecord {
 
     @Id
@@ -19,7 +20,7 @@ public class WorkerRegistryRecord {
     @Column("worker_group")
     private String workerGroup;
     @Column("capability_tags")
-    private String capabilityTags;
+    private JsonbString capabilityTags;
     @Column("resource_tag")
     private String resourceTag;
     @Column("status")

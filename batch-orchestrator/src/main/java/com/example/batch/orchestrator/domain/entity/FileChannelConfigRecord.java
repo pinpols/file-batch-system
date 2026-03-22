@@ -6,7 +6,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.file_channel_config")
+@Table(schema = "batch", value = "file_channel_config")
 public class FileChannelConfigRecord {
 
     @Id

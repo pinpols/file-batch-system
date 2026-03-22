@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.util.StringUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -63,7 +64,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
     private final StateMachine<Object> stateMachine;
     private final WorkerRegistryRepository workerRegistryRepository;
     private final WorkflowDagService workflowDagService;
-    private final WorkflowNodeDispatchService workflowNodeDispatchService;
+    private final ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider;
 
     @Override
     @Transactional
@@ -339,7 +340,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
                         }
                         continue;
                     }
-                    workflowNodeDispatchService.dispatchNode(
+                    workflowNodeDispatchServiceProvider.getObject().dispatchNode(
                             jobInstance,
                             workflowRun,
                             nextNode,

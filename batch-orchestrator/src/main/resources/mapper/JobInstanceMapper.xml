@@ -179,11 +179,11 @@
         where instance_status in ('WAITING', 'READY', 'RUNNING')
           and sla_alerted_at is null
           and (
-                (deadline_at is not null and deadline_at < current_timestamp)
+                (deadline_at is not null and deadline_at &lt; current_timestamp)
                 or (
                     expected_duration_seconds > 0
                     and started_at is not null
-                    and started_at < current_timestamp - (expected_duration_seconds * interval '1 second')
+                    and started_at &lt; current_timestamp - (expected_duration_seconds * interval '1 second')
                 )
               )
         order by coalesce(
@@ -201,11 +201,11 @@
         where instance_status in ('WAITING', 'READY', 'RUNNING')
           and sla_alerted_at is null
           and (
-                (deadline_at is not null and deadline_at < current_timestamp)
+                (deadline_at is not null and deadline_at &lt; current_timestamp)
                 or (
                     expected_duration_seconds > 0
                     and started_at is not null
-                    and started_at < current_timestamp - (expected_duration_seconds * interval '1 second')
+                    and started_at &lt; current_timestamp - (expected_duration_seconds * interval '1 second')
                 )
               )
     </select>
