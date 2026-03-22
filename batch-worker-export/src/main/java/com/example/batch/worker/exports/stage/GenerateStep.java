@@ -11,10 +11,13 @@ import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Writer;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -147,9 +150,9 @@ public class GenerateStep implements ExportStageStep {
             snapshot = Map.of();
         }
         writer.write("{\"snapshot\":");
-        objectMapper.writeValue(writer, snapshot);
+        writeJsonValue(writer, snapshot);
         writer.write(",\"batch\":");
-        objectMapper.writeValue(writer, batch);
+        writeJsonValue(writer, batch);
         writer.write(",\"details\":[");
         long recordCount = 0L;
         boolean first = true;
@@ -165,7 +168,7 @@ public class GenerateStep implements ExportStageStep {
                 if (!first) {
                     writer.write(",");
                 }
-                objectMapper.writeValue(writer, detail);
+                writeJsonValue(writer, detail);
                 first = false;
                 recordCount++;
                 if (chunkSize > 0 && recordCount % chunkSize == 0) {
@@ -179,6 +182,14 @@ public class GenerateStep implements ExportStageStep {
         }
         writer.write("]}");
         return recordCount;
+    }
+
+    /** Writes one JSON value without closing the shared NDJSON/aggregate file writer. */
+    private void writeJsonValue(Writer writer, Object value) throws IOException {
+        try (JsonGenerator generator = objectMapper.getFactory().createGenerator(writer)) {
+            generator.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
+            objectMapper.writeValue(generator, value);
+        }
     }
 
     private long generateDelimited(Map<String, Object> batch,
@@ -339,7 +350,7 @@ public class GenerateStep implements ExportStageStep {
                 return Math.max(1, Integer.parseInt(String.valueOf(value)));
             }
         }
-        return Math.max(1, fallback);
+        return fallback;
     }
 
     private Path createGeneratedFile(ExportJobContext context, ExportPayload payload, String fileFormatType) throws Exception {
@@ -589,12 +600,14 @@ public class GenerateStep implements ExportStageStep {
         Map<String, Object> source = templateConfig == null ? Map.of() : templateConfig;
         Object schema = source.get("query_param_schema");
         Map<String, Object> schemaMap = toMap(schema);
-        String delimiter = textValue(firstNonNull(source.get("delimiter"), source.get("quote_delimiter"), schemaMap.get("delimiter")));
-        if (!StringUtils.hasText(delimiter)) {
+        Object delimiterRaw = firstNonNull(source.get("delimiter"), source.get("quote_delimiter"), schemaMap.get("delimiter"));
+        String delimiter = delimiterRaw == null ? null : String.valueOf(delimiterRaw);
+        if (delimiter == null || delimiter.isEmpty()) {
             delimiter = ",";
         }
-        String quoteChar = textValue(firstNonNull(source.get("quote_char"), source.get("quoteChar"), schemaMap.get("quoteChar")));
-        if (!StringUtils.hasText(quoteChar)) {
+        Object quoteCharRaw = firstNonNull(source.get("quote_char"), source.get("quoteChar"), schemaMap.get("quoteChar"));
+        String quoteChar = quoteCharRaw == null ? null : String.valueOf(quoteCharRaw);
+        if (quoteChar == null || quoteChar.isEmpty()) {
             quoteChar = "\"";
         }
         QuotePolicy quotePolicy = QuotePolicy.from(firstNonNull(source.get("quote_policy"), source.get("quotePolicy"), schemaMap.get("quotePolicy")));

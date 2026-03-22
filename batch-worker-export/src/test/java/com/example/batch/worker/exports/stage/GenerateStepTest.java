@@ -17,6 +17,7 @@ import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -155,9 +156,10 @@ class GenerateStepTest {
 
     @Test
     void delimited_tabSeparated_shouldUseTabs() throws Exception {
-        stubSinglePage(List.of(
-                Map.of("col1", "val1", "col2", "val2")
-        ));
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("col1", "val1");
+        row.put("col2", "val2");
+        stubSinglePage(List.of(row));
 
         ExportJobContext context = buildContext("DELIMITED", Map.of(
                 "export_data_ref", PLUGIN_ID,

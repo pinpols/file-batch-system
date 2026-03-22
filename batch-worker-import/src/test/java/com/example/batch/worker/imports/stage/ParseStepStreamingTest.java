@@ -150,7 +150,7 @@ class ParseStepStreamingTest {
                 null, null, null, null,
                 null, null, null, null,
                 rawPayload, null,
-                null, null, null, null,
+                null, null, null, Boolean.TRUE,
                 Map.of()
         );
 
@@ -164,6 +164,7 @@ class ParseStepStreamingTest {
         attrs.put(PipelineRuntimeKeys.FILE_ID, 42L);
         attrs.put(PipelineRuntimeKeys.TASK_ID, 101L);
         attrs.put("importPayload", importPayload);
+        attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
         context.setAttributes(attrs);
         return context;
     }

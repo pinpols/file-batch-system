@@ -185,6 +185,8 @@ class BatchObjectCryptoServiceTest {
         assertThatThrownBy(() -> cryptoService.encrypt(
                 "test".getBytes(StandardCharsets.UTF_8), "NONEXISTENT_KEY"))
                 .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("failed to encrypt")
+                .cause()
                 .hasMessageContaining("missing kms key material");
     }
 }

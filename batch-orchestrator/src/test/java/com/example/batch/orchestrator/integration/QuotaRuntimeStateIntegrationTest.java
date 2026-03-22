@@ -35,7 +35,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
                 "t1", "JOB", "quota-test-basic-" + System.currentTimeMillis(),
                 "NONE", 10, 0, 5, 1, 24, "OVER_CAP", "over");
 
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
     }
 
     @Test
@@ -44,7 +44,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
                 "t1", "JOB", "quota-test-block-" + System.currentTimeMillis(),
                 "NONE", 5, 0, 5, 1, 24, "OVER_CAP", "over cap");
 
-        assertThat(result.isAllowed()).isFalse();
+        assertThat(result.allowed()).isFalse();
     }
 
     @Test
@@ -54,7 +54,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(
                 "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 10, 7, 1, 2, "OVER", "over");
 
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
 
         QuotaRuntimeStateRecord state = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
@@ -86,7 +86,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(
                 "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 3, 10, 1, 2, "OVER_BURST", "over burst");
 
-        assertThat(result.isAllowed()).isFalse();
+        assertThat(result.allowed()).isFalse();
     }
 
     @Test
@@ -96,7 +96,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(
                 "t1", "JOB", ownerCode, "CALENDAR_DAY", 5, 10, 7, 1, 24, "OVER", "over");
 
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
 
         QuotaRuntimeStateRecord state = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);

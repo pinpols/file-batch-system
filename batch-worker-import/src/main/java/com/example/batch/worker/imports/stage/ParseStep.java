@@ -10,6 +10,7 @@ import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -18,7 +19,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.StringReader;
+import java.io.Writer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -814,9 +817,19 @@ public class ParseStep implements ImportStageStep {
             }
             value = payload;
         }
-        objectMapper.writeValue(writer, value);
+        writeNdjsonValue(writer, value);
         writer.newLine();
         context.getAttributes().put("parsedCount", numberValue(context.getAttributes().get("parsedCount")) + 1);
+    }
+
+    /**
+     * Writes one JSON value without closing the underlying writer (NDJSON writes many lines per staging file).
+     */
+    private void writeNdjsonValue(Writer writer, Object value) throws IOException {
+        try (JsonGenerator generator = objectMapper.getFactory().createGenerator(writer)) {
+            generator.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
+            objectMapper.writeValue(generator, value);
+        }
     }
 
     private boolean preserveLogicalRow(ImportJobContext context, Object templateConfigObject) {

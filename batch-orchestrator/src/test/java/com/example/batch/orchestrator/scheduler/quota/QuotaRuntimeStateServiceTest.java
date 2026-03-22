@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,21 +34,21 @@ class QuotaRuntimeStateServiceTest {
     void shouldAllowWhenTenantIdIsBlank() {
         ResourceCheck result = service.evaluateAndReserve(
                 "", "JOB", "job-001", "NONE", 10, 2, 0, 1, 24, "OVER", "over limit");
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
     }
 
     @Test
     void shouldAllowWhenBaseCapIsZero() {
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-001", "NONE", 0, 2, 0, 1, 24, "OVER", "over limit");
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
     }
 
     @Test
     void shouldAllowWhenBaseCapIsNegative() {
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-001", "NONE", -5, 2, 0, 1, 24, "OVER", "over limit");
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
     }
 
     // ── evaluateAndReserve — NONE policy ──────────────────────────────────────
@@ -57,7 +58,7 @@ class QuotaRuntimeStateServiceTest {
         // baseCap=10, burst=0, active=5, requested=1 → 5+1=6 ≤ 10
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-001", "NONE", 10, 0, 5, 1, 24, "OVER", "over");
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
     }
 
     @Test
@@ -65,7 +66,7 @@ class QuotaRuntimeStateServiceTest {
         // baseCap=10, burst=0, active=10, requested=1 → 11 > 10
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-001", "NONE", 10, 0, 10, 1, 24, "OVER_CAP", "over cap");
-        assertThat(result.isAllowed()).isFalse();
+        assertThat(result.allowed()).isFalse();
     }
 
     @Test
@@ -73,7 +74,7 @@ class QuotaRuntimeStateServiceTest {
         // baseCap=10, burst=5, combined=15, active=12, requested=1 → 13 ≤ 15
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-001", "NONE", 10, 5, 12, 1, 24, "OVER", "over");
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
     }
 
     @Test
@@ -81,7 +82,7 @@ class QuotaRuntimeStateServiceTest {
         // baseCap=10, burst=5, combined=15, active=15, requested=1 → 16 > 15
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-001", "NONE", 10, 5, 15, 1, 24, "OVER", "over");
-        assertThat(result.isAllowed()).isFalse();
+        assertThat(result.allowed()).isFalse();
     }
 
     // ── evaluateAndReserve — SLIDING_WINDOW policy ────────────────────────────
@@ -97,7 +98,7 @@ class QuotaRuntimeStateServiceTest {
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-sw", "SLIDING_WINDOW", 5, 10, 7, 1, 2, "OVER", "over");
 
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
         verify(quotaRuntimeStateRepository).save(any());
     }
 
@@ -112,7 +113,7 @@ class QuotaRuntimeStateServiceTest {
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-sw", "SLIDING_WINDOW", 5, 3, 8, 2, 2, "OVER", "over");
 
-        assertThat(result.isAllowed()).isFalse();
+        assertThat(result.allowed()).isFalse();
     }
 
     @Test
@@ -125,7 +126,7 @@ class QuotaRuntimeStateServiceTest {
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-sw", "SLIDING_WINDOW", 10, 5, 3, 2, 2, "OVER", "over");
 
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
     }
 
     // ── evaluateAndReserve — CALENDAR_DAY policy ──────────────────────────────
@@ -141,7 +142,7 @@ class QuotaRuntimeStateServiceTest {
         ResourceCheck result = service.evaluateAndReserve(
                 "t1", "JOB", "job-cal", "CALENDAR_DAY", 5, 10, 7, 1, 24, "OVER", "over");
 
-        assertThat(result.isAllowed()).isTrue();
+        assertThat(result.allowed()).isTrue();
     }
 
     @Test
@@ -165,7 +166,7 @@ class QuotaRuntimeStateServiceTest {
         service.evaluateAndReserve(
                 "t1", "JOB", "job-cal", "CALENDAR_DAY", 5, 10, 8, 1, 24, "OVER", "over");
 
-        verify(quotaRuntimeStateRepository).save(any(QuotaRuntimeStateRecord.class));
+        verify(quotaRuntimeStateRepository, times(2)).save(any(QuotaRuntimeStateRecord.class));
     }
 
     // ── describe() ────────────────────────────────────────────────────────────
