@@ -25,7 +25,7 @@ public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {
     private final ObjectMapper objectMapper;
     private final JdbcMappedExportSecurityProperties securityProperties;
 
-    public GenericJdbcMappedExportDataPlugin(@Qualifier("businessDataSource") DataSource businessDataSource,
+    public GenericJdbcMappedExportDataPlugin(@Qualifier("exportBusinessDataSource") DataSource businessDataSource,
                                              ObjectMapper objectMapper,
                                              JdbcMappedExportSecurityProperties securityProperties) {
         this.jdbcTemplate = new JdbcTemplate(businessDataSource);

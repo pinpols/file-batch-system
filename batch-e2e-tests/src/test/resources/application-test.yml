@@ -1,0 +1,33 @@
+# Align with orchestrator integration tests: Flyway from docs/sql/flyway; quiet background jobs.
+spring:
+  flyway:
+    locations: classpath:db/migration-integration
+
+batch:
+  sla:
+    enabled: false
+  worker:
+    drain:
+      enabled: false
+  file-governance:
+    latency:
+      enabled: false
+    archive:
+      enabled: false
+    reconcile:
+      enabled: false
+    arrival:
+      enabled: false
+    access:
+      enabled: false
+  outbox:
+    poll-interval-millis: 600000
+  retry:
+    poll-interval-millis: 600000
+  partition-lease:
+    reclaim-interval-millis: 600000
+  resource-scheduler:
+    waiting-dispatch-interval-millis: 600000
+    quota-reset-scan-interval-millis: 600000
+  scheduler:
+    snapshot-persist-ms: 600000

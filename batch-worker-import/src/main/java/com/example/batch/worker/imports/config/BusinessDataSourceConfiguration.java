@@ -12,7 +12,7 @@ import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.beans.factory.annotation.Qualifier;
 
-@Configuration
+@Configuration("importWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties(BusinessDataSourceProperties.class)
 @MapperScan(
         basePackages = "com.example.batch.worker.imports.mapper.business",

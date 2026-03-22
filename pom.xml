@@ -27,6 +27,7 @@
         <module>batch-worker-export</module>
         <module>batch-worker-dispatch</module>
         <module>batch-console-api</module>
+        <module>batch-e2e-tests</module>
     </modules>
 
     <properties>

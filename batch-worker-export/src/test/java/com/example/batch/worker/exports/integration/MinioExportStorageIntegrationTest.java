@@ -1,12 +1,14 @@
 package com.example.batch.worker.exports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.worker.exports.BatchWorkerExportApplication;
 import com.example.batch.worker.exports.infrastructure.MinioExportStorage;
+import io.minio.GetObjectArgs;
+import io.minio.MinioClient;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -64,6 +66,7 @@ class MinioExportStorageIntegrationTest extends AbstractIntegrationTest {
         storage.copyObject(source, dest);
 
         assertThat(storage.objectExists(dest)).isTrue();
+        assertThat(storage.sha256Hex(dest)).isEqualTo(storage.sha256Hex(source));
     }
 
     @Test
@@ -99,5 +102,23 @@ class MinioExportStorageIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(written).isNotBlank();
         assertThat(storage.objectExists(written)).isTrue();
+    }
+
+    @Test
+    void shouldRoundTripWrittenJsonThroughMinio() throws Exception {
+        String objectName = "export/it-test-roundtrip.json";
+        String content = "{\"roundTrip\":true,\"n\":7}";
+
+        storage.writeJson(objectName, content);
+
+        MinioClient client = MinioClient.builder()
+                .endpoint(minioEndpoint())
+                .credentials("minioadmin", "minioadmin123")
+                .build();
+        try (InputStream in = client.getObject(
+                GetObjectArgs.builder().bucket(minioBucket()).object(objectName).build())) {
+            String read = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(read).isEqualTo(content);
+        }
     }
 }

@@ -11,6 +11,7 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -73,6 +74,13 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         scanner.scan();
 
         assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+        Map<String, Object> row = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+        assertThat(row).isNotEmpty();
+        assertThat(row.get("tenant_id")).isEqualTo("t1");
+        assertThat(row.get("storage_bucket")).isEqualTo(bucket);
+        assertThat(row.get("storage_path")).isEqualTo(objectName);
+        assertThat(row.get("file_status")).isEqualTo("RECEIVED");
+        assertThat(((Number) row.get("file_size_bytes")).longValue()).isEqualTo(content.length);
     }
 
     @Test
@@ -97,9 +105,13 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         // First scan: registers the file
         scanner.scan();
         assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+        Map<String, Object> first = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+        long firstId = ((Number) first.get("id")).longValue();
 
         // Second scan: should not create a duplicate (idempotent)
         scanner.scan();
         assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+        Map<String, Object> after = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+        assertThat(((Number) after.get("id")).longValue()).isEqualTo(firstId);
     }
 }

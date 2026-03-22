@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-@Service
+@Service("workerCoreWorkerRegistryService")
 @RequiredArgsConstructor
 public class DefaultWorkerRegistryService implements WorkerRegistryService {
 
