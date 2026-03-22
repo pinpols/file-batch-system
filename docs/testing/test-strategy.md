@@ -16,6 +16,66 @@
 
 只测真实依赖下的模块协作，建议用 Postgres、Kafka、MinIO，再加少量 HTTP mock。
 
+### 推荐基建
+
+这个仓库的集成测试，建议统一收口到一套基础测试类：
+
+- `AbstractIntegrationTest`
+- `PostgreSQLContainer`
+- `KafkaContainer`
+- `MinIOContainer`
+- `DynamicPropertySource`
+
+这套基建的目标不是替代所有测试，而是把“真实依赖怎么起、连接串怎么注入、bucket/topic 怎么初始化”统一掉，避免每个模块各写一套测试启动逻辑。
+
+建议约定如下：
+
+- `AbstractIntegrationTest` 负责容器生命周期、公共测试工具和通用断言
+- `PostgreSQLContainer` 提供平台库和业务库所需的真实 PostgreSQL
+- `KafkaContainer` 提供真实 broker，验证 producer/consumer、序列化、topic 配置和消费位点
+- `MinIOContainer` 提供对象存储，验证上传、下载、copy、delete 和 bucket 初始化
+- `DynamicPropertySource` 负责把容器地址注入 Spring 环境，避免测试代码硬编码端口
+
+落地方式建议：
+
+- `batch-orchestrator`、`batch-worker-dispatch` 这类同时依赖 DB / Kafka / MinIO 的模块，直接继承 `AbstractIntegrationTest`
+- 只依赖其中一部分基础设施的模块，也优先复用同一个基类，再按需启用对应断言
+- 集成测试中尽量不 mock 数据库、Kafka 和 MinIO，本地的 fake 只保留给纯逻辑单元测试
+
+测试初始化上，建议在基类里统一做这几件事：
+
+- 为 PostgreSQL 执行 Flyway 或最小 schema 初始化
+- 为 Kafka 预创建必要 topic
+- 为 MinIO 预创建 bucket，例如开发桶和测试桶
+- 提供通用清理方法，避免测试之间的对象、消息和表数据互相污染
+
+### 使用方式
+
+新增集成测试时，建议直接继承 `AbstractIntegrationTest`，并在测试类上使用统一注解 `@BatchIntegrationTest`。
+
+推荐写法如下：
+
+```java
+@BatchIntegrationTest
+@SpringBootTest(classes = BatchOrchestratorApplication.class)
+class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
+
+    @Test
+    void shouldPublishOutboxEventToKafka() {
+        // test body
+    }
+}
+```
+
+约束建议：
+
+- 子类不要重复声明 `@Testcontainers`、`@Tag("integration")`、`@ActiveProfiles("test")`
+- 子类不要自己 new `PostgreSQLContainer`、`KafkaContainer`、`MinIOContainer`
+- 子类只关注业务断言，不要在每个类里重复写 `DynamicPropertySource`
+- 如果某个模块只需要部分依赖，也仍然优先复用这套基类，再按需覆盖业务断言
+
+如果测试类需要额外的 topic 或 bucket，建议在测试方法里显式创建，或者补到对应模块的测试辅助类里，不要把这些初始化逻辑散落在每个测试类内部
+
 - `batch-orchestrator`
   - Outbox -> Kafka
   - Retry scheduler -> retry / dead letter 推进

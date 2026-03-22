@@ -1,0 +1,13 @@
+.git
+.idea
+.DS_Store
+logs
+target
+**/target
+*.log
+*.iml
+docs
+README.md
+AGENT.md
+start-all.sh
+stop-all.sh

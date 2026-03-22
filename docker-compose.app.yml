@@ -1,0 +1,205 @@
+services:
+  console-api:
+    profiles: ["apps"]
+    image: batch-console-api:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+      args:
+        MODULE: batch-console-api
+    container_name: batch-console-api
+    restart: unless-stopped
+    environment:
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
+      BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
+      BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
+      BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
+      BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
+      BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+    ports:
+      - "${CONSOLE_API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      orchestrator:
+        condition: service_healthy
+
+  trigger:
+    profiles: ["apps"]
+    image: batch-trigger:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+      args:
+        MODULE: batch-trigger
+    container_name: batch-trigger
+    restart: unless-stopped
+    environment:
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
+      BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+    ports:
+      - "${TRIGGER_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      postgres:
+        condition: service_healthy
+      orchestrator:
+        condition: service_healthy
+
+  orchestrator:
+    profiles: ["apps"]
+    image: batch-orchestrator:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+      args:
+        MODULE: batch-orchestrator
+    container_name: batch-orchestrator
+    restart: unless-stopped
+    environment:
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
+      BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
+      BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
+      BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
+      BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
+      BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+    ports:
+      - "${ORCHESTRATOR_PORT:-8082}:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+
+  worker-import:
+    profiles: ["apps"]
+    image: batch-worker-import:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+      args:
+        MODULE: batch-worker-import
+    container_name: batch-worker-import
+    restart: unless-stopped
+    environment:
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
+      BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
+      BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
+      BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
+      BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
+      BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
+      BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
+      BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
+      BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
+      BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      orchestrator:
+        condition: service_healthy
+
+  worker-export:
+    profiles: ["apps"]
+    image: batch-worker-export:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+      args:
+        MODULE: batch-worker-export
+    container_name: batch-worker-export
+    restart: unless-stopped
+    environment:
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
+      BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
+      BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
+      BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
+      BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
+      BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
+      BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
+      BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
+      BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
+      BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      orchestrator:
+        condition: service_healthy
+
+  worker-dispatch:
+    profiles: ["apps"]
+    image: batch-worker-dispatch:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+      args:
+        MODULE: batch-worker-dispatch
+    container_name: batch-worker-dispatch
+    restart: unless-stopped
+    environment:
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
+      BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
+      BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
+      BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
+      BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
+      BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
+      BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
+      BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
+      BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
+      BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
