@@ -1,0 +1,169 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:batch-platform-sbom-2026-03-22",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-03-22T00:00:00Z",
+    "tools": [
+      {
+        "vendor": "batch-platform team",
+        "name": "manual + cyclonedx-maven-plugin",
+        "version": "2.9.1"
+      }
+    ],
+    "component": {
+      "type": "library",
+      "bom-ref": "pkg:maven/com.example.batch/batch-platform@1.0.0-SNAPSHOT",
+      "group": "com.example.batch",
+      "name": "batch-platform",
+      "version": "1.0.0-SNAPSHOT",
+      "description": "Batch scheduling platform multi-module engineering skeleton"
+    }
+  },
+  "components": [
+    {
+      "type": "framework",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter-parent@4.0.3",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter-parent",
+      "version": "4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-parent@4.0.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.kafka/spring-kafka@managed",
+      "group": "org.springframework.kafka",
+      "name": "spring-kafka",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.kafka/spring-kafka"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.ai/spring-ai-starter-model-openai@2.0.0-M3",
+      "group": "org.springframework.ai",
+      "name": "spring-ai-starter-model-openai",
+      "version": "2.0.0-M3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.ai/spring-ai-starter-model-openai@2.0.0-M3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.mybatis.spring.boot/mybatis-spring-boot-starter@4.0.0",
+      "group": "org.mybatis.spring.boot",
+      "name": "mybatis-spring-boot-starter",
+      "version": "4.0.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.mybatis.spring.boot/mybatis-spring-boot-starter@4.0.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.postgresql/postgresql@managed",
+      "group": "org.postgresql",
+      "name": "postgresql",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "BSD-2-Clause" } }],
+      "purl": "pkg:maven/org.postgresql/postgresql"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.flywaydb/flyway-core@managed",
+      "group": "org.flywaydb",
+      "name": "flyway-core",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.flywaydb/flyway-core"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/io.minio/minio@8.6.0",
+      "group": "io.minio",
+      "name": "minio",
+      "version": "8.6.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/io.minio/minio@8.6.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@managed",
+      "group": "com.fasterxml.jackson.core",
+      "name": "jackson-databind",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/io.micrometer/micrometer-registry-prometheus@managed",
+      "group": "io.micrometer",
+      "name": "micrometer-registry-prometheus",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/io.micrometer/micrometer-registry-prometheus"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.projectlombok/lombok@1.18.42",
+      "group": "org.projectlombok",
+      "name": "lombok",
+      "version": "1.18.42",
+      "scope": "optional",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "purl": "pkg:maven/org.projectlombok/lombok@1.18.42"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/com.squareup.okhttp3/okhttp@4.12.0",
+      "group": "com.squareup.okhttp3",
+      "name": "okhttp",
+      "version": "4.12.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/com.squareup.okhttp3/okhttp@4.12.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.apache.poi/poi-ooxml@5.4.0",
+      "group": "org.apache.poi",
+      "name": "poi-ooxml",
+      "version": "5.4.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.apache.poi/poi-ooxml@5.4.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/com.github.mwiede/jsch@0.2.23",
+      "group": "com.github.mwiede",
+      "name": "jsch",
+      "version": "0.2.23",
+      "licenses": [{ "license": { "id": "BSD-3-Clause" } }],
+      "purl": "pkg:maven/com.github.mwiede/jsch@0.2.23"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.eclipse.angus/angus-mail@managed",
+      "group": "org.eclipse.angus",
+      "name": "angus-mail",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [
+        { "license": { "id": "EPL-2.0" } },
+        { "license": { "id": "GPL-2.0-only WITH Classpath-exception-2.0" } }
+      ],
+      "purl": "pkg:maven/org.eclipse.angus/angus-mail"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/ch.qos.logback/logback-classic@managed",
+      "group": "ch.qos.logback",
+      "name": "logback-classic",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [
+        { "license": { "id": "EPL-1.0" } },
+        { "license": { "id": "LGPL-2.1-only" } }
+      ],
+      "purl": "pkg:maven/ch.qos.logback/logback-classic"
+    }
+  ],
+  "_comment": "Authoritative SBOM is generated by cyclonedx-maven-plugin via: mvn -P compliance cyclonedx:makeAggregateBom. This file is a representative skeleton for version tracking. Test-scoped dependencies (Testcontainers, WireMock, JUnit, Mockito, AssertJ) are excluded as they are not shipped in production artifacts."
+}

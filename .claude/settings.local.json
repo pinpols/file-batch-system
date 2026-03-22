@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(chmod:*)",
+      "Bash(printf '\\\\xef\\\\xbb\\\\xbf')",
+      "Bash(/Users/dengchao/Downloads/file-batch-system/batch-worker-import/src/test/resources/fixtures/import-customers-utf8bom.csv:*)",
+      "Bash(openssl dgst:*)",
+      "Bash(openssl pkcs8:*)",
+      "Bash(find /Users/dengchao/Downloads/file-batch-system/docs -name *.md)"
+    ]
+  }
+}

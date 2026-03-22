@@ -67,14 +67,16 @@ groups:
           summary: "Heap usage is high"
           description: "Heap usage exceeds 85% for one or more batch services."
 
-      # Optional example if a Kafka exporter is present.
-      # - alert: BatchKafkaConsumerLagHigh
-      #   expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|dispatch)"} > 1000
-      #   for: 10m
-      #   labels:
-      #     severity: warning
-      #     team: batch-platform
-      #     alert_group: kafka
-      #   annotations:
-      #     summary: "Kafka consumer lag is high"
-      #     description: "Lag exceeds 1000 messages for at least one batch consumer group."
+      # Requires kafka-exporter (e.g. danielqsj/kafka-exporter) or Prometheus Kafka adapter
+      # to expose the kafka_consumergroup_lag metric. The batch workers register consumer groups
+      # batch-worker-import, batch-worker-export, and batch-worker-dispatch.
+      - alert: BatchKafkaConsumerLagHigh
+        expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|dispatch)"} > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: kafka
+        annotations:
+          summary: "Kafka consumer lag is high for {{ $labels.consumergroup }}"
+          description: "Consumer group {{ $labels.consumergroup }} topic {{ $labels.topic }} partition {{ $labels.partition }} lag exceeds 1000 messages for 10 minutes."

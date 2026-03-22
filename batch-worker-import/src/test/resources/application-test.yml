@@ -1,0 +1,11 @@
+spring:
+  flyway:
+    locations: classpath:db/migration-integration
+
+batch:
+  worker:
+    import:
+      heartbeat-interval-millis: 600000
+      scanner:
+        enabled: false
+        poll-interval-millis: 600000

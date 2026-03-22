@@ -1,0 +1,8 @@
+spring:
+  flyway:
+    locations: classpath:db/migration-integration
+
+batch:
+  console:
+    ai:
+      enabled: false

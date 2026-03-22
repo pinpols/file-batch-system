@@ -120,6 +120,16 @@
     </dependencies>
 
     <build>
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <!-- Full platform schema for integration tests (see docs/sql/flyway). -->
+            <testResource>
+                <directory>${project.basedir}/../docs/sql/flyway</directory>
+                <targetPath>db/migration-integration</targetPath>
+            </testResource>
+        </testResources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
