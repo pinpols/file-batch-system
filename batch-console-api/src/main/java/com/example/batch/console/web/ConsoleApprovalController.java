@@ -1,8 +1,8 @@
 package com.example.batch.console.web;
 
-import com.example.batch.console.application.ConsoleApprovalApplicationService;
+import com.example.batch.console.service.ConsoleApprovalApplicationService;
 import com.example.batch.console.support.ConsoleResponseFactory;
-import com.example.batch.console.web.request.ApprovalActionRequest;
+import com.example.batch.console.domain.request.ApprovalActionRequest;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;

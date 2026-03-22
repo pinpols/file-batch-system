@@ -1,12 +1,12 @@
 package com.example.batch.console.infrastructure;
 
-import com.example.batch.console.application.ConsoleWorkerApplicationService;
+import com.example.batch.console.service.ConsoleWorkerApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.web.request.DrainWorkerRequest;
-import com.example.batch.console.web.request.ForceOfflineWorkerRequest;
+import com.example.batch.console.domain.request.DrainWorkerRequest;
+import com.example.batch.console.domain.request.ForceOfflineWorkerRequest;
 import com.example.batch.common.constants.CommonConstants;
 import java.util.LinkedHashMap;
 import java.util.List;

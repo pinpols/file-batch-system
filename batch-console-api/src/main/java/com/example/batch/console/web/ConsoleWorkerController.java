@@ -1,9 +1,9 @@
 package com.example.batch.console.web;
 
-import com.example.batch.console.application.ConsoleWorkerApplicationService;
+import com.example.batch.console.service.ConsoleWorkerApplicationService;
 import com.example.batch.console.support.ConsoleResponseFactory;
-import com.example.batch.console.web.request.DrainWorkerRequest;
-import com.example.batch.console.web.request.ForceOfflineWorkerRequest;
+import com.example.batch.console.domain.request.DrainWorkerRequest;
+import com.example.batch.console.domain.request.ForceOfflineWorkerRequest;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;

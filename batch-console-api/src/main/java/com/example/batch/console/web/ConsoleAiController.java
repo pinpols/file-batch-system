@@ -2,10 +2,10 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ConsoleAiApplicationService;
+import com.example.batch.console.service.ConsoleAiApplicationService;
 import com.example.batch.console.support.ConsoleResponseFactory;
-import com.example.batch.console.web.request.AiChatRequest;
-import com.example.batch.console.web.response.AiChatResponse;
+import com.example.batch.console.domain.request.AiChatRequest;
+import com.example.batch.console.domain.response.AiChatResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;

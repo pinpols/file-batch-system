@@ -12,7 +12,7 @@ spring:
   ai:
     openai:
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
-      api-key: ${OPENAI_API_KEY:}
+      api-key: ${OPENAI_API_KEY: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}
       chat:
         options:
           model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
