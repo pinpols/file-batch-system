@@ -7,7 +7,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.tenant_scheduler_snapshot")
+@Table(schema = "batch", value = "tenant_scheduler_snapshot")
 public class TenantSchedulerSnapshotRecord {
 
     @Id

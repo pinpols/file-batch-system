@@ -22,6 +22,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
@@ -42,7 +43,7 @@ public class ConsoleSecurityConfiguration {
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(new ConsoleTokenAuthenticationFilter(properties, batchSecurityProperties), ConsoleRequestContextFilter.class)
+                .addFilterBefore(new ConsoleTokenAuthenticationFilter(properties, batchSecurityProperties), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

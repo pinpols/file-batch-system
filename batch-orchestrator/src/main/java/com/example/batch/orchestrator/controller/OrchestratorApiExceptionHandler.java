@@ -7,7 +7,9 @@ import com.example.batch.common.exception.SystemException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestControllerAdvice(basePackageClasses = LaunchController.class)
 public class OrchestratorApiExceptionHandler {
 
@@ -25,6 +27,7 @@ public class OrchestratorApiExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<CommonResponse<Void>> handleException(Exception exception) {
+        log.error("unexpected orchestrator exception", exception);
         return ResponseEntity.internalServerError()
                 .body(CommonResponse.failure(ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.defaultMessage()));
     }

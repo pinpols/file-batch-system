@@ -114,11 +114,6 @@
             <artifactId>kafka</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>io.minio</groupId>
-            <artifactId>minio</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>

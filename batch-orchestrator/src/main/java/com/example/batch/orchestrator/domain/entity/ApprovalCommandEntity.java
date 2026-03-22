@@ -7,7 +7,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.approval_command")
+@Table(schema = "batch", value = "approval_command")
 public class ApprovalCommandEntity {
 
     @Id

@@ -6,7 +6,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.file_template_config")
+@Table(schema = "batch", value = "file_template_config")
 public class FileTemplateConfigRecord {
 
     @Id

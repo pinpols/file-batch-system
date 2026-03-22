@@ -21,10 +21,8 @@ import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-@Component
 public class BatchObjectCryptoService {
 
     private static final byte[] MAGIC = "BATCHENC".getBytes(StandardCharsets.US_ASCII);

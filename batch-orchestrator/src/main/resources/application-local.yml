@@ -10,11 +10,14 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
   flyway:
-    enabled: true
+    enabled: false
     default-schema: batch
     schemas:
       - batch
       - quartz
+  sql:
+    init:
+      mode: always
 
 mybatis:
   mapper-locations: classpath*:mapper/*.xml

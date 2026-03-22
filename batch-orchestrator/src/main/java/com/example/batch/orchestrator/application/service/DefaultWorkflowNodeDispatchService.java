@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.ObjectProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,7 +43,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     private final WorkflowNodeRunMapper workflowNodeRunMapper;
     private final WorkflowDagService workflowDagService;
     private final ResourceScheduler resourceScheduler;
-    private final TaskExecutionService taskExecutionService;
+    private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
 
     @Override
     @Transactional
@@ -130,7 +131,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             task.setAssignedWorkerCode(resolveSelectedWorkerId(plan, partition));
             task.setTaskStatus(decision.getTaskStatus());
             task.setTaskPayload(taskPayload);
-            taskExecutionService.createTask(task);
+            taskExecutionServiceProvider.getObject().createTask(task);
             if (decision.isDispatchable() && partitionLifecycleService.releaseForDispatch(
                     partition,
                     task,

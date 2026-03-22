@@ -6,7 +6,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Table("batch.tenant_quota_policy")
+@Table(schema = "batch", value = "tenant_quota_policy")
 public class TenantQuotaPolicyRecord {
 
     @Id
