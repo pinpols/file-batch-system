@@ -1,0 +1,4 @@
+﻿customerNo,customerName,customerType,creditLimit,currencyCode,email,phone,status,openDate,remark
+C001,Alice Wang,PERSONAL,50000.00,CNY,alice@example.com,13800138001,ACTIVE,2022-01-15,BOM测试
+C002,Bob Li,PERSONAL,30000.00,CNY,bob@example.com,13800138002,ACTIVE,2022-03-20,中文字段
+C003,Carol Zhang,CORPORATE,500000.00,USD,carol@corp.com,13800138003,ACTIVE,2021-06-01,企业客户
