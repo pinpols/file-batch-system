@@ -1,0 +1,31 @@
+# Merged orchestrator + worker: serve HTTP for /internal/tasks (claim/report) while workers stay non-web.
+spring:
+  main:
+    web-application-type: servlet
+
+batch:
+  orchestrator:
+    base-url: http://127.0.0.1:${local.server.port}
+  worker:
+    task-client:
+      base-url: http://127.0.0.1:${local.server.port}
+    import:
+      tenant-id: t1
+      worker-code: e2e-import-1
+      heartbeat-interval-millis: 600000
+      scanner:
+        enabled: false
+    export:
+      tenant-id: t1
+      worker-code: e2e-export-1
+      heartbeat-interval-millis: 600000
+    dispatch:
+      tenant-id: t1
+      worker-code: e2e-dispatch-1
+      heartbeat-interval-millis: 600000
+      circuit-breaker:
+        enabled: false
+      health:
+        enabled: false
+      receipt-poll:
+        enabled: false

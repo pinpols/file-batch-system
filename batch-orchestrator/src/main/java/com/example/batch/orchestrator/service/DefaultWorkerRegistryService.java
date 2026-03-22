@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Service
+@Service("orchestratorWorkerRegistryService")
 @RequiredArgsConstructor
 public class DefaultWorkerRegistryService implements WorkerRegistryService {
 

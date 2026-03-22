@@ -1,0 +1,121 @@
+package com.example.batch.e2e;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+import com.example.batch.common.dto.LaunchRequest;
+import com.example.batch.common.enums.TriggerType;
+import com.example.batch.e2e.apps.E2eExportApplication;
+import com.example.batch.e2e.support.E2eOutboxPublishSupport;
+import com.example.batch.e2e.support.E2eScenarioFixture;
+import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.orchestrator.service.LaunchService;
+import com.example.batch.testing.AbstractIntegrationTest;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
+
+/**
+ * End-to-end: export job → schedule → outbox → Kafka → export worker → settlement snapshot → report.
+ */
+@SpringBootTest(
+        classes = E2eExportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles({"test", "e2e"})
+@Sql(scripts = {
+        "classpath:sql/e2e-biz-schema.sql",
+        "classpath:db/testdata/export-template-config-seed.sql"
+})
+@Tag("e2e")
+class ExportPipelineE2eIT extends AbstractIntegrationTest {
+
+    private static final String TENANT = "t1";
+    private static final String BATCH_NO = "E2E-SET-EXPORT-1";
+
+    @Autowired
+    private LaunchService launchService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+
+    @Test
+    void exportJobRunsThroughKafkaClaimAndReportsSuccess() {
+        Long batchId = jdbcTemplate.queryForObject(
+                """
+                        insert into biz.settlement_batch (
+                            tenant_id, batch_no, biz_date, accounting_period, batch_status,
+                            total_record_count, total_amount, currency
+                        ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
+                        returning id
+                        """,
+                Long.class,
+                TENANT,
+                BATCH_NO);
+        assertThat(batchId).isNotNull();
+
+        jdbcTemplate.update(
+                """
+                        insert into biz.settlement_detail (
+                            tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
+                            gross_amount, fee_amount, net_amount, currency, settlement_status
+                        ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
+                        """,
+                TENANT,
+                batchId,
+                "E2E-SET-001",
+                "C-E2E-1");
+
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("batchNo", BATCH_NO);
+        params.put("templateCode", "EXP-CUSTOMER-JSON");
+        params.put("bizDate", "2026-01-15");
+        params.put("bizType", "SETTLEMENT");
+        params.put("fileCode", "e2e-export-file");
+
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.jobCode(),
+                LocalDate.of(2026, 1, 15),
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-export",
+                params));
+
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
+
+        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+            String status = jdbcTemplate.queryForObject(
+                    """
+                            select t.task_status from batch.job_task t
+                            join batch.job_instance ji on ji.id = t.job_instance_id
+                            where ji.tenant_id = ? and ji.dedup_key = ?
+                            """,
+                    String.class,
+                    TENANT,
+                    seed.dedupKey());
+            assertThat(status).isEqualTo("SUCCESS");
+        });
+
+        BigDecimal total = jdbcTemplate.queryForObject(
+                "select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?",
+                BigDecimal.class,
+                TENANT,
+                BATCH_NO);
+        assertThat(total).isNotNull();
+    }
+}

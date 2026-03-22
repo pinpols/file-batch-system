@@ -5,11 +5,12 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import java.time.Instant;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import org.springframework.core.env.Environment;
 
 @Component
 @RequiredArgsConstructor
@@ -17,12 +18,8 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     private final OrchestratorWorkerClientProperties properties;
     private final RestClient.Builder builder;
+    private final Environment environment;
     private RestClient restClient;
-
-    @PostConstruct
-    void initialize() {
-        this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
-    }
 
     @Override
     public WorkerRegistration register(WorkerRegistration registration) {
@@ -44,7 +41,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     @Override
     public WorkerRegistration updateStatus(WorkerRegistration registration) {
-        restClient.post()
+        client().post()
                 .uri("/internal/workers/{workerId}/status", registration.getWorkerId())
                 .body(toHeartbeatDto(registration))
                 .retrieve()
@@ -53,12 +50,37 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
     }
 
     private void post(String path, WorkerRegistration registration) {
-        restClient.post()
+        client().post()
                 .uri(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(toHeartbeatDto(registration))
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    private RestClient client() {
+        RestClient current = this.restClient;
+        if (current != null) {
+            return current;
+        }
+        synchronized (this) {
+            if (this.restClient == null) {
+                this.restClient = builder.baseUrl(resolveBaseUrl()).build();
+            }
+            return this.restClient;
+        }
+    }
+
+    private String resolveBaseUrl() {
+        String configuredBaseUrl = properties.getBaseUrl();
+        if (StringUtils.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
+            return configuredBaseUrl;
+        }
+        String localPort = environment.getProperty("local.server.port");
+        if (StringUtils.hasText(localPort)) {
+            return "http://127.0.0.1:" + localPort;
+        }
+        throw new IllegalStateException("Unable to resolve batch.orchestrator.base-url for worker registry client");
     }
 
     private WorkerHeartbeatDto toHeartbeatDto(WorkerRegistration registration) {

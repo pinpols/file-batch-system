@@ -12,11 +12,14 @@ import com.example.batch.orchestrator.domain.query.EventDeliveryLogQuery;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -35,6 +38,8 @@ import org.springframework.boot.test.context.SpringBootTest;
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     @Autowired
     private OutboxPublisher outboxPublisher;
 
@@ -45,7 +50,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     private EventDeliveryLogMapper eventDeliveryLogMapper;
 
     @Test
-    void shouldPublishFallbackEventToDefaultTopicAndPersistDeliveryLog() {
+    void shouldPublishFallbackEventToDefaultTopicAndPersistDeliveryLog() throws Exception {
         OutboxEventEntity event = pendingEvent("CUSTOM_EVENT_TYPE", "AGG_TYPE", "key-fallback-001");
         outboxEventMapper.insert(event);
 
@@ -62,11 +67,16 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             consumer.subscribe(List.of(BatchTopics.OUTBOX_EVENT));
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
             assertThat(records.count()).isGreaterThanOrEqualTo(1);
+            ConsumerRecord<String, String> first = records.iterator().next();
+            assertThat(first.key()).isEqualTo("key-fallback-001");
+            JsonNode root = OBJECT_MAPPER.readTree(first.value());
+            assertThat(root.path("idempotencyKey").asText()).isEqualTo("key-fallback-001");
+            assertThat(root.path("eventName").asText()).isEqualTo("CUSTOM_EVENT_TYPE");
         }
     }
 
     @Test
-    void shouldPublishImportDispatchEventToImportTopicAndPersistDeliveryLog() {
+    void shouldPublishImportDispatchEventToImportTopicAndPersistDeliveryLog() throws Exception {
         OutboxEventEntity event = pendingEvent("IMPORT", "JOB_PARTITION", "key-import-001");
         outboxEventMapper.insert(event);
 
@@ -83,11 +93,15 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT));
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
             assertThat(records.count()).isGreaterThanOrEqualTo(1);
+            ConsumerRecord<String, String> first = records.iterator().next();
+            assertThat(first.key()).isEqualTo("key-import-001");
+            JsonNode payload = OBJECT_MAPPER.readTree(first.value());
+            assertThat(payload.path("test").asBoolean()).isTrue();
         }
     }
 
     @Test
-    void shouldPublishExportDispatchEventToExportTopicAndPersistDeliveryLog() {
+    void shouldPublishExportDispatchEventToExportTopicAndPersistDeliveryLog() throws Exception {
         OutboxEventEntity event = pendingEvent("EXPORT", "JOB_PARTITION", "key-export-001");
         outboxEventMapper.insert(event);
 
@@ -99,6 +113,16 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
                 new EventDeliveryLogQuery("t1", OutboxPublishStatus.PUBLISHED.code(), "EXPORT", "key-export-001"));
         assertThat(logs).hasSize(1);
         assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_EXPORT);
+
+        try (KafkaConsumer<String, String> consumer = buildConsumer("export-test-" + System.currentTimeMillis())) {
+            consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_EXPORT));
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
+            assertThat(records.count()).isGreaterThanOrEqualTo(1);
+            ConsumerRecord<String, String> first = records.iterator().next();
+            assertThat(first.key()).isEqualTo("key-export-001");
+            JsonNode payload = OBJECT_MAPPER.readTree(first.value());
+            assertThat(payload.path("test").asBoolean()).isTrue();
+        }
     }
 
     // --- helpers ---

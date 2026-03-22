@@ -16,8 +16,9 @@ import org.testcontainers.utility.DockerImageName;
 @BatchIntegrationTest
 public abstract class AbstractIntegrationTest {
 
-    private static final String POSTGRES_IMAGE = "postgres:16-alpine";
-    private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.6.1";
+    private static final String POSTGRES_IMAGE = "postgres:16";
+    /** {@link KafkaContainer} only supports apache/kafka (not Confluent); see Testcontainers Kafka module docs. */
+    private static final String KAFKA_IMAGE = "apache/kafka:4.1.2";
     private static final String DEFAULT_DB_USER = "batch_user";
     private static final String DEFAULT_DB_PASSWORD = "batch_pass_123";
 

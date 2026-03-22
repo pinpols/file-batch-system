@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
-@Configuration
+@Configuration("exportWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties({
         BusinessDataSourceProperties.class,
         MinioStorageProperties.class,
@@ -20,12 +20,12 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 })
 @MapperScan(
         basePackages = "com.example.batch.worker.exports.mapper.business",
-        sqlSessionFactoryRef = "businessSqlSessionFactory"
+        sqlSessionFactoryRef = "exportBusinessSqlSessionFactory"
 )
 public class BusinessDataSourceConfiguration {
 
-    @Bean(name = "businessDataSource")
-    public DataSource businessDataSource(BusinessDataSourceProperties properties) {
+    @Bean(name = "exportBusinessDataSource")
+    public DataSource exportBusinessDataSource(BusinessDataSourceProperties properties) {
         return DataSourceBuilder.create()
                 .url(properties.getUrl())
                 .username(properties.getUsername())
@@ -34,10 +34,11 @@ public class BusinessDataSourceConfiguration {
                 .build();
     }
 
-    @Bean(name = "businessSqlSessionFactory")
-    public SqlSessionFactory businessSqlSessionFactory(@Qualifier("businessDataSource") DataSource businessDataSource) throws Exception {
+    @Bean(name = "exportBusinessSqlSessionFactory")
+    public SqlSessionFactory exportBusinessSqlSessionFactory(
+            @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource) throws Exception {
         SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-        factoryBean.setDataSource(businessDataSource);
+        factoryBean.setDataSource(exportBusinessDataSource);
         factoryBean.setMapperLocations(
                 new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/business/*.xml")
         );
@@ -47,8 +48,9 @@ public class BusinessDataSourceConfiguration {
         return factoryBean.getObject();
     }
 
-    @Bean(name = "businessSqlSessionTemplate")
-    public SqlSessionTemplate businessSqlSessionTemplate(@Qualifier("businessSqlSessionFactory") SqlSessionFactory businessSqlSessionFactory) {
-        return new SqlSessionTemplate(businessSqlSessionFactory);
+    @Bean(name = "exportBusinessSqlSessionTemplate")
+    public SqlSessionTemplate exportBusinessSqlSessionTemplate(
+            @Qualifier("exportBusinessSqlSessionFactory") SqlSessionFactory exportBusinessSqlSessionFactory) {
+        return new SqlSessionTemplate(exportBusinessSqlSessionFactory);
     }
 }

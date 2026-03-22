@@ -1,0 +1,97 @@
+package com.example.batch.e2e;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+import com.example.batch.common.dto.LaunchRequest;
+import com.example.batch.common.enums.TriggerType;
+import com.example.batch.e2e.apps.E2eImportApplication;
+import com.example.batch.e2e.support.E2eOutboxPublishSupport;
+import com.example.batch.e2e.support.E2eScenarioFixture;
+import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.orchestrator.service.LaunchService;
+import com.example.batch.testing.AbstractIntegrationTest;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
+
+/**
+ * End-to-end: API trigger → schedule → outbox → Kafka → import worker claim → pipeline → task report.
+ */
+@SpringBootTest(
+        classes = E2eImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles({"test", "e2e"})
+@Sql(scripts = {
+        "classpath:sql/e2e-biz-schema.sql",
+        "classpath:db/testdata/import-template-config-seed.sql"
+})
+@Tag("e2e")
+class ImportPipelineE2eIT extends AbstractIntegrationTest {
+
+    private static final String TENANT = "t1";
+
+    @Autowired
+    private LaunchService launchService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+
+    @Test
+    void importJobRunsThroughKafkaClaimAndReportsSuccess() {
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("fileFormatType", "JSON");
+        params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
+        params.put("bizType", "CUSTOMER");
+        params.put("content",
+                "[{\"customerNo\":\"E2E001\",\"customerName\":\"E2E User\",\"customerType\":\"PERSONAL\","
+                        + "\"creditLimit\":100.00,\"currencyCode\":\"CNY\",\"email\":\"e2e@example.com\","
+                        + "\"phone\":\"13800000001\",\"status\":\"ACTIVE\",\"openDate\":\"2022-01-15\",\"remark\":\"\"}]");
+
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.jobCode(),
+                LocalDate.of(2026, 1, 15),
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-import",
+                params));
+
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
+
+        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+            String status = jdbcTemplate.queryForObject(
+                    """
+                            select t.task_status from batch.job_task t
+                            join batch.job_instance ji on ji.id = t.job_instance_id
+                            where ji.tenant_id = ? and ji.dedup_key = ?
+                            """,
+                    String.class,
+                    TENANT,
+                    seed.dedupKey());
+            assertThat(status).isEqualTo("SUCCESS");
+        });
+
+        Integer rows = jdbcTemplate.queryForObject(
+                "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no = ?",
+                Integer.class,
+                TENANT,
+                "E2E001");
+        assertThat(rows).isNotNull();
+        assertThat(rows).isGreaterThanOrEqualTo(1);
+    }
+}
