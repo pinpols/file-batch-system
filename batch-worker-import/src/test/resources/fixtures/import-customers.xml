@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<customers>
+    <record>
+        <customerNo>C001</customerNo>
+        <customerName>Alice Wang</customerName>
+        <customerType>PERSONAL</customerType>
+        <creditLimit>50000.00</creditLimit>
+        <currencyCode>CNY</currencyCode>
+        <email>alice@example.com</email>
+        <phone>13800138001</phone>
+        <status>ACTIVE</status>
+        <openDate>2022-01-15</openDate>
+        <remark>VIP客户</remark>
+    </record>
+    <record>
+        <customerNo>C002</customerNo>
+        <customerName>Bob Li</customerName>
+        <customerType>PERSONAL</customerType>
+        <creditLimit>30000.00</creditLimit>
+        <currencyCode>CNY</currencyCode>
+        <email>bob@example.com</email>
+        <phone>13800138002</phone>
+        <status>ACTIVE</status>
+        <openDate>2022-03-20</openDate>
+        <remark></remark>
+    </record>
+    <record>
+        <customerNo>C003</customerNo>
+        <customerName>Carol Zhang</customerName>
+        <customerType>CORPORATE</customerType>
+        <creditLimit>500000.00</creditLimit>
+        <currencyCode>USD</currencyCode>
+        <email>carol@corp.com</email>
+        <phone>13800138003</phone>
+        <status>ACTIVE</status>
+        <openDate>2021-06-01</openDate>
+        <remark>企业客户</remark>
+    </record>
+    <record>
+        <customerNo>C004</customerNo>
+        <customerName>David Chen</customerName>
+        <customerType>PERSONAL</customerType>
+        <creditLimit>20000.00</creditLimit>
+        <currencyCode>CNY</currencyCode>
+        <email>david@example.com</email>
+        <phone>13800138004</phone>
+        <status>INACTIVE</status>
+        <openDate>2020-11-10</openDate>
+        <remark>已停用</remark>
+    </record>
+    <record>
+        <customerNo>C005</customerNo>
+        <customerName>Eve Liu</customerName>
+        <customerType>PERSONAL</customerType>
+        <creditLimit>80000.00</creditLimit>
+        <currencyCode>CNY</currencyCode>
+        <email>eve@example.com</email>
+        <phone>13800138005</phone>
+        <status>ACTIVE</status>
+        <openDate>2023-02-28</openDate>
+        <remark></remark>
+    </record>
+</customers>

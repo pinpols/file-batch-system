@@ -1,0 +1,12 @@
+{
+  "batchNo": "BATCH-20260322-001",
+  "bizDate": "2026-03-22",
+  "totalCount": 5,
+  "records": [
+    {"customerNo":"C001","customerName":"Alice Wang","customerType":"PERSONAL","creditLimit":50000.00,"currencyCode":"CNY","email":"alice@example.com","phone":"13800138001","status":"ACTIVE","openDate":"2022-01-15","remark":"VIP客户"},
+    {"customerNo":"C002","customerName":"Bob Li","customerType":"PERSONAL","creditLimit":30000.00,"currencyCode":"CNY","email":"bob@example.com","phone":"13800138002","status":"ACTIVE","openDate":"2022-03-20","remark":""},
+    {"customerNo":"C003","customerName":"Carol Zhang","customerType":"CORPORATE","creditLimit":500000.00,"currencyCode":"USD","email":"carol@corp.com","phone":"13800138003","status":"ACTIVE","openDate":"2021-06-01","remark":"企业客户"},
+    {"customerNo":"C004","customerName":"David Chen","customerType":"PERSONAL","creditLimit":20000.00,"currencyCode":"CNY","email":"david@example.com","phone":"13800138004","status":"INACTIVE","openDate":"2020-11-10","remark":"已停用"},
+    {"customerNo":"C005","customerName":"Eve Liu","customerType":"PERSONAL","creditLimit":80000.00,"currencyCode":"CNY","email":"eve@example.com","phone":"13800138005","status":"ACTIVE","openDate":"2023-02-28","remark":""}
+  ]
+}
