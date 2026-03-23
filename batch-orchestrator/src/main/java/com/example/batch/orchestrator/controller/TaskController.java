@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.controller;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.service.TaskExecutionService;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
-import com.example.batch.orchestrator.domain.dto.TaskExecutionReportDto;
+import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

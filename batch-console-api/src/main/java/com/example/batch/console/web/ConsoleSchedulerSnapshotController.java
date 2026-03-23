@@ -1,7 +1,7 @@
 package com.example.batch.console.web;
 
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
-import com.example.batch.console.support.ConsoleResponseFactory;
+import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.common.dto.CommonResponse;
 import java.util.List;
 import java.util.Map;

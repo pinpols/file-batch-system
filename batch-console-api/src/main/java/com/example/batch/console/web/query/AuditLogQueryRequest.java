@@ -1,0 +1,13 @@
+package com.example.batch.console.web.query;
+
+import lombok.Data;
+
+@Data
+public class AuditLogQueryRequest {
+
+    private String tenantId;
+    private String operationType;
+    private String traceId;
+    private String fromTime;
+    private String toTime;
+}

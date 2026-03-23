@@ -1,13 +1,13 @@
 package com.example.batch.console.web;
 
-import com.example.batch.console.service.ConsoleJobApplicationService;
-import com.example.batch.console.support.ConsoleResponseFactory;
-import com.example.batch.console.domain.request.CatchUpApprovalRequest;
-import com.example.batch.console.domain.request.CompensateRequest;
-import com.example.batch.console.domain.request.CompensationCommandRequest;
-import com.example.batch.console.domain.request.DeadLetterReplayRequest;
-import com.example.batch.console.domain.request.RerunRequest;
-import com.example.batch.console.domain.request.TriggerRequest;
+import com.example.batch.console.application.ConsoleJobApplicationService;
+import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.web.request.CatchUpApprovalRequest;
+import com.example.batch.console.web.request.CompensateRequest;
+import com.example.batch.console.web.request.CompensationCommandRequest;
+import com.example.batch.console.web.request.DeadLetterReplayRequest;
+import com.example.batch.console.web.request.RerunRequest;
+import com.example.batch.console.web.request.TriggerRequest;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;

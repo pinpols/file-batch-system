@@ -23,9 +23,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class LoadStep implements ImportStageStep {
@@ -272,7 +274,8 @@ public class LoadStep implements ImportStageStep {
         }
         try {
             Files.deleteIfExists(path);
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.warn("Failed to delete temp file: {}", path, ex);
         }
     }
 

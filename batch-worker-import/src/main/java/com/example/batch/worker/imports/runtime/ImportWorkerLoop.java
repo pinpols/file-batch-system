@@ -1,6 +1,6 @@
 package com.example.batch.worker.imports.runtime;
 
-import com.example.batch.worker.core.app.WorkerRuntimeFacade;
+import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import jakarta.annotation.PreDestroy;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;

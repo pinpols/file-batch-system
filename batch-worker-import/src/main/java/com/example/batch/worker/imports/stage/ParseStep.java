@@ -36,6 +36,7 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -50,6 +51,7 @@ import org.xml.sax.InputSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ParseStep implements ImportStageStep {
@@ -853,7 +855,8 @@ public class ParseStep implements ImportStageStep {
         }
         try {
             Files.deleteIfExists(path);
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.warn("Failed to delete temp file: {}", path, ex);
         }
     }
 

@@ -1,6 +1,7 @@
 package com.example.batch.console.support;
 
 import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;

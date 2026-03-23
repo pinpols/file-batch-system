@@ -30,12 +30,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class GenerateStep implements ExportStageStep {
@@ -683,7 +685,8 @@ public class GenerateStep implements ExportStageStep {
         }
         try {
             Files.deleteIfExists(path);
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.warn("Failed to delete temp file: {}", path, ex);
         }
     }
 

@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.infrastructure.sla;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.AlertEventService;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
-import com.example.batch.orchestrator.domain.dto.AlertEmitRequest;
+import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
