@@ -134,6 +134,11 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Keep the original jar intact so batch-e2e-tests can depend on it as a library.
+                         The executable fat jar is produced with the "exec" classifier instead. -->
+                    <classifier>exec</classifier>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -116,8 +116,8 @@
             #{successPartitionCount},
             #{failedPartitionCount},
             #{traceId},
-            #{paramsSnapshot},
-            #{resultSummary},
+            #{paramsSnapshot,jdbcType=VARCHAR}::jsonb,
+            #{resultSummary,jdbcType=VARCHAR}::jsonb,
             #{deadlineAt},
             #{expectedDurationSeconds},
             #{slaAlertedAt}
@@ -142,7 +142,7 @@
         set instance_status = #{instanceStatus},
             success_partition_count = #{successPartitionCount},
             failed_partition_count = #{failedPartitionCount},
-            result_summary = #{resultSummary},
+            result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             finished_at = #{finishedAt},
             version = version + 1,
             updated_at = current_timestamp

@@ -36,7 +36,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
     E2ePlatformMybatisConfiguration.class
 })
 @ComponentScan(
-        basePackages = "com.example.batch",
+        basePackages = {
+                "com.example.batch.e2e.support",
+                "com.example.batch.orchestrator",
+                "com.example.batch.worker.core",
+                "com.example.batch.worker.exports"
+        },
         excludeFilters = {
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchOrchestratorApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eImportApplication.class),

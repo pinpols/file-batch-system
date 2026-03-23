@@ -36,7 +36,7 @@
             #{aggregateId},
             #{eventType},
             #{eventKey},
-            #{payloadJson},
+            #{payloadJson,jdbcType=VARCHAR}::jsonb,
             #{publishStatus},
             #{publishAttempt},
             #{nextPublishAt},

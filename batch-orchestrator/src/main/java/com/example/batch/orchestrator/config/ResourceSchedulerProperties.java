@@ -11,4 +11,5 @@ public class ResourceSchedulerProperties {
     private long waitingDispatchIntervalMillis = 10000L;
     private int quotaResetSlidingWindowHours = 24;
     private long quotaResetScanIntervalMillis = 60000L;
+    private boolean quotaResetEnabled = true;
 }

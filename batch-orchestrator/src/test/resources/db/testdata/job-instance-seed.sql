@@ -3,13 +3,13 @@
 -- All records use tenant_id='t1' to match default test tenant.
 
 INSERT INTO batch.job_definition
-  (tenant_id, job_code, job_name, job_type, trigger_type, retry_policy, retry_max_count,
-   sla_deadline_offset_seconds, expected_duration_seconds, is_active, created_at, updated_at)
+  (tenant_id, job_code, job_name, job_type, schedule_type, trigger_mode, timezone,
+   retry_policy, retry_max_count, created_at, updated_at)
 VALUES
-  ('t1', 'TEST_IMPORT_JOB', 'Test Import Job', 'IMPORT', 'MANUAL', 'FIXED', 3,
-   3600, 600, true, now(), now()),
-  ('t1', 'TEST_EXPORT_JOB', 'Test Export Job', 'EXPORT', 'MANUAL', 'EXPONENTIAL', 2,
-   7200, 1200, true, now(), now()),
-  ('t1', 'TEST_DISPATCH_JOB', 'Test Dispatch Job', 'DISPATCH', 'MANUAL', 'NONE', 0,
-   null, null, true, now(), now())
+  ('t1', 'TEST_IMPORT_JOB', 'Test Import Job', 'IMPORT', 'MANUAL', 'MANUAL', 'UTC',
+   'FIXED', 3, now(), now()),
+  ('t1', 'TEST_EXPORT_JOB', 'Test Export Job', 'EXPORT', 'MANUAL', 'MANUAL', 'UTC',
+   'EXPONENTIAL', 2, now(), now()),
+  ('t1', 'TEST_DISPATCH_JOB', 'Test Dispatch Job', 'DISPATCH', 'MANUAL', 'MANUAL', 'UTC',
+   'NONE', 0, now(), now())
 ON CONFLICT DO NOTHING;
