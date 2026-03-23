@@ -5,24 +5,24 @@
 -- ── tenant t2: finance business unit ──────────────────────────────────────────
 
 INSERT INTO batch.job_definition
-  (tenant_id, job_code, job_name, job_type, trigger_type, retry_policy, retry_max_count,
-   sla_deadline_offset_seconds, expected_duration_seconds, is_active, created_at, updated_at)
+  (tenant_id, job_code, job_name, job_type, schedule_type, trigger_mode, timezone,
+   retry_policy, retry_max_count, created_at, updated_at)
 VALUES
-  ('t2', 'T2_IMPORT_JOB', 'T2 Finance Import', 'IMPORT', 'MANUAL', 'FIXED', 3,
-   3600, 600, true, now(), now()),
-  ('t2', 'T2_EXPORT_JOB', 'T2 Finance Export', 'EXPORT', 'SCHEDULED', 'EXPONENTIAL', 2,
-   7200, 1200, true, now(), now()),
-  ('t2', 'T2_DISPATCH_JOB', 'T2 Finance Dispatch', 'DISPATCH', 'MANUAL', 'NONE', 0,
-   null, null, true, now(), now()),
+  ('t2', 'T2_IMPORT_JOB', 'T2 Finance Import', 'IMPORT', 'MANUAL', 'MANUAL', 'UTC',
+   'FIXED', 3, now(), now()),
+  ('t2', 'T2_EXPORT_JOB', 'T2 Finance Export', 'EXPORT', 'CRON', 'SCHEDULED', 'UTC',
+   'EXPONENTIAL', 2, now(), now()),
+  ('t2', 'T2_DISPATCH_JOB', 'T2 Finance Dispatch', 'DISPATCH', 'MANUAL', 'MANUAL', 'UTC',
+   'NONE', 0, now(), now()),
 
 -- ── tenant t3: risk management unit ───────────────────────────────────────────
 
-  ('t3', 'T3_IMPORT_JOB', 'T3 Risk Import', 'IMPORT', 'EVENT', 'EXPONENTIAL', 5,
-   1800, 300, true, now(), now()),
-  ('t3', 'T3_EXPORT_JOB', 'T3 Risk Export', 'EXPORT', 'SCHEDULED', 'FIXED', 3,
-   3600, 900, true, now(), now()),
-  ('t3', 'T3_DISPATCH_JOB', 'T3 Risk Dispatch', 'DISPATCH', 'MANUAL', 'NONE', 0,
-   null, null, true, now(), now())
+  ('t3', 'T3_IMPORT_JOB', 'T3 Risk Import', 'IMPORT', 'EVENT', 'EVENT', 'UTC',
+   'EXPONENTIAL', 5, now(), now()),
+  ('t3', 'T3_EXPORT_JOB', 'T3 Risk Export', 'EXPORT', 'CRON', 'SCHEDULED', 'UTC',
+   'FIXED', 3, now(), now()),
+  ('t3', 'T3_DISPATCH_JOB', 'T3 Risk Dispatch', 'DISPATCH', 'MANUAL', 'MANUAL', 'UTC',
+   'NONE', 0, now(), now())
 ON CONFLICT DO NOTHING;
 
 -- ── quota policies ─────────────────────────────────────────────────────────────

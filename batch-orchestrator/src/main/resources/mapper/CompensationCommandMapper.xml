@@ -63,7 +63,7 @@
             #{strategy},
             #{commandStatus},
             #{traceId},
-            #{resultSummary},
+            #{resultSummary,jdbcType=VARCHAR}::jsonb,
             #{errorCode},
             #{errorMessage},
             #{finishedAt}
@@ -82,7 +82,7 @@
         set command_status = #{commandStatus},
             related_job_instance_id = #{relatedJobInstanceId},
             related_file_id = #{relatedFileId},
-            result_summary = #{resultSummary},
+            result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             error_code = #{errorCode},
             error_message = #{errorMessage},
             finished_at = #{finishedAt}

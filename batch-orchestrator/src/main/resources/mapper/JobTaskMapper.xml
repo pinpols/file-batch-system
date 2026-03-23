@@ -44,8 +44,8 @@
             #{taskSeq},
             #{taskStatus},
             #{assignedWorkerCode},
-            #{taskPayload},
-            #{resultSummary},
+            #{taskPayload,jdbcType=VARCHAR}::jsonb,
+            #{resultSummary,jdbcType=VARCHAR}::jsonb,
             #{errorCode},
             #{errorMessage},
             #{startedAt},
@@ -105,7 +105,7 @@
     <update id="updateStatus">
         update batch.job_task
         set task_status = #{taskStatus},
-            result_summary = #{resultSummary},
+            result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             error_code = #{errorCode},
             error_message = #{errorMessage},
             finished_at = case

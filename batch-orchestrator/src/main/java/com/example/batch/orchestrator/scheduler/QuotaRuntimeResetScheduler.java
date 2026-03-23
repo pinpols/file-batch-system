@@ -15,6 +15,9 @@ public class QuotaRuntimeResetScheduler {
 
     @Scheduled(fixedDelayString = "${batch.resource-scheduler.quota-reset-scan-interval-millis:60000}")
     public void reconcile() {
+        if (!resourceSchedulerProperties.isQuotaResetEnabled()) {
+            return;
+        }
         quotaRuntimeStateService.reconcileExpiredStates(resourceSchedulerProperties.getQuotaResetSlidingWindowHours());
     }
 }

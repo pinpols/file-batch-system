@@ -36,7 +36,7 @@
             #{traceId},
             #{message},
             #{detailRef},
-            #{extraJson}
+            #{extraJson,jdbcType=VARCHAR}::jsonb
         )
     </insert>
 

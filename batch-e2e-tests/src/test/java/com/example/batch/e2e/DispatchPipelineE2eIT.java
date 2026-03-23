@@ -28,7 +28,8 @@ import org.springframework.test.context.jdbc.Sql;
  */
 @SpringBootTest(
         classes = E2eDispatchApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.dispatch.worker-type=DISPATCH")
 @ActiveProfiles({"test", "e2e"})
 @Sql(scripts = "classpath:sql/e2e-biz-schema.sql")
 @Tag("e2e")

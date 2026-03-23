@@ -1,11 +1,14 @@
 # Align with orchestrator integration tests: Flyway from docs/sql/flyway; quiet background jobs.
 spring:
   flyway:
-    locations: classpath:db/migration-integration
+    locations: classpath:db/migration
 
 batch:
   sla:
     enabled: false
+  scheduler:
+    snapshot-persist-enabled: false
+    snapshot-persist-ms: 600000
   worker:
     drain:
       enabled: false
@@ -29,5 +32,4 @@ batch:
   resource-scheduler:
     waiting-dispatch-interval-millis: 600000
     quota-reset-scan-interval-millis: 600000
-  scheduler:
-    snapshot-persist-ms: 600000
+    quota-reset-enabled: false

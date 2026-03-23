@@ -61,7 +61,7 @@ VALUES
 -- 3. Tab-separated export (no header, backslash escape)
 ('t1', 'EXP-CUSTOMER-TAB-NOHEADER', 'Customer Export Tab No-Header', 'EXPORT', 'CUSTOMER',
  'DELIMITED', 'UTF-8', 'UTF-8', false,
- '\t', null, '\',
+ '\t', null, E'\\',
  0, 0, 0,
  'NONE', 'NONE', 'NONE',
  'customers_noheader_{seq}.tsv',

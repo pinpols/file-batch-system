@@ -41,7 +41,7 @@
             #{targetWorkerId},
             #{deliveryStatus},
             #{deliveryAttempt},
-            #{deliverySummary},
+            #{deliverySummary,jdbcType=VARCHAR}::jsonb,
             #{errorMessage},
             #{traceId}
         )

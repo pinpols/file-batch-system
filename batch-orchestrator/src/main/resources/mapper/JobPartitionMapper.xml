@@ -63,8 +63,8 @@
             #{retryCount},
             #{businessKey},
             #{idempotencyKey},
-            #{inputSnapshot},
-            #{outputSummary}
+            #{inputSnapshot,jdbcType=VARCHAR}::jsonb,
+            #{outputSummary,jdbcType=VARCHAR}::jsonb
         )
     </insert>
 
@@ -118,7 +118,7 @@
 
     <update id="updateOutputSummary">
         update batch.job_partition
-        set output_summary = #{outputSummary},
+        set output_summary = #{outputSummary,jdbcType=VARCHAR}::jsonb,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
@@ -126,7 +126,7 @@
 
     <update id="updateInputSnapshot">
         update batch.job_partition
-        set input_snapshot = #{inputSnapshot},
+        set input_snapshot = #{inputSnapshot,jdbcType=VARCHAR}::jsonb,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}

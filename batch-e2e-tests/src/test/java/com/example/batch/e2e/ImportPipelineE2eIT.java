@@ -28,7 +28,8 @@ import org.springframework.test.context.jdbc.Sql;
  */
 @SpringBootTest(
         classes = E2eImportApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.import.worker-type=IMPORT")
 @ActiveProfiles({"test", "e2e"})
 @Sql(scripts = {
         "classpath:sql/e2e-biz-schema.sql",

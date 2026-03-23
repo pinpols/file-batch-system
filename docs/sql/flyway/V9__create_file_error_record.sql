@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS batch.file_error_record (
     id                  BIGSERIAL PRIMARY KEY,
-    tenant_id           VARCHAR(128) NOT NULL,
+    tenant_id           VARCHAR(64)  NOT NULL,
     file_id             BIGINT,
     pipeline_instance_id BIGINT,
     pipeline_step_run_id BIGINT,
