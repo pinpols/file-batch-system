@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.controller;
 
 import com.example.batch.orchestrator.application.service.AlertEventService;
-import com.example.batch.orchestrator.domain.dto.AlertEmitRequest;
+import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

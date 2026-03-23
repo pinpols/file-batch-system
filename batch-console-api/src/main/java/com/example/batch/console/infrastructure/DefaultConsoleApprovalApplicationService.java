@@ -1,15 +1,15 @@
 package com.example.batch.console.infrastructure;
 
-import com.example.batch.console.service.ConsoleApprovalApplicationService;
-import com.example.batch.console.service.ConsoleFileApplicationService;
-import com.example.batch.console.service.ConsoleJobApplicationService;
+import com.example.batch.console.application.ConsoleApprovalApplicationService;
+import com.example.batch.console.application.ConsoleFileApplicationService;
+import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.domain.request.CatchUpApprovalRequest;
-import com.example.batch.console.domain.request.CompensationCommandRequest;
-import com.example.batch.console.domain.request.DeadLetterReplayRequest;
-import com.example.batch.console.domain.request.PresignDownloadFileRequest;
+import com.example.batch.console.web.request.CatchUpApprovalRequest;
+import com.example.batch.console.web.request.CompensationCommandRequest;
+import com.example.batch.console.web.request.DeadLetterReplayRequest;
+import com.example.batch.console.web.request.PresignDownloadFileRequest;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;

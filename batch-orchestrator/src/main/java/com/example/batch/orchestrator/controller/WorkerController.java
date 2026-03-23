@@ -2,6 +2,8 @@ package com.example.batch.orchestrator.controller;
 
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceService;
+import com.example.batch.orchestrator.controller.request.WorkerDrainRequest;
+import com.example.batch.orchestrator.controller.request.WorkerTenantRequest;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.service.WorkerRegistryService;

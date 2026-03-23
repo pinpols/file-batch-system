@@ -3,7 +3,7 @@ package com.example.batch.worker.exports.runtime;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.worker.core.app.TaskDispatchExecutor;
+import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.exports.config.ExportWorkerConfiguration;

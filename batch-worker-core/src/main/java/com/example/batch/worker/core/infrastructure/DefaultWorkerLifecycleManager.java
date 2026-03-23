@@ -2,9 +2,9 @@ package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.worker.core.domain.WorkerRegistration;
-import com.example.batch.worker.core.support.ActiveTaskLeaseRegistry;
+import com.example.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
 import com.example.batch.worker.core.support.WorkerRegistryService;
-import com.example.batch.worker.core.support.WorkerRuntimeState;
+import com.example.batch.worker.core.infrastructure.WorkerRuntimeState;
 import com.example.batch.worker.core.support.WorkerLifecycleManager;
 import java.time.OffsetDateTime;
 import java.util.UUID;

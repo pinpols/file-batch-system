@@ -14,7 +14,7 @@ import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
-import com.example.batch.worker.core.support.ActiveTaskLeaseRegistry;
+import com.example.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
 import com.example.batch.worker.core.support.StepExecutionAdapter;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import org.junit.jupiter.api.BeforeEach;

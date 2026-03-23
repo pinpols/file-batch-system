@@ -1,6 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
-import com.example.batch.worker.core.support.ActiveTaskLeaseRegistry;
+import com.example.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

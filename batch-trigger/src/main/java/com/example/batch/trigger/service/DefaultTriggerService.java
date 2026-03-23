@@ -6,7 +6,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
-import com.example.batch.trigger.adapter.OrchestratorTriggerAdapter;
+import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;

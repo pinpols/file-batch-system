@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.utils.AlertFingerprints;
-import com.example.batch.orchestrator.domain.dto.AlertEmitRequest;
+import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import com.example.batch.orchestrator.domain.entity.AlertEventEntity;
 import com.example.batch.orchestrator.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.MeterRegistry;

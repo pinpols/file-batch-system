@@ -7,6 +7,8 @@ import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.service.TriggerService;
+import com.example.batch.trigger.web.request.CatchUpApprovalRequest;
+import com.example.batch.trigger.web.request.TriggerLaunchRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;

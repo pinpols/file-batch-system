@@ -2,8 +2,8 @@ package com.example.batch.orchestrator.controller;
 
 import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord;
 import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
-import com.example.batch.orchestrator.scheduler.snapshot.SchedulerSnapshotResponse;
-import com.example.batch.orchestrator.scheduler.snapshot.TenantSchedulerSnapshotService;
+import com.example.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
+import com.example.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;

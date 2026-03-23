@@ -3,7 +3,7 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.HeartbeatService;
 import com.example.batch.worker.core.support.WorkerRegistryService;
-import com.example.batch.worker.core.support.WorkerRuntimeState;
+import com.example.batch.worker.core.infrastructure.WorkerRuntimeState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

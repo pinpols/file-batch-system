@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.application.service;
 
-import com.example.batch.orchestrator.domain.dto.AlertEmitRequest;
+import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 
 public interface AlertEventService {
 
