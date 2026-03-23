@@ -12,7 +12,6 @@ import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +71,14 @@ public class DefaultImportStageExecutor implements ImportStageExecutor {
                             ? ImportStageResult.failure(stage, "IMPORT_STEP_MISSING", "step impl not found: " + currentStep.implCode())
                             : step.execute(context);
                 } catch (Exception exception) {
+                    log.error(
+                            "import stage execution failed: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                            stage,
+                            currentStep.stepCode(),
+                            currentStep.implCode(),
+                            context.getTenantId(),
+                            context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                            exception);
                     result = ImportStageResult.failure(stage, "IMPORT_STAGE_EXECUTION_FAILED", exception.getMessage());
                 }
                 results.add(result);

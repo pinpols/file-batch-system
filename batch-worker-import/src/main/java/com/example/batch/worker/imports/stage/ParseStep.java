@@ -101,6 +101,11 @@ public class ParseStep implements ImportStageStep {
             return ImportStageResult.success(stage());
         } catch (Exception ex) {
             deleteQuietly(stagingFile);
+            log.error("parse stage failed: tenantId={}, fileId={}, message={}",
+                    context == null ? null : context.getTenantId(),
+                    context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                    ex.getMessage(),
+                    ex);
             return ImportStageResult.failure(stage(), "IMPORT_PARSE_FAILED", ex.getMessage());
         }
     }

@@ -1,11 +1,11 @@
 package com.example.batch.worker.core.infrastructure;
 
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.domain.PulledTask;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
-import com.example.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
 import com.example.batch.worker.core.support.StepExecutionAdapter;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskExecutionWrapper;
@@ -57,7 +57,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
             report.setSuccess(response.success());
             report.setCode(response.code());
             report.setMessage(response.message());
-            report.setResultSummary(response.message());
+            report.setResultSummary(JsonUtils.toJson(Map.of(
+                    "code", response.code(),
+                    "message", response.message())));
             taskExecutionClient.report(report);
             return new WorkerExecutionResult(task.getTaskId(), response.success(), response.message());
         } finally {

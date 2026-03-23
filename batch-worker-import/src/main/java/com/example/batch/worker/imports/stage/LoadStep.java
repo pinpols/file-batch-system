@@ -106,6 +106,11 @@ public class LoadStep implements ImportStageStep {
             deleteQuietly(resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
             return ImportStageResult.success(stage());
         } catch (Exception ex) {
+            log.error("load stage (streaming) failed: tenantId={}, fileId={}, message={}",
+                    context.getTenantId(),
+                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                    ex.getMessage(),
+                    ex);
             return ImportStageResult.failure(stage(), "IMPORT_LOAD_FAILED", ex.getMessage());
         }
     }
@@ -162,6 +167,11 @@ public class LoadStep implements ImportStageStep {
             );
             return ImportStageResult.success(stage());
         } catch (Exception ex) {
+            log.error("load stage (legacy) failed: tenantId={}, fileId={}, message={}",
+                    context.getTenantId(),
+                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                    ex.getMessage(),
+                    ex);
             return ImportStageResult.failure(stage(), "IMPORT_LOAD_FAILED", ex.getMessage());
         }
     }

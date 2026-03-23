@@ -15,9 +15,11 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -49,6 +51,10 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     @Autowired
     private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
+    @Autowired
+    @Qualifier("businessDataSource")
+    private DataSource businessDataSource;
+
     @Test
     void importJobRunsThroughKafkaClaimAndReportsSuccess() {
         LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
@@ -60,8 +66,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         params.put("bizType", "CUSTOMER");
         params.put("content",
                 "[{\"customerNo\":\"E2E001\",\"customerName\":\"E2E User\",\"customerType\":\"PERSONAL\","
-                        + "\"creditLimit\":100.00,\"currencyCode\":\"CNY\",\"email\":\"e2e@example.com\","
-                        + "\"phone\":\"13800000001\",\"status\":\"ACTIVE\",\"openDate\":\"2022-01-15\",\"remark\":\"\"}]");
+                        + "\"certificateNo\":\"ID-20260115-0001\",\"mobileNo\":\"13800000001\","
+                        + "\"email\":\"e2e@example.com\",\"status\":\"ACTIVE\"}]");
 
         launchService.launch(new LaunchRequest(
                 TENANT,
@@ -87,7 +93,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
             assertThat(status).isEqualTo("SUCCESS");
         });
 
-        Integer rows = jdbcTemplate.queryForObject(
+        JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+        Integer rows = businessJdbc.queryForObject(
                 "select count(*)::int from biz.customer_account where tenant_id = ? and customer_no = ?",
                 Integer.class,
                 TENANT,

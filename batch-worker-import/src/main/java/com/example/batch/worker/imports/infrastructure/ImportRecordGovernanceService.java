@@ -172,6 +172,7 @@ public class ImportRecordGovernanceService {
         Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
         Object safePayload = errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
         runtimeRepository.insertFileErrorRecord(
+                context.getTenantId(),
                 fileId,
                 pipelineInstanceId,
                 pipelineStepRunId,

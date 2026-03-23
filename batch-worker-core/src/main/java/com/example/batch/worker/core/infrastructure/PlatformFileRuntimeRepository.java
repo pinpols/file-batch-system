@@ -313,7 +313,8 @@ public class PlatformFileRuntimeRepository {
         );
     }
 
-    public Long insertFileErrorRecord(Long fileId,
+    public Long insertFileErrorRecord(String tenantId,
+                                      Long fileId,
                                       Long pipelineInstanceId,
                                       Long pipelineStepRunId,
                                       Long recordNo,
@@ -324,6 +325,7 @@ public class PlatformFileRuntimeRepository {
                                       String skipAction,
                                       Object rawRecord) {
         Map<String, Object> paramMap = params(
+                "tenantId", tenantId,
                 "fileId", fileId,
                 "pipelineInstanceId", pipelineInstanceId,
                 "pipelineStepRunId", pipelineStepRunId,
