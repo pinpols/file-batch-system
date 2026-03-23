@@ -17,12 +17,12 @@ import org.springframework.beans.factory.annotation.Qualifier;
 @EnableConfigurationProperties(BusinessDataSourceProperties.class)
 @MapperScan(
         basePackages = "com.example.batch.worker.imports.mapper.business",
-        sqlSessionFactoryRef = "businessSqlSessionFactory"
+        sqlSessionFactoryRef = "importBusinessSqlSessionFactory"
 )
 public class BusinessDataSourceConfiguration {
 
-    @Bean(name = "businessDataSource")
-    public DataSource businessDataSource(BusinessDataSourceProperties properties) {
+    @Bean(name = "importBusinessDataSource")
+    public DataSource importBusinessDataSource(BusinessDataSourceProperties properties) {
         return DataSourceBuilder.create()
                 .url(properties.getUrl())
                 .username(properties.getUsername())
@@ -31,10 +31,11 @@ public class BusinessDataSourceConfiguration {
                 .build();
     }
 
-    @Bean(name = "businessSqlSessionFactory")
-    public SqlSessionFactory businessSqlSessionFactory(@Qualifier("businessDataSource") DataSource businessDataSource) throws Exception {
+    @Bean(name = "importBusinessSqlSessionFactory")
+    public SqlSessionFactory importBusinessSqlSessionFactory(
+            @Qualifier("importBusinessDataSource") DataSource importBusinessDataSource) throws Exception {
         SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-        factoryBean.setDataSource(businessDataSource);
+        factoryBean.setDataSource(importBusinessDataSource);
         factoryBean.setMapperLocations(
                 new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/business/*.xml")
         );
@@ -44,8 +45,9 @@ public class BusinessDataSourceConfiguration {
         return factoryBean.getObject();
     }
 
-    @Bean(name = "businessSqlSessionTemplate")
-    public SqlSessionTemplate businessSqlSessionTemplate(@Qualifier("businessSqlSessionFactory") SqlSessionFactory businessSqlSessionFactory) {
-        return new SqlSessionTemplate(businessSqlSessionFactory);
+    @Bean(name = "importBusinessSqlSessionTemplate")
+    public SqlSessionTemplate importBusinessSqlSessionTemplate(
+            @Qualifier("importBusinessSqlSessionFactory") SqlSessionFactory importBusinessSqlSessionFactory) {
+        return new SqlSessionTemplate(importBusinessSqlSessionFactory);
     }
 }
