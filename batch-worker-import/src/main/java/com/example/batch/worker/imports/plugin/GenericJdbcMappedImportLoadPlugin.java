@@ -30,10 +30,10 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     private final ObjectMapper objectMapper;
     private final JdbcMappedImportSecurityProperties securityProperties;
 
-    public GenericJdbcMappedImportLoadPlugin(@Qualifier("businessDataSource") DataSource businessDataSource,
+    public GenericJdbcMappedImportLoadPlugin(@Qualifier("importBusinessDataSource") DataSource importBusinessDataSource,
                                              ObjectMapper objectMapper,
                                              JdbcMappedImportSecurityProperties securityProperties) {
-        this.jdbcTemplate = new JdbcTemplate(businessDataSource);
+        this.jdbcTemplate = new JdbcTemplate(importBusinessDataSource);
         this.objectMapper = objectMapper;
         this.securityProperties = securityProperties;
     }

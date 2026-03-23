@@ -52,7 +52,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
     @Autowired
-    @Qualifier("businessDataSource")
+    @Qualifier("importBusinessDataSource")
     private DataSource businessDataSource;
 
     @Test
