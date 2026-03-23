@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.scheduler.quota;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.orchestrator.domain.scheduler.QuotaResetPolicy;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import org.junit.jupiter.api.Test;

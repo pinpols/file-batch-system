@@ -1,8 +1,9 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.enums.AlertStatus;
 import com.example.batch.common.utils.AlertFingerprints;
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
-import com.example.batch.orchestrator.domain.entity.AlertEventEntity;
+import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.orchestrator.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -39,7 +40,7 @@ public class DefaultAlertEventService implements AlertEventService {
         entity.setDetailJson(request.detailJson());
         entity.setDedupFingerprint(fingerprint);
         entity.setTraceId(request.traceId());
-        entity.setStatus("OPEN");
+        entity.setStatus(AlertStatus.OPEN.name());
 
         alertEventMapper.insertOrMerge(entity);
 

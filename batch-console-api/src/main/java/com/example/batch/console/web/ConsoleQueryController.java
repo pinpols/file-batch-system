@@ -1,7 +1,7 @@
 package com.example.batch.console.web;
 
 import com.example.batch.console.application.ConsoleQueryApplicationService;
-import com.example.batch.console.domain.entity.AlertEventEntity;
+import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.console.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.entity.FileArrivalGroupEntity;
@@ -16,7 +16,7 @@ import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeRunEntity;
-import com.example.batch.console.domain.entity.WorkflowRunEntity;
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.console.web.view.WorkflowTopologyView;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.AlertEventQueryRequest;

@@ -31,7 +31,8 @@ public interface JobPartitionMapper {
 
     int markRetrying(@Param("tenantId") String tenantId,
                      @Param("id") Long id,
-                     @Param("retryCount") Integer retryCount);
+                     @Param("retryCount") Integer retryCount,
+                     @Param("retryingStatus") String retryingStatus);
 
     int updateOutputSummary(@Param("tenantId") String tenantId,
                             @Param("id") Long id,
@@ -43,24 +44,42 @@ public interface JobPartitionMapper {
 
     int markStatus(@Param("tenantId") String tenantId,
                    @Param("id") Long id,
-                   @Param("partitionStatus") String partitionStatus);
+                   @Param("partitionStatus") String partitionStatus,
+                   @Param("runningStatus") String runningStatus,
+                   @Param("terminalStatus1") String terminalStatus1,
+                   @Param("terminalStatus2") String terminalStatus2,
+                   @Param("terminalStatus3") String terminalStatus3,
+                   @Param("terminalStatus4") String terminalStatus4);
 
-    List<JobPartitionEntity> selectExpiredLeases(@Param("tenantId") String tenantId);
+    List<JobPartitionEntity> selectExpiredLeases(@Param("tenantId") String tenantId,
+                                                 @Param("readyStatus") String readyStatus,
+                                                 @Param("runningStatus") String runningStatus);
 
-    List<JobPartitionEntity> selectExpiredLeasesGlobal();
+    List<JobPartitionEntity> selectExpiredLeasesGlobal(@Param("readyStatus") String readyStatus,
+                                                        @Param("runningStatus") String runningStatus);
 
-    List<JobPartitionEntity> selectWaitingPartitionsGlobal(@Param("batchSize") int batchSize);
+    List<JobPartitionEntity> selectWaitingPartitionsGlobal(@Param("batchSize") int batchSize,
+                                                            @Param("waitingStatus") String waitingStatus);
 
     int resetForDispatch(@Param("tenantId") String tenantId,
-                         @Param("id") Long id);
+                         @Param("id") Long id,
+                         @Param("readyStatus") String readyStatus);
 
     int promoteStatus(@Param("tenantId") String tenantId,
                       @Param("id") Long id,
                       @Param("fromStatus") String fromStatus,
                       @Param("toStatus") String toStatus);
 
-    long countActiveByTenant(@Param("tenantId") String tenantId);
+    long countActiveByTenant(@Param("tenantId") String tenantId,
+                              @Param("waitingStatus") String waitingStatus,
+                              @Param("readyStatus") String readyStatus,
+                              @Param("runningStatus") String runningStatus,
+                              @Param("retryingStatus") String retryingStatus);
 
     long countActiveByTenantAndWorkerGroup(@Param("tenantId") String tenantId,
-                                           @Param("workerGroup") String workerGroup);
+                                           @Param("workerGroup") String workerGroup,
+                                           @Param("waitingStatus") String waitingStatus,
+                                           @Param("readyStatus") String readyStatus,
+                                           @Param("runningStatus") String runningStatus,
+                                           @Param("retryingStatus") String retryingStatus);
 }

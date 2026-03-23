@@ -1,6 +1,6 @@
 package com.example.batch.worker.exports.infrastructure;
 
-import com.example.batch.worker.exports.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import io.minio.BucketExistsArgs;
 import io.minio.CopyObjectArgs;

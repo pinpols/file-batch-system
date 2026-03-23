@@ -106,7 +106,7 @@
 
     <update id="markRetrying">
         update batch.job_partition
-        set partition_status = 'RETRYING',
+        set partition_status = #{retryingStatus},
             retry_count = #{retryCount},
             worker_code = null,
             lease_expire_at = null,
@@ -135,10 +135,10 @@
     <update id="markStatus">
         update batch.job_partition
         set partition_status = #{partitionStatus},
-            worker_code = case when #{partitionStatus} = 'RUNNING' then worker_code else null end,
-            lease_expire_at = case when #{partitionStatus} = 'RUNNING' then lease_expire_at else null end,
+            worker_code = case when #{partitionStatus} = #{runningStatus} then worker_code else null end,
+            lease_expire_at = case when #{partitionStatus} = #{runningStatus} then lease_expire_at else null end,
             finished_at = case
-                when #{partitionStatus} in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED') then current_timestamp
+                when #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
                 else finished_at
             end,
             updated_at = current_timestamp
@@ -150,7 +150,7 @@
         select *
         from batch.job_partition
         where tenant_id = #{tenantId}
-          and partition_status in ('READY', 'RUNNING')
+          and partition_status in (#{readyStatus}, #{runningStatus})
           and lease_expire_at is not null
           and lease_expire_at &lt; current_timestamp
         order by id asc
@@ -159,7 +159,7 @@
     <select id="selectExpiredLeasesGlobal" resultMap="JobPartitionResultMap">
         select *
         from batch.job_partition
-        where partition_status in ('READY', 'RUNNING')
+        where partition_status in (#{readyStatus}, #{runningStatus})
           and lease_expire_at is not null
           and lease_expire_at &lt; current_timestamp
         order by id asc
@@ -168,14 +168,14 @@
     <select id="selectWaitingPartitionsGlobal" resultMap="JobPartitionResultMap">
         select *
         from batch.job_partition
-        where partition_status = 'WAITING'
+        where partition_status = #{waitingStatus}
         order by id asc
         limit #{batchSize}
     </select>
 
     <update id="resetForDispatch">
         update batch.job_partition
-        set partition_status = 'READY',
+        set partition_status = #{readyStatus},
             worker_code = null,
             lease_expire_at = null,
             started_at = null,
@@ -198,7 +198,7 @@
         select count(1)
         from batch.job_partition
         where tenant_id = #{tenantId}
-          and partition_status in ('WAITING', 'READY', 'RUNNING', 'RETRYING')
+          and partition_status in (#{waitingStatus}, #{readyStatus}, #{runningStatus}, #{retryingStatus})
     </select>
 
     <select id="countActiveByTenantAndWorkerGroup" resultType="long">
@@ -206,6 +206,6 @@
         from batch.job_partition
         where tenant_id = #{tenantId}
           and worker_group = #{workerGroup}
-          and partition_status in ('WAITING', 'READY', 'RUNNING', 'RETRYING')
+          and partition_status in (#{waitingStatus}, #{readyStatus}, #{runningStatus}, #{retryingStatus})
     </select>
 </mapper>

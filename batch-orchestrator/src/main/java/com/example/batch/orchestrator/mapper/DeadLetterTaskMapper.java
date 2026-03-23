@@ -17,6 +17,7 @@ public interface DeadLetterTaskMapper {
 
     int markReplaySuccess(@Param("tenantId") String tenantId,
                           @Param("id") Long id,
+                          @Param("successStatus") String successStatus,
                           @Param("replayCount") Integer replayCount,
                           @Param("lastReplayAt") java.time.Instant lastReplayAt,
                           @Param("lastReplayResult") String lastReplayResult);

@@ -1,4 +1,4 @@
-package com.example.batch.worker.imports.testing;
+package com.example.batch.testing;
 
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
@@ -11,19 +11,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 /**
  * Test utility for generating .xlsx file bytes in-memory using Apache POI.
- *
- * <p>Used in import tests that need Excel input fixtures without committing
- * binary files to source control.
- *
- * <p>Usage:
- * <pre>{@code
- * byte[] xlsx = TestExcelFileBuilder.builder()
- *     .sheetName("Sheet1")
- *     .headers(List.of("customerNo", "customerName", "status"))
- *     .row(List.of("C001", "Alice Wang", "ACTIVE"))
- *     .row(List.of("C002", "Bob Li", "INACTIVE"))
- *     .build();
- * }</pre>
  */
 public final class TestExcelFileBuilder {
 
@@ -31,7 +18,8 @@ public final class TestExcelFileBuilder {
     private List<String> headers;
     private final List<List<Object>> rows = new ArrayList<>();
 
-    private TestExcelFileBuilder() {}
+    private TestExcelFileBuilder() {
+    }
 
     public static TestExcelFileBuilder builder() {
         return new TestExcelFileBuilder();
@@ -52,11 +40,10 @@ public final class TestExcelFileBuilder {
         return this;
     }
 
-    /**
-     * Adds rows from a list of maps; column order follows the headers list.
-     */
     public TestExcelFileBuilder rows(List<Map<String, Object>> maps) {
-        if (headers == null) throw new IllegalStateException("Call headers() before rows(List<Map>)");
+        if (headers == null) {
+            throw new IllegalStateException("Call headers() before rows(List<Map>)");
+        }
         for (Map<String, Object> map : maps) {
             List<Object> vals = headers.stream()
                     .map(h -> map.getOrDefault(h, ""))
@@ -66,9 +53,6 @@ public final class TestExcelFileBuilder {
         return this;
     }
 
-    /**
-     * Builds the workbook and returns the raw .xlsx bytes.
-     */
     public byte[] build() {
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet(sheetName);
@@ -106,9 +90,6 @@ public final class TestExcelFileBuilder {
         }
     }
 
-    // ── convenience factory methods ──────────────────────────────────────────
-
-    /** Builds a customer import .xlsx with standard columns. */
     public static byte[] customerImport(List<Map<String, Object>> customers) {
         return builder()
                 .sheetName("Sheet1")
@@ -119,7 +100,6 @@ public final class TestExcelFileBuilder {
                 .build();
     }
 
-    /** Minimal single-row .xlsx for a given sheet name and values. */
     public static byte[] singleRow(String sheetName, List<String> headers, List<Object> values) {
         return builder()
                 .sheetName(sheetName)

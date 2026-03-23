@@ -1,7 +1,7 @@
 package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
-import com.example.batch.orchestrator.domain.entity.WorkflowRunEntity;
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 
 public interface WorkflowNodeDispatchService {
 

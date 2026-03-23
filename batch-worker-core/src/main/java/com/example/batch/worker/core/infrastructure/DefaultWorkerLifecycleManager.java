@@ -2,9 +2,7 @@ package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.worker.core.domain.WorkerRegistration;
-import com.example.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
-import com.example.batch.worker.core.support.WorkerRegistryService;
-import com.example.batch.worker.core.infrastructure.WorkerRuntimeState;
+import com.example.batch.worker.core.support.WorkerSelfRegistrationService;
 import com.example.batch.worker.core.support.WorkerLifecycleManager;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -17,7 +15,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
 
-    private final WorkerRegistryService workerRegistryService;
+    private final WorkerSelfRegistrationService workerRegistryService;
     private final WorkerRuntimeState workerRuntimeState;
     private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
 

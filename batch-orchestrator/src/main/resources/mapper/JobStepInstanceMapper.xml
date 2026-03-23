@@ -83,14 +83,14 @@
 
     <update id="markRunning">
         update batch.job_step_instance
-        set step_status = 'RUNNING',
+        set step_status = #{runningStatus},
             started_at = coalesce(started_at, #{startedAt}),
             version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
-          and step_status in ('CREATED', 'WAITING', 'READY', 'RETRYING')
+          and step_status in (#{createdStatus}, #{waitingStatus}, #{readyStatus}, #{retryingStatus})
     </update>
 
     <update id="updateProgress">
@@ -111,7 +111,7 @@
 
     <update id="resetForRetryByJobTaskId">
         update batch.job_step_instance
-        set step_status = 'READY',
+        set step_status = #{readyStatus},
             retry_count = #{retryCount},
             result_summary = null,
             error_code = null,

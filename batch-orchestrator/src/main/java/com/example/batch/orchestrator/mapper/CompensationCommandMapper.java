@@ -23,5 +23,6 @@ public interface CompensationCommandMapper {
 
     int countRunningByTarget(@Param("tenantId") String tenantId,
                              @Param("compensationType") String compensationType,
-                             @Param("targetId") Long targetId);
+                             @Param("targetId") Long targetId,
+                             @Param("runningStatus") String runningStatus);
 }

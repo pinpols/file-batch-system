@@ -2,7 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import com.example.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
-import com.example.batch.worker.dispatchs.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -23,6 +23,8 @@ import org.springframework.util.StringUtils;
 @Service
 @RequiredArgsConstructor
 public class DispatchChannelHealthService {
+
+    private static final int MAX_PROBE_CHANNEL_BATCH = 1000;
 
     private final DispatchChannelHealthRepository repository;
     private final DispatchChannelHealthProperties properties;
@@ -115,7 +117,7 @@ public class DispatchChannelHealthService {
         if (!properties.isEnabled()) {
             return;
         }
-        List<Map<String, Object>> rows = repository.findEnabledProbeChannels(properties.getProbeChannelTypes(), 1000);
+        List<Map<String, Object>> rows = repository.findEnabledProbeChannels(properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH);
         for (Map<String, Object> row : rows) {
             try {
                 probeOne(row);

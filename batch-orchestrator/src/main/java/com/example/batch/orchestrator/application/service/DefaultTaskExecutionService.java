@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
@@ -9,7 +10,7 @@ import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import com.example.batch.orchestrator.domain.entity.WorkflowRunEntity;
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
@@ -84,7 +85,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         if (!isWorkerClaimable(tenantId, workerCode, current)) {
             return current;
         }
-        int updated = jobTaskMapper.assignWorker(tenantId, taskId, workerCode, TaskStatus.RUNNING.code());
+        int updated = jobTaskMapper.assignWorker(tenantId, taskId, workerCode, TaskStatus.RUNNING.code(), TaskStatus.READY.code());
         if (updated <= 0) {
             return jobTaskMapper.selectById(tenantId, taskId);
         }
@@ -103,7 +104,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         }
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
         if (stepInstance != null
-                && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), Instant.now(), stepInstance.getVersion()) <= 0) {
+                && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), Instant.now(), stepInstance.getVersion(), StepInstanceStatus.RUNNING.code(), StepInstanceStatus.CREATED.code(), StepInstanceStatus.WAITING.code(), StepInstanceStatus.READY.code(), StepInstanceStatus.RETRYING.code()) <= 0) {
             throw new BizException(ResultCode.STATE_CONFLICT, "job step instance claim conflict");
         }
         return jobTaskMapper.selectById(tenantId, taskId);
@@ -137,7 +138,8 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         if (current == null) {
             return null;
         }
-        jobTaskMapper.updateStatus(tenantId, taskId, taskStatus, null, errorCode, errorMessage);
+        jobTaskMapper.updateStatus(tenantId, taskId, taskStatus, null, errorCode, errorMessage,
+                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code());
         return jobTaskMapper.selectById(tenantId, taskId);
     }
 
@@ -162,10 +164,11 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         }
         current.setStartedAt(startedAt);
         current.setTaskStatus(TaskStatus.RUNNING.code());
-        jobTaskMapper.updateStatus(tenantId, taskId, TaskStatus.RUNNING.code(), null, null, null);
+        jobTaskMapper.updateStatus(tenantId, taskId, TaskStatus.RUNNING.code(), null, null, null,
+                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code());
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
         if (stepInstance != null
-                && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), startedAt, stepInstance.getVersion()) <= 0) {
+                && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), startedAt, stepInstance.getVersion(), StepInstanceStatus.RUNNING.code(), StepInstanceStatus.CREATED.code(), StepInstanceStatus.WAITING.code(), StepInstanceStatus.READY.code(), StepInstanceStatus.RETRYING.code()) <= 0) {
             throw new BizException(ResultCode.STATE_CONFLICT, "job step instance running conflict");
         }
         return jobTaskMapper.selectById(tenantId, taskId);
@@ -251,18 +254,22 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         jobTaskMapper.updateStatus(command.tenantId(), command.taskId(),
                 command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code(),
                 command.resultSummary(),
-                command.errorCode(), command.errorMessage());
+                command.errorCode(), command.errorMessage(),
+                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code());
         if (partition != null) {
             if (command.success()) {
-                jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.SUCCESS.code());
+                jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.SUCCESS.code(),
+                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code());
             } else if (retryScheduled) {
                 jobPartitionMapper.markRetrying(
                         command.tenantId(),
                         partition.getId(),
-                        (partition.getRetryCount() == null ? 0 : partition.getRetryCount()) + 1
+                        (partition.getRetryCount() == null ? 0 : partition.getRetryCount()) + 1,
+                        PartitionStatus.RETRYING.code()
                 );
             } else {
-                jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.FAILED.code());
+                jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.FAILED.code(),
+                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code());
             }
             jobPartitionMapper.updateOutputSummary(
                     command.tenantId(),

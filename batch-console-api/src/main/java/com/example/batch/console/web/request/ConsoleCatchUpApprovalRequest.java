@@ -3,7 +3,7 @@ package com.example.batch.console.web.request;
 import lombok.Data;
 
 @Data
-public class CatchUpApprovalRequest {
+public class ConsoleCatchUpApprovalRequest {
 
     private String tenantId;
     private String requestId;

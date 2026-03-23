@@ -205,7 +205,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         if (request == null || !StringUtils.hasText(request.getTenantId())) {
             return 0;
         }
-        return (int) jobPartitionMapper.countActiveByTenant(request.getTenantId());
+        return (int) jobPartitionMapper.countActiveByTenant(request.getTenantId(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
     }
 
     private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
@@ -219,7 +219,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.getWorkerGroup())) {
             return 0;
         }
-        return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), queue.getWorkerGroup());
+        return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), queue.getWorkerGroup(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
     }
 
     private long resolveFairnessScore(Integer priority,

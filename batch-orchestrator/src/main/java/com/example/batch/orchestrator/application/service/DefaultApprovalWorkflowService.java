@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.enums.ApprovalCommandStatus;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import com.example.batch.orchestrator.mapper.ApprovalCommandMapper;
@@ -35,7 +36,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
         entity.setTargetType(targetType);
         entity.setTargetId(targetId);
         entity.setPayloadJson(StringUtils.hasText(payloadJson) ? payloadJson : "{}");
-        entity.setApprovalStatus("PENDING");
+        entity.setApprovalStatus(ApprovalCommandStatus.PENDING.code());
         entity.setRequesterId(requesterId);
         entity.setSourceTraceId(sourceTraceId);
         entity.setSourceIdempotencyKey(sourceIdempotencyKey);
@@ -48,10 +49,11 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     @Transactional
     public ApprovalRecord approve(String tenantId, String approvalNo, String approverId, String approvalReason) {
         ApprovalCommandEntity entity = require(tenantId, approvalNo);
-        if (!"PENDING".equals(entity.getApprovalStatus())) {
+        if (!ApprovalCommandStatus.PENDING.code().equals(entity.getApprovalStatus())) {
             return toRecord(entity);
         }
-        if (approvalCommandMapper.markApproved(tenantId, approvalNo, approverId, approvalReason) <= 0) {
+        if (approvalCommandMapper.markApproved(tenantId, approvalNo, approverId, approvalReason,
+                ApprovalCommandStatus.APPROVED.code(), ApprovalCommandStatus.PENDING.code()) <= 0) {
             return toRecord(require(tenantId, approvalNo));
         }
         return toRecord(require(tenantId, approvalNo));
@@ -61,10 +63,11 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     @Transactional
     public ApprovalRecord reject(String tenantId, String approvalNo, String approverId, String approvalReason) {
         ApprovalCommandEntity entity = require(tenantId, approvalNo);
-        if (!"PENDING".equals(entity.getApprovalStatus())) {
+        if (!ApprovalCommandStatus.PENDING.code().equals(entity.getApprovalStatus())) {
             return toRecord(entity);
         }
-        if (approvalCommandMapper.markRejected(tenantId, approvalNo, approverId, approvalReason) <= 0) {
+        if (approvalCommandMapper.markRejected(tenantId, approvalNo, approverId, approvalReason,
+                ApprovalCommandStatus.REJECTED.code(), ApprovalCommandStatus.PENDING.code()) <= 0) {
             return toRecord(require(tenantId, approvalNo));
         }
         return toRecord(require(tenantId, approvalNo));
@@ -73,7 +76,8 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     @Override
     @Transactional
     public ApprovalRecord markExecuted(String tenantId, String approvalNo) {
-        if (approvalCommandMapper.markExecuted(tenantId, approvalNo) <= 0) {
+        if (approvalCommandMapper.markExecuted(tenantId, approvalNo,
+                ApprovalCommandStatus.EXECUTED.code(), ApprovalCommandStatus.APPROVED.code()) <= 0) {
             return toRecord(require(tenantId, approvalNo));
         }
         return toRecord(require(tenantId, approvalNo));

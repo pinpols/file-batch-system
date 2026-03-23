@@ -8,6 +8,7 @@ import com.example.batch.worker.imports.domain.ImportPayload;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
+import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessException;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
 import java.nio.charset.Charset;
@@ -58,7 +59,7 @@ public class PreprocessStep implements ImportStageStep {
                 Map<String, Object> templateConfig = runtimeRepository.loadLatestTemplateConfig(
                         context.getTenantId(),
                         importPayload.templateCode(),
-                        "IMPORT"
+                        ImportWorkerType.IMPORT
                 );
                 if (!templateConfig.isEmpty()) {
                     context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);

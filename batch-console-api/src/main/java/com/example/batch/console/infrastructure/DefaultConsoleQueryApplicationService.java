@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure;
 
 import com.example.batch.console.application.ConsoleQueryApplicationService;
-import com.example.batch.console.domain.entity.AlertEventEntity;
+import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.console.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.entity.FileArrivalGroupEntity;
@@ -16,7 +16,7 @@ import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeRunEntity;
-import com.example.batch.console.domain.entity.WorkflowRunEntity;
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.console.domain.query.AlertEventQuery;
 import com.example.batch.console.domain.query.AuditLogQuery;
 import com.example.batch.console.domain.query.DeadLetterTaskQuery;
@@ -106,6 +106,8 @@ import org.springframework.util.StringUtils;
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplicationService {
+
+    private static final int DEFAULT_QUERY_LIMIT = 100;
 
     private final ConsoleTenantGuard tenantGuard;
     private final AuditLogMapper auditLogMapper;
@@ -514,7 +516,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
 
     @Override
     public List<AlertEventEntity> alertEvents(AlertEventQueryRequest request) {
-        int limit = request.getLimit() == null ? 100 : request.getLimit();
+        int limit = request.getLimit() == null ? DEFAULT_QUERY_LIMIT : request.getLimit();
         return alertEventMapper.selectByQuery(new AlertEventQuery(
                 resolveTenant(request.getTenantId()),
                 request.getSeverity(),

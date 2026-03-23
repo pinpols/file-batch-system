@@ -4,7 +4,7 @@ import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeRunEntity;
-import com.example.batch.console.domain.entity.WorkflowRunEntity;
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;

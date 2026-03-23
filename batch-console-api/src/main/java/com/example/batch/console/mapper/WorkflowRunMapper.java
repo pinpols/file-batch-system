@@ -1,6 +1,6 @@
 package com.example.batch.console.mapper;
 
-import com.example.batch.console.domain.entity.WorkflowRunEntity;
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.console.domain.query.WorkflowRunQuery;
 import java.util.List;
 

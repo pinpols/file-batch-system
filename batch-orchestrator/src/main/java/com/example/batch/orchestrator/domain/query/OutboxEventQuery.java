@@ -6,6 +6,8 @@ public record OutboxEventQuery(
         String tenantId,
         String publishStatus,
         String aggregateType,
-        PageRequest pageRequest
+        PageRequest pageRequest,
+        String pendingStatus1,
+        String pendingStatus2
 ) {
 }

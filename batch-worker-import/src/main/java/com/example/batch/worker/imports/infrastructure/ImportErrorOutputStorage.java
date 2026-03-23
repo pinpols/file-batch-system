@@ -2,7 +2,7 @@ package com.example.batch.worker.imports.infrastructure;
 
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.constants.BatchFileConstants;
-import com.example.batch.worker.imports.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.worker.imports.domain.ImportBadRecord;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;

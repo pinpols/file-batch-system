@@ -3,6 +3,8 @@ package com.example.batch.orchestrator.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.enums.SchedulingPriorityBand;
+import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.infrastructure.scheduler.DefaultPriorityScheduler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

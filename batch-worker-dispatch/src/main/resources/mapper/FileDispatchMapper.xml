@@ -30,7 +30,7 @@
             tenant_id, file_id, pipeline_instance_id, channel_code, dispatch_target, dispatch_status,
             dispatch_attempt, receipt_code, receipt_status, external_request_id
         ) values (
-            #{tenantId}, #{fileId}, #{pipelineInstanceId}, #{channelCode}, #{dispatchTarget}, 'CREATED',
+            #{tenantId}, #{fileId}, #{pipelineInstanceId}, #{channelCode}, #{dispatchTarget}, #{dispatchStatus},
             1, #{receiptCode}, #{receiptStatus}, #{externalRequestId}
         )
     </insert>
@@ -46,7 +46,7 @@
 
     <update id="markSent">
         update batch.file_dispatch_record
-        set dispatch_status = 'SENT',
+        set dispatch_status = #{dispatchStatus},
             external_request_id = #{externalRequestId},
             receipt_code = coalesce(#{receiptCode}, receipt_code),
             receipt_status = #{receiptStatus},
@@ -59,8 +59,8 @@
 
     <update id="markAcked">
         update batch.file_dispatch_record
-        set dispatch_status = 'ACKED',
-            receipt_status = 'SUCCESS',
+        set dispatch_status = #{dispatchStatus},
+            receipt_status = #{receiptStatus},
             receipt_code = #{receiptCode},
             ack_at = current_timestamp,
             updated_at = current_timestamp
@@ -71,8 +71,8 @@
 
     <update id="markFailed">
         update batch.file_dispatch_record
-        set dispatch_status = 'FAILED',
-            receipt_status = 'FAILED',
+        set dispatch_status = #{dispatchStatus},
+            receipt_status = #{receiptStatus},
             error_code = #{errorCode},
             error_message = #{errorMessage},
             updated_at = current_timestamp
@@ -84,18 +84,18 @@
     <select id="listPendingReceiptPolls" resultType="map">
         select *
         from batch.file_dispatch_record
-        where dispatch_status = 'SENT'
-          and receipt_status = 'PENDING'
+        where dispatch_status = #{dispatchStatus}
+          and receipt_status = #{receiptStatus}
         order by dispatched_at asc nulls last
         limit #{limit}
     </select>
 
     <update id="markCompensated">
         update batch.file_dispatch_record
-        set dispatch_status = 'COMPENSATED',
+        set dispatch_status = #{dispatchStatus},
             receipt_status = case
-                when receipt_status = 'SUCCESS' then receipt_status
-                else 'FAILED'
+                when receipt_status = #{receiptStatusSuccess} then receipt_status
+                else #{receiptStatusFailed}
             end,
             error_code = #{errorCode},
             error_message = #{errorMessage},

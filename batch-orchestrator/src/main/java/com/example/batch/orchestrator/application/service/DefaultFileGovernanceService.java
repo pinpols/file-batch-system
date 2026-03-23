@@ -1,6 +1,8 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
@@ -150,8 +152,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         }
 
         fileGovernanceRepository.resetDispatchRecordForRedispatch(command.tenantId(), toLong(dispatchRecord.get("id")));
-        jobPartitionMapper.resetForDispatch(command.tenantId(), partition.getId());
-        jobTaskMapper.resetForRetry(command.tenantId(), task.getId());
+        jobPartitionMapper.resetForDispatch(command.tenantId(), partition.getId(), PartitionStatus.READY.code());
+        jobTaskMapper.resetForRetry(command.tenantId(), task.getId(), TaskStatus.READY.code());
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,

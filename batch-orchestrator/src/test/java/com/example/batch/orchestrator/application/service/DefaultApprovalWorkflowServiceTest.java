@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.ApprovalCommandStatus;
 import com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import com.example.batch.orchestrator.mapper.ApprovalCommandMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,7 +84,8 @@ class DefaultApprovalWorkflowServiceTest {
         when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-002"))
                 .thenReturn(entity)
                 .thenReturn(approved);
-        when(approvalCommandMapper.markApproved("t1", "apr-002", "approver-001", "approved")).thenReturn(1);
+        when(approvalCommandMapper.markApproved("t1", "apr-002", "approver-001", "approved",
+                ApprovalCommandStatus.APPROVED.code(), ApprovalCommandStatus.PENDING.code())).thenReturn(1);
 
         ApprovalWorkflowService.ApprovalRecord result = service.approve("t1", "apr-002", "approver-001", "approved");
 
@@ -110,7 +112,8 @@ class DefaultApprovalWorkflowServiceTest {
         when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-003"))
                 .thenReturn(entity)
                 .thenReturn(rejected);
-        when(approvalCommandMapper.markRejected("t1", "apr-003", "approver-001", "data incorrect")).thenReturn(1);
+        when(approvalCommandMapper.markRejected("t1", "apr-003", "approver-001", "data incorrect",
+                ApprovalCommandStatus.REJECTED.code(), ApprovalCommandStatus.PENDING.code())).thenReturn(1);
 
         ApprovalWorkflowService.ApprovalRecord result = service.reject("t1", "apr-003", "approver-001", "data incorrect");
 
@@ -134,7 +137,8 @@ class DefaultApprovalWorkflowServiceTest {
     void shouldMarkExecutedAfterApproval() {
         ApprovalCommandEntity executed = pendingApproval("t1", "apr-005");
         executed.setApprovalStatus("EXECUTED");
-        when(approvalCommandMapper.markExecuted("t1", "apr-005")).thenReturn(1);
+        when(approvalCommandMapper.markExecuted("t1", "apr-005",
+                ApprovalCommandStatus.EXECUTED.code(), ApprovalCommandStatus.APPROVED.code())).thenReturn(1);
         when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-005")).thenReturn(executed);
 
         ApprovalWorkflowService.ApprovalRecord result = service.markExecuted("t1", "apr-005");

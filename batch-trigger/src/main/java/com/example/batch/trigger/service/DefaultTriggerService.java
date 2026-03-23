@@ -10,7 +10,7 @@ import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
-import com.example.batch.trigger.domain.entity.TriggerRequestEntity;
+import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

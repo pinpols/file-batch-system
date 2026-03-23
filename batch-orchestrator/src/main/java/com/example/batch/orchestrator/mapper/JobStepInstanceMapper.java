@@ -21,7 +21,12 @@ public interface JobStepInstanceMapper {
     int markRunning(@Param("tenantId") String tenantId,
                     @Param("id") Long id,
                     @Param("startedAt") Instant startedAt,
-                    @Param("expectedVersion") Long expectedVersion);
+                    @Param("expectedVersion") Long expectedVersion,
+                    @Param("runningStatus") String runningStatus,
+                    @Param("createdStatus") String createdStatus,
+                    @Param("waitingStatus") String waitingStatus,
+                    @Param("readyStatus") String readyStatus,
+                    @Param("retryingStatus") String retryingStatus);
 
     int updateProgress(@Param("tenantId") String tenantId,
                        @Param("id") Long id,
@@ -36,5 +41,6 @@ public interface JobStepInstanceMapper {
 
     int resetForRetryByJobTaskId(@Param("tenantId") String tenantId,
                                  @Param("jobTaskId") Long jobTaskId,
-                                 @Param("retryCount") Integer retryCount);
+                                 @Param("retryCount") Integer retryCount,
+                                 @Param("readyStatus") String readyStatus);
 }

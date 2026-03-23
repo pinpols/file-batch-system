@@ -2,7 +2,7 @@ package com.example.batch.console.application;
 
 import com.example.batch.console.web.request.CompensateRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
-import com.example.batch.console.web.request.CatchUpApprovalRequest;
+import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
 import com.example.batch.console.web.request.TriggerRequest;
@@ -19,5 +19,5 @@ public interface ConsoleJobApplicationService {
 
     String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey);
 
-    String approveCatchUp(CatchUpApprovalRequest request, String idempotencyKey);
+    String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey);
 }

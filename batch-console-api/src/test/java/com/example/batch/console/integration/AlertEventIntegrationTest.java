@@ -3,7 +3,7 @@ package com.example.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.console.BatchConsoleApiApplication;
-import com.example.batch.console.domain.entity.AlertEventEntity;
+import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.console.domain.query.AlertEventQuery;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;

@@ -2,7 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure;
 
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.worker.dispatchs.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;

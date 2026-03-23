@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SchedulerSnapshotController {
 
+    private static final int MAX_SNAPSHOT_LIMIT = 100;
+
     private final TenantSchedulerSnapshotService tenantSchedulerSnapshotService;
     private final TenantSchedulerSnapshotRepository tenantSchedulerSnapshotRepository;
 
@@ -27,6 +29,6 @@ public class SchedulerSnapshotController {
     @GetMapping("/snapshot/history")
     public List<TenantSchedulerSnapshotRecord> history(@RequestParam("tenantId") String tenantId,
                                                        @RequestParam(value = "limit", defaultValue = "20") int limit) {
-        return tenantSchedulerSnapshotRepository.listRecent(tenantId, Math.min(Math.max(limit, 1), 100));
+        return tenantSchedulerSnapshotRepository.listRecent(tenantId, Math.min(Math.max(limit, 1), MAX_SNAPSHOT_LIMIT));
     }
 }

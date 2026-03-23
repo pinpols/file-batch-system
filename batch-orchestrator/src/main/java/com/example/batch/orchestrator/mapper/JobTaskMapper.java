@@ -18,25 +18,35 @@ public interface JobTaskMapper {
     List<JobTaskEntity> selectByQuery(JobTaskQuery query);
 
     List<JobTaskEntity> selectReadyTasks(@Param("tenantId") String tenantId,
-                                         @Param("batchSize") int batchSize);
+                                         @Param("batchSize") int batchSize,
+                                         @Param("readyStatus") String readyStatus);
 
     List<JobTaskEntity> selectActiveByAssignedWorker(@Param("tenantId") String tenantId,
-                                                     @Param("assignedWorkerCode") String assignedWorkerCode);
+                                                     @Param("assignedWorkerCode") String assignedWorkerCode,
+                                                     @Param("runningStatus") String runningStatus,
+                                                     @Param("readyStatus") String readyStatus,
+                                                     @Param("createdStatus") String createdStatus);
 
     int updateStatus(@Param("tenantId") String tenantId,
                      @Param("id") Long id,
                      @Param("taskStatus") String taskStatus,
                      @Param("resultSummary") String resultSummary,
                      @Param("errorCode") String errorCode,
-                     @Param("errorMessage") String errorMessage);
+                     @Param("errorMessage") String errorMessage,
+                     @Param("terminalStatus1") String terminalStatus1,
+                     @Param("terminalStatus2") String terminalStatus2,
+                     @Param("terminalStatus3") String terminalStatus3,
+                     @Param("terminalStatus4") String terminalStatus4);
 
     int assignWorker(@Param("tenantId") String tenantId,
                      @Param("id") Long id,
                      @Param("assignedWorkerCode") String assignedWorkerCode,
-                     @Param("taskStatus") String taskStatus);
+                     @Param("taskStatus") String taskStatus,
+                     @Param("readyStatus") String readyStatus);
 
     int resetForRetry(@Param("tenantId") String tenantId,
-                      @Param("id") Long id);
+                      @Param("id") Long id,
+                      @Param("readyStatus") String readyStatus);
 
     int promoteStatus(@Param("tenantId") String tenantId,
                       @Param("id") Long id,

@@ -74,7 +74,7 @@
 
     <update id="markRunning">
         update batch.retry_schedule
-        set retry_status = 'RUNNING',
+        set retry_status = #{runningStatus},
             updated_at = current_timestamp
         where id = #{id}
           and retry_status = #{fromStatus}
@@ -82,7 +82,7 @@
 
     <update id="markSuccess">
         update batch.retry_schedule
-        set retry_status = 'SUCCESS',
+        set retry_status = #{successStatus},
             updated_at = current_timestamp
         where id = #{id}
     </update>

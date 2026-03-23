@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
@@ -125,7 +126,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
         JobTaskEntity task = new JobTaskEntity();
         task.setId(100L);
         task.setTenantId("t1");
-        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of(task));
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
+                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of(task));
 
         WorkerRegistryRecord result = service.forceOffline("t1", "w1");
 
@@ -138,7 +140,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
         WorkerRegistryRecord registry = onlineWorker("t1", "w1");
         when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
         when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
+                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of());
 
         WorkerRegistryRecord result = service.forceOffline("t1", "w1");
 
@@ -158,7 +161,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
     void shouldReturnActiveTasksForWorker() {
         JobTaskEntity task = new JobTaskEntity();
         task.setId(200L);
-        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of(task));
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
+                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of(task));
 
         List<JobTaskEntity> tasks = service.listClaimedTasks("t1", "w1");
 
@@ -186,7 +190,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
         service.takeoverAfterDrainTimeout("t1", "w1");
 
-        verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString());
+        verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -197,7 +201,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
         service.takeoverAfterDrainTimeout("t1", "w1");
 
-        verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString());
+        verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -211,7 +215,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
                 .thenReturn(registry)
                 .thenReturn(registry);
         when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
+                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of());
 
         service.takeoverAfterDrainTimeout("t1", "w1");
 
@@ -233,7 +238,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
         JobTaskEntity task2 = new JobTaskEntity();
         task2.setId(302L);
         task2.setTenantId("t1");
-        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of(task1, task2));
+        when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
+                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of(task1, task2));
         doThrow(new RuntimeException("retry failed")).when(retryGovernanceService)
                 .retryTask(eq("t1"), eq(301L), anyString());
 

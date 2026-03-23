@@ -7,7 +7,9 @@ import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.imports.domain.ImportJobContext;
+import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
+import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.stage.ImportStageExecutor;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +31,7 @@ public class ImportStepExecutionAdapter extends AbstractPipelineStepExecutionAda
 
     @Override
     protected String pipelineType() {
-        return "IMPORT";
+        return ImportWorkerType.IMPORT;
     }
 
     @Override
@@ -44,7 +46,7 @@ public class ImportStepExecutionAdapter extends AbstractPipelineStepExecutionAda
 
     @Override
     protected String initialStage() {
-        return "RECEIVE";
+        return ImportStage.RECEIVE.name();
     }
 
     @Override

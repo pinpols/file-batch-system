@@ -9,6 +9,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -47,7 +49,7 @@ class PartitionLeaseReclaimSchedulerTest {
 
     @Test
     void shouldDoNothingWhenNoExpiredPartitions() {
-        when(jobPartitionMapper.selectExpiredLeasesGlobal()).thenReturn(List.of());
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code())).thenReturn(List.of());
 
         scheduler.reclaimExpiredPartitions();
 
@@ -57,12 +59,12 @@ class PartitionLeaseReclaimSchedulerTest {
     @Test
     void shouldResetPartitionForDispatchWhenNoRunningTaskFound() {
         JobPartitionEntity partition = expiredPartition("t1", 1L, 10L);
-        when(jobPartitionMapper.selectExpiredLeasesGlobal()).thenReturn(List.of(partition));
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code())).thenReturn(List.of(partition));
         when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of());
 
         scheduler.reclaimExpiredPartitions();
 
-        verify(jobPartitionMapper).resetForDispatch("t1", 1L);
+        verify(jobPartitionMapper).resetForDispatch("t1", 1L, PartitionStatus.READY.code());
         verify(taskDispatchOutboxService, never()).writeDispatchEvent(any(), any(), any(), anyString(), anyString());
     }
 
@@ -70,7 +72,7 @@ class PartitionLeaseReclaimSchedulerTest {
     void shouldSkipReclaimWhenJobInstanceNotFound() {
         JobPartitionEntity partition = expiredPartition("t1", 2L, 20L);
         JobTaskEntity task = runningTask("t1", 200L, 2L);
-        when(jobPartitionMapper.selectExpiredLeasesGlobal()).thenReturn(List.of(partition));
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code())).thenReturn(List.of(partition));
         when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
         when(jobInstanceMapper.selectById("t1", 20L)).thenReturn(null);
 
@@ -84,14 +86,14 @@ class PartitionLeaseReclaimSchedulerTest {
         JobPartitionEntity partition = expiredPartition("t1", 3L, 30L);
         JobTaskEntity task = runningTask("t1", 300L, 3L);
         JobInstanceEntity jobInstance = jobInstance("t1", 30L);
-        when(jobPartitionMapper.selectExpiredLeasesGlobal()).thenReturn(List.of(partition));
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code())).thenReturn(List.of(partition));
         when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
         when(jobInstanceMapper.selectById("t1", 30L)).thenReturn(jobInstance);
 
         scheduler.reclaimExpiredPartitions();
 
-        verify(jobPartitionMapper).resetForDispatch("t1", 3L);
-        verify(jobTaskMapper).resetForRetry("t1", 300L);
+        verify(jobPartitionMapper).resetForDispatch("t1", 3L, PartitionStatus.READY.code());
+        verify(jobTaskMapper).resetForRetry("t1", 300L, TaskStatus.READY.code());
         verify(taskDispatchOutboxService).writeDispatchEvent(any(), any(), any(), anyString(), anyString());
     }
 
@@ -103,7 +105,7 @@ class PartitionLeaseReclaimSchedulerTest {
         JobTaskEntity t2 = runningTask("t1", 501L, 5L);
         JobInstanceEntity instance = jobInstance("t1", 40L);
 
-        when(jobPartitionMapper.selectExpiredLeasesGlobal()).thenReturn(List.of(p1, p2));
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code())).thenReturn(List.of(p1, p2));
         when(jobTaskMapper.selectByQuery(any()))
                 .thenReturn(List.of(t1))
                 .thenReturn(List.of(t2));
@@ -119,12 +121,12 @@ class PartitionLeaseReclaimSchedulerTest {
         // First call starts without finishing (simulated by blocking selectExpiredLeasesGlobal)
         // This test verifies the AtomicBoolean guard via thread racing
         // Simple sequential test: calling twice should process both
-        when(jobPartitionMapper.selectExpiredLeasesGlobal()).thenReturn(List.of());
+        when(jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code())).thenReturn(List.of());
 
         scheduler.reclaimExpiredPartitions();
         scheduler.reclaimExpiredPartitions();
 
-        verify(jobPartitionMapper, times(2)).selectExpiredLeasesGlobal();
+        verify(jobPartitionMapper, times(2)).selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

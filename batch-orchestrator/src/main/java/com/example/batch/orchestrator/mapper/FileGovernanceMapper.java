@@ -35,7 +35,7 @@ public interface FileGovernanceMapper {
 
     Long countProcessingDelayViolations(Map<String, Object> params);
 
-    Long selectMaxProcessingDelaySeconds();
+    Long selectMaxProcessingDelaySeconds(Map<String, Object> params);
 
     List<Map<String, Object>> selectProcessingDelaySamples(Map<String, Object> params);
 

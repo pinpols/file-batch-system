@@ -2,6 +2,7 @@ package com.example.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

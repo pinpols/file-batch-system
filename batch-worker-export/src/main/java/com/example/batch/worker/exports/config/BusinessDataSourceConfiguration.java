@@ -1,5 +1,7 @@
 package com.example.batch.worker.exports.config;
 
+import com.example.batch.common.config.BusinessDataSourceProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;

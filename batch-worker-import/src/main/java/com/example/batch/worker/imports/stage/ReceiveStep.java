@@ -12,6 +12,7 @@ import java.util.Map;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
+import com.example.batch.worker.imports.domain.ImportWorkerType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -103,7 +104,7 @@ public class ReceiveStep implements ImportStageStep {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(templateCode)) {
             return Map.of();
         }
-        Map<String, Object> template = runtimeRepository.loadLatestTemplateConfig(tenantId, templateCode, "IMPORT");
+        Map<String, Object> template = runtimeRepository.loadLatestTemplateConfig(tenantId, templateCode, ImportWorkerType.IMPORT);
         if (template == null || template.isEmpty()) {
             return Map.of();
         }

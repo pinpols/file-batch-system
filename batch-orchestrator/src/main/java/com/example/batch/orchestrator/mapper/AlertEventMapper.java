@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
-import com.example.batch.orchestrator.domain.entity.AlertEventEntity;
+import com.example.batch.common.persistence.entity.AlertEventEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

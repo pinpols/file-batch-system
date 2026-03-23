@@ -7,6 +7,7 @@ import com.example.batch.common.enums.AiPromptCategory;
 import com.example.batch.common.enums.AiPromptDecision;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.config.ConsoleAiProperties;
+import com.example.batch.console.service.ConsoleAiPromptGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

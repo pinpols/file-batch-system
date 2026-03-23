@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.application.service;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import com.example.batch.common.enums.CompensationCommandStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
@@ -86,7 +87,8 @@ class DefaultCompensationServiceTest {
         org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyLong()
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -99,7 +101,8 @@ class DefaultCompensationServiceTest {
         org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any()
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -112,7 +115,8 @@ class DefaultCompensationServiceTest {
         org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any()
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -125,7 +129,8 @@ class DefaultCompensationServiceTest {
         org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any()
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -140,7 +145,8 @@ class DefaultCompensationServiceTest {
         org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any()
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -155,7 +161,8 @@ class DefaultCompensationServiceTest {
         org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any()
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))

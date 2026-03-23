@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class AlertEventQueryRequest {
 
+    private static final int DEFAULT_LIMIT = 100;
+
     @NotBlank
     private String tenantId;
     private String severity;
@@ -15,5 +17,5 @@ public class AlertEventQueryRequest {
     private String alertType;
     @Min(1)
     @Max(500)
-    private Integer limit = 100;
+    private Integer limit = DEFAULT_LIMIT;
 }
