@@ -2,7 +2,7 @@ package com.example.batch.worker.imports.runtime;
 
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
-import com.example.batch.worker.imports.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.worker.imports.config.MinioImportScannerProperties;
 import io.minio.BucketExistsArgs;
 import io.minio.ListObjectsArgs;

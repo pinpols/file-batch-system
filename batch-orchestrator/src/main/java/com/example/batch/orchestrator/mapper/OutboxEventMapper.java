@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.mapper;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.domain.query.OutboxEventQuery;
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 public interface OutboxEventMapper {
 
@@ -10,16 +11,22 @@ public interface OutboxEventMapper {
 
     List<OutboxEventEntity> selectPending(OutboxEventQuery query);
 
-    int markPublishing(@org.apache.ibatis.annotations.Param("tenantId") String tenantId,
-                       @org.apache.ibatis.annotations.Param("id") Long id);
+    int markPublishing(@Param("tenantId") String tenantId,
+                       @Param("id") Long id,
+                       @Param("publishingStatus") String publishingStatus,
+                       @Param("pendingStatus1") String pendingStatus1,
+                       @Param("pendingStatus2") String pendingStatus2);
 
-    int markPublished(@org.apache.ibatis.annotations.Param("tenantId") String tenantId,
-                      @org.apache.ibatis.annotations.Param("id") Long id);
+    int markPublished(@Param("tenantId") String tenantId,
+                      @Param("id") Long id,
+                      @Param("status") String status);
 
-    int markFailed(@org.apache.ibatis.annotations.Param("tenantId") String tenantId,
-                   @org.apache.ibatis.annotations.Param("id") Long id,
-                   @org.apache.ibatis.annotations.Param("nextPublishAt") java.time.Instant nextPublishAt);
+    int markFailed(@Param("tenantId") String tenantId,
+                   @Param("id") Long id,
+                   @Param("status") String status,
+                   @Param("nextPublishAt") java.time.Instant nextPublishAt);
 
-    int markGiveUp(@org.apache.ibatis.annotations.Param("tenantId") String tenantId,
-                   @org.apache.ibatis.annotations.Param("id") Long id);
+    int markGiveUp(@Param("tenantId") String tenantId,
+                   @Param("id") Long id,
+                   @Param("status") String status);
 }

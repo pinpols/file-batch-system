@@ -93,7 +93,7 @@
             trace_id, started_at, created_at, updated_at
         ) values (
             #{tenantId}, #{pipelineDefinitionId}, #{pipelineCode}, #{pipelineType},
-            #{fileId}, #{relatedJobInstanceId}, #{currentStage}, 'RUNNING',
+            #{fileId}, #{relatedJobInstanceId}, #{currentStage}, #{runStatus},
             #{traceId}, current_timestamp, current_timestamp, current_timestamp
         )
     </insert>
@@ -117,7 +117,7 @@
         update batch.pipeline_instance
         set current_stage = #{currentStage},
             last_success_stage = #{lastSuccessStage},
-            run_status = 'SUCCESS',
+            run_status = #{runStatus},
             finished_at = current_timestamp,
             updated_at = current_timestamp
         where id = #{pipelineInstanceId}
@@ -127,7 +127,7 @@
         update batch.pipeline_instance
         set current_stage = #{currentStage},
             last_success_stage = #{lastSuccessStage},
-            run_status = 'FAILED',
+            run_status = #{runStatus},
             finished_at = current_timestamp,
             updated_at = current_timestamp
         where id = #{pipelineInstanceId}
@@ -146,7 +146,7 @@
             step_status, input_summary, started_at
         ) values (
             #{pipelineInstanceId}, #{stepCode}, #{stageCode}, #{runSeq},
-            'RUNNING', #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
+            #{stepStatus}, #{inputSummaryJson,jdbcType=VARCHAR}::jsonb, current_timestamp
         )
     </insert>
 

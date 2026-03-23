@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
@@ -64,7 +65,8 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
         if (!StringUtils.hasText(workerCode)) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "workerCode is required");
         }
-        return jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode);
+        return jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode,
+                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code());
     }
 
     @Override
@@ -83,7 +85,8 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     }
 
     private void takeoverTasks(String tenantId, String workerCode) {
-        List<JobTaskEntity> tasks = jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode);
+        List<JobTaskEntity> tasks = jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode,
+                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code());
         for (JobTaskEntity task : tasks) {
             if (task == null || task.getId() == null) {
                 continue;

@@ -1,5 +1,8 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
+import com.example.batch.common.enums.FileDispatchRunStatus;
+import com.example.batch.common.enums.FileDispatchStatus;
+import com.example.batch.common.enums.FileReceiptStatus;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.JsonUtils;
 import java.time.Instant;
@@ -37,7 +40,13 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return 0L;
         }
-        Long count = fileGovernanceMapper.countActivePipelineInstances(params("tenantId", tenantId, "fileId", fileId));
+        Long count = fileGovernanceMapper.countActivePipelineInstances(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "createdStatus", FileDispatchRunStatus.CREATED.code(),
+                "runningStatus", FileDispatchRunStatus.RUNNING.code(),
+                "compensatingStatus", FileDispatchRunStatus.COMPENSATING.code()
+        ));
         return count == null ? 0L : count;
     }
 
@@ -45,7 +54,13 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return 0L;
         }
-        Long count = fileGovernanceMapper.countPendingDispatchRecords(params("tenantId", tenantId, "fileId", fileId));
+        Long count = fileGovernanceMapper.countPendingDispatchRecords(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "dispatchCreatedStatus", FileDispatchStatus.CREATED.name(),
+                "dispatchSentStatus", FileDispatchStatus.SENT.name(),
+                "receiptPendingStatus", FileReceiptStatus.PENDING.name()
+        ));
         return count == null ? 0L : count;
     }
 
@@ -70,11 +85,19 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId) || dispatchRecordId == null) {
             return;
         }
-        fileGovernanceMapper.resetDispatchRecordForRedispatch(params("tenantId", tenantId, "dispatchRecordId", dispatchRecordId));
+        fileGovernanceMapper.resetDispatchRecordForRedispatch(params(
+                "tenantId", tenantId,
+                "dispatchRecordId", dispatchRecordId,
+                "dispatchCreatedStatus", FileDispatchStatus.CREATED.name()
+        ));
     }
 
     public List<Map<String, Object>> selectArchivedFilesForCleanup(Instant cutoff, int limit) {
-        return fileGovernanceMapper.selectArchivedFilesForCleanup(params("cutoff", cutoff, "limit", limit));
+        return fileGovernanceMapper.selectArchivedFilesForCleanup(params(
+                "cutoff", cutoff,
+                "limit", limit,
+                "archivedStatus", FileDispatchRunStatus.ARCHIVED.code()
+        ));
     }
 
     public List<Map<String, Object>> selectArrivalGovernanceCandidates(int limit) {
@@ -114,17 +137,26 @@ public class FileGovernanceRepository {
     }
 
     public long countProcessingDelayViolations(long thresholdSeconds) {
-        Long count = fileGovernanceMapper.countProcessingDelayViolations(params("thresholdSeconds", thresholdSeconds));
+        Long count = fileGovernanceMapper.countProcessingDelayViolations(params(
+                "thresholdSeconds", thresholdSeconds,
+                "runningStatus", FileDispatchRunStatus.RUNNING.code()
+        ));
         return count == null ? 0L : count;
     }
 
     public long maxProcessingDelaySeconds() {
-        Long maxDelay = fileGovernanceMapper.selectMaxProcessingDelaySeconds();
+        Long maxDelay = fileGovernanceMapper.selectMaxProcessingDelaySeconds(params(
+                "runningStatus", FileDispatchRunStatus.RUNNING.code()
+        ));
         return maxDelay == null ? 0L : maxDelay;
     }
 
     public List<Map<String, Object>> selectProcessingDelaySamples(long thresholdSeconds, int limit) {
-        return fileGovernanceMapper.selectProcessingDelaySamples(params("thresholdSeconds", thresholdSeconds, "limit", limit));
+        return fileGovernanceMapper.selectProcessingDelaySamples(params(
+                "thresholdSeconds", thresholdSeconds,
+                "limit", limit,
+                "runningStatus", FileDispatchRunStatus.RUNNING.code()
+        ));
     }
 
     public boolean existsFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {

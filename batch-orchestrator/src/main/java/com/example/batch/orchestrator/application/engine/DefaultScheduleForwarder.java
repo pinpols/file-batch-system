@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.engine;
 
+import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
@@ -29,25 +30,33 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                 plan == null ? null : plan.getTenantId(),
                 null,
                 null,
-                null
+                null,
+                OutboxPublishStatus.NEW.code(),
+                OutboxPublishStatus.FAILED.code()
         ));
         pendingEvents.stream()
                 .limit(outboxProperties.getBatchSize())
                 .forEach(event -> {
-                    if (outboxEventMapper.markPublishing(event.getTenantId(), event.getId()) > 0) {
+                    if (outboxEventMapper.markPublishing(
+                            event.getTenantId(),
+                            event.getId(),
+                            OutboxPublishStatus.PUBLISHING.code(),
+                            OutboxPublishStatus.NEW.code(),
+                            OutboxPublishStatus.FAILED.code()) > 0) {
                         boolean published = outboxPublisher.publish(event);
                         if (published) {
-                            outboxEventMapper.markPublished(event.getTenantId(), event.getId());
+                            outboxEventMapper.markPublished(event.getTenantId(), event.getId(), OutboxPublishStatus.PUBLISHED.code());
                         } else {
                             Instant nextRetryAt = Instant.now().plusSeconds(outboxProperties.getRetryDelaySeconds());
                             int attemptNo = event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
                             if (attemptNo >= outboxProperties.getMaxRetryAttempts()) {
-                                outboxEventMapper.markGiveUp(event.getTenantId(), event.getId());
+                                outboxEventMapper.markGiveUp(event.getTenantId(), event.getId(), OutboxPublishStatus.GIVE_UP.code());
                                 recordRetry(event, attemptNo, null, "retry attempts exhausted");
                             } else {
                                 outboxEventMapper.markFailed(
                                         event.getTenantId(),
                                         event.getId(),
+                                        OutboxPublishStatus.FAILED.code(),
                                         nextRetryAt
                                 );
                                 recordRetry(event, attemptNo, nextRetryAt, "publish failed");

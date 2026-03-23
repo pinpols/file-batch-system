@@ -2,7 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.constants.BatchFileConstants;
-import com.example.batch.worker.dispatchs.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;

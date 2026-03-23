@@ -85,9 +85,10 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     @Transactional
     public int reclaimExpiredPartitions(String tenantId) {
         int reclaimed = 0;
-        List<JobPartitionEntity> expired = jobPartitionMapper.selectExpiredLeases(tenantId);
+        List<JobPartitionEntity> expired = jobPartitionMapper.selectExpiredLeases(tenantId, PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
         for (JobPartitionEntity partition : expired) {
-            reclaimed += jobPartitionMapper.markStatus(tenantId, partition.getId(), PartitionStatus.WAITING.code());
+            reclaimed += jobPartitionMapper.markStatus(tenantId, partition.getId(), PartitionStatus.WAITING.code(),
+                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code());
         }
         return reclaimed;
     }

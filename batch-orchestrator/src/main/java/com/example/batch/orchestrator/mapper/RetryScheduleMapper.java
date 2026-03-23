@@ -15,9 +15,11 @@ public interface RetryScheduleMapper {
     List<RetryScheduleEntity> selectByQuery(RetryScheduleQuery query);
 
     int markRunning(@Param("id") Long id,
-                    @Param("fromStatus") String fromStatus);
+                    @Param("fromStatus") String fromStatus,
+                    @Param("runningStatus") String runningStatus);
 
-    int markSuccess(@Param("id") Long id);
+    int markSuccess(@Param("id") Long id,
+                    @Param("successStatus") String successStatus);
 
     int markFailed(@Param("id") Long id,
                    @Param("retryStatus") String retryStatus,

@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
-public class CatchUpApprovalRequest {
+public class TriggerCatchUpRequest {
 
     @NotBlank
     private String tenantId;

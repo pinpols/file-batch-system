@@ -6,7 +6,7 @@ import com.example.batch.console.config.ConsoleTriggerClientProperties;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.web.request.CatchUpApprovalRequest;
+import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensateRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
@@ -142,7 +142,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     }
 
     @Override
-    public String approveCatchUp(CatchUpApprovalRequest request, String idempotencyKey) {
+    public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {
             return submitApproval("CATCH_UP", "CATCH_UP", "CATCH_UP", request.getRequestId(), request, request.getReason(), idempotencyKey);
         }
@@ -166,7 +166,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         );
     }
 
-    private String approvePendingCatchUpRequest(CatchUpApprovalRequest request, String idempotencyKey) {
+    private String approvePendingCatchUpRequest(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
         String tenantId = resolveTenant(request.getTenantId());
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(triggerClientProperties.getBaseUrl()).build();
@@ -298,7 +298,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         if (payload instanceof DeadLetterReplayRequest request) {
             return request.getTenantId();
         }
-        if (payload instanceof CatchUpApprovalRequest request) {
+        if (payload instanceof ConsoleCatchUpApprovalRequest request) {
             return request.getTenantId();
         }
         return null;

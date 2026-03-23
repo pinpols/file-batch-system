@@ -88,7 +88,7 @@
         select *
         from batch.job_task
         where tenant_id = #{tenantId}
-          and task_status = 'READY'
+          and task_status = #{readyStatus}
         order by id asc
         limit #{batchSize}
     </select>
@@ -98,7 +98,7 @@
         from batch.job_task
         where tenant_id = #{tenantId}
           and assigned_worker_code = #{assignedWorkerCode}
-          and task_status in ('RUNNING', 'READY', 'CREATED')
+          and task_status in (#{runningStatus}, #{readyStatus}, #{createdStatus})
         order by id asc
     </select>
 
@@ -109,7 +109,7 @@
             error_code = #{errorCode},
             error_message = #{errorMessage},
             finished_at = case
-                when #{taskStatus} in ('SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED') then current_timestamp
+                when #{taskStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
                 else finished_at
             end,
             updated_at = current_timestamp
@@ -125,13 +125,13 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
-          and task_status = 'READY'
+          and task_status = #{readyStatus}
           and (assigned_worker_code is null or assigned_worker_code = #{assignedWorkerCode})
     </update>
 
     <update id="resetForRetry">
         update batch.job_task
-        set task_status = 'READY',
+        set task_status = #{readyStatus},
             assigned_worker_code = null,
             error_code = null,
             error_message = null,

@@ -6,7 +6,7 @@ import com.example.batch.orchestrator.controller.request.WorkerDrainRequest;
 import com.example.batch.orchestrator.controller.request.WorkerTenantRequest;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
-import com.example.batch.orchestrator.service.WorkerRegistryService;
+import com.example.batch.orchestrator.service.WorkerRegistryServerService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class WorkerController {
 
-    private final WorkerRegistryService workerRegistryService;
+    private final WorkerRegistryServerService workerRegistryService;
     private final WorkerDrainGovernanceService workerDrainGovernanceService;
 
     @PostMapping("/register")

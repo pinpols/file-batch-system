@@ -1,6 +1,6 @@
 package com.example.batch.trigger.mapper;
 
-import com.example.batch.trigger.domain.entity.TriggerRequestEntity;
+import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.trigger.domain.query.TriggerRequestQuery;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;

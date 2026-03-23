@@ -7,7 +7,7 @@ import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.service.TriggerService;
-import com.example.batch.trigger.web.request.CatchUpApprovalRequest;
+import com.example.batch.trigger.web.request.TriggerCatchUpRequest;
 import com.example.batch.trigger.web.request.TriggerLaunchRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +36,7 @@ public class TriggerController {
 
     @PostMapping("/catch-up/approve")
     public CommonResponse<LaunchResponse> approveCatchUp(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-                                                         @Valid @RequestBody CatchUpApprovalRequest request) {
+                                                         @Valid @RequestBody TriggerCatchUpRequest request) {
         PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
         command.setTenantId(request.getTenantId());
         command.setRequestId(request.getRequestId());

@@ -2,7 +2,7 @@ package com.example.batch.worker.core.support;
 
 import com.example.batch.worker.core.domain.WorkerRegistration;
 
-public interface WorkerRegistryService {
+public interface WorkerSelfRegistrationService {
 
     WorkerRegistration register(WorkerRegistration registration);
 

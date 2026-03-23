@@ -3,14 +3,14 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
-import com.example.batch.worker.core.support.WorkerRegistryService;
+import com.example.batch.worker.core.support.WorkerSelfRegistrationService;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service("workerCoreWorkerRegistryService")
 @RequiredArgsConstructor
-public class DefaultWorkerRegistryService implements WorkerRegistryService {
+public class DefaultWorkerRegistryService implements WorkerSelfRegistrationService {
 
     private final WorkerRegistryClient workerRegistryClient;
 

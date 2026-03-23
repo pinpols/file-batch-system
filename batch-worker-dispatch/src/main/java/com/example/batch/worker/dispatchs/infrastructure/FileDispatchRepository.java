@@ -1,5 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
+import com.example.batch.common.enums.FileDispatchStatus;
+import com.example.batch.common.enums.FileReceiptStatus;
 import com.example.batch.worker.dispatchs.mapper.FileDispatchMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -11,6 +13,8 @@ import org.springframework.util.StringUtils;
 @Repository
 @RequiredArgsConstructor
 public class FileDispatchRepository {
+
+    private static final int MAX_DISPATCH_BATCH_SIZE = 500;
 
     private final FileDispatchMapper fileDispatchMapper;
 
@@ -63,6 +67,7 @@ public class FileDispatchRepository {
                 "pipelineInstanceId", pipelineInstanceId,
                 "channelCode", channelCode,
                 "dispatchTarget", dispatchTarget,
+                "dispatchStatus", FileDispatchStatus.CREATED.name(),
                 "receiptCode", receiptCode,
                 "receiptStatus", receiptStatus,
                 "externalRequestId", externalRequestId
@@ -83,6 +88,7 @@ public class FileDispatchRepository {
                 "tenantId", tenantId,
                 "fileId", fileId,
                 "channelCode", channelCode,
+                "dispatchStatus", FileDispatchStatus.SENT.name(),
                 "externalRequestId", externalRequestId,
                 "receiptCode", receiptCode,
                 "receiptStatus", receiptStatus
@@ -90,9 +96,14 @@ public class FileDispatchRepository {
     }
 
     public int markAcked(String tenantId, Long fileId, String channelCode, String receiptCode) {
-        return fileDispatchMapper.markAcked(
-                params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode, "receiptCode", receiptCode)
-        );
+        return fileDispatchMapper.markAcked(params(
+                "tenantId", tenantId,
+                "fileId", fileId,
+                "channelCode", channelCode,
+                "dispatchStatus", FileDispatchStatus.ACKED.name(),
+                "receiptStatus", FileReceiptStatus.SUCCESS.name(),
+                "receiptCode", receiptCode
+        ));
     }
 
     public int markFailed(String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
@@ -100,6 +111,8 @@ public class FileDispatchRepository {
                 "tenantId", tenantId,
                 "fileId", fileId,
                 "channelCode", channelCode,
+                "dispatchStatus", FileDispatchStatus.FAILED.name(),
+                "receiptStatus", FileReceiptStatus.FAILED.name(),
                 "errorCode", errorCode,
                 "errorMessage", errorMessage
         ));
@@ -110,14 +123,21 @@ public class FileDispatchRepository {
                 "tenantId", tenantId,
                 "fileId", fileId,
                 "channelCode", channelCode,
+                "dispatchStatus", FileDispatchStatus.COMPENSATED.name(),
+                "receiptStatusSuccess", FileReceiptStatus.SUCCESS.name(),
+                "receiptStatusFailed", FileReceiptStatus.FAILED.name(),
                 "errorCode", errorCode,
                 "errorMessage", errorMessage
         ));
     }
 
     public List<Map<String, Object>> listPendingReceiptPolls(int limit) {
-        int safe = Math.max(1, Math.min(limit, 500));
-        return fileDispatchMapper.listPendingReceiptPolls(params("limit", safe));
+        int safe = Math.max(1, Math.min(limit, MAX_DISPATCH_BATCH_SIZE));
+        return fileDispatchMapper.listPendingReceiptPolls(params(
+                "limit", safe,
+                "dispatchStatus", FileDispatchStatus.SENT.name(),
+                "receiptStatus", FileReceiptStatus.PENDING.name()
+        ));
     }
 
     private Map<String, Object> params(Object... pairs) {

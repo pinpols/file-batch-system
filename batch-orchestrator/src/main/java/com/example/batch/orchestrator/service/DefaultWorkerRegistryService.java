@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service("orchestratorWorkerRegistryService")
 @RequiredArgsConstructor
-public class DefaultWorkerRegistryService implements WorkerRegistryService {
+public class DefaultWorkerRegistryService implements WorkerRegistryServerService {
 
     private final WorkerRegistryRepository workerRegistryRepository;
 

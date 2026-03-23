@@ -14,16 +14,23 @@ public interface ApprovalCommandMapper {
     int markApproved(@Param("tenantId") String tenantId,
                      @Param("approvalNo") String approvalNo,
                      @Param("approverId") String approverId,
-                     @Param("approvalReason") String approvalReason);
+                     @Param("approvalReason") String approvalReason,
+                     @Param("approvedStatus") String approvedStatus,
+                     @Param("pendingStatus") String pendingStatus);
 
     int markRejected(@Param("tenantId") String tenantId,
                      @Param("approvalNo") String approvalNo,
                      @Param("approverId") String approverId,
-                     @Param("approvalReason") String approvalReason);
+                     @Param("approvalReason") String approvalReason,
+                     @Param("rejectedStatus") String rejectedStatus,
+                     @Param("pendingStatus") String pendingStatus);
 
     int markExecuted(@Param("tenantId") String tenantId,
-                     @Param("approvalNo") String approvalNo);
+                     @Param("approvalNo") String approvalNo,
+                     @Param("executedStatus") String executedStatus,
+                     @Param("approvedStatus") String approvedStatus);
 
     List<ApprovalCommandEntity> selectPending(@Param("tenantId") String tenantId,
-                                              @Param("limit") int limit);
+                                              @Param("limit") int limit,
+                                              @Param("pendingStatus") String pendingStatus);
 }

@@ -6,7 +6,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.console.application.ConsoleFileDownloadApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
-import com.example.batch.console.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.console.mapper.FileRecordMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;

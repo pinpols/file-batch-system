@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.config;
 
+import com.example.batch.common.config.BusinessDataSourceProperties;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;

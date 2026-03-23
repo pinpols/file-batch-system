@@ -1,8 +1,11 @@
 package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.DeadLetterReplayStatus;
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.RetryScheduleStatus;
+import com.example.batch.common.enums.StepInstanceStatus;
+import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
@@ -95,12 +98,12 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 retryGovernanceProperties.getBatchSize()
         ));
         for (RetryScheduleEntity retrySchedule : dueRetries) {
-            if (retryScheduleMapper.markRunning(retrySchedule.getId(), RetryScheduleStatus.WAITING.code()) <= 0) {
+            if (retryScheduleMapper.markRunning(retrySchedule.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()) <= 0) {
                 continue;
             }
             try {
                 requeuePartition(retrySchedule);
-                retryScheduleMapper.markSuccess(retrySchedule.getId());
+                retryScheduleMapper.markSuccess(retrySchedule.getId(), RetryScheduleStatus.SUCCESS.code());
             } catch (Exception exception) {
                 log.warn("retry dispatch failed: retryId={}, error={}", retrySchedule.getId(), exception.getMessage(), exception);
                 retryScheduleMapper.markFailed(
@@ -162,6 +165,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             deadLetterTaskMapper.markReplaySuccess(
                     tenantId,
                     deadLetterTaskId,
+                    DeadLetterReplayStatus.SUCCESS.code(),
                     replayCount,
                     replayAt,
                     "REPLAY_ACCEPTED"
@@ -214,10 +218,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
         if (stepInstance != null) {
             int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
-            jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount);
+            jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
         }
-        jobPartitionMapper.resetForDispatch(tenantId, partition.getId());
-        jobTaskMapper.resetForRetry(tenantId, task.getId());
+        jobPartitionMapper.resetForDispatch(tenantId, partition.getId(), PartitionStatus.READY.code());
+        jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code());
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,
@@ -235,9 +239,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
         if (stepInstance != null) {
             int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
-            jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount);
+            jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
         }
-        jobTaskMapper.resetForRetry(tenantId, task.getId());
+        jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code());
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,

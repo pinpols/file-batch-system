@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.lease;
 
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
@@ -37,7 +38,7 @@ public class PartitionLeaseReclaimScheduler {
             return;
         }
         try {
-            List<JobPartitionEntity> expiredPartitions = jobPartitionMapper.selectExpiredLeasesGlobal();
+            List<JobPartitionEntity> expiredPartitions = jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
             expiredPartitions.forEach(this::requeueExpiredPartition);
         } finally {
             running.set(false);
@@ -54,15 +55,15 @@ public class PartitionLeaseReclaimScheduler {
         ));
         JobTaskEntity task = tasks.stream().findFirst().orElse(null);
         if (task == null) {
-            jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId());
+            jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code());
             return;
         }
         JobInstanceEntity jobInstance = jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
         if (jobInstance == null) {
             return;
         }
-        jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId());
-        jobTaskMapper.resetForRetry(partition.getTenantId(), task.getId());
+        jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code());
+        jobTaskMapper.resetForRetry(partition.getTenantId(), task.getId(), TaskStatus.READY.code());
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,

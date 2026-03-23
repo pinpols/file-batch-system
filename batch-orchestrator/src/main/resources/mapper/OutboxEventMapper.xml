@@ -51,7 +51,7 @@
         <if test="tenantId != null and tenantId != ''">
             and tenant_id = #{tenantId}
         </if>
-          and publish_status in ('NEW', 'FAILED')
+          and publish_status in (#{pendingStatus1}, #{pendingStatus2})
           and (next_publish_at is null or next_publish_at &lt;= current_timestamp)
         <if test="aggregateType != null and aggregateType != ''">
             and aggregate_type = #{aggregateType}
@@ -64,17 +64,17 @@
 
     <update id="markPublishing">
         update batch.outbox_event
-        set publish_status = 'PUBLISHING',
+        set publish_status = #{publishingStatus},
             publish_attempt = publish_attempt + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
-          and publish_status in ('NEW', 'FAILED')
+          and publish_status in (#{pendingStatus1}, #{pendingStatus2})
     </update>
 
     <update id="markPublished">
         update batch.outbox_event
-        set publish_status = 'PUBLISHED',
+        set publish_status = #{status},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
@@ -82,7 +82,7 @@
 
     <update id="markFailed">
         update batch.outbox_event
-        set publish_status = 'FAILED',
+        set publish_status = #{status},
             next_publish_at = #{nextPublishAt},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
@@ -91,7 +91,7 @@
 
     <update id="markGiveUp">
         update batch.outbox_event
-        set publish_status = 'GIVE_UP',
+        set publish_status = #{status},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}

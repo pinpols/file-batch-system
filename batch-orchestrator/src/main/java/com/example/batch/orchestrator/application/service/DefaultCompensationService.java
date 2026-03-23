@@ -5,6 +5,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.enums.CompensationCommandStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
@@ -15,7 +16,7 @@ import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.TriggerRequestEntity;
+import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -66,7 +67,7 @@ public class DefaultCompensationService implements CompensationService {
             compensationCommandMapper.updateStatus(
                     command.tenantId(),
                     entity.getId(),
-                    "SUCCESS",
+                    CompensationCommandStatus.SUCCESS.code(),
                     entity.getRelatedJobInstanceId(),
                     entity.getRelatedFileId(),
                     JsonUtils.toJson(result),
@@ -74,13 +75,13 @@ public class DefaultCompensationService implements CompensationService {
                     null,
                     Instant.now()
             );
-            appendCompensationLog(command, traceId, entity, "SUCCESS", result, null);
+            appendCompensationLog(command, traceId, entity, CompensationCommandStatus.SUCCESS.code(), result, null);
             return commandNo;
         } catch (Exception exception) {
             compensationCommandMapper.updateStatus(
                     command.tenantId(),
                     entity.getId(),
-                    "FAILED",
+                    CompensationCommandStatus.FAILED.code(),
                     entity.getRelatedJobInstanceId(),
                     entity.getRelatedFileId(),
                     null,
@@ -88,7 +89,7 @@ public class DefaultCompensationService implements CompensationService {
                     exception.getMessage(),
                     Instant.now()
             );
-            appendCompensationLog(command, traceId, entity, "FAILED", null, exception);
+            appendCompensationLog(command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception);
             throw exception;
         }
     }
@@ -325,7 +326,7 @@ public class DefaultCompensationService implements CompensationService {
         entity.setOperatorId(command.operatorId());
         entity.setReason(command.reason());
         entity.setStrategy(command.strategy());
-        entity.setCommandStatus("RUNNING");
+        entity.setCommandStatus(CompensationCommandStatus.RUNNING.code());
         entity.setTraceId(traceId);
         return entity;
     }
@@ -383,7 +384,7 @@ public class DefaultCompensationService implements CompensationService {
             return;
         }
         String type = normalizeType(command.compensationType());
-        int running = compensationCommandMapper.countRunningByTarget(command.tenantId(), type, targetId);
+        int running = compensationCommandMapper.countRunningByTarget(command.tenantId(), type, targetId, CompensationCommandStatus.RUNNING.code());
         if (running > 0) {
             throw new BizException(ResultCode.CONFLICT, "compensation command already running for this target");
         }

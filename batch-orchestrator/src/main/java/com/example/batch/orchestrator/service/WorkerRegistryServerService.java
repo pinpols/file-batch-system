@@ -3,7 +3,7 @@ package com.example.batch.orchestrator.service;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 
-public interface WorkerRegistryService {
+public interface WorkerRegistryServerService {
 
     WorkerRegistryRecord register(WorkerHeartbeatDto request);
 

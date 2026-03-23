@@ -5,6 +5,7 @@ import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
+import com.example.batch.worker.exports.domain.ExportWorkerType;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,7 +46,7 @@ public class PrepareStep implements ExportStageStep {
             context.getAttributes().put("exportPayload", payload);
             Map<String, Object> templateConfig = Map.of();
             if (StringUtils.hasText(payload.templateCode())) {
-                templateConfig = runtimeRepository.loadLatestTemplateConfig(context.getTenantId(), payload.templateCode(), "EXPORT");
+                templateConfig = runtimeRepository.loadLatestTemplateConfig(context.getTenantId(), payload.templateCode(), ExportWorkerType.EXPORT);
                 if (!templateConfig.isEmpty()) {
                     context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
                 }

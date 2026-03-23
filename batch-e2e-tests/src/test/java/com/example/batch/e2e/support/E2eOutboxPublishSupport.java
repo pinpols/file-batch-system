@@ -1,5 +1,6 @@
 package com.example.batch.e2e.support;
 
+import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
@@ -24,7 +25,8 @@ public class E2eOutboxPublishSupport {
 
     public void publishAllPending(String tenantId) {
         List<OutboxEventEntity> pending = outboxEventMapper.selectPending(
-                new OutboxEventQuery(tenantId, null, null, new PageRequest(1, 500)));
+                new OutboxEventQuery(tenantId, null, null, new PageRequest(1, 500),
+                        OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code()));
         for (OutboxEventEntity event : pending) {
             outboxPublisher.publish(event);
         }

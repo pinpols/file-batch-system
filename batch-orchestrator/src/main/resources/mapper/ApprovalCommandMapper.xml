@@ -43,42 +43,42 @@
 
     <update id="markApproved">
         update batch.approval_command
-        set approval_status = 'APPROVED',
+        set approval_status = #{approvedStatus},
             approver_id = #{approverId},
             approval_reason = #{approvalReason},
             approved_at = current_timestamp,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and approval_no = #{approvalNo}
-          and approval_status = 'PENDING'
+          and approval_status = #{pendingStatus}
     </update>
 
     <update id="markRejected">
         update batch.approval_command
-        set approval_status = 'REJECTED',
+        set approval_status = #{rejectedStatus},
             approver_id = #{approverId},
             approval_reason = #{approvalReason},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and approval_no = #{approvalNo}
-          and approval_status = 'PENDING'
+          and approval_status = #{pendingStatus}
     </update>
 
     <update id="markExecuted">
         update batch.approval_command
-        set approval_status = 'EXECUTED',
+        set approval_status = #{executedStatus},
             executed_at = current_timestamp,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and approval_no = #{approvalNo}
-          and approval_status = 'APPROVED'
+          and approval_status = #{approvedStatus}
     </update>
 
     <select id="selectPending" resultMap="approvalCommandMap">
         select *
         from batch.approval_command
         where tenant_id = #{tenantId}
-          and approval_status = 'PENDING'
+          and approval_status = #{pendingStatus}
         order by created_at asc
         limit #{limit}
     </select>

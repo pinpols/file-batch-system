@@ -7,6 +7,7 @@ import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.repository.ResourceQueueRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
@@ -35,7 +36,7 @@ public class TenantSchedulerSnapshotService {
             return new SchedulerSnapshotResponse(Instant.now(), tenantId, List.of(), List.of(), List.of());
         }
         long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(tenantId);
-        long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(tenantId);
+        long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(tenantId, PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
 
         List<SchedulerSnapshotResponse.PolicySnapshot> policies = new ArrayList<>();
         List<TenantQuotaPolicyRecord> quotaRows = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);

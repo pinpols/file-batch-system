@@ -6,7 +6,7 @@ import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
-import com.example.batch.worker.exports.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.worker.exports.infrastructure.SettlementExportRepository;
 import java.time.LocalDate;
 import java.util.Set;

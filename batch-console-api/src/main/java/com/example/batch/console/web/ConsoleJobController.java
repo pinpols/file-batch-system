@@ -2,7 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.web.request.CatchUpApprovalRequest;
+import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensateRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
@@ -60,7 +60,7 @@ public class ConsoleJobController {
 
     @PostMapping("/catch-up/approve")
     public CommonResponse<String> approveCatchUp(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-                                                 @Valid @RequestBody CatchUpApprovalRequest request) {
+                                                 @Valid @RequestBody ConsoleCatchUpApprovalRequest request) {
         return responseFactory.success(applicationService.approveCatchUp(request, idempotencyKey));
     }
 }

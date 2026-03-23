@@ -8,7 +8,9 @@ import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepositor
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
+import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
+import com.example.batch.worker.exports.domain.ExportWorkerType;
 import com.example.batch.worker.exports.stage.ExportStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -34,7 +36,7 @@ public class ExportStepExecutionAdapter extends AbstractPipelineStepExecutionAda
 
     @Override
     protected String pipelineType() {
-        return "EXPORT";
+        return ExportWorkerType.EXPORT;
     }
 
     @Override
@@ -49,7 +51,7 @@ public class ExportStepExecutionAdapter extends AbstractPipelineStepExecutionAda
 
     @Override
     protected String initialStage() {
-        return "PREPARE";
+        return ExportStage.PREPARE.name();
     }
 
     @Override

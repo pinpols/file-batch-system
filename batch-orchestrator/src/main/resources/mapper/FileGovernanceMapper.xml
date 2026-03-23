@@ -43,7 +43,7 @@
         from batch.pipeline_instance
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
-          and run_status in ('CREATED', 'RUNNING', 'COMPENSATING')
+          and run_status in (#{createdStatus}, #{runningStatus}, #{compensatingStatus})
     </select>
 
     <select id="countPendingDispatchRecords" resultType="java.lang.Long">
@@ -51,7 +51,7 @@
         from batch.file_dispatch_record
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
-          and (dispatch_status in ('CREATED', 'SENT') or receipt_status = 'PENDING')
+          and (dispatch_status in (#{dispatchCreatedStatus}, #{dispatchSentStatus}) or receipt_status = #{receiptPendingStatus})
     </select>
 
     <select id="selectLatestDispatchRecord" resultType="map">
@@ -74,7 +74,7 @@
 
     <update id="resetDispatchRecordForRedispatch">
         update batch.file_dispatch_record
-        set dispatch_status = 'CREATED',
+        set dispatch_status = #{dispatchCreatedStatus},
             receipt_status = 'NONE',
             error_code = null,
             error_message = null,
@@ -87,7 +87,7 @@
     <select id="selectArchivedFilesForCleanup" resultType="map">
         select *
         from batch.file_record
-        where file_status = 'ARCHIVED'
+        where file_status = #{archivedStatus}
           and updated_at &lt; #{cutoff}
         order by updated_at asc
         limit #{limit}
@@ -200,7 +200,7 @@
     <select id="countProcessingDelayViolations" resultType="java.lang.Long">
         select count(1)
         from batch.pipeline_instance
-        where run_status = 'RUNNING'
+        where run_status = #{runningStatus}
           and started_at is not null
           and started_at &lt; current_timestamp - (#{thresholdSeconds} * interval '1 second')
     </select>
@@ -208,7 +208,7 @@
     <select id="selectMaxProcessingDelaySeconds" resultType="java.lang.Long">
         select coalesce(max(extract(epoch from (current_timestamp - started_at))), 0)::bigint
         from batch.pipeline_instance
-        where run_status = 'RUNNING'
+        where run_status = #{runningStatus}
           and started_at is not null
     </select>
 
@@ -221,7 +221,7 @@
                started_at,
                extract(epoch from (current_timestamp - started_at))::bigint as processing_delay_seconds
         from batch.pipeline_instance
-        where run_status = 'RUNNING'
+        where run_status = #{runningStatus}
           and started_at is not null
           and started_at &lt; current_timestamp - (#{thresholdSeconds} * interval '1 second')
         order by processing_delay_seconds desc

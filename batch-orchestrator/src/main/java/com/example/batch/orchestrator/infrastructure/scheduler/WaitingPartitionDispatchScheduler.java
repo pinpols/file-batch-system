@@ -12,7 +12,7 @@ import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.WorkflowRunEntity;
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -50,7 +50,8 @@ public class WaitingPartitionDispatchScheduler {
     @Scheduled(fixedDelayString = "${batch.resource-scheduler.waiting-dispatch-interval-millis:10000}")
     public void dispatchWaitingPartitions() {
         List<JobPartitionEntity> waitingPartitions = jobPartitionMapper.selectWaitingPartitionsGlobal(
-                resourceSchedulerProperties.getWaitingDispatchBatchSize()
+                resourceSchedulerProperties.getWaitingDispatchBatchSize(),
+                PartitionStatus.WAITING.code()
         );
         List<WaitingDispatchCandidate> candidates = new ArrayList<>();
         for (JobPartitionEntity partition : waitingPartitions) {

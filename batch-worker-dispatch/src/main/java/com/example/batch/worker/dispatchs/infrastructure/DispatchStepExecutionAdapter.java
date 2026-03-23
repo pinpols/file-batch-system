@@ -8,7 +8,9 @@ import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepositor
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchPayload;
+import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
+import com.example.batch.worker.dispatchs.domain.DispatchWorkerType;
 import com.example.batch.worker.dispatchs.stage.DispatchStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -34,7 +36,7 @@ public class DispatchStepExecutionAdapter extends AbstractPipelineStepExecutionA
 
     @Override
     protected String pipelineType() {
-        return "DISPATCH";
+        return DispatchWorkerType.DISPATCH;
     }
 
     @Override
@@ -49,7 +51,7 @@ public class DispatchStepExecutionAdapter extends AbstractPipelineStepExecutionA
 
     @Override
     protected String initialStage() {
-        return "PREPARE";
+        return DispatchStage.PREPARE.name();
     }
 
     @Override

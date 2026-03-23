@@ -7,6 +7,7 @@ import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import java.util.List;
@@ -30,7 +31,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
         }
         int requestedPartitions = Math.max(request.getRequestedPartitionCount(), 1);
         TenantQuotaPolicyRecord quotaPolicy = resolveQuotaPolicy(request.getTenantId());
-        long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(request.getTenantId());
+        long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(request.getTenantId(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
         if (quotaPolicy != null
                 && quotaPolicy.getMaxPartitionsPerTenant() != null
                 && quotaPolicy.getMaxPartitionsPerTenant() > 0) {
@@ -86,7 +87,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
         if (!StringUtils.hasText(workerGroup)) {
             return tenantActivePartitions;
         }
-        return jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), workerGroup);
+        return jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), workerGroup, PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
     }
 
     private TenantQuotaPolicyRecord resolveQuotaPolicy(String tenantId) {

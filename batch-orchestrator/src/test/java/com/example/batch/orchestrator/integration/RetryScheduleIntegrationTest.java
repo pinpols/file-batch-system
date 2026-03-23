@@ -77,7 +77,7 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
         entity.setNextRetryAt(Instant.now().minusSeconds(10));
         retryScheduleMapper.insert(entity);
 
-        int updated = retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code());
+        int updated = retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
 
         assertThat(updated).isEqualTo(1);
     }
@@ -89,9 +89,9 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
         entity.setNextRetryAt(Instant.now().minusSeconds(10));
         retryScheduleMapper.insert(entity);
 
-        retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code());
+        retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
         // Second attempt should fail (optimistic lock via fromStatus check)
-        int second = retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code());
+        int second = retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
 
         assertThat(second).isZero();
     }
@@ -102,9 +102,9 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
         entity.setDedupKey("t1:mark-success:" + System.currentTimeMillis());
         entity.setNextRetryAt(Instant.now().minusSeconds(10));
         retryScheduleMapper.insert(entity);
-        retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code());
+        retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
 
-        int updated = retryScheduleMapper.markSuccess(entity.getId());
+        int updated = retryScheduleMapper.markSuccess(entity.getId(), RetryScheduleStatus.SUCCESS.code());
 
         assertThat(updated).isEqualTo(1);
         RetryScheduleEntity loaded = retryScheduleMapper.selectById(entity.getId());
@@ -117,7 +117,7 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
         entity.setDedupKey("t1:mark-failed:" + System.currentTimeMillis());
         entity.setNextRetryAt(Instant.now().minusSeconds(10));
         retryScheduleMapper.insert(entity);
-        retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code());
+        retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
 
         int updated = retryScheduleMapper.markFailed(
                 entity.getId(),

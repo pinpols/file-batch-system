@@ -11,7 +11,8 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.repository.QuotaRuntimeStateRepository;
-import com.example.batch.orchestrator.scheduler.ResourceCheck;
+import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
+import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;

@@ -6,7 +6,7 @@ import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.CatchUpApprovalRequest;
+import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.PresignDownloadFileRequest;
@@ -54,7 +54,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 yield consoleFileApplicationService.presignDownload(request, approvalNo);
             }
             case "CATCH_UP" -> {
-                CatchUpApprovalRequest request = JsonUtils.fromJson(record.payloadJson(), CatchUpApprovalRequest.class);
+                ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(record.payloadJson(), ConsoleCatchUpApprovalRequest.class);
                 request.setApprovalId(approvalNo);
                 yield consoleJobApplicationService.approveCatchUp(request, approvalNo);
             }

@@ -132,7 +132,8 @@ public class PlatformFileRuntimeRepository {
                 "fileId", fileId,
                 "relatedJobInstanceId", relatedJobInstanceId,
                 "currentStage", currentStage,
-                "traceId", traceId
+                "traceId", traceId,
+                "runStatus", com.example.batch.common.enums.PipelineRunStatus.RUNNING.name()
         );
         platformFileRuntimeMapper.insertPipelineInstance(paramMap);
         return toLong(paramMap.get("id"));
@@ -159,7 +160,8 @@ public class PlatformFileRuntimeRepository {
             return;
         }
         platformFileRuntimeMapper.markPipelineSuccess(
-                params("pipelineInstanceId", pipelineInstanceId, "currentStage", currentStage, "lastSuccessStage", lastSuccessStage)
+                params("pipelineInstanceId", pipelineInstanceId, "currentStage", currentStage,
+                        "lastSuccessStage", lastSuccessStage, "runStatus", com.example.batch.common.enums.PipelineRunStatus.SUCCESS.name())
         );
     }
 
@@ -168,7 +170,8 @@ public class PlatformFileRuntimeRepository {
             return;
         }
         platformFileRuntimeMapper.markPipelineFailed(
-                params("pipelineInstanceId", pipelineInstanceId, "currentStage", currentStage, "lastSuccessStage", lastSuccessStage)
+                params("pipelineInstanceId", pipelineInstanceId, "currentStage", currentStage,
+                        "lastSuccessStage", lastSuccessStage, "runStatus", com.example.batch.common.enums.PipelineRunStatus.FAILED.name())
         );
     }
 
@@ -187,6 +190,7 @@ public class PlatformFileRuntimeRepository {
                 "stepCode", stepCode,
                 "stageCode", stageCode,
                 "runSeq", nextRunSeq == null ? 1 : nextRunSeq,
+                "stepStatus", com.example.batch.common.enums.PipelineRunStatus.RUNNING.name(),
                 "inputSummaryJson", toJson(inputSummary)
         );
         platformFileRuntimeMapper.insertStepRun(paramMap);

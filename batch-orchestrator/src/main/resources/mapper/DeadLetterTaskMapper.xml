@@ -62,7 +62,7 @@
 
     <update id="markReplaySuccess">
         update batch.dead_letter_task
-        set replay_status = 'SUCCESS',
+        set replay_status = #{successStatus},
             replay_count = #{replayCount},
             last_replay_at = #{lastReplayAt},
             last_replay_result = #{lastReplayResult},

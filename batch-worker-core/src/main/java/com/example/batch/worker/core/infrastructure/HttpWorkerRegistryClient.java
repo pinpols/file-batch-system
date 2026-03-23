@@ -3,6 +3,7 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.worker.core.config.OrchestratorWorkerClientProperties;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
+import com.example.batch.common.enums.WorkerRegistryStatus;
 import java.time.Instant;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +36,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     @Override
     public void deactivate(WorkerRegistration registration) {
-        registration.setStatus("OFFLINE");
+        registration.setStatus(WorkerRegistryStatus.OFFLINE.name());
         updateStatus(registration);
     }
 

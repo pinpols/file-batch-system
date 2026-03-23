@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.TriggerRequestMapper">
-    <resultMap id="TriggerRequestResultMap" type="com.example.batch.orchestrator.domain.entity.TriggerRequestEntity">
+    <resultMap id="TriggerRequestResultMap" type="com.example.batch.common.persistence.entity.TriggerRequestEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="request_id" property="requestId"/>
@@ -23,7 +23,7 @@
           and request_id = #{requestId}
     </select>
 
-    <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.TriggerRequestEntity"
+    <insert id="insert" parameterType="com.example.batch.common.persistence.entity.TriggerRequestEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.trigger_request (
             tenant_id,

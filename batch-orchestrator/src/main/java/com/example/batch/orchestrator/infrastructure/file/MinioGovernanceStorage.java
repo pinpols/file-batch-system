@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
-import com.example.batch.orchestrator.config.MinioStorageProperties;
+import com.example.batch.common.config.MinioStorageProperties;
 import io.minio.BucketExistsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.ListObjectsArgs;

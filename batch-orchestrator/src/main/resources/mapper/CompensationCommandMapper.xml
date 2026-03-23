@@ -96,6 +96,6 @@
         where tenant_id = #{tenantId}
           and compensation_type = #{compensationType}
           and target_id = #{targetId}
-          and command_status = 'RUNNING'
+          and command_status = #{runningStatus}
     </select>
 </mapper>
