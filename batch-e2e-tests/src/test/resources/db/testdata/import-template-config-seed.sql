@@ -73,13 +73,10 @@ VALUES
    {"name":"customerNo","targetColumn":"customer_no","type":"STRING","required":true},
    {"name":"customerName","targetColumn":"customer_name","type":"STRING","required":true},
    {"name":"customerType","targetColumn":"customer_type","type":"STRING","required":true},
-   {"name":"creditLimit","targetColumn":"credit_limit","type":"DECIMAL","required":true},
-   {"name":"currencyCode","targetColumn":"currency_code","type":"STRING","required":true},
+   {"name":"certificateNo","targetColumn":"certificate_no","type":"STRING","required":false},
+   {"name":"mobileNo","targetColumn":"mobile_no","type":"STRING","required":false},
    {"name":"email","targetColumn":"email","type":"EMAIL","required":false},
-   {"name":"phone","targetColumn":"phone","type":"STRING","required":false},
-   {"name":"status","targetColumn":"status","type":"STRING","required":true},
-   {"name":"openDate","targetColumn":"open_date","type":"DATE","required":true,"format":"yyyy-MM-dd"},
-   {"name":"remark","targetColumn":"remark","type":"STRING","required":false}
+   {"name":"status","targetColumn":"status","type":"STRING","required":true}
  ]'::jsonb,
  null,
  true, 1000, 1000, 500,

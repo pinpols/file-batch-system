@@ -12,20 +12,35 @@ batch:
     import:
       tenant-id: t1
       worker-code: e2e-import-1
+      worker-type: IMPORT
       heartbeat-interval-millis: 600000
+      topic: batch.task.dispatch.import
+      consumer-group-id: batch-worker-import-e2e
       scanner:
         enabled: false
     export:
       tenant-id: t1
       worker-code: e2e-export-1
+      worker-type: EXPORT
       heartbeat-interval-millis: 600000
+      topic: batch.task.dispatch.export
+      consumer-group-id: batch-worker-export-e2e
     dispatch:
       tenant-id: t1
       worker-code: e2e-dispatch-1
+      worker-type: DISPATCH
       heartbeat-interval-millis: 600000
+      topic: batch.task.dispatch.dispatch
+      consumer-group-id: batch-worker-dispatch-e2e
       circuit-breaker:
         enabled: false
       health:
         enabled: false
       receipt-poll:
         enabled: false
+  datasource:
+    business:
+      url: ${spring.datasource.url}
+      username: ${spring.datasource.username}
+      password: ${spring.datasource.password}
+      schema: biz

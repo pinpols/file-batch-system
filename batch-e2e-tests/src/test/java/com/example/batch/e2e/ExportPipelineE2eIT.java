@@ -16,9 +16,11 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -51,9 +53,14 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
     @Autowired
     private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
+    @Autowired
+    @Qualifier("exportBusinessDataSource")
+    private DataSource businessDataSource;
+
     @Test
     void exportJobRunsThroughKafkaClaimAndReportsSuccess() {
-        Long batchId = jdbcTemplate.queryForObject(
+        JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+        Long batchId = businessJdbc.queryForObject(
                 """
                         insert into biz.settlement_batch (
                             tenant_id, batch_no, biz_date, accounting_period, batch_status,
@@ -66,7 +73,7 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
                 BATCH_NO);
         assertThat(batchId).isNotNull();
 
-        jdbcTemplate.update(
+        businessJdbc.update(
                 """
                         insert into biz.settlement_detail (
                             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
@@ -112,7 +119,7 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
             assertThat(status).isEqualTo("SUCCESS");
         });
 
-        BigDecimal total = jdbcTemplate.queryForObject(
+        BigDecimal total = businessJdbc.queryForObject(
                 "select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?",
                 BigDecimal.class,
                 TENANT,

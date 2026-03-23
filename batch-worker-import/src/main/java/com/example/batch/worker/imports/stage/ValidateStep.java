@@ -9,7 +9,6 @@ import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportDataQualityService;
 import com.example.batch.worker.imports.infrastructure.ImportDataQualityService.ValidationIssue;
-import com.example.batch.worker.imports.infrastructure.ImportDataQualityService.ValidationOutcome;
 import com.example.batch.worker.imports.infrastructure.ImportDataQualityService.ValidationSession;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -145,6 +144,11 @@ public class ValidateStep implements ImportStageStep {
             if (validatedRecordsPath != null) {
                 deleteQuietly(validatedRecordsPath);
             }
+            log.error("validate stage failed: tenantId={}, fileId={}, message={}",
+                    context.getTenantId(),
+                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                    exception.getMessage(),
+                    exception);
             return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_FAILED", exception.getMessage());
         }
     }
@@ -166,7 +170,7 @@ public class ValidateStep implements ImportStageStep {
                 }
                 continue;
             }
-            objectMapper.writeValue(writer, chunk.get(index));
+            writer.write(objectMapper.writeValueAsString(chunk.get(index)));
             writer.newLine();
             validCount++;
         }

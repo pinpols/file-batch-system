@@ -38,13 +38,13 @@ public class DispatchTaskConsumer {
     }
 
     public String[] topics() {
-        WorkerRegistration registration = workerLoop.ensureStarted();
-        if (registration == null || registration.getWorkerId() == null || registration.getWorkerId().isBlank()) {
+        String configuredWorkerCode = configuration.workerCode();
+        if (configuredWorkerCode == null || configuredWorkerCode.isBlank()) {
             return new String[] {configuration.topic()};
         }
         return new String[] {
                 configuration.topic(),
-                BatchTopics.directDispatchTopic(configuration.topic(), registration.getWorkerId())
+                BatchTopics.directDispatchTopic(configuration.topic(), configuredWorkerCode)
         };
     }
 

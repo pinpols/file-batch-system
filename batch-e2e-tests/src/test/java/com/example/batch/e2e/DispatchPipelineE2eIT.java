@@ -53,7 +53,8 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
                         insert into batch.file_channel_config (
                             tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
                             config_json, receipt_policy, timeout_seconds, enabled
-                        ) values (
+                        )
+                        select
                             ?, ?, ?, 'LOCAL', null, 'NONE',
                             jsonb_build_object(
                                 'target_endpoint', '/tmp/batch-e2e-dispatch-out',
@@ -62,12 +63,16 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
                                 'channel_code', 'e2e_local_dispatch'
                             ),
                             'NONE', 10, true
+                        where not exists (
+                            select 1 from batch.file_channel_config
+                            where tenant_id = ? and channel_code = ?
                         )
-                        on conflict (tenant_id, channel_code) do nothing
                         """,
                 TENANT,
                 "e2e_local_dispatch",
-                "E2E local dispatch");
+                "E2E local dispatch",
+                TENANT,
+                "e2e_local_dispatch");
 
         String path = "/tmp/e2e-dispatch-" + System.nanoTime() + ".json";
         Long fileId = jdbcTemplate.queryForObject(
