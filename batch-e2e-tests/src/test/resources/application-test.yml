@@ -1,7 +1,7 @@
 # Align with orchestrator integration tests: Flyway from docs/sql/flyway; quiet background jobs.
 spring:
   flyway:
-    locations: classpath:db/migration
+    locations: classpath:db/migration-integration
 
 batch:
   sla:
