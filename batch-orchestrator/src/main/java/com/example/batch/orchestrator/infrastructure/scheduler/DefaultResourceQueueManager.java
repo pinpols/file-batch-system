@@ -27,18 +27,18 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
         }
         if (StringUtils.hasText(request.getQueueCode())) {
             return queues.stream()
-                    .filter(queue -> request.getQueueCode().equalsIgnoreCase(queue.getQueueCode()))
+                    .filter(queue -> request.getQueueCode().equalsIgnoreCase(queue.queueCode()))
                     .findFirst()
                     .orElse(null);
         }
         return queues.stream()
                 .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
                 .sorted(Comparator
-                        .comparing((ResourceQueueRecord queue) -> !"MIXED".equalsIgnoreCase(queue.getQueueType()))
-                        .thenComparing(queue -> normalizedWeight(queue.getFairShareWeight()), Comparator.reverseOrder())
-                        .thenComparing(queue -> normalizedWeight(queue.getMaxRunningJobs()), Comparator.reverseOrder())
-                        .thenComparing(queue -> normalizedWeight(queue.getMaxRunningPartitions()), Comparator.reverseOrder())
-                        .thenComparing(ResourceQueueRecord::getQueueCode, Comparator.nullsLast(String::compareToIgnoreCase)))
+                        .comparing((ResourceQueueRecord queue) -> !"MIXED".equalsIgnoreCase(queue.queueType()))
+                        .thenComparing(queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
+                        .thenComparing(queue -> normalizedWeight(queue.maxRunningJobs()), Comparator.reverseOrder())
+                        .thenComparing(queue -> normalizedWeight(queue.maxRunningPartitions()), Comparator.reverseOrder())
+                        .thenComparing(ResourceQueueRecord::queueCode, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .findFirst()
                 .orElse(null);
     }
@@ -50,8 +50,8 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
         if (!StringUtils.hasText(workerType)) {
             return true;
         }
-        return workerType.equalsIgnoreCase(queue.getQueueType())
-                || "MIXED".equalsIgnoreCase(queue.getQueueType());
+        return workerType.equalsIgnoreCase(queue.queueType())
+                || "MIXED".equalsIgnoreCase(queue.queueType());
     }
 
     private Integer normalizedWeight(Integer weight) {

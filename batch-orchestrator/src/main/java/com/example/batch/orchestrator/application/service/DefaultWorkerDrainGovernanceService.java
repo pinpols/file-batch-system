@@ -35,17 +35,14 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
             throw new BizException(ResultCode.INVALID_ARGUMENT, "workerCode is required");
         }
         WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
-        if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.getStatus())) {
+        if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
             throw new BizException(ResultCode.STATE_CONFLICT, "worker is decommissioned");
         }
         int seconds = timeoutSeconds != null && timeoutSeconds > 0
                 ? timeoutSeconds
                 : workerDrainProperties.getDefaultTimeoutSeconds();
         Instant now = Instant.now();
-        registry.setStatus(WorkerRegistryStatus.DRAINING.code());
-        registry.setDrainStartedAt(now);
-        registry.setDrainDeadlineAt(now.plusSeconds(seconds));
-        registry.setHeartbeatAt(now);
+        registry = registry.withDrain(WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(seconds), now);
         return workerRegistryRepository.save(registry);
     }
 
@@ -76,7 +73,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
             return;
         }
         WorkerRegistryRecord registry = workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
-        if (registry == null || !WorkerRegistryStatus.DRAINING.code().equals(registry.getStatus())) {
+        if (registry == null || !WorkerRegistryStatus.DRAINING.code().equals(registry.status())) {
             return;
         }
         log.warn("drain deadline exceeded, taking over tasks: tenantId={}, workerCode={}", tenantId, workerCode);
@@ -105,10 +102,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
     private WorkerRegistryRecord markDecommissioned(String tenantId, String workerCode) {
         WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
-        registry.setStatus(WorkerRegistryStatus.DECOMMISSIONED.code());
-        registry.setDrainStartedAt(null);
-        registry.setDrainDeadlineAt(null);
-        registry.setHeartbeatAt(Instant.now());
+        registry = registry.withDecommissioned(Instant.now());
         return workerRegistryRepository.save(registry);
     }
 

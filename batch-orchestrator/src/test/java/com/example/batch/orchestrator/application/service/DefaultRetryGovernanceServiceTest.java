@@ -273,11 +273,34 @@ class DefaultRetryGovernanceServiceTest {
     }
 
     private static JobDefinitionRecord jobDefinitionWithPolicy(Long id, String retryPolicy, int maxRetry) {
-        JobDefinitionRecord jd = new JobDefinitionRecord();
-        jd.setId(id);
-        jd.setRetryPolicy(retryPolicy);
-        jd.setRetryMaxCount(maxRetry);
-        return jd;
+        return new JobDefinitionRecord(
+                id,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                retryPolicy,
+                maxRetry,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
     }
 
     private static DeadLetterTaskEntity deadLetter(Long id, String tenantId, String replayStatus) {

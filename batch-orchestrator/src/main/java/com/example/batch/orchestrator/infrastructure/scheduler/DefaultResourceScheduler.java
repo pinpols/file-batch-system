@@ -74,7 +74,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
         decision.setDispatchable(true);
         decision.setFailFast(false);
-        decision.setQueueCode(queue == null ? request.getQueueCode() : queue.getQueueCode());
+        decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
         decision.setWorkerGroup(resolveWorkerGroup(request, queue));
         decision.setPriority(priority);
         decision.setPriorityBand(priorityBand);
@@ -95,7 +95,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         decision.setFailFast(check.failFast());
         decision.setReasonCode(check.reasonCode());
         decision.setReasonMessage(check.reasonMessage());
-        decision.setQueueCode(queue == null ? request.getQueueCode() : queue.getQueueCode());
+        decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
         decision.setWorkerGroup(resolveWorkerGroup(request, queue));
         decision.setPriority(priority);
         decision.setPriorityBand(priorityBand);
@@ -111,32 +111,32 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         }
         List<BatchWindowRecord> windows = batchWindowRepository.findByTenantIdAndEnabled(request.getTenantId(), true);
         BatchWindowRecord window = windows.stream()
-                .filter(candidate -> request.getWindowCode().equalsIgnoreCase(candidate.getWindowCode()))
+                .filter(candidate -> request.getWindowCode().equalsIgnoreCase(candidate.windowCode()))
                 .findFirst()
                 .orElse(null);
         if (window == null || isWithinWindow(window)) {
             return ResourceCheck.allow();
         }
-        if ("FAIL".equalsIgnoreCase(window.getOutOfWindowAction())) {
+        if ("FAIL".equalsIgnoreCase(window.outOfWindowAction())) {
             return ResourceCheck.reject("OUT_OF_WINDOW", "current execution time is outside batch window");
         }
         return ResourceCheck.waitForCapacity("OUT_OF_WINDOW_WAIT", "waiting for batch window");
     }
 
     private boolean isWithinWindow(BatchWindowRecord window) {
-        if (window == null || window.getStartTime() == null || window.getEndTime() == null) {
+        if (window == null || window.startTime() == null || window.endTime() == null) {
             return true;
         }
-        ZoneId zoneId = StringUtils.hasText(window.getTimezone())
-                ? ZoneId.of(window.getTimezone())
+        ZoneId zoneId = StringUtils.hasText(window.timezone())
+                ? ZoneId.of(window.timezone())
                 : ZoneId.systemDefault();
         LocalTime now = ZonedDateTime.now(zoneId).toLocalTime();
-        LocalTime start = window.getStartTime();
-        LocalTime end = window.getEndTime();
+        LocalTime start = window.startTime();
+        LocalTime end = window.endTime();
         if (start.equals(end)) {
             return true;
         }
-        boolean crossDay = Boolean.TRUE.equals(window.getAllowCrossDay()) || end.isBefore(start);
+        boolean crossDay = Boolean.TRUE.equals(window.allowCrossDay()) || end.isBefore(start);
         if (crossDay) {
             return !now.isBefore(start) || !now.isAfter(end);
         }
@@ -147,7 +147,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         if (request != null && StringUtils.hasText(request.getWorkerGroup())) {
             return request.getWorkerGroup();
         }
-        return queue == null ? null : queue.getWorkerGroup();
+        return queue == null ? null : queue.workerGroup();
     }
 
     private void enrichFairnessScore(ResourceSchedulingRequest request,
@@ -181,17 +181,17 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         }
         List<TenantQuotaPolicyRecord> policies = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
         TenantQuotaPolicyRecord policy = policies == null || policies.isEmpty() ? null : policies.get(0);
-        if (policy == null || policy.getFairShareWeight() == null || policy.getFairShareWeight() <= 0) {
+        if (policy == null || policy.fairShareWeight() == null || policy.fairShareWeight() <= 0) {
             return 1;
         }
-        return policy.getFairShareWeight();
+        return policy.fairShareWeight();
     }
 
     private int resolveQueueWeight(ResourceQueueRecord queue) {
-        if (queue == null || queue.getFairShareWeight() == null || queue.getFairShareWeight() <= 0) {
+        if (queue == null || queue.fairShareWeight() == null || queue.fairShareWeight() <= 0) {
             return 1;
         }
-        return queue.getFairShareWeight();
+        return queue.fairShareWeight();
     }
 
     private int resolveTenantActiveJobs(ResourceSchedulingRequest request) {
@@ -209,17 +209,17 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
-        if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.getQueueCode())) {
+        if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.queueCode())) {
             return 0;
         }
-        return (int) jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.getQueueCode());
+        return (int) jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.queueCode());
     }
 
     private int resolveQueueActivePartitions(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
-        if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.getWorkerGroup())) {
+        if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.workerGroup())) {
             return 0;
         }
-        return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), queue.getWorkerGroup(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
+        return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), queue.workerGroup(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
     }
 
     private long resolveFairnessScore(Integer priority,

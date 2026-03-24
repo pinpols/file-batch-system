@@ -59,9 +59,9 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         QuotaRuntimeStateRecord state = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
         assertThat(state).isNotNull();
-        assertThat(state.getWindowStartedAt()).isNotNull();
-        assertThat(state.getWindowExpiresAt()).isNotNull();
-        assertThat(state.getWindowExpiresAt()).isAfter(state.getWindowStartedAt());
+        assertThat(state.windowStartedAt()).isNotNull();
+        assertThat(state.windowExpiresAt()).isNotNull();
+        assertThat(state.windowExpiresAt()).isAfter(state.windowStartedAt());
     }
 
     @Test
@@ -75,7 +75,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         QuotaRuntimeStateRecord state = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
         assertThat(state).isNotNull();
-        assertThat(state.getPeakBorrowedCount()).isGreaterThan(0);
+        assertThat(state.peakBorrowedCount()).isGreaterThan(0);
     }
 
     @Test
@@ -101,7 +101,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         QuotaRuntimeStateRecord state = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
         assertThat(state).isNotNull();
-        assertThat(state.getWindowStartedAt()).isNotNull();
+        assertThat(state.windowStartedAt()).isNotNull();
     }
 
     @Test
@@ -127,16 +127,10 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         String ownerCode = "reconcile-sw-" + System.currentTimeMillis();
 
         // Insert an already-expired state directly
-        QuotaRuntimeStateRecord expiredState = new QuotaRuntimeStateRecord();
-        expiredState.setTenantId("t1");
-        expiredState.setQuotaScope("JOB");
-        expiredState.setOwnerCode(ownerCode);
-        expiredState.setQuotaResetPolicy("SLIDING_WINDOW");
-        expiredState.setPeakBorrowedCount(5);
-        expiredState.setWindowStartedAt(Instant.now().minusSeconds(7200));
-        expiredState.setWindowExpiresAt(Instant.now().minusSeconds(3600)); // expired
-        expiredState.setCreatedAt(Instant.now());
-        expiredState.setUpdatedAt(Instant.now());
+        QuotaRuntimeStateRecord expiredState = new QuotaRuntimeStateRecord(
+                null, "t1", "JOB", ownerCode, "SLIDING_WINDOW",
+                Instant.now().minusSeconds(7200), Instant.now().minusSeconds(3600), // expired
+                5, null, Instant.now(), Instant.now());
         quotaRuntimeStateRepository.save(expiredState);
 
         quotaRuntimeStateService.reconcileExpiredStates(2);
@@ -145,28 +139,22 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         QuotaRuntimeStateRecord updated = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
         assertThat(updated).isNotNull();
-        assertThat(updated.getPeakBorrowedCount()).isZero();
+        assertThat(updated.peakBorrowedCount()).isZero();
     }
 
     @Test
     void shouldFindExpiredStatesViaRepository() {
         String ownerCode = "find-expired-" + System.currentTimeMillis();
 
-        QuotaRuntimeStateRecord state = new QuotaRuntimeStateRecord();
-        state.setTenantId("t1");
-        state.setQuotaScope("JOB");
-        state.setOwnerCode(ownerCode);
-        state.setQuotaResetPolicy("SLIDING_WINDOW");
-        state.setPeakBorrowedCount(3);
-        state.setWindowStartedAt(Instant.now().minusSeconds(3700));
-        state.setWindowExpiresAt(Instant.now().minusSeconds(100)); // expired
-        state.setCreatedAt(Instant.now());
-        state.setUpdatedAt(Instant.now());
+        QuotaRuntimeStateRecord state = new QuotaRuntimeStateRecord(
+                null, "t1", "JOB", ownerCode, "SLIDING_WINDOW",
+                Instant.now().minusSeconds(3700), Instant.now().minusSeconds(100), // expired
+                3, null, Instant.now(), Instant.now());
         quotaRuntimeStateRepository.save(state);
 
         List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateRepository.findExpired(Instant.now());
 
-        boolean found = expired.stream().anyMatch(r -> ownerCode.equals(r.getOwnerCode()));
+        boolean found = expired.stream().anyMatch(r -> ownerCode.equals(r.ownerCode()));
         assertThat(found).isTrue();
     }
 }

@@ -1,0 +1,131 @@
+package com.example.batch.e2e;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.enums.RetryScheduleStatus;
+import com.example.batch.e2e.apps.E2eImportApplication;
+import com.example.batch.orchestrator.application.engine.OutboxPublisher;
+import com.example.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
+import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
+import com.example.batch.orchestrator.domain.query.EventOutboxRetryQuery;
+import com.example.batch.orchestrator.mapper.EventOutboxRetryMapper;
+import com.example.batch.orchestrator.mapper.OutboxEventMapper;
+import com.example.batch.testing.AbstractIntegrationTest;
+import java.time.Duration;
+import java.util.List;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+
+/**
+ * End-to-end: verifies the retry/exhaustion semantics of {@code OutboxPollScheduler} without
+ * touching real Kafka by replacing {@link OutboxPublisher} with a mock.
+ *
+ * <p>Scenario A — retry exhaustion: publisher always returns {@code false}; after
+ * {@code max-retry-attempts=2} the event is marked {@code GIVE_UP} and an
+ * {@code EXHAUSTED} audit record is written to {@code event_outbox_retry}.
+ *
+ * <p>Scenario B — transient failure then recovery: publisher returns {@code false} on the first
+ * attempt and {@code true} on the second; the event eventually reaches {@code PUBLISHED} and
+ * at least one {@code FAILED} retry record is present as the audit trail.
+ */
+@SpringBootTest(
+        classes = E2eImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+                "batch.outbox.poll-interval-millis=200",
+                "batch.outbox.retry-delay-seconds=0",
+                "batch.outbox.max-retry-attempts=2"
+        })
+@ActiveProfiles({"test", "e2e"})
+@Tag("e2e")
+class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
+
+    @MockitoBean
+    private OutboxPublisher outboxPublisher;
+
+    @Autowired
+    private OutboxEventMapper outboxEventMapper;
+
+    @Autowired
+    private EventOutboxRetryMapper eventOutboxRetryMapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    // ── Scenario A ────────────────────────────────────────────────────────────
+
+    @Test
+    void retryExhaustion_marksGiveUp_andWritesExhaustedAuditRecord() {
+        // publisher always fails
+        when(outboxPublisher.publish(any())).thenReturn(false);
+
+        OutboxEventEntity event = seedOutboxEvent("t1", "e2e-exhausted-001");
+
+        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(300)).untilAsserted(() -> {
+            String status = jdbcTemplate.queryForObject(
+                    "select publish_status from batch.outbox_event where id = ?",
+                    String.class, event.getId());
+            assertThat(status).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
+        });
+
+        // publish_attempt should equal max-retry-attempts
+        Integer attempt = jdbcTemplate.queryForObject(
+                "select publish_attempt from batch.outbox_event where id = ?",
+                Integer.class, event.getId());
+        assertThat(attempt).isEqualTo(2);
+
+        // audit trail: at least one EXHAUSTED retry record
+        List<EventOutboxRetryEntity> retries = eventOutboxRetryMapper.selectByQuery(
+                new EventOutboxRetryQuery("t1", null, "e2e-exhausted-001"));
+        assertThat(retries).isNotEmpty();
+        assertThat(retries).anyMatch(r -> RetryScheduleStatus.EXHAUSTED.code().equals(r.getRetryStatus()));
+    }
+
+    // ── Scenario B ────────────────────────────────────────────────────────────
+
+    @Test
+    void transientFailure_thenRecovery_eventIsPublishedEventually() {
+        // fail on first publish attempt, succeed on the second
+        when(outboxPublisher.publish(any())).thenReturn(false, true);
+
+        OutboxEventEntity event = seedOutboxEvent("t1", "e2e-recovery-001");
+
+        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(300)).untilAsserted(() -> {
+            String status = jdbcTemplate.queryForObject(
+                    "select publish_status from batch.outbox_event where id = ?",
+                    String.class, event.getId());
+            assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+        });
+
+        // audit trail: at least one FAILED retry record for the failed attempt
+        List<EventOutboxRetryEntity> retries = eventOutboxRetryMapper.selectByQuery(
+                new EventOutboxRetryQuery("t1", null, "e2e-recovery-001"));
+        assertThat(retries).isNotEmpty();
+        assertThat(retries).anyMatch(r -> RetryScheduleStatus.FAILED.code().equals(r.getRetryStatus()));
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private OutboxEventEntity seedOutboxEvent(String tenantId, String eventKey) {
+        OutboxEventEntity entity = new OutboxEventEntity();
+        entity.setTenantId(tenantId);
+        entity.setAggregateType("E2E_TEST");
+        entity.setAggregateId(System.currentTimeMillis());
+        entity.setEventType("E2E_TEST_EVENT");
+        entity.setEventKey(eventKey);
+        entity.setPayloadJson("{\"test\":true}");
+        entity.setPublishStatus(OutboxPublishStatus.NEW.code());
+        entity.setTraceId("e2e-tr-" + eventKey);
+        outboxEventMapper.insert(entity);
+        return entity;
+    }
+}

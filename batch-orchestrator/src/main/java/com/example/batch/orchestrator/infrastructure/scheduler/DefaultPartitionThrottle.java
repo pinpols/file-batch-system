@@ -33,15 +33,15 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
         TenantQuotaPolicyRecord quotaPolicy = resolveQuotaPolicy(request.getTenantId());
         long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(request.getTenantId(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
         if (quotaPolicy != null
-                && quotaPolicy.getMaxPartitionsPerTenant() != null
-                && quotaPolicy.getMaxPartitionsPerTenant() > 0) {
-            int pburst = quotaPolicy.getPartitionBurstLimit() == null ? 0 : Math.max(0, quotaPolicy.getPartitionBurstLimit());
+                && quotaPolicy.maxPartitionsPerTenant() != null
+                && quotaPolicy.maxPartitionsPerTenant() > 0) {
+            int pburst = quotaPolicy.partitionBurstLimit() == null ? 0 : Math.max(0, quotaPolicy.partitionBurstLimit());
             ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
                     request.getTenantId(),
                     "TENANT_PARTITIONS",
                     request.getTenantId(),
-                    quotaPolicy.getQuotaResetPolicy(),
-                    quotaPolicy.getMaxPartitionsPerTenant(),
+                    quotaPolicy.quotaResetPolicy(),
+                    quotaPolicy.maxPartitionsPerTenant(),
                     pburst,
                     tenantActivePartitions,
                     requestedPartitions,
@@ -54,16 +54,16 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
             }
         }
         if (queue != null
-                && queue.getMaxRunningPartitions() != null
-                && queue.getMaxRunningPartitions() > 0) {
+                && queue.maxRunningPartitions() != null
+                && queue.maxRunningPartitions() > 0) {
             long queueActivePartitions = countQueueActivePartitions(request, queue, tenantActivePartitions);
-            int burst = queue.getBurstLimit() == null ? 0 : Math.max(0, queue.getBurstLimit());
+            int burst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
             ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
                     request.getTenantId(),
                     "QUEUE_PARTITIONS",
-                    queue.getQueueCode(),
-                    queue.getQuotaResetPolicy(),
-                    queue.getMaxRunningPartitions(),
+                    queue.queueCode(),
+                    queue.quotaResetPolicy(),
+                    queue.maxRunningPartitions(),
                     burst,
                     queueActivePartitions,
                     requestedPartitions,
@@ -83,7 +83,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
                                             long tenantActivePartitions) {
         String workerGroup = StringUtils.hasText(request.getWorkerGroup())
                 ? request.getWorkerGroup()
-                : queue.getWorkerGroup();
+                : queue.workerGroup();
         if (!StringUtils.hasText(workerGroup)) {
             return tenantActivePartitions;
         }

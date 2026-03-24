@@ -1,35 +1,37 @@
 package com.example.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
-import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-@Data
 @Table(schema = "batch", value = "quota_runtime_state")
-public class QuotaRuntimeStateRecord {
+public record QuotaRuntimeStateRecord(
+        @Id Long id,
+        @Column("tenant_id") String tenantId,
+        @Column("quota_scope") String quotaScope,
+        @Column("owner_code") String ownerCode,
+        @Column("quota_reset_policy") String quotaResetPolicy,
+        @Column("window_started_at") Instant windowStartedAt,
+        @Column("window_expires_at") Instant windowExpiresAt,
+        @Column("peak_borrowed_count") Integer peakBorrowedCount,
+        @Column("last_reset_at") Instant lastResetAt,
+        @Column("created_at") Instant createdAt,
+        @Column("updated_at") Instant updatedAt
+) {
+    /** Update peak + last timestamps (called by evaluateAndReserve). */
+    public QuotaRuntimeStateRecord withPeakAndTimestamps(int newPeak, Instant lastResetAt, Instant updatedAt) {
+        return new QuotaRuntimeStateRecord(id, tenantId, quotaScope, ownerCode, quotaResetPolicy,
+                windowStartedAt, windowExpiresAt, newPeak, lastResetAt, createdAt, updatedAt);
+    }
 
-    @Id
-    private Long id;
-    @Column("tenant_id")
-    private String tenantId;
-    @Column("quota_scope")
-    private String quotaScope;
-    @Column("owner_code")
-    private String ownerCode;
-    @Column("quota_reset_policy")
-    private String quotaResetPolicy;
-    @Column("window_started_at")
-    private Instant windowStartedAt;
-    @Column("window_expires_at")
-    private Instant windowExpiresAt;
-    @Column("peak_borrowed_count")
-    private Integer peakBorrowedCount;
-    @Column("last_reset_at")
-    private Instant lastResetAt;
-    @Column("created_at")
-    private Instant createdAt;
-    @Column("updated_at")
-    private Instant updatedAt;
+    /** Full window refresh (called by reconcileExpiredStates / refreshState). */
+    public QuotaRuntimeStateRecord withRefresh(String quotaResetPolicy,
+                                               Instant windowStartedAt,
+                                               Instant windowExpiresAt,
+                                               int peakBorrowedCount,
+                                               Instant lastResetAt) {
+        return new QuotaRuntimeStateRecord(id, tenantId, quotaScope, ownerCode, quotaResetPolicy,
+                windowStartedAt, windowExpiresAt, peakBorrowedCount, lastResetAt, createdAt, Instant.now());
+    }
 }

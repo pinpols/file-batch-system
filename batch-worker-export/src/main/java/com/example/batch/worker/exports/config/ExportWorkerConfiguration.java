@@ -1,5 +1,6 @@
 package com.example.batch.worker.exports.config;
 
+import com.example.batch.worker.core.config.WorkerConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "batch.worker.export")
@@ -11,7 +12,7 @@ public record ExportWorkerConfiguration(
         String topic,
         String consumerGroupId,
         FileProcessing fileProcessing
-) {
+) implements WorkerConfiguration {
     private static final int DEFAULT_PAGE_SIZE = 1000;
     private static final int DEFAULT_FETCH_SIZE = 1000;
     private static final int DEFAULT_CHUNK_SIZE = 500;

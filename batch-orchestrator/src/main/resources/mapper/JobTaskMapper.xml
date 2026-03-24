@@ -117,6 +117,19 @@
           and id = #{id}
     </update>
 
+    <update id="finishTask">
+        update batch.job_task
+        set task_status = #{taskStatus},
+            result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            finished_at = current_timestamp,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and task_status = #{expectedStatus}
+    </update>
+
     <update id="assignWorker">
         update batch.job_task
         set assigned_worker_code = #{assignedWorkerCode},

@@ -68,8 +68,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
     @Test
     void shouldThrowWhenWorkerAlreadyDecommissionedOnStartDrain() {
-        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-        registry.setStatus(WorkerRegistryStatus.DECOMMISSIONED.code());
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1")
+                .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), Instant.now());
         when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
 
         assertThatThrownBy(() -> service.startDrain("t1", "w1", null))
@@ -84,10 +84,10 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
         WorkerRegistryRecord result = service.startDrain("t1", "w1", null);
 
-        assertThat(result.getStatus()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
-        assertThat(result.getDrainStartedAt()).isNotNull();
-        assertThat(result.getDrainDeadlineAt()).isNotNull();
-        assertThat(result.getDrainDeadlineAt()).isAfter(result.getDrainStartedAt());
+        assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+        assertThat(result.drainStartedAt()).isNotNull();
+        assertThat(result.drainDeadlineAt()).isNotNull();
+        assertThat(result.drainDeadlineAt()).isAfter(result.drainStartedAt());
     }
 
     @Test
@@ -131,7 +131,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
         WorkerRegistryRecord result = service.forceOffline("t1", "w1");
 
-        assertThat(result.getStatus()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
+        assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
         verify(retryGovernanceService).retryTask(eq("t1"), eq(100L), anyString());
     }
 
@@ -145,7 +145,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
         WorkerRegistryRecord result = service.forceOffline("t1", "w1");
 
-        assertThat(result.getStatus()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
+        assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
         verify(retryGovernanceService, never()).retryTask(anyString(), anyLong(), anyString());
     }
 
@@ -196,7 +196,6 @@ class DefaultWorkerDrainGovernanceServiceTest {
     @Test
     void shouldDoNothingWhenWorkerNotDrainingOnTakeover() {
         WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-        registry.setStatus(WorkerRegistryStatus.ONLINE.code());
         when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
 
         service.takeoverAfterDrainTimeout("t1", "w1");
@@ -206,10 +205,10 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
     @Test
     void shouldTakeoverAndDecommissionWhenDrainingWorkerFound() {
-        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-        registry.setStatus(WorkerRegistryStatus.DRAINING.code());
-        registry.setDrainStartedAt(Instant.now().minusSeconds(600));
-        registry.setDrainDeadlineAt(Instant.now().minusSeconds(100));
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1")
+                .withDrain(WorkerRegistryStatus.DRAINING.code(),
+                        Instant.now().minusSeconds(600), Instant.now().minusSeconds(100),
+                        Instant.now().minusSeconds(600));
 
         when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
                 .thenReturn(registry)
@@ -225,8 +224,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
     @Test
     void shouldContinueTakeoverWhenOneTaskRetryFails() {
-        WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-        registry.setStatus(WorkerRegistryStatus.DRAINING.code());
+        WorkerRegistryRecord registry = onlineWorker("t1", "w1")
+                .withStatus(WorkerRegistryStatus.DRAINING.code(), Instant.now());
         when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
                 .thenReturn(registry)
                 .thenReturn(registry);
@@ -252,10 +251,8 @@ class DefaultWorkerDrainGovernanceServiceTest {
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static WorkerRegistryRecord onlineWorker(String tenantId, String workerCode) {
-        WorkerRegistryRecord r = new WorkerRegistryRecord();
-        r.setTenantId(tenantId);
-        r.setWorkerCode(workerCode);
-        r.setStatus(WorkerRegistryStatus.ONLINE.code());
-        return r;
+        return new WorkerRegistryRecord(
+                null, tenantId, workerCode, null, null, null,
+                WorkerRegistryStatus.ONLINE.code(), Instant.now(), null, null, null);
     }
 }

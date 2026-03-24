@@ -36,7 +36,8 @@
       "Bash(export DOCKER_HOST=\"unix:///Users/dengchao/.docker/run/docker.sock\")",
       "Bash(curl -s --unix-socket /Users/dengchao/.docker/run/docker.sock http://localhost/v1.48/info)",
       "Bash(export DOCKER_API_VERSION=1.44 export PATH=\"$PATH:$HOME/.docker/bin\" mvn test -pl batch-orchestrator -Dtest=\"FileErrorRecordIntegrationTest\")",
-      "Bash(find /Users/dengchao/Downloads/file-batch-system -name testcontainers*)"
+      "Bash(find /Users/dengchao/Downloads/file-batch-system -name testcontainers*)",
+      "Bash(mvn compile:*)"
     ],
     "defaultMode": "bypassPermissions"
   }

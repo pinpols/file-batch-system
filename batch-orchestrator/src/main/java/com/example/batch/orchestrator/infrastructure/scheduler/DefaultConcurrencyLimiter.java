@@ -32,28 +32,28 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
         long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(request.getTenantId());
 
         if (quotaPolicy != null
-                && StringUtils.hasText(quotaPolicy.getFairShareGroup())
-                && quotaPolicy.getGroupSharedMaxRunningJobs() != null
-                && quotaPolicy.getGroupSharedMaxRunningJobs() > 0) {
-            long groupActive = jobInstanceMapper.countActiveByFairShareGroup(quotaPolicy.getFairShareGroup());
-            if (groupActive >= quotaPolicy.getGroupSharedMaxRunningJobs()) {
+                && StringUtils.hasText(quotaPolicy.fairShareGroup())
+                && quotaPolicy.groupSharedMaxRunningJobs() != null
+                && quotaPolicy.groupSharedMaxRunningJobs() > 0) {
+            long groupActive = jobInstanceMapper.countActiveByFairShareGroup(quotaPolicy.fairShareGroup());
+            if (groupActive >= quotaPolicy.groupSharedMaxRunningJobs()) {
                 return ResourceCheck.waitForCapacity(
                         "FAIR_SHARE_GROUP_JOB_LIMIT",
-                        "fair-share group job cap reached for group " + quotaPolicy.getFairShareGroup()
+                        "fair-share group job cap reached for group " + quotaPolicy.fairShareGroup()
                 );
             }
         }
 
         if (quotaPolicy != null
-                && quotaPolicy.getMaxRunningJobsPerTenant() != null
-                && quotaPolicy.getMaxRunningJobsPerTenant() > 0) {
-            int burst = quotaPolicy.getBurstLimit() == null ? 0 : Math.max(0, quotaPolicy.getBurstLimit());
+                && quotaPolicy.maxRunningJobsPerTenant() != null
+                && quotaPolicy.maxRunningJobsPerTenant() > 0) {
+            int burst = quotaPolicy.burstLimit() == null ? 0 : Math.max(0, quotaPolicy.burstLimit());
             ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
                     request.getTenantId(),
                     "TENANT_JOBS",
                     request.getTenantId(),
-                    quotaPolicy.getQuotaResetPolicy(),
-                    quotaPolicy.getMaxRunningJobsPerTenant(),
+                    quotaPolicy.quotaResetPolicy(),
+                    quotaPolicy.maxRunningJobsPerTenant(),
                     burst,
                     tenantActiveJobs,
                     1,
@@ -67,17 +67,17 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
         }
 
         if (queue != null
-                && StringUtils.hasText(queue.getQueueCode())
-                && queue.getMaxRunningJobs() != null
-                && queue.getMaxRunningJobs() > 0) {
-            long queueActiveJobs = jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.getQueueCode());
-            int qburst = queue.getBurstLimit() == null ? 0 : Math.max(0, queue.getBurstLimit());
+                && StringUtils.hasText(queue.queueCode())
+                && queue.maxRunningJobs() != null
+                && queue.maxRunningJobs() > 0) {
+            long queueActiveJobs = jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.queueCode());
+            int qburst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
             ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
                     request.getTenantId(),
                     "QUEUE_JOBS",
-                    queue.getQueueCode(),
-                    queue.getQuotaResetPolicy(),
-                    queue.getMaxRunningJobs(),
+                    queue.queueCode(),
+                    queue.quotaResetPolicy(),
+                    queue.maxRunningJobs(),
                     qburst,
                     queueActiveJobs,
                     1,

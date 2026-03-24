@@ -71,11 +71,12 @@ public class QuotaRuntimeStateService {
         if (borrowedNeeded > normalizedBurst) {
             return ResourceCheck.waitForCapacity(reasonCode, reasonMessage);
         }
-        int currentPeak = state.getPeakBorrowedCount() == null ? 0 : Math.max(0, state.getPeakBorrowedCount());
+        int currentPeak = state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());
         if (borrowedNeeded > currentPeak) {
-            state.setPeakBorrowedCount(borrowedNeeded);
-            state.setLastResetAt(state.getLastResetAt() == null ? now : state.getLastResetAt());
-            state.setUpdatedAt(now);
+            state = state.withPeakAndTimestamps(
+                    borrowedNeeded,
+                    state.lastResetAt() == null ? now : state.lastResetAt(),
+                    now);
             quotaRuntimeStateRepository.save(state);
         }
         return ResourceCheck.allow();
@@ -103,16 +104,16 @@ public class QuotaRuntimeStateService {
         if (state == null) {
             return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
         }
-        int peakBorrowed = state.getPeakBorrowedCount() == null ? 0 : Math.max(0, state.getPeakBorrowedCount());
+        int peakBorrowed = state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());
         int remaining = Math.max(0, burstLimit - peakBorrowed);
         return new QuotaRuntimeSnapshot(
                 policy.name(),
                 burstLimit,
                 peakBorrowed,
                 remaining,
-                state.getWindowStartedAt(),
-                state.getWindowExpiresAt(),
-                state.getLastResetAt()
+                state.windowStartedAt(),
+                state.windowExpiresAt(),
+                state.lastResetAt()
         );
     }
 
@@ -121,7 +122,7 @@ public class QuotaRuntimeStateService {
         Instant now = Instant.now();
         List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateRepository.findExpired(now);
         for (QuotaRuntimeStateRecord state : expired) {
-            QuotaResetPolicy policy = QuotaResetPolicy.from(state.getQuotaResetPolicy());
+            QuotaResetPolicy policy = QuotaResetPolicy.from(state.quotaResetPolicy());
             refreshState(state, policy, now, slidingWindowHours, true);
         }
     }
@@ -136,15 +137,10 @@ public class QuotaRuntimeStateService {
         if (state != null) {
             return state;
         }
-        QuotaRuntimeStateRecord created = new QuotaRuntimeStateRecord();
-        created.setTenantId(tenantId);
-        created.setQuotaScope(quotaScope);
-        created.setOwnerCode(ownerCode);
-        created.setQuotaResetPolicy(quotaResetPolicy);
-        created.setPeakBorrowedCount(0);
-        created.setCreatedAt(now);
-        created.setUpdatedAt(now);
-        refreshState(created, QuotaResetPolicy.from(quotaResetPolicy), now, slidingWindowHours, false);
+        QuotaRuntimeStateRecord created = new QuotaRuntimeStateRecord(
+                null, tenantId, quotaScope, ownerCode, quotaResetPolicy,
+                null, null, 0, null, now, now);
+        created = refreshState(created, QuotaResetPolicy.from(quotaResetPolicy), now, slidingWindowHours, false);
         return created;
     }
 
@@ -165,22 +161,18 @@ public class QuotaRuntimeStateService {
         }
         String normalizedPolicy = policy == null ? QuotaResetPolicy.NONE.name() : policy.name();
         boolean changed = false;
-        if (!normalizedPolicy.equalsIgnoreCase(state.getQuotaResetPolicy())) {
-            state.setQuotaResetPolicy(normalizedPolicy);
+        if (!normalizedPolicy.equalsIgnoreCase(state.quotaResetPolicy())) {
+            state = state.withRefresh(normalizedPolicy, state.windowStartedAt(), state.windowExpiresAt(),
+                    state.peakBorrowedCount() == null ? 0 : state.peakBorrowedCount(), state.lastResetAt());
             changed = true;
         }
         if (!policy.isRuntimeManaged()) {
-            if (state.getPeakBorrowedCount() == null || state.getPeakBorrowedCount() != 0) {
-                state.setPeakBorrowedCount(0);
-                changed = true;
-            }
-            if (state.getWindowStartedAt() != null || state.getWindowExpiresAt() != null) {
-                state.setWindowStartedAt(null);
-                state.setWindowExpiresAt(null);
+            if (state.peakBorrowedCount() == null || state.peakBorrowedCount() != 0
+                    || state.windowStartedAt() != null || state.windowExpiresAt() != null) {
+                state = state.withRefresh(normalizedPolicy, null, null, 0, state.lastResetAt());
                 changed = true;
             }
             if (changed && persist) {
-                state.setUpdatedAt(now);
                 quotaRuntimeStateRepository.save(state);
             }
             return state;
@@ -190,25 +182,18 @@ public class QuotaRuntimeStateService {
             ZonedDateTime nowZdt = now.atZone(QuotaResetPolicy.systemZone());
             Instant windowStart = QuotaResetPolicy.startOfCalendarDay(nowZdt).toInstant();
             Instant windowEnd = windowStart.plus(Duration.ofDays(1));
-            if (!windowStart.equals(state.getWindowStartedAt()) || state.getWindowExpiresAt() == null || !now.isBefore(state.getWindowExpiresAt())) {
-                state.setWindowStartedAt(windowStart);
-                state.setWindowExpiresAt(windowEnd);
-                state.setPeakBorrowedCount(0);
-                state.setLastResetAt(now);
+            if (!windowStart.equals(state.windowStartedAt()) || state.windowExpiresAt() == null || !now.isBefore(state.windowExpiresAt())) {
+                state = state.withRefresh(normalizedPolicy, windowStart, windowEnd, 0, now);
                 changed = true;
             }
         } else if (policy == QuotaResetPolicy.SLIDING_WINDOW) {
             int normalizedHours = Math.max(1, slidingWindowHours);
-            if (state.getWindowStartedAt() == null || state.getWindowExpiresAt() == null || !now.isBefore(state.getWindowExpiresAt())) {
-                state.setWindowStartedAt(now);
-                state.setWindowExpiresAt(now.plus(Duration.ofHours(normalizedHours)));
-                state.setPeakBorrowedCount(0);
-                state.setLastResetAt(now);
+            if (state.windowStartedAt() == null || state.windowExpiresAt() == null || !now.isBefore(state.windowExpiresAt())) {
+                state = state.withRefresh(normalizedPolicy, now, now.plus(Duration.ofHours(normalizedHours)), 0, now);
                 changed = true;
             }
         }
         if (changed && persist) {
-            state.setUpdatedAt(now);
             quotaRuntimeStateRepository.save(state);
         }
         return state;

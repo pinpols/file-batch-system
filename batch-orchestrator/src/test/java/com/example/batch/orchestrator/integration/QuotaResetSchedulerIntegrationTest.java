@@ -52,16 +52,10 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
     void schedulerReconcileResetsExpiredSlidingWindowState() {
         String ownerCode = "sched-reset-" + System.currentTimeMillis();
 
-        QuotaRuntimeStateRecord expired = new QuotaRuntimeStateRecord();
-        expired.setTenantId("t1");
-        expired.setQuotaScope("JOB");
-        expired.setOwnerCode(ownerCode);
-        expired.setQuotaResetPolicy("SLIDING_WINDOW");
-        expired.setPeakBorrowedCount(7);
-        expired.setWindowStartedAt(Instant.now().minusSeconds(10800)); // 3 hours ago
-        expired.setWindowExpiresAt(Instant.now().minusSeconds(3600));  // expired 1 hour ago
-        expired.setCreatedAt(Instant.now());
-        expired.setUpdatedAt(Instant.now());
+        QuotaRuntimeStateRecord expired = new QuotaRuntimeStateRecord(
+                null, "t1", "JOB", ownerCode, "SLIDING_WINDOW",
+                Instant.now().minusSeconds(10800), Instant.now().minusSeconds(3600), // expired 1 hour ago
+                7, null, Instant.now(), Instant.now());
         quotaRuntimeStateRepository.save(expired);
 
         // Trigger scheduler directly (schedule interval is 600s so won't auto-fire in test)
@@ -70,7 +64,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
         QuotaRuntimeStateRecord updated = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
         assertThat(updated).isNotNull();
-        assertThat(updated.getPeakBorrowedCount()).isZero();
+        assertThat(updated.peakBorrowedCount()).isZero();
     }
 
     @Test
@@ -79,16 +73,10 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
         String ownerCode = "sched-no-expired-" + System.currentTimeMillis();
 
         // Create a state that is NOT yet expired (window expires in the future)
-        QuotaRuntimeStateRecord active = new QuotaRuntimeStateRecord();
-        active.setTenantId("t1");
-        active.setQuotaScope("JOB");
-        active.setOwnerCode(ownerCode);
-        active.setQuotaResetPolicy("SLIDING_WINDOW");
-        active.setPeakBorrowedCount(3);
-        active.setWindowStartedAt(Instant.now().minusSeconds(1800));
-        active.setWindowExpiresAt(Instant.now().plusSeconds(3600)); // still valid
-        active.setCreatedAt(Instant.now());
-        active.setUpdatedAt(Instant.now());
+        QuotaRuntimeStateRecord active = new QuotaRuntimeStateRecord(
+                null, "t1", "JOB", ownerCode, "SLIDING_WINDOW",
+                Instant.now().minusSeconds(1800), Instant.now().plusSeconds(3600), // still valid
+                3, null, Instant.now(), Instant.now());
         quotaRuntimeStateRepository.save(active);
 
         // reconcile() should not touch non-expired states
@@ -98,7 +86,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
         assertThat(afterReconcile).isNotNull();
         // peakBorrowedCount should remain unchanged since the window hasn't expired
-        assertThat(afterReconcile.getPeakBorrowedCount()).isEqualTo(3);
+        assertThat(afterReconcile.peakBorrowedCount()).isEqualTo(3);
     }
 
     @Test

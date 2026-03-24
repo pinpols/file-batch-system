@@ -7,6 +7,7 @@ import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.PipelineStepFlowSupport;
+import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
@@ -44,7 +45,7 @@ public class DefaultImportStageExecutor implements ImportStageExecutor {
         List<ImportStageResult> results = new ArrayList<>();
         try {
             if (configuredSteps.isEmpty()) {
-                results.add(ImportStageResult.failure(ImportStage.RECEIVE, "IMPORT_PIPELINE_STEP_MISSING", "pipeline step definition missing"));
+                results.add(ImportStageResult.failure(ImportStage.RECEIVE, StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing"));
                 return results;
             }
             Long pipelineInstanceId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
@@ -68,18 +69,28 @@ public class DefaultImportStageExecutor implements ImportStageExecutor {
                 ImportStageResult result;
                 try {
                     result = step == null
-                            ? ImportStageResult.failure(stage, "IMPORT_STEP_MISSING", "step impl not found: " + currentStep.implCode())
+                            ? ImportStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(), "step impl not found: " + currentStep.implCode())
                             : step.execute(context);
-                } catch (Exception exception) {
+                } catch (BizException exception) {
                     log.error(
-                            "import stage execution failed: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                            "import stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
                             stage,
                             currentStep.stepCode(),
                             currentStep.implCode(),
                             context.getTenantId(),
                             context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
                             exception);
-                    result = ImportStageResult.failure(stage, "IMPORT_STAGE_EXECUTION_FAILED", exception.getMessage());
+                    result = ImportStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+                } catch (Exception exception) {
+                    log.error(
+                            "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                            stage,
+                            currentStep.stepCode(),
+                            currentStep.implCode(),
+                            context.getTenantId(),
+                            context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                            exception);
+                    result = ImportStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
                 }
                 results.add(result);
                 if (result.success()) {

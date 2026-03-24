@@ -39,24 +39,26 @@ public class TenantSchedulerSnapshotRecorder {
                 continue;
             }
             SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
-            TenantSchedulerSnapshotRecord row = new TenantSchedulerSnapshotRecord();
-            row.setTenantId(tenantId);
-            row.setSnapshotAt(snap.generatedAt());
-            row.setFairShareGroup(p.fairShareGroup());
-            row.setPolicyCode(p.policyCode());
-            row.setActiveJobs((int) Math.min(Integer.MAX_VALUE, p.activeJobs()));
-            row.setActivePartitions((int) Math.min(Integer.MAX_VALUE, p.activePartitions()));
-            row.setMaxJobsBase(p.maxRunningJobsPerTenant());
-            row.setBurstLimit(p.burstLimit());
-            row.setEffectiveJobCap(p.effectiveTenantJobCap());
-            row.setGroupActiveJobs((int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()));
-            row.setGroupMaxJobs(p.groupSharedMaxRunningJobs());
-            row.setQuotaResetPolicy(p.quotaResetPolicy());
-            row.setOnlineWorkers((int) workerRegistryRepository.countByTenantIdAndStatus(
+            TenantSchedulerSnapshotRecord row = new TenantSchedulerSnapshotRecord(
+                    null,
                     tenantId,
-                    WorkerRegistryStatus.ONLINE.code()
-            ));
-            row.setDetailJson(JsonUtils.toJson(snap));
+                    snap.generatedAt(),
+                    p.fairShareGroup(),
+                    p.policyCode(),
+                    (int) Math.min(Integer.MAX_VALUE, p.activeJobs()),
+                    (int) Math.min(Integer.MAX_VALUE, p.activePartitions()),
+                    p.maxRunningJobsPerTenant(),
+                    p.burstLimit(),
+                    p.effectiveTenantJobCap(),
+                    (int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()),
+                    p.groupSharedMaxRunningJobs(),
+                    p.quotaResetPolicy(),
+                    (int) workerRegistryRepository.countByTenantIdAndStatus(
+                            tenantId,
+                            WorkerRegistryStatus.ONLINE.code()
+                    ),
+                    JsonUtils.toJson(snap)
+            );
             snapshotRepository.save(row);
         }
     }
