@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
@@ -34,8 +35,8 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
                 .findFirstByTenantIdAndWorkerCode("t1", "worker-it-001");
 
         assertThat(found).isNotNull();
-        assertThat(found.getStatus()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
-        assertThat(found.getWorkerGroup()).isEqualTo("DEFAULT");
+        assertThat(found.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+        assertThat(found.workerGroup()).isEqualTo("DEFAULT");
     }
 
     @Test
@@ -43,16 +44,15 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
         WorkerRegistryRecord worker = onlineWorker("t1", "worker-it-drain", "DEFAULT");
         worker = workerRegistryRepository.save(worker);
 
-        worker.setStatus(WorkerRegistryStatus.DRAINING.code());
-        worker.setDrainStartedAt(Instant.now());
-        worker.setDrainDeadlineAt(Instant.now().plusSeconds(300));
+        Instant now = Instant.now();
+        worker = worker.withDrain(WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(300), now);
         workerRegistryRepository.save(worker);
 
         WorkerRegistryRecord found = workerRegistryRepository
                 .findFirstByTenantIdAndWorkerCode("t1", "worker-it-drain");
-        assertThat(found.getStatus()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
-        assertThat(found.getDrainStartedAt()).isNotNull();
-        assertThat(found.getDrainDeadlineAt()).isNotNull();
+        assertThat(found.status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+        assertThat(found.drainStartedAt()).isNotNull();
+        assertThat(found.drainDeadlineAt()).isNotNull();
     }
 
     @Test
@@ -60,16 +60,14 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
         WorkerRegistryRecord worker = onlineWorker("t1", "worker-it-decom", "DEFAULT");
         worker = workerRegistryRepository.save(worker);
 
-        worker.setStatus(WorkerRegistryStatus.DECOMMISSIONED.code());
-        worker.setDrainStartedAt(null);
-        worker.setDrainDeadlineAt(null);
+        worker = worker.withDecommissioned(Instant.now());
         workerRegistryRepository.save(worker);
 
         WorkerRegistryRecord found = workerRegistryRepository
                 .findFirstByTenantIdAndWorkerCode("t1", "worker-it-decom");
-        assertThat(found.getStatus()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
-        assertThat(found.getDrainStartedAt()).isNull();
-        assertThat(found.getDrainDeadlineAt()).isNull();
+        assertThat(found.status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
+        assertThat(found.drainStartedAt()).isNull();
+        assertThat(found.drainDeadlineAt()).isNull();
     }
 
     @Test
@@ -77,8 +75,8 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
         String uniqueGroup = "GROUP-IT-" + System.currentTimeMillis();
         WorkerRegistryRecord w1 = onlineWorker("t1", "w-grp-1-" + uniqueGroup, uniqueGroup);
         WorkerRegistryRecord w2 = onlineWorker("t1", "w-grp-2-" + uniqueGroup, uniqueGroup);
-        WorkerRegistryRecord w3 = onlineWorker("t1", "w-offline-" + uniqueGroup, uniqueGroup);
-        w3.setStatus(WorkerRegistryStatus.OFFLINE.code());
+        WorkerRegistryRecord w3 = onlineWorker("t1", "w-offline-" + uniqueGroup, uniqueGroup)
+                .withStatus(WorkerRegistryStatus.OFFLINE.code(), Instant.now());
         workerRegistryRepository.save(w1);
         workerRegistryRepository.save(w2);
         workerRegistryRepository.save(w3);
@@ -87,7 +85,7 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
                 .findByTenantIdAndWorkerGroupAndStatus("t1", uniqueGroup, WorkerRegistryStatus.ONLINE.code());
 
         assertThat(online).hasSize(2);
-        assertThat(online).allMatch(w -> WorkerRegistryStatus.ONLINE.code().equals(w.getStatus()));
+        assertThat(online).allMatch(w -> WorkerRegistryStatus.ONLINE.code().equals(w.status()));
     }
 
     @Test
@@ -106,29 +104,28 @@ class WorkerRegistryIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldFindDrainingWorkers() {
-        WorkerRegistryRecord draining = onlineWorker("t1", "worker-draining-search-" + System.currentTimeMillis(), "DEFAULT");
-        draining.setStatus(WorkerRegistryStatus.DRAINING.code());
-        draining.setDrainStartedAt(Instant.now().minusSeconds(60));
-        draining.setDrainDeadlineAt(Instant.now().minusSeconds(10)); // already past deadline
+        Instant pastDeadline = Instant.now().minusSeconds(10);
+        WorkerRegistryRecord draining = onlineWorker("t1", "worker-draining-search-" + System.currentTimeMillis(), "DEFAULT")
+                .withDrain(WorkerRegistryStatus.DRAINING.code(),
+                        Instant.now().minusSeconds(60),
+                        pastDeadline,
+                        Instant.now());
         workerRegistryRepository.save(draining);
 
         List<WorkerRegistryRecord> drainingWorkers = workerRegistryRepository
                 .findByStatus(WorkerRegistryStatus.DRAINING.code());
 
         assertThat(drainingWorkers).isNotEmpty();
-        assertThat(drainingWorkers).allMatch(w -> WorkerRegistryStatus.DRAINING.code().equals(w.getStatus()));
+        assertThat(drainingWorkers).allMatch(w -> WorkerRegistryStatus.DRAINING.code().equals(w.status()));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static WorkerRegistryRecord onlineWorker(String tenantId, String workerCode, String workerGroup) {
-        WorkerRegistryRecord r = new WorkerRegistryRecord();
-        r.setTenantId(tenantId);
-        r.setWorkerCode(workerCode);
-        r.setWorkerGroup(workerGroup);
-        r.setStatus(WorkerRegistryStatus.ONLINE.code());
-        r.setHeartbeatAt(Instant.now());
-        r.setCurrentLoad(0);
-        return r;
+        return new WorkerRegistryRecord(
+                null, tenantId, workerCode, workerGroup,
+                new JsonbString("{}"), null,
+                WorkerRegistryStatus.ONLINE.code(),
+                Instant.now(), 0, null, null);
     }
 }

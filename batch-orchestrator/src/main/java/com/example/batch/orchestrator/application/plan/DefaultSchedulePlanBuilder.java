@@ -34,13 +34,13 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
         plan.setTenantId(command.tenantId());
         plan.setJobCode(command.jobCode());
         plan.setBizDate(command.bizDate());
-        plan.setJobDefinitionId(jobDefinition == null ? null : jobDefinition.getId());
-        plan.setWorkflowDefinitionId(workflowDefinition == null ? null : workflowDefinition.getId());
-        plan.setQueueCode(jobDefinition == null ? null : jobDefinition.getQueueCode());
-        plan.setWorkerGroup(jobDefinition == null ? null : jobDefinition.getWorkerGroup());
-        plan.setWindowCode(jobDefinition == null ? null : jobDefinition.getWindowCode());
-        plan.setDefaultWorkerType(jobDefinition == null ? null : jobDefinition.getJobType());
-        plan.setPriority(jobDefinition == null ? 5 : jobDefinition.getPriority());
+        plan.setJobDefinitionId(jobDefinition == null ? null : jobDefinition.id());
+        plan.setWorkflowDefinitionId(workflowDefinition == null ? null : workflowDefinition.id());
+        plan.setQueueCode(jobDefinition == null ? null : jobDefinition.queueCode());
+        plan.setWorkerGroup(jobDefinition == null ? null : jobDefinition.workerGroup());
+        plan.setWindowCode(jobDefinition == null ? null : jobDefinition.windowCode());
+        plan.setDefaultWorkerType(jobDefinition == null ? null : jobDefinition.jobType());
+        plan.setPriority(jobDefinition == null ? 5 : jobDefinition.priority());
         plan.setPartitionCount(resolvePartitionCount(jobDefinition, planParams));
 
         WorkerRouteModel route = new WorkerRouteModel();
@@ -65,8 +65,8 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
     private Map<String, Object> mergePlanParams(JobDefinitionRecord jobDefinition, Map<String, Object> runtimeParams) {
         Map<String, Object> merged = new LinkedHashMap<>();
-        if (jobDefinition != null && jobDefinition.getDefaultParams() != null) {
-            merged.putAll(jobDefinition.getDefaultParams());
+        if (jobDefinition != null && jobDefinition.defaultParams() != null) {
+            merged.putAll(jobDefinition.defaultParams());
         }
         if (runtimeParams != null) {
             merged.putAll(runtimeParams);
@@ -77,7 +77,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     private int resolvePartitionCount(JobDefinitionRecord jobDefinition, Map<String, Object> params) {
         ShardStrategy shardStrategy = jobDefinition == null
                 ? ShardStrategy.NONE
-                : ShardStrategy.fromCode(jobDefinition.getShardStrategy());
+                : ShardStrategy.fromCode(jobDefinition.shardStrategy());
         int minPartitionCount = Math.max(1, firstPositiveInt(
                 params.get("minPartitionCount"),
                 params.get("minShardCount")
@@ -195,18 +195,18 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     }
 
     private long resolveOnlineWorkerCount(JobDefinitionRecord jobDefinition, Map<String, Object> params) {
-        if (jobDefinition == null || !StringUtils.hasText(jobDefinition.getTenantId())) {
+        if (jobDefinition == null || !StringUtils.hasText(jobDefinition.tenantId())) {
             return firstPositiveLong(params.get("onlineWorkerCount"), params.get("workerCount"));
         }
-        if (StringUtils.hasText(jobDefinition.getWorkerGroup())) {
+        if (StringUtils.hasText(jobDefinition.workerGroup())) {
             return workerRegistryRepository.countByTenantIdAndWorkerGroupAndStatus(
-                    jobDefinition.getTenantId(),
-                    jobDefinition.getWorkerGroup(),
+                    jobDefinition.tenantId(),
+                    jobDefinition.workerGroup(),
                     WorkerRegistryStatus.ONLINE.code()
             );
         }
         return workerRegistryRepository.countByTenantIdAndStatus(
-                jobDefinition.getTenantId(),
+                jobDefinition.tenantId(),
                 WorkerRegistryStatus.ONLINE.code()
         );
     }

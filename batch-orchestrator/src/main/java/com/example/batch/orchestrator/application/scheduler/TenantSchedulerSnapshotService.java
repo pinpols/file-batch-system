@@ -42,36 +42,36 @@ public class TenantSchedulerSnapshotService {
         List<TenantQuotaPolicyRecord> quotaRows = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
         for (TenantQuotaPolicyRecord p : quotaRows) {
             long groupJobs = 0L;
-            if (StringUtils.hasText(p.getFairShareGroup())) {
-                groupJobs = jobInstanceMapper.countActiveByFairShareGroup(p.getFairShareGroup());
+            if (StringUtils.hasText(p.fairShareGroup())) {
+                groupJobs = jobInstanceMapper.countActiveByFairShareGroup(p.fairShareGroup());
             }
-            int baseJobs = p.getMaxRunningJobsPerTenant() == null ? 0 : p.getMaxRunningJobsPerTenant();
-            int burst = p.getBurstLimit() == null ? 0 : Math.max(0, p.getBurstLimit());
+            int baseJobs = p.maxRunningJobsPerTenant() == null ? 0 : p.maxRunningJobsPerTenant();
+            int burst = p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit());
             int effJobs = baseJobs > 0 ? baseJobs + burst : 0;
-            int baseParts = p.getMaxPartitionsPerTenant() == null ? 0 : p.getMaxPartitionsPerTenant();
-            int pburst = p.getPartitionBurstLimit() == null ? 0 : Math.max(0, p.getPartitionBurstLimit());
+            int baseParts = p.maxPartitionsPerTenant() == null ? 0 : p.maxPartitionsPerTenant();
+            int pburst = p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit());
             int effParts = baseParts > 0 ? baseParts + pburst : 0;
             var runtime = quotaRuntimeStateService.describe(
                     tenantId,
                     "TENANT_JOBS",
                     tenantId,
-                    p.getQuotaResetPolicy(),
+                    p.quotaResetPolicy(),
                     burst,
                     resourceSchedulerProperties.getQuotaResetSlidingWindowHours()
             );
             policies.add(new SchedulerSnapshotResponse.PolicySnapshot(
-                    p.getPolicyCode(),
-                    p.getFairShareGroup(),
-                    p.getFairShareWeight(),
-                    p.getMaxRunningJobsPerTenant(),
-                    p.getBurstLimit(),
-                    p.getPartitionBurstLimit(),
-                    p.getQuotaResetPolicy(),
+                    p.policyCode(),
+                    p.fairShareGroup(),
+                    p.fairShareWeight(),
+                    p.maxRunningJobsPerTenant(),
+                    p.burstLimit(),
+                    p.partitionBurstLimit(),
+                    p.quotaResetPolicy(),
                     runtime.peakBorrowedCount(),
                     runtime.remainingBurst(),
                     runtime.windowStartedAt(),
                     runtime.windowExpiresAt(),
-                    p.getGroupSharedMaxRunningJobs(),
+                    p.groupSharedMaxRunningJobs(),
                     tenantActiveJobs,
                     tenantActivePartitions,
                     groupJobs,
@@ -82,31 +82,31 @@ public class TenantSchedulerSnapshotService {
 
         List<SchedulerSnapshotResponse.QueueSnapshot> queues = new ArrayList<>();
         for (ResourceQueueRecord q : resourceQueueRepository.findByTenantIdAndEnabled(tenantId, true)) {
-            long qj = jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, q.getQueueCode());
-            int qmax = q.getMaxRunningJobs() == null ? 0 : q.getMaxRunningJobs();
-            int qburst = q.getBurstLimit() == null ? 0 : Math.max(0, q.getBurstLimit());
+            long qj = jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, q.queueCode());
+            int qmax = q.maxRunningJobs() == null ? 0 : q.maxRunningJobs();
+            int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
             int qeff = qmax > 0 ? qmax + qburst : 0;
             var runtime = quotaRuntimeStateService.describe(
                     tenantId,
                     "QUEUE_JOBS",
-                    q.getQueueCode(),
-                    q.getQuotaResetPolicy(),
+                    q.queueCode(),
+                    q.quotaResetPolicy(),
                     qburst,
                     resourceSchedulerProperties.getQuotaResetSlidingWindowHours()
             );
             queues.add(new SchedulerSnapshotResponse.QueueSnapshot(
-                    q.getQueueCode(),
-                    q.getFairShareGroup(),
-                    q.getFairShareWeight(),
-                    q.getMaxRunningJobs(),
-                    q.getBurstLimit(),
+                    q.queueCode(),
+                    q.fairShareGroup(),
+                    q.fairShareWeight(),
+                    q.maxRunningJobs(),
+                    q.burstLimit(),
                     qeff,
-                    q.getQuotaResetPolicy(),
+                    q.quotaResetPolicy(),
                     runtime.peakBorrowedCount(),
                     runtime.remainingBurst(),
                     runtime.windowStartedAt(),
                     runtime.windowExpiresAt(),
-                    q.getGroupSharedMaxRunningJobs(),
+                    q.groupSharedMaxRunningJobs(),
                     qj
             ));
         }
@@ -118,11 +118,11 @@ public class TenantSchedulerSnapshotService {
         List<SchedulerSnapshotResponse.WorkerLoadSnapshot> wl = new ArrayList<>();
         for (WorkerRegistryRecord w : workers) {
             wl.add(new SchedulerSnapshotResponse.WorkerLoadSnapshot(
-                    w.getWorkerCode(),
-                    w.getWorkerGroup(),
-                    w.getCurrentLoad(),
-                    w.getHeartbeatAt(),
-                    w.getStatus()
+                    w.workerCode(),
+                    w.workerGroup(),
+                    w.currentLoad(),
+                    w.heartbeatAt(),
+                    w.status()
             ));
         }
         return new SchedulerSnapshotResponse(Instant.now(), tenantId, policies, queues, wl);

@@ -159,7 +159,7 @@ public class WaitingPartitionDispatchScheduler {
         request.setWorkerType(task.getTaskType());
         request.setPriority(jobInstance.getPriority());
         request.setRequestedPartitionCount(1);
-        request.setWindowCode(jobDefinition == null ? null : jobDefinition.getWindowCode());
+        request.setWindowCode(jobDefinition == null ? null : jobDefinition.windowCode());
         return request;
     }
 

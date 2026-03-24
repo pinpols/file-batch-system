@@ -7,6 +7,7 @@ import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.PipelineStepFlowSupport;
+import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
@@ -14,8 +15,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class DefaultExportStageExecutor implements ExportStageExecutor {
 
@@ -37,7 +40,7 @@ public class DefaultExportStageExecutor implements ExportStageExecutor {
         List<PipelineStepDefinition> configuredSteps = configuredSteps(context);
         List<ExportStageResult> results = new ArrayList<>();
         if (configuredSteps.isEmpty()) {
-            results.add(ExportStageResult.failure(ExportStage.PREPARE, "EXPORT_PIPELINE_STEP_MISSING", "pipeline step definition missing"));
+            results.add(ExportStageResult.failure(ExportStage.PREPARE, StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing"));
             return results;
         }
         Long pipelineInstanceId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
@@ -57,9 +60,32 @@ public class DefaultExportStageExecutor implements ExportStageExecutor {
                     buildInputSummary(context, currentStep)
             );
             ExportStageStep step = stepsByImplCode.get(currentStep.implCode());
-            ExportStageResult result = step == null
-                    ? ExportStageResult.failure(stage, "EXPORT_STEP_MISSING", "step impl not found: " + currentStep.implCode())
-                    : step.execute(context);
+            ExportStageResult result;
+            try {
+                result = step == null
+                        ? ExportStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(), "step impl not found: " + currentStep.implCode())
+                        : step.execute(context);
+            } catch (BizException exception) {
+                log.error(
+                        "export stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                        stage,
+                        currentStep.stepCode(),
+                        currentStep.implCode(),
+                        context.getTenantId(),
+                        context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                        exception);
+                result = ExportStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+            } catch (Exception exception) {
+                log.error(
+                        "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                        stage,
+                        currentStep.stepCode(),
+                        currentStep.implCode(),
+                        context.getTenantId(),
+                        context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                        exception);
+                result = ExportStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+            }
             results.add(result);
             if (result.success()) {
                 lastSuccessStage = currentStep.stageCode();

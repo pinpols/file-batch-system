@@ -137,14 +137,16 @@ public class ImportRecordGovernanceService {
                                  String errorMessage,
                                  Object rawRecord,
                                  boolean skipped) {
-        ImportBadRecord badRecord = new ImportBadRecord();
-        badRecord.setRecordNo(recordNo);
-        badRecord.setStageCode(stage == null ? null : stage.name());
-        badRecord.setErrorCode(errorCode);
-        badRecord.setErrorMessage(errorMessage);
-        badRecord.setRawRecord(rawRecord);
-        badRecord.setSkipped(skipped);
-        badRecord.setSkipAction(resolveSkipAction().getCode());
+        ImportBadRecord badRecord = new ImportBadRecord(
+                recordNo,
+                stage == null ? null : stage.name(),
+                errorCode,
+                errorMessage,
+                rawRecord,
+                skipped,
+                resolveSkipAction().getCode(),
+                null
+        );
         badRecords(context).add(badRecord);
 
         if (skipped) {

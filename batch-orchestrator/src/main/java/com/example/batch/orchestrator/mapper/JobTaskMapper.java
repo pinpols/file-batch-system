@@ -52,4 +52,12 @@ public interface JobTaskMapper {
                       @Param("id") Long id,
                       @Param("fromStatus") String fromStatus,
                       @Param("toStatus") String toStatus);
+
+    int finishTask(@Param("tenantId") String tenantId,
+                   @Param("id") Long id,
+                   @Param("taskStatus") String taskStatus,
+                   @Param("expectedStatus") String expectedStatus,
+                   @Param("resultSummary") String resultSummary,
+                   @Param("errorCode") String errorCode,
+                   @Param("errorMessage") String errorMessage);
 }

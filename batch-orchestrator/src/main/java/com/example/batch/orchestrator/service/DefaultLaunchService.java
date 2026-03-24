@@ -105,7 +105,7 @@ public class DefaultLaunchService implements LaunchService {
 
         JobInstanceEntity jobInstance = new JobInstanceEntity();
         jobInstance.setTenantId(request.tenantId());
-        jobInstance.setJobDefinitionId(jobDefinition.getId());
+        jobInstance.setJobDefinitionId(jobDefinition.id());
         jobInstance.setTriggerRequestId(triggerRequest.getId());
         jobInstance.setJobCode(request.jobCode());
         jobInstance.setInstanceNo(IdGenerator.newBusinessNo("inst"));
@@ -119,9 +119,9 @@ public class DefaultLaunchService implements LaunchService {
         jobInstance.setRerunReason(resolveRerunReason(effectiveParams));
         jobInstance.setRelatedFileId(resolveRelatedFileId(effectiveParams));
         jobInstance.setParentInstanceId(resolveParentInstanceId(effectiveParams));
-        jobInstance.setQueueCode(jobDefinition.getQueueCode());
-        jobInstance.setWorkerGroup(jobDefinition.getWorkerGroup());
-        jobInstance.setPriority(jobDefinition.getPriority() == null ? 5 : jobDefinition.getPriority());
+        jobInstance.setQueueCode(jobDefinition.queueCode());
+        jobInstance.setWorkerGroup(jobDefinition.workerGroup());
+        jobInstance.setPriority(jobDefinition.priority() == null ? 5 : jobDefinition.priority());
         jobInstance.setDedupKey(triggerRequest.getDedupKey());
         jobInstance.setVersion(0L);
         jobInstance.setExpectedPartitionCount(0);
@@ -137,12 +137,12 @@ public class DefaultLaunchService implements LaunchService {
 
         WorkflowRunEntity workflowRun = new WorkflowRunEntity();
         workflowRun.setTenantId(request.tenantId());
-        workflowRun.setWorkflowDefinitionId(workflowDefinition.getId());
+        workflowRun.setWorkflowDefinitionId(workflowDefinition.id());
         workflowRun.setRelatedJobInstanceId(jobInstance.getId());
         workflowRun.setBizDate(request.bizDate());
         workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
         List<WorkflowDagService.DagNodeResolution> initialNodes = workflowDagService.resolveInitialNodes(
-                workflowDefinition.getId(),
+                workflowDefinition.id(),
                 buildPayloadJson(effectiveParams)
         );
         workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
@@ -390,17 +390,17 @@ public class DefaultLaunchService implements LaunchService {
                                        Map<String, Object> effectiveParams,
                                        String traceId) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
-        snapshot.put("jobDefinitionId", jobDefinition == null ? null : jobDefinition.getId());
+        snapshot.put("jobDefinitionId", jobDefinition == null ? null : jobDefinition.id());
         snapshot.put("jobCode", request.jobCode());
         snapshot.put("triggerType", request.triggerType() == null ? null : request.triggerType().code());
         snapshot.put("traceId", traceId);
         snapshot.put("priorityOrder", List.of("defaultParams", "requestParams", "effectiveParams"));
-        snapshot.put("paramSchema", jobDefinition == null || jobDefinition.getParamSchema() == null
+        snapshot.put("paramSchema", jobDefinition == null || jobDefinition.paramSchema() == null
                 ? Map.of()
-                : jobDefinition.getParamSchema());
-        snapshot.put("defaultParams", jobDefinition == null || jobDefinition.getDefaultParams() == null
+                : jobDefinition.paramSchema());
+        snapshot.put("defaultParams", jobDefinition == null || jobDefinition.defaultParams() == null
                 ? Map.of()
-                : jobDefinition.getDefaultParams());
+                : jobDefinition.defaultParams());
         snapshot.put("requestParams", request.params() == null ? Map.of() : request.params());
         snapshot.put("effectiveParams", effectiveParams == null ? Map.of() : effectiveParams);
         return JsonUtils.toJson(snapshot);
@@ -440,8 +440,8 @@ public class DefaultLaunchService implements LaunchService {
 
     private Map<String, Object> mergeLaunchParams(JobDefinitionRecord jobDefinition, Map<String, Object> runtimeParams) {
         Map<String, Object> merged = new LinkedHashMap<>();
-        if (jobDefinition != null && jobDefinition.getDefaultParams() != null) {
-            merged.putAll(jobDefinition.getDefaultParams());
+        if (jobDefinition != null && jobDefinition.defaultParams() != null) {
+            merged.putAll(jobDefinition.defaultParams());
         }
         if (runtimeParams != null) {
             merged.putAll(runtimeParams);
@@ -459,8 +459,8 @@ public class DefaultLaunchService implements LaunchService {
         if (explicitValue != null) {
             return explicitValue;
         }
-        if (jobDefinition != null && jobDefinition.getTimeoutSeconds() != null && jobDefinition.getTimeoutSeconds() > 0) {
-            return jobDefinition.getTimeoutSeconds();
+        if (jobDefinition != null && jobDefinition.timeoutSeconds() != null && jobDefinition.timeoutSeconds() > 0) {
+            return jobDefinition.timeoutSeconds();
         }
         return 0;
     }

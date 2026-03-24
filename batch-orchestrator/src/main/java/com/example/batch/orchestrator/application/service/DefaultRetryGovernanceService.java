@@ -259,8 +259,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         if (jobDefinitionRecord == null) {
             return new RetryPolicyPlan(RetryPolicyType.FIXED.code(), retryGovernanceProperties.getDefaultMaxRetryCount());
         }
-        String retryPolicy = jobDefinitionRecord.getRetryPolicy();
-        Integer retryMaxCount = jobDefinitionRecord.getRetryMaxCount();
+        String retryPolicy = jobDefinitionRecord.retryPolicy();
+        Integer retryMaxCount = jobDefinitionRecord.retryMaxCount();
         if (retryPolicy == null || retryPolicy.isBlank()) {
             retryPolicy = RetryPolicyType.FIXED.code();
         }

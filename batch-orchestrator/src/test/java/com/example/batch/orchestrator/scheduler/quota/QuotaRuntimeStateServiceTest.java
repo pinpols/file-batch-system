@@ -148,15 +148,11 @@ class QuotaRuntimeStateServiceTest {
 
     @Test
     void shouldUpdatePeakBorrowedCountWhenHigherBorrowDetected() {
-        QuotaRuntimeStateRecord existingState = new QuotaRuntimeStateRecord();
-        existingState.setTenantId("t1");
-        existingState.setQuotaScope("JOB");
-        existingState.setOwnerCode("job-cal");
-        existingState.setQuotaResetPolicy("CALENDAR_DAY");
-        existingState.setPeakBorrowedCount(1);
+        QuotaRuntimeStateRecord existingState = new QuotaRuntimeStateRecord(
+                null, "t1", "JOB", "job-cal", "CALENDAR_DAY",
+                Instant.now().minusSeconds(3600), Instant.now().plusSeconds(82800),
+                1, null, Instant.now(), Instant.now());
         // Window still valid (far future)
-        existingState.setWindowStartedAt(Instant.now().minusSeconds(3600));
-        existingState.setWindowExpiresAt(Instant.now().plusSeconds(82800));
 
         when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
                 "t1", "JOB", "job-cal"))
@@ -218,14 +214,10 @@ class QuotaRuntimeStateServiceTest {
 
     @Test
     void shouldResetExpiredSlidingWindowState() {
-        QuotaRuntimeStateRecord expired = new QuotaRuntimeStateRecord();
-        expired.setTenantId("t1");
-        expired.setQuotaScope("JOB");
-        expired.setOwnerCode("job-sw");
-        expired.setQuotaResetPolicy("SLIDING_WINDOW");
-        expired.setPeakBorrowedCount(5);
-        expired.setWindowStartedAt(Instant.now().minusSeconds(7200));
-        expired.setWindowExpiresAt(Instant.now().minusSeconds(3600)); // already expired
+        QuotaRuntimeStateRecord expired = new QuotaRuntimeStateRecord(
+                null, "t1", "JOB", "job-sw", "SLIDING_WINDOW",
+                Instant.now().minusSeconds(7200), Instant.now().minusSeconds(3600),
+                5, null, Instant.now(), Instant.now()); // already expired
 
         when(quotaRuntimeStateRepository.findExpired(any(Instant.class))).thenReturn(List.of(expired));
         when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

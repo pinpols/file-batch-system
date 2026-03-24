@@ -181,14 +181,33 @@ class DefaultSchedulePlanBuilderTest {
     }
 
     private static JobDefinitionRecord jobDef(String shardStrategy, int priority, Map<String, Object> defaultParams) {
-        JobDefinitionRecord record = new JobDefinitionRecord();
-        record.setId(1L);
-        record.setTenantId("t1");
-        record.setJobCode("JOB_001");
-        record.setShardStrategy(shardStrategy);
-        record.setPriority(priority);
-        record.setDefaultParams(defaultParams);
-        record.setEnabled(true);
-        return record;
+        return new JobDefinitionRecord(
+                1L,
+                "t1",
+                "JOB_001",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                shardStrategy,
+                null,
+                null,
+                null,
+                null,
+                null,
+                priority,
+                defaultParams,
+                null,
+                true,
+                null
+        );
     }
 }

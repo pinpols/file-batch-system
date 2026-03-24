@@ -251,11 +251,16 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
                 && partition != null
                 && jobInstance != null
                 && retryGovernanceService.scheduleRetryIfNecessary(task, partition, jobInstance, command.errorCode(), command.errorMessage());
-        jobTaskMapper.updateStatus(command.tenantId(), command.taskId(),
+        int updated = jobTaskMapper.finishTask(
+                command.tenantId(), command.taskId(),
                 command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code(),
+                TaskStatus.RUNNING.code(),
                 command.resultSummary(),
-                command.errorCode(), command.errorMessage(),
-                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code());
+                command.errorCode(), command.errorMessage());
+        if (updated <= 0) {
+            throw new BizException(ResultCode.STATE_CONFLICT,
+                    "task already finished by concurrent update: taskId=" + command.taskId());
+        }
         if (partition != null) {
             if (command.success()) {
                 jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.SUCCESS.code(),
@@ -362,7 +367,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
             boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
             String instanceEvent = resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
             String instanceStatus = stateMachine.transition(jobInstance, instanceEvent).toState();
-            int updated = jobInstanceMapper.updateProgress(
+            int progressUpdated = jobInstanceMapper.updateProgress(
                     command.tenantId(),
                     jobInstance.getId(),
                     instanceStatus,
@@ -372,7 +377,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
                     allPartitionsFinished && !dagContinues ? finishedAt : null,
                     jobInstance.getVersion()
             );
-            if (updated <= 0) {
+            if (progressUpdated <= 0) {
                 throw new BizException(ResultCode.STATE_CONFLICT, "job instance progress conflict");
             }
             jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
@@ -460,7 +465,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
             return false;
         }
         WorkerRegistryRecord workerRegistry = workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
-        if (workerRegistry == null || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.getStatus())) {
+        if (workerRegistry == null || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
             return false;
         }
         if (task == null || task.getJobPartitionId() == null) {
@@ -470,7 +475,7 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
         if (partition == null || partition.getWorkerGroup() == null || partition.getWorkerGroup().isBlank()) {
             return true;
         }
-        return partition.getWorkerGroup().equalsIgnoreCase(workerRegistry.getWorkerGroup());
+        return partition.getWorkerGroup().equalsIgnoreCase(workerRegistry.workerGroup());
     }
 
     private void createStepInstance(JobTaskEntity task) {

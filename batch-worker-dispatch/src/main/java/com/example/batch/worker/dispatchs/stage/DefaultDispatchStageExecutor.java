@@ -7,6 +7,7 @@ import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.PipelineStepFlowSupport;
+import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
@@ -14,8 +15,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class DefaultDispatchStageExecutor implements DispatchStageExecutor {
 
@@ -37,7 +40,7 @@ public class DefaultDispatchStageExecutor implements DispatchStageExecutor {
         List<PipelineStepDefinition> configuredSteps = configuredSteps(context);
         List<DispatchStageResult> results = new ArrayList<>();
         if (configuredSteps.isEmpty()) {
-            results.add(DispatchStageResult.failure(DispatchStage.PREPARE, "DISPATCH_PIPELINE_STEP_MISSING", "pipeline step definition missing"));
+            results.add(DispatchStageResult.failure(DispatchStage.PREPARE, StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing"));
             return results;
         }
         int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
@@ -69,9 +72,32 @@ public class DefaultDispatchStageExecutor implements DispatchStageExecutor {
                 buildInputSummary(context, stepDefinition)
         );
         DispatchStageStep step = stepsByImplCode.get(stepDefinition.implCode());
-        DispatchStageResult result = step == null
-                ? DispatchStageResult.failure(stage, "DISPATCH_STEP_MISSING", "step impl not found: " + stepDefinition.implCode())
-                : step.execute(context);
+        DispatchStageResult result;
+        try {
+            result = step == null
+                    ? DispatchStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(), "step impl not found: " + stepDefinition.implCode())
+                    : step.execute(context);
+        } catch (BizException exception) {
+            log.error(
+                    "dispatch stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage,
+                    stepDefinition.stepCode(),
+                    stepDefinition.implCode(),
+                    context.getTenantId(),
+                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                    exception);
+            result = DispatchStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+        } catch (Exception exception) {
+            log.error(
+                    "dispatch stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage,
+                    stepDefinition.stepCode(),
+                    stepDefinition.implCode(),
+                    context.getTenantId(),
+                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
+                    exception);
+            result = DispatchStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+        }
         results.add(result);
         if (result.success()) {
             context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, stepDefinition.stageCode());

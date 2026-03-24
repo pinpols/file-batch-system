@@ -29,11 +29,11 @@ public class WorkerDrainTimeoutScheduler {
         Instant now = Instant.now();
         List<WorkerRegistryRecord> draining = workerRegistryRepository.findByStatus(WorkerRegistryStatus.DRAINING.code());
         for (WorkerRegistryRecord worker : draining) {
-            if (worker == null || worker.getDrainDeadlineAt() == null) {
+            if (worker == null || worker.drainDeadlineAt() == null) {
                 continue;
             }
-            if (!worker.getDrainDeadlineAt().isAfter(now)) {
-                workerDrainGovernanceService.takeoverAfterDrainTimeout(worker.getTenantId(), worker.getWorkerCode());
+            if (!worker.drainDeadlineAt().isAfter(now)) {
+                workerDrainGovernanceService.takeoverAfterDrainTimeout(worker.tenantId(), worker.workerCode());
             }
         }
     }

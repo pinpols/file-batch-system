@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -24,7 +25,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
         WorkerRouteModel route = new WorkerRouteModel();
         route.setWorkerType(request == null ? null : request.getWorkerType());
         route.setPriority(priority);
-        route.setResourceProfile(queue == null ? null : queue.getResourceTag());
+        route.setResourceProfile(queue == null ? null : queue.resourceTag());
         if (request == null || !StringUtils.hasText(request.getTenantId())) {
             route.setAvailable(false);
             return route;
@@ -43,29 +44,29 @@ public class DefaultWorkerSelector implements WorkerSelector {
         WorkerRegistryRecord selected = candidates.stream()
                 .filter(candidate -> matchesResourceTag(candidate, queue))
                 .min(Comparator
-                        .comparingInt((WorkerRegistryRecord r) -> r.getCurrentLoad() == null ? 0 : r.getCurrentLoad())
-                        .thenComparing(WorkerRegistryRecord::getHeartbeatAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                        .comparingInt((WorkerRegistryRecord r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
+                        .thenComparing(WorkerRegistryRecord::heartbeatAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .orElse(null);
         if (selected == null) {
             route.setAvailable(false);
             return route;
         }
-        route.setWorkerId(selected.getWorkerCode());
+        route.setWorkerId(selected.workerCode());
         route.setAvailable(true);
         return route;
     }
 
     private boolean matchesResourceTag(WorkerRegistryRecord candidate, ResourceQueueRecord queue) {
-        if (queue == null || !StringUtils.hasText(queue.getResourceTag())) {
+        if (queue == null || !StringUtils.hasText(queue.resourceTag())) {
             return true;
         }
-        return queue.getResourceTag().equalsIgnoreCase(candidate.getResourceTag());
+        return queue.resourceTag().equalsIgnoreCase(candidate.resourceTag());
     }
 
     private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
         if (request != null && StringUtils.hasText(request.getWorkerGroup())) {
             return request.getWorkerGroup();
         }
-        return queue == null ? null : queue.getWorkerGroup();
+        return queue == null ? null : queue.workerGroup();
     }
 }
