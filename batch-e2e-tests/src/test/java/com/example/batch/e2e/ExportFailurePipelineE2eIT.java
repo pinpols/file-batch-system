@@ -1,0 +1,95 @@
+package com.example.batch.e2e;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+import com.example.batch.common.dto.LaunchRequest;
+import com.example.batch.common.enums.TriggerType;
+import com.example.batch.e2e.apps.E2eExportApplication;
+import com.example.batch.e2e.support.E2eOutboxPublishSupport;
+import com.example.batch.e2e.support.E2eScenarioFixture;
+import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.orchestrator.service.LaunchService;
+import com.example.batch.testing.AbstractIntegrationTest;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
+
+/**
+ * End-to-end failure branch: export job references a template code that does not exist in
+ * {@code file_template_config}. The export worker fails to resolve the template and the
+ * orchestrator must record {@code task_status = FAILED}.
+ */
+@SpringBootTest(
+        classes = E2eExportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "batch.worker.export.worker-type=EXPORT")
+@ActiveProfiles({"test", "e2e"})
+@Sql(scripts = "classpath:sql/e2e-biz-schema.sql")
+@Tag("e2e")
+class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
+
+    private static final String TENANT = "t1";
+
+    @Autowired
+    private LaunchService launchService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+
+    @Test
+    void exportJobReportsFailedWhenTemplateDoesNotExist() {
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("batchNo", "E2E-FAIL-BATCH-001");
+        // Non-existent template — export worker fails at template resolution
+        params.put("templateCode", "EXP-TEMPLATE-DOES-NOT-EXIST");
+        params.put("bizDate", "2026-01-15");
+        params.put("bizType", "SETTLEMENT");
+        params.put("fileCode", "e2e-export-fail-file");
+
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.jobCode(),
+                LocalDate.of(2026, 1, 15),
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-export-fail",
+                params));
+
+        e2eOutboxPublishSupport.publishAllPending(TENANT);
+
+        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+            String status = jdbcTemplate.queryForObject(
+                    """
+                            select t.task_status from batch.job_task t
+                            join batch.job_instance ji on ji.id = t.job_instance_id
+                            where ji.tenant_id = ? and ji.dedup_key = ?
+                            """,
+                    String.class,
+                    TENANT,
+                    seed.dedupKey());
+            assertThat(status).isEqualTo("FAILED");
+        });
+
+        String instanceStatus = jdbcTemplate.queryForObject(
+                "select instance_status from batch.job_instance where tenant_id = ? and dedup_key = ?",
+                String.class,
+                TENANT,
+                seed.dedupKey());
+        assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
+    }
+}

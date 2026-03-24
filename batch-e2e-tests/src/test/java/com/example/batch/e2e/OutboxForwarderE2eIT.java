@@ -1,0 +1,91 @@
+package com.example.batch.e2e;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+import com.example.batch.common.dto.LaunchRequest;
+import com.example.batch.common.enums.TriggerType;
+import com.example.batch.e2e.apps.E2eImportApplication;
+import com.example.batch.e2e.support.E2eScenarioFixture;
+import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.orchestrator.service.LaunchService;
+import com.example.batch.testing.AbstractIntegrationTest;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
+
+/**
+ * End-to-end: verifies the real {@code OutboxPollScheduler} automatically publishes pending outbox
+ * events to Kafka without manual intervention. Overrides {@code poll-interval-millis} to 500 ms
+ * so the scheduler fires frequently; the test intentionally does NOT call
+ * {@code E2eOutboxPublishSupport.publishAllPending()}.
+ */
+@SpringBootTest(
+        classes = E2eImportApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+                "batch.worker.import.worker-type=IMPORT",
+                "batch.outbox.poll-interval-millis=500"
+        })
+@ActiveProfiles({"test", "e2e"})
+@Sql(scripts = {
+        "classpath:sql/e2e-biz-schema.sql",
+        "classpath:db/testdata/import-template-config-seed.sql"
+})
+@Tag("e2e")
+class OutboxForwarderE2eIT extends AbstractIntegrationTest {
+
+    private static final String TENANT = "t1";
+
+    @Autowired
+    private LaunchService launchService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void outboxSchedulerAutomaticallyPublishesAndWorkerReportsSuccess() {
+        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("fileFormatType", "JSON");
+        params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
+        params.put("bizType", "CUSTOMER");
+        params.put("content",
+                "[{\"customerNo\":\"E2E-FWD-001\",\"customerName\":\"Forwarder User\",\"customerType\":\"PERSONAL\","
+                        + "\"certificateNo\":\"ID-20260115-9001\",\"mobileNo\":\"13800009001\","
+                        + "\"email\":\"fwd@example.com\",\"status\":\"ACTIVE\"}]");
+
+        launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.jobCode(),
+                LocalDate.of(2026, 1, 15),
+                TriggerType.API,
+                seed.requestId(),
+                "e2e-tr-outbox-fwd",
+                params));
+
+        // OutboxPollScheduler fires every 500 ms and publishes the pending outbox event automatically.
+        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(500)).untilAsserted(() -> {
+            String status = jdbcTemplate.queryForObject(
+                    """
+                            select t.task_status from batch.job_task t
+                            join batch.job_instance ji on ji.id = t.job_instance_id
+                            where ji.tenant_id = ? and ji.dedup_key = ?
+                            """,
+                    String.class,
+                    TENANT,
+                    seed.dedupKey());
+            assertThat(status).isEqualTo("SUCCESS");
+        });
+    }
+}
