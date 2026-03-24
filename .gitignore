@@ -21,3 +21,11 @@ logs/
 tmp/
 *.bak
 .claude/settings.local.json
+# 忽略特定的 worktree
+.claude/worktrees/inspiring-pascal
+
+# 或者忽略所有 .claude/worktrees 下的内容
+.claude/worktrees/
+
+# 或者忽略整个 .claude 目录
+.claude/
