@@ -48,6 +48,7 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldNotWriteDispatchOutboxWhenNoOnlineWorkerForWorkerGroup() {
+        long outboxBefore = LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
         LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithoutWorker(
                 jdbcTemplate, TENANT, "IMPORT", "NO_WORKER_GROUP_" + System.nanoTime(), TriggerType.API);
 
@@ -55,8 +56,8 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
                 TENANT, seed.jobCode(), LocalDate.of(2026, 1, 15), TriggerType.API,
                 seed.requestId(), "tr-block", Map.of()));
 
-        assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT"))
-                .isEqualTo(0L);
+        long outboxAfter = LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
+        assertThat(outboxAfter - outboxBefore).isEqualTo(0L);
 
         Integer waiting = jdbcTemplate.queryForObject(
                 """

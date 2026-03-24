@@ -29,5 +29,7 @@ batch:
   resource-scheduler:
     waiting-dispatch-interval-millis: 600000
     quota-reset-scan-interval-millis: 600000
+    quota-reset-enabled: false
   scheduler:
+    snapshot-persist-enabled: false
     snapshot-persist-ms: 600000

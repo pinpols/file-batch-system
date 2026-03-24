@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.service.ApprovalWorkflowService;
 import com.example.batch.testing.AbstractIntegrationTest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,8 @@ import org.springframework.boot.test.context.SpringBootTest;
         classes = BatchOrchestratorApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     @Autowired
     private ApprovalWorkflowService approvalWorkflowService;
@@ -95,13 +98,13 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void shouldPreservePayloadJsonThroughApprovalLifecycle() {
+    void shouldPreservePayloadJsonThroughApprovalLifecycle() throws Exception {
         String payload = "{\"deadLetterId\":999,\"reason\":\"retry needed\"}";
         String approvalNo = approvalWorkflowService.submit(
                 "t1", "COMPENSATION", "DLQ_REPLAY", "DEAD_LETTER", "999",
                 payload, "op-001", "trace-payload", "idem-payload", "verify payload");
 
         ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.get("t1", approvalNo);
-        assertThat(record.payloadJson()).isEqualTo(payload);
+        assertThat(JSON.readTree(record.payloadJson())).isEqualTo(JSON.readTree(payload));
     }
 }

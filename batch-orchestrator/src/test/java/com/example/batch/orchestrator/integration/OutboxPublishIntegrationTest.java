@@ -96,7 +96,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             ConsumerRecord<String, String> first = records.iterator().next();
             assertThat(first.key()).isEqualTo("key-import-001");
             JsonNode payload = OBJECT_MAPPER.readTree(first.value());
-            assertThat(payload.path("test").asBoolean()).isTrue();
+            assertThat(payload.path("idempotencyKey").asText()).isEqualTo("key-import-001");
+            assertThat(payload.path("workerType").asText()).isEqualTo("IMPORT");
         }
     }
 
@@ -121,7 +122,8 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             ConsumerRecord<String, String> first = records.iterator().next();
             assertThat(first.key()).isEqualTo("key-export-001");
             JsonNode payload = OBJECT_MAPPER.readTree(first.value());
-            assertThat(payload.path("test").asBoolean()).isTrue();
+            assertThat(payload.path("idempotencyKey").asText()).isEqualTo("key-export-001");
+            assertThat(payload.path("workerType").asText()).isEqualTo("EXPORT");
         }
     }
 
@@ -134,7 +136,27 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
         e.setAggregateId(1L);
         e.setEventType(eventType);
         e.setEventKey(eventKey);
-        e.setPayloadJson("{\"test\":true}");
+        e.setPayloadJson("""
+                {
+                  "schemaVersion":"v1",
+                  "tenantId":"t1",
+                  "jobInstanceId":1,
+                  "jobPartitionId":1,
+                  "taskId":1,
+                  "instanceNo":"it-instance-001",
+                  "jobCode":"IT_JOB",
+                  "taskType":"EXECUTION",
+                  "taskSeq":1,
+                  "workerType":"%s",
+                  "selectedWorkerId":null,
+                  "priorityBand":"NORMAL",
+                  "businessKey":"biz-it-001",
+                  "payload":"{}",
+                  "traceId":"trace-it-test",
+                  "idempotencyKey":"%s",
+                  "dispatchAt":"2026-01-15T00:00:00Z"
+                }
+                """.formatted(eventType, eventKey));
         e.setPublishStatus(OutboxPublishStatus.NEW.code());
         e.setPublishAttempt(0);
         e.setNextPublishAt(Instant.now());

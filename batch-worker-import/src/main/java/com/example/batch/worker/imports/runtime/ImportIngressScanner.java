@@ -3,7 +3,7 @@ package com.example.batch.worker.imports.runtime;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.common.config.MinioStorageProperties;
-import com.example.batch.worker.imports.config.MinioImportScannerProperties;
+import com.example.batch.worker.imports.config.ImportScannerProperties;
 import io.minio.BucketExistsArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
@@ -32,7 +32,7 @@ public class ImportIngressScanner {
 
     private final PlatformFileRuntimeRepository runtimeRepository;
     private final ImportWorkerConfiguration workerConfiguration;
-    private final MinioImportScannerProperties scannerProperties;
+    private final ImportScannerProperties scannerProperties;
     private final MinioStorageProperties minioStorageProperties;
     private final Map<String, ObservedObjectState> observedObjects = new ConcurrentHashMap<>();
 
