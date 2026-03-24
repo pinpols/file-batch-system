@@ -1,5 +1,7 @@
 package com.example.batch.worker.core.support;
 
+import com.example.batch.common.logging.BatchMdc;
+import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
@@ -27,6 +29,28 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
     public final StepExecutionResponse execute(StepExecutionRequest request) {
         Map<String, Object> attributes = new LinkedHashMap<>(request.context() == null ? Map.of() : request.context());
         String traceId = resolveTraceId(attributes);
+        injectMdc(request, attributes, traceId);
+        try {
+            return doExecute(request, attributes, traceId);
+        } finally {
+            BatchMdc.remove(StructuredLogField.TENANT_ID);
+            BatchMdc.remove(StructuredLogField.TRACE_ID);
+            BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+            BatchMdc.remove(StructuredLogField.WORKER_ID);
+        }
+    }
+
+    private void injectMdc(StepExecutionRequest request, Map<String, Object> attributes, String traceId) {
+        BatchMdc.putIfAbsent(StructuredLogField.TENANT_ID, request.tenantId());
+        BatchMdc.putIfAbsent(StructuredLogField.TRACE_ID, traceId);
+        Object jobInstanceId = attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID);
+        if (jobInstanceId != null) {
+            BatchMdc.putIfAbsent(StructuredLogField.JOB_INSTANCE_ID, String.valueOf(jobInstanceId));
+        }
+        BatchMdc.putIfAbsent(StructuredLogField.WORKER_ID, request.workerId());
+    }
+
+    private StepExecutionResponse doExecute(StepExecutionRequest request, Map<String, Object> attributes, String traceId) {
         String pipelineCode = resolvePipelineCode(request, attributes);
         Long fileId = runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
         Long pipelineDefinitionId = runtimeRepository.ensurePipelineDefinition(

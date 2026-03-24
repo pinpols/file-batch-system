@@ -15,6 +15,7 @@ import com.example.batch.orchestrator.domain.query.EventOutboxRetryQuery;
 import com.example.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
+import com.example.batch.testing.OrchestratorWireMockSupport;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
@@ -24,6 +25,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * End-to-end: verifies the retry/exhaustion semantics of {@code OutboxPollScheduler} without
@@ -48,6 +51,11 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles({"test", "e2e"})
 @Tag("e2e")
 class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
+
+    @DynamicPropertySource
+    static void registerOrchestratorUrl(DynamicPropertyRegistry registry) {
+        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+    }
 
     @MockitoBean
     private OutboxPublisher outboxPublisher;

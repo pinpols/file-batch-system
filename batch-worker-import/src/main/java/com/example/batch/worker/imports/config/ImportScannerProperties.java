@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
 @ConfigurationProperties(prefix = "batch.worker.import.scanner")
-public class MinioImportScannerProperties {
+public class ImportScannerProperties {
 
     private boolean enabled = true;
     private long pollIntervalMillis = 30000L;

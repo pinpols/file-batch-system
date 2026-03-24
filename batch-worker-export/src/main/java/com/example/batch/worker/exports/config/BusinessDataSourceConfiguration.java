@@ -1,7 +1,6 @@
 package com.example.batch.worker.exports.config;
 
 import com.example.batch.common.config.BusinessDataSourceProperties;
-import com.example.batch.common.config.MinioStorageProperties;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
@@ -15,11 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 @Configuration("exportWorkerBusinessDataSourceConfiguration")
-@EnableConfigurationProperties({
-        BusinessDataSourceProperties.class,
-        MinioStorageProperties.class,
-        ExportWorkerConfiguration.class
-})
+@EnableConfigurationProperties(BusinessDataSourceProperties.class)
 @MapperScan(
         basePackages = "com.example.batch.worker.exports.mapper.business",
         sqlSessionFactoryRef = "exportBusinessSqlSessionFactory"

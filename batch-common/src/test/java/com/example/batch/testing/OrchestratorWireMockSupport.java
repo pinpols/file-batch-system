@@ -1,11 +1,9 @@
 package com.example.batch.testing;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.any;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
-
-import com.github.tomakehurst.wiremock.WireMockServer;
-import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import org.springframework.test.context.DynamicPropertyRegistry;
 
 /**
@@ -14,7 +12,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
  */
 public final class OrchestratorWireMockSupport {
 
-    private static volatile WireMockServer server;
+    private static volatile HttpServer server;
+    private static volatile String baseUrl;
 
     private OrchestratorWireMockSupport() {
     }
@@ -23,15 +22,26 @@ public final class OrchestratorWireMockSupport {
         if (server == null) {
             synchronized (OrchestratorWireMockSupport.class) {
                 if (server == null) {
-                    WireMockServer wm = new WireMockServer(WireMockConfiguration.options().dynamicPort());
-                    wm.start();
-                    wm.stubFor(any(urlPathMatching("/internal/.*"))
-                            .willReturn(aResponse().withStatus(200)));
-                    server = wm;
+                    try {
+                        HttpServer httpServer = HttpServer.create(new InetSocketAddress(0), 0);
+                        httpServer.createContext("/internal/", exchange -> {
+                            byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
+                            exchange.getResponseHeaders().set("Content-Type", "application/json");
+                            exchange.sendResponseHeaders(200, body.length);
+                            exchange.getResponseBody().write(body);
+                            exchange.close();
+                        });
+                        httpServer.start();
+                        server = httpServer;
+                        baseUrl = "http://localhost:" + httpServer.getAddress().getPort();
+                    } catch (IOException ex) {
+                        throw new IllegalStateException("Failed to start orchestrator stub server", ex);
+                    }
                     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                         if (server != null) {
-                            server.stop();
+                            server.stop(0);
                             server = null;
+                            baseUrl = null;
                         }
                     }));
                 }
@@ -44,7 +54,7 @@ public final class OrchestratorWireMockSupport {
      */
     public static void registerOrchestratorBaseUrls(DynamicPropertyRegistry registry) {
         ensureStarted();
-        registry.add("batch.orchestrator.base-url", () -> server.baseUrl());
-        registry.add("batch.worker.task-client.base-url", () -> server.baseUrl());
+        registry.add("batch.orchestrator.base-url", () -> baseUrl);
+        registry.add("batch.worker.task-client.base-url", () -> baseUrl);
     }
 }

@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS batch.approval_command (
     CONSTRAINT uk_approval_command_tenant_no UNIQUE (tenant_id, approval_no),
     CONSTRAINT ck_approval_command_status CHECK (approval_status IN ('PENDING', 'APPROVED', 'REJECTED', 'EXECUTED')),
     CONSTRAINT ck_approval_command_type CHECK (approval_type IN ('CATCH_UP', 'COMPENSATION', 'DLQ_REPLAY', 'DOWNLOAD')),
-    CONSTRAINT ck_approval_command_action CHECK (action_type IN ('CATCH_UP', 'COMPENSATION', 'DLQ_REPLAY', 'DOWNLOAD'))
+    CONSTRAINT ck_approval_command_action CHECK (action_type IN ('CATCH_UP', 'COMPENSATION', 'DLQ_REPLAY', 'DOWNLOAD', 'RETRY'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_approval_command_status

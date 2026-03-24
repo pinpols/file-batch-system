@@ -18,7 +18,7 @@ import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfigura
 })
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
-@MapperScan("com.example.batch.worker.core.mapper")
+@MapperScan(basePackages = "com.example.batch.worker.core.mapper", sqlSessionFactoryRef = "exportPlatformSqlSessionFactory")
 public class BatchWorkerExportApplication {
 
     public static void main(String[] args) {

@@ -3,7 +3,6 @@ package com.example.batch.testing;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -22,25 +21,29 @@ public abstract class AbstractIntegrationTest {
     private static final String DEFAULT_DB_USER = "batch_user";
     private static final String DEFAULT_DB_PASSWORD = "batch_pass_123";
 
-    @Container
     private static final PostgreSQLContainer<?> PLATFORM_POSTGRES = new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
             .withDatabaseName("batch_platform")
             .withUsername(DEFAULT_DB_USER)
             .withPassword(DEFAULT_DB_PASSWORD)
             .withInitScript("db/platform-init.sql");
 
-    @Container
     private static final PostgreSQLContainer<?> BUSINESS_POSTGRES = new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
             .withDatabaseName("batch_business")
             .withUsername(DEFAULT_DB_USER)
             .withPassword(DEFAULT_DB_PASSWORD)
             .withInitScript("db/business-init.sql");
 
-    @Container
     private static final KafkaContainer KAFKA = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));
 
-    @Container
     private static final MinIOContainer MINIO = new MinIOContainer();
+
+    static {
+        // Keep test infrastructure ports stable across all integration test classes in one JVM.
+        PLATFORM_POSTGRES.start();
+        BUSINESS_POSTGRES.start();
+        KAFKA.start();
+        MINIO.start();
+    }
 
     protected AbstractIntegrationTest() {
     }

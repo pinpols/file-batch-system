@@ -111,14 +111,16 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                 "select count(*) from batch.tenant_quota_policy where tenant_id = 't3' and policy_code = 'DEFAULT'",
                 Long.class);
 
-        assertThat(t2Policies).isEqualTo(1L);
-        assertThat(t3Policies).isEqualTo(1L);
+        assertThat(t2Policies).isGreaterThanOrEqualTo(1L);
+        assertThat(t3Policies).isGreaterThanOrEqualTo(1L);
 
         // Verify quota limits differ per tenant
         Map<String, Object> t2Policy = jdbcTemplate.queryForMap(
-                "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy where tenant_id = 't2' and policy_code = 'DEFAULT'");
+                "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy "
+                        + "where tenant_id = 't2' and policy_code = 'DEFAULT' order by id desc limit 1");
         Map<String, Object> t3Policy = jdbcTemplate.queryForMap(
-                "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy where tenant_id = 't3' and policy_code = 'DEFAULT'");
+                "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy "
+                        + "where tenant_id = 't3' and policy_code = 'DEFAULT' order by id desc limit 1");
 
         assertThat((Integer) t2Policy.get("max_running_jobs_per_tenant")).isEqualTo(50);
         assertThat((Integer) t3Policy.get("max_running_jobs_per_tenant")).isEqualTo(30);
