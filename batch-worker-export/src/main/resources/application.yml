@@ -9,9 +9,6 @@ spring:
   config:
     # 引入共享默认配置基线（DB/Kafka/日志/通用 batch.* 等）
     import: "classpath:batch-defaults.yml"
-  main:
-    # Worker 作为后台进程运行，不提供 Web API
-    web-application-type: none
 
 mybatis:
   # MyBatis domain 别名包（用于 mapper XML 简化类型引用）

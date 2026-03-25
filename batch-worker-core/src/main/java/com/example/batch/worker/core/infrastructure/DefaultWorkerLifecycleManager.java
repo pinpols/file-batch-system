@@ -41,15 +41,23 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
         if (workerId == null || workerId.isBlank()) {
             return;
         }
-        WorkerRegistration activeRegistration = workerRuntimeState.remove(workerId);
-        if (activeRegistration != null) {
-            activeRegistration.setActive(Boolean.FALSE);
-            String targetStatus = hasActiveLeases(workerId)
-                    ? WorkerRegistryStatus.DRAINING.code()
-                    : WorkerRegistryStatus.DECOMMISSIONED.code();
-            workerRegistryService.updateStatus(activeRegistration, targetStatus);
-            log.info("worker shutdown: workerId={}, status={}", workerId, targetStatus);
+        WorkerRegistration activeRegistration = workerRuntimeState.get(workerId);
+        if (activeRegistration == null) {
+            return;
         }
+        activeRegistration.setActive(Boolean.FALSE);
+
+        // Always mark as DRAINING first so orchestrator can stop dispatching new tasks immediately.
+        workerRegistryService.updateStatus(activeRegistration, WorkerRegistryStatus.DRAINING.code());
+
+        String finalStatus = hasActiveLeases(workerId)
+                ? WorkerRegistryStatus.DRAINING.code()
+                : WorkerRegistryStatus.DECOMMISSIONED.code();
+        if (!WorkerRegistryStatus.DRAINING.code().equals(finalStatus)) {
+            workerRegistryService.updateStatus(activeRegistration, finalStatus);
+        }
+        workerRuntimeState.remove(workerId);
+        log.info("worker shutdown: workerId={}, status={}", workerId, finalStatus);
     }
 
     private boolean hasActiveLeases(String workerId) {
