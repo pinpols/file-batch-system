@@ -3,6 +3,9 @@
 分析日期：2026-03-22
 分析基准：`docs/architecture/design-gap-audit.md`、全量 `src/main` 代码、测试补全结果（对话_5 完成后更新于 2026-03-25）
 
+更新记录：
+- 2026-03-25：补齐 K8s 健康探针（Actuator probes）默认配置；Worker 停机时先标记 DRAINING 并停止 Kafka Listener 拉取新消息；Worker 运行方式调整为可对外提供 Actuator HTTP 端点（用于 readiness/liveness 探针）。
+
 ---
 
 ## 整体结论
@@ -27,6 +30,7 @@
 | AI 提示词网关（分类/脱敏/审计日志） | ✅ 完整 | `ConsoleAiPromptGuard`（REJECTED_DISABLED/SAFETY/SCOPE/APPROVED）、`DefaultConsoleAiAuditService` |
 | SLA & 文件治理定时检查 + 告警落库 | ✅ 完整 | `JobSlaScheduler`、`FileGovernanceScheduler`、V18 Flyway（`batch.alert_event`） |
 | Worker 排空/下线（drain/force-offline） | ✅ 完整 | `WorkerDrainGovernanceService`、`WorkerDrainTimeoutScheduler`、V19 Flyway（`drain_started_at`/`drain_deadline_at`） |
+| K8s 健康探针 + Worker 优雅停机（停止接新活） | ✅ 完整 | `batch-defaults.yml` 启用 Actuator probes；`GracefulKafkaShutdown`（shutdown 置 DRAINING + stop Kafka listener）；`DefaultWorkerLifecycleManager.shutdown()`（DRAINING→DECOMMISSIONED） |
 | 调度快照与控制台代理 | ✅ 完整 | `TenantSchedulerSnapshotService`、`ConsoleSchedulerSnapshotController` |
 | 默认运行参数目录 | ✅ 完整 | V23 Flyway（`batch.batch_runtime_default_parameter`）、`runtime-default-parameters.md` |
 | Flyway 完整迁移序列（V1–V23） | ✅ 完整 | 无重复版本号，V20/V21/V22 已在第 22 轮重编号修正 |
@@ -72,7 +76,7 @@
 
 ## 测试覆盖现状（2026-03-22 第三轮补全后）
 
-### 单元测试（41 个）
+### 单元测试（44 个）
 
 | 测试类 | 所在模块 | 覆盖重点 |
 |---|---|---|
@@ -112,6 +116,9 @@
 | `PreprocessStepKmsDecryptTest` | worker-import | BATCHENC 密文 payload → PreprocessStep 透明解密 → normalizedPayload 正确还原（KMS 闭环） |
 | `ParseStepStreamingTest` | worker-import | JSON array / `{"records":[...]}` envelope 流式解析、大批量 500 条不全量加载、空 records 返回 PARSE_EMPTY、DELIMITED 逐行 |
 | `GenerateStepTest` | worker-export | DELIMITED 含分隔符引用/双引号转义/换行引用/ALL 策略/Tab 分隔；FIXED_WIDTH 补位/截断/record_length；EXCEL sheet 名消毒/超长；JSON cursor 分页/快照/特殊字符 |
+| `PrepareStepTest` | worker-export | payload 解析/复用、模板配置加载、文件名规则与 objectName 生成、exportSnapshot 生成 |
+| `StoreStepTest` | worker-export | generatedFilePath 校验、上传/晋升正向路径（digest match）、本地文件清理 |
+| `RegisterStepTest` | worker-export | file_record 幂等复用、checksum 冲突保护、pipeline 绑定与导出标记调用 |
 | `ParseStepFixtureTest` | worker-import | 基于磁盘 fixture 文件的格式覆盖：CSV/Pipe/Tab/JSON-array/JSON-envelope/UTF-8 BOM/Excel（POI 动态生成）/bad-records（解析全量，校验延后到 ValidateStep） |
 | `ImportPreprocessPipelineRsaTest` | worker-import | VERIFY_RSA_SHA256 步骤：有效签名通过、篡改 payload 失败、缺失公钥失败、签名从 metadata 注入、testingOpen 跳过验证 |
 
@@ -184,7 +191,7 @@
 
 核心业务链路（调度主链、DAG、文件处理三链路、安全治理）已全部落地且编译通过。
 对话_5（12 轮）完成：Worker 循环模板、Stage 异常契约、Outbox E2E、SQL 原子保护、三链路失败 E2E、多租户并发 E2E、HTTP 韧性、SQL CI 守卫、配置基线模块化、ADR 体系、产物验收 Verifier 框架 + Micrometer 指标。
-**当前测试体系**：**41 单元** + 18 集成 + **10 E2E**（主链路/失败分支/内容验证/多租户/dedup 幂等），逻辑覆盖率约 75%。
+**当前测试体系**：**44 单元** + 18 集成 + **10 E2E**（主链路/失败分支/内容验证/多租户/dedup 幂等），逻辑覆盖率约 75%。
 
 **未完成项（截至 2026-03-25）**：
 

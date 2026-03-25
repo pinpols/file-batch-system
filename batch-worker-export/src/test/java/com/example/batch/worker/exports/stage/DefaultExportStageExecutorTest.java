@@ -16,6 +16,8 @@ import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,7 @@ class DefaultExportStageExecutorTest {
     private ExportStageStep prepareStep;
 
     private DefaultExportStageExecutor executor;
+    private MeterRegistry meterRegistry;
 
     private static final Long PIPELINE_INSTANCE_ID = 100L;
     private static final Long STEP_RUN_ID = 200L;
@@ -51,6 +54,7 @@ class DefaultExportStageExecutorTest {
     @BeforeEach
     void setUp() {
         prepareStep = stubStep(ExportStage.PREPARE);
+        meterRegistry = new SimpleMeterRegistry();
 
         when(runtimeRepository.toLong(any())).thenReturn(PIPELINE_INSTANCE_ID);
         when(runtimeRepository.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
@@ -63,7 +67,7 @@ class DefaultExportStageExecutorTest {
                 allSteps.add(stubStep(stage));
             }
         }
-        executor = new DefaultExportStageExecutor(allSteps, runtimeRepository);
+        executor = new DefaultExportStageExecutor(allSteps, runtimeRepository, meterRegistry);
     }
 
     @Test
