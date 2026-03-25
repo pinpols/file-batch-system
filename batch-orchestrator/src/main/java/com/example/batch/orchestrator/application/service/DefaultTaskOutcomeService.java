@@ -391,7 +391,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 childJobInstance.getTenantId(),
                 parentVirtualTaskId,
                 nodeSuccess,
-                childInstanceStatus,
+                JsonUtils.toJson(Map.of("childInstanceStatus", childInstanceStatus)),
                 nodeSuccess ? null : childCommand.errorCode(),
                 nodeSuccess ? null : childCommand.errorMessage()
         ));

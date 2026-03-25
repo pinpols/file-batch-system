@@ -12,6 +12,7 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
@@ -242,11 +243,11 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         // Simulate worker picking up child task: move to RUNNING
         jdbcTemplate.update(
                 "update batch.job_task set task_status = 'RUNNING', started_at = ? where id = ?",
-                Instant.now(), childTaskId);
+                Timestamp.from(Instant.now()), childTaskId);
 
         // Simulate child task completing successfully
         taskOutcomeService.applyTaskOutcome(new TaskOutcomeCommand(
-                TENANT, childTaskId, true, "done", null, null));
+                TENANT, childTaskId, true, "{}", null, null));
 
         // Child job instance should be SUCCESS
         String childStatus = jdbcTemplate.queryForObject(
@@ -294,10 +295,10 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
         jdbcTemplate.update(
                 "update batch.job_task set task_status = 'RUNNING', started_at = ? where id = ?",
-                Instant.now(), childTaskId);
+                Timestamp.from(Instant.now()), childTaskId);
 
         taskOutcomeService.applyTaskOutcome(new TaskOutcomeCommand(
-                TENANT, childTaskId, false, null, "ERR_CHILD", "child task failed"));
+                TENANT, childTaskId, false, "{}", "ERR_CHILD", "child task failed"));
 
         // Parent should be FAILED (child failed, no retry policy)
         String parentStatus = jdbcTemplate.queryForObject(

@@ -11,17 +11,23 @@
 # ------------------------------------------------------------------
 spring:
   datasource:
+    # 平台库 JDBC URL（所有服务模块共用）
     url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
+    # 平台库用户名
     username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
+    # 平台库密码（生产请通过环境变量/密钥管理注入）
     password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
+    # JDBC 驱动类
     driver-class-name: org.postgresql.Driver
   kafka:
+    # Kafka 集群地址（逗号分隔）
     bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 # ------------------------------------------------------------------
 # MyBatis（mapper 扫描路径各模块相同；type-aliases-package 在模块内覆盖）
 # ------------------------------------------------------------------
 mybatis:
+  # mapper XML 统一扫描路径（各服务模块一致）
   mapper-locations: classpath*:mapper/*.xml
 
 # ------------------------------------------------------------------
@@ -62,45 +68,65 @@ logging:
 batch:
   # 安全 / KMS（orchestrator + worker + console 共用）
   security:
+    # 测试/演示模式开关：开启后可放宽部分校验（按实现约定）
     testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
     kms:
+      # 默认密钥引用（key ref）
       default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
       keys:
+        # 具体密钥内容（Base64 等形式；生产请避免明文出现在仓库）
         DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
 
   # MinIO 对象存储（orchestrator + 所有 worker + console）
   storage:
     minio:
+      # MinIO endpoint（http/https）
       endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
+      # MinIO access key
       access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
+      # MinIO secret key
       secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
+      # 默认 bucket
       bucket: ${BATCH_MINIO_BUCKET:batch-dev}
 
   # Orchestrator API 地址（trigger + 所有 worker 模块使用）
   orchestrator:
+    # Orchestrator 基础地址（trigger/worker 客户端调用）
     base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
 
   # 业务数据库（import / export / dispatch worker 使用）
   datasource:
     business:
+      # 业务库 JDBC URL（worker 侧使用）
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}
+      # 业务库用户名
       username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
+      # 业务库密码（生产请通过环境变量/密钥管理注入）
       password: ${BATCH_BUSINESS_DB_PASSWORD:batch_pass_123}
+      # 业务 schema（用于 SQL 拼接/校验等）
       schema: ${BATCH_BUSINESS_DB_SCHEMA:biz}
 
   # Kafka Topic 名称（orchestrator 发布，worker 消费）
   mq:
     topics:
+      # Import 派发 Topic
       import-dispatch: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
+      # Export 派发 Topic
       export-dispatch: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
+      # Dispatch 派发 Topic
       dispatch-dispatch: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
+      # 任务结果 Topic（worker → orchestrator）
       task-result: ${BATCH_TOPIC_TASK_RESULT:batch.task.result}
+      # 任务重试 Topic
       task-retry: ${BATCH_TOPIC_TASK_RETRY:batch.task.retry}
+      # 死信 Topic（无法处理/超过重试）
       dead-letter: ${BATCH_TOPIC_DEAD_LETTER:batch.task.dead-letter}
 
   # Worker 通用配置（import / export / dispatch 共用）
   worker:
     lease:
+      # 租约续约间隔（毫秒）：worker 定期刷新租约防止被回收
       renew-interval-millis: ${BATCH_WORKER_LEASE_RENEW_INTERVAL_MILLIS:10000}
     task-client:
+      # worker 调用 orchestrator 的 base-url（默认同 orchestrator.base-url）
       base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}

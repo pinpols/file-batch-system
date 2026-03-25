@@ -1,80 +1,137 @@
+# =========================
+# Orchestrator 服务基础配置
+# =========================
 server:
+  # 服务端口：优先读取环境变量 BATCH_ORCHESTRATOR_PORT，未设置则使用 8082
   port: ${BATCH_ORCHESTRATOR_PORT:8082}
 
 spring:
   application:
+    # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-orchestrator
   config:
-    import: "classpath:batch-defaults.yml"
+    # 可选导入共享默认配置（不存在也不报错）
+    import: "optional:classpath:batch-defaults.yml"
   flyway:
+    # 数据库版本管理（迁移脚本执行）
     enabled: true
+    # 默认 schema（未显式指定时使用）
     default-schema: batch
+    # 需要由 Flyway 管理的 schema 列表
     schemas:
       - batch
       - quartz
 
 mybatis:
+  # MyBatis domain 的别名包路径（用于 mapper XML 简化类型引用）
   type-aliases-package: com.example.batch.orchestrator.domain
 
 batch:
   scheduler:
+    # 是否持久化调度器快照（用于恢复/审计；关闭可减少写库）
     snapshot-persist-enabled: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST:true}
+    # 快照持久化周期（毫秒）
     snapshot-persist-ms: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST_MS:120000}
   outbox:
+    # Outbox 拉取批大小（单次处理条数）
     batch-size: ${BATCH_OUTBOX_BATCH_SIZE:100}
+    # Outbox 轮询间隔（毫秒）
     poll-interval-millis: ${BATCH_OUTBOX_POLL_INTERVAL_MILLIS:5000}
+    # Outbox 重试延迟（秒）
     retry-delay-seconds: ${BATCH_OUTBOX_RETRY_DELAY_SECONDS:60}
+    # Outbox 最大重试次数
     max-retry-attempts: ${BATCH_OUTBOX_MAX_RETRY_ATTEMPTS:5}
   worker:
     drain:
+      # Worker drain 默认超时（秒）
       default-timeout-seconds: ${BATCH_WORKER_DRAIN_TIMEOUT_SECONDS:600}
+      # Drain 状态检查间隔（毫秒）
       check-interval-millis: ${BATCH_WORKER_DRAIN_CHECK_INTERVAL_MILLIS:15000}
+      # 是否启用 drain 机制（优雅下线/排空任务）
       enabled: ${BATCH_WORKER_DRAIN_ENABLED:true}
   partition-lease:
+    # 分区租约过期时间（秒）：过期后可被回收再分配
     expire-seconds: ${BATCH_PARTITION_LEASE_EXPIRE_SECONDS:60}
+    # 租约回收扫描间隔（毫秒）
     reclaim-interval-millis: ${BATCH_PARTITION_LEASE_RECLAIM_INTERVAL_MILLIS:15000}
   retry:
+    # 重试任务拉取批大小
     batch-size: ${BATCH_RETRY_BATCH_SIZE:100}
+    # 重试轮询间隔（毫秒）
     poll-interval-millis: ${BATCH_RETRY_POLL_INTERVAL_MILLIS:10000}
+    # 固定延迟重试间隔（秒）
     fixed-delay-seconds: ${BATCH_RETRY_FIXED_DELAY_SECONDS:60}
+    # 指数退避倍数（与 fixed-delay 配合）
     exponential-multiplier: ${BATCH_RETRY_EXPONENTIAL_MULTIPLIER:2}
+    # 最大退避延迟（秒）
     max-delay-seconds: ${BATCH_RETRY_MAX_DELAY_SECONDS:3600}
+    # 默认最大重试次数（未在任务级别配置时生效）
     default-max-retry-count: ${BATCH_RETRY_DEFAULT_MAX_RETRY_COUNT:3}
   resource-scheduler:
+    # 等待派发任务的批大小
     waiting-dispatch-batch-size: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE:100}
+    # 等待派发扫描间隔（毫秒）
     waiting-dispatch-interval-millis: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_INTERVAL_MILLIS:10000}
+    # 配额重置滑动窗口（小时）：用于按时间窗口重置配额
     quota-reset-sliding-window-hours: ${BATCH_RESOURCE_SCHEDULER_QUOTA_RESET_SLIDING_WINDOW_HOURS:24}
+    # 配额重置扫描间隔（毫秒）
     quota-reset-scan-interval-millis: ${BATCH_RESOURCE_SCHEDULER_QUOTA_RESET_SCAN_INTERVAL_MILLIS:60000}
   sla:
+    # SLA 监控开关（超时/延迟等规则）
     enabled: ${BATCH_SLA_ENABLED:true}
+    # SLA 扫描间隔（毫秒）
     poll-interval-millis: ${BATCH_SLA_POLL_INTERVAL_MILLIS:30000}
+    # SLA 单次处理批大小
     batch-size: ${BATCH_SLA_BATCH_SIZE:200}
   file-governance:
     latency:
+      # 文件治理 - 延迟监控：到达/处理延迟阈值检测
       enabled: ${BATCH_FILE_GOVERNANCE_LATENCY_ENABLED:true}
+      # 轮询间隔（毫秒）
       poll-interval-millis: ${BATCH_FILE_GOVERNANCE_LATENCY_POLL_INTERVAL_MILLIS:30000}
+      # 到达延迟阈值（秒）
       arrival-delay-threshold-seconds: ${BATCH_FILE_GOVERNANCE_ARRIVAL_DELAY_THRESHOLD_SECONDS:600}
+      # 处理延迟阈值（秒）
       processing-delay-threshold-seconds: ${BATCH_FILE_GOVERNANCE_PROCESSING_DELAY_THRESHOLD_SECONDS:900}
+      # 采样数量（用于统计/告警的样本大小）
       sample-size: ${BATCH_FILE_GOVERNANCE_SAMPLE_SIZE:20}
     archive:
+      # 文件治理 - 归档清理：按保留期清理归档对象
       enabled: ${BATCH_FILE_GOVERNANCE_ARCHIVE_ENABLED:true}
+      # 清理任务间隔（毫秒）
       cleanup-interval-millis: ${BATCH_FILE_GOVERNANCE_ARCHIVE_CLEANUP_INTERVAL_MILLIS:60000}
+      # 单次清理批大小
       cleanup-batch-size: ${BATCH_FILE_GOVERNANCE_ARCHIVE_CLEANUP_BATCH_SIZE:100}
+      # 归档保留天数
       retention-days: ${BATCH_FILE_GOVERNANCE_ARCHIVE_RETENTION_DAYS:7}
     reconcile:
+      # 文件治理 - 对账：比对对象存储与系统记录，发现缺失/多余/临时对象
       enabled: ${BATCH_FILE_GOVERNANCE_RECONCILE_ENABLED:true}
+      # 轮询间隔（毫秒）
       poll-interval-millis: ${BATCH_FILE_GOVERNANCE_RECONCILE_POLL_INTERVAL_MILLIS:60000}
+      # 单次处理批大小
       batch-size: ${BATCH_FILE_GOVERNANCE_RECONCILE_BATCH_SIZE:200}
+      # 默认租户（未指定时使用）
       default-tenant-id: ${BATCH_FILE_GOVERNANCE_RECONCILE_DEFAULT_TENANT_ID:default-tenant}
+      # 只对指定前缀对象做对账（空表示不限制）
       prefix: ${BATCH_FILE_GOVERNANCE_RECONCILE_PREFIX:}
+      # 是否包含临时对象（通常用于排查/清理）
       include-temporary-objects: ${BATCH_FILE_GOVERNANCE_RECONCILE_INCLUDE_TEMPORARY_OBJECTS:false}
     arrival:
+      # 文件治理 - 到达检测：识别“应到未到”并触发默认动作
       enabled: ${BATCH_FILE_GOVERNANCE_ARRIVAL_ENABLED:true}
+      # 轮询间隔（毫秒）
       poll-interval-millis: ${BATCH_FILE_GOVERNANCE_ARRIVAL_POLL_INTERVAL_MILLIS:30000}
+      # 单次处理批大小
       batch-size: ${BATCH_FILE_GOVERNANCE_ARRIVAL_BATCH_SIZE:200}
+      # 超时默认动作（例如 MANUAL_CONFIRM）
       default-timeout-action: ${BATCH_FILE_GOVERNANCE_ARRIVAL_DEFAULT_TIMEOUT_ACTION:MANUAL_CONFIRM}
+      # 文件 complete 时是否触发到达事件
       trigger-on-complete: ${BATCH_FILE_GOVERNANCE_ARRIVAL_TRIGGER_ON_COMPLETE:true}
+      # 人工等待延长期（秒）：用于人工确认前延长窗口
       manual-wait-extension-seconds: ${BATCH_FILE_GOVERNANCE_ARRIVAL_MANUAL_WAIT_EXTENSION_SECONDS:1800}
     access:
+      # 文件治理 - 访问控制：生成预签名下载链接等
       enabled: ${BATCH_FILE_GOVERNANCE_ACCESS_ENABLED:true}
+      # 预签名链接有效期（秒）
       presign-expiry-seconds: ${BATCH_FILE_GOVERNANCE_ACCESS_PRESIGN_EXPIRY_SECONDS:600}

@@ -1,63 +1,108 @@
 server:
+  # Import Worker 端口：优先读取环境变量 BATCH_WORKER_IMPORT_PORT（通常仅用于健康检查/指标）
   port: ${BATCH_WORKER_IMPORT_PORT:8083}
 
 spring:
   application:
+    # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-worker-import
   config:
+    # 引入共享默认配置基线（DB/Kafka/日志/通用 batch.* 等）
     import: "classpath:batch-defaults.yml"
   main:
+    # Worker 作为后台进程运行，不提供 Web API
     web-application-type: none
 
 mybatis:
+  # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
   type-aliases-package: com.example.batch.worker.imports.domain
 
 batch:
   worker:
+    # Worker 类型（IMPORT/EXPORT/DISPATCH）：用于统一行为/注册/指标标签
     type: IMPORT
     import:
+      # Worker 唯一标识（用于注册、审计、告警定位）
       worker-code: ${BATCH_WORKER_IMPORT_CODE:import-node-1}
+      # Worker 业务类型（与 batch.worker.type 一致，保留用于兼容/显式表达）
       worker-type: IMPORT
+      # 租户隔离标识（多租户场景下用）
       tenant-id: ${BATCH_WORKER_IMPORT_TENANT_ID:default-tenant}
+      # 心跳间隔（毫秒）：Worker 向 orchestrator 上报存活/进度
       heartbeat-interval-millis: ${BATCH_WORKER_IMPORT_HEARTBEAT_INTERVAL_MILLIS:15000}
+      # 消费的派发 Topic（默认值在 batch-defaults.yml 里统一）
       topic: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
+      # Kafka consumer group（同类 worker 负载均衡）
       consumer-group-id: ${BATCH_WORKER_IMPORT_CONSUMER_GROUP_ID:batch-worker-import}
       file-processing:
+        # 流式处理开关：大文件优先建议开启（降低内存峰值）
         streaming-enabled: ${BATCH_WORKER_IMPORT_STREAMING_ENABLED:true}
+        # 分页读取 page-size（与业务 DB/驱动能力相关）
         page-size: ${BATCH_WORKER_IMPORT_PAGE_SIZE:1000}
+        # JDBC fetch-size（驱动层拉取批大小）
         fetch-size: ${BATCH_WORKER_IMPORT_FETCH_SIZE:1000}
+        # 业务处理 chunk-size（每批处理/提交的行数）
         chunk-size: ${BATCH_WORKER_IMPORT_CHUNK_SIZE:500}
       jdbc-mapped:
+        # 允许访问的业务 schema 白名单（防止误写/越权）
         allowed-schemas:
           - biz
       skip:
+        # 跳过策略：允许在可控范围内“跳过错误继续跑”，提高批处理鲁棒性
         enabled: ${BATCH_WORKER_IMPORT_SKIP_ENABLED:false}
+        # 阈值模式：ABSOLUTE（绝对条数）/RATE（比例）
         threshold-mode: ${BATCH_WORKER_IMPORT_SKIP_THRESHOLD_MODE:ABSOLUTE}
+        # 最大跳过条数（ABSOLUTE）
         max-skip-count: ${BATCH_WORKER_IMPORT_SKIP_MAX_SKIP_COUNT:0}
+        # 最大跳过比例（RATE）
         max-skip-rate: ${BATCH_WORKER_IMPORT_SKIP_MAX_SKIP_RATE:0.0}
+        # 可跳过的错误码列表（逗号分隔）
         skip-error-codes: ${BATCH_WORKER_IMPORT_SKIP_ERROR_CODES:IMPORT_PARSE_LINE_INVALID,IMPORT_PARSE_JSON_INVALID,IMPORT_PARSE_TYPE_INVALID,IMPORT_VALIDATE_REQUIRED,IMPORT_VALIDATE_DUPLICATE,IMPORT_VALIDATE_TYPE_INVALID,IMPORT_VALIDATE_STATUS_INVALID,IMPORT_VALIDATE_NULL,IMPORT_VALIDATE_LENGTH,IMPORT_VALIDATE_RANGE,IMPORT_VALIDATE_REGEX,IMPORT_VALIDATE_ALLOWED_VALUES,IMPORT_VALIDATE_UNIQUE}
+        # 跳过后的动作：CONTINUE/FAIL 等（按实现约定）
         skip-action: ${BATCH_WORKER_IMPORT_SKIP_ACTION:CONTINUE}
+        # 错误落地方式：DB/OBJECT_STORAGE/BOTH（按实现约定）
         error-sink-type: ${BATCH_WORKER_IMPORT_ERROR_SINK_TYPE:BOTH}
+        # 错误输出保留天数（对象存储/DB 清理策略）
         error-output-retention-days: ${BATCH_WORKER_IMPORT_ERROR_OUTPUT_RETENTION_DAYS:7}
       scanner:
+        # 扫描器：从对象存储/目录扫描待导入文件并创建任务
         enabled: ${BATCH_WORKER_IMPORT_SCANNER_ENABLED:true}
+        # 扫描轮询间隔（毫秒）
         poll-interval-millis: ${BATCH_WORKER_IMPORT_SCANNER_POLL_INTERVAL_MILLIS:30000}
+        # 单次扫描处理批大小
         batch-size: ${BATCH_WORKER_IMPORT_SCANNER_BATCH_SIZE:200}
+        # 扫描前缀（例如 ingress/）
         prefix: ${BATCH_WORKER_IMPORT_SCANNER_PREFIX:ingress/}
+        # 是否要求存在 done 文件（用于“上传完成”信号）
         require-done-file: ${BATCH_WORKER_IMPORT_SCANNER_REQUIRE_DONE_FILE:false}
+        # 稳定窗口（秒）：对象在该窗口内不再变化才认为可处理
         stability-window-seconds: ${BATCH_WORKER_IMPORT_SCANNER_STABILITY_WINDOW_SECONDS:30}
+        # 来源类型（SYSTEM/…）：用于审计/策略
         source-type: ${BATCH_WORKER_IMPORT_SCANNER_SOURCE_TYPE:SYSTEM}
+        # 默认业务类型（用于任务分类/路由）
         default-biz-type: ${BATCH_WORKER_IMPORT_SCANNER_DEFAULT_BIZ_TYPE:IMPORT_SCAN}
         arrival:
+          # 与“文件到达治理”联动：按文件组等待/超时策略（可选）
           enabled: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_ENABLED:false}
+          # 文件组编码（用于关联治理规则）
           file-group-code: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_FILE_GROUP_CODE:}
+          # 等待模式：ALL_OF/ANY_OF 等（按实现约定）
           wait-file-group-mode: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_WAIT_FILE_GROUP_MODE:ALL_OF}
+          # 必需文件集合（逗号分隔/JSON 字符串，按实现约定）
           required-file-set: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_REQUIRED_FILE_SET:}
+          # 到达超时动作（默认 MANUAL_CONFIRM）
           arrival-timeout-action: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_TIMEOUT_ACTION:MANUAL_CONFIRM}
+          # 期望到达延迟（秒）：用于计算目标到达时间
           expected-arrival-delay-seconds: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_EXPECTED_DELAY_SECONDS:0}
+          # 最晚可容忍延迟（秒）：超过则认为异常
           latest-tolerable-delay-seconds: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_LATEST_TOLERABLE_DELAY_SECONDS:600}
+          # 文件 complete 时是否触发到达事件
           trigger-on-complete: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_TRIGGER_ON_COMPLETE:true}
+          # 无文件时是否允许空跑（防止误报/误触发）
           allow-empty-run: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_ALLOW_EMPTY_RUN:false}
+          # 是否允许跳过业务日期校验（按租户/策略决定）
           allow-skip-biz-date: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_ALLOW_SKIP_BIZ_DATE:false}
+          # 是否通知人工处理（告警/工单）
           notify-manual: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_NOTIFY_MANUAL:true}
+          # 通知渠道（如 email/sms/wecom 等，按实现约定）
           notify-channels: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_NOTIFY_CHANNELS:}

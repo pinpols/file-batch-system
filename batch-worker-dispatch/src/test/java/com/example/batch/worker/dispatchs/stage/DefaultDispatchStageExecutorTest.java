@@ -16,6 +16,7 @@ import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +64,7 @@ class DefaultDispatchStageExecutorTest {
                 allSteps.add(stubStep(stage));
             }
         }
-        executor = new DefaultDispatchStageExecutor(allSteps, runtimeRepository);
+        executor = new DefaultDispatchStageExecutor(allSteps, runtimeRepository, new SimpleMeterRegistry());
     }
 
     @Test

@@ -1,32 +1,49 @@
 server:
+  # Export Worker 端口：优先读取环境变量 BATCH_WORKER_EXPORT_PORT（通常仅用于健康检查/指标）
   port: ${BATCH_WORKER_EXPORT_PORT:8084}
 
 spring:
   application:
+    # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-worker-export
   config:
+    # 引入共享默认配置基线（DB/Kafka/日志/通用 batch.* 等）
     import: "classpath:batch-defaults.yml"
   main:
+    # Worker 作为后台进程运行，不提供 Web API
     web-application-type: none
 
 mybatis:
+  # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
   type-aliases-package: com.example.batch.worker.exports.domain
 
 batch:
   worker:
+    # Worker 类型（IMPORT/EXPORT/DISPATCH）
     type: EXPORT
     export:
+      # Worker 唯一标识
       worker-code: ${BATCH_WORKER_EXPORT_CODE:export-node-1}
+      # Worker 业务类型（与 batch.worker.type 一致）
       worker-type: EXPORT
+      # 租户隔离标识
       tenant-id: ${BATCH_WORKER_EXPORT_TENANT_ID:default-tenant}
+      # 心跳间隔（毫秒）
       heartbeat-interval-millis: ${BATCH_WORKER_EXPORT_HEARTBEAT_INTERVAL_MILLIS:15000}
+      # 消费的派发 Topic（默认值在 batch-defaults.yml）
       topic: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
+      # Kafka consumer group
       consumer-group-id: ${BATCH_WORKER_EXPORT_CONSUMER_GROUP_ID:batch-worker-export}
       file-processing:
+        # 流式处理开关
         streaming-enabled: ${BATCH_WORKER_EXPORT_STREAMING_ENABLED:true}
+        # 分页读取 page-size
         page-size: ${BATCH_WORKER_EXPORT_PAGE_SIZE:1000}
+        # JDBC fetch-size
         fetch-size: ${BATCH_WORKER_EXPORT_FETCH_SIZE:1000}
+        # 业务处理 chunk-size
         chunk-size: ${BATCH_WORKER_EXPORT_CHUNK_SIZE:500}
       jdbc-mapped:
+        # 允许访问的业务 schema 白名单
         allowed-schemas:
           - biz
