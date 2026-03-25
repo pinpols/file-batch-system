@@ -4,11 +4,8 @@ server:
 spring:
   application:
     name: batch-trigger
-  datasource:
-    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
-    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
-    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
-    driver-class-name: org.postgresql.Driver
+  config:
+    import: "classpath:batch-defaults.yml"
   quartz:
     job-store-type: jdbc
     jdbc:
@@ -29,22 +26,7 @@ spring:
       - batch
       - quartz
 
-mybatis:
-  mapper-locations: classpath*:mapper/*.xml
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
-
 batch:
-  orchestrator:
-    base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
   trigger:
     runtime:
       misfire-catch-up-threshold-seconds: ${BATCH_TRIGGER_MISFIRE_CATCH_UP_THRESHOLD_SECONDS:60}

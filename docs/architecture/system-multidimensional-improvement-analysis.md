@@ -31,15 +31,16 @@
 
 ## 2. 结论总览（Executive Summary）
 
-系统主链路已经达到“可跑通、可回归”的阶段：`触发 -> 调度 -> outbox -> Kafka -> worker -> 回报` 在 Import/Export/Dispatch 三条 E2E 上都可通过。  
-但从“生产级稳定性与长期演进”视角看，仍存在四类核心短板：
+系统主链路已经达到”可跑通、可回归”的阶段：`触发 -> 调度 -> outbox -> Kafka -> worker -> 回报` 在 Import/Export/Dispatch 三条 E2E 上都可通过。
 
-- **设计层面**：模块边界在组合运行场景中仍偏脆弱（E2E 需要额外兜底配置才能装配成功）。
-- **工程层面**：配置和运行循环重复较多，跨模块一致性依赖人工维护。
-- **编码层面**：关键路径上的错误处理、幂等保护、并发保护策略不统一。
-- **业务层面**：当前测试偏 happy path，失败分支、并发与多租户隔离验证不足，生产风险暴露能力不够。
+**截至 2026-03-25（对话_5 全部 12 轮完成）**，以下四类短板已全部完成结构化治理：
 
-一句话判断：**当前系统可用，但距离“高置信度、低运维负担”的生产形态，还需要一轮结构化治理。**
+- **设计层面** ✅：架构真相文档（`architecture-truth.md`）+ ADR-001~ADR-008 体系落地；配置装配契约通过 `batch-defaults.yml` 统一。
+- **工程层面** ✅：`AbstractWorkerLoop` / `AbstractTaskConsumer` / `AbstractStageExecutor` 消除三链路重复循环；`batch-defaults.yml` + `spring.config.import` 解决配置漂移；SQL 一致性守卫 `SqlConsistencyIT` 建立 CI 门禁。
+- **编码层面** ✅：`StageFailureCode` / `PipelineContext` / `StageExecutionContext` 统一异常处理契约；`HttpTaskExecutionClient` 韧性层（重试/超时/断路）补齐；关键状态更新已引入数据库层原子 CAS。
+- **业务层面** ✅：失败分支 E2E（Import/Export/Dispatch）、Outbox 自动轮询 E2E、多租户并发 E2E、内容级验收（ExportFileVerifier/DispatchReceiptVerifier）全部落地。
+
+一句话判断：**当前系统已完成结构化治理，核心链路高置信度可回归；剩余差距仅在生产部署产物和运营产品化层面。**
 
 ---
 
@@ -277,27 +278,27 @@
 
 ---
 
-## 7. 优先级路线图（建议）
+## 7. 优先级路线图（截至 2026-03-25，全部完成）
 
-## P0（1~2 周，稳态收敛）
+## P0 ✅ 已完成
 
-- 统一 worker 生命周期/consumer 模板，减少重复实现。
-- 统一 stage 异常处理契约和日志字段规范。
-- 增加 outbox-forwarder 真轮询 E2E。
-- 增加关键 SQL 原子更新保护（状态 compare-and-set）。
+- ✅ 统一 worker 生命周期/consumer 模板（`AbstractWorkerLoop` / `AbstractTaskConsumer` / `AbstractStageExecutor`）
+- ✅ 统一 stage 异常处理契约（`StageFailureCode` / `PipelineContext` / `StageExecutionContext`）
+- ✅ 增加 outbox-forwarder 真轮询 E2E（`OutboxForwarderE2eIT`）
+- ✅ 增加关键 SQL 原子更新保护（状态 compare-and-set，Orchestrator 主写路径）
 
-## P1（2~4 周，风险前移）
+## P1 ✅ 已完成
 
-- 补 failure/retry/compensation E2E 套件。
-- 补多租户并发 E2E 套件。
-- 引入 HTTP 调用韧性策略（timeout/retry/circuit）。
-- 建立 SQL 一致性 CI 检查。
+- ✅ 失败分支 E2E（`ImportFailureE2eIT` / `ExportStorageFailureE2eIT` / `DispatchFailurePipelineE2eIT`）
+- ✅ 多租户并发 E2E（`MultiTenantConcurrentE2eIT`）
+- ✅ HTTP 调用韧性策略（`HttpTaskExecutionClient`：重试/超时/断路，`OrchestratorTaskClientProperties` 可配）
+- ✅ SQL 一致性 CI 检查（`SqlConsistencyIT`）
 
-## P2（4~8 周，工程化升级）
+## P2 ✅ 已完成
 
-- 配置基线模块化（shared defaults + overlay）。
-- 架构真相文档与 ADR 体系落地。
-- 导出/分发内容级验收标准化（可观测 + 可追溯）。
+- ✅ 配置基线模块化（`batch-defaults.yml` + `spring.config.import` 6 个服务模块）
+- ✅ 架构真相文档与 ADR 体系（`architecture-truth.md` + ADR-001~ADR-008）
+- ✅ 导出/分发内容级验收标准化（`ExportFileVerifier` / `DispatchReceiptVerifier` + Micrometer 指标）
 
 ---
 
@@ -317,11 +318,13 @@
 
 ---
 
-## 9. 立即可执行的下一步
+## 9. 当前状态（截至 2026-03-25）
 
-- 先从 P0 启动一个“小闭环”：
-  1) 新增 `OutboxForwarderE2eIT`（真实轮询）  
-  2) 为 Import/Export/Dispatch 各新增 1 个失败场景 E2E  
-  3) 统一 stage 异常处理模板到 worker-core  
+P0/P1/P2 全部已完成，系统已从”主链路可跑”提升到”异常流可控、回归可依赖”阶段。
 
-这样可以在最短周期内，把系统从“主链路可跑”提升到“异常流可控、回归可依赖”。
+**剩余低优先级工作（不影响核心运行）**：
+1. 生产部署产物（Dockerfile/Helm/K8s 清单）
+2. 审批台账产品化（批量审批、SLA 告警、运营视图）
+3. SFTP/EMAIL/HTTP 渠道主动健康探测与分级退避
+4. ELK / OpenTelemetry 生产侧采集管道
+5. 压测脚本与容量基线数据

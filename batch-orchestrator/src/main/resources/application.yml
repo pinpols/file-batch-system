@@ -4,13 +4,8 @@ server:
 spring:
   application:
     name: batch-orchestrator
-  datasource:
-    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
-    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
-    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
-    driver-class-name: org.postgresql.Driver
-  kafka:
-    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  config:
+    import: "classpath:batch-defaults.yml"
   flyway:
     enabled: true
     default-schema: batch
@@ -19,26 +14,9 @@ spring:
       - quartz
 
 mybatis:
-  mapper-locations: classpath*:mapper/*.xml
   type-aliases-package: com.example.batch.orchestrator.domain
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
-
 batch:
-  security:
-    testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
-    kms:
-      default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
-      keys:
-        DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
   scheduler:
     snapshot-persist-enabled: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST:true}
     snapshot-persist-ms: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST_MS:120000}
@@ -100,17 +78,3 @@ batch:
     access:
       enabled: ${BATCH_FILE_GOVERNANCE_ACCESS_ENABLED:true}
       presign-expiry-seconds: ${BATCH_FILE_GOVERNANCE_ACCESS_PRESIGN_EXPIRY_SECONDS:600}
-  storage:
-    minio:
-      endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
-      access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
-      secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
-      bucket: ${BATCH_MINIO_BUCKET:batch-dev}
-  mq:
-    topics:
-      import-dispatch: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
-      export-dispatch: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
-      dispatch-dispatch: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
-      task-result: ${BATCH_TOPIC_TASK_RESULT:batch.task.result}
-      task-retry: ${BATCH_TOPIC_TASK_RETRY:batch.task.retry}
-      dead-letter: ${BATCH_TOPIC_DEAD_LETTER:batch.task.dead-letter}

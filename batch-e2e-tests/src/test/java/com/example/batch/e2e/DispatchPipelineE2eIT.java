@@ -9,6 +9,7 @@ import com.example.batch.e2e.apps.E2eDispatchApplication;
 import com.example.batch.e2e.support.E2eOutboxPublishSupport;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.e2e.support.verifier.DispatchReceiptVerifier;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
@@ -128,32 +129,15 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
             assertThat(status).isEqualTo("SUCCESS");
         });
 
-        String fileStatus = jdbcTemplate.queryForObject(
-                "select file_status from batch.file_record where id = ?",
-                String.class,
-                fileId);
-        assertThat(fileStatus).isEqualTo("DISPATCHED");
-
-        String receiptCode = jdbcTemplate.queryForObject(
-                """
-                        select receipt_code from batch.file_dispatch_record
-                        where tenant_id = ? and file_id = ?
-                        order by id desc
-                        limit 1
-                        """,
-                String.class,
-                TENANT,
-                fileId);
-        assertThat(receiptCode).isEqualTo("R-E2E-DISPATCH");
-
-        Long auditCount = jdbcTemplate.queryForObject(
-                """
-                        select count(*) from batch.file_audit_log
-                        where tenant_id = ? and file_id = ?
-                        """,
-                Long.class,
-                TENANT,
-                fileId);
-        assertThat(auditCount).isGreaterThanOrEqualTo(1L);
+        // Content-level triple-check (状态 + 回执 + 审计) via DispatchReceiptVerifier
+        DispatchReceiptVerifier.forTenant(TENANT)
+                .fileId(fileId)
+                .platformJdbc(jdbcTemplate)
+                .expectedFileStatus("DISPATCHED")
+                .expectedReceiptCode("R-E2E-DISPATCH")
+                .expectedChannelCode("e2e_local_dispatch")
+                .expectedMinAuditCount(1)
+                .build()
+                .verify();
     }
 }
