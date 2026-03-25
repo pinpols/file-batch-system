@@ -10,9 +10,16 @@ import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import io.minio.errors.ErrorResponseException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -141,6 +148,69 @@ final class RemoteFilesystemDispatchSupport {
         }
     }
 
+    static DispatchChannelProbeResult probeSftp(Map<String, Object> channelConfig) {
+        try {
+            String host = stringProp(channelConfig, "sftp_host");
+            if (!StringUtils.hasText(host)) {
+                host = stringProp(channelConfig, "target_endpoint");
+            }
+            if (!StringUtils.hasText(host)) {
+                return new DispatchChannelProbeResult(false, "sftp_host missing", null);
+            }
+            int port = intProp(channelConfig, "sftp_port", 22);
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 5_000);
+            }
+            return new DispatchChannelProbeResult(true, "sftp probe ok", host + ":" + port);
+        } catch (Exception ex) {
+            return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+        }
+    }
+
+    static DispatchChannelProbeResult probeSmtp(Map<String, Object> channelConfig) {
+        try {
+            String host = stringProp(channelConfig, "smtp_host");
+            if (!StringUtils.hasText(host)) {
+                host = stringProp(channelConfig, "target_endpoint");
+            }
+            if (!StringUtils.hasText(host)) {
+                return new DispatchChannelProbeResult(false, "smtp_host missing", null);
+            }
+            int port = intProp(channelConfig, "smtp_port", 25);
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 5_000);
+            }
+            return new DispatchChannelProbeResult(true, "smtp probe ok", host + ":" + port);
+        } catch (Exception ex) {
+            return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+        }
+    }
+
+    static DispatchChannelProbeResult probeHttp(Map<String, Object> channelConfig) {
+        try {
+            String endpoint = stringProp(channelConfig, "target_endpoint");
+            if (!StringUtils.hasText(endpoint)) {
+                return new DispatchChannelProbeResult(false, "target_endpoint missing", null);
+            }
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint))
+                    .timeout(Duration.ofSeconds(5))
+                    .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+            int status = response.statusCode();
+            if (status >= 200 && status < 500) {
+                return new DispatchChannelProbeResult(true, "http probe ok (status=" + status + ")", endpoint);
+            }
+            return new DispatchChannelProbeResult(false, "http probe failed (status=" + status + ")", endpoint);
+        } catch (Exception ex) {
+            return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+        }
+    }
+
     static DispatchChannelProbeResult probeChannel(Map<String, Object> channelConfig,
                                                    MinioStorageProperties minioProperties,
                                                    MinioClient minioClient) {
@@ -148,6 +218,9 @@ final class RemoteFilesystemDispatchSupport {
         return switch (channelType) {
             case "NAS" -> probeNas(channelConfig);
             case "OSS" -> probeOss(channelConfig, minioProperties, minioClient);
+            case "SFTP" -> probeSftp(channelConfig);
+            case "EMAIL" -> probeSmtp(channelConfig);
+            case "API", "API_PUSH" -> probeHttp(channelConfig);
             default -> new DispatchChannelProbeResult(false, "unsupported health probe channel type: " + channelType, null);
         };
     }
@@ -224,6 +297,18 @@ final class RemoteFilesystemDispatchSupport {
             return v;
         }
         return firstText(map, key2, fallback);
+    }
+
+    private static int intProp(Map<String, Object> map, String key, int defaultValue) {
+        Object v = map == null ? null : map.get(key);
+        if (v == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(v).trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     private static String stringProp(Map<String, Object> map, String key) {

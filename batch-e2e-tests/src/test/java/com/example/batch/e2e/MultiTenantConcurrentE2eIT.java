@@ -30,21 +30,20 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * P1 E2E suite: multi-tenant concurrency and data isolation.
+ * P1 端到端测试：多租户并发 + 数据隔离。
  *
- * <p>Two tenants (t1, t2) trigger import jobs concurrently.  This suite verifies:
+ * <p>测试意图：模拟 t1/t2 并发触发任务，验证“同库多租户”模式下不会出现租户串数据、串消息、串配额。
+ *
+ * <p>本套件验证点：
  * <ol>
- *   <li><b>Data isolation</b>: t1's job_instance / outbox_event / task are not visible when
- *       queried under t2's tenant_id, and vice versa.</li>
- *   <li><b>Outbox isolation</b>: outbox_events created for t1 do not appear under t2.</li>
- *   <li><b>Quota independence</b>: if quota_runtime_state rows exist for both tenants, their
- *       peak_borrowed_count values are independent (one tenant's run does not overflow
- *       into the other tenant's quota counter).</li>
- *   <li><b>End-to-end success</b>: both jobs eventually reach SUCCESS without interference.</li>
+ *   <li><b>运行态隔离</b>：job_instance / job_task / outbox_event 仅在各自 tenant_id 下可见。</li>
+ *   <li><b>消息隔离</b>：t1 的 outbox_event 不会挂到 t2 的 tenant_id 下，反之亦然。</li>
+ *   <li><b>错误明细隔离</b>：file_error_record 不允许出现“tenant_id 与 file_id 所属租户不一致”的污染。</li>
+ *   <li><b>配额隔离（best-effort）</b>：若两租户均写入 quota_runtime_state，则 peak_borrowed_count 各自独立。</li>
+ *   <li><b>并发成功</b>：两个租户最终都能跑到 SUCCESS。</li>
  * </ol>
  *
- * <p>The test drives concurrency by submitting both job launches from separate threads using a
- * CountDownLatch barrier, then waits for both tasks to complete before asserting isolation.
+ * <p>并发驱动方式：两个线程在 {@link CountDownLatch} 栅栏处对齐后同时 launch，随后等待两个任务完成再做隔离断言。
  */
 @SpringBootTest(
         classes = E2eImportApplication.class,
@@ -368,7 +367,9 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
                     String.class,
                     tenantId,
                     dedupKey);
-        } catch (Exception ex) {
+        } catch (org.springframework.dao.EmptyResultDataAccessException ex) {
+            return null;
+        } catch (org.springframework.dao.DataAccessException ex) {
             return null;
         }
     }

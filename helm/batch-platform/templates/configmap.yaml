@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "batch-platform.configmapName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" . | nindent 4 }}
+data:
+  # ── Platform database ───────────────────────────────────────────────────────
+  BATCH_PLATFORM_DB_URL: {{ .Values.postgresql.platform.url | quote }}
+  BATCH_PLATFORM_DB_USERNAME: {{ .Values.postgresql.platform.username | quote }}
+
+  # ── Business database (workers) ────────────────────────────────────────────
+  BATCH_BUSINESS_DB_URL: {{ .Values.postgresql.business.url | quote }}
+  BATCH_BUSINESS_DB_USERNAME: {{ .Values.postgresql.business.username | quote }}
+  BATCH_BUSINESS_DB_SCHEMA: {{ .Values.postgresql.business.schema | quote }}
+
+  # ── Kafka ──────────────────────────────────────────────────────────────────
+  BATCH_KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
+
+  # ── MinIO ──────────────────────────────────────────────────────────────────
+  BATCH_MINIO_ENDPOINT: {{ .Values.minio.endpoint | quote }}
+  BATCH_MINIO_BUCKET: {{ .Values.minio.bucket | quote }}
+
+  # ── Cross-service ──────────────────────────────────────────────────────────
+  BATCH_ORCHESTRATOR_BASE_URL: {{ .Values.orchestratorBaseUrl | quote }}
+  BATCH_SECURITY_TESTING_OPEN: {{ .Values.security.testingOpen | quote }}
+
+  # ── OpenTelemetry ──────────────────────────────────────────────────────────
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.otel.endpoint | quote }}
+  OTEL_SAMPLING_PROBABILITY: {{ .Values.otel.samplingProbability | quote }}
+  BATCH_LOG_FORMAT: {{ .Values.otel.logFormat | quote }}
+
+  # ── JVM ───────────────────────────────────────────────────────────────────
+  JAVA_OPTS: {{ .Values.javaOpts | quote }}

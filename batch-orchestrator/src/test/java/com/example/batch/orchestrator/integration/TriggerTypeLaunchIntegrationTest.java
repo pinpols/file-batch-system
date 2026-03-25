@@ -44,7 +44,7 @@ class TriggerTypeLaunchIntegrationTest extends AbstractIntegrationTest {
     @EnumSource(TriggerType.class)
     void shouldLaunchAndPersistTriggerTypeForEachTriggerType(TriggerType triggerType) {
         LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
-                jdbcTemplate, TENANT, "IMPORT", "IMPORT", triggerType);
+                jdbcTemplate, TENANT, "DISPATCH", "DISPATCH", triggerType);
 
         LaunchResponse response = launchService.launch(new LaunchRequest(
                 TENANT,

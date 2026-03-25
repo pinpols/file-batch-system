@@ -18,6 +18,23 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+/**
+ * Outbox → Kafka 的投递器。
+ *
+ * <p>输入：一行 {@link OutboxEventEntity}（DB 事实源）<br>
+ * 输出：Kafka topic 上的一条消息（字符串 JSON）
+ *
+ * <p>投递策略：
+ * <ul>
+ *   <li>若 {@code eventType} 能映射到 dispatch topic（import/export/dispatch），则认为是“任务派发消息”，直接把
+ *       {@code payloadJson} 当作 {@link TaskDispatchMessage} 投递到对应 topic。</li>
+ *   <li>若消息指定了 {@code selectedWorkerId}，则投递到“直达 topic”（{@link BatchTopics#directDispatchTopic(String, String)}），
+ *       用于定向派发/粘性路由。</li>
+ *   <li>否则走 fallback topic：把 outbox 包装成 {@link BatchEventMessage}，用于统一审计/调试。</li>
+ * </ul>
+ *
+ * <p>注意：本类只负责“投递动作 + delivery log 记录”，不负责重试调度策略；重试由 outbox forwarder/调度器负责。
+ */
 @Component
 @RequiredArgsConstructor
 public class KafkaOutboxPublisher implements OutboxPublisher {
@@ -31,6 +48,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     public boolean publish(OutboxEventEntity event) {
         String topic = batchMqTopicsProperties.resolveDispatchTopic(event.getEventType());
         if (topic != null) {
+            // 任务派发：payloadJson 是 TaskDispatchMessage 的 JSON，直接按 eventKey 作为 Kafka key 投递。
             TaskDispatchMessage dispatchMessage = JsonUtils.fromJson(event.getPayloadJson(), TaskDispatchMessage.class);
             String targetTopic = dispatchMessage != null && dispatchMessage.selectedWorkerId() != null
                     ? BatchTopics.directDispatchTopic(topic, dispatchMessage.selectedWorkerId())
@@ -47,6 +65,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             }
         }
 
+        // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
         String fallbackTopic = outboxProperties.getDefaultTopic();
         BatchEventMessage message = new BatchEventMessage(
                 "v1",

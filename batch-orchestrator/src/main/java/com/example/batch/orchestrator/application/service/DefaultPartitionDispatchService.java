@@ -31,6 +31,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Launch 的 T2 阶段：把“准备态的 job_instance/workflow_run”推进到“可执行运行态”。
+ *
+ * <p>核心职责：
+ * <ul>
+ *   <li>根据 DAG 初始节点或调度计划（SchedulePlan）创建 {@code job_partition}</li>
+ *   <li>为每个 partition 创建 {@code job_task}（并同步创建 step 镜像 {@code job_step_instance}）</li>
+ *   <li>对可派发的任务统一写入 outbox（由 outbox forwarder 负责投递到 Kafka）</li>
+ *   <li>根据资源调度决策把 instance 标记为 RUNNING 或 WAITING</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -55,6 +66,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                          WorkflowRunEntity workflowRun,
                          List<WorkflowDagService.DagNodeResolution> initialNodes,
                          Instant startedAt) {
+        // 说明：如果有 DAG 初始节点（非 START），优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
         boolean dispatchable = true;
         int partitionCount;
         String sourcePayload = buildPayloadJson(effectiveParams);
@@ -72,7 +84,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                     request.tenantId(), request.jobCode(), request.bizDate().toString(), effectiveParams));
             ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
             if (decision.isFailFast()) {
-                throw new BizException(ResultCode.INVALID_ARGUMENT, decision.getReasonMessage());
+                throw new BizException(ResultCode.BUSINESS_ERROR, decision.getReasonMessage());
             }
             applySchedulingDecision(plan, decision);
             List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
@@ -83,6 +95,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         }
         // markLaunchRuntime inline
         if (dispatchable) {
+            // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
             int updated = jobInstanceMapper.markRunning(
                     jobInstance.getTenantId(), jobInstance.getId(),
                     stateMachine.transition(jobInstance, "START").toState(),
@@ -96,6 +109,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                     stateMachine.transition(workflowRun, "START").toState(),
                     workflowRun.getCurrentNodeCode(), startedAt);
         } else {
+            // 不可派发（资源不足/窗口限制等）：instance 进入 WAITING，由等待派发调度器后续推进。
             int updated = jobInstanceMapper.markRunning(
                     jobInstance.getTenantId(), jobInstance.getId(),
                     JobInstanceStatus.WAITING.code(),

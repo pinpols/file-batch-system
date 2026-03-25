@@ -1,0 +1,298 @@
+# Default values for batch-platform.
+# Override with -f values-prod.yaml or --set key=value.
+
+# ── Image ─────────────────────────────────────────────────────────────────────
+image:
+  registry: ""          # e.g. registry.example.com/batch-platform
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Infrastructure ─────────────────────────────────────────────────────────────
+
+postgresql:
+  platform:
+    url: "jdbc:postgresql://postgresql:5432/batch_platform"
+    username: "batch_user"
+    # password: set via --set or external secret
+    password: ""
+  business:
+    url: "jdbc:postgresql://postgresql:5432/batch_business"
+    username: "batch_user"
+    password: ""
+    schema: "biz"
+
+kafka:
+  bootstrapServers: "kafka:9092"
+
+minio:
+  endpoint: "http://minio:9000"
+  accessKey: ""
+  secretKey: ""
+  bucket: "batch-prod"
+
+# ── Cross-service ──────────────────────────────────────────────────────────────
+
+orchestratorBaseUrl: "http://batch-orchestrator:8082"
+
+security:
+  testingOpen: "false"
+
+# ── console-api ────────────────────────────────────────────────────────────────
+
+consoleApi:
+  replicaCount: 2
+  port: 8080
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+      # kubernetes.io/ingress.class: nginx
+      # cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: batch-console.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+      # - secretName: batch-console-tls
+      #   hosts:
+      #     - batch-console.example.com
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 8080
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── trigger ────────────────────────────────────────────────────────────────────
+
+trigger:
+  replicaCount: 1
+  port: 8081
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "384Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi"
+  service:
+    type: ClusterIP
+    port: 8081
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 8081
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 8081
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── orchestrator ───────────────────────────────────────────────────────────────
+
+orchestrator:
+  replicaCount: 2
+  port: 8082
+  resources:
+    requests:
+      cpu: "300m"
+      memory: "512Mi"
+    limits:
+      cpu: "1500m"
+      memory: "1.5Gi"
+  service:
+    type: ClusterIP
+    port: 8082
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 8082
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 8082
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── worker-import ──────────────────────────────────────────────────────────────
+
+workerImport:
+  replicaCount: 2
+  port: 8083
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "768Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+  service:
+    type: ClusterIP
+    port: 8083
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 8083
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 8083
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── worker-export ──────────────────────────────────────────────────────────────
+
+workerExport:
+  replicaCount: 2
+  port: 8084
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "768Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+  service:
+    type: ClusterIP
+    port: 8084
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 8084
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 8084
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── worker-dispatch ────────────────────────────────────────────────────────────
+
+workerDispatch:
+  replicaCount: 2
+  port: 8085
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  service:
+    type: ClusterIP
+    port: 8085
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 8085
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 8085
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── Pod scheduling ─────────────────────────────────────────────────────────────
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ── JVM tuning ─────────────────────────────────────────────────────────────────
+
+javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+
+# ── OpenTelemetry Collector (sidecar-less gateway mode) ────────────
+otelCollector:
+  enabled: false        # set true to deploy Collector alongside apps
+  imageTag: "0.116.0"
+  replicaCount: 1
+  deploymentEnvironment: "production"
+  memoryLimitMib: 512
+  jaegerEndpoint: "jaeger:4317"            # override with actual Jaeger address
+  lokiEndpoint: "http://loki:3100"         # override with actual Loki address
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "640Mi"
+
+# ── OTEL env vars injected into all app pods (via ConfigMap) ────────
+otel:
+  endpoint: "http://batch-platform-otel-collector:4318"  # within cluster
+  samplingProbability: "0.1"
+  logFormat: "ecs"                                        # structured JSON

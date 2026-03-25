@@ -33,6 +33,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 失败重试与死信治理（Orchestrator 侧）。
+ *
+ * <p>总体策略：
+ * <ul>
+ *   <li>task 执行失败后（worker report）由治理层决定是否进入重试：写 {@code retry_schedule} 或写 {@code dead_letter_task}。</li>
+ *   <li>重试不是“原地把 task 置回 READY”这么简单，而是通过重排队（requeue）统一回到 outbox → Kafka 的派发链路。</li>
+ * </ul>
+ *
+ * <p>为什么要通过 outbox 回流：
+ * <ul>
+ *   <li>避免多处（launch / retry / reclaim）各自拼 Kafka 消息协议，减少漂移风险。</li>
+ *   <li>事务边界清晰：DB 状态更新与 outbox 落库同事务，Kafka 投递由 forwarder 异步完成。</li>
+ * </ul>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -55,18 +70,21 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                                             JobInstanceEntity jobInstance,
                                             String errorCode,
                                             String errorMessage) {
+        // 入口语义：返回 true 表示“已进入 RETRYING（有后续重排队）”，返回 false 表示“本次失败将进入终态（dead-letter 或直接失败）”。
         if (task == null || partition == null || jobInstance == null) {
             return false;
         }
         RetryPolicyPlan retryPolicyPlan = resolveRetryPolicy(jobInstance.getJobDefinitionId());
         if (RetryPolicyType.NONE.code().equals(retryPolicyPlan.retryPolicy())
                 || retryPolicyPlan.maxRetryCount() <= 0) {
+            // 无重试预算：直接进入死信，交由人工/审批/补偿处理。
             createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
             return false;
         }
 
         int nextRetryCount = Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1;
         if (nextRetryCount > retryPolicyPlan.maxRetryCount()) {
+            // 重试耗尽：落死信（不会回到正常 dispatch）。
             createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
             return false;
         }
@@ -92,6 +110,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     @Override
     @Transactional
     public void dispatchDueRetries() {
+        // 定时扫描：把到期的 retry_schedule 记录重排队（requeue）回 outbox。
         List<RetryScheduleEntity> dueRetries = retryScheduleMapper.selectByQuery(new RetryScheduleQuery(
                 null,
                 RetryScheduleStatus.WAITING.code(),

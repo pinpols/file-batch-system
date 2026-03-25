@@ -257,6 +257,7 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{fileId}
+          and file_status = #{currentStatus}
     </update>
 
     <update id="updateFileMetadata">

@@ -24,9 +24,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * End-to-end failure branch: export job references a template code that does not exist in
- * {@code file_template_config}. The export worker fails to resolve the template and the
- * orchestrator must record {@code task_status = FAILED}.
+ * 端到端测试：Export 模板不存在导致失败。
+ *
+ * <p>测试意图：验证“配置缺失/引用错误”这类常见问题能被快速失败并正确落库，而不是卡在中间态。
+ *
+ * <p>断言点：
+ * <ul>
+ *   <li>task_status 最终为 FAILED</li>
+ *   <li>job_instance.instance_status 最终为 FAILED 或 PARTIAL_FAILED（按分片汇总口径）</li>
+ * </ul>
  */
 @SpringBootTest(
         classes = E2eExportApplication.class,

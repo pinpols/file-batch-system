@@ -25,25 +25,23 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * P1 E2E suite: Import failure paths.
+ * P1 端到端测试：Import 链路失败场景覆盖。
  *
- * <p>Scenario A – Validation failure: content JSON contains a record that exceeds the skip threshold
- * (a field that causes strict validation to reject the whole batch).  The import worker must:
- * <ol>
- *   <li>reach {@code VALIDATE} stage and fail there</li>
- *   <li>write at least one {@code batch.file_error_record} row (error_code, error_stage, record_no)</li>
- *   <li>set {@code job_instance.instance_status} = {@code FAILED} or {@code PARTIAL_FAILED}</li>
- * </ol>
+ * <p>为什么要做失败 E2E：只测“主链路成功”无法证明系统在生产故障下可控；这里用真实 outbox→Kafka→worker→report
+ * 的闭环来验证：失败时状态机落库正确、错误明细可追溯、重试/死信治理按预期工作。
  *
- * <p>Scenario B – Load stage failure (plugin throws): a template is configured with a bogus
- * {@code load_target_ref} that the plugin registry cannot resolve.  The {@code LoadStep} catches the
- * exception and returns {@code IMPORT_LOAD_FAILED}.  Because retry_policy = NONE the job goes
- * directly to FAILED after 1 attempt.
+ * <p>覆盖场景：
+ * <ul>
+ *   <li><b>场景 A</b>：未知模板（templateCode 不存在）导致失败，断言 task/job_instance 进入失败态且 failure_code 非空。</li>
+ *   <li><b>场景 B</b>：数据质量失败（必填字段缺失）应写入 {@code batch.file_error_record}，用于逐行问题定位。</li>
+ *   <li><b>场景 C</b>：配置重试预算（FIXED + retry_max_count）后，持续失败会触发重试调度并最终进入死信。</li>
+ * </ul>
  *
- * <p>Note: full field-level validation requires the data-quality service to flag the record.
- * The simplest trigger is to submit content that is valid JSON but with an unknown {@code templateCode}
- * so that the template-config lookup returns null → the import pipeline aborts early.  This approach
- * avoids the need to manipulate skip-threshold config per test run.
+ * <p>说明：
+ * <ul>
+ *   <li>测试里显式调用 {@link E2eOutboxPublishSupport#publishAllPending(String)}，用于在 E2E profile 下驱动派发。</li>
+ *   <li>重试/死信的“最终裁决”在 orchestrator 侧完成：本用例通过 DB 断言验证其结果。</li>
+ * </ul>
  */
 @SpringBootTest(
         classes = E2eImportApplication.class,

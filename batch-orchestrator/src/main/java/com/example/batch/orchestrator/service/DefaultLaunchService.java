@@ -38,17 +38,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Orchestrates the job launch lifecycle in two committed transactions:
+ * 批任务启动（Launch）的核心入口：把一次触发请求落地为可调度的运行态，并驱动后续分片/任务派发。
+ *
+ * <p>这里把 launch 拆成两段<strong>独立提交</strong>的事务（T1/T2），目的是降低锁竞争与提升可重试性：
  * <ul>
- *   <li>T1 ({@link #prepareJobInstance}): creates {@code job_instance} + {@code workflow_run} +
- *       bootstraps the START node run, then commits. Invoked via self-proxy to honour
- *       {@code @Transactional} through Spring AOP.</li>
- *   <li>T2 ({@link PartitionDispatchService#dispatch}): creates partitions, tasks and outbox
- *       events, then marks the instance as RUNNING, in its own transaction on the
- *       {@link PartitionDispatchService} bean.</li>
+ *   <li><strong>T1（准备态落库）</strong>：只创建 {@code job_instance}/{@code workflow_run} 以及 START 节点的运行态，
+ *       快速提交，作为后续调度/派发的“事实源”。</li>
+ *   <li><strong>T2（运行态构建与派发）</strong>：创建 partition/task、写 outbox，并推进 instance/workflow 状态。
+ *       高竞争表只在 T2 短事务里触碰，避免长事务持锁。</li>
  * </ul>
- * The split ensures that the high-contention partition/task tables are locked only during T2,
- * not for the full duration of instance creation.
+ *
+ * <p>注意：{@link #prepareJobInstance} 必须通过 self-proxy 调用，才能让 Spring AOP 的 {@code @Transactional} 生效。
  */
 @Service
 public class DefaultLaunchService implements LaunchService {
@@ -62,8 +62,7 @@ public class DefaultLaunchService implements LaunchService {
     private final WorkflowDagService workflowDagService;
 
     /**
-     * Self-reference injected lazily to let Spring AOP intercept {@link #prepareJobInstance}
-     * and apply the {@code @Transactional} advice for T1.
+     * 通过延迟注入的 self 触发 AOP 拦截，确保 {@link #prepareJobInstance} 的 {@code @Transactional} 在同类调用中仍生效。
      */
     @Lazy
     @Autowired
@@ -99,10 +98,10 @@ public class DefaultLaunchService implements LaunchService {
                 ? IdGenerator.newTraceId() : request.traceId();
         Map<String, Object> effectiveParams = mergeLaunchParams(loaded.jobDefinition(), request.params());
 
-        // T1: job instance + workflow run — commits before T2 reads them
+        // T1：先把 instance/workflow 落库并提交，避免 T2 执行期间持有更长时间锁。
         PreparedLaunch prepared = self.prepareJobInstance(request, loaded, effectiveParams, traceId);
 
-        // T2: partitions + tasks + outbox events + mark RUNNING — separate transaction
+        // T2：构建分片/任务/outbox，并推进运行态；该事务可在失败后独立重试。
         partitionDispatchService.dispatch(request, effectiveParams, traceId,
                 prepared.jobInstance(), prepared.workflowRun(),
                 prepared.initialNodes(), prepared.startedAt());
@@ -113,9 +112,9 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     /**
-     * T1: inserts {@code job_instance}, {@code workflow_run}, and the bootstrap START
-     * {@code workflow_node_run} in one atomic transaction, then returns the prepared state
-     * for T2 to consume.
+     * T1 事务：创建 {@code job_instance}/{@code workflow_run}，并补齐 START 节点运行态。
+     *
+     * <p>该事务只做“准备态落库”，不触碰高竞争的 task/partition/outbox 表，从而缩短锁持有时间。
      */
     @Transactional
     public PreparedLaunch prepareJobInstance(LaunchRequest request,

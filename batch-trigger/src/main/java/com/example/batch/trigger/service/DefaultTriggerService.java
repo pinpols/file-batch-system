@@ -60,10 +60,10 @@ public class DefaultTriggerService implements TriggerService {
             throw new BizException(ResultCode.NOT_FOUND, "pending catch-up request not found");
         }
         if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "request is not a catch-up request");
+            throw new BizException(ResultCode.BUSINESS_ERROR, "request is not a catch-up request");
         }
         if ("REJECTED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "request is already rejected");
+            throw new BizException(ResultCode.BUSINESS_ERROR, "request is already rejected");
         }
         LaunchRequest launchRequest = new LaunchRequest(
                 pendingRequest.getTenantId(),

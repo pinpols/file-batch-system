@@ -20,6 +20,19 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+/**
+ * Dispatch 主链路的 stage 执行器（worker 侧）。
+ *
+ * <p>dispatch 的核心目标是把平台侧的“输出文件”投递到目标渠道（LOCAL/SFTP/HTTP/OSS 等），并记录回执与审计：
+ * <ul>
+ *   <li>准备阶段：读取 file_record + channel_config，生成 dispatchPayload</li>
+ *   <li>发送阶段：按 channel adapter 执行投递，写 file_dispatch_record</li>
+ *   <li>回执阶段（可选）：轮询/等待 ACK，并最终把 file_status 推进为 DISPATCHED</li>
+ *   <li>审计：通过平台表 {@code file_audit_log} 记录关键操作与结果</li>
+ * </ul>
+ *
+ * <p>成功后记录指标 {@code dispatch.receipt.total}，用于观测“成功投递次数”。
+ */
 @Slf4j
 @Service
 public class DefaultDispatchStageExecutor
@@ -43,6 +56,7 @@ public class DefaultDispatchStageExecutor
 
     @Override
     public List<DispatchStageResult> execute(DispatchJobContext context) {
+        // 全流程 stage loop；只有全部成功才计入“成功回执”指标。
         List<DispatchStageResult> results = runStageLoop(context);
         boolean overallSuccess = results.stream().allMatch(DispatchStageResult::success);
         if (overallSuccess) {

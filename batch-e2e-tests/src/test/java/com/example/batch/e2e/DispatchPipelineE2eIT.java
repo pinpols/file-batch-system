@@ -25,7 +25,20 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * End-to-end: dispatch job → schedule → outbox → Kafka → dispatch worker → local channel → task report.
+ * 端到端测试：Dispatch 主链路成功闭环。
+ *
+ * <p>链路路径：
+ * <pre>
+ * launch → orchestrator 生成 task/outbox → Kafka 派发 → dispatch worker claim → 渠道投递（LOCAL）
+ *      → 回写平台表（file_record/file_dispatch_record/file_audit_log）→ worker report → orchestrator 终态
+ * </pre>
+ *
+ * <p>本用例不仅断言任务成功，还断言“交付可追溯”：
+ * <ul>
+ *   <li>{@code file_record.file_status = DISPATCHED}</li>
+ *   <li>{@code file_dispatch_record.receipt_code} 被写入（便于对账）</li>
+ *   <li>{@code file_audit_log} 至少有一条审计记录（便于审计/排障）</li>
+ * </ul>
  */
 @SpringBootTest(
         classes = E2eDispatchApplication.class,

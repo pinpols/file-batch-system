@@ -1,32 +1,40 @@
 package com.example.batch.orchestrator.application.service;
 
-import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.constants.BatchStatusConstants;
+import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.enums.WorkflowNodeType;
+import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.utils.IdGenerator;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import com.example.batch.orchestrator.application.plan.SchedulePlanCommand;
+import com.example.batch.orchestrator.application.scheduler.ResourceScheduler;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
-import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
-import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
-import com.example.batch.orchestrator.application.scheduler.ResourceScheduler;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
+import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
+import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
+import com.example.batch.orchestrator.service.LaunchService;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.ObjectProvider;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +51,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     private final WorkflowNodeRunMapper workflowNodeRunMapper;
     private final WorkflowDagService workflowDagService;
     private final ResourceScheduler resourceScheduler;
+    private final TriggerRequestMapper triggerRequestMapper;
     private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
+    private final ObjectProvider<LaunchService> launchServiceProvider;
 
     @Override
     @Transactional
@@ -75,6 +85,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         }
         if (isGatewayNode(workflowNode.getNodeType())) {
             return dispatchGatewayNode(jobInstance, workflowRun, node, sourcePayload);
+        }
+        if (isJobNode(workflowNode.getNodeType())) {
+            return dispatchJobNode(jobInstance, workflowRun, node, workflowNode, sourcePayload, traceId);
         }
         recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
         String targetJobCode = workflowNode.getRelatedJobCode() == null || workflowNode.getRelatedJobCode().isBlank()
@@ -202,6 +215,119 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         return dispatchedCount;
     }
 
+    /**
+     * Dispatches a JOB node by launching the referenced child job as a sub-instance.
+     * <p>
+     * A "virtual" partition + task (status=RUNNING) is created in the parent job so that
+     * the standard partition-based DAG advancement logic in {@code DefaultTaskOutcomeService}
+     * can handle child-job completion uniformly.  When the child job reaches a terminal
+     * state it signals back via {@code _parentVirtualTaskId} stored in its params snapshot.
+     */
+    private int dispatchJobNode(JobInstanceEntity jobInstance,
+                                WorkflowRunEntity workflowRun,
+                                WorkflowDagService.DagNodeResolution node,
+                                WorkflowNodeEntity workflowNode,
+                                String sourcePayload,
+                                String traceId) {
+        String refJobCode = workflowNode.getRelatedJobCode();
+        if (refJobCode == null || refJobCode.isBlank()) {
+            return 0;
+        }
+
+        // Mark node as READY immediately (same as TASK/FILE_STEP nodes)
+        recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
+
+        // Determine partition_no for the virtual partition
+        List<JobPartitionEntity> existingPartitions = jobPartitionMapper.selectByQuery(new JobPartitionQuery(
+                jobInstance.getTenantId(), jobInstance.getId(), null, null));
+        int virtualPartitionNo = existingPartitions.stream()
+                .map(JobPartitionEntity::getPartitionNo)
+                .filter(java.util.Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(0) + 1;
+
+        // Create virtual partition (RUNNING – no worker needs to claim it)
+        String idempotencyKey = jobInstance.getTenantId() + ":wf:" + workflowRun.getId() + ":" + node.nodeCode();
+        JobPartitionEntity virtualPartition = new JobPartitionEntity();
+        virtualPartition.setTenantId(jobInstance.getTenantId());
+        virtualPartition.setJobInstanceId(jobInstance.getId());
+        virtualPartition.setPartitionNo(virtualPartitionNo);
+        virtualPartition.setPartitionKey(node.nodeCode() + ":JOB:" + virtualPartitionNo);
+        virtualPartition.setPartitionStatus(PartitionStatus.RUNNING.code());
+        virtualPartition.setRetryCount(0);
+        virtualPartition.setBusinessKey(refJobCode + ":" + node.nodeCode());
+        virtualPartition.setIdempotencyKey(idempotencyKey);
+        jobPartitionMapper.insert(virtualPartition);
+
+        // Build virtual task payload – mirrors what TASK nodes do so the outcome service
+        // can resolve workflowNodeCode / workflowNodeType correctly
+        Map<String, Object> payloadMap = new LinkedHashMap<>(parsePayloadMap(sourcePayload));
+        payloadMap.put("workflowNodeCode", node.nodeCode());
+        payloadMap.put("workflowNodeType", node.nodeType());
+        payloadMap.put("targetJobCode", refJobCode);
+        String taskPayload = JsonUtils.toJson(payloadMap);
+
+        // Create virtual task (RUNNING) – no outbox dispatch event
+        JobTaskEntity virtualTaskTemplate = new JobTaskEntity();
+        virtualTaskTemplate.setTenantId(jobInstance.getTenantId());
+        virtualTaskTemplate.setJobInstanceId(jobInstance.getId());
+        virtualTaskTemplate.setJobPartitionId(virtualPartition.getId());
+        virtualTaskTemplate.setTaskType("EXECUTION");
+        virtualTaskTemplate.setTaskSeq(1);
+        virtualTaskTemplate.setTaskStatus(TaskStatus.RUNNING.code());
+        virtualTaskTemplate.setTaskPayload(taskPayload);
+        JobTaskEntity virtualTask = taskExecutionServiceProvider.getObject().createTask(virtualTaskTemplate);
+
+        // Update parent job's expected partition count (optimistic-lock pattern)
+        int currentExpected = jobInstance.getExpectedPartitionCount() == null
+                ? 0 : jobInstance.getExpectedPartitionCount();
+        int updated = jobInstanceMapper.updateExpectedPartitionCount(
+                jobInstance.getTenantId(),
+                jobInstance.getId(),
+                currentExpected + 1,
+                jobInstance.getVersion()
+        );
+        if (updated <= 0) {
+            throw new IllegalStateException("job instance expected partition count update conflict for JOB node " + node.nodeCode());
+        }
+        jobInstance.setExpectedPartitionCount(currentExpected + 1);
+        jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+
+        // Create trigger_request for the child job so LaunchValidationService.load() can find it
+        String childRequestId = IdGenerator.newTraceId();
+        String childDedupKey = idempotencyKey + ":child";
+        TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
+        triggerRequest.setTenantId(jobInstance.getTenantId());
+        triggerRequest.setRequestId(childRequestId);
+        triggerRequest.setTriggerType(TriggerType.EVENT.code());
+        triggerRequest.setJobCode(refJobCode);
+        triggerRequest.setBizDate(jobInstance.getBizDate());
+        triggerRequest.setDedupKey(childDedupKey);
+        triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
+        triggerRequest.setTraceId(traceId);
+        triggerRequestMapper.insert(triggerRequest);
+
+        // Build child launch params – include back-reference so the child can signal this task
+        Map<String, Object> childParams = new LinkedHashMap<>(parsePayloadMap(sourcePayload));
+        childParams.put("parentInstanceId", jobInstance.getId());
+        childParams.put("_parentVirtualTaskId", virtualTask.getId());
+        childParams.put("_parentWorkflowRunId", workflowRun.getId());
+        childParams.put("_parentNodeCode", node.nodeCode());
+
+        LaunchRequest childLaunchRequest = new LaunchRequest(
+                jobInstance.getTenantId(),
+                refJobCode,
+                jobInstance.getBizDate(),
+                TriggerType.EVENT,
+                childRequestId,
+                traceId,
+                childParams
+        );
+        launchServiceProvider.getObject().launch(childLaunchRequest);
+
+        return 1; // one virtual partition added to the parent job
+    }
+
     private void createTerminalNodeRun(Long workflowRunId,
                                        WorkflowDagService.DagNodeResolution nextNode,
                                        Instant finishedAt) {
@@ -219,8 +345,12 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     }
 
     private boolean isGatewayNode(String nodeType) {
-        return com.example.batch.common.enums.WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(nodeType)
-                || com.example.batch.common.enums.WorkflowNodeType.START.code().equalsIgnoreCase(nodeType);
+        return WorkflowNodeType.GATEWAY.code().equalsIgnoreCase(nodeType)
+                || WorkflowNodeType.START.code().equalsIgnoreCase(nodeType);
+    }
+
+    private boolean isJobNode(String nodeType) {
+        return WorkflowNodeType.JOB.code().equalsIgnoreCase(nodeType);
     }
 
     private boolean isNodeAlreadyActivated(Long workflowRunId, String nodeCode) {

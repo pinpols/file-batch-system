@@ -23,10 +23,16 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * End-to-end: verifies the real {@code OutboxPollScheduler} automatically publishes pending outbox
- * events to Kafka without manual intervention. Overrides {@code poll-interval-millis} to 500 ms
- * so the scheduler fires frequently; the test intentionally does NOT call
- * {@code E2eOutboxPublishSupport.publishAllPending()}.
+ * 端到端测试：验证真实的 Outbox 轮询器会自动投递消息（不依赖测试手工 publish）。
+ *
+ * <p>测试意图：
+ * <ul>
+ *   <li>覆盖生产形态：由 {@code OutboxPollScheduler} 定时扫描 outbox 表并投递到 Kafka。</li>
+ *   <li>避免“测试里手动 publishAllPending()”掩盖 outbox forwarder 没跑/配置错误的风险。</li>
+ * </ul>
+ *
+ * <p>实现方式：把 {@code batch.outbox.poll-interval-millis} 调小到 500ms，并且<strong>刻意不调用</strong>
+ * {@code E2eOutboxPublishSupport.publishAllPending()}，仅等待最终任务成功。
  */
 @SpringBootTest(
         classes = E2eImportApplication.class,

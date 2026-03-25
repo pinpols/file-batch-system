@@ -1,0 +1,151 @@
+{{- if .Values.otelCollector.enabled }}
+---
+# ── ConfigMap: Collector pipeline config ──────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-otel-collector-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" "otel-collector") .) | nindent 4 }}
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      memory_limiter:
+        limit_mib: {{ .Values.otelCollector.memoryLimitMib }}
+        spike_limit_mib: 128
+        check_interval: 1s
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+      resource:
+        attributes:
+          - key: deployment.environment
+            value: {{ .Values.otelCollector.deploymentEnvironment | quote }}
+            action: upsert
+          - key: service.namespace
+            value: batch-platform
+            action: upsert
+
+    exporters:
+      otlp/jaeger:
+        endpoint: {{ .Values.otelCollector.jaegerEndpoint }}
+        tls:
+          insecure: true
+      otlphttp/loki:
+        endpoint: {{ .Values.otelCollector.lokiEndpoint }}/otlp
+        tls:
+          insecure: true
+
+    service:
+      extensions: [health_check]
+      telemetry:
+        logs:
+          level: warn
+        metrics:
+          address: 0.0.0.0:8888
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlp/jaeger]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [otlphttp/loki]
+---
+# ── Deployment ────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" "otel-collector") .) | nindent 4 }}
+spec:
+  replicas: {{ .Values.otelCollector.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "batch-platform.selectorLabels" (merge (dict "component" "otel-collector") .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "batch-platform.selectorLabels" (merge (dict "component" "otel-collector") .) | nindent 8 }}
+    spec:
+      {{- include "batch-platform.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:{{ .Values.otelCollector.imageTag }}
+          imagePullPolicy: IfNotPresent
+          args: ["--config=/etc/otelcol/config.yaml"]
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: metrics
+              containerPort: 8888
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.otelCollector.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "batch-platform.fullname" . }}-otel-collector-config
+---
+# ── Service ───────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" "otel-collector") .) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "batch-platform.selectorLabels" (merge (dict "component" "otel-collector") .) | nindent 4 }}
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: metrics
+      port: 8888
+      targetPort: metrics
+{{- end }}

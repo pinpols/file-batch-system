@@ -38,30 +38,35 @@
 
 ### 高优——直接影响交付质量
 
-| 差距项 | 现状 | 缺什么 |  done
+| 差距项 | 现状 | 状态 |
 |---|---|---|
-| **文件对象加密 KMS 全链路** | `StoreStep` 已落地 BATCHENC 加密（AES-GCM）；`PreprocessStep` 新增 `BatchObjectCryptoService.decrypt()` 前置解密，在 `ImportPreprocessPipeline` 运行前透明解密 BATCHENC 包头格式，完成 export-encrypt / import-decrypt 闭环 | 运行时闭环已完成 ✅ |  done
-| **§9.12 边查边写全量对齐** | `ParseStep.parseJsonObjectStreaming()` 已改为流式扫描 `{"records":[...]}` envelope，不再调用 `objectMapper.readTree()` 全量加载；`CustomerImportPayload` 转换保持逐条逻辑 | 全量加载路径已消除 ✅ |  done
-| **导出格式矩阵完整性** | DELIMITED（引用/转义/分隔符策略）、FIXED_WIDTH（补位/截断/右对齐/record_length）、EXCEL（sheet名消毒/31字符限制/多页分页）、JSON（cursor 分页/快照）均已验证；`GenerateStepTest` 覆盖边界场景 | 格式矩阵已验收 ✅ |  done
+| **文件对象加密 KMS 全链路** | `StoreStep` 已落地 BATCHENC 加密（AES-GCM）；`PreprocessStep` 新增 `BatchObjectCryptoService.decrypt()` 前置解密，在 `ImportPreprocessPipeline` 运行前透明解密 BATCHENC 包头格式，完成 export-encrypt / import-decrypt 闭环 | ✅ 已完成 |
+| **§9.12 边查边写全量对齐** | `ParseStep.parseJsonObjectStreaming()` 已改为流式扫描 `{"records":[...]}` envelope，不再调用 `objectMapper.readTree()` 全量加载；`CustomerImportPayload` 转换保持逐条逻辑 | ✅ 已完成 |
+| **导出格式矩阵完整性** | DELIMITED（引用/转义/分隔符策略）、FIXED_WIDTH（补位/截断/右对齐/record_length）、EXCEL（sheet名消毒/31字符限制/多页分页）、JSON（cursor 分页/快照）均已验证；`GenerateStepTest` 覆盖边界场景 | ✅ 已完成 |
 
 ### 中优——产品化/运营层面
 
-| 差距项 | 现状 | 缺什么 |
+| 差距项 | 现状 | 状态 |
 |---|---|---|
-| 审批台账产品化 | 审批单主干工作流已通（catch-up/compensation/DLQ replay/download） | 批量审批、审批 SLA 联动告警、审批运营视图 |
-| SFTP/EMAIL/HTTP 主动健康探测 | OSS/NAS 探测已接入 `DispatchChannelHealthScheduler` + `RemoteFilesystemDispatchSupport` | SFTP/EMAIL/HTTP 渠道的主动探测逻辑和分级退避策略 |
-| `masking_rule_set` 可插拔脱敏规则 | 脱敏功能已有基础实现 | 命名规则集（PCI/GDPR 类）的可插拔规则引擎 |
-| Kafka lag 告警 | `prometheus-batch-rules.yml` 已启用 `BatchKafkaConsumerLagHigh` 规则（需 kafka-exporter sidecar，consumergroup=`batch-worker-(import\|export\|dispatch)`，阈值 >1000 消息，10m 持续） | Kafka exporter 已接入平台统一告警 ✅ |  done
+| 审批台账产品化 | 审批单主干工作流已通（catch-up/compensation/DLQ replay/download） | 批量审批/SLA 告警/运营视图待补 |
+| SFTP/EMAIL/HTTP 主动健康探测 | `probeSftp`（TCP socket）/`probeSmtp`（TCP socket）/`probeHttp`（HEAD 5s timeout）已落地；`DispatchChannelHealthProperties.probeChannelTypes` 默认包含全部六种渠道类型 | ✅ 已完成 |
+| `masking_rule_set` PCI/GDPR 规则集 | `ContentMaskingUtils` 已新增 PCI（卡有效期）与 GDPR（IPv4/UK邮编/US ZIP）规则集；`maskPlainText(text, ruleSetCode)` 支持 STRICT/PCI/GDPR 三档 | ✅ 已完成 |
+| Kafka lag 告警 | `prometheus-batch-rules.yml` 已启用 `BatchKafkaConsumerLagHigh` 规则 | ✅ 已完成 |
 
 ### 低优——交付/合规层面
 
-| 差距项 | 现状 | 缺什么 |
+| 差距项 | 现状 | 状态 |
 |---|---|---|
-| 生产部署产物 | 本地 `docker-compose.yml` + 初始化脚本已有 | Dockerfile、Helm Chart、K8s 清单 |
-| 压测脚本与容量基线 | 无 | JMeter/Gatling 脚本、分区数/并发数容量基线数据 |
-| ELK / OpenTelemetry 接入 | 结构化日志格式已统一；Prometheus 告警规则已有 | 采集管道生产侧接入细节（Logstash pipeline / OTEL collector 配置） |
+| 生产部署产物 | Helm Chart `helm/batch-platform/`（6 个 Deployment/Service、ConfigMap/Secret、Ingress、HPA）；生产覆盖文件 `helm/values-prod.yaml` | ✅ 已完成 |
+| 压测脚本与容量基线 | Gatling 3.12 Java DSL，`load-tests/` 独立模块；三个 Simulation（写入/查询/容量基线分级爬坡）；种子 SQL `docs/sql/load-test/load-test-seed.sql`；容量基线记录表 `docs/testing/load-test-capacity-baseline.md` | ✅ 脚本已完成，基线数据待实测填写 |
+| Kafka 消息体完整 schema | `docs/kafka-topic-plan.md` 已补充 Envelope 规范、重试/死信完整 JSON 示例、序列化兼容策略（inline object + schemaVersion） | ✅ 已完成 |
+| ELK / OpenTelemetry 接入 | OTEL Collector pipeline（Traces→Jaeger，Logs→Loki）；`batch-common` 新增 tracing bridge + OTLP exporter；`batch-defaults.yml` 统一 OTLP 端点 + 结构化 JSON 日志；Docker Compose observability overlay；Helm Collector 模板；Grafana 数据源自动注入 | ✅ 已完成 |
 | `THIRD-PARTY-LICENSES / SBOM` | `docs/compliance/THIRD-PARTY-LICENSES.md`（43 组件，手工编译含许可证分类）；`docs/compliance/sbom.json`（CycloneDX 1.6 格式骨架）；根 `pom.xml` 新增 `compliance` Maven profile（`cyclonedx-maven-plugin 2.9.1` + `license-maven-plugin 2.4.0`），运行 `mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party` 可生成完整机器可读 SBOM | 合规交付物已完成 ✅ |
 | 自动巡检/自愈脚本 | 巡检脚本体系完整落地：`inspect-all.sh`（主入口）、`inspect-db.sh`（Flyway/卡死作业/Outbox/死信/重试积压）、`inspect-workers.sh`（DRAINING 超时/心跳失联/孤儿任务）；自愈脚本：`heal-drain-timeout.sh`、`heal-dead-letters.sh`、`heal-stuck-outbox.sh`（均默认 dry-run，`BATCH_HEAL_DRY_RUN=false` 才执行）；`daily-inspection.md` 更新为脚本化 SOP | 脚本化巡检已完成 ✅ |
+
+### 已知测试缺陷
+
+无。`OutboxForwarderRetryE2eIT` 已通过 `@DynamicPropertySource` + `OrchestratorWireMockSupport.registerOrchestratorBaseUrls` 修复。`DedupJobLaunchE2eIT` 已补充顺序和并发两种 dedup 幂等场景。当前全套 E2E 无已知失败。
 
 ---
 
@@ -178,7 +183,14 @@
 ## 一句话总结
 
 核心业务链路（调度主链、DAG、文件处理三链路、安全治理）已全部落地且编译通过。
-第三轮补全完成四个实质性差距：**KMS 运行时闭环**、**§9.12 流式对齐**、**导出格式矩阵验收**、**Kafka lag 告警启用**。
-第四轮补全完成测试数据完整性：7 张 seed SQL 覆盖全格式矩阵 + 多租户场景，11 个 fixture 文件覆盖所有上游文件格式（CSV/Pipe/Tab/XML/FW/JSON-array/JSON-envelope/BOM/bad-records/RSA keys），`TestExcelFileBuilder` 工具类实现 Excel 二进制免提交，新增 `ParseStepFixtureTest`（8 个场景）和 `ImportPreprocessPipelineRsaTest`（5 个场景）。
-**当前实质性缺口仅剩生产部署产物（Dockerfile/Helm/K8s）**，所有功能链路已完成。
-测试体系（**41 单元** + 18 集成）覆盖全部核心模块，逻辑覆盖率提升至约 75%。
+对话_5（12 轮）完成：Worker 循环模板、Stage 异常契约、Outbox E2E、SQL 原子保护、三链路失败 E2E、多租户并发 E2E、HTTP 韧性、SQL CI 守卫、配置基线模块化、ADR 体系、产物验收 Verifier 框架 + Micrometer 指标。
+**当前测试体系**：**41 单元** + 18 集成 + **10 E2E**（主链路/失败分支/内容验证/多租户/dedup 幂等），逻辑覆盖率约 75%。
+
+**未完成项（截至 2026-03-25）**：
+
+| 优先级 | 项目 |
+|---|---|
+| 🟡 上线前补全 | 压测容量基线数据（脚本已有，需在 staging 环境实测并填写基线记录表） |
+| 🟢 已完成 | Helm Chart / K8s 生产清单（`helm/batch-platform/` + `helm/values-prod.yaml`） |
+| ⚪ 按需推进 | 审批台账产品化（批量审批、SLA 告警、运营视图） |
+| 🟢 已完成 | ELK / OpenTelemetry 生产侧采集管道（OTEL Collector + Jaeger + Loki） |

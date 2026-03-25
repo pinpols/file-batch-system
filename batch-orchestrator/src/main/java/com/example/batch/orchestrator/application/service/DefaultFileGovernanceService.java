@@ -63,7 +63,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         }
         Map<String, Object> security = fileGovernanceRepository.loadTemplateSecurityForFile(command.tenantId(), command.fileId());
         if (requiresDownloadApproval(security) && !StringUtils.hasText(command.approvalId())) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "approvalId is required for download on this file template");
+            throw new BizException(ResultCode.BUSINESS_ERROR, "approvalId is required for download on this file template");
         }
         if (truthy(security.get("content_encryption_enabled")) && !batchSecurityProperties.isTestingOpen()) {
             String consolePath = "/api/console/files/" + command.fileId() + "/download?tenantId=" + command.tenantId();

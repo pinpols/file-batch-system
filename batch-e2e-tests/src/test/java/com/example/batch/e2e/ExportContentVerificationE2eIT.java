@@ -28,20 +28,20 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * P1 E2E suite: Export content-level verification.
+ * P1 端到端测试：Export 成功链路的“内容级”验收。
  *
- * <p>Extends the basic success assertion from {@link ExportPipelineE2eIT} with content-level checks:
+ * <p>为什么要做内容级断言：仅断言 task_status=SUCCESS 可能掩盖“产物为空/字段错/汇总没更新”等交付缺陷。
+ * 因此本用例在主链路成功基础上，进一步校验导出产物与业务汇总字段。
+ *
+ * <p>本用例在 {@link ExportPipelineE2eIT} 的基础上增强断言：
  * <ul>
- *   <li>The exported file stored in MinIO is non-empty</li>
- *   <li>Line count in the exported file matches the seeded settlement detail count</li>
- *   <li>The settlement_batch.total_amount is updated (non-zero) after the export job completes</li>
+ *   <li>导出文件在 MinIO 上可读取且非空（best-effort：如果存储后端不是 MinIO，则退化为 storage_path 非空）</li>
+ *   <li>导出内容包含关键业务字段（如 settlement_no）</li>
+ *   <li>业务表 {@code biz.settlement_batch.total_amount} 被正确回填（至少达到种子数据汇总值）</li>
  * </ul>
  *
- * <p>MinIO download: uses {@link AbstractIntegrationTest#minioEndpoint()} and
- * {@link AbstractIntegrationTest#minioBucket()} to build a client and fetch the produced file.
- * If the export worker stores the file in a different bucket or uses a path scheme that is not
- * directly predictable from the test, the file-content assertion degrades to a "file_record
- * has storage_path set" check, which is still a meaningful content-level signal.
+ * <p>说明：MinIO 读取使用 {@link AbstractIntegrationTest#minioEndpoint()} / {@link AbstractIntegrationTest#minioBucket()}。
+ * 若未来导出存储路径或桶策略变更，测试允许退化为“平台表记录了 storage_path”这一弱内容信号，避免把环境差异当成业务失败。
  */
 @SpringBootTest(
         classes = E2eExportApplication.class,

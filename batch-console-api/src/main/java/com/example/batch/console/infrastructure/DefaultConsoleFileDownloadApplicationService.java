@@ -46,7 +46,7 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
         }
         Map<String, Object> security = templateSecurity(effectiveTenant, fileId);
         if (requiresDownloadApproval(security) && !StringUtils.hasText(approvalId) && !batchSecurityProperties.isTestingOpen()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "approvalId is required for download on this file template");
+            throw new BizException(ResultCode.BUSINESS_ERROR, "approvalId is required for download on this file template");
         }
         if (StringUtils.hasText(approvalId)) {
             requireApprovedApproval(effectiveTenant, approvalId);

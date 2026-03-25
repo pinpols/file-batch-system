@@ -12,5 +12,5 @@ public class DispatchChannelHealthProperties {
     private boolean enabled = true;
     private long probeIntervalMillis = 60_000L;
     private long maxBackoffMillis = 15 * 60_000L;
-    private List<String> probeChannelTypes = new ArrayList<>(List.of("NAS", "OSS"));
+    private List<String> probeChannelTypes = new ArrayList<>(List.of("NAS", "OSS", "SFTP", "EMAIL", "API", "API_PUSH"));
 }
