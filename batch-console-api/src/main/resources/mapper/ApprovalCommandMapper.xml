@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ApprovalCommandMapper">
+
+    <resultMap id="ApprovalCommandResultMap" type="com.example.batch.console.domain.entity.ApprovalCommandEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="approval_no" property="approvalNo"/>
+        <result column="approval_type" property="approvalType"/>
+        <result column="action_type" property="actionType"/>
+        <result column="target_type" property="targetType"/>
+        <result column="target_id" property="targetId"/>
+        <result column="payload_json" property="payloadJson"/>
+        <result column="approval_status" property="approvalStatus"/>
+        <result column="requester_id" property="requesterId"/>
+        <result column="approver_id" property="approverId"/>
+        <result column="rejection_reason" property="rejectionReason"/>
+        <result column="approval_reason" property="approvalReason"/>
+        <result column="source_trace_id" property="sourceTraceId"/>
+        <result column="source_idempotency_key" property="sourceIdempotencyKey"/>
+        <result column="approved_at" property="approvedAt"/>
+        <result column="executed_at" property="executedAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="ApprovalCommandResultMap">
+        select *
+        from batch.approval_command
+        where tenant_id = #{tenantId}
+        <if test="approvalNo != null and approvalNo != ''">
+            and approval_no = #{approvalNo}
+        </if>
+        <if test="approvalType != null and approvalType != ''">
+            and approval_type = #{approvalType}
+        </if>
+        <if test="actionType != null and actionType != ''">
+            and action_type = #{actionType}
+        </if>
+        <if test="approvalStatus != null and approvalStatus != ''">
+            and approval_status = #{approvalStatus}
+        </if>
+        order by created_at desc
+        limit #{limit}
+    </select>
+
+    <select id="countByStatus" resultType="long">
+        select count(1)
+        from batch.approval_command
+        where tenant_id = #{tenantId}
+          and approval_status = #{approvalStatus}
+    </select>
+</mapper>
+
