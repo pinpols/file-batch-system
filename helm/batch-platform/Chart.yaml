@@ -1,0 +1,12 @@
+apiVersion: v2
+name: batch-platform
+description: File Batch Processing Platform — orchestrator, trigger, workers, console API
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - batch
+  - etl
+  - file-processing
+maintainers:
+  - name: platform-team

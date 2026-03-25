@@ -15,11 +15,20 @@ import org.springframework.context.event.EventListener;
 import org.springframework.util.StringUtils;
 
 /**
- * Shared lifecycle template for all worker types.
+ * Worker 生命周期模板（所有 worker 通用骨架）。
  *
- * <p>Subclasses provide the three differentiating values ({@link #workerConfiguration()},
- * {@link #workerGroup()}, {@link #workerPort()}) and a thin {@code @Scheduled} method that
- * calls {@link #doHeartbeat()}.  All registration, heartbeat, and shutdown logic lives here.
+ * <p>使用方式：
+ * <ul>
+ *   <li>子类只提供差异化配置：{@link #workerConfiguration()} / {@link #workerGroup()} / {@link #workerPort()}</li>
+ *   <li>子类用一个很薄的 {@code @Scheduled} 方法定期调用 {@link #doHeartbeat()}（避免在抽象类里硬编码配置 key）</li>
+ * </ul>
+ *
+ * <p>该模板负责：
+ * <ul>
+ *   <li>应用启动后自动注册（{@link #onReady()}）</li>
+ *   <li>周期心跳（{@link #doHeartbeat()}）</li>
+ *   <li>优雅下线（{@link #onShutdown()}）</li>
+ * </ul>
  */
 @Slf4j
 public abstract class AbstractWorkerLoop {
@@ -32,13 +41,13 @@ public abstract class AbstractWorkerLoop {
         this.workerRuntimeFacade = workerRuntimeFacade;
     }
 
-    /** Worker-specific configuration (topic, tenantId, workerType, etc.). */
+    /** Worker 配置（topic、tenantId、workerType 等）。 */
     protected abstract WorkerConfiguration workerConfiguration();
 
-    /** Logical group name, e.g. {@code "import"}, {@code "export"}, {@code "dispatch"}. */
+    /** worker 逻辑分组，如 {@code import}/{@code export}/{@code dispatch}。 */
     protected abstract String workerGroup();
 
-    /** HTTP port this worker process listens on (used for registration metadata). */
+    /** worker 对外端口（用于注册元数据；E2E 合并进程时通常为 orchestrator 端口）。 */
     protected abstract int workerPort();
 
     @EventListener(ApplicationReadyEvent.class)
@@ -47,8 +56,8 @@ public abstract class AbstractWorkerLoop {
     }
 
     /**
-     * Called by each subclass's {@code @Scheduled} method.
-     * Keeping {@code @Scheduled} in the subclass avoids hard-coding the property key here.
+     * 由子类的 {@code @Scheduled} 方法调用。
+     * <p>把 {@code @Scheduled} 放在子类，是为了避免在抽象层硬编码配置 key（各 worker 的心跳间隔配置可能不同）。
      */
     protected void doHeartbeat() {
         WorkerRegistration current = ensureStarted();

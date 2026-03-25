@@ -5,7 +5,8 @@ public enum WorkflowNodeType {
     GATEWAY("GATEWAY", "网关节点"),
     FILE_STEP("FILE_STEP", "文件步骤"),
     START("START", "开始节点"),
-    END("END", "结束节点");
+    END("END", "结束节点"),
+    JOB("JOB", "作业节点");
 
     private final String code;
     private final String label;

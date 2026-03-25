@@ -1,0 +1,39 @@
+{{- if .Values.consoleApi.ingress.enabled }}
+{{- $fullName := include "batch-platform.fullname" . }}
+{{- $component := "console-api" }}
+{{- $svcPort := .Values.consoleApi.service.port }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+  {{- with .Values.consoleApi.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.consoleApi.ingress.className }}
+  ingressClassName: {{ .Values.consoleApi.ingress.className }}
+  {{- end }}
+  {{- if .Values.consoleApi.ingress.tls }}
+  tls:
+    {{- toYaml .Values.consoleApi.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.consoleApi.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ $fullName }}-{{ $component }}
+                port:
+                  number: {{ $svcPort }}
+          {{- end }}
+    {{- end }}
+{{- end }}

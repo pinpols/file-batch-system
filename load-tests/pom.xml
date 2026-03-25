@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      Standalone Gatling load-test module — NOT included in root pom.xml modules list.
+      Run independently:
+        cd load-tests
+        mvn gatling:test -Dsimulation=JobLaunchSimulation
+        mvn gatling:test -Dsimulation=ConsoleQuerySimulation
+        mvn gatling:test -Dsimulation=CapacityBaselineSimulation
+
+      Target environment config (override via -D or environment-specific profiles):
+        -Dtrigger.baseUrl=http://localhost:8081
+        -Dconsole.baseUrl=http://localhost:8080
+        -DjobCode=E2E_IMPORT_123456
+        -DtenantId=t1
+        -Dusers.peak=50
+        -Dduration.seconds=180
+    -->
+    <groupId>com.example.batch</groupId>
+    <artifactId>batch-load-tests</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+    <name>batch-load-tests</name>
+    <description>Gatling load tests and capacity baseline for batch-platform</description>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <gatling.version>3.12.0</gatling.version>
+        <gatling-maven-plugin.version>4.10.0</gatling-maven-plugin.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.gatling.highcharts</groupId>
+            <artifactId>gatling-charts-highcharts</artifactId>
+            <version>${gatling.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <testSourceDirectory>src/test/java</testSourceDirectory>
+        <plugins>
+            <plugin>
+                <groupId>io.gatling</groupId>
+                <artifactId>gatling-maven-plugin</artifactId>
+                <version>${gatling-maven-plugin.version}</version>
+                <configuration>
+                    <!-- Override with -Dsimulation=ClassName -->
+                    <simulationClass>${simulation}</simulationClass>
+                    <resultsFolder>${project.build.directory}/gatling-results</resultsFolder>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>21</release>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Local dev environment -->
+        <profile>
+            <id>local</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <trigger.baseUrl>http://localhost:8081</trigger.baseUrl>
+                <console.baseUrl>http://localhost:8080</console.baseUrl>
+                <users.peak>20</users.peak>
+                <duration.seconds>120</duration.seconds>
+                <ramp.seconds>30</ramp.seconds>
+            </properties>
+        </profile>
+
+        <!-- Staging environment -->
+        <profile>
+            <id>staging</id>
+            <properties>
+                <trigger.baseUrl>http://batch-trigger.staging.internal:8081</trigger.baseUrl>
+                <console.baseUrl>http://batch-console.staging.internal:8080</console.baseUrl>
+                <users.peak>100</users.peak>
+                <duration.seconds>300</duration.seconds>
+                <ramp.seconds>60</ramp.seconds>
+            </properties>
+        </profile>
+
+        <!-- Production capacity probe (read-only, conservative) -->
+        <profile>
+            <id>prod-probe</id>
+            <properties>
+                <trigger.baseUrl>http://batch-trigger.prod.internal:8081</trigger.baseUrl>
+                <console.baseUrl>http://batch-console.prod.internal:8080</console.baseUrl>
+                <users.peak>200</users.peak>
+                <duration.seconds>600</duration.seconds>
+                <ramp.seconds>120</ramp.seconds>
+            </properties>
+        </profile>
+    </profiles>
+</project>

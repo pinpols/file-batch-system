@@ -27,7 +27,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * End-to-end: export job → schedule → outbox → Kafka → export worker → settlement snapshot → report.
+ * 端到端测试：Export 主链路成功闭环。
+ *
+ * <p>链路路径：
+ * <pre>
+ * launch → orchestrator 调度/落 outbox → Kafka 派发 → export worker claim → 读取业务明细 → 生成导出产物
+ *     → 写平台 file_record/对象存储 → worker report → orchestrator 终态
+ * </pre>
+ *
+ * <p>说明：该用例偏“状态级成功”断言；更严格的产物内容断言见 {@link ExportContentVerificationE2eIT}。
  */
 @SpringBootTest(
         classes = E2eExportApplication.class,

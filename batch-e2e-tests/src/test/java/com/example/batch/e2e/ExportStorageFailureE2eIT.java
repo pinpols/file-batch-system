@@ -28,8 +28,18 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * P1: export failure on object storage write — unreachable MinIO endpoint + non-zero orchestrator retry
- * budget should exhaust retries, then produce a dead-letter partition entry.
+ * P1 端到端测试：Export 写对象存储失败 + 重试耗尽 → 死信。
+ *
+ * <p>测试意图：
+ * <ul>
+ *   <li>模拟“对象存储不可用”这一高频生产故障（通过覆盖 MinIO endpoint 指向不可达地址）。</li>
+ *   <li>验证 orchestrator 的重试治理生效：有重试预算时会反复重排队；预算耗尽后进入死信（dead_letter_task）。</li>
+ * </ul>
+ *
+ * <p>断言点：
+ * <ul>
+ *   <li>最终存在与该 job_instance 对应的 {@code batch.dead_letter_task}（source_type=JOB_PARTITION）。</li>
+ * </ul>
  */
 @SpringBootTest(
         classes = E2eExportApplication.class,

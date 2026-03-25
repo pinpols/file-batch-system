@@ -40,6 +40,24 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * worker 回报（report）后的“状态推进中枢”。
+ *
+ * <p>在本系统中，worker 不直接修改 orchestrator 的运行态表，而是通过 HTTP {@code /internal/tasks/{taskId}/report}
+ * 回报执行结果；orchestrator 在这里统一完成：
+ * <ul>
+ *   <li>写入 task 的终态（SUCCESS/FAILED）</li>
+ *   <li>根据失败决定是否进入重试（写 retry_schedule，并把 partition/task/step 标记为 RETRYING）</li>
+ *   <li>推进 partition/job_instance/workflow_run 的状态机（含 DAG 节点切换与下一节点派发）</li>
+ *   <li>更新 step 镜像 {@code job_step_instance}（用于审计/可视化口径一致）</li>
+ * </ul>
+ *
+ * <p>重要约束：
+ * <ul>
+ *   <li>只接受 RUNNING 状态的 task 回报，避免重复 report 导致状态回跳。</li>
+ *   <li>并发冲突靠 DB 乐观锁/条件更新兜底（更新行数为 0 → STATE_CONFLICT）。</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -116,6 +134,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     @Override
     @Transactional
     public JobTaskEntity applyTaskOutcome(TaskOutcomeCommand command) {
+        // 入口语义：worker report → orchestrator 在单事务内完成“任务完成 +（可选）重试入队 + 状态机推进”。
         if (command == null) {
             return null;
         }
@@ -123,12 +142,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         if (task == null) {
             return null;
         }
+        // 只处理 RUNNING → terminal 的一次性回报；重复回报直接返回当前状态，保证幂等。
         if (!TaskStatus.RUNNING.code().equals(task.getTaskStatus())) {
             return task;
         }
         Instant finishedAt = finishedAtOrNow();
         JobPartitionEntity partition = jobPartitionMapper.selectById(command.tenantId(), task.getJobPartitionId());
         JobInstanceEntity jobInstance = jobInstanceMapper.selectById(command.tenantId(), task.getJobInstanceId());
+        // 失败时是否进入重试：由治理层统一决策（NONE/预算耗尽 → dead-letter；否则写 retry_schedule）。
         boolean retryScheduled = !command.success()
                 && partition != null
                 && jobInstance != null
@@ -143,15 +164,17 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             throw new BizException(ResultCode.STATE_CONFLICT,
                     "task already finished by concurrent update: taskId=" + command.taskId());
         }
+        // partition 是 job_instance 的“并行执行单元”，task outcome 会汇聚到 partition 状态上。
         if (partition != null) {
             if (command.success()) {
                 jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.SUCCESS.code(),
                     PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code());
             } else if (retryScheduled) {
+                // 进入 RETRYING：partition 先标记为 RETRYING，实际重排队由 retry scheduler → outbox 完成。
                 jobPartitionMapper.markRetrying(
                         command.tenantId(),
                         partition.getId(),
-                        (partition.getRetryCount() == null ? 0 : partition.getRetryCount()) + 1,
+                        Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1,
                         PartitionStatus.RETRYING.code()
                 );
             } else {
@@ -164,8 +187,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                     buildOutputSummary(command, task)
             );
         }
+        // step 镜像用于“按 step 维度”看执行状态/重试次数，与 task/partition 状态保持一致口径。
         updateStepInstanceProgress(command, task, retryScheduled, finishedAt);
         if (jobInstance != null) {
+            // job_instance/workflow_run 的推进依赖“当前节点 partitions 是否全部结束”，结束后可能切换 DAG 节点并派发 nextNodes。
             List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(new JobPartitionQuery(
                     command.tenantId(),
                     task.getJobInstanceId(),
@@ -262,9 +287,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             if (progressUpdated <= 0) {
                 throw new BizException(ResultCode.STATE_CONFLICT, "job instance progress conflict");
             }
-            jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+            jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
+            // If this job was launched as a JOB-node child, signal back to the parent
+            if (allPartitionsFinished && !dagContinues && isTerminalJobInstanceStatus(instanceStatus)) {
+                signalParentVirtualTask(jobInstance, instanceStatus, command, finishedAt);
+            }
             if (workflowRun != null) {
-                String workflowEvent = resolveWorkflowEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
+                String workflowEvent = resolveWorkflowEvent(failedCount, allPartitionsFinished, dagContinues);
                 String workflowStatus = stateMachine.transition(workflowRun, workflowEvent).toState();
                 workflowRunMapper.updateStatus(
                         command.tenantId(),
@@ -292,13 +321,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         String nextStatus = retryScheduled
                 ? "RETRYING"
                 : command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code();
+        int currentRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0);
+        int nextRetryCount = retryScheduled ? currentRetryCount + 1 : currentRetryCount;
         int updated = jobStepInstanceMapper.updateProgress(
                 command.tenantId(),
                 stepInstance.getId(),
                 nextStatus,
-                retryScheduled
-                        ? Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1
-                        : Optional.ofNullable(stepInstance.getRetryCount()).orElse(0),
+                nextRetryCount,
                 resolveRelatedFileId(task, command),
                 buildOutputSummary(command, task),
                 command.errorCode(),
@@ -340,6 +369,61 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         summary.put("lastErrorMessage", command == null ? null : command.errorMessage());
         summary.put("updatedAt", Instant.now().toString());
         return JsonUtils.toJson(summary);
+    }
+
+    // ── JOB-node child completion signal ────────────────────────────────────────
+
+    /**
+     * When a child job (launched by a JOB node) reaches a terminal state, apply the
+     * outcome to the virtual task that was created in the parent job so that the standard
+     * partition-based DAG advancement logic takes over.
+     */
+    private void signalParentVirtualTask(JobInstanceEntity childJobInstance,
+                                         String childInstanceStatus,
+                                         TaskOutcomeCommand childCommand,
+                                         Instant finishedAt) {
+        Long parentVirtualTaskId = extractParentVirtualTaskId(childJobInstance.getParamsSnapshot());
+        if (parentVirtualTaskId == null) {
+            return;
+        }
+        boolean nodeSuccess = JobInstanceStatus.SUCCESS.code().equals(childInstanceStatus);
+        applyTaskOutcome(new TaskOutcomeCommand(
+                childJobInstance.getTenantId(),
+                parentVirtualTaskId,
+                nodeSuccess,
+                childInstanceStatus,
+                nodeSuccess ? null : childCommand.errorCode(),
+                nodeSuccess ? null : childCommand.errorMessage()
+        ));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Long extractParentVirtualTaskId(String paramsSnapshot) {
+        if (paramsSnapshot == null || paramsSnapshot.isBlank()) {
+            return null;
+        }
+        try {
+            Object parsed = JsonUtils.fromJson(paramsSnapshot, Object.class);
+            if (!(parsed instanceof Map<?, ?> snapshotMap)) {
+                return null;
+            }
+            Object effectiveParams = ((Map<String, Object>) snapshotMap).get("effectiveParams");
+            if (!(effectiveParams instanceof Map<?, ?> effectiveMap)) {
+                return null;
+            }
+            Object value = ((Map<String, Object>) effectiveMap).get("_parentVirtualTaskId");
+            return toPositiveLong(value);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private boolean isTerminalJobInstanceStatus(String status) {
+        return JobInstanceStatus.SUCCESS.code().equals(status)
+                || JobInstanceStatus.FAILED.code().equals(status)
+                || JobInstanceStatus.PARTIAL_FAILED.code().equals(status)
+                || JobInstanceStatus.CANCELLED.code().equals(status)
+                || JobInstanceStatus.TERMINATED.code().equals(status);
     }
 
     private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
@@ -471,7 +555,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     /**
      * workflow_run 只允许进入 workflow 语义状态，不复用 job_instance 的 PARTIAL_FAILED 等口径。
      */
-    private String resolveWorkflowEvent(long successCount, long failedCount, boolean allPartitionsFinished, boolean dagContinues) {
+    private String resolveWorkflowEvent(long failedCount, boolean allPartitionsFinished, boolean dagContinues) {
         if (!allPartitionsFinished) {
             return WorkflowRunStatus.RUNNING.code();
         }

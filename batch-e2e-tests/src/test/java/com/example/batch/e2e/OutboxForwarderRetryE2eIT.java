@@ -29,16 +29,20 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * End-to-end: verifies the retry/exhaustion semantics of {@code OutboxPollScheduler} without
- * touching real Kafka by replacing {@link OutboxPublisher} with a mock.
+ * 端到端测试：Outbox forwarder 的重试/耗尽语义（不依赖真实 Kafka）。
  *
- * <p>Scenario A — retry exhaustion: publisher always returns {@code false}; after
- * {@code max-retry-attempts=2} the event is marked {@code GIVE_UP} and an
- * {@code EXHAUSTED} audit record is written to {@code event_outbox_retry}.
+ * <p>测试意图：只验证 forwarder 的“状态机 + 审计落库”行为，不验证 Kafka 网络与 broker。
+ * 因此这里用 {@link org.springframework.test.context.bean.override.mockito.MockitoBean} 把
+ * {@link OutboxPublisher} 替换为 mock，精确控制 publish 成功/失败序列。
  *
- * <p>Scenario B — transient failure then recovery: publisher returns {@code false} on the first
- * attempt and {@code true} on the second; the event eventually reaches {@code PUBLISHED} and
- * at least one {@code FAILED} retry record is present as the audit trail.
+ * <p>覆盖场景：
+ * <ul>
+ *   <li><b>场景 A：重试耗尽</b>：publisher 永远返回 false；
+ *       当 {@code batch.outbox.max-retry-attempts=2} 时，最终 outbox_event 进入 {@code GIVE_UP}，
+ *       并在 {@code event_outbox_retry} 写入 {@code EXHAUSTED} 审计记录。</li>
+ *   <li><b>场景 B：短暂失败后恢复</b>：第一次 false、第二次 true；
+ *       最终 outbox_event 进入 {@code PUBLISHED}，同时审计表至少有一条 {@code FAILED} 记录作为失败轨迹。</li>
+ * </ul>
  */
 @SpringBootTest(
         classes = E2eImportApplication.class,

@@ -24,10 +24,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * End-to-end failure branch: import job receives deliberately malformed content that cannot be
- * parsed as JSON. The import ParseStep catches the parse exception and returns
- * {@code IMPORT_PARSE_FAILED}. The orchestrator must record {@code task_status = FAILED}.
- * No retry is configured (retry_policy = NONE, retry_max_count = 0).
+ * 端到端测试：Import 解析失败（不可解析 JSON）场景。
+ *
+ * <p>测试意图：验证 worker 在 PARSE 阶段捕获解析异常并回报失败，orchestrator 侧把 task/job_instance 落到失败态。
+ *
+ * <p>关键点：
+ * <ul>
+ *   <li>输入是“不是 JSON 的字符串”，用于稳定触发 ParseStep 的失败分支。</li>
+ *   <li>此用例不启用重试（retry_policy=NONE），目的是验证“失败直接收敛为终态”的最短路径。</li>
+ * </ul>
  */
 @SpringBootTest(
         classes = E2eImportApplication.class,

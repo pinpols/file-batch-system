@@ -1,0 +1,120 @@
+# ============================================================
+# 可观测性基础设施叠加层
+#
+# 用法（与基础设施层叠加启动）：
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.observability.yml \
+#                  --profile observability up -d
+#
+# 单独启动可观测性栈（不启动 batch 应用）：
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.observability.yml \
+#                  --profile observability up -d \
+#                  otel-collector jaeger loki grafana
+#
+# 访问地址：
+#   Jaeger UI  : http://localhost:16686
+#   Grafana    : http://localhost:3000  (admin / admin)
+#   Loki       : http://localhost:3100
+#   Collector  : grpc=4317  http=4318
+# ============================================================
+
+services:
+
+  # ── OpenTelemetry Collector ─────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_IMAGE_TAG:-0.116.0}
+    container_name: batch-otel-collector
+    profiles: [observability]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./docs/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"    # OTLP gRPC
+      - "${OTEL_HTTP_PORT:-4318}:4318"    # OTLP HTTP
+      - "8888:8888"                        # Collector 自身指标
+      - "13133:13133"                      # Health check
+    environment:
+      - DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT:-local}
+    depends_on:
+      jaeger:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - batch-network
+
+  # ── Jaeger（分布式追踪 UI）─────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:${JAEGER_IMAGE_TAG:-1.62}
+    container_name: batch-jaeger
+    profiles: [observability]
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory    # 生产替换为 elasticsearch 或 cassandra
+      - TZ=${TZ:-Asia/Shanghai}
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"   # Jaeger UI
+      - "4317:4317"                         # OTLP gRPC（collector → jaeger）
+      - "14250:14250"                       # Jaeger gRPC
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:14269/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - batch-network
+
+  # ── Loki（日志存储）────────────────────────────────────────────
+  loki:
+    image: grafana/loki:${LOKI_IMAGE_TAG:-3.3.2}
+    container_name: batch-loki
+    profiles: [observability]
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - batch-network
+
+  # ── Grafana（统一可视化：Metrics + Traces + Logs）────────────────
+  grafana:
+    image: grafana/grafana:${GRAFANA_IMAGE_TAG:-11.4.0}
+    container_name: batch-grafana
+    profiles: [observability]
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+      - TZ=${TZ:-Asia/Shanghai}
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docs/observability/grafana-provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - loki
+      - jaeger
+    restart: unless-stopped
+    networks:
+      - batch-network
+
+volumes:
+  loki-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  batch-network:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network

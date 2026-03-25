@@ -1,0 +1,85 @@
+# ============================================================
+# OpenTelemetry Collector — batch-platform pipeline config
+#
+# Pipeline:
+#   Apps (OTLP HTTP/gRPC) → Collector → Jaeger (Traces)
+#                                     → Loki   (Logs)
+#   Metrics: 保持 Prometheus scrape 不变（/actuator/prometheus）
+#
+# 本文件挂载到 Collector 容器的 /etc/otelcol/config.yaml
+# ============================================================
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+# ── Receivers ─────────────────────────────────────────────────────
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317   # apps → collector（gRPC）
+      http:
+        endpoint: 0.0.0.0:4318   # apps → collector（HTTP）Spring Boot 默认用此端口
+
+# ── Processors ────────────────────────────────────────────────────
+processors:
+  # 内存保护：超出 384MiB 触发 GC，超出 512MiB 开始丢弃（优先丢低优先级数据）
+  memory_limiter:
+    limit_mib: 512
+    spike_limit_mib: 128
+    check_interval: 1s
+
+  # 批量发送，降低下游写入压力
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # 为所有遥测数据注入部署环境标签
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT:-local}
+        action: upsert
+      - key: service.namespace
+        value: batch-platform
+        action: upsert
+
+# ── Exporters ─────────────────────────────────────────────────────
+exporters:
+  # Traces → Jaeger（Jaeger 1.35+ 原生支持 OTLP gRPC 4317）
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  # Logs → Loki（Loki 2.9+ 原生支持 OTLP HTTP /otlp/v1/logs）
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+  # 调试：将所有遥测数据打印到 Collector 自身日志（生产可移除）
+  debug:
+    verbosity: basic
+
+# ── Service ───────────────────────────────────────────────────────
+service:
+  extensions: [health_check, pprof]
+  telemetry:
+    logs:
+      level: warn
+    metrics:
+      address: 0.0.0.0:8888   # Collector 自身指标（可被 Prometheus 抓取）
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/jaeger, debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp/loki, debug]

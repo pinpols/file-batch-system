@@ -20,6 +20,17 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+/**
+ * Export 主链路的 stage 执行器（worker 侧）。
+ *
+ * <p>职责与 Import 类似：加载 pipeline 定义并执行各 stage。差异点在于：
+ * <ul>
+ *   <li>export 的成功产物通常是“输出文件 + 平台 file_record 更新 + 对象存储写入”</li>
+ *   <li>成功后会打指标（如 {@code export.file.rows.total}），用于容量规划与告警</li>
+ * </ul>
+ *
+ * <p>异常策略：BizException 归类为业务失败；其他异常归类为基础设施失败（用于 orchestrator 重试治理决策）。
+ */
 @Slf4j
 @Service
 public class DefaultExportStageExecutor
@@ -43,6 +54,7 @@ public class DefaultExportStageExecutor
 
     @Override
     public List<ExportStageResult> execute(ExportJobContext context) {
+        // 先跑 stage loop；只有“全部 stage 成功”才认为产物可信并记录 rows 指标。
         List<ExportStageResult> results = runStageLoop(context);
         boolean overallSuccess = results.stream().allMatch(ExportStageResult::success);
         if (overallSuccess) {

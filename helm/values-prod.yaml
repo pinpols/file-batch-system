@@ -1,0 +1,80 @@
+# Production overlay — apply on top of values.yaml:
+#   helm upgrade --install batch-platform ./helm/batch-platform \
+#     -f helm/values-prod.yaml \
+#     --set postgresql.platform.password=$DB_PASS \
+#     --set postgresql.business.password=$DB_PASS \
+#     --set minio.accessKey=$MINIO_AK \
+#     --set minio.secretKey=$MINIO_SK
+
+image:
+  registry: "registry.example.com/batch-platform"
+  tag: "1.0.0"
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: registry-credentials
+
+postgresql:
+  platform:
+    url: "jdbc:postgresql://pg-primary.db.svc.cluster.local:5432/batch_platform"
+    username: "batch_user"
+  business:
+    url: "jdbc:postgresql://pg-primary.db.svc.cluster.local:5432/batch_business"
+    username: "batch_user"
+    schema: "biz"
+
+kafka:
+  bootstrapServers: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+
+minio:
+  endpoint: "http://minio.minio.svc.cluster.local:9000"
+  bucket: "batch-prod"
+
+orchestratorBaseUrl: "http://batch-platform-orchestrator.batch.svc.cluster.local:8082"
+
+consoleApi:
+  replicaCount: 2
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/proxy-body-size: "200m"
+    hosts:
+      - host: batch-console.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: batch-console-tls
+        hosts:
+          - batch-console.example.com
+
+orchestrator:
+  replicaCount: 2
+
+workerImport:
+  replicaCount: 3
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+workerExport:
+  replicaCount: 3
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+workerDispatch:
+  replicaCount: 2
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Dspring.profiles.active=prod"

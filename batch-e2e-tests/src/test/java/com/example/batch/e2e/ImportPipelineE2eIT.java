@@ -26,7 +26,19 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * End-to-end: API trigger → schedule → outbox → Kafka → import worker claim → pipeline → task report.
+ * 端到端测试：Import 主链路成功闭环。
+ *
+ * <p>链路路径：
+ * <pre>
+ * API 触发 launch → orchestrator 调度/落 outbox → Kafka 派发 → import worker claim → 执行 pipeline
+ *     → worker report → orchestrator 落库终态（task/partition/job_instance）
+ * </pre>
+ *
+ * <p>断言点（典型）：
+ * <ul>
+ *   <li>task_status 最终为 SUCCESS</li>
+ *   <li>业务表写入成功（import 的“交付结果”）</li>
+ * </ul>
  */
 @SpringBootTest(
         classes = E2eImportApplication.class,

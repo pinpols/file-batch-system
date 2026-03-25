@@ -129,8 +129,14 @@
 
 ---
 
+## 已知失败测试
+
+无。`OutboxForwarderRetryE2eIT` 已通过 `@DynamicPropertySource` + `OrchestratorWireMockSupport.registerOrchestratorBaseUrls` 修复，当前全套 E2E 无已知失败。
+
+---
+
 ## 当前结论（截至 2026-03-25）
 
-E2E 套件已覆盖：主链路（Import/Export/Dispatch）、Outbox 自动轮询、失败分支（三链路）、内容级验收（导出/分发）、多租户并发隔离，共 9 个 E2E 测试类。
+E2E 套件已覆盖：主链路（Import/Export/Dispatch）、Outbox 自动轮询、失败分支（三链路）、内容级验收（导出/分发）、多租户并发隔离、dedup 幂等（顺序 + 并发），共 10 个 E2E 测试类。
 
-能够作为生产风险防线级别的回归门禁。剩余未覆盖的场景：单 worker 并发 claim 竞争与同 dedupKey 幂等冲突（低风险，有单元和集成测试兜底）。
+能够作为生产风险防线级别的回归门禁。剩余未覆盖的场景：单 worker 并发 claim 竞争（低风险，有单元和集成测试兜底）。

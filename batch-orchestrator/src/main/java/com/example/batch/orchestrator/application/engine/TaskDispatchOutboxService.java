@@ -12,6 +12,16 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * Outbox 写入：把“要派发的任务消息”以统一协议落库到 {@code batch.outbox_event}。
+ *
+ * <p>为什么要统一走 outbox：
+ * <ul>
+ *   <li><strong>协议收口</strong>：launch / retry / reclaim 等入口都复用同一套消息结构（{@link TaskDispatchMessage}）。</li>
+ *   <li><strong>事务一致性</strong>：DB 状态更新与 outbox 落库在同一事务；Kafka 投递由 forwarder 异步完成。</li>
+ *   <li><strong>可审计可补偿</strong>：消息投递记录（delivery log）与失败重试均可追溯。</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class TaskDispatchOutboxService {
@@ -19,7 +29,14 @@ public class TaskDispatchOutboxService {
     private final OutboxEventMapper outboxEventMapper;
 
     /**
-     * 任务派发统一通过 outbox 落库，避免 launch/retry/reclaim 各自拼装消息协议。
+     * 写入一条“任务派发事件”到 outbox。
+     *
+     * <p>约束/语义：
+     * <ul>
+     *   <li>{@code eventKey} 是 outbox 的幂等键（同一个 eventKey 重复写入会被上层避免；DB 层也有唯一约束兜底）。</li>
+     *   <li>{@code idempotencyKey} 优先使用 partition 的幂等键（保证同分片重复派发不会导致多次执行）。</li>
+     *   <li>当无 partition（极少数场景）时，退化使用 {@code tenantId:taskId} 作为幂等键。</li>
+     * </ul>
      */
     public void writeDispatchEvent(JobInstanceEntity jobInstance,
                                    JobTaskEntity task,

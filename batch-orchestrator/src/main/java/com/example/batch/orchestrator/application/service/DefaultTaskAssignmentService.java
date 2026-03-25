@@ -13,7 +13,6 @@ import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.query.JobExecutionLogQuery;
-import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -26,6 +25,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Worker 认领（claim）与租约（lease）治理。
+ *
+ * <p>该类对外提供的语义是“worker 通过 HTTP 回调 orchestrator 完成 claim/renew”，对应接口为：
+ * <ul>
+ *   <li>{@code POST /internal/tasks/{taskId}/claim}</li>
+ *   <li>{@code POST /internal/tasks/{taskId}/renew}</li>
+ * </ul>
+ *
+ * <p>关键约束：
+ * <ul>
+ *   <li><strong>同一 task 只能被一个 worker 成功认领</strong>：靠 DB 条件更新（READY → RUNNING）保证并发一致性。</li>
+ *   <li><strong>partition 与 task 必须一致</strong>：task 认领成功后同步 claim partition，并写入 lease_expire_at。</li>
+ *   <li><strong>step 镜像跟随推进</strong>：若存在 {@code job_step_instance}，一并推进为 RUNNING，避免 UI/审计口径不一致。</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -37,11 +52,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     private final JobExecutionLogMapper jobExecutionLogMapper;
     private final WorkerRegistryRepository workerRegistryRepository;
     private final PartitionLeaseProperties partitionLeaseProperties;
-    private final StateMachine<Object> stateMachine;
-
     @Override
     @Transactional
     public JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode) {
+        // 入口语义：如果不可认领（worker 不在线/组不匹配/状态不允许），返回 current（由 controller 转换为 409/404）。
         JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
         if (current == null) {
             return null;
@@ -54,6 +68,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return jobTaskMapper.selectById(tenantId, taskId);
         }
         if (current.getJobPartitionId() != null) {
+            // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
             int claimed = jobPartitionMapper.claimPartition(
                     tenantId,
                     current.getJobPartitionId(),
@@ -77,6 +92,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     @Override
     @Transactional
     public boolean renewTaskLease(String tenantId, Long taskId, String workerCode) {
+        // 续租语义：只有 RUNNING 且 worker 匹配时允许续租；失败由 controller 统一转成 409。
         JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
         if (current == null || current.getJobPartitionId() == null) {
             return false;

@@ -19,6 +19,20 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+/**
+ * Import 主链路的 stage 执行器（worker 侧）。
+ *
+ * <p>职责：
+ * <ul>
+ *   <li>从平台侧加载 pipeline step 定义（可配置；无配置则使用默认模板）</li>
+ *   <li>按 step 依赖/顺序执行各 stage（RECEIVE → PARSE → PREPROCESS → VALIDATE → LOAD → COMPLETE）</li>
+ *   <li>统一异常归类（业务异常/基础设施异常），并产出标准化的 stage 结果（success/可重试/不可重试）</li>
+ *   <li>在流程结束时汇总并落地错误产物（{@link ImportRecordGovernanceService#finalizeErrorOutput}）</li>
+ * </ul>
+ *
+ * <p>注意：worker 不直接改 orchestrator 的运行态表；它只负责执行并通过 HTTP report 回报结果。
+ * orchestrator 侧会把结果写入 task/partition/job_instance，并决定是否重试/死信。
+ */
 @Slf4j
 @Service
 public class DefaultImportStageExecutor
@@ -42,6 +56,7 @@ public class DefaultImportStageExecutor
 
     @Override
     public List<ImportStageResult> execute(ImportJobContext context) {
+        // 主链路：执行 stage loop；无论成功/失败都尝试收口错误明细产物（用于对账/审计）。
         try {
             return runStageLoop(context);
         } finally {

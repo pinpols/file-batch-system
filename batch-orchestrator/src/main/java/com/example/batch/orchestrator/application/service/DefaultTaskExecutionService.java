@@ -10,9 +10,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * Thin facade that delegates to the three focused sub-services.
- * Preserved so all existing callers (controllers, consumers, tests) that depend on
- * {@link TaskExecutionService} continue to work without modification.
+ * TaskExecutionService 的门面实现（Facade）。
+ *
+ * <p>该类本身不承载复杂业务逻辑，而是把“任务创建/认领/结果回报”等能力拆分到三个更聚焦的子服务中，
+ * 以降低单类复杂度，并保持 controller/测试代码的调用入口不变：
+ * <ul>
+ *   <li>{@link TaskCreationService}：创建任务 + 初始化 step 镜像</li>
+ *   <li>{@link TaskAssignmentService}：worker claim/renew 等租约治理</li>
+ *   <li>{@link TaskOutcomeService}：worker report → 状态机推进 / retry / DAG 推进</li>
+ * </ul>
+ *
+ * <p>你在排查主链路时，最关键的方法通常是 {@link #applyTaskOutcome(TaskOutcomeCommand)}（worker 回报入口）。
  */
 @Service
 @RequiredArgsConstructor

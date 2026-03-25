@@ -1,0 +1,27 @@
+batch-platform {{ .Chart.AppVersion }} deployed to namespace {{ .Release.Namespace }}.
+
+Services:
+  console-api  : http://{{ include "batch-platform.fullname" . }}-console-api:{{ .Values.consoleApi.service.port }}
+  trigger      : http://{{ include "batch-platform.fullname" . }}-trigger:{{ .Values.trigger.service.port }}
+  orchestrator : http://{{ include "batch-platform.fullname" . }}-orchestrator:{{ .Values.orchestrator.service.port }}
+  worker-import: http://{{ include "batch-platform.fullname" . }}-worker-import:{{ .Values.workerImport.service.port }}
+  worker-export: http://{{ include "batch-platform.fullname" . }}-worker-export:{{ .Values.workerExport.service.port }}
+  worker-dispatch: http://{{ include "batch-platform.fullname" . }}-worker-dispatch:{{ .Values.workerDispatch.service.port }}
+
+{{- if .Values.consoleApi.ingress.enabled }}
+Console API ingress hosts:
+{{- range .Values.consoleApi.ingress.hosts }}
+  http{{ if $.Values.consoleApi.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+Console API ingress is disabled. To expose externally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "batch-platform.fullname" . }}-console-api 8080:{{ .Values.consoleApi.service.port }}
+{{- end }}
+
+Prerequisites (must be provisioned externally):
+  - PostgreSQL : {{ .Values.postgresql.platform.url }}
+  - Kafka      : {{ .Values.kafka.bootstrapServers }}
+  - MinIO      : {{ .Values.minio.endpoint }}
+
+To check pod status:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}

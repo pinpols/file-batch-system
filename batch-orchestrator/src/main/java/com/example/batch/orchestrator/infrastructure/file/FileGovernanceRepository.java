@@ -3,6 +3,8 @@ package com.example.batch.orchestrator.infrastructure.file;
 import com.example.batch.common.enums.FileDispatchRunStatus;
 import com.example.batch.common.enums.FileDispatchStatus;
 import com.example.batch.common.enums.FileReceiptStatus;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.JsonUtils;
 import java.time.Instant;
@@ -208,9 +210,14 @@ public class FileGovernanceRepository {
         }
         String currentStatus = fileRecord.get("file_status") == null ? null : String.valueOf(fileRecord.get("file_status"));
         FileStateMachine.assertTransition(currentStatus, nextStatus);
-        fileGovernanceMapper.updateFileStatus(
-                params("tenantId", tenantId, "fileId", fileId, "nextStatus", nextStatus, "metadataJson", toJson(metadata))
+        int updated = fileGovernanceMapper.updateFileStatus(
+                params("tenantId", tenantId, "fileId", fileId,
+                        "currentStatus", currentStatus, "nextStatus", nextStatus, "metadataJson", toJson(metadata))
         );
+        if (updated <= 0) {
+            throw new BizException(ResultCode.STATE_CONFLICT,
+                    "file status changed concurrently, expected " + currentStatus);
+        }
     }
 
     public void updateFileMetadata(String tenantId, Long fileId, Object metadata) {

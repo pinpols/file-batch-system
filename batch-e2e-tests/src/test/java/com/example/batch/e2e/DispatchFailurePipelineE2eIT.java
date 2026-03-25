@@ -24,10 +24,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * End-to-end failure branch: dispatch job references a channel code with no matching
- * {@code file_channel_config} row. The dispatch worker fails to resolve the channel and
- * the orchestrator must record {@code task_status = FAILED}.
- * The {@code file_record.file_status} must remain non-DISPATCHED.
+ * 端到端测试：Dispatch 渠道配置缺失导致失败。
+ *
+ * <p>测试意图：验证 dispatch worker 在无法解析 {@code channelCode} 时会失败收敛，且不会错误地把文件标记为 DISPATCHED。
+ *
+ * <p>断言点：
+ * <ul>
+ *   <li>task_status = FAILED</li>
+ *   <li>file_record.file_status 不能是 DISPATCHED</li>
+ * </ul>
  */
 @SpringBootTest(
         classes = E2eDispatchApplication.class,

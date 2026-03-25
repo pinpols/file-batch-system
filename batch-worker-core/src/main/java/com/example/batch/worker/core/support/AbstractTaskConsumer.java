@@ -12,29 +12,38 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Shared Kafka consumer template for all worker types.
+ * Kafka 消费骨架（所有 worker 通用）。
  *
- * <p>Subclasses provide the three collaborators ({@link #workerLoop()},
- * {@link #workerConfiguration()}, {@link #taskDispatchExecutor()}) and a thin
- * {@code @KafkaListener} method that calls {@link #doConsume(String)}.
- * All message routing, filtering, and execution-result logging logic lives here.
+ * <p>设计目标：把“通用的消费/路由/幂等/日志字段注入”集中在一处，避免 import/export/dispatch 三条链路各自演化出不一致实现。
+ *
+ * <p>子类只需要：
+ * <ul>
+ *   <li>提供 {@link #workerLoop()} / {@link #workerConfiguration()} / {@link #taskDispatchExecutor()}</li>
+ *   <li>写一个很薄的 {@code @KafkaListener} 方法，把原始 payload 交给 {@link #doConsume(String)}</li>
+ * </ul>
+ *
+ * <p>该类负责：
+ * <ul>
+ *   <li>反序列化 {@link TaskDispatchMessage}</li>
+ *   <li>启动保障（确保 worker 已注册）</li>
+ *   <li>MDC 注入（tenantId/traceId/taskId/workerId 等）以保证日志可关联</li>
+ * </ul>
  */
 @Slf4j
 public abstract class AbstractTaskConsumer {
 
-    /** The worker loop associated with this consumer (used for {@code ensureStarted}). */
+    /** 关联的 worker loop（用于 ensureStarted，保证注册完成后再执行 claim/处理）。 */
     protected abstract AbstractWorkerLoop workerLoop();
 
-    /** Worker-specific configuration. */
+    /** Worker 侧配置（topic、workerType 等）。 */
     protected abstract WorkerConfiguration workerConfiguration();
 
-    /** Executor that claims and runs the dispatched task. */
+    /** 实际执行器：负责 claim + 执行业务 pipeline + report。 */
     protected abstract TaskDispatchExecutor taskDispatchExecutor();
 
     /**
-     * Called by each subclass's {@code @KafkaListener} method.
-     * Keeping {@code @KafkaListener} in the subclass avoids per-worker annotation duplication
-     * at the abstract level.
+     * 由子类的 {@code @KafkaListener} 方法调用。
+     * <p>把监听注解留在子类，避免抽象类强耦合 listener 配置与 topic 表达式。
      */
     protected void doConsume(String payload) {
         TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
