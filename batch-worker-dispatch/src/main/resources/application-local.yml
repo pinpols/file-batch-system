@@ -2,8 +2,6 @@ server:
   port: 8085
 
 spring:
-  main:
-    web-application-type: none
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user
