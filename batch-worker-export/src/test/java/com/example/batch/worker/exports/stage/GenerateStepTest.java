@@ -14,6 +14,11 @@ import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
+import com.example.batch.worker.exports.stage.format.DelimitedExportFormat;
+import com.example.batch.worker.exports.stage.format.ExcelExportFormat;
+import com.example.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
+import com.example.batch.worker.exports.stage.format.FixedWidthExportFormat;
+import com.example.batch.worker.exports.stage.format.JsonExportFormat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,7 +57,14 @@ class GenerateStepTest {
                 new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50)
         );
 
-        generateStep = new GenerateStep(pluginRegistry, new ObjectMapper(), config);
+        ObjectMapper objectMapper = new ObjectMapper();
+        ExportFormatStrategyRegistry formatStrategyRegistry = new ExportFormatStrategyRegistry(List.of(
+                new JsonExportFormat(objectMapper),
+                new DelimitedExportFormat(objectMapper),
+                new ExcelExportFormat(objectMapper),
+                new FixedWidthExportFormat(objectMapper)
+        ));
+        generateStep = new GenerateStep(pluginRegistry, formatStrategyRegistry, config);
     }
 
     // ── DELIMITED / CSV ────────────────────────────────────────────────────────

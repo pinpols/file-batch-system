@@ -6,7 +6,7 @@ import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
-import com.example.batch.worker.core.support.PipelineStepFlowSupport;
+import com.example.batch.worker.core.support.AbstractStageExecutor;
 import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
@@ -20,86 +20,25 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
-public class DefaultExportStageExecutor implements ExportStageExecutor {
+public class DefaultExportStageExecutor
+        extends AbstractStageExecutor<ExportJobContext, ExportStageResult>
+        implements ExportStageExecutor {
 
     private final Map<String, ExportStageStep> stepsByImplCode;
     private final Map<ExportStage, ExportStageStep> stepsByStage;
     private final List<PipelineStepTemplate> defaultStepDefinitions;
-    private final PlatformFileRuntimeRepository runtimeRepository;
 
     public DefaultExportStageExecutor(List<ExportStageStep> steps,
                                       PlatformFileRuntimeRepository runtimeRepository) {
+        super(runtimeRepository);
         this.stepsByImplCode = indexByImplCode(steps);
         this.stepsByStage = indexByStage(steps);
         this.defaultStepDefinitions = buildDefaultStepDefinitions();
-        this.runtimeRepository = runtimeRepository;
     }
 
     @Override
     public List<ExportStageResult> execute(ExportJobContext context) {
-        List<PipelineStepDefinition> configuredSteps = configuredSteps(context);
-        List<ExportStageResult> results = new ArrayList<>();
-        if (configuredSteps.isEmpty()) {
-            results.add(ExportStageResult.failure(ExportStage.PREPARE, StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing"));
-            return results;
-        }
-        Long pipelineInstanceId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-        String lastSuccessStage = stringValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE));
-        int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
-        PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
-        while (currentStep != null) {
-            if (guard-- <= 0) {
-                throw new BizException(ResultCode.STATE_CONFLICT, "export pipeline step flow contains a cycle");
-            }
-            ExportStage stage = toStage(currentStep.stageCode());
-            runtimeRepository.updatePipelineStage(pipelineInstanceId, currentStep.stageCode(), lastSuccessStage);
-            Long stepRunId = runtimeRepository.startStepRun(
-                    pipelineInstanceId,
-                    currentStep.stepCode(),
-                    currentStep.stageCode(),
-                    buildInputSummary(context, currentStep)
-            );
-            ExportStageStep step = stepsByImplCode.get(currentStep.implCode());
-            ExportStageResult result;
-            try {
-                result = step == null
-                        ? ExportStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(), "step impl not found: " + currentStep.implCode())
-                        : step.execute(context);
-            } catch (BizException exception) {
-                log.error(
-                        "export stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
-                        stage,
-                        currentStep.stepCode(),
-                        currentStep.implCode(),
-                        context.getTenantId(),
-                        context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-                        exception);
-                result = ExportStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
-            } catch (Exception exception) {
-                log.error(
-                        "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
-                        stage,
-                        currentStep.stepCode(),
-                        currentStep.implCode(),
-                        context.getTenantId(),
-                        context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-                        exception);
-                result = ExportStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
-            }
-            results.add(result);
-            if (result.success()) {
-                lastSuccessStage = currentStep.stageCode();
-                context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, lastSuccessStage);
-                runtimeRepository.finishStepRunSuccess(stepRunId, buildOutputSummary(context, result));
-            } else {
-                runtimeRepository.finishStepRunFailure(stepRunId, result.code(), result.message(), buildOutputSummary(context, result));
-            }
-            currentStep = PipelineStepFlowSupport.resolveNextStep(currentStep, result.success(), configuredSteps, context.getAttributes());
-            if (!result.success() && currentStep == null) {
-                break;
-            }
-        }
-        return results;
+        return runStageLoop(context);
     }
 
     @Override
@@ -107,36 +46,10 @@ public class DefaultExportStageExecutor implements ExportStageExecutor {
         return defaultStepDefinitions;
     }
 
-    private Map<String, Object> buildInputSummary(ExportJobContext context, PipelineStepDefinition step) {
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("stepCode", step.stepCode());
-        summary.put("stage", step.stageCode());
-        summary.put("implCode", step.implCode());
-        summary.put("tenantId", context.getTenantId());
-        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-        summary.put("workerId", context.getWorkerId());
-        summary.put("jobCode", context.getJobCode());
-        return summary;
-    }
+    // ─── AbstractStageExecutor template methods ──────────────────────────────
 
-    private Map<String, Object> buildOutputSummary(ExportJobContext context, ExportStageResult result) {
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("success", result.success());
-        summary.put("code", result.code());
-        summary.put("message", result.message());
-        summary.put("stage", result.stage().name());
-        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-        summary.put("recordCount", context.getAttributes().get("recordCount"));
-        summary.put("fileSizeBytes", context.getAttributes().get("fileSizeBytes"));
-        summary.put("objectName", context.getAttributes().get("objectName"));
-        return summary;
-    }
-
-    private String stringValue(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private List<PipelineStepDefinition> configuredSteps(ExportJobContext context) {
+    @Override
+    protected List<PipelineStepDefinition> loadConfiguredSteps(ExportJobContext context) {
         Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
         if (definitions instanceof List<?> list) {
             List<PipelineStepDefinition> resolved = new ArrayList<>();
@@ -149,9 +62,72 @@ public class DefaultExportStageExecutor implements ExportStageExecutor {
                 return List.copyOf(resolved);
             }
         }
-        Long pipelineDefinitionId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
+        Long pipelineDefinitionId = runtimeRepository.toLong(
+                context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
         return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
     }
+
+    @Override
+    protected ExportStageResult stepMissingFailure() {
+        return ExportStageResult.failure(ExportStage.PREPARE,
+                StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing");
+    }
+
+    @Override
+    protected ExportStageResult executeOneStep(ExportJobContext context, PipelineStepDefinition step) {
+        ExportStage stage = toStage(step.stageCode());
+        ExportStageStep stageStep = stepsByImplCode.get(step.implCode());
+        try {
+            return stageStep == null
+                    ? ExportStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(),
+                    "step impl not found: " + step.implCode())
+                    : stageStep.execute(context);
+        } catch (BizException exception) {
+            log.error("export stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage, step.stepCode(), step.implCode(),
+                    context.getTenantId(), context.getAttributes().get(PipelineRuntimeKeys.FILE_ID), exception);
+            return ExportStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+        } catch (Exception exception) {
+            log.error("export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage, step.stepCode(), step.implCode(),
+                    context.getTenantId(), context.getAttributes().get(PipelineRuntimeKeys.FILE_ID), exception);
+            return ExportStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+        }
+    }
+
+    @Override
+    protected Map<String, Object> buildInputSummary(ExportJobContext context, PipelineStepDefinition step) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("stepCode", step.stepCode());
+        summary.put("stage", step.stageCode());
+        summary.put("implCode", step.implCode());
+        summary.put("tenantId", context.getTenantId());
+        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put("workerId", context.getWorkerId());
+        summary.put("jobCode", context.getJobCode());
+        return summary;
+    }
+
+    @Override
+    protected Map<String, Object> buildOutputSummary(ExportJobContext context, ExportStageResult result) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("success", result.success());
+        summary.put("code", result.code());
+        summary.put("message", result.message());
+        summary.put("stage", result.stage().name());
+        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put("recordCount", context.getAttributes().get("recordCount"));
+        summary.put("fileSizeBytes", context.getAttributes().get("fileSizeBytes"));
+        summary.put("objectName", context.getAttributes().get("objectName"));
+        return summary;
+    }
+
+    @Override
+    protected String cycleDetectedMessage() {
+        return "export pipeline step flow contains a cycle";
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────────────────
 
     private ExportStage toStage(String stageCode) {
         try {

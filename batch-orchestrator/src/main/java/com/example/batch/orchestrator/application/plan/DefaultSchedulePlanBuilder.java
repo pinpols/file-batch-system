@@ -1,12 +1,10 @@
 package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
-import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
-import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 @Component
 @RequiredArgsConstructor
@@ -22,7 +19,8 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
     private final JobDefinitionRepository jobDefinitionRepository;
     private final WorkflowDefinitionRepository workflowDefinitionRepository;
-    private final WorkerRegistryRepository workerRegistryRepository;
+    /** Ordered chain of resolvers; first positive result wins. Injected by Spring via @Order. */
+    private final List<PartitionCountResolver> dynamicResolvers;
 
     @Override
     public SchedulePlan build(SchedulePlanCommand command) {
@@ -102,113 +100,27 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     }
 
     /**
-     * 动态分片优先按工作量估算，再用在线 worker 容量兜底，避免固定 1 分片或固定写死分片数。
+     * Chains all injected {@link PartitionCountResolver} strategies (ordered by {@code @Order}).
+     *
+     * <p>Resolution steps (first positive result wins):
+     * <ol>
+     *   <li>{@link ExplicitPartitionCountResolver} — caller-supplied override</li>
+     *   <li>{@link SizeBasedPartitionCountResolver} — item/byte volume ÷ target-per-partition</li>
+     *   <li>{@link RuntimeBasedPartitionCountResolver} — historical duration ÷ target duration</li>
+     *   <li>{@link WorkerBasedPartitionCountResolver} — online workers × partition factor</li>
+     * </ol>
+     * Falls back to {@code 1} when all resolvers return {@code 0}.
      */
     private int resolveDynamicPartitionCount(JobDefinitionRecord jobDefinition,
                                              Map<String, Object> params,
                                              ShardStrategy shardStrategy) {
-        int explicitPartitionCount = firstPositiveInt(
-                params.get("partitionCount"),
-                params.get("estimatedPartitionCount"),
-                params.get("suggestedPartitionCount"),
-                params.get("shardCount")
-        );
-        if (explicitPartitionCount > 0) {
-            return explicitPartitionCount;
-        }
-        int sizeBasedPartitionCount = resolveSizeBasedPartitionCount(params);
-        int runtimeBasedPartitionCount = resolveRuntimeBasedPartitionCount(params);
-        int workloadBasedPartitionCount = Math.max(sizeBasedPartitionCount, runtimeBasedPartitionCount);
-        int workerBasedPartitionCount = resolveWorkerBasedPartitionCount(jobDefinition, params, shardStrategy);
-
-        if (workloadBasedPartitionCount > 0 && workerBasedPartitionCount > 0) {
-            return Math.min(workloadBasedPartitionCount, workerBasedPartitionCount);
-        }
-        if (workloadBasedPartitionCount > 0) {
-            return workloadBasedPartitionCount;
-        }
-        if (workerBasedPartitionCount > 0) {
-            return workerBasedPartitionCount;
+        for (PartitionCountResolver resolver : dynamicResolvers) {
+            int count = resolver.resolve(jobDefinition, params, shardStrategy);
+            if (count > 0) {
+                return count;
+            }
         }
         return 1;
-    }
-
-    private int resolveSizeBasedPartitionCount(Map<String, Object> params) {
-        long estimatedItems = firstPositiveLong(
-                params.get("estimatedItemCount"),
-                params.get("recordCount"),
-                params.get("itemCount"),
-                params.get("totalCount")
-        );
-        int targetItemsPerPartition = firstPositiveInt(
-                params.get("targetItemsPerPartition"),
-                params.get("targetShardSize"),
-                params.get("itemsPerPartition")
-        );
-        if (estimatedItems > 0 && targetItemsPerPartition > 0) {
-            return ceilDiv(estimatedItems, targetItemsPerPartition);
-        }
-        long estimatedBytes = firstPositiveLong(
-                params.get("estimatedFileSizeBytes"),
-                params.get("fileSizeBytes"),
-                params.get("sourceFileSizeBytes")
-        );
-        long targetBytesPerPartition = firstPositiveLong(
-                params.get("targetBytesPerPartition"),
-                params.get("targetShardBytes")
-        );
-        if (estimatedBytes > 0 && targetBytesPerPartition > 0) {
-            return ceilDiv(estimatedBytes, targetBytesPerPartition);
-        }
-        return 0;
-    }
-
-    private int resolveRuntimeBasedPartitionCount(Map<String, Object> params) {
-        long historicalDurationSeconds = firstPositiveLong(
-                params.get("historicalAverageDurationSeconds"),
-                params.get("historicalDurationSeconds"),
-                params.get("expectedDurationSeconds")
-        );
-        int targetDurationSeconds = firstPositiveInt(
-                params.get("targetPartitionDurationSeconds"),
-                params.get("targetDurationSeconds")
-        );
-        if (historicalDurationSeconds > 0 && targetDurationSeconds > 0) {
-            return ceilDiv(historicalDurationSeconds, targetDurationSeconds);
-        }
-        return 0;
-    }
-
-    private int resolveWorkerBasedPartitionCount(JobDefinitionRecord jobDefinition,
-                                                 Map<String, Object> params,
-                                                 ShardStrategy shardStrategy) {
-        long onlineWorkerCount = resolveOnlineWorkerCount(jobDefinition, params);
-        if (onlineWorkerCount <= 0) {
-            return 0;
-        }
-        int partitionFactor = firstPositiveInt(
-                params.get("partitionFactor"),
-                params.get("workerPartitionFactor"),
-                shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1
-        );
-        return (int) Math.min(256L, onlineWorkerCount * partitionFactor);
-    }
-
-    private long resolveOnlineWorkerCount(JobDefinitionRecord jobDefinition, Map<String, Object> params) {
-        if (jobDefinition == null || !StringUtils.hasText(jobDefinition.tenantId())) {
-            return firstPositiveLong(params.get("onlineWorkerCount"), params.get("workerCount"));
-        }
-        if (StringUtils.hasText(jobDefinition.workerGroup())) {
-            return workerRegistryRepository.countByTenantIdAndWorkerGroupAndStatus(
-                    jobDefinition.tenantId(),
-                    jobDefinition.workerGroup(),
-                    WorkerRegistryStatus.ONLINE.code()
-            );
-        }
-        return workerRegistryRepository.countByTenantIdAndStatus(
-                jobDefinition.tenantId(),
-                WorkerRegistryStatus.ONLINE.code()
-        );
     }
 
     private int normalizePartitionCount(int partitionCount, int minPartitionCount, int maxPartitionCount) {
@@ -223,56 +135,19 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
     private int firstPositiveInt(Object... values) {
         for (Object value : values) {
-            int candidate = toInt(value);
-            if (candidate > 0) {
-                return candidate;
+            if (value instanceof Number number && number.intValue() > 0) {
+                return number.intValue();
+            }
+            if (value != null) {
+                try {
+                    int parsed = Integer.parseInt(String.valueOf(value).trim());
+                    if (parsed > 0) {
+                        return parsed;
+                    }
+                } catch (NumberFormatException ignored) {
+                }
             }
         }
         return 0;
-    }
-
-    private long firstPositiveLong(Object... values) {
-        for (Object value : values) {
-            long candidate = toLong(value);
-            if (candidate > 0) {
-                return candidate;
-            }
-        }
-        return 0L;
-    }
-
-    private int toInt(Object value) {
-        if (value == null) {
-            return 0;
-        }
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        try {
-            return Integer.parseInt(String.valueOf(value).trim());
-        } catch (NumberFormatException exception) {
-            return 0;
-        }
-    }
-
-    private long toLong(Object value) {
-        if (value == null) {
-            return 0L;
-        }
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        try {
-            return Long.parseLong(String.valueOf(value).trim());
-        } catch (NumberFormatException exception) {
-            return 0L;
-        }
-    }
-
-    private int ceilDiv(long dividend, long divisor) {
-        if (dividend <= 0 || divisor <= 0) {
-            return 1;
-        }
-        return (int) ((dividend + divisor - 1) / divisor);
     }
 }

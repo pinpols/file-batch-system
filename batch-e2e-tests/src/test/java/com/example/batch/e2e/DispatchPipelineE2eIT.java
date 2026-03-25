@@ -133,5 +133,27 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
                 String.class,
                 fileId);
         assertThat(fileStatus).isEqualTo("DISPATCHED");
+
+        String receiptCode = jdbcTemplate.queryForObject(
+                """
+                        select receipt_code from batch.file_dispatch_record
+                        where tenant_id = ? and file_id = ?
+                        order by id desc
+                        limit 1
+                        """,
+                String.class,
+                TENANT,
+                fileId);
+        assertThat(receiptCode).isEqualTo("R-E2E-DISPATCH");
+
+        Long auditCount = jdbcTemplate.queryForObject(
+                """
+                        select count(*) from batch.file_audit_log
+                        where tenant_id = ? and file_id = ?
+                        """,
+                Long.class,
+                TENANT,
+                fileId);
+        assertThat(auditCount).isGreaterThanOrEqualTo(1L);
     }
 }

@@ -27,14 +27,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class DefaultCompensationService implements CompensationService {
 
     private final CompensationCommandMapper compensationCommandMapper;
@@ -46,6 +46,37 @@ public class DefaultCompensationService implements CompensationService {
     private final FileGovernanceService fileGovernanceService;
     private final LaunchService launchService;
     private final TaskExecutionService taskExecutionService;
+
+    /** Routing table: compensationType → handler. Built once at construction; O(1) lookup. */
+    private final Map<String, CompensationHandler> handlersByType;
+
+    public DefaultCompensationService(CompensationCommandMapper compensationCommandMapper,
+                                      JobInstanceMapper jobInstanceMapper,
+                                      JobStepInstanceMapper jobStepInstanceMapper,
+                                      JobTaskMapper jobTaskMapper,
+                                      TriggerRequestMapper triggerRequestMapper,
+                                      RetryGovernanceService retryGovernanceService,
+                                      FileGovernanceService fileGovernanceService,
+                                      LaunchService launchService,
+                                      TaskExecutionService taskExecutionService) {
+        this.compensationCommandMapper = compensationCommandMapper;
+        this.jobInstanceMapper = jobInstanceMapper;
+        this.jobStepInstanceMapper = jobStepInstanceMapper;
+        this.jobTaskMapper = jobTaskMapper;
+        this.triggerRequestMapper = triggerRequestMapper;
+        this.retryGovernanceService = retryGovernanceService;
+        this.fileGovernanceService = fileGovernanceService;
+        this.launchService = launchService;
+        this.taskExecutionService = taskExecutionService;
+        this.handlersByType = Map.of(
+                "JOB",       this::rerunJob,
+                "STEP",      this::rerunStep,
+                "PARTITION", this::retryPartition,
+                "FILE",      (cmd, cmdNo, traceId, entity) -> reprocessFile(cmd, traceId, entity),
+                "BATCH",     this::rerunBatch,
+                "DLQ",       this::replayDeadLetter
+        );
+    }
 
     @Override
     @Transactional
@@ -99,15 +130,11 @@ public class DefaultCompensationService implements CompensationService {
                                         String traceId,
                                         CompensationCommandEntity entity) {
         String compensationType = normalizeType(command.compensationType());
-        return switch (compensationType) {
-            case "JOB" -> rerunJob(command, commandNo, traceId, entity);
-            case "STEP" -> rerunStep(command, commandNo, traceId, entity);
-            case "PARTITION" -> retryPartition(command, commandNo, traceId, entity);
-            case "FILE" -> reprocessFile(command, traceId, entity);
-            case "BATCH" -> rerunBatch(command, commandNo, traceId, entity);
-            case "DLQ" -> replayDeadLetter(command, commandNo, traceId, entity);
-            default -> throw new BizException(ResultCode.INVALID_ARGUMENT, "unsupported compensationType: " + command.compensationType());
-        };
+        CompensationHandler handler = handlersByType.get(compensationType);
+        if (handler == null) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "unsupported compensationType: " + command.compensationType());
+        }
+        return handler.handle(command, commandNo, traceId, entity);
     }
 
     private Map<String, Object> rerunJob(CompensationSubmitCommand command,

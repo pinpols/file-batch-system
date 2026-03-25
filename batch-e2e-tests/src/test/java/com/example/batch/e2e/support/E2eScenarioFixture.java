@@ -23,6 +23,21 @@ public final class E2eScenarioFixture {
                                                                  String jobType,
                                                                  String workerGroup,
                                                                  TriggerType triggerType) {
+        return prepareLaunchWithoutPreSeededWorker(
+                jdbc, tenantId, jobType, workerGroup, triggerType, "NONE", 0);
+    }
+
+    /**
+     * Same as {@link #prepareLaunchWithoutPreSeededWorker(JdbcTemplate, String, String, String, TriggerType)}
+     * but allows orchestrator-level retry policy (FIXED / EXPONENTIAL) for failure-path E2E.
+     */
+    public static LaunchSeed prepareLaunchWithoutPreSeededWorker(JdbcTemplate jdbc,
+                                                                 String tenantId,
+                                                                 String jobType,
+                                                                 String workerGroup,
+                                                                 TriggerType triggerType,
+                                                                 String retryPolicy,
+                                                                 int retryMaxCount) {
         String suffix = Long.toUnsignedString(System.nanoTime());
         String jobCode = "E2E_" + jobType + "_" + suffix;
         String requestId = "e2e-req-" + suffix;
@@ -36,9 +51,9 @@ public final class E2eScenarioFixture {
                             retry_policy, retry_max_count, timeout_seconds, enabled, version
                         ) values (?, ?, ?, ?, ?, 'MANUAL', 'UTC',
                             5, 'e2e-q', ?, 'API', false, 'NONE',
-                            'NONE', 0, 0, true, 1)
+                            ?, ?, 0, true, 1)
                         """,
-                tenantId, jobCode, "e2e " + jobCode, jobType, "E2E", workerGroup);
+                tenantId, jobCode, "e2e " + jobCode, jobType, "E2E", workerGroup, retryPolicy, retryMaxCount);
 
         jdbc.update(
                 """
