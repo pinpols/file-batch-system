@@ -1,35 +1,62 @@
-# Stabilize orchestrator integration tests: fewer background jobs, same infra as AbstractIntegrationTest.
+# 稳定 orchestrator 集成测试：减少后台任务干扰，测试基础设施与 AbstractIntegrationTest 保持一致。
 spring:
+  config:
+    # 在 CI / 本地开发中，测试可能只构建当前模块。
+    # 如果共享默认配置（依赖产物）过期或缺失，这里用 optional import 避免测试直接失败。
+    import: "optional:classpath:batch-defaults.yml"
   flyway:
+    # 集成测试使用独立的迁移脚本目录，避免与正式环境迁移互相影响
     locations: classpath:db/migration-integration
+
+mybatis:
+  # 即使 batch-defaults.yml 不在 classpath，也要保证测试可自包含运行
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    # 测试输出 SQL 日志到 stdout，便于排查
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 batch:
   sla:
+    # 测试关闭 SLA 扫描，避免后台线程影响测试稳定性
     enabled: false
   worker:
     drain:
+      # 测试关闭 drain，减少状态机/轮询干扰
       enabled: false
   file-governance:
     latency:
+      # 测试关闭文件治理（延迟）
       enabled: false
     archive:
+      # 测试关闭文件治理（归档清理）
       enabled: false
     reconcile:
+      # 测试关闭文件治理（对账）
       enabled: false
     arrival:
+      # 测试关闭文件治理（到达检测）
       enabled: false
     access:
+      # 测试关闭文件治理（访问控制/预签名）
       enabled: false
   outbox:
+    # 拉长轮询周期，避免测试时频繁跑后台任务
     poll-interval-millis: 600000
   retry:
+    # 拉长轮询周期，避免测试时频繁跑后台任务
     poll-interval-millis: 600000
   partition-lease:
+    # 拉长回收扫描周期，降低并发时序干扰
     reclaim-interval-millis: 600000
   resource-scheduler:
+    # 拉长扫描周期，避免测试时频繁跑后台任务
     waiting-dispatch-interval-millis: 600000
+    # 拉长扫描周期，避免测试时频繁跑后台任务
     quota-reset-scan-interval-millis: 600000
+    # 测试关闭配额重置逻辑
     quota-reset-enabled: false
   scheduler:
+    # 测试关闭快照持久化，避免写库与时序影响
     snapshot-persist-enabled: false
+    # 拉长周期（理论上不应触发），兜底避免误触发
     snapshot-persist-ms: 600000

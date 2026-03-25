@@ -1,27 +1,39 @@
 server:
+  # Trigger 服务端口：优先读取环境变量 BATCH_TRIGGER_PORT
   port: ${BATCH_TRIGGER_PORT:8081}
 
 spring:
   application:
+    # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-trigger
   config:
+    # 引入共享默认配置基线（来自 batch-common 的 resources）
     import: "classpath:batch-defaults.yml"
   quartz:
+    # Quartz 调度器配置（使用 JDBC JobStore，支持集群）
     job-store-type: jdbc
     jdbc:
+      # 不自动建表：由 Flyway 迁移统一管理
       initialize-schema: never
     properties:
       org:
         quartz:
           scheduler:
+            # 调度器实例名（便于识别）
             instanceName: BatchTriggerScheduler
           jobStore:
+            # Quartz 表前缀（这里在 quartz schema 下）
             tablePrefix: quartz.QRTZ_
+            # PostgreSQL 方言
             driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+            # 集群模式：多实例共同抢占/执行触发任务
             isClustered: true
   flyway:
+    # 迁移脚本执行：负责 batch/quartz schema 的建表/升级
     enabled: true
+    # 默认 schema
     default-schema: batch
+    # 需要管理的 schema 列表
     schemas:
       - batch
       - quartz
@@ -29,4 +41,5 @@ spring:
 batch:
   trigger:
     runtime:
+      # misfire 追赶阈值（秒）：当触发错过时间超过该阈值时进行 catch-up
       misfire-catch-up-threshold-seconds: ${BATCH_TRIGGER_MISFIRE_CATCH_UP_THRESHOLD_SECONDS:60}

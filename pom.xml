@@ -37,6 +37,7 @@
         <minio.version>8.6.0</minio.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <okhttp.version>4.12.0</okhttp.version>
+        <okio.version>3.16.1</okio.version>
         <lombok.version>1.18.42</lombok.version>
         <mybatis-spring-boot.version>4.0.0</mybatis-spring-boot.version>
         <spring-ai.version>2.0.0-M3</spring-ai.version>
@@ -82,6 +83,16 @@
                 <groupId>com.squareup.okhttp3</groupId>
                 <artifactId>okhttp</artifactId>
                 <version>${okhttp.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.squareup.okio</groupId>
+                <artifactId>okio</artifactId>
+                <version>${okio.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.squareup.okio</groupId>
+                <artifactId>okio-jvm</artifactId>
+                <version>${okio.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>

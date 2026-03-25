@@ -1,53 +1,79 @@
 server:
+  # Console API 端口：优先读取环境变量 BATCH_CONSOLE_API_PORT
   port: ${BATCH_CONSOLE_API_PORT:8080}
 
 spring:
   application:
+    # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-console-api
   config:
+    # 引入共享默认配置基线（来自 batch-common 的 resources）
     import: "classpath:batch-defaults.yml"
   ai:
     openai:
+      # OpenAI 接入地址（可按代理/私有化环境覆盖）
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      # API Key：强烈建议通过环境变量注入，避免在仓库中明文保存真实密钥
       api-key: ${OPENAI_API_KEY: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}
       chat:
         options:
+          # 默认模型（Console 内置 AI 功能使用；也会被 batch.console.ai.model 覆盖）
           model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
   security:
     user:
+      # 基础认证账号（用于开发/演示；生产建议接入统一身份认证）
       name: ${BATCH_CONSOLE_USERNAME:admin}
+      # 基础认证密码（生产请通过环境变量/密钥管理注入）
       password: ${BATCH_CONSOLE_PASSWORD:admin123}
 
 mybatis:
+  # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
   type-aliases-package: com.example.batch.console.domain
 
 batch:
   console:
     security:
+      # Console 鉴权开关（开启后按 shared-secret + header 解析租户/用户/角色）
       enabled: ${BATCH_CONSOLE_SECURITY_ENABLED:true}
+      # 控制台与上游（或网关）共享密钥，用于签名/校验（按实现约定）
       shared-secret: ${BATCH_CONSOLE_SHARED_SECRET:console-secret}
+      # 多租户 header 名称（租户隔离）
       tenant-header: ${BATCH_CONSOLE_TENANT_HEADER:X-Tenant-Id}
+      # 用户 header 名称（展示/审计）
       user-header: ${BATCH_CONSOLE_USER_HEADER:X-Console-User}
+      # 角色/权限 header 名称（RBAC）
       role-header: ${BATCH_CONSOLE_ROLE_HEADER:X-Console-Roles}
+      # Token header 名称（会话/签名 token）
       token-header: ${BATCH_CONSOLE_TOKEN_HEADER:X-Console-Token}
+      # 默认租户（未显式传入时使用）
       default-tenant-id: ${BATCH_CONSOLE_DEFAULT_TENANT_ID:default-tenant}
+      # 允许访问的租户列表（白名单）
       allowed-tenants:
         - ${BATCH_CONSOLE_ALLOWED_TENANT:default-tenant}
+      # 默认授权列表（未显式传入 roles 时使用）
       default-authorities:
         - ROLE_ADMIN
         - ROLE_AUDITOR
         - ROLE_CONFIG_ADMIN
     ai:
+      # Console AI 功能开关（仅在开启并满足白名单时生效）
       enabled: ${BATCH_CONSOLE_AI_ENABLED:false}
+      # AI 模型（通常与 OPENAI_CHAT_MODEL 保持一致）
       model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      # prompt 最大长度（防止输入过长导致请求失败/费用不可控）
       max-prompt-length: ${BATCH_CONSOLE_AI_MAX_PROMPT_LENGTH:4000}
+      # response 最大长度（防止输出过长）
       max-response-length: ${BATCH_CONSOLE_AI_MAX_RESPONSE_LENGTH:3000}
+      # 允许使用 AI 的用户白名单
       allowed-users:
         - ${BATCH_CONSOLE_AI_ALLOWED_USER:admin}
+      # 允许使用 AI 的角色白名单
       allowed-authorities:
         - ROLE_ADMIN
         - ROLE_AUDITOR
     trigger:
+      # Trigger 服务地址（Console 调用 Trigger API）
       base-url: ${BATCH_TRIGGER_BASE_URL:http://localhost:8081}
     orchestrator:
+      # Orchestrator 服务地址（Console 调用 Orchestrator API）
       base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
