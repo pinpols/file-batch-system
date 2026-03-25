@@ -4,11 +4,8 @@ server:
 spring:
   application:
     name: batch-console-api
-  datasource:
-    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
-    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
-    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
-    driver-class-name: org.postgresql.Driver
+  config:
+    import: "classpath:batch-defaults.yml"
   ai:
     openai:
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
@@ -22,26 +19,9 @@ spring:
       password: ${BATCH_CONSOLE_PASSWORD:admin123}
 
 mybatis:
-  mapper-locations: classpath*:mapper/*.xml
   type-aliases-package: com.example.batch.console.domain
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
-
 batch:
-  security:
-    testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
-    kms:
-      default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
-      keys:
-        DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
   console:
     security:
       enabled: ${BATCH_CONSOLE_SECURITY_ENABLED:true}
@@ -71,9 +51,3 @@ batch:
       base-url: ${BATCH_TRIGGER_BASE_URL:http://localhost:8081}
     orchestrator:
       base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
-  storage:
-    minio:
-      endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
-      access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
-      secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
-      bucket: ${BATCH_MINIO_BUCKET:batch-dev}

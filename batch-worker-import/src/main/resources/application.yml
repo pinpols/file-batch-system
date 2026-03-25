@@ -4,45 +4,17 @@ server:
 spring:
   application:
     name: batch-worker-import
+  config:
+    import: "classpath:batch-defaults.yml"
   main:
     web-application-type: none
-  datasource:
-    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
-    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
-    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
-    driver-class-name: org.postgresql.Driver
-  kafka:
-    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 mybatis:
-  mapper-locations: classpath*:mapper/*.xml
   type-aliases-package: com.example.batch.worker.imports.domain
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
-
 batch:
-  security:
-    testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
-    kms:
-      default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
-      keys:
-        DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
-  orchestrator:
-    base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
   worker:
     type: IMPORT
-    lease:
-      renew-interval-millis: ${BATCH_WORKER_LEASE_RENEW_INTERVAL_MILLIS:10000}
-    task-client:
-      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
     import:
       worker-code: ${BATCH_WORKER_IMPORT_CODE:import-node-1}
       worker-type: IMPORT
@@ -89,15 +61,3 @@ batch:
           allow-skip-biz-date: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_ALLOW_SKIP_BIZ_DATE:false}
           notify-manual: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_NOTIFY_MANUAL:true}
           notify-channels: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_NOTIFY_CHANNELS:}
-  datasource:
-    business:
-      url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}
-      username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
-      password: ${BATCH_BUSINESS_DB_PASSWORD:batch_pass_123}
-      schema: ${BATCH_BUSINESS_DB_SCHEMA:biz}
-  storage:
-    minio:
-      endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
-      access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
-      secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
-      bucket: ${BATCH_MINIO_BUCKET:batch-dev}

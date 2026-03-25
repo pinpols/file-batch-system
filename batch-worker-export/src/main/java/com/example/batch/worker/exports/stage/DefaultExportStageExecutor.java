@@ -11,6 +11,8 @@ import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,18 +29,37 @@ public class DefaultExportStageExecutor
     private final Map<String, ExportStageStep> stepsByImplCode;
     private final Map<ExportStage, ExportStageStep> stepsByStage;
     private final List<PipelineStepTemplate> defaultStepDefinitions;
+    private final MeterRegistry meterRegistry;
 
     public DefaultExportStageExecutor(List<ExportStageStep> steps,
-                                      PlatformFileRuntimeRepository runtimeRepository) {
+                                      PlatformFileRuntimeRepository runtimeRepository,
+                                      MeterRegistry meterRegistry) {
         super(runtimeRepository);
         this.stepsByImplCode = indexByImplCode(steps);
         this.stepsByStage = indexByStage(steps);
         this.defaultStepDefinitions = buildDefaultStepDefinitions();
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
     public List<ExportStageResult> execute(ExportJobContext context) {
-        return runStageLoop(context);
+        List<ExportStageResult> results = runStageLoop(context);
+        boolean overallSuccess = results.stream().allMatch(ExportStageResult::success);
+        if (overallSuccess) {
+            recordExportRowsMetric(context);
+        }
+        return results;
+    }
+
+    private void recordExportRowsMetric(ExportJobContext context) {
+        Object recordCountAttr = context.getAttributes().get("recordCount");
+        if (recordCountAttr instanceof Number recordCount) {
+            Counter.builder("export.file.rows.total")
+                    .description("Total rows written to export files")
+                    .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
+                    .register(meterRegistry)
+                    .increment(recordCount.doubleValue());
+        }
     }
 
     @Override

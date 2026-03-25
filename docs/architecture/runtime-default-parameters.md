@@ -9,8 +9,8 @@
 | 域 | 主配置位置 |
 |----|------------|
 | Orchestrator 调度 / Outbox / 重试 / 租约 / 排空 / SLA / 文件治理 | `batch-orchestrator/src/main/resources/application.yml` |
-| Import Worker 流式与分页 | `batch-worker-import/src/main/resources/application.yml`、`import-worker.yml` |
-| Export Worker 流式与分页 | `batch-worker-export/src/main/resources/application.yml`、`export-worker.yml` |
+| Import Worker 流式与分页 | `batch-worker-import/src/main/resources/application.yml`（含 `spring.config.import: classpath:batch-defaults.yml`） |
+| Export Worker 流式与分页 | `batch-worker-export/src/main/resources/application.yml`（含 `spring.config.import: classpath:batch-defaults.yml`） |
 | Dispatch 熔断与回执轮询 | `batch-worker-dispatch/src/main/resources/application.yml` |
 | 模板级 chunk | `batch.file_template_config.chunk_size`（Flyway V13，默认 500） |
 

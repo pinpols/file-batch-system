@@ -1,0 +1,90 @@
+# ============================================================
+# batch-defaults.yml — 共享配置基线
+#
+# 所有 batch-platform 服务模块通过 spring.config.import 引入本文件。
+# 模块自身的 application.yml 值优先级高于此处默认值（可覆盖）。
+# 仅包含跨模块重复的配置；模块专属配置保留在各模块的 application.yml。
+# ============================================================
+
+# ------------------------------------------------------------------
+# 平台数据库（Platform PostgreSQL，所有服务模块共用）
+# ------------------------------------------------------------------
+spring:
+  datasource:
+    url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
+    username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
+    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+# ------------------------------------------------------------------
+# MyBatis（mapper 扫描路径各模块相同；type-aliases-package 在模块内覆盖）
+# ------------------------------------------------------------------
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+
+# ------------------------------------------------------------------
+# Actuator / 可观测性
+# ------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+# ------------------------------------------------------------------
+# 结构化日志（MDC 字段统一：service / tenantId / traceId / requestId / jobInstanceId / fileId）
+# ------------------------------------------------------------------
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [%X{service:-} %X{tenantId:-} %X{traceId:-} %X{requestId:-} %X{jobInstanceId:-} %X{fileId:-}] %logger{40} - %msg%n"
+
+# ------------------------------------------------------------------
+# Batch 平台共享配置
+# ------------------------------------------------------------------
+batch:
+  # 安全 / KMS（orchestrator + worker + console 共用）
+  security:
+    testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
+    kms:
+      default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}
+      keys:
+        DEFAULT_TEST: ${BATCH_SECURITY_KMS_KEYS_DEFAULT_TEST:AAAAAAAAAAAAAAAAAAAAAA==}
+
+  # MinIO 对象存储（orchestrator + 所有 worker + console）
+  storage:
+    minio:
+      endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
+      bucket: ${BATCH_MINIO_BUCKET:batch-dev}
+
+  # Orchestrator API 地址（trigger + 所有 worker 模块使用）
+  orchestrator:
+    base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
+
+  # 业务数据库（import / export / dispatch worker 使用）
+  datasource:
+    business:
+      url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}
+      username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
+      password: ${BATCH_BUSINESS_DB_PASSWORD:batch_pass_123}
+      schema: ${BATCH_BUSINESS_DB_SCHEMA:biz}
+
+  # Kafka Topic 名称（orchestrator 发布，worker 消费）
+  mq:
+    topics:
+      import-dispatch: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
+      export-dispatch: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
+      dispatch-dispatch: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
+      task-result: ${BATCH_TOPIC_TASK_RESULT:batch.task.result}
+      task-retry: ${BATCH_TOPIC_TASK_RETRY:batch.task.retry}
+      dead-letter: ${BATCH_TOPIC_DEAD_LETTER:batch.task.dead-letter}
+
+  # Worker 通用配置（import / export / dispatch 共用）
+  worker:
+    lease:
+      renew-interval-millis: ${BATCH_WORKER_LEASE_RENEW_INTERVAL_MILLIS:10000}
+    task-client:
+      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}

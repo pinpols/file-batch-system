@@ -1,7 +1,7 @@
 # 设计文档与代码落地状态分析
 
 分析日期：2026-03-22
-分析基准：`docs/architecture/design-gap-audit.md`、全量 `src/main` 代码、测试补全结果
+分析基准：`docs/architecture/design-gap-audit.md`、全量 `src/main` 代码、测试补全结果（对话_5 完成后更新于 2026-03-25）
 
 ---
 

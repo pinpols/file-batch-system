@@ -4,9 +4,9 @@
 
 ## 核查范围
 
-- 设计文档全章节：[批量调度系统设计说明书（完整版）-20260321.md](/Users/dengchao/Downloads/file-batch-system/批量调度系统设计说明书（完整版）-20260321.md)
-- 工程基线：[AGENT.md](/Users/dengchao/Downloads/file-batch-system/AGENT.md)
-- 当前补全过程：[补全对话.md](/Users/dengchao/Downloads/file-batch-system/补全对话.md)、[后续对话step.md](/Users/dengchao/Downloads/file-batch-system/后续对话step.md)
+- 设计文档全章节：`docs/批量调度系统设计说明书（完整版）-20260321.md`
+- 架构真相文档：`docs/architecture/architecture-truth.md`（含 ADR-001 ~ ADR-008）
+- 实现状态跟踪：`docs/architecture/implementation-status-2026-03-22.md`
 - 代码现状：8 个 Maven 模块全部 `src/main` 代码
 - 校验结果：`mvn -q compile` 通过
 
@@ -139,14 +139,20 @@
 
 ### 测试与质量门禁
 
-- 当前只有 1 个单元测试：
-  - [FileStateMachineTest.java](/Users/dengchao/Downloads/file-batch-system/batch-common/src/test/java/com/example/batch/common/utils/FileStateMachineTest.java)
-- 没有：
-  - 集成测试
-  - Testcontainers
-  - Embedded Kafka
-  - 主链路回放演练
-  - 失败治理演练
+**已完成（截至 2026-03-25）**：
+- 单元测试：41 个（覆盖状态机、调度规则、文件链、分发链、安全、加解密、流式解析等）
+- 集成测试：18 个（基于 Testcontainers，真实 PostgreSQL/Kafka/MinIO）
+- E2E 测试（`batch-e2e-tests`）：
+  - `ImportPipelineE2eIT`、`ExportPipelineE2eIT`、`DispatchPipelineE2eIT`（主链路）
+  - `OutboxForwarderE2eIT`（outbox 自动轮询）
+  - `ImportFailureE2eIT`、`ExportStorageFailureE2eIT`、`DispatchFailurePipelineE2eIT`（失败分支）
+  - `ExportContentVerificationE2eIT`（内容级验证，含 MinIO 文件断言）
+  - `MultiTenantConcurrentE2eIT`（多租户并发隔离）
+- SQL 一致性守卫：`SqlConsistencyIT`（batch-orchestrator，校验唯一约束、ON CONFLICT 兼容性）
+- 测试基建：`AbstractIntegrationTest`（2×PG+Kafka+MinIO）、`E2eVerifier`/`ExportFileVerifier`/`DispatchReceiptVerifier` 验收框架
+- 完整 seed 数据：7 张 seed SQL（全格式矩阵 + 多租户）、11 个 import fixture 文件
+
+详细覆盖分析见 `docs/architecture/implementation-status-2026-03-22.md` 测试覆盖章节。
 
 ### Flyway 与文档漂移
 
@@ -154,12 +160,19 @@
 - **升级注意**：若某环境曾在旧命名下只执行过重复版本中的**一部分**，需对照 `flyway_schema_history` 人工核对后再迁移（详见 [runtime-default-parameters.md](./runtime-default-parameters.md)）。
 - [README.md](/Users/dengchao/Downloads/file-batch-system/README.md) 已指向设计说明书、审计文档与补全对话；模块细节仍以代码与 `docs/` 为准。
 
-## 建议优先级
+## 当前优先级（截至 2026-03-25）
 
-1. 文件链高级能力（任意列 Map、导出格式矩阵、9.12 与说明书完全对齐）与 **`quota_reset_policy` 运行时**。
-2. 文件对象加密/KMS、审批流产品化、SFTP/EMAIL/HTTP 主动健康探测与更细退避策略。
-3. 集成测试与压测基线、生产部署与合规交付物（对应 [补全对话.md](/Users/dengchao/Downloads/file-batch-system/补全对话.md) 第 23～24 轮）。
+以下核心缺口已在对话_5（12轮）中全部完成：
+- ✅ Worker 生命周期/消费者模板抽象（AbstractWorkerLoop / AbstractTaskConsumer / AbstractStageExecutor）
+- ✅ Stage 异常处理契约统一（StageFailureCode / PipelineContext / StageExecutionContext）
+- ✅ 配置基线模块化（batch-defaults.yml + spring.config.import）
+- ✅ 架构真相文档与 ADR 体系（architecture-truth.md + ADR-001~ADR-008）
+- ✅ 产物内容级验收标准化（ExportFileVerifier / DispatchReceiptVerifier + Micrometer 指标）
+- ✅ Outbox 自动轮询 E2E、失败分支 E2E、多租户并发 E2E、SQL 一致性守卫
 
-## 对应补全过程
-
-- 剩余轮次已整理到 [补全对话.md](/Users/dengchao/Downloads/file-batch-system/补全对话.md) 第 13 轮以后。
+**剩余未完成（低优先级，不影响核心运行）**：
+- 生产部署产物（Dockerfile/Helm/K8s）
+- 审批台账产品化（批量审批、审批 SLA 告警、运营视图）
+- SFTP/EMAIL/HTTP 渠道主动健康探测与分级退避
+- ELK / OpenTelemetry 生产侧接入细节
+- 压测脚本与容量基线

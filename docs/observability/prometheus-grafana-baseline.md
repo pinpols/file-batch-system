@@ -30,7 +30,7 @@ scrape_configs:
 ## Grafana
 
 - 导入 `docs/observability/grafana-dashboard-batch.json`（JVM + 平台计数器）。
-- 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`（若已部署 dispatch worker）、JVM 内存/线程。
+- 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`、`export_file_rows_total`（导出文件行数，按 tenant 分标签）、`dispatch_receipt_total`（分发回执计数，按 tenant 分标签）、JVM 内存/线程。
 - 告警与路由模板见 `docs/observability/prometheus-batch-rules.yml` 和 `docs/observability/alertmanager-batch-template.yml`。
 
 ## 结构化日志

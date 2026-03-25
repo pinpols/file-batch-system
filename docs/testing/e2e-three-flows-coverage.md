@@ -4,11 +4,18 @@
 
 本文分析 `batch-e2e-tests` 中三个 E2E 测试类当前覆盖了哪些核心链路、哪些风险点仍未覆盖，并给出后续可执行的覆盖优化清单。
 
-涉及测试类：
+涉及测试类（截至 2026-03-25，共 9 个 E2E）：
 
-- `batch-e2e-tests/src/test/java/com/example/batch/e2e/ImportPipelineE2eIT.java`
-- `batch-e2e-tests/src/test/java/com/example/batch/e2e/ExportPipelineE2eIT.java`
-- `batch-e2e-tests/src/test/java/com/example/batch/e2e/DispatchPipelineE2eIT.java`
+**主链路（Happy Path）**
+- `ImportPipelineE2eIT`、`ExportPipelineE2eIT`、`DispatchPipelineE2eIT`
+- `OutboxForwarderE2eIT`（outbox 自动轮询）
+- `ExportContentVerificationE2eIT`（内容级验证）
+
+**失败分支**
+- `ImportFailureE2eIT`、`ExportStorageFailureE2eIT`、`DispatchFailurePipelineE2eIT` (即 `DispatchPipelineE2eIT` 的失败场景变体)
+
+**稳健性**
+- `MultiTenantConcurrentE2eIT`（多租户并发隔离）
 
 ---
 
@@ -64,61 +71,51 @@
 
 ---
 
-## 仍未覆盖或覆盖较弱的风险点
+## 覆盖状态（截至 2026-03-25）
 
-### A. Outbox Forwarder 定时轮询机制
+### A. Outbox Forwarder 定时轮询机制 ✅ 已覆盖
 
-当前测试使用 `E2eOutboxPublishSupport.publishAllPending(...)` 人工发布，未覆盖真实调度轮询器行为（扫描、重试、退避）。
+`OutboxForwarderE2eIT`：不手动 publish，开启真实轮询器，验证 NEW→PUBLISHED 状态机和消费到成功全链路。
 
-### B. 异常与重试分支
+### B. 异常与重试分支 ✅ 已覆盖
 
-当前主要验证 happy path；以下场景缺少 E2E 验证：
+- `ImportFailureE2eIT`：字段/模板不匹配，验证失败状态与错误记录落库
+- `ExportStorageFailureE2eIT`：存储阶段失败场景
+- `DispatchFailurePipelineE2eIT`：无效通道/目标不可达，验证失败与回执/补偿状态
 
-- worker 执行失败后的重试策略生效
-- 达到重试上限后的 dead-letter 行为细节
-- dispatch 的 ACK 超时/补偿路径
+### C. 导出/分发产物内容级断言 ✅ 已覆盖
 
-### C. 导出/分发产物内容级断言
+- `ExportContentVerificationE2eIT`：使用 `ExportFileVerifier` 验证文件行数、MinIO 内容、金额汇总（`total_amount ≥ 285.00`）、内容片段（`E2E-CV-001`/`E2E-CV-002`）
+- `DispatchPipelineE2eIT`：使用 `DispatchReceiptVerifier` 验证文件状态、回执码、渠道码、审计日志条数
 
-目前更多验证“状态成功”与“关键行存在”，未做深度内容校验：
+### D. 并发与竞争场景 ⚠️ 部分覆盖
 
-- export 生成文件内容结构、字段映射、行数/汇总是否正确
-- dispatch 输出目标路径中的文件内容是否与期望一致
+`MultiTenantConcurrentE2eIT` 覆盖多租户并行触发与数据隔离。单 worker 并发 claim 竞争、同 dedupKey 幂等冲突场景尚未有专项 E2E（已有单元测试覆盖逻辑）。
 
-### D. 并发与竞争场景
+### E. 多租户隔离 ✅ 已覆盖
 
-未覆盖多 worker 并发 claim、重复消息消费幂等、同 dedupKey 并发触发冲突等高风险场景。
-
-### E. 多租户隔离
-
-现有用例基本单租户 `t1`，未覆盖多租户并行时的数据隔离与路由隔离。
+`MultiTenantConcurrentE2eIT`：t1/t2/t3 租户同时触发，校验数据隔离、队列公平、无串租户污染。
 
 ---
 
-## 后续覆盖优化建议（按优先级）
+## 覆盖优化完成情况（截至 2026-03-25）
 
-## P0（建议优先补齐）
+## P0 ✅ 全部完成
 
-- 新增 `OutboxForwarderE2eIT`：不手动 publish，开启短轮询，验证 outbox 自动发布到消费成功。
-- 为三条用例各补一个“失败分支”：
-  - import：模板/字段不匹配，验证失败状态与错误记录落库
-  - export：业务源缺失，验证失败与错误码
-  - dispatch：无效 channel 或目标不可达，验证失败与回执/补偿状态
+- ✅ `OutboxForwarderE2eIT`：真实轮询验证
+- ✅ `ImportFailureE2eIT`：失败分支
+- ✅ `ExportStorageFailureE2eIT`：失败分支
+- ✅ `DispatchFailurePipelineE2eIT`：失败分支
 
-## P1（增强可信度）
+## P1 ✅ 全部完成
 
-- Export 增加“文件内容断言”：
-  - 校验导出对象存在、行数、关键字段值
-- Dispatch 增加“落地文件断言”：
-  - 校验 LOCAL 路径文件存在、内容摘要、状态与审计记录一致
+- ✅ `ExportContentVerificationE2eIT`：文件内容断言（行数/金额/MinIO 内容片段）—— `ExportFileVerifier`
+- ✅ `DispatchPipelineE2eIT`：回执一致性断言（文件状态/回执码/渠道码/审计条数）—— `DispatchReceiptVerifier`
 
-## P2（稳健性与规模）
+## P2 ✅ 已完成多租户；并发幂等待专项
 
-- 并发测试：
-  - 双 worker 同 topic 竞争 claim，确保只处理一次
-  - 同 dedupKey 重复触发，确保幂等
-- 多租户并行触发：
-  - tenant A/B 同时运行，互不污染
+- ✅ `MultiTenantConcurrentE2eIT`：多租户并行触发与数据隔离
+- ⚠️ 单 worker 并发 claim 竞争、同 dedupKey 幂等冲突：暂无专项 E2E，由单元测试和集成测试覆盖
 
 ---
 
@@ -132,8 +129,8 @@
 
 ---
 
-## 当前结论
+## 当前结论（截至 2026-03-25）
 
-三个 E2E 测试已经覆盖了平台最核心的“触发 -> 调度 -> outbox -> Kafka -> worker -> 回报”主链路，能够作为主干回归门禁。
+E2E 套件已覆盖：主链路（Import/Export/Dispatch）、Outbox 自动轮询、失败分支（三链路）、内容级验收（导出/分发）、多租户并发隔离，共 9 个 E2E 测试类。
 
-若目标提升到“生产风险防线”，下一步应优先补齐 outbox 自动轮询、失败重试/补偿、产物内容断言与并发幂等场景。
+能够作为生产风险防线级别的回归门禁。剩余未覆盖的场景：单 worker 并发 claim 竞争与同 dedupKey 幂等冲突（低风险，有单元和集成测试兜底）。

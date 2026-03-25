@@ -11,6 +11,8 @@ import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,18 +29,34 @@ public class DefaultDispatchStageExecutor
     private final Map<String, DispatchStageStep> stepsByImplCode;
     private final Map<DispatchStage, DispatchStageStep> stepsByStage;
     private final List<PipelineStepTemplate> defaultStepDefinitions;
+    private final MeterRegistry meterRegistry;
 
     public DefaultDispatchStageExecutor(List<DispatchStageStep> steps,
-                                        PlatformFileRuntimeRepository runtimeRepository) {
+                                        PlatformFileRuntimeRepository runtimeRepository,
+                                        MeterRegistry meterRegistry) {
         super(runtimeRepository);
         this.stepsByImplCode = indexByImplCode(steps);
         this.stepsByStage = indexByStage(steps);
         this.defaultStepDefinitions = buildDefaultStepDefinitions();
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
     public List<DispatchStageResult> execute(DispatchJobContext context) {
-        return runStageLoop(context);
+        List<DispatchStageResult> results = runStageLoop(context);
+        boolean overallSuccess = results.stream().allMatch(DispatchStageResult::success);
+        if (overallSuccess) {
+            recordDispatchReceiptMetric(context);
+        }
+        return results;
+    }
+
+    private void recordDispatchReceiptMetric(DispatchJobContext context) {
+        Counter.builder("dispatch.receipt.total")
+                .description("Total successfully dispatched file receipts")
+                .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
+                .register(meterRegistry)
+                .increment();
     }
 
     @Override
