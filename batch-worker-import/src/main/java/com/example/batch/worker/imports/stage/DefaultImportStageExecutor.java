@@ -6,7 +6,7 @@ import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
-import com.example.batch.worker.core.support.PipelineStepFlowSupport;
+import com.example.batch.worker.core.support.AbstractStageExecutor;
 import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
@@ -21,91 +21,29 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
-public class DefaultImportStageExecutor implements ImportStageExecutor {
+public class DefaultImportStageExecutor
+        extends AbstractStageExecutor<ImportJobContext, ImportStageResult>
+        implements ImportStageExecutor {
 
     private final Map<String, ImportStageStep> stepsByImplCode;
     private final Map<ImportStage, ImportStageStep> stepsByStage;
     private final List<PipelineStepTemplate> defaultStepDefinitions;
-    private final PlatformFileRuntimeRepository runtimeRepository;
     private final ImportRecordGovernanceService recordGovernanceService;
 
     public DefaultImportStageExecutor(List<ImportStageStep> steps,
                                       PlatformFileRuntimeRepository runtimeRepository,
                                       ImportRecordGovernanceService recordGovernanceService) {
+        super(runtimeRepository);
         this.stepsByImplCode = indexByImplCode(steps);
         this.stepsByStage = indexByStage(steps);
         this.defaultStepDefinitions = buildDefaultStepDefinitions();
-        this.runtimeRepository = runtimeRepository;
         this.recordGovernanceService = recordGovernanceService;
     }
 
     @Override
     public List<ImportStageResult> execute(ImportJobContext context) {
-        List<PipelineStepDefinition> configuredSteps = configuredSteps(context);
-        List<ImportStageResult> results = new ArrayList<>();
         try {
-            if (configuredSteps.isEmpty()) {
-                results.add(ImportStageResult.failure(ImportStage.RECEIVE, StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing"));
-                return results;
-            }
-            Long pipelineInstanceId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-            String lastSuccessStage = stringValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE));
-            int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
-            PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
-            while (currentStep != null) {
-                if (guard-- <= 0) {
-                    throw new BizException(ResultCode.STATE_CONFLICT, "import pipeline step flow contains a cycle");
-                }
-                ImportStage stage = toStage(currentStep.stageCode());
-                runtimeRepository.updatePipelineStage(pipelineInstanceId, currentStep.stageCode(), lastSuccessStage);
-                Long stepRunId = runtimeRepository.startStepRun(
-                        pipelineInstanceId,
-                        currentStep.stepCode(),
-                        currentStep.stageCode(),
-                        buildInputSummary(context, currentStep)
-                );
-                context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID, stepRunId);
-                ImportStageStep step = stepsByImplCode.get(currentStep.implCode());
-                ImportStageResult result;
-                try {
-                    result = step == null
-                            ? ImportStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(), "step impl not found: " + currentStep.implCode())
-                            : step.execute(context);
-                } catch (BizException exception) {
-                    log.error(
-                            "import stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
-                            stage,
-                            currentStep.stepCode(),
-                            currentStep.implCode(),
-                            context.getTenantId(),
-                            context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-                            exception);
-                    result = ImportStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
-                } catch (Exception exception) {
-                    log.error(
-                            "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
-                            stage,
-                            currentStep.stepCode(),
-                            currentStep.implCode(),
-                            context.getTenantId(),
-                            context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-                            exception);
-                    result = ImportStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
-                }
-                results.add(result);
-                if (result.success()) {
-                    lastSuccessStage = currentStep.stageCode();
-                    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, lastSuccessStage);
-                    runtimeRepository.finishStepRunSuccess(stepRunId, buildOutputSummary(context, result));
-                } else {
-                    runtimeRepository.finishStepRunFailure(stepRunId, result.code(), result.message(), buildOutputSummary(context, result));
-                }
-                currentStep = PipelineStepFlowSupport.resolveNextStep(currentStep, result.success(), configuredSteps, context.getAttributes());
-                if (!result.success() && currentStep == null) {
-                    break;
-                }
-            }
-            return results;
+            return runStageLoop(context);
         } finally {
             try {
                 recordGovernanceService.finalizeErrorOutput(context);
@@ -120,36 +58,10 @@ public class DefaultImportStageExecutor implements ImportStageExecutor {
         return defaultStepDefinitions;
     }
 
-    private Map<String, Object> buildInputSummary(ImportJobContext context, PipelineStepDefinition step) {
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("stepCode", step.stepCode());
-        summary.put("stage", step.stageCode());
-        summary.put("implCode", step.implCode());
-        summary.put("tenantId", context.getTenantId());
-        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-        summary.put("workerId", context.getWorkerId());
-        summary.put("jobCode", context.getJobCode());
-        return summary;
-    }
+    // ─── AbstractStageExecutor template methods ──────────────────────────────
 
-    private Map<String, Object> buildOutputSummary(ImportJobContext context, ImportStageResult result) {
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("success", result.success());
-        summary.put("code", result.code());
-        summary.put("message", result.message());
-        summary.put("stage", result.stage().name());
-        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-        summary.put("parsedCount", context.getAttributes().get("parsedCount"));
-        summary.put("validatedCount", context.getAttributes().get("validatedCount"));
-        summary.put("loadedCount", context.getAttributes().get("loadedCount"));
-        return summary;
-    }
-
-    private String stringValue(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private List<PipelineStepDefinition> configuredSteps(ImportJobContext context) {
+    @Override
+    protected List<PipelineStepDefinition> loadConfiguredSteps(ImportJobContext context) {
         Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
         if (definitions instanceof List<?> list) {
             List<PipelineStepDefinition> resolved = new ArrayList<>();
@@ -162,9 +74,72 @@ public class DefaultImportStageExecutor implements ImportStageExecutor {
                 return List.copyOf(resolved);
             }
         }
-        Long pipelineDefinitionId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
+        Long pipelineDefinitionId = runtimeRepository.toLong(
+                context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
         return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
     }
+
+    @Override
+    protected ImportStageResult stepMissingFailure() {
+        return ImportStageResult.failure(ImportStage.RECEIVE,
+                StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing");
+    }
+
+    @Override
+    protected ImportStageResult executeOneStep(ImportJobContext context, PipelineStepDefinition step) {
+        ImportStage stage = toStage(step.stageCode());
+        ImportStageStep stageStep = stepsByImplCode.get(step.implCode());
+        try {
+            return stageStep == null
+                    ? ImportStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(),
+                    "step impl not found: " + step.implCode())
+                    : stageStep.execute(context);
+        } catch (BizException exception) {
+            log.error("import stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage, step.stepCode(), step.implCode(),
+                    context.getTenantId(), context.getAttributes().get(PipelineRuntimeKeys.FILE_ID), exception);
+            return ImportStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+        } catch (Exception exception) {
+            log.error("import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage, step.stepCode(), step.implCode(),
+                    context.getTenantId(), context.getAttributes().get(PipelineRuntimeKeys.FILE_ID), exception);
+            return ImportStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+        }
+    }
+
+    @Override
+    protected Map<String, Object> buildInputSummary(ImportJobContext context, PipelineStepDefinition step) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("stepCode", step.stepCode());
+        summary.put("stage", step.stageCode());
+        summary.put("implCode", step.implCode());
+        summary.put("tenantId", context.getTenantId());
+        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put("workerId", context.getWorkerId());
+        summary.put("jobCode", context.getJobCode());
+        return summary;
+    }
+
+    @Override
+    protected Map<String, Object> buildOutputSummary(ImportJobContext context, ImportStageResult result) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("success", result.success());
+        summary.put("code", result.code());
+        summary.put("message", result.message());
+        summary.put("stage", result.stage().name());
+        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put("parsedCount", context.getAttributes().get("parsedCount"));
+        summary.put("validatedCount", context.getAttributes().get("validatedCount"));
+        summary.put("loadedCount", context.getAttributes().get("loadedCount"));
+        return summary;
+    }
+
+    @Override
+    protected String cycleDetectedMessage() {
+        return "import pipeline step flow contains a cycle";
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────────────────
 
     private ImportStage toStage(String stageCode) {
         try {

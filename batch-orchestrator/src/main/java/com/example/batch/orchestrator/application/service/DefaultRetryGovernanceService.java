@@ -30,6 +30,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
@@ -118,13 +119,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void retryPartition(String tenantId, Long partitionId, String eventKey) {
         requeuePartition(tenantId, partitionId, eventKey);
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void retryTask(String tenantId, Long taskId, String eventKey) {
         JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
         if (task == null) {
@@ -138,7 +139,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
         DeadLetterTaskEntity deadLetterTask = deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
         if (deadLetterTask == null) {

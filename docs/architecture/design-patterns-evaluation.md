@@ -22,7 +22,7 @@
 | **Repository** | `*Repository`（Spring Data JDBC）+ `*Mapper`（MyBatis）双层 | 数据访问抽象；`*Record` 走 Spring Data，`*Entity` 走 MyBatis，持久化与业务逻辑解耦 |
 | **Adapter** | `StepExecutionAdapter` → `ImportStepExecutionAdapter` / `ExportStepExecutionAdapter` / `DispatchStepExecutionAdapter` | 将泛型 Step 接口与各 Worker 特定管道桥接，核心框架不感知具体业务 |
 | **Decorator** | `DispatchChannelGateway` 包裹所有 `DispatchChannelAdapter` | 在 adapter 调用前后透明注入健康检查、熔断器、指标采集，不修改 adapter 本身 |
-| **Facade** | `DefaultLaunchService`（636行）、`DefaultTaskExecutionService`（769行）、`DefaultCompensationService`（450行） | 对调用方隐藏内部子系统的协调复杂性，提供统一入口 |
+| **Facade** | `DefaultLaunchService`（协调器，~280行）、`DefaultTaskExecutionService`（Facade，~60行，委托 `TaskCreationService` / `TaskAssignmentService` / `TaskOutcomeService`）、`DefaultCompensationService`（450行） | 对调用方隐藏内部子系统的协调复杂性，提供统一入口 |
 
 ### 行为型
 
@@ -44,7 +44,7 @@
 
 ### P1 — 收益高，改动范围可控
 
-#### ① Export 格式选择 → Strategy
+#### ① Export 格式选择 → Strategy ✅ 已完成
 
 **现状**：`GenerateStep` 中的 `if/else` 链按 `fileFormatType` 字符串分派：
 
@@ -59,14 +59,15 @@ if ("DELIMITED".equalsIgnoreCase(fileFormatType)) {
     recordCount = generateJson(...);
 }
 ```
-
 **问题**：新增格式必须修改 `GenerateStep`，违反开闭原则。
 
 **方案**：参照已有的 `ImportLoadPluginRegistry` 风格，抽 `ExportFormatStrategy` 接口 + `JsonExportFormat` / `DelimitedExportFormat` / `ExcelExportFormat` 实现，通过 Registry 按 `fileFormatType` 选取。`GenerateStep` 只调用 `strategy.generate(context)`。
 
+**实现说明**：新增 `batch-worker-export/stage/format/` 包：`ExportFormatStrategy` 接口、`ExportFormatContext` 参数容器、`AbstractExportFormat` 基类（含全部共享辅助方法和内部类型）、`JsonExportFormat` / `DelimitedExportFormat` / `ExcelExportFormat` / `FixedWidthExportFormat` 四个 `@Component` 实现、`ExportFormatStrategyRegistry` 注册表。`GenerateStep` 从 766 行缩减至 100 行，if/else 替换为 `formatStrategyRegistry.resolve(fileFormatType).generate(ctx)`。
+
 ---
 
-#### ② 三个 StageExecutor 的重复 while 循环 → Template Method
+#### ② 三个 StageExecutor 的重复 while 循环 → Template Method ✅ 已完成
 
 **现状**：`DefaultImportStageExecutor`、`DefaultExportStageExecutor`、`DefaultDispatchStageExecutor` 各自维护 40-60 行几乎相同的阶段推进循环（while loop + `PipelineStepFlowSupport.resolveNextStep()` + 成功/失败汇总）。
 
@@ -74,9 +75,11 @@ if ("DELIMITED".equalsIgnoreCase(fileFormatType)) {
 
 **方案**：抽 `AbstractStageExecutor<S extends StageStep, R extends StageResult>` 基类，封装通用循环骨架，子类只需提供 `stageSupplier()` 和 `onStageComplete()` 钩子。
 
+**实现说明**：`batch-worker-core` 新增 `PipelineContext` 接口（`getTenantId/getJobCode/getWorkerId/getAttributes`）和 `StageExecutionResult` 接口（`success/code/message`）；三个 `*JobContext` 类实现 `PipelineContext`，三个 `*StageResult` record 实现 `StageExecutionResult`；`AbstractStageExecutor<C,R>` 封装完整 while 循环（guard、updatePipelineStage、startStepRun、executeOneStep、finishStepRun、resolveNextStep），子类只需实现 6 个模板方法；三个具体 Executor 继承基类，`execute()` 改为一行 `return runStageLoop(context)`（Import 保留 try/finally 用于 finalizeErrorOutput）。
+
 ---
 
-#### ③ 补偿类型路由 → Strategy（取代 switch）
+#### ③ 补偿类型路由 → Strategy（取代 switch）✅ 已完成
 
 **现状**：`DefaultCompensationService.execute()` 的 6-way switch：
 
@@ -95,31 +98,39 @@ switch (compensationType) {
 
 **方案**：`CompensationHandler` 接口 + 按 `compensationType` 注册到 Map，`CompensationService` 只做路由查找。新增补偿类型无需修改核心 switch。
 
+**实现说明**：新增 `CompensationHandler` `@FunctionalInterface`；`DefaultCompensationService` 改为显式构造器，在构造器中用方法引用初始化 `handlersByType`（`Map.of("JOB", this::rerunJob, ...)`）；`execute()` 方法替换 switch 为 `handlersByType.get(compensationType)` O(1) 路由查找；6 个私有业务方法保持不变。
+
 ---
 
-#### ④ 分区数量解析 → Strategy
+#### ④ 分区数量解析 → Strategy ✅ 已完成
 
 **现状**：`DefaultSchedulePlanBuilder.resolveDynamicPartitionCount()` 含 5 层嵌套条件（固定值 / SIZE_BASED / RUNTIME_BASED / WORKER_BASED / 兜底）。
 
 **方案**：抽 `PartitionCountResolver` 策略接口，按 `shard_strategy` 枚举选取具体 Resolver，各自独立测试，消除嵌套。
 
+**实现说明**：新增 `PartitionCountResolver` 接口；提取 4 个 `@Component` + `@Order` 实现：`ExplicitPartitionCountResolver`（Order=1）、`SizeBasedPartitionCountResolver`（Order=2）、`RuntimeBasedPartitionCountResolver`（Order=3）、`WorkerBasedPartitionCountResolver`（Order=4，注入 `WorkerRegistryRepository`）；`DefaultSchedulePlanBuilder` 移除 `workerRegistryRepository` 直接依赖，改为注入 `List<PartitionCountResolver> dynamicResolvers`；`resolveDynamicPartitionCount` 简化为 for 循环遍历 resolvers，首个正值即返回。
+
 ---
 
 ### P2 — 收益中等，适合专项优化
 
-#### ⑤ DefaultStateMachine 反射调用 → 泛型接口
+#### ⑤ DefaultStateMachine 反射调用 → 泛型接口 ✅ 已完成
 
 **现状**：通过反射调用 `getInstanceStatus` / `getPartitionStatus` / `getTaskStatus`，无编译期保护，字段改名即运行时崩溃。
 
 **方案**：定义 `Stateful<S>` 泛型接口，各实体实现后直接调用，编译期即可发现问题。
 
+**实现说明**：新增 `Stateful` 接口（`domain/statemachine` 包，`String getStatus()`）；`JobInstanceEntity`（返回 `instanceStatus`）、`JobPartitionEntity`（返回 `partitionStatus`）、`JobTaskEntity`（返回 `taskStatus`）、`JobStepInstanceEntity`（返回 `stepStatus`）四个实体类实现 `Stateful`；`DefaultStateMachine.resolveState()` 在反射循环之前优先检查 `instanceof Stateful`，反射作为其他类型的兜底保留。
+
 ---
 
-#### ⑥ FileGovernanceScheduler → 单一职责拆分
+#### ⑥ FileGovernanceScheduler → 单一职责拆分 ✅ 已完成（早于本轮）
 
 **现状**：`FileGovernanceScheduler`（472行）合并了 latency 扫描、arrival group 处理、reconcile、archive cleanup 四个相互独立的调度职责。
 
 **方案**：拆为 `FileLatencyScheduler`、`FileArrivalGroupScheduler`、`FileReconcileScheduler`、`FileArchiveScheduler`，各自独立开关（`enabled` 配置项），独立测试，与已有的 `OutboxPollScheduler`、`RetryScheduleScheduler` 风格一致。
+
+**实现说明**：`FileGovernanceScheduler` 保留为共享实现（`@Service`，无 `@Scheduled`），注释说明其角色；4 个独立 `@Component` 调度包装器（`FileGovernanceLatencyScheduler`、`FileGovernanceArrivalGroupScheduler`、`FileGovernanceArchiveCleanupScheduler`、`FileGovernanceReconcileScheduler`）各持有 `FileGovernanceScheduler` 引用，各自 `@Scheduled` + 独立 `fixedDelayString` 配置项。
 
 ---
 
@@ -142,14 +153,14 @@ switch (compensationType) {
 
 | 问题 | 严重度 | 位置 | 建议 |
 |---|---|---|---|
-| **God Class — 任务执行服务** | 🔴 高 | `DefaultTaskExecutionService`（769行）：任务创建、worker 分配、结果回报、partition 状态、workflow 节点分发全混在一处 | 拆分为 `TaskCreationService`、`TaskAssignmentService`、`TaskOutcomeService` |
-| **God Class — 启动服务** | 🔴 高 | `DefaultLaunchService`（636行）：触发校验、定义查找、dedup、计划构建、分区创建、任务分发、workflow 初始化全在一处，13 个注入依赖 | 拆分为 `LaunchValidationService`、`SchedulePlanService`、`PartitionDispatchService` |
-| **大事务** | 🔴 高 | `launch()` 在单个 `@Transactional` 内执行分区创建 + 任务分发 + workflow 初始化，长时间持锁 | 拆分为 prepare 事务（定义查询 + 实例创建）和 dispatch 事务（分区 + outbox），通过 outbox 解耦 |
-| **`@Transactional` 嵌套调用链** | 🟡 中 | `CompensationService → LaunchService → RetryGovernanceService`，嵌套事务传播可能掩盖死锁或导致意外回滚扩散 | 审查传播级别，关键分支改为 `REQUIRES_NEW` 或异步解耦 |
-| **反射调用状态 getter** | 🟡 中 | `DefaultStateMachine` 通过反射取 `instanceStatus` / `taskStatus`，字段改名即运行时崩溃 | 改为泛型接口（见建议⑤） |
-| **Stage Executor 三份拷贝** | 🟡 中 | `DefaultImportStageExecutor` / `DefaultExportStageExecutor` / `DefaultDispatchStageExecutor` 的 while 循环几乎相同 | 抽 `AbstractStageExecutor` 基类（见建议②） |
-| **Export 格式 if/else 链** | 🟡 中 | `GenerateStep.generate()` 中按字符串分派格式 | 改用 Strategy + Registry（见建议①） |
-| **`WorkerRegistryService` 同名** | 🟢 低 | orchestrator（服务端接口）和 worker-core（客户端接口）各有一个同名接口，跨模块歧义 | 改名：`WorkerRegistryServerService`（orchestrator）/ `WorkerSelfRegistrationService`（worker-core） |
+| **God Class — 任务执行服务** ✅ 已完成 | 🔴 高 | `DefaultTaskExecutionService`（769行）：任务创建、worker 分配、结果回报、partition 状态、workflow 节点分发全混在一处 | 拆分为 `TaskCreationService` / `DefaultTaskCreationService`、`TaskAssignmentService` / `DefaultTaskAssignmentService`、`TaskOutcomeService` / `DefaultTaskOutcomeService`；`DefaultTaskExecutionService` 改为 ~60 行纯 Facade，全部委托给三个子服务 |
+| **God Class — 启动服务** ✅ 已完成 | 🔴 高 | `DefaultLaunchService`（636行）：触发校验、定义查找、dedup、计划构建、分区创建、任务分发、workflow 初始化全在一处，13 个注入依赖 | 拆分为 `LaunchValidationService` / `DefaultLaunchValidationService`（只读校验 + dedup）和 `PartitionDispatchService` / `DefaultPartitionDispatchService`（分区 + 任务 + outbox + RUNNING 状态）；`DefaultLaunchService` 缩减为 ~280 行协调器，依赖从 13 降至 7 |
+| **大事务** ✅ 已完成 | 🔴 高 | `launch()` 在单个 `@Transactional` 内执行分区创建 + 任务分发 + workflow 初始化，长时间持锁 | T1（`DefaultLaunchService.prepareJobInstance()`，`@Transactional`）：创建 job_instance + workflow_run + START node run，提交后 partition/task 表完全不持锁；T2（`DefaultPartitionDispatchService.dispatch()`，独立 `@Transactional` bean）：创建分区 + 任务 + outbox + 标记 RUNNING；`launch()` 本身不加 `@Transactional`，通过 `@Lazy self` 自注入触发 T1 的 Spring AOP 事务代理，保证 READ COMMITTED 下 T2 可读 T1 已提交数据 |
+| **`@Transactional` 嵌套调用链** ✅ 已完成 | 🟡 中 | `CompensationService → LaunchService → RetryGovernanceService`，嵌套事务传播可能掩盖死锁或导致意外回滚扩散 | `DefaultRetryGovernanceService.retryTask()` / `retryPartition()` / `replayDeadLetter()` 改为 `@Transactional(propagation = REQUIRES_NEW)`，使手动补偿触发的重试在独立事务中运行，防止 partition/task 表锁竞争死锁向上传播到补偿命令记录事务 |
+| **反射调用状态 getter** ✅ 已完成 | 🟡 中 | `DefaultStateMachine` 通过反射取 `instanceStatus` / `taskStatus`，字段改名即运行时崩溃 | 见建议⑤：新增 `Stateful` 接口，4 个实体类实现，`DefaultStateMachine` 优先走 `instanceof Stateful` 路径 |
+| **Stage Executor 三份拷贝** ✅ 已完成 | 🟡 中 | `DefaultImportStageExecutor` / `DefaultExportStageExecutor` / `DefaultDispatchStageExecutor` 的 while 循环几乎相同 | 见建议②：`AbstractStageExecutor<C,R>` 基类封装完整循环，三个 Executor 继承基类 |
+| **Export 格式 if/else 链** ✅ 已完成 | 🟡 中 | `GenerateStep.generate()` 中按字符串分派格式 | 见建议①：`ExportFormatStrategy` + `ExportFormatStrategyRegistry`，`GenerateStep` 从 766 行缩减至 100 行 |
+| **`WorkerRegistryService` 同名** ✅ 已完成 | 🟢 低 | orchestrator（服务端接口）和 worker-core（客户端接口）各有一个同名接口，跨模块歧义 | 已改名：orchestrator 接口为 `WorkerRegistryServerService`，worker-core 接口为 `WorkerSelfRegistrationService`，两侧实现类分别加 `@Service("orchestratorWorkerRegistryService")` / `@Service("workerCoreWorkerRegistryService")` 限定 bean 名 |
 
 ---
 
@@ -157,19 +168,18 @@ switch (compensationType) {
 
 ```
 已合理使用设计模式：15 个
-建议引入（P1 高优先）：4 处
-建议引入（P2 中优先）：2 处
+建议引入（P1 高优先）：4 处 ✅ 全部完成
+建议引入（P2 中优先）：2 处 ✅ 全部完成
 不需要引入（保持简单）：6 处
-需要重构的反模式：7 处（其中 3 处高风险）
+需要重构的反模式：7 处（3 处高风险 ✅ 全部完成；4 处中低风险 ✅ 全部完成）
 ```
 
 ### 架构整体评价
 
 系统核心设计质量较高。**Outbox + Saga + Template Method + Strategy + Chain of Responsibility** 的组合构成了系统的核心骨架，设计合理且经过验证。
 
-**最值得优先处理的两件事**：
+**全部反模式已完成重构**（2026-03-25）：
 
-1. **God Class 拆分**：`DefaultTaskExecutionService`（769行）和 `DefaultLaunchService`（636行）是最大的可维护性风险，随着业务增长会持续变大。
-2. **大事务拆分**：`launch()` 的单事务边界在高并发下是锁竞争热点，结合 Outbox 模式已有基础，拆分代价较低且收益显著。
-
-其余模式引入建议（Export Strategy、StageExecutor 基类、补偿路由 Strategy）属于代码质量提升，可在日常迭代中逐步完成，不需要集中专项重构。
+1. **God Class 拆分** ✅：`DefaultTaskExecutionService` → 3 个子服务 + Facade；`DefaultLaunchService` → `LaunchValidationService` + `PartitionDispatchService` + 协调器。
+2. **大事务拆分** ✅：`launch()` 拆为 T1（实例创建，自注入事务）+ T2（分区分发，独立事务 bean），高并发下 partition/task 表锁竞争窗口大幅缩小。
+3. **中低风险反模式** ✅：`@Transactional(REQUIRES_NEW)` 保护补偿链、`Stateful` 接口替换反射、`AbstractStageExecutor` 消除三份拷贝、Export Strategy 注册表。

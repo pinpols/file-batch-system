@@ -1,11 +1,13 @@
 package com.example.batch.worker.exports.domain;
 
+import com.example.batch.worker.core.support.StageExecutionResult;
+
 public record ExportStageResult(
         ExportStage stage,
         boolean success,
         String code,
         String message
-) {
+) implements StageExecutionResult {
     public static ExportStageResult success(ExportStage stage) {
         return new ExportStageResult(stage, true, "SUCCESS", "ok");
     }

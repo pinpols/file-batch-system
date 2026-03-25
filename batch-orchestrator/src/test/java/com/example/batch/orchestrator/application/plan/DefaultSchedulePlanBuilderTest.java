@@ -11,6 +11,7 @@ import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,13 @@ class DefaultSchedulePlanBuilderTest {
         jobDefinitionRepository = mock(JobDefinitionRepository.class);
         workflowDefinitionRepository = mock(WorkflowDefinitionRepository.class);
         workerRegistryRepository = mock(WorkerRegistryRepository.class);
-        builder = new DefaultSchedulePlanBuilder(jobDefinitionRepository, workflowDefinitionRepository, workerRegistryRepository);
+        List<PartitionCountResolver> resolvers = List.of(
+                new ExplicitPartitionCountResolver(),
+                new SizeBasedPartitionCountResolver(),
+                new RuntimeBasedPartitionCountResolver(),
+                new WorkerBasedPartitionCountResolver(workerRegistryRepository)
+        );
+        builder = new DefaultSchedulePlanBuilder(jobDefinitionRepository, workflowDefinitionRepository, resolvers);
     }
 
     // --- null / missing job definition ---

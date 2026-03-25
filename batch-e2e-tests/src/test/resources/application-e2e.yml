@@ -4,11 +4,23 @@ spring:
     web-application-type: servlet
 
 batch:
+  retry:
+    # Fast retry cadence for E2E (orchestrator schedules partition retries without multi-minute waits).
+    fixed-delay-seconds: 1
+    poll-interval-millis: 400
   orchestrator:
     base-url: http://127.0.0.1:${local.server.port}
   worker:
     task-client:
       base-url: http://127.0.0.1:${local.server.port}
+      connect-timeout-millis: 3000
+      read-timeout-millis: 30000
+      report-max-attempts: 4
+      report-initial-backoff-millis: 100
+      report-max-backoff-millis: 800
+      claim-max-attempts: 4
+      claim-initial-backoff-millis: 100
+      claim-max-backoff-millis: 800
     import:
       tenant-id: t1
       worker-code: e2e-import-1

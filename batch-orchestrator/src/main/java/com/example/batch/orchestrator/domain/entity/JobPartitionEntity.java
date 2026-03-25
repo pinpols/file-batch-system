@@ -1,10 +1,11 @@
 package com.example.batch.orchestrator.domain.entity;
 
+import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.time.Instant;
 import lombok.Data;
 
 @Data
-public class JobPartitionEntity {
+public class JobPartitionEntity implements Stateful {
 
     private Long id;
     private String tenantId;
@@ -24,4 +25,9 @@ public class JobPartitionEntity {
     private Instant finishedAt;
     private Instant createdAt;
     private Instant updatedAt;
+
+    @Override
+    public String getStatus() {
+        return partitionStatus;
+    }
 }

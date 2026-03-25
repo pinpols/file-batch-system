@@ -6,7 +6,7 @@ import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
-import com.example.batch.worker.core.support.PipelineStepFlowSupport;
+import com.example.batch.worker.core.support.AbstractStageExecutor;
 import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
@@ -20,121 +20,25 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
-public class DefaultDispatchStageExecutor implements DispatchStageExecutor {
+public class DefaultDispatchStageExecutor
+        extends AbstractStageExecutor<DispatchJobContext, DispatchStageResult>
+        implements DispatchStageExecutor {
 
     private final Map<String, DispatchStageStep> stepsByImplCode;
     private final Map<DispatchStage, DispatchStageStep> stepsByStage;
     private final List<PipelineStepTemplate> defaultStepDefinitions;
-    private final PlatformFileRuntimeRepository runtimeRepository;
 
     public DefaultDispatchStageExecutor(List<DispatchStageStep> steps,
                                         PlatformFileRuntimeRepository runtimeRepository) {
+        super(runtimeRepository);
         this.stepsByImplCode = indexByImplCode(steps);
         this.stepsByStage = indexByStage(steps);
         this.defaultStepDefinitions = buildDefaultStepDefinitions();
-        this.runtimeRepository = runtimeRepository;
     }
 
     @Override
     public List<DispatchStageResult> execute(DispatchJobContext context) {
-        List<PipelineStepDefinition> configuredSteps = configuredSteps(context);
-        List<DispatchStageResult> results = new ArrayList<>();
-        if (configuredSteps.isEmpty()) {
-            results.add(DispatchStageResult.failure(DispatchStage.PREPARE, StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing"));
-            return results;
-        }
-        int guard = PipelineStepFlowSupport.maxTransitionGuard(configuredSteps);
-        PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
-        while (currentStep != null) {
-            if (guard-- <= 0) {
-                throw new BizException(ResultCode.STATE_CONFLICT, "dispatch pipeline step flow contains a cycle");
-            }
-            DispatchStageResult result = executeStep(context, currentStep, results);
-            currentStep = PipelineStepFlowSupport.resolveNextStep(currentStep, result.success(), configuredSteps, context.getAttributes());
-            if (!result.success() && currentStep == null) {
-                break;
-            }
-        }
-        return results;
-    }
-
-    private DispatchStageResult executeStep(DispatchJobContext context,
-                                             PipelineStepDefinition stepDefinition,
-                                             List<DispatchStageResult> results) {
-        DispatchStage stage = toStage(stepDefinition.stageCode());
-        Long pipelineInstanceId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-        String lastSuccessStage = stringValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE));
-        runtimeRepository.updatePipelineStage(pipelineInstanceId, stepDefinition.stageCode(), lastSuccessStage);
-        Long stepRunId = runtimeRepository.startStepRun(
-                pipelineInstanceId,
-                stepDefinition.stepCode(),
-                stepDefinition.stageCode(),
-                buildInputSummary(context, stepDefinition)
-        );
-        DispatchStageStep step = stepsByImplCode.get(stepDefinition.implCode());
-        DispatchStageResult result;
-        try {
-            result = step == null
-                    ? DispatchStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(), "step impl not found: " + stepDefinition.implCode())
-                    : step.execute(context);
-        } catch (BizException exception) {
-            log.error(
-                    "dispatch stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
-                    stage,
-                    stepDefinition.stepCode(),
-                    stepDefinition.implCode(),
-                    context.getTenantId(),
-                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-                    exception);
-            result = DispatchStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
-        } catch (Exception exception) {
-            log.error(
-                    "dispatch stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
-                    stage,
-                    stepDefinition.stepCode(),
-                    stepDefinition.implCode(),
-                    context.getTenantId(),
-                    context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-                    exception);
-            result = DispatchStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
-        }
-        results.add(result);
-        if (result.success()) {
-            context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, stepDefinition.stageCode());
-            runtimeRepository.finishStepRunSuccess(stepRunId, buildOutputSummary(context, result));
-        } else {
-            runtimeRepository.finishStepRunFailure(stepRunId, result.code(), result.message(), buildOutputSummary(context, result));
-        }
-        return result;
-    }
-
-    private Map<String, Object> buildInputSummary(DispatchJobContext context, PipelineStepDefinition stepDefinition) {
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("stepCode", stepDefinition.stepCode());
-        summary.put("stage", stepDefinition.stageCode());
-        summary.put("implCode", stepDefinition.implCode());
-        summary.put("tenantId", context.getTenantId());
-        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-        summary.put("dispatchId", context.getDispatchId());
-        summary.put("workerId", context.getWorkerId());
-        return summary;
-    }
-
-    private Map<String, Object> buildOutputSummary(DispatchJobContext context, DispatchStageResult result) {
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("success", result.success());
-        summary.put("code", result.code());
-        summary.put("message", result.message());
-        summary.put("stage", result.stage().name());
-        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-        summary.put("receiptStatus", context.getAttributes().get("receiptStatus"));
-        summary.put("externalRequestId", context.getAttributes().get("externalRequestId"));
-        summary.put("receiptCode", context.getAttributes().get("receiptCode"));
-        return summary;
-    }
-
-    private String stringValue(Object value) {
-        return value == null ? null : String.valueOf(value);
+        return runStageLoop(context);
     }
 
     @Override
@@ -142,7 +46,10 @@ public class DefaultDispatchStageExecutor implements DispatchStageExecutor {
         return defaultStepDefinitions;
     }
 
-    private List<PipelineStepDefinition> configuredSteps(DispatchJobContext context) {
+    // ─── AbstractStageExecutor template methods ──────────────────────────────
+
+    @Override
+    protected List<PipelineStepDefinition> loadConfiguredSteps(DispatchJobContext context) {
         Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
         if (definitions instanceof List<?> list) {
             List<PipelineStepDefinition> resolved = new ArrayList<>();
@@ -155,9 +62,72 @@ public class DefaultDispatchStageExecutor implements DispatchStageExecutor {
                 return List.copyOf(resolved);
             }
         }
-        Long pipelineDefinitionId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
+        Long pipelineDefinitionId = runtimeRepository.toLong(
+                context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
         return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
     }
+
+    @Override
+    protected DispatchStageResult stepMissingFailure() {
+        return DispatchStageResult.failure(DispatchStage.PREPARE,
+                StageFailureCode.PIPELINE_STEP_MISSING.name(), "pipeline step definition missing");
+    }
+
+    @Override
+    protected DispatchStageResult executeOneStep(DispatchJobContext context, PipelineStepDefinition step) {
+        DispatchStage stage = toStage(step.stageCode());
+        DispatchStageStep stageStep = stepsByImplCode.get(step.implCode());
+        try {
+            return stageStep == null
+                    ? DispatchStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(),
+                    "step impl not found: " + step.implCode())
+                    : stageStep.execute(context);
+        } catch (BizException exception) {
+            log.error("dispatch stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage, step.stepCode(), step.implCode(),
+                    context.getTenantId(), context.getAttributes().get(PipelineRuntimeKeys.FILE_ID), exception);
+            return DispatchStageResult.failure(stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+        } catch (Exception exception) {
+            log.error("dispatch stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+                    stage, step.stepCode(), step.implCode(),
+                    context.getTenantId(), context.getAttributes().get(PipelineRuntimeKeys.FILE_ID), exception);
+            return DispatchStageResult.failure(stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+        }
+    }
+
+    @Override
+    protected Map<String, Object> buildInputSummary(DispatchJobContext context, PipelineStepDefinition step) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("stepCode", step.stepCode());
+        summary.put("stage", step.stageCode());
+        summary.put("implCode", step.implCode());
+        summary.put("tenantId", context.getTenantId());
+        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put("dispatchId", context.getDispatchId());
+        summary.put("workerId", context.getWorkerId());
+        return summary;
+    }
+
+    @Override
+    protected Map<String, Object> buildOutputSummary(DispatchJobContext context, DispatchStageResult result) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("success", result.success());
+        summary.put("code", result.code());
+        summary.put("message", result.message());
+        summary.put("stage", result.stage().name());
+        summary.put("fileId", context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
+        summary.put("receiptStatus", context.getAttributes().get("receiptStatus"));
+        summary.put("externalRequestId", context.getAttributes().get("externalRequestId"));
+        summary.put("receiptCode", context.getAttributes().get("receiptCode"));
+        return summary;
+    }
+
+    @Override
+    protected String cycleDetectedMessage() {
+        return "dispatch pipeline step flow contains a cycle";
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────────────────
 
     private DispatchStage toStage(String stageCode) {
         try {
