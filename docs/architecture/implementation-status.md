@@ -52,7 +52,7 @@
 
 | 差距项 | 现状 | 状态 |
 |---|---|---|
-| 审批台账产品化 | 审批单主干工作流已通（catch-up/compensation/DLQ replay/download） | 批量审批/SLA 告警/运营视图待补 |
+| 审批台账产品化 | 审批单主干工作流已通（catch-up/compensation/DLQ replay/download） | ✅ 最小可用已补齐：批量审批（console）、审批列表查询（console）、SLA 告警查询（console）、运营汇总视图（console `/api/console/ops/summary`） |
 | SFTP/EMAIL/HTTP 主动健康探测 | `probeSftp`（TCP socket）/`probeSmtp`（TCP socket）/`probeHttp`（HEAD 5s timeout）已落地；`DispatchChannelHealthProperties.probeChannelTypes` 默认包含全部六种渠道类型 | ✅ 已完成 |
 | `masking_rule_set` PCI/GDPR 规则集 | `ContentMaskingUtils` 已新增 PCI（卡有效期）与 GDPR（IPv4/UK邮编/US ZIP）规则集；`maskPlainText(text, ruleSetCode)` 支持 STRICT/PCI/GDPR 三档 | ✅ 已完成 |
 | Kafka lag 告警 | `prometheus-batch-rules.yml` 已启用 `BatchKafkaConsumerLagHigh` 规则 | ✅ 已完成 |

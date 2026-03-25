@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure;
 import com.example.batch.console.application.ConsoleQueryApplicationService;
 import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.console.domain.entity.DeadLetterTaskEntity;
+import com.example.batch.console.domain.entity.ApprovalCommandEntity;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.entity.FileArrivalGroupEntity;
 import com.example.batch.console.domain.entity.FileRecordEntity;
@@ -19,6 +20,7 @@ import com.example.batch.console.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.console.domain.query.AlertEventQuery;
 import com.example.batch.console.domain.query.AuditLogQuery;
+import com.example.batch.console.domain.query.ApprovalCommandQuery;
 import com.example.batch.console.domain.query.DeadLetterTaskQuery;
 import com.example.batch.console.domain.query.FileErrorRecordQuery;
 import com.example.batch.console.domain.query.FileArrivalGroupQuery;
@@ -40,6 +42,7 @@ import com.example.batch.console.domain.query.ConsoleAiAuditLogQuery;
 import com.example.batch.console.web.view.WorkflowTopologyView;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.console.mapper.AuditLogMapper;
+import com.example.batch.console.mapper.ApprovalCommandMapper;
 import com.example.batch.console.mapper.DeadLetterTaskMapper;
 import com.example.batch.console.mapper.FileErrorRecordMapper;
 import com.example.batch.console.mapper.FileArrivalGroupMapper;
@@ -65,6 +68,7 @@ import com.example.batch.console.mapper.WorkflowNodeRunMapper;
 import com.example.batch.console.mapper.ConsoleAiAuditLogMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
+import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.DeadLetterQueryRequest;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
@@ -112,6 +116,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     private final ConsoleTenantGuard tenantGuard;
     private final AuditLogMapper auditLogMapper;
     private final AlertEventMapper alertEventMapper;
+    private final ApprovalCommandMapper approvalCommandMapper;
     private final JobDefinitionMapper jobDefinitionMapper;
     private final JobInstanceMapper jobInstanceMapper;
     private final JobStepInstanceMapper jobStepInstanceMapper;
@@ -524,6 +529,19 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getAlertType(),
                 limit
         ));
+    }
+
+    @Override
+    public List<ApprovalCommandEntity> approvals(ApprovalCommandQueryRequest request) {
+        int limit = request.getLimit() == null ? DEFAULT_QUERY_LIMIT : request.getLimit();
+        ApprovalCommandQuery query = new ApprovalCommandQuery();
+        query.setTenantId(resolveTenant(request.getTenantId()));
+        query.setApprovalNo(request.getApprovalNo());
+        query.setApprovalType(request.getApprovalType());
+        query.setActionType(request.getActionType());
+        query.setApprovalStatus(request.getApprovalStatus());
+        query.setLimit(limit);
+        return approvalCommandMapper.selectByQuery(query);
     }
 
     private Instant parseInstant(String value, String fieldName) {

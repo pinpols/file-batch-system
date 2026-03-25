@@ -2,6 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.console.application.ConsoleQueryApplicationService;
 import com.example.batch.common.persistence.entity.AlertEventEntity;
+import com.example.batch.console.domain.entity.ApprovalCommandEntity;
 import com.example.batch.console.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.entity.FileArrivalGroupEntity;
@@ -20,6 +21,7 @@ import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.console.web.view.WorkflowTopologyView;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
+import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import com.example.batch.console.web.query.OutboxRetryLogQueryRequest;
@@ -73,6 +75,11 @@ public class ConsoleQueryController {
     @GetMapping("/alerts")
     public CommonResponse<List<AlertEventEntity>> alerts(@Valid @ModelAttribute AlertEventQueryRequest request) {
         return responseFactory.success(applicationService.alertEvents(request));
+    }
+
+    @GetMapping("/approvals")
+    public CommonResponse<List<ApprovalCommandEntity>> approvals(@Valid @ModelAttribute ApprovalCommandQueryRequest request) {
+        return responseFactory.success(applicationService.approvals(request));
     }
 
     @GetMapping("/files")

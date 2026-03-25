@@ -3,9 +3,11 @@ package com.example.batch.console.web;
 import com.example.batch.console.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ApprovalActionRequest;
+import jakarta.validation.constraints.NotEmpty;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,5 +36,29 @@ public class ConsoleApprovalController {
                                          @PathVariable String approvalNo,
                                          @Valid @RequestBody ApprovalActionRequest request) {
         return responseFactory.success(approvalApplicationService.reject(request.getTenantId(), approvalNo, request.getOperatorId(), request.getReason()));
+    }
+
+    @PostMapping("/batch/approve")
+    public CommonResponse<List<ConsoleApprovalApplicationService.BatchApprovalResult>> batchApprove(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody BatchApprovalActionRequest request) {
+        return responseFactory.success(
+                approvalApplicationService.batchApprove(request.tenantId(), request.approvalNos(), request.operatorId(), request.reason())
+        );
+    }
+
+    @PostMapping("/batch/reject")
+    public CommonResponse<List<ConsoleApprovalApplicationService.BatchApprovalResult>> batchReject(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody BatchApprovalActionRequest request) {
+        return responseFactory.success(
+                approvalApplicationService.batchReject(request.tenantId(), request.approvalNos(), request.operatorId(), request.reason())
+        );
+    }
+
+    public record BatchApprovalActionRequest(String tenantId,
+                                             @NotEmpty List<String> approvalNos,
+                                             String operatorId,
+                                             String reason) {
     }
 }
