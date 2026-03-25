@@ -70,6 +70,46 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         return approvalNo;
     }
 
+    @Override
+    public java.util.List<BatchApprovalResult> batchApprove(String tenantId,
+                                                            java.util.List<String> approvalNos,
+                                                            String operatorId,
+                                                            String reason) {
+        if (approvalNos == null || approvalNos.isEmpty()) {
+            return java.util.List.of();
+        }
+        java.util.List<BatchApprovalResult> results = new java.util.ArrayList<>();
+        for (String approvalNo : approvalNos) {
+            try {
+                approve(tenantId, approvalNo, operatorId, reason);
+                results.add(new BatchApprovalResult(approvalNo, true, "APPROVED"));
+            } catch (Exception ex) {
+                results.add(new BatchApprovalResult(approvalNo, false, ex.getMessage()));
+            }
+        }
+        return java.util.List.copyOf(results);
+    }
+
+    @Override
+    public java.util.List<BatchApprovalResult> batchReject(String tenantId,
+                                                           java.util.List<String> approvalNos,
+                                                           String operatorId,
+                                                           String reason) {
+        if (approvalNos == null || approvalNos.isEmpty()) {
+            return java.util.List.of();
+        }
+        java.util.List<BatchApprovalResult> results = new java.util.ArrayList<>();
+        for (String approvalNo : approvalNos) {
+            try {
+                reject(tenantId, approvalNo, operatorId, reason);
+                results.add(new BatchApprovalResult(approvalNo, true, "REJECTED"));
+            } catch (Exception ex) {
+                results.add(new BatchApprovalResult(approvalNo, false, ex.getMessage()));
+            }
+        }
+        return java.util.List.copyOf(results);
+    }
+
     private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
         RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
         ApprovalRecordResponse response = restClient.get()

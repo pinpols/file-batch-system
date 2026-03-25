@@ -22,11 +22,13 @@ import com.example.batch.console.web.query.WorkflowRunQueryRequest;
 import com.example.batch.console.web.query.WorkflowNodeRunQueryRequest;
 import com.example.batch.console.web.query.WorkflowTopologyQueryRequest;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
+import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.ConsoleAiAuditLogQueryRequest;
 import com.example.batch.console.web.query.PendingCatchUpQueryRequest;
 import com.example.batch.console.web.query.RetryScheduleQueryRequest;
 import com.example.batch.console.web.query.WorkerRegistryQueryRequest;
 import com.example.batch.common.persistence.entity.AlertEventEntity;
+import com.example.batch.console.domain.entity.ApprovalCommandEntity;
 import com.example.batch.console.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.console.domain.entity.FileArrivalGroupEntity;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
@@ -99,4 +101,6 @@ public interface ConsoleQueryApplicationService {
     List<WorkerRegistryEntity> workers(WorkerRegistryQueryRequest request);
 
     List<AlertEventEntity> alertEvents(AlertEventQueryRequest request);
+
+    List<ApprovalCommandEntity> approvals(ApprovalCommandQueryRequest request);
 }
