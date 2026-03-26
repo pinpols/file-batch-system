@@ -14,23 +14,23 @@ class ImportLoadPluginRegistryTest {
 
     @Test
     void shouldResolvePluginById() {
-        ImportLoadPlugin plugin = stubPlugin("customer_account");
+        ImportLoadPlugin plugin = stubPlugin("jdbc_mapped");
         ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(plugin));
 
-        assertThat(registry.require("customer_account")).isSameAs(plugin);
+        assertThat(registry.require("jdbc_mapped")).isSameAs(plugin);
     }
 
     @Test
     void shouldNormalizeIdToLowerCase() {
-        ImportLoadPlugin plugin = stubPlugin("customer_account");
+        ImportLoadPlugin plugin = stubPlugin("jdbc_mapped");
         ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(plugin));
 
-        assertThat(registry.require("CUSTOMER_ACCOUNT")).isSameAs(plugin);
+        assertThat(registry.require("JDBC_MAPPED")).isSameAs(plugin);
     }
 
     @Test
     void shouldUseDefaultPluginWhenIdIsNull() {
-        ImportLoadPlugin defaultPlugin = stubPlugin(WorkerPluginIds.IMPORT_LOAD_CUSTOMER_ACCOUNT);
+        ImportLoadPlugin defaultPlugin = stubPlugin(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
         ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(defaultPlugin));
 
         assertThat(registry.require(null)).isSameAs(defaultPlugin);
@@ -38,7 +38,7 @@ class ImportLoadPluginRegistryTest {
 
     @Test
     void shouldUseDefaultPluginWhenIdIsBlank() {
-        ImportLoadPlugin defaultPlugin = stubPlugin(WorkerPluginIds.IMPORT_LOAD_CUSTOMER_ACCOUNT);
+        ImportLoadPlugin defaultPlugin = stubPlugin(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED);
         ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(defaultPlugin));
 
         assertThat(registry.require("  ")).isSameAs(defaultPlugin);
@@ -55,8 +55,8 @@ class ImportLoadPluginRegistryTest {
 
     @Test
     void shouldThrowOnDuplicatePluginId() {
-        ImportLoadPlugin p1 = stubPlugin("customer_account");
-        ImportLoadPlugin p2 = stubPlugin("customer_account");
+        ImportLoadPlugin p1 = stubPlugin("jdbc_mapped");
+        ImportLoadPlugin p2 = stubPlugin("jdbc_mapped");
 
         assertThatThrownBy(() -> new ImportLoadPluginRegistry(List.of(p1, p2)))
                 .isInstanceOf(IllegalStateException.class)
@@ -65,12 +65,12 @@ class ImportLoadPluginRegistryTest {
 
     @Test
     void shouldSupportMultipleDistinctPlugins() {
-        ImportLoadPlugin p1 = stubPlugin("customer_account");
-        ImportLoadPlugin p2 = stubPlugin("jdbc_mapped");
+        ImportLoadPlugin p1 = stubPlugin("jdbc_mapped");
+        ImportLoadPlugin p2 = stubPlugin("sql_template_export");
         ImportLoadPluginRegistry registry = new ImportLoadPluginRegistry(List.of(p1, p2));
 
-        assertThat(registry.require("customer_account")).isSameAs(p1);
-        assertThat(registry.require("jdbc_mapped")).isSameAs(p2);
+        assertThat(registry.require("jdbc_mapped")).isSameAs(p1);
+        assertThat(registry.require("sql_template_export")).isSameAs(p2);
     }
 
     // --- helpers ---

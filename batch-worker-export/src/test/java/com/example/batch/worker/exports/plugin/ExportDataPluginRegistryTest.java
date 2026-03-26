@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.plugin.ExportDataPlugin;
-import com.example.batch.common.plugin.WorkerPluginIds;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -29,19 +28,21 @@ class ExportDataPluginRegistryTest {
     }
 
     @Test
-    void shouldUseDefaultPluginWhenIdIsNull() {
-        ExportDataPlugin defaultPlugin = stubPlugin(WorkerPluginIds.EXPORT_DATA_SETTLEMENT);
-        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(defaultPlugin));
+    void shouldThrowWhenIdIsNull() {
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
 
-        assertThat(registry.require(null)).isSameAs(defaultPlugin);
+        assertThatThrownBy(() -> registry.require(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("export_data_ref is required");
     }
 
     @Test
-    void shouldUseDefaultPluginWhenIdIsBlank() {
-        ExportDataPlugin defaultPlugin = stubPlugin(WorkerPluginIds.EXPORT_DATA_SETTLEMENT);
-        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(defaultPlugin));
+    void shouldThrowWhenIdIsBlank() {
+        ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of());
 
-        assertThat(registry.require("  ")).isSameAs(defaultPlugin);
+        assertThatThrownBy(() -> registry.require("  "))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("export_data_ref is required");
     }
 
     @Test

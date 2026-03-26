@@ -43,4 +43,12 @@ public interface ExportDataPlugin {
     default List<DelimitedColumn> describeFixedWidthColumns(ExportDataContext context, Map<String, Object> batch) {
         return describeDelimitedColumns(context, batch);
     }
+
+    /**
+     * Called by {@code RegisterStep} after the file record has been successfully persisted.
+     * Plugins may use this to mark their own business data as exported (e.g. updating a status column).
+     * The default implementation is a no-op.
+     */
+    default void onRegistered(ExportDataContext context, Long batchId, int exportVersion, String traceId) {
+    }
 }

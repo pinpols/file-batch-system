@@ -8,29 +8,32 @@
 ## 导入 LOAD — `ImportLoadPlugin`
 
 - **契约**：`batch-common` → `com.example.batch.common.plugin.ImportLoadPlugin`
-- **默认实现**：`customer_account` → `CustomerAccountImportLoadPlugin`（写 `biz.customer_account`）
-- **通用 JDBC（少写类）**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`  
+- **默认实现**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`（通用 JDBC UPSERT）
+- **通用 JDBC（少写类）**：`jdbc_mapped` → `GenericJdbcMappedImportLoadPlugin`
   - 模板 **`query_param_schema.jdbcMappedImport`**（或 **`jdbc_mapped_import`**）里声明：`schema`、`table`、`tenantColumn`、`columnMappings`（`from`/`to`）、可选 `conflictColumns`（UPSERT）、`systemBindings`（`${traceId}` 等占位符）。  
   - **schema 白名单**：`batch.worker.import.jdbc-mapped.allowed-schemas`（默认仅 `biz`）。  
   - 标识符仅允许 `[a-z][a-z0-9_]*`，禁止拼接任意 SQL。
 - **路由**（优先级从高到低）：
   1. `batch.file_template_config` 行内字段 **`load_target_ref`**
-  2. 默认 `customer_account`（`WorkerPluginIds.IMPORT_LOAD_CUSTOMER_ACCOUNT`）
+  2. 默认 `jdbc_mapped`（`WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED`）
 
 新增业务：**优先**用 `jdbc_mapped` 加配置行；仅当规则复杂时再实现独立 `ImportLoadPlugin`。
 
 ## 导出 GENERATE — `ExportDataPlugin`
 
 - **契约**：`com.example.batch.common.plugin.ExportDataPlugin`
-- **默认实现**：`settlement` → `SettlementExportDataPlugin`（读 `biz.settlement_batch` / `biz.settlement_detail`）
 - **通用 JDBC**：`jdbc_mapped_export` → `GenericJdbcMappedExportDataPlugin`  
   - 模板 **`query_param_schema.jdbcMappedExport`**（或 **`jdbc_mapped_export`**）：`batchTable`、`batchTenantColumn`、`batchNoColumn`、`batchSelectColumns`（须含 **`id`**）、`detailTable`、`detailFkColumn`、`detailOrderByColumn`、`detailSelectColumns`。  
   - 明细分页通过 **`detailOrderByColumn` keyset/cursor** 推进，不再依赖 `LIMIT/OFFSET`。  
   - DELIMITED 时默认表头为 `detailSelectColumns` 顺序；也可由模板 `csv_columns` / `csvColumns` 或插件 `describeDelimitedColumns()` 提供布局。模板还能配置 `delimiter`、`quote_policy`、`escape_policy`、`quote_char`、`header_rows`；JSON 仍为 snapshot+batch+details。  
   - **schema 白名单**：`batch.worker.export.jdbc-mapped.allowed-schemas`（默认 `biz`）。
-- **路由**：
-  1. 模板 **`export_data_ref`**
-  2. 默认 `settlement`（`WorkerPluginIds.EXPORT_DATA_SETTLEMENT`）
+- **SQL 模板（更灵活，需治理）**：`sql_template_export` → `SqlTemplateExportDataPlugin`
+  - SQL 来源：模板 `default_query_sql`（命名参数：`:tenantId`、`:batchNo` 等）
+  - 游标分页：`query_param_schema.sqlTemplateExport.cursorColumn`（默认 `id`）
+  - SQL 治理（JSqlParser AST）：仅允许 `SELECT/WITH`；禁止 `SELECT *`（`forbidSelectStar=true`）；schema 白名单（`allowedSchemas`）；必须包含 `:tenantId` / `:batchNo` 等命名参数
+  - EXPLAIN 前置检查（`explainCheckEnabled=true`）：首页前执行 `EXPLAIN (FORMAT JSON)`，超过 `maxEstimatedRows` / `maxPlanCost` 则拒绝执行
+  - 每页大小受 `batch.worker.export.sql-template.max-page-size` 限制
+- **路由**：模板 **`export_data_ref`** 字段（必须显式配置，无默认值）
 
 新增业务：**优先**用 `jdbc_mapped_export`；复杂 join/存储过程再写专用 `ExportDataPlugin`。
 
