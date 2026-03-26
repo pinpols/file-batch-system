@@ -28,7 +28,7 @@ public class ImportLoadPluginRegistry {
 
     public ImportLoadPlugin require(String id) {
         if (id == null || id.isBlank()) {
-            id = WorkerPluginIds.IMPORT_LOAD_CUSTOMER_ACCOUNT;
+            id = WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
         }
         ImportLoadPlugin plugin = byId.get(id.toLowerCase(Locale.ROOT));
         if (plugin == null) {

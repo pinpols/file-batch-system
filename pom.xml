@@ -41,6 +41,7 @@
         <lombok.version>1.18.42</lombok.version>
         <mybatis-spring-boot.version>4.0.0</mybatis-spring-boot.version>
         <spring-ai.version>2.0.0-M3</spring-ai.version>
+        <jsqlparser.version>4.5</jsqlparser.version>
     </properties>
 
     <dependencyManagement>
@@ -103,6 +104,11 @@
                 <groupId>org.wiremock</groupId>
                 <artifactId>wiremock</artifactId>
                 <version>3.9.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.jsqlparser</groupId>
+                <artifactId>jsqlparser</artifactId>
+                <version>${jsqlparser.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

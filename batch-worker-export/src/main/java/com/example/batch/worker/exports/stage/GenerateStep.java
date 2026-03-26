@@ -2,7 +2,6 @@ package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
-import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
@@ -115,7 +114,7 @@ public class GenerateStep implements ExportStageStep {
         if (v != null && StringUtils.hasText(String.valueOf(v))) {
             return String.valueOf(v).trim();
         }
-        return WorkerPluginIds.EXPORT_DATA_SETTLEMENT;
+        return null;
     }
 
     private int resolvePageSize(ExportJobContext context) {

@@ -204,7 +204,7 @@ public class LoadStep implements ImportStageStep {
         if (v != null && StringUtils.hasText(String.valueOf(v))) {
             return String.valueOf(v).trim();
         }
-        return WorkerPluginIds.IMPORT_LOAD_CUSTOMER_ACCOUNT;
+        return WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
     }
 
     private Map<String, Object> templateConfigMap(ImportJobContext context) {

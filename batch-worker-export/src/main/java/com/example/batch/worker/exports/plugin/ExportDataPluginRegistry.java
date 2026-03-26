@@ -1,7 +1,6 @@
 package com.example.batch.worker.exports.plugin;
 
 import com.example.batch.common.plugin.ExportDataPlugin;
-import com.example.batch.common.plugin.WorkerPluginIds;
 import java.util.List;
 import java.util.Locale;
 import java.util.LinkedHashMap;
@@ -28,7 +27,8 @@ public class ExportDataPluginRegistry {
 
     public ExportDataPlugin require(String id) {
         if (id == null || id.isBlank()) {
-            id = WorkerPluginIds.EXPORT_DATA_SETTLEMENT;
+            throw new IllegalStateException(
+                    "export_data_ref is required in template config: use 'jdbc_mapped_export' or 'sql_template_export'");
         }
         ExportDataPlugin plugin = byId.get(id.toLowerCase(Locale.ROOT));
         if (plugin == null) {

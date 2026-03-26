@@ -11,11 +11,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
-import com.example.batch.worker.exports.infrastructure.SettlementExportRepository;
+import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,17 +24,19 @@ import org.junit.jupiter.api.Test;
 class RegisterStepTest {
 
     private PlatformFileRuntimeRepository runtimeRepository;
-    private SettlementExportRepository settlementExportRepository;
+    private ExportDataPluginRegistry exportDataPluginRegistry;
+    private ExportDataPlugin exportDataPlugin;
     private MinioStorageProperties minioStorageProperties;
     private RegisterStep step;
 
     @BeforeEach
     void setUp() {
         runtimeRepository = mock(PlatformFileRuntimeRepository.class);
-        settlementExportRepository = mock(SettlementExportRepository.class);
+        exportDataPluginRegistry = mock(ExportDataPluginRegistry.class);
+        exportDataPlugin = mock(ExportDataPlugin.class);
         minioStorageProperties = new MinioStorageProperties();
         minioStorageProperties.setBucket("bucket-1");
-        step = new RegisterStep(runtimeRepository, settlementExportRepository, minioStorageProperties);
+        step = new RegisterStep(runtimeRepository, exportDataPluginRegistry, minioStorageProperties);
     }
 
     @Test
@@ -79,6 +82,7 @@ class RegisterStepTest {
         ctx.getAttributes().put("objectName", "obj.json");
         ctx.getAttributes().put("checksumValue", "aaa");
         ctx.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, 99L);
+        ctx.getAttributes().put("exportDataRef", "jdbc_mapped_export");
 
         when(runtimeRepository.existsFileRecordByStoragePath(eq("t1"), eq("bucket-1"), eq("obj.json"))).thenReturn(true);
         when(runtimeRepository.loadFileRecordByStoragePath(eq("t1"), eq("bucket-1"), eq("obj.json")))
@@ -86,14 +90,14 @@ class RegisterStepTest {
         when(runtimeRepository.toLong(eq(1L))).thenReturn(1L);
         when(runtimeRepository.toLong(eq(99L))).thenReturn(99L);
         when(runtimeRepository.toLong(eq(10L))).thenReturn(10L);
+        when(exportDataPluginRegistry.require(eq("jdbc_mapped_export"))).thenReturn(exportDataPlugin);
 
         var result = step.execute(ctx);
 
         assertThat(result.success()).isTrue();
         assertThat(ctx.getAttributes().get(PipelineRuntimeKeys.FILE_ID)).isEqualTo(1L);
         verify(runtimeRepository).bindFileToPipelineInstance(eq(99L), eq(1L));
-        verify(settlementExportRepository).markBatchExported(eq("t1"), anyLong());
-        verify(settlementExportRepository).markDetailsExported(eq("t1"), anyLong(), eq(2), anyString());
+        verify(exportDataPlugin).onRegistered(any(), anyLong(), eq(2), anyString());
     }
 
     private ExportJobContext baseContext() {
@@ -111,4 +115,3 @@ class RegisterStepTest {
         return ctx;
     }
 }
-

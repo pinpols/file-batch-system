@@ -1,17 +1,19 @@
 package com.example.batch.worker.exports.stage;
 
+import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.plugin.ExportDataContext;
+import com.example.batch.common.plugin.ExportDataPlugin;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
-import com.example.batch.common.config.MinioStorageProperties;
-import com.example.batch.worker.exports.infrastructure.SettlementExportRepository;
+import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import java.time.LocalDate;
-import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -27,14 +29,14 @@ public class RegisterStep implements ExportStageStep {
     );
 
     private final PlatformFileRuntimeRepository runtimeRepository;
-    private final SettlementExportRepository settlementExportRepository;
+    private final ExportDataPluginRegistry exportDataPluginRegistry;
     private final MinioStorageProperties minioStorageProperties;
 
     public RegisterStep(PlatformFileRuntimeRepository runtimeRepository,
-                          SettlementExportRepository settlementExportRepository,
-                          MinioStorageProperties minioStorageProperties) {
+                        ExportDataPluginRegistry exportDataPluginRegistry,
+                        MinioStorageProperties minioStorageProperties) {
         this.runtimeRepository = runtimeRepository;
-        this.settlementExportRepository = settlementExportRepository;
+        this.exportDataPluginRegistry = exportDataPluginRegistry;
         this.minioStorageProperties = minioStorageProperties;
     }
 
@@ -115,13 +117,8 @@ public class RegisterStep implements ExportStageStep {
         Integer exportVersion = fileRecord.get("file_generation_no") instanceof Number number
                 ? number.intValue()
                 : 1;
-        settlementExportRepository.markBatchExported(context.getTenantId(), batchId);
-        settlementExportRepository.markDetailsExported(
-                context.getTenantId(),
-                batchId,
-                exportVersion,
-                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID))
-        );
+        String traceId = String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
+        resolvePlugin(context).onRegistered(buildDataContext(context, exportPayload), batchId, exportVersion, traceId);
         return ExportStageResult.success(stage());
     }
 
@@ -143,13 +140,9 @@ public class RegisterStep implements ExportStageStep {
         Integer exportVersion = existing.get("file_generation_no") instanceof Number number
                 ? number.intValue()
                 : 1;
-        settlementExportRepository.markBatchExported(context.getTenantId(), batchId);
-        settlementExportRepository.markDetailsExported(
-                context.getTenantId(),
-                batchId,
-                exportVersion,
-                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID))
-        );
+        String traceId = String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
+        ExportPayload exportPayload2 = (ExportPayload) context.getAttributes().get("exportPayload");
+        resolvePlugin(context).onRegistered(buildDataContext(context, exportPayload2), batchId, exportVersion, traceId);
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("reason", "STORE_TO_REGISTER_RETRY");
         audit.put("objectName", context.getAttributes().get("objectName"));
@@ -214,5 +207,31 @@ public class RegisterStep implements ExportStageStep {
         if (value != null) {
             target.put(key, value);
         }
+    }
+
+    private ExportDataPlugin resolvePlugin(ExportJobContext context) {
+        String exportDataRef = nullableText(context.getAttributes().get("exportDataRef"));
+        return exportDataPluginRegistry.require(exportDataRef);
+    }
+
+    private ExportDataContext buildDataContext(ExportJobContext context, ExportPayload payload) {
+        Object tc = context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+        Map<String, Object> templateConfig = new LinkedHashMap<>();
+        if (tc instanceof Map<?, ?> m) {
+            m.forEach((k, v) -> templateConfig.put(String.valueOf(k), v));
+        }
+        Object snap = context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT);
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        if (snap instanceof Map<?, ?> m) {
+            m.forEach((k, v) -> snapshot.put(String.valueOf(k), v));
+        }
+        return new ExportDataContext(
+                context.getTenantId(),
+                context.getJobCode(),
+                payload == null ? null : payload.batchNo(),
+                payload == null ? null : payload.templateCode(),
+                templateConfig,
+                snapshot
+        );
     }
 }
