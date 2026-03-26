@@ -9,7 +9,11 @@ import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
+import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.listener.MessageListenerContainer;
 
 /**
  * Kafka 消费骨架（所有 worker 通用）。
@@ -42,13 +46,40 @@ public abstract class AbstractTaskConsumer {
     protected abstract TaskDispatchExecutor taskDispatchExecutor();
 
     /**
+     * KafkaListener 的 container id。
+     *
+     * <p>背压实现需要在运行时对 container 做 pause/resume，因此这里要求子类固定配置 listenerId，
+     * 并在 {@code @KafkaListener(id = "...")} 中保持一致。
+     */
+    protected abstract String listenerId();
+
+    @Value("${batch.worker.max-concurrent-tasks:8}")
+    private int maxConcurrentTasks;
+
+    private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+    private volatile Semaphore semaphore;
+
+    protected AbstractTaskConsumer(KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
+        this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
+    }
+
+    /**
      * 由子类的 {@code @KafkaListener} 方法调用。
      * <p>把监听注解留在子类，避免抽象类强耦合 listener 配置与 topic 表达式。
      */
     protected void doConsume(String payload) {
+        Semaphore sem = ensureSemaphore();
+        boolean acquired = sem.tryAcquire();
+        if (!acquired) {
+            // 背压：当实例内并发达到上限时，暂停拉取新消息。
+            // 注意：这里不阻塞线程等待 permit（避免 Kafka consumer 线程卡死导致 rebalance 风险）。
+            pauseContainer();
+            return;
+        }
         TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
         WorkerRegistration registration = workerLoop().ensureStarted();
         if (!accepts(message, registration)) {
+            sem.release();
             return;
         }
         injectMdc(message, registration);
@@ -62,12 +93,58 @@ public abstract class AbstractTaskConsumer {
             log.info("{} task processed: taskId={}, success={}, message={}",
                     workerConfiguration().workerType(), result.taskId(), result.success(), result.message());
         } finally {
+            // 无论处理成功/失败/抛异常，都必须释放 permit；
+            // 若之前触发过 pause，则在释放后尝试恢复消费。
+            sem.release();
+            resumeContainerIfPaused();
             BatchMdc.remove(StructuredLogField.TENANT_ID);
             BatchMdc.remove(StructuredLogField.TRACE_ID);
             BatchMdc.remove(StructuredLogField.TASK_ID);
             BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
             BatchMdc.remove(StructuredLogField.WORKER_TYPE);
             BatchMdc.remove(StructuredLogField.WORKER_ID);
+        }
+    }
+
+    private Semaphore ensureSemaphore() {
+        Semaphore local = semaphore;
+        if (local != null) {
+            return local;
+        }
+        synchronized (this) {
+            if (semaphore == null) {
+                int permits = Math.max(1, maxConcurrentTasks);
+                semaphore = new Semaphore(permits);
+            }
+            return semaphore;
+        }
+    }
+
+    private void pauseContainer() {
+        MessageListenerContainer container = kafkaListenerEndpointRegistry.getListenerContainer(listenerId());
+        if (container == null) {
+            return;
+        }
+        try {
+            if (!container.isPauseRequested()) {
+                container.pause();
+            }
+        } catch (Exception ex) {
+            log.warn("failed to pause container: listenerId={}, error={}", listenerId(), ex.getMessage(), ex);
+        }
+    }
+
+    private void resumeContainerIfPaused() {
+        MessageListenerContainer container = kafkaListenerEndpointRegistry.getListenerContainer(listenerId());
+        if (container == null) {
+            return;
+        }
+        try {
+            if (container.isPauseRequested()) {
+                container.resume();
+            }
+        } catch (Exception ex) {
+            log.warn("failed to resume container: listenerId={}, error={}", listenerId(), ex.getMessage(), ex);
         }
     }
 

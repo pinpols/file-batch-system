@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -34,12 +35,14 @@ public class ImportIngressScanner {
     private final ImportWorkerConfiguration workerConfiguration;
     private final ImportScannerProperties scannerProperties;
     private final MinioStorageProperties minioStorageProperties;
+    private final MinioClient minioClient;
     private final Map<String, ObservedObjectState> observedObjects = new ConcurrentHashMap<>();
 
     /**
      * 扫描器只负责“安全发现 + 登记”，不绕过 Trigger/Orchestrator 直接起任务。
      */
     @Scheduled(fixedDelayString = "${batch.worker.import.scanner.poll-interval-millis:30000}")
+    @SchedulerLock(name = "import_ingress_scan", lockAtMostFor = "PT2M", lockAtLeastFor = "PT20S")
     public void scan() {
         if (!scannerProperties.isEnabled() || !StringUtils.hasText(workerConfiguration.tenantId())) {
             return;
@@ -167,7 +170,7 @@ public class ImportIngressScanner {
         Map<String, ObjectSnapshot> snapshots = new HashMap<>();
         int count = 0;
         try {
-            Iterable<Result<Item>> objects = minioClient().listObjects(
+            Iterable<Result<Item>> objects = minioClient.listObjects(
                     ListObjectsArgs.builder()
                             .bucket(minioStorageProperties.getBucket())
                             .prefix(scannerProperties.getPrefix())
@@ -201,21 +204,20 @@ public class ImportIngressScanner {
         return objectName + ".done";
     }
 
-    private String resolveFileFormatType(String fileName) {
+ private String resolveFileFormatType(String fileName) {
         String lower = fileName == null ? "" : fileName.toLowerCase();
-        if (lower.endsWith(".csv")) {
-            return "DELIMITED";
-        }
-        if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
-            return "EXCEL";
-        }
-        if (lower.endsWith(".xml")) {
-            return "XML";
-        }
-        if (lower.endsWith(".json")) {
-            return "JSON";
-        }
-        return "BINARY";
+        Map<String, String> formatMap = Map.ofEntries(
+                Map.entry(".csv", "DELIMITED"),
+                Map.entry(".xlsx", "EXCEL"),
+                Map.entry(".xls", "EXCEL"),
+                Map.entry(".xml", "XML"),
+                Map.entry(".json", "JSON")
+        );
+        return formatMap.entrySet().stream()
+                .filter(e -> lower.endsWith(e.getKey()))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse("BINARY");
     }
 
     private String sanitizeTrace(String fileName) {
@@ -224,22 +226,15 @@ public class ImportIngressScanner {
 
     private void ensureBucket() {
         try {
-            boolean exists = minioClient().bucketExists(
+            boolean exists = minioClient.bucketExists(
                     BucketExistsArgs.builder().bucket(minioStorageProperties.getBucket()).build()
             );
             if (!exists) {
-                minioClient().makeBucket(MakeBucketArgs.builder().bucket(minioStorageProperties.getBucket()).build());
+                minioClient.makeBucket(MakeBucketArgs.builder().bucket(minioStorageProperties.getBucket()).build());
             }
         } catch (Exception exception) {
             throw new IllegalStateException("failed to ensure import scanner bucket", exception);
         }
-    }
-
-    private MinioClient minioClient() {
-        return MinioClient.builder()
-                .endpoint(minioStorageProperties.getEndpoint())
-                .credentials(minioStorageProperties.getAccessKey(), minioStorageProperties.getSecretKey())
-                .build();
     }
 
     private record ObjectSnapshot(String objectName, long size, String etag, Instant lastModified) {

@@ -67,9 +67,15 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             consumer.subscribe(List.of(BatchTopics.OUTBOX_EVENT));
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
             assertThat(records.count()).isGreaterThanOrEqualTo(1);
-            ConsumerRecord<String, String> first = records.iterator().next();
-            assertThat(first.key()).isEqualTo("key-fallback-001");
-            JsonNode root = OBJECT_MAPPER.readTree(first.value());
+            ConsumerRecord<String, String> matched = null;
+            for (ConsumerRecord<String, String> record : records) {
+                if ("key-fallback-001".equals(record.key())) {
+                    matched = record;
+                    break;
+                }
+            }
+            assertThat(matched).as("should find the published record by key").isNotNull();
+            JsonNode root = OBJECT_MAPPER.readTree(matched.value());
             assertThat(root.path("idempotencyKey").asText()).isEqualTo("key-fallback-001");
             assertThat(root.path("eventName").asText()).isEqualTo("CUSTOM_EVENT_TYPE");
         }
@@ -93,9 +99,15 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT));
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
             assertThat(records.count()).isGreaterThanOrEqualTo(1);
-            ConsumerRecord<String, String> first = records.iterator().next();
-            assertThat(first.key()).isEqualTo("key-import-001");
-            JsonNode payload = OBJECT_MAPPER.readTree(first.value());
+            ConsumerRecord<String, String> matched = null;
+            for (ConsumerRecord<String, String> record : records) {
+                if ("key-import-001".equals(record.key())) {
+                    matched = record;
+                    break;
+                }
+            }
+            assertThat(matched).as("should find the published record by key").isNotNull();
+            JsonNode payload = OBJECT_MAPPER.readTree(matched.value());
             assertThat(payload.path("idempotencyKey").asText()).isEqualTo("key-import-001");
             assertThat(payload.path("workerType").asText()).isEqualTo("IMPORT");
         }
@@ -119,9 +131,15 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_EXPORT));
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
             assertThat(records.count()).isGreaterThanOrEqualTo(1);
-            ConsumerRecord<String, String> first = records.iterator().next();
-            assertThat(first.key()).isEqualTo("key-export-001");
-            JsonNode payload = OBJECT_MAPPER.readTree(first.value());
+            ConsumerRecord<String, String> matched = null;
+            for (ConsumerRecord<String, String> record : records) {
+                if ("key-export-001".equals(record.key())) {
+                    matched = record;
+                    break;
+                }
+            }
+            assertThat(matched).as("should find the published record by key").isNotNull();
+            JsonNode payload = OBJECT_MAPPER.readTree(matched.value());
             assertThat(payload.path("idempotencyKey").asText()).isEqualTo("key-export-001");
             assertThat(payload.path("workerType").asText()).isEqualTo("EXPORT");
         }

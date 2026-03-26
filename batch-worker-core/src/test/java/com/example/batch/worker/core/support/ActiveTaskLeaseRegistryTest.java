@@ -3,6 +3,10 @@ package com.example.batch.worker.core.support;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.worker.core.infrastructure.ActiveTaskLeaseRegistry;
+import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -72,5 +76,33 @@ class ActiveTaskLeaseRegistryTest {
     @Test
     void shouldReturnEmptySnapshotWhenNoLeases() {
         assertThat(registry.snapshot()).isEmpty();
+    }
+
+    @Test
+    void awaitDrain_shouldReturnAfterLeasesRemoved() throws Exception {
+        registry.register("task-1", "t1", "w1");
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        Future<?> f = pool.submit(() -> registry.awaitDrain(Duration.ofSeconds(2)));
+
+        // simulate in-flight completion
+        Thread.sleep(200);
+        registry.remove("task-1");
+
+        f.get();
+        pool.shutdown();
+        assertThat(registry.snapshot()).isEmpty();
+    }
+
+    @Test
+    void awaitDrain_shouldReturnOnTimeoutEvenIfLeasesRemain() {
+        registry.register("task-1", "t1", "w1");
+
+        long start = System.currentTimeMillis();
+        registry.awaitDrain(Duration.ofMillis(200));
+        long elapsed = System.currentTimeMillis() - start;
+
+        assertThat(elapsed).isGreaterThanOrEqualTo(150);
+        assertThat(registry.snapshot()).hasSize(1);
     }
 }

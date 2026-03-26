@@ -2,8 +2,6 @@ package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
-import com.example.batch.common.exception.SystemException;
-import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -18,6 +16,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +41,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             partitionEntity.setPartitionStatus(resolveInitialPartitionStatus(partitionPlan, initialStatus));
             partitionEntity.setWorkerGroup(plan.getWorkerGroup());
             partitionEntity.setWorkerCode(partitionPlan.getWorkerRoute() == null ? null : partitionPlan.getWorkerRoute().getWorkerId());
+            partitionEntity.setVersion(0L);
             partitionEntity.setRetryCount(0);
             partitionEntity.setBusinessKey(partitionPlan.getBusinessKey());
             partitionEntity.setIdempotencyKey(partitionPlan.getPartitionKey());
@@ -65,7 +65,8 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
                 workerCode,
                 leaseExpireAt,
                 PartitionStatus.READY.code(),
-                PartitionStatus.RUNNING.code()
+                PartitionStatus.RUNNING.code(),
+                existingPartition.getVersion()
         );
         return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
     }
@@ -88,7 +89,8 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
         List<JobPartitionEntity> expired = jobPartitionMapper.selectExpiredLeases(tenantId, PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
         for (JobPartitionEntity partition : expired) {
             reclaimed += jobPartitionMapper.markStatus(tenantId, partition.getId(), PartitionStatus.WAITING.code(),
-                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code());
+                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code(),
+                    partition.getVersion());
         }
         return reclaimed;
     }
@@ -105,24 +107,34 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
         if (partition == null || task == null) {
             return false;
         }
-        if (jobPartitionMapper.promoteStatus(
+        int partitionUpdated = jobPartitionMapper.promoteStatus(
                 partition.getTenantId(),
                 partition.getId(),
                 fromPartitionStatus,
-                PartitionStatus.READY.code()
-        ) <= 0) {
+                PartitionStatus.READY.code(),
+                partition.getVersion()
+        );
+        if (partitionUpdated <= 0) {
             return false;
         }
-        if (jobTaskMapper.promoteStatus(
+        int taskUpdated = jobTaskMapper.promoteStatus(
                 task.getTenantId(),
                 task.getId(),
                 fromTaskStatus,
-                TaskStatus.READY.code()
-        ) <= 0) {
-            throw new SystemException(ResultCode.SYSTEM_ERROR, "partition and task status promotion diverged");
+                TaskStatus.READY.code(),
+                task.getVersion()
+        );
+        if (taskUpdated <= 0) {
+            // 分片与任务是“必须一起推进”的原子语义：
+            // - partition 已 READY 但 task 还没 READY，会导致派发链路选择/查询出现不一致
+            // 因此这里宁可回滚重试，也不要留下半推进状态。
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return false;
         }
         partition.setPartitionStatus(PartitionStatus.READY.code());
+        partition.setVersion(partition.getVersion() == null ? 1L : partition.getVersion() + 1);
         task.setTaskStatus(TaskStatus.READY.code());
+        task.setVersion(task.getVersion() == null ? 1L : task.getVersion() + 1);
         return true;
     }
 

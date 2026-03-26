@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,7 @@ public class WorkerDrainTimeoutScheduler {
     private final WorkerDrainProperties workerDrainProperties;
 
     @Scheduled(fixedDelayString = "${batch.worker.drain.check-interval-millis:15000}")
+    @SchedulerLock(name = "worker_drain_timeout", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
     public void expireDrains() {
         if (!workerDrainProperties.isEnabled()) {
             return;

@@ -13,3 +13,7 @@ management:
 batch:
   worker:
     heartbeat-interval-seconds: ${BATCH_WORKER_HEARTBEAT_INTERVAL_SECONDS:15}
+    graceful-shutdown:
+      timeout-seconds: ${BATCH_WORKER_GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS:120}
+    max-concurrent-tasks: ${BATCH_WORKER_MAX_CONCURRENT_TASKS:8}
+    stale-temp-file-hours: ${BATCH_WORKER_STALE_TEMP_FILE_HOURS:6}

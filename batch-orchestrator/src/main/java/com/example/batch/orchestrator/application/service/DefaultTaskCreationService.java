@@ -23,6 +23,9 @@ public class DefaultTaskCreationService implements TaskCreationService {
     @Override
     @Transactional
     public JobTaskEntity createTask(JobTaskEntity task) {
+        if (task != null && task.getVersion() == null) {
+            task.setVersion(0L);
+        }
         jobTaskMapper.insert(task);
         createStepInstance(task);
         return task;

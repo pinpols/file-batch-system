@@ -152,8 +152,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         }
 
         fileGovernanceRepository.resetDispatchRecordForRedispatch(command.tenantId(), toLong(dispatchRecord.get("id")));
-        jobPartitionMapper.resetForDispatch(command.tenantId(), partition.getId(), PartitionStatus.READY.code());
-        jobTaskMapper.resetForRetry(command.tenantId(), task.getId(), TaskStatus.READY.code());
+        jobPartitionMapper.resetForDispatch(command.tenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
+        jobTaskMapper.resetForRetry(command.tenantId(), task.getId(), TaskStatus.READY.code(), task.getVersion());
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,

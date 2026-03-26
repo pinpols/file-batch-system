@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
  * Worker 认领（claim）与租约（lease）治理。
@@ -63,22 +64,31 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         if (!isWorkerClaimable(tenantId, workerCode, current)) {
             return current;
         }
-        int updated = jobTaskMapper.assignWorker(tenantId, taskId, workerCode, TaskStatus.RUNNING.code(), TaskStatus.READY.code());
+        int updated = jobTaskMapper.assignWorker(tenantId, taskId, workerCode, TaskStatus.RUNNING.code(), TaskStatus.READY.code(), current.getVersion());
         if (updated <= 0) {
             return jobTaskMapper.selectById(tenantId, taskId);
         }
         if (current.getJobPartitionId() != null) {
             // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
+            JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
+            if (partition == null) {
+                // 这里回滚而不是抛异常：语义上属于并发/状态漂移（可重试），不应该把 worker 侧认领请求打成“系统故障”。
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                return jobTaskMapper.selectById(tenantId, taskId);
+            }
             int claimed = jobPartitionMapper.claimPartition(
                     tenantId,
                     current.getJobPartitionId(),
                     workerCode,
                     Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()),
                     PartitionStatus.READY.code(),
-                    PartitionStatus.RUNNING.code()
+                    PartitionStatus.RUNNING.code(),
+                    partition.getVersion()
             );
             if (claimed <= 0) {
-                throw new IllegalStateException("partition claim failed for taskId=" + taskId);
+                // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                return jobTaskMapper.selectById(tenantId, taskId);
             }
         }
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
@@ -119,7 +129,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             return null;
         }
         jobTaskMapper.updateStatus(tenantId, taskId, taskStatus, null, errorCode, errorMessage,
-                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code());
+                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code(),
+                current.getVersion());
         return jobTaskMapper.selectById(tenantId, taskId);
     }
 
@@ -145,7 +156,8 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         current.setStartedAt(startedAt);
         current.setTaskStatus(TaskStatus.RUNNING.code());
         jobTaskMapper.updateStatus(tenantId, taskId, TaskStatus.RUNNING.code(), null, null, null,
-                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code());
+                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code(),
+                current.getVersion());
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
         if (stepInstance != null
                 && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), startedAt, stepInstance.getVersion(), StepInstanceStatus.RUNNING.code(), StepInstanceStatus.CREATED.code(), StepInstanceStatus.WAITING.code(), StepInstanceStatus.READY.code(), StepInstanceStatus.RETRYING.code()) <= 0) {

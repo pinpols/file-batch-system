@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -48,6 +49,7 @@ public class WaitingPartitionDispatchScheduler {
      * WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。
      */
     @Scheduled(fixedDelayString = "${batch.resource-scheduler.waiting-dispatch-interval-millis:10000}")
+    @SchedulerLock(name = "waiting_partition_dispatch", lockAtMostFor = "PT1M", lockAtLeastFor = "PT5S")
     public void dispatchWaitingPartitions() {
         List<JobPartitionEntity> waitingPartitions = jobPartitionMapper.selectWaitingPartitionsGlobal(
                 resourceSchedulerProperties.getWaitingDispatchBatchSize(),

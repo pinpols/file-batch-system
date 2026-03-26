@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.JobTaskMapper">
+    <!--
+      关键约束：JobTask 的状态推进采用 DB 乐观锁（version CAS）。
+      约定：UPDATE affected rows == 0 表示并发冲突（重复回报/重复认领/重复重试等），由调用方转换为幂等返回或 STATE_CONFLICT。
+    -->
     <resultMap id="JobTaskResultMap" type="com.example.batch.orchestrator.domain.entity.JobTaskEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
@@ -10,6 +14,7 @@
         <result column="task_seq" property="taskSeq"/>
         <result column="task_status" property="taskStatus"/>
         <result column="assigned_worker_code" property="assignedWorkerCode"/>
+        <result column="version" property="version"/>
         <result column="task_payload" property="taskPayload"/>
         <result column="result_summary" property="resultSummary"/>
         <result column="error_code" property="errorCode"/>
@@ -112,9 +117,11 @@
                 when #{taskStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
                 else finished_at
             end,
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and version = #{expectedVersion}
     </update>
 
     <update id="finishTask">
@@ -124,10 +131,12 @@
             error_code = #{errorCode},
             error_message = #{errorMessage},
             finished_at = current_timestamp,
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
           and task_status = #{expectedStatus}
+          and version = #{expectedVersion}
     </update>
 
     <update id="assignWorker">
@@ -135,11 +144,13 @@
         set assigned_worker_code = #{assignedWorkerCode},
             task_status = #{taskStatus},
             started_at = current_timestamp,
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
           and task_status = #{readyStatus}
           and (assigned_worker_code is null or assigned_worker_code = #{assignedWorkerCode})
+          and version = #{expectedVersion}
     </update>
 
     <update id="resetForRetry">
@@ -151,17 +162,21 @@
             result_summary = null,
             started_at = null,
             finished_at = null,
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and version = #{expectedVersion}
     </update>
 
     <update id="promoteStatus">
         update batch.job_task
         set task_status = #{toStatus},
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
           and task_status = #{fromStatus}
+          and version = #{expectedVersion}
     </update>
 </mapper>

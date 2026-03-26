@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ public class PartitionLeaseReclaimScheduler {
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Scheduled(fixedDelayString = "${batch.partition-lease.reclaim-interval-millis:15000}")
+    @SchedulerLock(name = "partition_lease_reclaim", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
     @Transactional
     public void reclaimExpiredPartitions() {
         if (!running.compareAndSet(false, true)) {
@@ -55,15 +57,15 @@ public class PartitionLeaseReclaimScheduler {
         ));
         JobTaskEntity task = tasks.stream().findFirst().orElse(null);
         if (task == null) {
-            jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code());
+            jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
             return;
         }
         JobInstanceEntity jobInstance = jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
         if (jobInstance == null) {
             return;
         }
-        jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code());
-        jobTaskMapper.resetForRetry(partition.getTenantId(), task.getId(), TaskStatus.READY.code());
+        jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
+        jobTaskMapper.resetForRetry(partition.getTenantId(), task.getId(), TaskStatus.READY.code(), task.getVersion());
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,

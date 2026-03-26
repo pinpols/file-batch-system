@@ -240,8 +240,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
             jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
         }
-        jobPartitionMapper.resetForDispatch(tenantId, partition.getId(), PartitionStatus.READY.code());
-        jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code());
+        jobPartitionMapper.resetForDispatch(tenantId, partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
+        jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion());
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,
@@ -261,7 +261,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
             jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
         }
-        jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code());
+        jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion());
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,

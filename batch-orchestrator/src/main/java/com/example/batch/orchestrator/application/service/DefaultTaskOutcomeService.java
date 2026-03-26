@@ -159,7 +159,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code(),
                 TaskStatus.RUNNING.code(),
                 command.resultSummary(),
-                command.errorCode(), command.errorMessage());
+                command.errorCode(), command.errorMessage(),
+                task.getVersion());
         if (updated <= 0) {
             throw new BizException(ResultCode.STATE_CONFLICT,
                     "task already finished by concurrent update: taskId=" + command.taskId());
@@ -168,18 +169,21 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         if (partition != null) {
             if (command.success()) {
                 jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.SUCCESS.code(),
-                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code());
+                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code(),
+                    partition.getVersion());
             } else if (retryScheduled) {
                 // 进入 RETRYING：partition 先标记为 RETRYING，实际重排队由 retry scheduler → outbox 完成。
                 jobPartitionMapper.markRetrying(
                         command.tenantId(),
                         partition.getId(),
                         Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1,
-                        PartitionStatus.RETRYING.code()
+                        PartitionStatus.RETRYING.code(),
+                        partition.getVersion()
                 );
             } else {
                 jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.FAILED.code(),
-                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code());
+                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code(),
+                    partition.getVersion());
             }
             jobPartitionMapper.updateOutputSummary(
                     command.tenantId(),
