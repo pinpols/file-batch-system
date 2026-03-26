@@ -5,6 +5,7 @@
 
 更新记录：
 - 2026-03-25：补齐 K8s 健康探针（Actuator probes）默认配置；Worker 停机时先标记 DRAINING 并停止 Kafka Listener 拉取新消息；Worker 运行方式调整为可对外提供 Actuator HTTP 端点（用于 readiness/liveness 探针）。
+- 2026-03-26：可扩展性 & 高可用 6 项改造全部完成（详见下文及 `scalability-ha-assessment.md`）。
 
 ---
 
@@ -30,7 +31,11 @@
 | AI 提示词网关（分类/脱敏/审计日志） | ✅ 完整 | `ConsoleAiPromptGuard`（REJECTED_DISABLED/SAFETY/SCOPE/APPROVED）、`DefaultConsoleAiAuditService` |
 | SLA & 文件治理定时检查 + 告警落库 | ✅ 完整 | `JobSlaScheduler`、`FileGovernanceScheduler`、V18 Flyway（`batch.alert_event`） |
 | Worker 排空/下线（drain/force-offline） | ✅ 完整 | `WorkerDrainGovernanceService`、`WorkerDrainTimeoutScheduler`、V19 Flyway（`drain_started_at`/`drain_deadline_at`） |
-| K8s 健康探针 + Worker 优雅停机（停止接新活） | ✅ 完整 | `batch-defaults.yml` 启用 Actuator probes；`GracefulKafkaShutdown`（shutdown 置 DRAINING + stop Kafka listener）；`DefaultWorkerLifecycleManager.shutdown()`（DRAINING→DECOMMISSIONED） |
+| K8s 健康探针 + Worker 优雅停机（停止接新活 + 等 in-flight） | ✅ 完整 | `batch-defaults.yml` 启用 Actuator probes；`GracefulKafkaShutdown`（stop listener → `awaitDrain` 120s）；`ActiveTaskLeaseRegistry.awaitDrain(Duration)` |
+| Orchestrator 多实例 HA（乐观锁） | ✅ 完整 | `job_instance/partition/task` 状态转换均含 `version CAS`；mapper 返回 `int`，affected=0 静默放弃 |
+| Kafka 消费并发 + 背压 | ✅ 完整 | 三类 worker `concurrency=4`、`max-poll-records`；`AbstractTaskConsumer` Semaphore + container pause/resume |
+| 连接池角色隔离 | ✅ 完整 | `BusinessDataSourceConfiguration` 改造为 `HikariConfig @ConfigurationProperties`；各模块按角色定容（orchestrator platform=10；import biz=15；export biz=20；dispatch platform=10） |
+| 临时文件兜底清理 | ✅ 完整 | `StaleTempFileCleanup`（ApplicationReadyEvent，清 `batch-*` 超 6h 孤儿文件） |
 | 调度快照与控制台代理 | ✅ 完整 | `TenantSchedulerSnapshotService`、`ConsoleSchedulerSnapshotController` |
 | 默认运行参数目录 | ✅ 完整 | V23 Flyway（`batch.batch_runtime_default_parameter`）、`runtime-default-parameters.md` |
 | Flyway 完整迁移序列（V1–V23） | ✅ 完整 | 无重复版本号，V20/V21/V22 已在第 22 轮重编号修正 |
@@ -102,7 +107,9 @@
 | `DispatchReceiptPollSchedulerTest` | worker-dispatch | disabled/无行/null fileId/空 channelCode/无 pollUrl 跳过 |
 | `ImportLoadPluginRegistryTest` | worker-import | 大小写归一、默认插件、重复 id 检测 |
 | `ExportDataPluginRegistryTest` | worker-export | 同上（导出侧） |
-| `ActiveTaskLeaseRegistryTest` | worker-core | 租约注册/移除/覆盖/null 防护 |
+| `ActiveTaskLeaseRegistryTest` | worker-core | 租约注册/移除/覆盖/null 防护；`awaitDrain` 正常返回 + 超时返回 |
+| `AbstractTaskConsumerBackpressureTest` | worker-core | Semaphore permits 耗尽时 container 被暂停；release 后恢复消费 |
+| `StaleTempFileCleanupTest` | worker-core | 超龄文件被删；未超龄文件保留；启动异常不影响应用 |
 | `DefaultTaskExecutionWrapperTest` | worker-core | 租约生命周期、claim 委托、异常时仍移除租约 |
 | `ConsoleAiPromptGuardTest` | console-api | 禁用/空白/超长/敏感词/领域词/分类/优先级 |
 | `JobInstanceStatusTest` | common | 9 个枚举 code/label/name 一致性 |
@@ -191,13 +198,16 @@
 
 核心业务链路（调度主链、DAG、文件处理三链路、安全治理）已全部落地且编译通过。
 对话_5（12 轮）完成：Worker 循环模板、Stage 异常契约、Outbox E2E、SQL 原子保护、三链路失败 E2E、多租户并发 E2E、HTTP 韧性、SQL CI 守卫、配置基线模块化、ADR 体系、产物验收 Verifier 框架 + Micrometer 指标。
-**当前测试体系**：**44 单元** + 18 集成 + **10 E2E**（主链路/失败分支/内容验证/多租户/dedup 幂等），逻辑覆盖率约 75%。
+2026-03-26 完成：可扩展性 & 高可用 6 项改造（乐观锁 / Kafka 并发 / 连接池隔离 / 优雅关闭 / 背压 / 临时文件清理）。
+**当前测试体系**：**47 单元** + 18 集成 + **10 E2E**（主链路/失败分支/内容验证/多租户/dedup 幂等），逻辑覆盖率约 78%。
 
-**未完成项（截至 2026-03-25）**：
+**未完成项（截至 2026-03-26）**：
 
 | 优先级 | 项目 |
 |---|---|
 | 🟡 上线前补全 | 压测容量基线数据（脚本已有，需在 staging 环境实测并填写基线记录表） |
 | 🟢 已完成 | Helm Chart / K8s 生产清单（`helm/batch-platform/` + `helm/values-prod.yaml`） |
-| ⚪ 按需推进 | 审批台账产品化（批量审批、SLA 告警、运营视图） |
+| 🟢 已完成 | 可扩展性 & 高可用 6 项改造（详见 `scalability-ha-assessment.md`） |
+| ⚪ 按需推进 | Quartz JDBC 集群模式（彻底消除触发器重复规划，`QRTZ_*` 表已存在） |
+| ⚪ 按需推进 | Kafka lag 驱动 HPA（KEDA 或自定义 metrics，比 CPU 更精准） |
 | 🟢 已完成 | ELK / OpenTelemetry 生产侧采集管道（OTEL Collector + Jaeger + Loki） |

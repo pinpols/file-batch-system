@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import lombok.RequiredArgsConstructor;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,7 @@ public class TenantSchedulerSnapshotRecorder {
     private boolean persistEnabled;
 
     @Scheduled(fixedDelayString = "${batch.scheduler.snapshot-persist-ms:120000}")
+    @SchedulerLock(name = "tenant_scheduler_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
     public void persist() {
         if (!persistEnabled) {
             return;

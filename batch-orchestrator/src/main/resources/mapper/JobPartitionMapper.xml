@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.orchestrator.mapper.JobPartitionMapper">
+    <!--
+      关键约束：JobPartition 的状态推进采用 DB 乐观锁（version CAS）。
+      约定：UPDATE affected rows == 0 视为并发冲突/状态已被其他实例推进，调用方应安静放弃或重试，不应抛系统异常。
+    -->
     <resultMap id="JobPartitionResultMap" type="com.example.batch.orchestrator.domain.entity.JobPartitionEntity">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
@@ -11,6 +15,7 @@
         <result column="worker_group" property="workerGroup"/>
         <result column="worker_code" property="workerCode"/>
         <result column="lease_expire_at" property="leaseExpireAt"/>
+        <result column="version" property="version"/>
         <result column="retry_count" property="retryCount"/>
         <result column="business_key" property="businessKey"/>
         <result column="idempotency_key" property="idempotencyKey"/>
@@ -89,10 +94,12 @@
             partition_status = #{toStatus},
             lease_expire_at = #{leaseExpireAt},
             started_at = coalesce(started_at, current_timestamp),
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
           and partition_status = #{fromStatus}
+          and version = #{expectedVersion}
     </update>
 
     <update id="renewLease">
@@ -111,9 +118,11 @@
             worker_code = null,
             lease_expire_at = null,
             finished_at = null,
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and version = #{expectedVersion}
     </update>
 
     <update id="updateOutputSummary">
@@ -141,9 +150,11 @@
                 when #{partitionStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
                 else finished_at
             end,
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and version = #{expectedVersion}
     </update>
 
     <select id="selectExpiredLeases" resultMap="JobPartitionResultMap">
@@ -180,18 +191,22 @@
             lease_expire_at = null,
             started_at = null,
             finished_at = null,
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
+          and version = #{expectedVersion}
     </update>
 
     <update id="promoteStatus">
         update batch.job_partition
         set partition_status = #{toStatus},
+            version = version + 1,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{id}
           and partition_status = #{fromStatus}
+          and version = #{expectedVersion}
     </update>
 
     <select id="countActiveByTenant" resultType="long">

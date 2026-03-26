@@ -5,17 +5,26 @@ import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.support.AbstractTaskConsumer;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
-import lombok.RequiredArgsConstructor;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class ImportTaskConsumer extends AbstractTaskConsumer {
 
     private final ImportWorkerLoop workerLoop;
     private final ImportWorkerConfiguration configuration;
     private final TaskDispatchExecutor taskDispatchExecutor;
+
+    public ImportTaskConsumer(ImportWorkerLoop workerLoop,
+                             ImportWorkerConfiguration configuration,
+                             TaskDispatchExecutor taskDispatchExecutor,
+                             KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
+        super(kafkaListenerEndpointRegistry);
+        this.workerLoop = workerLoop;
+        this.configuration = configuration;
+        this.taskDispatchExecutor = taskDispatchExecutor;
+    }
 
     @Override
     protected AbstractWorkerLoop workerLoop() {
@@ -32,7 +41,12 @@ public class ImportTaskConsumer extends AbstractTaskConsumer {
         return taskDispatchExecutor;
     }
 
-    @KafkaListener(topics = "#{__listener.topics()}", groupId = "#{__listener.consumerGroupId()}")
+    @Override
+    protected String listenerId() {
+        return "import-task-consumer";
+    }
+
+    @KafkaListener(id = "import-task-consumer", topics = "#{__listener.topics()}", groupId = "#{__listener.consumerGroupId()}")
     public void consume(String payload) {
         doConsume(payload);
     }

@@ -21,6 +21,12 @@ spring:
     schemas:
       - batch
       - quartz
+  datasource:
+    hikari:
+      # orchestrator platform pool（调度/状态推进/查询为主）
+      maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:10}
+      minimum-idle: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MIN_IDLE:3}
+      connection-timeout: ${BATCH_ORCHESTRATOR_PLATFORM_DB_CONNECTION_TIMEOUT_MS:3000}
 
 mybatis:
   # MyBatis domain 的别名包路径（用于 mapper XML 简化类型引用）

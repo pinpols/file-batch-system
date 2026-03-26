@@ -64,7 +64,7 @@ class PartitionLeaseReclaimSchedulerTest {
 
         scheduler.reclaimExpiredPartitions();
 
-        verify(jobPartitionMapper).resetForDispatch("t1", 1L, PartitionStatus.READY.code());
+        verify(jobPartitionMapper).resetForDispatch("t1", 1L, PartitionStatus.READY.code(), 0L);
         verify(taskDispatchOutboxService, never()).writeDispatchEvent(any(), any(), any(), anyString(), anyString());
     }
 
@@ -92,8 +92,8 @@ class PartitionLeaseReclaimSchedulerTest {
 
         scheduler.reclaimExpiredPartitions();
 
-        verify(jobPartitionMapper).resetForDispatch("t1", 3L, PartitionStatus.READY.code());
-        verify(jobTaskMapper).resetForRetry("t1", 300L, TaskStatus.READY.code());
+        verify(jobPartitionMapper).resetForDispatch("t1", 3L, PartitionStatus.READY.code(), 0L);
+        verify(jobTaskMapper).resetForRetry("t1", 300L, TaskStatus.READY.code(), 0L);
         verify(taskDispatchOutboxService).writeDispatchEvent(any(), any(), any(), anyString(), anyString());
     }
 
@@ -136,6 +136,7 @@ class PartitionLeaseReclaimSchedulerTest {
         p.setTenantId(tenantId);
         p.setId(partitionId);
         p.setJobInstanceId(jobInstanceId);
+        p.setVersion(0L);
         return p;
     }
 
@@ -144,6 +145,7 @@ class PartitionLeaseReclaimSchedulerTest {
         t.setTenantId(tenantId);
         t.setId(taskId);
         t.setJobPartitionId(partitionId);
+        t.setVersion(0L);
         return t;
     }
 

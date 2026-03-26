@@ -15,6 +15,7 @@ public class JobTaskEntity implements Stateful {
     private Integer taskSeq;
     private String taskStatus;
     private String assignedWorkerCode;
+    private Long version;
     private String taskPayload;
     private String resultSummary;
     private String errorCode;

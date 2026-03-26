@@ -22,7 +22,8 @@ public interface JobPartitionMapper {
                        @Param("workerCode") String workerCode,
                        @Param("leaseExpireAt") java.time.Instant leaseExpireAt,
                        @Param("fromStatus") String fromStatus,
-                       @Param("toStatus") String toStatus);
+                       @Param("toStatus") String toStatus,
+                       @Param("expectedVersion") Long expectedVersion);
 
     int renewLease(@Param("tenantId") String tenantId,
                    @Param("id") Long id,
@@ -32,7 +33,8 @@ public interface JobPartitionMapper {
     int markRetrying(@Param("tenantId") String tenantId,
                      @Param("id") Long id,
                      @Param("retryCount") Integer retryCount,
-                     @Param("retryingStatus") String retryingStatus);
+                     @Param("retryingStatus") String retryingStatus,
+                     @Param("expectedVersion") Long expectedVersion);
 
     int updateOutputSummary(@Param("tenantId") String tenantId,
                             @Param("id") Long id,
@@ -49,7 +51,8 @@ public interface JobPartitionMapper {
                    @Param("terminalStatus1") String terminalStatus1,
                    @Param("terminalStatus2") String terminalStatus2,
                    @Param("terminalStatus3") String terminalStatus3,
-                   @Param("terminalStatus4") String terminalStatus4);
+                   @Param("terminalStatus4") String terminalStatus4,
+                   @Param("expectedVersion") Long expectedVersion);
 
     List<JobPartitionEntity> selectExpiredLeases(@Param("tenantId") String tenantId,
                                                  @Param("readyStatus") String readyStatus,
@@ -63,12 +66,14 @@ public interface JobPartitionMapper {
 
     int resetForDispatch(@Param("tenantId") String tenantId,
                          @Param("id") Long id,
-                         @Param("readyStatus") String readyStatus);
+                         @Param("readyStatus") String readyStatus,
+                         @Param("expectedVersion") Long expectedVersion);
 
     int promoteStatus(@Param("tenantId") String tenantId,
                       @Param("id") Long id,
                       @Param("fromStatus") String fromStatus,
-                      @Param("toStatus") String toStatus);
+                      @Param("toStatus") String toStatus,
+                      @Param("expectedVersion") Long expectedVersion);
 
     long countActiveByTenant(@Param("tenantId") String tenantId,
                               @Param("waitingStatus") String waitingStatus,

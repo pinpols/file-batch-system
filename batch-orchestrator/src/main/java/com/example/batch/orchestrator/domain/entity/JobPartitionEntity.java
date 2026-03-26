@@ -16,6 +16,7 @@ public class JobPartitionEntity implements Stateful {
     private String workerGroup;
     private String workerCode;
     private Instant leaseExpireAt;
+    private Long version;
     private Integer retryCount;
     private String businessKey;
     private String idempotencyKey;

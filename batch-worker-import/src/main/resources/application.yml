@@ -9,6 +9,17 @@ spring:
   config:
     # 引入共享默认配置基线（DB/Kafka/日志/通用 batch.* 等）
     import: "classpath:batch-defaults.yml"
+  kafka:
+    listener:
+      # 每实例消费者并发线程数：建议 ≤ topic partition 数，否则多余线程空转
+      concurrency: ${BATCH_WORKER_IMPORT_KAFKA_CONCURRENCY:4}
+      # 手动确认：业务处理成功后显式 ack，避免“处理失败但已提交 offset”
+      ack-mode: manual_immediate
+    consumer:
+      # import 任务通常较重：每次 poll 拉取条数建议偏小，降低单批处理时延
+      max-poll-records: ${BATCH_WORKER_IMPORT_KAFKA_MAX_POLL_RECORDS:5}
+      fetch-min-size: ${BATCH_WORKER_IMPORT_KAFKA_FETCH_MIN_SIZE:1}
+      fetch-max-wait: ${BATCH_WORKER_IMPORT_KAFKA_FETCH_MAX_WAIT:500}
 
 mybatis:
   # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
@@ -18,6 +29,8 @@ batch:
   worker:
     # Worker 类型（IMPORT/EXPORT/DISPATCH）：用于统一行为/注册/指标标签
     type: IMPORT
+    # 实例内并发上限（背压）：建议按任务重量与 DB 连接池匹配
+    max-concurrent-tasks: ${BATCH_WORKER_IMPORT_MAX_CONCURRENT_TASKS:6}
     import:
       # Worker 唯一标识（用于注册、审计、告警定位）
       worker-code: ${BATCH_WORKER_IMPORT_CODE:import-node-1}
@@ -103,3 +116,15 @@ batch:
           notify-manual: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_NOTIFY_MANUAL:true}
           # 通知渠道（如 email/sms/wecom 等，按实现约定）
           notify-channels: ${BATCH_WORKER_IMPORT_SCANNER_ARRIVAL_NOTIFY_CHANNELS:}
+
+  datasource:
+    hikari:
+      # import worker platform pool（写任务状态/审计/file_record，负载低于 business pool）
+      maximum-pool-size: ${BATCH_WORKER_IMPORT_PLATFORM_DB_MAX_POOL_SIZE:5}
+      minimum-idle: ${BATCH_WORKER_IMPORT_PLATFORM_DB_MIN_IDLE:2}
+      connection-timeout: ${BATCH_WORKER_IMPORT_PLATFORM_DB_CONNECTION_TIMEOUT_MS:3000}
+    business:
+      hikari:
+        # import worker business pool（以 DB 写入/校验为主）
+        maximum-pool-size: ${BATCH_WORKER_IMPORT_BUSINESS_DB_MAX_POOL_SIZE:15}
+        minimum-idle: ${BATCH_WORKER_IMPORT_BUSINESS_DB_MIN_IDLE:3}

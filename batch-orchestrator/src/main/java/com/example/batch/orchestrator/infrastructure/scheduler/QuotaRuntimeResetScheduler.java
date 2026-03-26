@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import lombok.RequiredArgsConstructor;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ public class QuotaRuntimeResetScheduler {
     private final ResourceSchedulerProperties resourceSchedulerProperties;
 
     @Scheduled(fixedDelayString = "${batch.resource-scheduler.quota-reset-scan-interval-millis:60000}")
+    @SchedulerLock(name = "quota_runtime_reset", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
     public void reconcile() {
         if (!resourceSchedulerProperties.isQuotaResetEnabled()) {
             return;

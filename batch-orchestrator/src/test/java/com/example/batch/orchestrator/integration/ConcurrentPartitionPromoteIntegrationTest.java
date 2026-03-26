@@ -2,9 +2,8 @@ package com.example.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,18 +17,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Proves that {@code JobTaskMapper.finishTask} carries a {@code WHERE task_status = expectedStatus}
- * CAS guard: when two concurrent threads race to finish the same RUNNING task, exactly one of them
- * gets a row-count of 1 (winner) and the other gets 0 (loser).
- */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
+class ConcurrentPartitionPromoteIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
-    private JobTaskMapper jobTaskMapper;
+    private JobPartitionMapper jobPartitionMapper;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -38,17 +32,16 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
     private TransactionTemplate transactionTemplate;
 
     @Test
-    void finishTask_onlyOneWins_whenTwoThreadsRaceConcurrently() throws Exception {
-        // seed a RUNNING task (no FK constraints on job_task in test schema)
-        Long taskId = jdbcTemplate.queryForObject(
+    void promoteStatus_onlyOneWins_whenTwoThreadsRaceConcurrently() throws Exception {
+        Long partitionId = jdbcTemplate.queryForObject(
                 """
-                INSERT INTO batch.job_task (
-                    tenant_id, job_instance_id, task_type, task_seq, task_status, version
-                ) VALUES ('t1', -1, 'EXECUTION', 1, 'RUNNING', 0)
+                INSERT INTO batch.job_partition (
+                    tenant_id, job_instance_id, partition_no, partition_key, partition_status, worker_group, retry_count, idempotency_key, version
+                ) VALUES ('t1', -1, 1, 'p1', 'WAITING', 'g1', 0, 'p1', 0)
                 RETURNING id
                 """,
                 Long.class);
-        assertThat(taskId).isNotNull();
+        assertThat(partitionId).isNotNull();
 
         CountDownLatch startGate = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -58,16 +51,16 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
             futures.add(pool.submit(() -> {
                 startGate.await();
                 return transactionTemplate.execute(status ->
-                        jobTaskMapper.finishTask(
-                                "t1", taskId,
-                                TaskStatus.SUCCESS.code(),
-                                TaskStatus.RUNNING.code(),
-                                null, null, null,
+                        jobPartitionMapper.promoteStatus(
+                                "t1",
+                                partitionId,
+                                "WAITING",
+                                "READY",
                                 0L));
             }));
         }
 
-        startGate.countDown(); // release both threads simultaneously
+        startGate.countDown();
 
         int totalUpdated = 0;
         for (Future<Integer> f : futures) {
@@ -78,7 +71,12 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
         assertThat(totalUpdated).as("exactly one thread must win the CAS update").isEqualTo(1);
 
         String finalStatus = jdbcTemplate.queryForObject(
-                "SELECT task_status FROM batch.job_task WHERE id = ?", String.class, taskId);
-        assertThat(finalStatus).isEqualTo(TaskStatus.SUCCESS.code());
+                "SELECT partition_status FROM batch.job_partition WHERE id = ?", String.class, partitionId);
+        assertThat(finalStatus).isEqualTo("READY");
+
+        Long finalVersion = jdbcTemplate.queryForObject(
+                "SELECT version FROM batch.job_partition WHERE id = ?", Long.class, partitionId);
+        assertThat(finalVersion).isEqualTo(1L);
     }
 }
+

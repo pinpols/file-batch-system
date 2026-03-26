@@ -9,6 +9,17 @@ spring:
   config:
     # 引入共享默认配置基线（DB/Kafka/日志/通用 batch.* 等）
     import: "classpath:batch-defaults.yml"
+  kafka:
+    listener:
+      # 每实例消费者并发线程数：建议 ≤ topic partition 数，否则多余线程空转
+      concurrency: ${BATCH_WORKER_EXPORT_KAFKA_CONCURRENCY:4}
+      # 手动确认：业务处理成功后显式 ack，避免“处理失败但已提交 offset”
+      ack-mode: manual_immediate
+    consumer:
+      # export 任务通常较重：每次 poll 拉取条数建议偏小，降低单批处理时延
+      max-poll-records: ${BATCH_WORKER_EXPORT_KAFKA_MAX_POLL_RECORDS:5}
+      fetch-min-size: ${BATCH_WORKER_EXPORT_KAFKA_FETCH_MIN_SIZE:1}
+      fetch-max-wait: ${BATCH_WORKER_EXPORT_KAFKA_FETCH_MAX_WAIT:500}
 
 mybatis:
   # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
@@ -18,6 +29,8 @@ batch:
   worker:
     # Worker 类型（IMPORT/EXPORT/DISPATCH）
     type: EXPORT
+    # 实例内并发上限（背压）：建议按任务重量与 DB 连接池匹配
+    max-concurrent-tasks: ${BATCH_WORKER_EXPORT_MAX_CONCURRENT_TASKS:4}
     export:
       # Worker 唯一标识
       worker-code: ${BATCH_WORKER_EXPORT_CODE:export-node-1}
@@ -44,3 +57,16 @@ batch:
         # 允许访问的业务 schema 白名单
         allowed-schemas:
           - biz
+
+  datasource:
+    hikari:
+      # export worker platform pool（写任务状态/审计/file_record，负载低于 business pool）
+      maximum-pool-size: ${BATCH_WORKER_EXPORT_PLATFORM_DB_MAX_POOL_SIZE:5}
+      minimum-idle: ${BATCH_WORKER_EXPORT_PLATFORM_DB_MIN_IDLE:2}
+      connection-timeout: ${BATCH_WORKER_EXPORT_PLATFORM_DB_CONNECTION_TIMEOUT_MS:3000}
+    business:
+      hikari:
+        # export worker business pool（导出大 SQL 可能长时间占用连接）
+        maximum-pool-size: ${BATCH_WORKER_EXPORT_BUSINESS_DB_MAX_POOL_SIZE:20}
+        minimum-idle: ${BATCH_WORKER_EXPORT_BUSINESS_DB_MIN_IDLE:5}
+        leak-detection-threshold: ${BATCH_WORKER_EXPORT_BUSINESS_DB_LEAK_DETECTION_THRESHOLD_MS:60000}

@@ -36,22 +36,26 @@ public interface JobTaskMapper {
                      @Param("terminalStatus1") String terminalStatus1,
                      @Param("terminalStatus2") String terminalStatus2,
                      @Param("terminalStatus3") String terminalStatus3,
-                     @Param("terminalStatus4") String terminalStatus4);
+                     @Param("terminalStatus4") String terminalStatus4,
+                     @Param("expectedVersion") Long expectedVersion);
 
     int assignWorker(@Param("tenantId") String tenantId,
                      @Param("id") Long id,
                      @Param("assignedWorkerCode") String assignedWorkerCode,
                      @Param("taskStatus") String taskStatus,
-                     @Param("readyStatus") String readyStatus);
+                     @Param("readyStatus") String readyStatus,
+                     @Param("expectedVersion") Long expectedVersion);
 
     int resetForRetry(@Param("tenantId") String tenantId,
                       @Param("id") Long id,
-                      @Param("readyStatus") String readyStatus);
+                      @Param("readyStatus") String readyStatus,
+                      @Param("expectedVersion") Long expectedVersion);
 
     int promoteStatus(@Param("tenantId") String tenantId,
                       @Param("id") Long id,
                       @Param("fromStatus") String fromStatus,
-                      @Param("toStatus") String toStatus);
+                      @Param("toStatus") String toStatus,
+                      @Param("expectedVersion") Long expectedVersion);
 
     int finishTask(@Param("tenantId") String tenantId,
                    @Param("id") Long id,
@@ -59,5 +63,6 @@ public interface JobTaskMapper {
                    @Param("expectedStatus") String expectedStatus,
                    @Param("resultSummary") String resultSummary,
                    @Param("errorCode") String errorCode,
-                   @Param("errorMessage") String errorMessage);
+                   @Param("errorMessage") String errorMessage,
+                   @Param("expectedVersion") Long expectedVersion);
 }

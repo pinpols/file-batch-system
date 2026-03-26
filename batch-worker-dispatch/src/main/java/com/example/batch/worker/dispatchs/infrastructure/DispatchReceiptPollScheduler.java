@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -45,6 +46,7 @@ public class DispatchReceiptPollScheduler {
     }
 
     @Scheduled(fixedDelayString = "${batch.worker.dispatch.receipt-poll.interval-millis:60000}")
+    @SchedulerLock(name = "dispatch_receipt_poll", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
     public void poll() {
         if (!properties.isEnabled()) {
             return;

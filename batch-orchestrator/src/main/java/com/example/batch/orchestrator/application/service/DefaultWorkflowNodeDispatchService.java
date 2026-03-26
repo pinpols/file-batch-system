@@ -143,6 +143,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             task.setTaskSeq(sequence++);
             task.setAssignedWorkerCode(resolveSelectedWorkerId(plan, partition));
             task.setTaskStatus(decision.getTaskStatus());
+            task.setVersion(0L);
             task.setTaskPayload(taskPayload);
             taskExecutionServiceProvider.getObject().createTask(task);
             if (decision.isDispatchable() && partitionLifecycleService.releaseForDispatch(
@@ -254,6 +255,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         virtualPartition.setPartitionNo(virtualPartitionNo);
         virtualPartition.setPartitionKey(node.nodeCode() + ":JOB:" + virtualPartitionNo);
         virtualPartition.setPartitionStatus(PartitionStatus.RUNNING.code());
+        virtualPartition.setVersion(0L);
         virtualPartition.setRetryCount(0);
         virtualPartition.setBusinessKey(refJobCode + ":" + node.nodeCode());
         virtualPartition.setIdempotencyKey(idempotencyKey);
@@ -275,6 +277,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         virtualTaskTemplate.setTaskType("EXECUTION");
         virtualTaskTemplate.setTaskSeq(1);
         virtualTaskTemplate.setTaskStatus(TaskStatus.RUNNING.code());
+        virtualTaskTemplate.setVersion(0L);
         virtualTaskTemplate.setTaskPayload(taskPayload);
         JobTaskEntity virtualTask = taskExecutionServiceProvider.getObject().createTask(virtualTaskTemplate);
 

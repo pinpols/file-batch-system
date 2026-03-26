@@ -171,6 +171,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         task.setTaskStatus(decision == null || decision.getTaskStatus() == null
                 ? TaskStatus.READY.code()
                 : decision.getTaskStatus());
+        task.setVersion(0L);
         task.setTaskPayload(buildPayloadJson(effectiveParams));
         return task;
     }

@@ -6,6 +6,7 @@ import com.example.batch.orchestrator.config.OutboxProperties;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,7 @@ public class OutboxPollScheduler {
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Scheduled(fixedDelayString = "${batch.outbox.poll-interval-millis:5000}")
+    @SchedulerLock(name = "outbox_poll", lockAtMostFor = "PT1M", lockAtLeastFor = "PT3S")
     public void poll() {
         if (!running.compareAndSet(false, true)) {
             return;

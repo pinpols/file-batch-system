@@ -18,6 +18,7 @@ import org.springframework.util.StringUtils;
 public class ImportErrorOutputStorage {
 
     private final MinioStorageProperties minioStorageProperties;
+    private final MinioClient minioClient;
 
     public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileId) || badRecords == null || badRecords.isEmpty()) {
@@ -30,7 +31,7 @@ public class ImportErrorOutputStorage {
         }
         byte[] bytes = builder.toString().getBytes(StandardCharsets.UTF_8);
         try {
-            minioClient().putObject(
+            minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(minioStorageProperties.getBucket())
                             .object(objectKey)
@@ -44,10 +45,4 @@ public class ImportErrorOutputStorage {
         }
     }
 
-    private MinioClient minioClient() {
-        return MinioClient.builder()
-                .endpoint(minioStorageProperties.getEndpoint())
-                .credentials(minioStorageProperties.getAccessKey(), minioStorageProperties.getSecretKey())
-                .build();
-    }
 }

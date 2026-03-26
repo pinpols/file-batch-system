@@ -50,6 +50,18 @@
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-exporter-otlp</artifactId>
+            <exclusions>
+                <!-- Avoid pulling okhttp 5.x (conflicts with okhttp 4.x used elsewhere) -->
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-sender-okhttp</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- Use JDK HTTP sender to avoid okhttp 5.x dependency in runtime/test classpath -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-sender-jdk</artifactId>
         </dependency>
 
         <dependency>

@@ -42,6 +42,7 @@
         <mybatis-spring-boot.version>4.0.0</mybatis-spring-boot.version>
         <spring-ai.version>2.0.0-M3</spring-ai.version>
         <jsqlparser.version>4.5</jsqlparser.version>
+        <shedlock.version>6.3.0</shedlock.version>
     </properties>
 
     <dependencyManagement>
@@ -109,6 +110,16 @@
                 <groupId>com.github.jsqlparser</groupId>
                 <artifactId>jsqlparser</artifactId>
                 <version>${jsqlparser.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.javacrumbs.shedlock</groupId>
+                <artifactId>shedlock-spring</artifactId>
+                <version>${shedlock.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.javacrumbs.shedlock</groupId>
+                <artifactId>shedlock-provider-jdbc-template</artifactId>
+                <version>${shedlock.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
