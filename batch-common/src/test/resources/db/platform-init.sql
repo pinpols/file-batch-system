@@ -1,6 +1,14 @@
 CREATE SCHEMA IF NOT EXISTS batch;
 CREATE SCHEMA IF NOT EXISTS quartz;
 
+-- ShedLock table used by orchestrator @SchedulerLock integration tests.
+CREATE TABLE IF NOT EXISTS batch.shedlock (
+    name        VARCHAR(64)  NOT NULL PRIMARY KEY,
+    lock_until  TIMESTAMPTZ  NOT NULL,
+    locked_at   TIMESTAMPTZ  NOT NULL,
+    locked_by   VARCHAR(255) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS batch.resource_queue (
     id BIGSERIAL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,

@@ -14,7 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>Ensures that each {@code @Scheduled} task runs on exactly one orchestrator instance
  * at a time, regardless of how many replicas are deployed.
  *
- * <p>Locks are stored in {@code batch.shedlock} (created by V29 Flyway migration).
+ * <p>Locks are stored in {@code batch.shedlock} (created by V30 Flyway migration).
  * {@code defaultLockAtMostFor} is a safety net: if a JVM crashes while holding a lock,
  * the lock auto-expires after this duration so another instance can take over.
  */
