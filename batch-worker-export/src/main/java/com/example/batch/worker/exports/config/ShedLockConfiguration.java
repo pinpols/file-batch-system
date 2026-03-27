@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.config;
+package com.example.batch.worker.exports.config;
 
 import com.example.batch.common.config.ShedLockProviderFactory;
 import javax.sql.DataSource;
@@ -7,16 +7,6 @@ import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * ShedLock configuration for orchestrator cluster.
- *
- * <p>Ensures that each {@code @Scheduled} task runs on exactly one orchestrator instance
- * at a time, regardless of how many replicas are deployed.
- *
- * <p>Locks are stored in {@code batch.shedlock} (created by V30 Flyway migration).
- * {@code defaultLockAtMostFor} is a safety net: if a JVM crashes while holding a lock,
- * the lock auto-expires after this duration so another instance can take over.
- */
 @Configuration
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
 public class ShedLockConfiguration {

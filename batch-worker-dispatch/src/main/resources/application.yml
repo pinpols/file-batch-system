@@ -20,8 +20,6 @@ spring:
       max-poll-records: ${BATCH_WORKER_DISPATCH_KAFKA_MAX_POLL_RECORDS:10}
       fetch-min-size: ${BATCH_WORKER_DISPATCH_KAFKA_FETCH_MIN_SIZE:1}
       fetch-max-wait: ${BATCH_WORKER_DISPATCH_KAFKA_FETCH_MAX_WAIT:500}
-
-spring:
   datasource:
     hikari:
       # dispatch worker platform pool（dispatch 无 business DB，platform DB 是唯一 JDBC 连接池）
