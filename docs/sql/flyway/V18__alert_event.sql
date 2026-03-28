@@ -1,4 +1,10 @@
--- Operational alert events: persisted, deduplicated, queryable from console (design §16.x)
+-- =========================================================
+-- V18 - Operational alert event table
+-- Notes:
+-- 1) Persist deduplicated alert records for console query and operations handling.
+-- 2) Track occurrence counts, severity, and status transitions on one table.
+-- =========================================================
+
 CREATE TABLE IF NOT EXISTS batch.alert_event (
     id                  BIGSERIAL PRIMARY KEY,
     tenant_id           VARCHAR(64)  NOT NULL,

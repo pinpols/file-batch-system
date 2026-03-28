@@ -1,3 +1,10 @@
+-- =========================================================
+-- V9 - Create file error record table
+-- Notes:
+-- 1) Persist per-record import/export errors for console query and replay.
+-- 2) Store raw_record as JSONB for debugging and operator review.
+-- =========================================================
+
 CREATE TABLE IF NOT EXISTS batch.file_error_record (
     id                  BIGSERIAL PRIMARY KEY,
     tenant_id           VARCHAR(64)  NOT NULL,

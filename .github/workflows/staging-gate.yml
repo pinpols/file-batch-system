@@ -1,0 +1,111 @@
+name: staging-gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staging-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+      BATCH_DEPLOY_SMOKE_ENABLE_LIVE: "true"
+      BATCH_DEPLOY_SMOKE_RELEASE: "batch-platform-staging"
+      BATCH_DEPLOY_SMOKE_NAMESPACE: "batch-staging"
+      BATCH_DEPLOY_SMOKE_VALUES_FILE: "helm/values-prod.yaml"
+      BATCH_DEPLOY_SMOKE_TIMEOUT: "12m"
+      BATCH_DEPLOY_SMOKE_READINESS_TIMEOUT_SECONDS: "240"
+      BATCH_DEPLOY_VERIFICATION_ENABLE_LIVE: "true"
+      BATCH_DEPLOY_VERIFICATION_RELEASE: "batch-platform-verification"
+      BATCH_DEPLOY_VERIFICATION_NAMESPACE: "batch-verification"
+      BATCH_DEPLOY_VERIFICATION_VALUES_FILE: "helm/values-prod.yaml"
+      BATCH_DEPLOY_VERIFICATION_TIMEOUT: "12m"
+      BATCH_DEPLOY_VERIFICATION_READINESS_TIMEOUT_SECONDS: "240"
+      BATCH_LOAD_SMOKE_USERS_PEAK: "5"
+      BATCH_LOAD_SMOKE_DURATION_SECONDS: "30"
+      BATCH_LOAD_SMOKE_RAMP_SECONDS: "10"
+      PGHOST: "staging-postgres.internal"
+      PGPORT: "5432"
+      PGDATABASE: "batch_platform"
+      PGUSER: "batch_user"
+      BATCH_OBSERVABILITY_BASE_URLS: "http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:8080,http://batch-platform-staging-orchestrator.batch-staging.svc.cluster.local:8082"
+      BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS: "kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Compile load-tests module
+        shell: bash
+        run: |
+          mvn -q -f load-tests/pom.xml test-compile
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.33.0
+
+      - name: Configure kubeconfig
+        shell: bash
+        env:
+          STAGING_KUBECONFIG_B64: ${{ secrets.STAGING_KUBECONFIG_B64 }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "$STAGING_KUBECONFIG_B64" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Run full staging gate
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.STAGING_PLATFORM_DB_PASSWORD }}
+          BATCH_DEPLOY_SMOKE_PLATFORM_DB_PASSWORD: ${{ secrets.STAGING_PLATFORM_DB_PASSWORD }}
+          BATCH_DEPLOY_SMOKE_BUSINESS_DB_PASSWORD: ${{ secrets.STAGING_BUSINESS_DB_PASSWORD }}
+          BATCH_DEPLOY_SMOKE_MINIO_ACCESS_KEY: ${{ secrets.STAGING_MINIO_ACCESS_KEY }}
+          BATCH_DEPLOY_SMOKE_MINIO_SECRET_KEY: ${{ secrets.STAGING_MINIO_SECRET_KEY }}
+          BATCH_DEPLOY_VERIFICATION_PLATFORM_DB_PASSWORD: ${{ secrets.STAGING_PLATFORM_DB_PASSWORD }}
+          BATCH_DEPLOY_VERIFICATION_BUSINESS_DB_PASSWORD: ${{ secrets.STAGING_BUSINESS_DB_PASSWORD }}
+          BATCH_DEPLOY_VERIFICATION_MINIO_ACCESS_KEY: ${{ secrets.STAGING_MINIO_ACCESS_KEY }}
+          BATCH_DEPLOY_VERIFICATION_MINIO_SECRET_KEY: ${{ secrets.STAGING_MINIO_SECRET_KEY }}
+        run: |
+          bash scripts/ci/run-full-regression.sh \
+            --with-deploy-smoke \
+            --with-deployment-verification \
+            --with-load-smoke \
+            --with-inspection
+
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: |
+            **/target/surefire-reports/**
+
+      - name: Upload Gatling Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gatling-reports
+          path: |
+            load-tests/target/gatling-results/**

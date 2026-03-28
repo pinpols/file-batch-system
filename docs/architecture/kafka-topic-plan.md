@@ -1,6 +1,6 @@
-# Kafka Topic Plan
+# Kafka Topic 设计规范
 
-## Topic Naming
+## 主题命名
 
 - `batch.task.dispatch.import`
 - `batch.task.dispatch.export`
@@ -11,7 +11,7 @@
 - `batch.outbox.event`
 - `batch.worker.heartbeat`
 
-## Key Design
+## Key 设计
 
 - Dispatch topics: `tenantId:jobCode:instanceNo:partitionId`
 - Result topics: `tenantId:jobCode:instanceNo:taskId`
@@ -20,7 +20,7 @@
 - Outbox topics: `tenantId:eventName:aggregateType:aggregateId`
 - Heartbeat topics: `tenantId:workerCode:workerGroup:workerId`
 
-## Event Body
+## 事件体字段
 
 - `schemaVersion`
 - `messageType`
@@ -41,13 +41,13 @@
 - `payload`
 - `ext`
 
-## Retry and Dead Letter
+## 重试与死信
 
 - Retry messages carry `attemptNo`, `maxAttempts`, `nextRetryAt`, and `retryReason`.
 - Dead-letter messages carry `attemptNo`, `deadReason`, and `deadAt`.
 - Retry exhaustion moves the message to dead-letter, not back to normal dispatch.
 
-## Message Body Schema (JSON Examples)
+## 消息体结构（JSON 示例）
 
 本项目当前采用 **JSON + `schemaVersion`** 的轻量方案（不依赖 Schema Registry）。
 
@@ -183,7 +183,7 @@
 - `payload` **必须为内联 object**（不要用 JSON string），便于日志检索与结构化消费。
 - 版本兼容：`schemaVersion` 只做 **向后兼容**（新增可选字段）；类型变化需升版本并在消费端同时支持 N/N+1。
 
-## Idempotency Key
+## 幂等键
 
 - Trigger: `tenantId + jobCode + bizDate + requestId`
 - Instance: `tenantId + jobCode + instanceNo`
@@ -192,7 +192,7 @@
 - Dispatch: `fileId + targetSystem + dispatchVersion`
 - Outbox: `tenantId + eventName + aggregateType + aggregateId`
 
-## 待完成
+## 待补充
 
 以下内容尚未形成正式文档，需在上线前补全：
 

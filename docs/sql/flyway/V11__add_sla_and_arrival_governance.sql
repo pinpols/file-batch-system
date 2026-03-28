@@ -1,3 +1,10 @@
+-- =========================================================
+-- V11 - Add SLA and arrival governance columns
+-- Notes:
+-- 1) Track deadline, expected duration, and SLA alert state on job_instance.
+-- 2) Support arrival / processing governance queries and alerting.
+-- =========================================================
+
 ALTER TABLE batch.job_instance
     ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS expected_duration_seconds INTEGER NOT NULL DEFAULT 0,

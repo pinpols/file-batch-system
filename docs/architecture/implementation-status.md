@@ -68,7 +68,7 @@
 |---|---|---|
 | 生产部署产物 | Helm Chart `helm/batch-platform/`（6 个 Deployment/Service、ConfigMap/Secret、Ingress、HPA）；生产覆盖文件 `helm/values-prod.yaml` | ✅ 已完成 |
 | 压测脚本与容量基线 | Gatling 3.12 Java DSL，`load-tests/` 独立模块；三个 Simulation（写入/查询/容量基线分级爬坡）；种子 SQL `docs/sql/load-test/load-test-seed.sql`；容量基线记录表 `docs/testing/load-test-capacity-baseline.md` | ✅ 脚本已完成，基线数据待实测填写 |
-| Kafka 消息体完整 schema | `docs/kafka-topic-plan.md` 已补充 Envelope 规范、重试/死信完整 JSON 示例、序列化兼容策略（inline object + schemaVersion） | ✅ 已完成 |
+| Kafka 消息体完整 schema | `docs/architecture/kafka-topic-plan.md` 已补充 Envelope 规范、重试/死信完整 JSON 示例、序列化兼容策略（inline object + schemaVersion） | ✅ 已完成 |
 | ELK / OpenTelemetry 接入 | OTEL Collector pipeline（Traces→Jaeger，Logs→Loki）；`batch-common` 新增 tracing bridge + OTLP exporter；`batch-defaults.yml` 统一 OTLP 端点 + 结构化 JSON 日志；Docker Compose observability overlay；Helm Collector 模板；Grafana 数据源自动注入 | ✅ 已完成 |
 | `THIRD-PARTY-LICENSES / SBOM` | `docs/compliance/THIRD-PARTY-LICENSES.md`（43 组件，手工编译含许可证分类）；`docs/compliance/sbom.json`（CycloneDX 1.6 格式骨架）；根 `pom.xml` 新增 `compliance` Maven profile（`cyclonedx-maven-plugin 2.9.1` + `license-maven-plugin 2.4.0`），运行 `mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party` 可生成完整机器可读 SBOM | 合规交付物已完成 ✅ |
 | 自动巡检/自愈脚本 | 巡检脚本体系完整落地：`inspect-all.sh`（主入口）、`inspect-db.sh`（Flyway/卡死作业/Outbox/死信/重试积压）、`inspect-workers.sh`（DRAINING 超时/心跳失联/孤儿任务）；自愈脚本：`heal-drain-timeout.sh`、`heal-dead-letters.sh`、`heal-stuck-outbox.sh`（均默认 dry-run，`BATCH_HEAL_DRY_RUN=false` 才执行）；`daily-inspection.md` 更新为脚本化 SOP | 脚本化巡检已完成 ✅ |
@@ -129,7 +129,7 @@
 | `ParseStepFixtureTest` | worker-import | 基于磁盘 fixture 文件的格式覆盖：CSV/Pipe/Tab/JSON-array/JSON-envelope/UTF-8 BOM/Excel（POI 动态生成）/bad-records（解析全量，校验延后到 ValidateStep） |
 | `ImportPreprocessPipelineRsaTest` | worker-import | VERIFY_RSA_SHA256 步骤：有效签名通过、篡改 payload 失败、缺失公钥失败、签名从 metadata 注入、testingOpen 跳过验证 |
 
-### 集成测试（18 个，基于 Testcontainers）
+### 集成测试（当前仓库 35 个，以下列主链路代表用例）
 
 | 测试类 | 所在模块 | 覆盖重点 |
 |---|---|---|
@@ -151,6 +151,12 @@
 | `DeadLetterQueryIntegrationTest` | console-api | dead_letter_task 按 replayStatus/sourceType/traceId 查询 |
 | `ConsoleRetryScheduleQueryIntegrationTest` | console-api | retry_schedule 按 status/policy/relatedType 查询 |
 | `BatchConsoleApiApplicationIT` | console-api | Spring 上下文加载 |
+
+补充说明：
+
+- 当前仓库实际共有 35 个集成测试；上表只列主链路代表用例
+- 新增的 `batch-trigger` 首批门禁已包含 `TriggerServiceIntegrationIT`
+- `batch-orchestrator`、`batch-worker-import`、`batch-worker-export`、`batch-worker-dispatch` 已补 `ShedLockConfigurationIT`
 
 ### 测试数据脚本
 
@@ -199,9 +205,9 @@
 核心业务链路（调度主链、DAG、文件处理三链路、安全治理）已全部落地且编译通过。
 对话_5（12 轮）完成：Worker 循环模板、Stage 异常契约、Outbox E2E、SQL 原子保护、三链路失败 E2E、多租户并发 E2E、HTTP 韧性、SQL CI 守卫、配置基线模块化、ADR 体系、产物验收 Verifier 框架 + Micrometer 指标。
 2026-03-26 完成：可扩展性 & 高可用 6 项改造（乐观锁 / Kafka 并发 / 连接池隔离 / 优雅关闭 / 背压 / 临时文件清理）。
-**当前测试体系**：**47 单元** + 18 集成 + **10 E2E**（主链路/失败分支/内容验证/多租户/dedup 幂等），逻辑覆盖率约 78%。
+**当前测试体系（截至 2026-03-27）**：**67 单元** + **35 集成** + **13 E2E**。统一回归入口 `scripts/ci/run-full-regression.sh` 与 deploy smoke 已落地；live rollout / readiness 仍需真实 staging kube context 实跑留档。覆盖率口径待下一轮 JaCoCo / coverage 报告回填。
 
-**未完成项（截至 2026-03-26）**：
+**未完成项（截至 2026-03-27）**：
 
 | 优先级 | 项目 |
 |---|---|

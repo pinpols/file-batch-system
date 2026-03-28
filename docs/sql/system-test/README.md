@@ -1,22 +1,22 @@
-# System Test Seed Pack
+# 系统测试种子包
 
-This directory contains repeatable seed SQL for system testing.
-For the recommended testing split, see [docs/testing/test-strategy.md](/Users/dengchao/Downloads/file-batch-system/docs/testing/test-strategy.md).
+这里放系统测试用的可重复种子 SQL。
+推荐的测试分层说明见 [docs/testing/test-strategy.md](../../testing/test-strategy.md)。
 
-## Included
+## 包含内容
 
 - `platform_seed.sql`
-  - Seeds `batch_platform.batch` with queues, quotas, jobs, workflows, pipelines, files, approvals, alerts, retries, outbox, and governance state.
+  - 向 `batch_platform.batch` 装载队列、配额、作业、工作流、流水线、文件、审批、告警、重试、Outbox 和治理状态等基础数据。
 - `platform_edge_cases.sql`
-  - Adds boundary coverage for enum states, error tables, outbox delivery logs, retry logs, and file error records.
+  - 补充枚举状态、错误表、Outbox 投递日志、重试日志和文件错误记录等边界样本。
 - `business_seed.sql`
-  - Seeds `batch_business.biz` with import and export source data.
+  - 向 `batch_business.biz` 装载导入 / 导出源数据。
 - `business_edge_cases.sql`
-  - Adds additional settlement batch states and settlement detail terminal states.
+  - 补充更多结算批次状态和结算明细终态样本。
 
-## Load
+## 加载方式
 
-Prefer the helper script:
+优先使用辅助脚本：
 
 ```bash
 scripts/local/load-system-test-data.sh
@@ -31,4 +31,4 @@ psql -U batch_user -d batch_business -f docs/sql/system-test/business_seed.sql
 psql -U batch_user -d batch_business -f docs/sql/system-test/business_edge_cases.sql
 ```
 
-The base seed files are idempotent for a dedicated test database: they truncate the covered tables first, then insert a known dataset. The edge-case packs add extra coverage on top of the base seeds.
+基础种子脚本对专用测试库是幂等的：会先清理覆盖范围内的表，再写入一组固定数据。边界样本在基础种子上叠加额外覆盖。

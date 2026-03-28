@@ -5,6 +5,9 @@
 -- Fields present in templates but absent from customer_account (creditLimit, currencyCode,
 -- openDate, remark) are intentionally excluded from columnMappings.
 
+ALTER TABLE batch.file_template_config
+    ADD COLUMN IF NOT EXISTS load_target_ref VARCHAR(128);
+
 INSERT INTO batch.file_template_config
   (tenant_id, template_code, template_name, template_type, biz_type,
    file_format_type, charset, target_charset, with_bom,

@@ -1,4 +1,22 @@
 #!/usr/bin/env bash
+# =========================================================
+# load-system-test-data.sh - 装载系统测试数据
+# Notes:
+# 1) 写入平台库、业务库和 MinIO 的系统测试种子。
+# 2) 用于本地联调、巡检和 E2E 前准备。
+# =========================================================
+# 默认依赖：
+#   - PostgreSQL: localhost:15432
+#   - 平台库: batch_platform
+#   - 业务库: batch_business
+#   - MinIO: http://localhost:9000
+#
+# 使用方法：
+#   BATCH_PLATFORM_DB_PASSWORD=... \
+#   BATCH_BUSINESS_DB_PASSWORD=... \
+#   BATCH_MINIO_ACCESS_KEY=... \
+#   BATCH_MINIO_SECRET_KEY=... \
+#     bash scripts/local/load-system-test-data.sh
 
 set -euo pipefail
 

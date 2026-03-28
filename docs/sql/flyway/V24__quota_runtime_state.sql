@@ -1,5 +1,8 @@
 -- =========================================================
 -- V24 - Quota runtime state for CALENDAR_DAY / SLIDING_WINDOW
+-- Notes:
+-- 1) Persist runtime quota reset state per tenant and owner scope.
+-- 2) Support both calendar-day and sliding-window quota policies.
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.quota_runtime_state (

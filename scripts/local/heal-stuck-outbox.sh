@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# heal-stuck-outbox.sh — 自愈：解除卡住的 Outbox 投递
-#
-# 行为：
-#   查询 published_at IS NULL 且 created_at 超过阈值的 outbox_event，
-#   将其 retry_count 重置为 0、published_at 清空（已是 NULL），
-#   并 NOTIFY outbox_publisher channel 唤醒 OutboxPollScheduler 立即扫描。
-#   （若数据库侧 NOTIFY 不可用，则改为打印告警并建议重启 Orchestrator）
+# =========================================================
+# heal-stuck-outbox.sh - 自愈：解除卡住的 Outbox 投递
+# Notes:
+# 1) 定位长期未投递的 outbox_event。
+# 2) 重置状态并发送 NOTIFY 唤醒 OutboxPollScheduler。
+# =========================================================
 #
 # Outbox 卡住的常见原因：
 #   - Kafka broker 不可达导致发送失败，retry_count 超上限后停止重试

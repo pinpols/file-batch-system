@@ -1,0 +1,303 @@
+package com.example.batch.orchestrator.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.orchestrator.config.FileGovernanceProperties;
+import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
+import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
+import com.example.batch.testing.AbstractIntegrationTest;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import io.minio.StatObjectArgs;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Import;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.mybatis.spring.annotation.MapperScan;
+
+@SpringBootTest(
+        classes = FileGovernanceIntegrationTest.TestApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+                "batch.file-governance.latency.enabled=true",
+                "batch.file-governance.archive.enabled=true",
+                "batch.file-governance.reconcile.enabled=true",
+                "batch.file-governance.arrival.enabled=true",
+                "batch.file-governance.reconcile.default-tenant-id=default-tenant",
+                "batch.file-governance.reconcile.prefix=incoming/",
+                "batch.file-governance.latency.arrival-delay-threshold-seconds=600",
+                "batch.file-governance.latency.processing-delay-threshold-seconds=900",
+                "batch.file-governance.archive.retention-days=7",
+                "batch.file-governance.archive.cleanup-batch-size=10",
+                "batch.file-governance.arrival.batch-size=10",
+                "batch.file-governance.reconcile.batch-size=10"
+        })
+class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
+
+    @SpringBootConfiguration
+    @EnableAutoConfiguration
+    @ImportAutoConfiguration(RestClientAutoConfiguration.class)
+    @EnableScheduling
+    @EnableConfigurationProperties({FileGovernanceProperties.class, MinioStorageProperties.class})
+    @MapperScan("com.example.batch.orchestrator.mapper")
+    @Import({
+            FileGovernanceScheduler.class,
+            FileGovernanceRepository.class,
+            com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.class
+    })
+    static class TestApplication {
+    }
+
+    private static final String TENANT_ID = "t1";
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private FileGovernanceScheduler fileGovernanceScheduler;
+
+    @Autowired
+    private FileGovernanceRepository fileGovernanceRepository;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+    @Test
+    void shouldCollectLatencyMetricsForDelayedArrivalFiles() {
+        Instant now = Instant.now();
+        String suffix = suffix();
+        insertFileRecord(
+                TENANT_ID,
+                "delay-file-" + suffix + ".csv",
+                "INPUT",
+                "RECEIVED",
+                "S3",
+                minioBucket(),
+                "incoming/delay-file-" + suffix + ".csv",
+                "{\"expectedArrivalTime\":\"" + now.minusSeconds(7200) + "\"}",
+                now,
+                now);
+
+        fileGovernanceScheduler.collectLatencyMetrics();
+
+        assertThat(meterRegistry.get("batch.file.arrival.delay.violations").gauge().value()).isEqualTo(1.0d);
+        assertThat(meterRegistry.get("batch.file.arrival.delay.max.seconds").gauge().value()).isGreaterThanOrEqualTo(7200.0d);
+    }
+
+    @Test
+    void shouldArchiveExpiredFilesAndWriteCleanupAudit() throws Exception {
+        ensureMinioBucket(minioBucket());
+        String objectName = "archive/cleanup/" + suffix() + ".csv";
+        putObject(objectName, "one,two,three\n");
+
+        Long fileId = insertFileRecord(
+                TENANT_ID,
+                "archive-file-" + suffix() + ".csv",
+                "INPUT",
+                "ARCHIVED",
+                "S3",
+                minioBucket(),
+                objectName,
+                "{}",
+                Instant.now().minusSeconds(9L * 24L * 3600L),
+                Instant.now().minusSeconds(9L * 24L * 3600L));
+
+        fileGovernanceScheduler.cleanupArchivedFiles();
+
+        Map<String, Object> fileRecord = jdbcTemplate.queryForMap(
+                "select file_status, metadata_json->>'cleanupReason' as cleanup_reason from batch.file_record where id = ?",
+                fileId);
+        assertThat(fileRecord.get("file_status")).isEqualTo("DELETED");
+        assertThat(fileRecord.get("cleanup_reason")).isEqualTo("ARCHIVE_RETENTION_EXPIRED");
+
+        Integer auditCount = jdbcTemplate.queryForObject(
+                """
+                        select count(1)::int
+                        from batch.file_audit_log
+                        where file_id = ? and operation_type = 'CLEANUP' and operation_result = 'SUCCESS'
+                        """,
+                Integer.class,
+                fileId);
+        assertThat(auditCount).isEqualTo(1);
+
+        MinioClient client = minioClient();
+        assertThatThrownBy(() -> client.statObject(StatObjectArgs.builder()
+                .bucket(minioBucket())
+                .object(objectName)
+                .build())).isInstanceOf(Exception.class);
+    }
+
+    @Test
+    void shouldReconcileOrphanObjectIntoFileRecord() throws Exception {
+        String objectName = "incoming/" + suffix() + "-orphan.csv";
+        putObject(objectName, "alpha,beta\n1,2\n");
+
+        fileGovernanceScheduler.reconcileObjectStorage();
+
+        Map<String, Object> reconciled = jdbcTemplate.queryForMap(
+                """
+                        select file_name,
+                               file_status,
+                               metadata_json->>'reconciled' as reconciled_flag,
+                               storage_path
+                        from batch.file_record
+                        where storage_path = ?
+                        """,
+                objectName);
+        assertThat(reconciled.get("file_name")).isEqualTo(objectName.substring(objectName.lastIndexOf('/') + 1));
+        assertThat(reconciled.get("file_status")).isEqualTo("RECEIVED");
+        assertThat(reconciled.get("reconciled_flag")).isEqualTo("true");
+        assertThat(reconciled.get("storage_path")).isEqualTo(objectName);
+
+        Integer auditCount = jdbcTemplate.queryForObject(
+                """
+                        select count(1)::int
+                        from batch.file_audit_log
+                        where operation_type = 'RECONCILE_REGISTER'
+                          and trace_id like 'reconcile-%'
+                        """,
+                Integer.class);
+        assertThat(auditCount).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void shouldTriggerArrivalGroupWhenAllFilesArrive() {
+        String groupCode = "arrival-group-" + suffix();
+        String requiredSet = "file-a.csv,file-b.csv";
+        String metadata = """
+                {
+                  "fileGroupCode": "%s",
+                  "waitFileGroupMode": "ALL_OF",
+                  "requiredFileSet": "%s",
+                  "arrivalTimeoutAction": "MANUAL_CONFIRM",
+                  "triggerOnComplete": true,
+                  "latestTolerableTime": "%s"
+                }
+                """.formatted(groupCode, requiredSet, Instant.now().plusSeconds(3600));
+
+        insertFileRecord(
+                TENANT_ID,
+                "file-a.csv",
+                "INPUT",
+                "RECEIVED",
+                "LOCAL",
+                null,
+                "incoming/" + groupCode + "/file-a.csv",
+                metadata,
+                Instant.now(),
+                Instant.now());
+        insertFileRecord(
+                TENANT_ID,
+                "file-b.csv",
+                "INPUT",
+                "RECEIVED",
+                "LOCAL",
+                null,
+                "incoming/" + groupCode + "/file-b.csv",
+                metadata,
+                Instant.now(),
+                Instant.now());
+
+        fileGovernanceScheduler.manageFileArrivalGroups();
+
+        var rows = jdbcTemplate.queryForList(
+                """
+                        select file_name,
+                               metadata_json->>'arrivalState' as arrival_state,
+                               metadata_json->>'arrivalReason' as arrival_reason
+                        from batch.file_record
+                        where tenant_id = ? and metadata_json->>'fileGroupCode' = ?
+                        order by file_name
+                        """,
+                TENANT_ID,
+                groupCode);
+        assertThat(rows).hasSize(2);
+        assertThat(rows).allSatisfy(row -> {
+            assertThat(row.get("arrival_state")).isEqualTo("TRIGGERED");
+            assertThat(row.get("arrival_reason")).isEqualTo("ALL_FILES_ARRIVED");
+        });
+
+        var summaries = fileGovernanceRepository.selectArrivalGroupSummaries(TENANT_ID, groupCode, "TRIGGERED");
+        assertThat(summaries).hasSize(1);
+        assertThat(((Number) summaries.get(0).get("triggered_count")).longValue()).isEqualTo(2L);
+    }
+
+    private Long insertFileRecord(String tenantId,
+                                  String fileName,
+                                  String fileCategory,
+                                  String fileStatus,
+                                  String storageType,
+                                  String storageBucket,
+                                  String storagePath,
+                                  String metadataJson,
+                                  Instant createdAt,
+                                  Instant updatedAt) {
+        return jdbcTemplate.queryForObject(
+                """
+                        insert into batch.file_record (
+                            tenant_id, file_category, file_name, original_file_name, file_ext, file_format_type,
+                            charset, mime_type, file_size_bytes, checksum_type, checksum_value,
+                            storage_type, storage_path, storage_bucket, file_version, file_generation_no,
+                            is_latest, source_type, source_ref, file_status, biz_date, trace_id,
+                            metadata_json, created_at, updated_at
+                        ) values (
+                            ?, ?, ?, ?, 'csv', 'DELIMITED',
+                            'UTF-8', 'text/csv', 128, 'NONE', null,
+                            ?, ?, ?, 'v1', 1,
+                            true, 'SYSTEM', 'file-governance-it', ?, ?, ?,
+                            ?::jsonb, ?, ?
+                        ) returning id
+                        """,
+                Long.class,
+                tenantId,
+                fileCategory,
+                fileName,
+                fileName,
+                storageType,
+                storagePath,
+                storageBucket,
+                fileStatus,
+                java.sql.Date.valueOf(LocalDate.of(2026, 3, 27)),
+                "trace-" + suffix(),
+                metadataJson,
+                Timestamp.from(createdAt),
+                Timestamp.from(updatedAt));
+    }
+
+    private void putObject(String objectName, String content) throws Exception {
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        minioClient().putObject(PutObjectArgs.builder()
+                .bucket(minioBucket())
+                .object(objectName)
+                .stream(new ByteArrayInputStream(bytes), bytes.length, 5 * 1024 * 1024)
+                .contentType("text/plain")
+                .build());
+    }
+
+    private MinioClient minioClient() {
+        return MinioClient.builder()
+                .endpoint(minioEndpoint())
+                .credentials("minioadmin", "minioadmin123")
+                .build();
+    }
+
+    private String suffix() {
+        return Long.toUnsignedString(System.nanoTime());
+    }
+}

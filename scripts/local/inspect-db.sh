@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# inspect-db.sh — PostgreSQL 数据库巡检
-#
-# 检查项：
-#   1. Flyway 迁移历史（无 FAILED 行）
-#   2. 近期告警事件数量（过去 1 小时 CRITICAL/WARNING）
-#   3. 长时间 RUNNING 的作业实例（超 stuck_job_minutes 分钟仍在运行）
-#   4. 待投递 Outbox 积压（unpublished 超 outbox_lag_seconds 秒）
+# =========================================================
+# inspect-db.sh - PostgreSQL 数据库巡检
+# Notes:
+# 1) 检查 Flyway 历史、告警、长时间 RUNNING 作业和 Outbox 积压。
+# 2) 默认只做只读巡检，不修改库内状态。
+# =========================================================
 #   5. 死信队列积压（replay_status = NEW 超 dlq_warn_count 条）
 #   6. 待重试调度积压（retry_status = WAITING 超 retry_warn_count 条）
 #

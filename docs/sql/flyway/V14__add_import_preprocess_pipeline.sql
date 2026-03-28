@@ -1,5 +1,8 @@
 -- =========================================================
 -- V14 - Import preprocess pipeline (ordered plugins, JSON array)
+-- Notes:
+-- 1) Store preprocess steps as an ordered JSONB array.
+-- 2) Keep the column comment as the canonical list of supported steps.
 -- =========================================================
 
 ALTER TABLE batch.file_template_config

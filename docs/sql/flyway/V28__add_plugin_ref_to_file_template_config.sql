@@ -1,15 +1,8 @@
 -- =========================================================
 -- V28 - Add plugin reference columns to file_template_config
---
--- export_data_ref: identifies which ExportDataPlugin to use
---   (e.g. 'jdbc_mapped_export', 'sql_template_export')
--- load_target_ref: identifies which ImportLoadPlugin to use
---   (e.g. 'jdbc_mapped')
---
--- Data migration:
---   - Templates with default_query_sql set → sql_template_export
---   - Import templates → jdbc_mapped (new default, requires
---     query_param_schema.jdbcMappedImport to be configured)
+-- Notes:
+-- 1) Add explicit plugin references for export and import templates.
+-- 2) Backfill existing templates to the current default plugin ids.
 -- =========================================================
 
 ALTER TABLE batch.file_template_config

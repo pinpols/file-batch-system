@@ -5,6 +5,7 @@ import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
+import java.util.LinkedHashMap;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Map;
@@ -33,6 +34,18 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         ZoneId zoneId = ZoneId.of(descriptor.getTimezone());
         LocalDate bizDate = command.fireTime().atZone(zoneId).toLocalDate();
         TriggerType triggerType = command.triggerType() == null ? TriggerType.SCHEDULED : command.triggerType();
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("scheduleType", descriptor.getScheduleType());
+        params.put("scheduleExpression", descriptor.getScheduleExpression());
+        params.put("triggerMode", descriptor.getTriggerMode());
+        params.put("calendarCode", descriptor.getCalendarCode());
+        params.put("catchUpPolicy", descriptor.getCatchUpPolicy());
+        params.put("scheduledAt", command.fireTime().toString());
+        params.put("catchUp", TriggerType.CATCH_UP == triggerType);
+        params.put(
+                "catchUpApprovalRequired",
+                CatchUpPolicyType.MANUAL_APPROVAL.code().equalsIgnoreCase(descriptor.getCatchUpPolicy())
+        );
         return new LaunchRequest(
                 descriptor.getTenantId(),
                 descriptor.getJobCode(),
@@ -40,16 +53,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
                 triggerType,
                 command.requestId(),
                 command.traceId(),
-                Map.of(
-                        "scheduleType", descriptor.getScheduleType(),
-                        "scheduleExpression", descriptor.getScheduleExpression(),
-                        "triggerMode", descriptor.getTriggerMode(),
-                        "calendarCode", descriptor.getCalendarCode(),
-                        "catchUpPolicy", descriptor.getCatchUpPolicy(),
-                        "scheduledAt", command.fireTime().toString(),
-                        "catchUp", TriggerType.CATCH_UP == triggerType,
-                        "catchUpApprovalRequired", CatchUpPolicyType.MANUAL_APPROVAL.code().equalsIgnoreCase(descriptor.getCatchUpPolicy())
-                )
+                params
         );
     }
 

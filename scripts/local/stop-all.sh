@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# 停止由 start-all.sh 启动的 Java 进程（读取 logs/start-all.pids），可选停止 Docker 依赖。
+# =========================================================
+# stop-all.sh - 停止 start-all.sh 启动的本地进程
+# Notes:
+# 1) 读取 logs/start-all.pids 并逐个终止 Java 进程。
+# 2) 可选使用 STOP_DOCKER=1 关闭 Docker Compose 依赖。
+# =========================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

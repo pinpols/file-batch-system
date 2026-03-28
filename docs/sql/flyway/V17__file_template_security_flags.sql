@@ -1,4 +1,10 @@
--- File template content security & download governance (design §15.2)
+-- =========================================================
+-- V17 - File template security flags and download governance
+-- Notes:
+-- 1) Add masking, encryption, and approval flags to file_template_config.
+-- 2) Keep the detailed semantics on the column comments for console use.
+-- =========================================================
+
 ALTER TABLE batch.file_template_config
     ADD COLUMN IF NOT EXISTS preview_masking_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS error_line_masking_enabled BOOLEAN NOT NULL DEFAULT FALSE,

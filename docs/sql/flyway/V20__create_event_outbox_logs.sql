@@ -1,5 +1,8 @@
 -- =========================================================
 -- V20 - Create outbox retry and delivery logs
+-- Notes:
+-- 1) Persist retry attempts separately from the base outbox event.
+-- 2) Capture delivery status for downstream audit and troubleshooting.
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.event_outbox_retry (

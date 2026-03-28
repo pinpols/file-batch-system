@@ -1,5 +1,8 @@
 -- =========================================================
 -- V25 - Dispatch channel health state
+-- Notes:
+-- 1) Track health probe status for each dispatch channel.
+-- 2) Keep failure counts and next probe timing queryable.
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.file_channel_health (

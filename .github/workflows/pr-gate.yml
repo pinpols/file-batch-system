@@ -1,0 +1,205 @@
+name: pr-gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-gate:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Detect affected scope
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          all_modules="batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api,batch-e2e-tests"
+          module_order=(
+            batch-trigger
+            batch-orchestrator
+            batch-worker-core
+            batch-worker-import
+            batch-worker-export
+            batch-worker-dispatch
+            batch-console-api
+            batch-e2e-tests
+          )
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "maven_scope=full" >> "$GITHUB_OUTPUT"
+            echo "maven_modules=$all_modules" >> "$GITHUB_OUTPUT"
+            echo "run_load_tests_build=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## PR Gate Scope"
+              echo
+              echo "- Event: $EVENT_NAME"
+              echo "- Scope: full reactor"
+              echo "- Modules: $all_modules"
+              echo "- load-tests: test-compile"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          mapfile -t changed_files < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          if (( ${#changed_files[@]} == 0 )); then
+            echo "maven_scope=skip" >> "$GITHUB_OUTPUT"
+            echo "maven_modules=" >> "$GITHUB_OUTPUT"
+            echo "run_load_tests_build=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## PR Gate Scope"
+              echo
+              echo "- Event: $EVENT_NAME"
+              echo "- Scope: skip"
+              echo "- Reason: no changed files detected"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          declare -A selected_modules=()
+          full_scope=false
+          run_load_tests_build=false
+
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              pom.xml|.mvn/*|.github/workflows/*|scripts/ci/*|scripts/local/*|helm/*|docker-compose.yml|batch-common/*)
+                full_scope=true
+                run_load_tests_build=true
+                ;;
+              batch-trigger/*)
+                selected_modules[batch-trigger]=1
+                ;;
+              batch-orchestrator/*)
+                selected_modules[batch-orchestrator]=1
+                ;;
+              batch-worker-core/*)
+                selected_modules[batch-worker-core]=1
+                ;;
+              batch-worker-import/*)
+                selected_modules[batch-worker-import]=1
+                ;;
+              batch-worker-export/*)
+                selected_modules[batch-worker-export]=1
+                ;;
+              batch-worker-dispatch/*)
+                selected_modules[batch-worker-dispatch]=1
+                ;;
+              batch-console-api/*)
+                selected_modules[batch-console-api]=1
+                ;;
+              batch-e2e-tests/*)
+                selected_modules[batch-e2e-tests]=1
+                ;;
+              load-tests/*)
+                run_load_tests_build=true
+                ;;
+            esac
+          done
+
+          if [[ "$full_scope" == "true" ]]; then
+            echo "maven_scope=full" >> "$GITHUB_OUTPUT"
+            echo "maven_modules=$all_modules" >> "$GITHUB_OUTPUT"
+          else
+            modules_csv=""
+            for module in "${module_order[@]}"; do
+              if [[ -n "${selected_modules[$module]:-}" ]]; then
+                if [[ -z "$modules_csv" ]]; then
+                  modules_csv="$module"
+                else
+                  modules_csv="$modules_csv,$module"
+                fi
+              fi
+            done
+
+            if [[ -n "$modules_csv" ]]; then
+              echo "maven_scope=partial" >> "$GITHUB_OUTPUT"
+              echo "maven_modules=$modules_csv" >> "$GITHUB_OUTPUT"
+            else
+              echo "maven_scope=skip" >> "$GITHUB_OUTPUT"
+              echo "maven_modules=" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+          echo "run_load_tests_build=$run_load_tests_build" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## PR Gate Scope"
+            echo
+            echo "- Event: $EVENT_NAME"
+            echo "- Changed files:"
+            for file in "${changed_files[@]}"; do
+              echo "  - $file"
+            done
+            echo "- Maven scope: $(grep '^maven_scope=' "$GITHUB_OUTPUT" | tail -n1 | cut -d= -f2)"
+            echo "- Maven modules: $(grep '^maven_modules=' "$GITHUB_OUTPUT" | tail -n1 | cut -d= -f2)"
+            echo "- load-tests: $run_load_tests_build"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run PR gate for full reactor
+        if: steps.scope.outputs.maven_scope == 'full'
+        shell: bash
+        run: |
+          bash scripts/ci/run-full-regression.sh --skip-it-suite
+
+      - name: Run PR gate for affected modules
+        if: steps.scope.outputs.maven_scope == 'partial'
+        shell: bash
+        run: |
+          bash scripts/ci/run-full-regression.sh \
+            --skip-it-suite \
+            -- --pl "${{ steps.scope.outputs.maven_modules }}" -am -amd
+
+      - name: Compile load-tests module
+        if: steps.scope.outputs.run_load_tests_build == 'true'
+        shell: bash
+        run: |
+          mvn -q -f load-tests/pom.xml test-compile
+
+      - name: Report skipped Maven gate
+        if: steps.scope.outputs.maven_scope == 'skip' && steps.scope.outputs.run_load_tests_build != 'true'
+        shell: bash
+        run: |
+          echo "No reactor modules or load-tests sources were affected; skipping Maven gate."
+
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-gate-surefire-reports
+          path: |
+            **/target/surefire-reports/**

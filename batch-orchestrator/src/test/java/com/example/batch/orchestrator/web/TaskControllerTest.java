@@ -1,0 +1,95 @@
+package com.example.batch.orchestrator.web;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.orchestrator.application.service.TaskExecutionService;
+import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
+import com.example.batch.orchestrator.controller.TaskController;
+import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+class TaskControllerTest {
+
+    private final TaskExecutionService taskExecutionService = org.mockito.Mockito.mock(TaskExecutionService.class);
+    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TaskController(taskExecutionService))
+            .setControllerAdvice(new OrchestratorApiExceptionHandler())
+            .build();
+
+    @Test
+    void shouldReturn200WhenClaimSucceeds() throws Exception {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setAssignedWorkerCode("w1");
+        when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
+
+        mockMvc.perform(post("/internal/tasks/10/claim")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldReturn404WhenTaskNotFoundOnClaim() throws Exception {
+        when(taskExecutionService.assignWorker(any(), any(), any())).thenReturn(null);
+
+        mockMvc.perform(post("/internal/tasks/99/claim")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturn409WhenClaimConflict() throws Exception {
+        JobTaskEntity task = new JobTaskEntity();
+        task.setTaskStatus(TaskStatus.RUNNING.code());
+        task.setAssignedWorkerCode("other");
+        when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
+
+        mockMvc.perform(post("/internal/tasks/10/claim")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void shouldReturn200WhenReportAccepted() throws Exception {
+        mockMvc.perform(post("/internal/tasks/5/report")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tenantId": "t1",
+                                  "success": true,
+                                  "resultSummary": "ok"
+                                }
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldReturn200WhenRenewSucceeds() throws Exception {
+        when(taskExecutionService.renewTaskLease("t1", 7L, "w1")).thenReturn(true);
+
+        mockMvc.perform(post("/internal/tasks/7/renew")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldReturn409WhenRenewRejected() throws Exception {
+        when(taskExecutionService.renewTaskLease("t1", 7L, "w1")).thenReturn(false);
+
+        mockMvc.perform(post("/internal/tasks/7/renew")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+                .andExpect(status().isConflict());
+    }
+}

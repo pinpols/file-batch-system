@@ -8,6 +8,12 @@
 | 模块 | `load-tests/`（独立 Maven 模块，不加入主构建） |
 | 目标 | 获取上线前容量基线，为 K8s 资源规格、HPA 阈值、数据库连接池上限提供实测数据 |
 
+## 当前状态
+
+- `load-tests` 已通过 `mvn -q -f load-tests test-compile`
+- 三个核心 simulation 已修复为可编译状态
+- 当前文档中的容量数字仍需在 staging 或 prod-like 环境实测后回填
+
 ---
 
 ## 测试场景
@@ -70,8 +76,8 @@ mvn gatling:test -Dsimulation=ConsoleQuerySimulation
 mvn gatling:test -Dsimulation=CapacityBaselineSimulation \
     -DjobCode=E2E_IMPORT_LOAD -DtenantId=t1
 
-# Staging 环境，50 并发，300 秒
-mvn gatling:test -Pstageing -Dsimulation=JobLaunchSimulation \
+# Staging 环境
+mvn gatling:test -Pstaging -Dsimulation=JobLaunchSimulation \
     -Dusers.peak=50 -Dduration.seconds=300
 
 # 查看报告
@@ -111,7 +117,7 @@ open target/gatling-results/*/index.html
 
 ---
 
-## 容量基线记录表（待填写）
+## 容量基线记录表（待回填）
 
 运行 `CapacityBaselineSimulation` 后，将各阶段数据记录于此：
 
@@ -144,16 +150,29 @@ open target/gatling-results/*/index.html
 
 ## CI 集成建议
 
-将 `JobLaunchSimulation`（20 并发，120 秒）加入 staging 流水线的"上线前验收"阶段：
+当前仓库已通过 `.github/workflows/staging-gate.yml` + `scripts/ci/run-full-regression.sh --with-load-smoke` 接入 staging gate。
+
+如果需要提升 staging 压测强度，可把 `JobLaunchSimulation`（20 并发，120 秒）扩展为更高参数，例如：
 
 ```yaml
 # .github/workflows/staging-gate.yml 片段
-- name: Load test gate
+- name: Stronger load test gate
   run: |
-    cd load-tests
-    mvn gatling:test -Pstageing \
-        -Dsimulation=JobLaunchSimulation \
-        -Dusers.peak=50 -Dduration.seconds=120
+    bash scripts/ci/run-full-regression.sh --with-load-smoke
 ```
 
-构建结果中 Gatling HTML 报告存为 artifact，供 review 使用。
+并通过环境变量覆盖默认 smoke 参数：
+
+```yaml
+env:
+  BATCH_LOAD_SMOKE_USERS_PEAK: "50"
+  BATCH_LOAD_SMOKE_DURATION_SECONDS: "120"
+  BATCH_LOAD_SMOKE_RAMP_SECONDS: "20"
+```
+
+构建结果中的 Gatling HTML 报告应继续作为 artifact 保留，供 review 使用。
+
+## 备注
+
+当前阶段已完成的是压测工具链和运行入口收口，不代表已经获得最终容量基线。  
+正式门禁仍要求在真实 staging 或 prod-like 环境回填 p95 / p99 / 吞吐 / 错误率 / 饱和点数据。

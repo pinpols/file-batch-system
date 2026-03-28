@@ -1,0 +1,31 @@
+package com.example.batch.orchestrator.web;
+
+import static org.mockito.Mockito.verify;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.example.batch.orchestrator.application.service.RetryGovernanceService;
+import com.example.batch.orchestrator.controller.DeadLetterController;
+import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+class DeadLetterControllerTest {
+
+    private final RetryGovernanceService retryGovernanceService = org.mockito.Mockito.mock(RetryGovernanceService.class);
+    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new DeadLetterController(retryGovernanceService))
+            .setControllerAdvice(new OrchestratorApiExceptionHandler())
+            .build();
+
+    @Test
+    void shouldReplayDeadLetter() throws Exception {
+        mockMvc.perform(post("/internal/dead-letters/42/replay")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\"}"))
+                .andExpect(status().isOk());
+
+        verify(retryGovernanceService).replayDeadLetter("t1", 42L);
+    }
+}

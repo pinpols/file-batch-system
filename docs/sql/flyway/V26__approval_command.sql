@@ -1,5 +1,8 @@
 -- =========================================================
 -- V26 - Unified approval command workflow
+-- Notes:
+-- 1) Centralize approval requests, approvals, rejections, and execution state.
+-- 2) Store source trace and idempotency keys for audit and replay safety.
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.approval_command (

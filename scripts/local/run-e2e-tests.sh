@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Run batch-e2e-tests (Testcontainers: Postgres x2, Kafka, MinIO).
-# On macOS + Docker Desktop, if tests are skipped, either:
-#   - Enable Docker Desktop → Settings → Advanced → "Allow the default Docker socket to be used", or
-#   - export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="$HOME/.docker/run/docker.sock"
-# The batch-e2e-tests POM also sets TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE for macOS via a Maven profile.
+# =========================================================
+# run-e2e-tests.sh - 运行 batch-e2e-tests
+# Notes:
+# 1) 使用 Testcontainers 启动 Postgres、Kafka 和 MinIO。
+# 2) macOS / Docker Desktop 下如遇 socket 问题，可按脚本提示设置 TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE。
+# =========================================================
 
 set -euo pipefail
 

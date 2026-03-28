@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# 一键启动：Docker 基础依赖（PostgreSQL / Kafka / MinIO）+ 六个可运行 Java 模块。
-# 依赖：Docker、Docker Compose、JDK、Maven；在仓库根目录执行。
-# 日志：logs/<模块名>.log；PID：logs/start-all.pids（name pid 两列）
+# =========================================================
+# start-all.sh - 一键启动本地联调环境
+# Notes:
+# 1) 启动 PostgreSQL / Kafka / MinIO 以及六个 Java 模块。
+# 2) 运行前需要 Docker、Docker Compose、JDK 和 Maven。
+# 3) PID 写入 logs/start-all.pids，日志写入 logs/<module>.log。
+# =========================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
