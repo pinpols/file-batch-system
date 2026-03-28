@@ -64,6 +64,14 @@ banner() {
   printf '%s\n' "$(printf '=%.0s' {1..72})"
 }
 
+run_mvn() {
+  local -a cmd=(mvn -q "$@")
+  if (( ${#EXTRA_MVN_ARGS[@]} > 0 )); then
+    cmd+=("${EXTRA_MVN_ARGS[@]}")
+  fi
+  "${cmd[@]}"
+}
+
 run_step() {
   local label="$1"
   shift
@@ -443,13 +451,13 @@ fi
 if [[ "$RUN_DEFAULT_TESTS" == true ]]; then
   run_step \
     "Reactor Default Tests (*Test / *IntegrationTest)" \
-    mvn -q test "${EXTRA_MVN_ARGS[@]}"
+    run_mvn test
 fi
 
 if [[ "$RUN_IT_SUITE" == true ]]; then
   run_step \
     "Reactor IT / E2E Suite (*IT)" \
-    mvn -q test -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false "${EXTRA_MVN_ARGS[@]}"
+    run_mvn test -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false
 fi
 
 if [[ "$RUN_LOAD_SMOKE" == true ]]; then

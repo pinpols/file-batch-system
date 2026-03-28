@@ -67,20 +67,20 @@ public abstract class AbstractTaskConsumer {
      * 由子类的 {@code @KafkaListener} 方法调用。
      * <p>把监听注解留在子类，避免抽象类强耦合 listener 配置与 topic 表达式。
      */
-    protected void doConsume(String payload) {
+    protected boolean doConsume(String payload) {
         Semaphore sem = ensureSemaphore();
         boolean acquired = sem.tryAcquire();
         if (!acquired) {
             // 背压：当实例内并发达到上限时，暂停拉取新消息。
             // 注意：这里不阻塞线程等待 permit（避免 Kafka consumer 线程卡死导致 rebalance 风险）。
             pauseContainer();
-            return;
+            return false;
         }
         TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
         WorkerRegistration registration = workerLoop().ensureStarted();
         if (!accepts(message, registration)) {
             sem.release();
-            return;
+            return true;
         }
         injectMdc(message, registration);
         try {
@@ -88,10 +88,11 @@ public abstract class AbstractTaskConsumer {
             if (result == null) {
                 log.info("{} task skipped after claim check: taskId={}",
                         workerConfiguration().workerType(), message.taskId());
-                return;
+                return true;
             }
             log.info("{} task processed: taskId={}, success={}, message={}",
                     workerConfiguration().workerType(), result.taskId(), result.success(), result.message());
+            return true;
         } finally {
             // 无论处理成功/失败/抛异常，都必须释放 permit；
             // 若之前触发过 pause，则在释放后尝试恢复消费。

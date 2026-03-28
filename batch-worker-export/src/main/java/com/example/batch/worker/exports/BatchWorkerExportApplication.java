@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
 
@@ -16,6 +17,7 @@ import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfigura
         BatchObjectCryptoAutoConfiguration.class,
         RestClientAutoConfiguration.class
 })
+@EnableKafka
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
 @MapperScan(basePackages = "com.example.batch.worker.core.mapper", sqlSessionFactoryRef = "exportPlatformSqlSessionFactory")
