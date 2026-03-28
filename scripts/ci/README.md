@@ -10,6 +10,14 @@
 bash scripts/ci/run-full-regression.sh --help
 ```
 
+## `security-scan.sh`
+
+本地 / CI 安全扫描一键入口：先打包 `security-scan` 独立 Java 模块，再按参数执行 secret、依赖、SAST、文件系统、镜像和 ZAP 扫描。默认执行全量扫描，可通过 `--mode` 收窄范围。
+
+```bash
+bash scripts/ci/security-scan.sh --help
+```
+
 ## `check-console-openapi-paths.py`
 
 校验 `docs/api/console-api.openapi.yaml` 中 `/api/console` 下的 **GET/POST** 路径是否与 `batch-console-api` 里 `Console*Controller` 的 `@RequestMapping` + `@GetMapping` / `@PostMapping` 一致，避免文档与实现漂移。

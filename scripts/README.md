@@ -10,6 +10,7 @@
 ## 主要入口
 
 - `scripts/ci/run-full-regression.sh`：统一回归入口，支持默认测试、IT/E2E、压测 smoke、部署 smoke、部署升级 / 回滚验证和巡检
+- `scripts/ci/security-scan.sh`：本地 / CI 安全扫描一键入口，编排 `gitleaks` / `dependency-check` / `semgrep` / `trivy` / `ZAP`
 - `scripts/ci/check-console-openapi-paths.py`：Console OpenAPI 与 `Console*Controller` 路由一致性检查（CI 与本地均可运行，详见 [scripts/ci/README.md](ci/README.md)）
 - `scripts/local/run-e2e-tests.sh`：本地运行 `batch-e2e-tests`
 - `scripts/local/inspect-all.sh`：本地巡检总入口
