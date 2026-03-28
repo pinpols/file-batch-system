@@ -1,0 +1,16 @@
+File Batch System
+
+Copyright 2026 Dengchao
+
+This product includes software developed by third parties.
+
+Third-party dependency details, license classifications, and the current
+compliance snapshot are maintained in:
+
+- docs/compliance/THIRD-PARTY-LICENSES.md
+- docs/compliance/sbom.json
+
+The repository also includes generated deployment, testing, and Excel template
+artifacts. Consult the relevant `docs/` subdirectories for usage and origin
+details.
+
