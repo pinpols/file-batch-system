@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# inspect-workers.sh — Worker 注册表巡检
-#
-# 检查项：
-#   1. DRAINING 超时（drain_deadline_at 已过但 worker 仍在 DRAINING 状态）
-#   2. 心跳失联（ONLINE 但 heartbeat_at 超 stale_heartbeat_minutes 未更新）
-#   3. DECOMMISSIONED worker 仍有活跃任务认领（关联 task_assignment）
-#   4. 各状态 worker 分布汇总
+# =========================================================
+# inspect-workers.sh - Worker 注册表巡检
+# Notes:
+# 1) 检查 DRAINING 超时、心跳失联和孤儿任务。
+# 2) 汇总各状态 worker 分布。
+# =========================================================
 #
 # 使用方法：
 #   PGHOST=localhost PGPORT=5432 PGDATABASE=batch_db PGUSER=batch \

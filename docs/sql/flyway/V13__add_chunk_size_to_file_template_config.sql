@@ -1,5 +1,8 @@
 -- =========================================================
 -- V13 - Add chunk size to file template config
+-- Notes:
+-- 1) Keep a database-level default for file_template_config.chunk_size.
+-- 2) Enforce chunk_size > 0 through a dedicated check constraint.
 -- =========================================================
 
 ALTER TABLE batch.file_template_config

@@ -1,4 +1,5 @@
-# 对话5：系统多维度治理推进脚本
+# dialog-5
+系统多维度治理推进脚本
 
 本文档基于 `docs/architecture/system-multidimensional-improvement-analysis.md` 的分析结论，
 将改进路线拆解为可逐轮推进的对话脚本。

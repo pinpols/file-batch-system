@@ -1,4 +1,10 @@
--- Worker graceful drain: deadlines for takeover (design §18.2)
+-- =========================================================
+-- V19 - Worker graceful drain fields
+-- Notes:
+-- 1) Record drain start and takeover deadline on worker_registry.
+-- 2) Let orchestrator reclaim in-flight work after the deadline passes.
+-- =========================================================
+
 ALTER TABLE batch.worker_registry
     ADD COLUMN IF NOT EXISTS drain_started_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS drain_deadline_at TIMESTAMPTZ;

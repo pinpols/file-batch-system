@@ -143,7 +143,7 @@ DB (job_task: READY)
 |------|------|
 | [设计说明书](批量调度系统设计说明书（完整版）-20260321.md) | 系统完整设计，含数据模型、流程、接口定义 |
 | [AGENT.md](AGENT.md) | 工程基线约束，供 AI 辅助开发时参考 |
-| [本地开发](docs/local-development.md) | 环境搭建、调试、常见问题 |
+| [本地开发](docs/runbook/local-development.md) | 环境搭建、调试、常见问题 |
 | [Docker 部署](docs/deployment/docker-deployment.md) | 容器化部署指南 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
 | [设计差距审计](docs/architecture/design-gap-audit.md) | 当前实现与设计文档的差距分析 |

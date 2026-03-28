@@ -40,7 +40,7 @@ public class ConsoleQuerySimulation extends Simulation {
 
     // ── Protocol ───────────────────────────────────────────────────────────────
 
-    private final HttpProtocolBuilder http = http()
+    private final HttpProtocolBuilder httpProtocol = http
             .baseUrl(GatlingConfig.CONSOLE_BASE_URL)
             .acceptHeader("application/json")
             .header("Authorization", AUTH_TOKEN)
@@ -78,7 +78,7 @@ public class ConsoleQuerySimulation extends Simulation {
             );
 
     private final ScenarioBuilder scenario = scenario("Console Query")
-            .forever().exec(queries);
+            .forever().on(queries);
 
     // ── Load profile ───────────────────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ public class ConsoleQuerySimulation extends Simulation {
                                 .during(GatlingConfig.DURATION_SECONDS)
                 )
         )
-                .protocols(http)
+                .protocols(httpProtocol)
                 .assertions(
                         global().responseTime().percentile(99).lt(GatlingConfig.READ_P99_MS),
                         global().failedRequests().percent().lt(0.1)

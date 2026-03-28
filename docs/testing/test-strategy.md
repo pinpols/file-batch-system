@@ -1,5 +1,9 @@
 # 测试分层建议
 
+完整功能与整体测试实施计划见：`docs/testing/full-project-test-plan.md`
+Phase 1 测试覆盖矩阵见：`docs/testing/phase-1-test-coverage-matrix.md`
+统一回归入口与门禁说明见：`docs/testing/release-gate.md`
+
 目标是覆盖核心链路和典型失败场景，但不把测试数量扩成全组合穷举。建议按三层拆分：单元测试负责纯逻辑，集成测试负责模块协作，端到端测试只保留少量主路径。
 
 ## 单元测试
@@ -112,13 +116,15 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 - 集成测试：中等，覆盖约 25% 的模块协作
 - 端到端测试：少而精，覆盖约 15% 的核心链路
 
-## 当前状态（截至 2026-03-25）
+## 当前状态（截至 2026-03-27）
 
-三层测试体系已完整落地：
+三层测试体系和统一回归入口已落地：
 
-1. ✅ 单元测试：41 个（覆盖状态机、调度规则、文件链、安全、加解密等核心逻辑）
-2. ✅ 集成测试：18 个（Testcontainers，真实 PostgreSQL/Kafka/MinIO）
-3. ✅ 端到端测试：9 个 E2E（主链路、失败分支、内容验证、多租户并发）
-4. ✅ SQL 一致性守卫：`SqlConsistencyIT`（批量调度器 CI 门禁）
+1. ✅ 单元测试：67 个（覆盖状态机、调度规则、文件链、安全、加解密、触发链路与 Worker 纯逻辑）
+2. ✅ 集成测试：35 个（含 Testcontainers 主链路协作、ShedLock 配置校验、应用启动 smoke）
+3. ✅ 端到端测试：13 个 E2E（主链路、失败分支、内容验证、Outbox 轮询与重试、多租户并发、dedup 幂等）
+4. ✅ SQL 一致性守卫：`SqlConsistencyIT`（批量调度器门禁）
+5. ✅ 统一回归入口：`scripts/ci/run-full-regression.sh`
+6. ✅ 部署 smoke：Helm `lint + template`，并已具备可选 live rollout / readiness 校验逻辑
 
-下一步建议方向：压测基线（JMeter/Gatling）、生产部署产物验证。
+下一步建议方向：真实 staging 集群 live deploy smoke、回滚 smoke、压测基线实测与回填。

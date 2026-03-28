@@ -51,13 +51,13 @@ public class CapacityBaselineSimulation extends Simulation {
 
     // ── Protocols ──────────────────────────────────────────────────────────────
 
-    private final HttpProtocolBuilder triggerHttp = http()
+    private final HttpProtocolBuilder triggerHttpProtocol = http
             .baseUrl(GatlingConfig.TRIGGER_BASE_URL)
             .acceptHeader("application/json")
             .contentTypeHeader("application/json")
             .shareConnections();
 
-    private final HttpProtocolBuilder consoleHttp = http()
+    private final HttpProtocolBuilder consoleHttpProtocol = http
             .baseUrl(GatlingConfig.CONSOLE_BASE_URL)
             .acceptHeader("application/json")
             .header("Authorization", AUTH_TOKEN)
@@ -98,7 +98,7 @@ public class CapacityBaselineSimulation extends Simulation {
             .pause(2);
 
     private final ScenarioBuilder writeScenario = scenario("Write: Job Launch")
-            .forever().exec(writePath);
+            .forever().on(writePath);
 
     // ── Read scenario (70 %) — console queries ─────────────────────────────────
 
@@ -119,7 +119,7 @@ public class CapacityBaselineSimulation extends Simulation {
             .pause(1);
 
     private final ScenarioBuilder readScenario = scenario("Read: Console Query")
-            .forever().exec(readPath);
+            .forever().on(readPath);
 
     // ── Stepped ramp load profile ──────────────────────────────────────────────
 
@@ -146,7 +146,7 @@ public class CapacityBaselineSimulation extends Simulation {
                         stressPeakUsers(writeUsers(100)).during(STEP_DURATION),
                         stressPeakUsers(writeUsers(150)).during(STEP_DURATION),
                         stressPeakUsers(writeUsers(200)).during(STEP_DURATION)
-                ).andThen(
+                ).protocols(triggerHttpProtocol).andThen(
                         // ── Read population ──
                         readScenario.injectOpen(
                                 stressPeakUsers(readUsers(25)).during(STEP_DURATION),
@@ -154,10 +154,9 @@ public class CapacityBaselineSimulation extends Simulation {
                                 stressPeakUsers(readUsers(100)).during(STEP_DURATION),
                                 stressPeakUsers(readUsers(150)).during(STEP_DURATION),
                                 stressPeakUsers(readUsers(200)).during(STEP_DURATION)
-                        )
+                        ).protocols(consoleHttpProtocol)
                 )
         )
-                .protocols(triggerHttp)
                 .assertions(
                         // Write SLO
                         details("POST /api/triggers/launch")

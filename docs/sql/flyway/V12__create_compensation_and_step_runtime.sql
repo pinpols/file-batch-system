@@ -1,3 +1,11 @@
+-- =========================================================
+-- V12 - Create compensation command and step runtime tables
+-- Notes:
+-- 1) Extend job_instance with rerun / retry / traceability fields.
+-- 2) Create job_step_instance for step-level execution tracking.
+-- 3) Create compensation_command for manual or automated compensation flow.
+-- =========================================================
+
 ALTER TABLE batch.job_instance
     ADD COLUMN IF NOT EXISTS batch_no VARCHAR(128),
     ADD COLUMN IF NOT EXISTS operator_id VARCHAR(64),

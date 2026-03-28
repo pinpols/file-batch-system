@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
+    static final String JOB_GROUP = "batch-trigger";
+
     private final TriggerDefinitionLoader triggerDefinitionLoader;
     private final Scheduler scheduler;
 
@@ -52,15 +54,18 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
             jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, descriptor.getScheduleExpression());
             jobDataMap.put(QuartzLaunchJob.TIMEZONE, descriptor.getTimezone());
             jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, descriptor.getTriggerMode());
+            jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, descriptor.getCalendarCode());
+            jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
+            jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
 
             JobDetail jobDetail = JobBuilder.newJob(QuartzLaunchJob.class)
-                    .withIdentity(identity, "batch-trigger")
+                    .withIdentity(identity, JOB_GROUP)
                     .usingJobData(jobDataMap)
                     .storeDurably()
                     .build();
 
             CronTrigger trigger = TriggerBuilder.newTrigger()
-                    .withIdentity(identity, "batch-trigger")
+                    .withIdentity(identity, JOB_GROUP)
                     .forJob(jobDetail)
                     .withSchedule(CronScheduleBuilder.cronSchedule(descriptor.getScheduleExpression())
                             .inTimeZone(TimeZone.getTimeZone(descriptor.getTimezone()))

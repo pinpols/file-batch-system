@@ -1,0 +1,174 @@
+package com.example.batch.trigger.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.example.batch.common.dto.LaunchRequest;
+import com.example.batch.common.dto.LaunchResponse;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.exception.BizException;
+import com.example.batch.common.exception.SystemException;
+import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
+import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
+import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
+import com.example.batch.trigger.mapper.TriggerRequestMapper;
+import com.example.batch.trigger.web.request.TriggerLaunchRequest;
+import java.time.LocalDate;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class DefaultTriggerServiceTest {
+
+    @Mock
+    private LaunchAdapterService launchAdapterService;
+    @Mock
+    private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
+    @Mock
+    private TriggerRequestMapper triggerRequestMapper;
+
+    private DefaultTriggerService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new DefaultTriggerService(launchAdapterService, orchestratorTriggerAdapter, triggerRequestMapper);
+    }
+
+    @Test
+    void shouldRejectBlankIdempotencyKey() {
+        assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(validRequest(), " ", "req-001", "trace-001")))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo(ResultCode.MISSING_IDEMPOTENCY_KEY);
+    }
+
+    @Test
+    void shouldShortCircuitWhenDedupRequestAlreadyExists() {
+        TriggerLaunchCommand command = new TriggerLaunchCommand(validRequest(), "idem-001", "req-001", "trace-001");
+        LaunchRequest launchRequest = new LaunchRequest(
+                "t1",
+                "IMPORT_JOB",
+                LocalDate.of(2026, 3, 27),
+                TriggerType.API,
+                "req-001",
+                "trace-001",
+                Map.of()
+        );
+        TriggerRequestEntity existing = new TriggerRequestEntity();
+        existing.setTenantId("t1");
+        existing.setRequestId("existing-request");
+        existing.setTraceId("existing-trace");
+
+        when(launchAdapterService.fromApiRequest(command)).thenReturn(launchRequest);
+        when(triggerRequestMapper.selectByTenantAndDedupKey("t1", "idem-001")).thenReturn(existing);
+
+        LaunchResponse response = service.launch(command);
+
+        assertThat(response).isNotNull();
+        assertThat(response.traceId()).isEqualTo("existing-trace");
+        verify(triggerRequestMapper, never()).insert(any());
+        verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+    }
+
+    @Test
+    void shouldMarkRequestRejectedWhenForwardingFails() {
+        TriggerLaunchCommand command = new TriggerLaunchCommand(validRequest(), "idem-002", "req-002", "trace-002");
+        LaunchRequest launchRequest = new LaunchRequest(
+                "t1",
+                "IMPORT_JOB",
+                LocalDate.of(2026, 3, 27),
+                TriggerType.API,
+                "req-002",
+                "trace-002",
+                Map.of("channel", "api")
+        );
+
+        when(launchAdapterService.fromApiRequest(command)).thenReturn(launchRequest);
+        when(triggerRequestMapper.selectByTenantAndDedupKey("t1", "idem-002")).thenReturn(null);
+        when(orchestratorTriggerAdapter.sendTrigger(launchRequest)).thenThrow(new IllegalStateException("orchestrator down"));
+
+        assertThatThrownBy(() -> service.launch(command))
+                .isInstanceOf(SystemException.class)
+                .hasMessageContaining("failed to forward trigger request");
+
+        ArgumentCaptor<TriggerRequestEntity> captor = ArgumentCaptor.forClass(TriggerRequestEntity.class);
+        verify(triggerRequestMapper).insert(captor.capture());
+        assertThat(captor.getValue().getRequestStatus()).isEqualTo("ACCEPTED");
+        assertThat(captor.getValue().getDedupKey()).isEqualTo("idem-002");
+        verify(triggerRequestMapper).updateRequestStatus("t1", "req-002", "REJECTED");
+    }
+
+    @Test
+    void shouldApprovePendingCatchUpAndMarkRequestLaunched() {
+        PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
+        command.setTenantId("t1");
+        command.setRequestId("req-pending");
+        command.setReason("manual approve");
+
+        TriggerRequestEntity pending = new TriggerRequestEntity();
+        pending.setTenantId("t1");
+        pending.setRequestId("req-pending");
+        pending.setJobCode("EXPORT_JOB");
+        pending.setBizDate(LocalDate.of(2026, 3, 27));
+        pending.setTriggerType(TriggerType.CATCH_UP.code());
+        pending.setRequestStatus("ACCEPTED");
+        pending.setTraceId("trace-pending");
+
+        LaunchResponse response = new LaunchResponse("inst-001", "trace-pending");
+        when(triggerRequestMapper.selectByTenantAndRequestId("t1", "req-pending")).thenReturn(pending);
+        when(orchestratorTriggerAdapter.sendTrigger(any())).thenReturn(response);
+
+        LaunchResponse approved = service.approvePendingCatchUp(command);
+
+        assertThat(approved.instanceNo()).isEqualTo("inst-001");
+        ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
+        verify(orchestratorTriggerAdapter).sendTrigger(captor.capture());
+        assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
+        assertThat(captor.getValue().params())
+                .containsEntry("operationType", "CATCH_UP_APPROVAL")
+                .containsEntry("approvalMode", "MANUAL_APPROVAL")
+                .containsEntry("catchUpApproved", true)
+                .containsEntry("reason", "manual approve");
+        verify(triggerRequestMapper).updateRequestStatus("t1", "req-pending", "LAUNCHED");
+    }
+
+    @Test
+    void shouldRejectApprovalForNonCatchUpRequest() {
+        PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
+        command.setTenantId("t1");
+        command.setRequestId("req-invalid");
+
+        TriggerRequestEntity request = new TriggerRequestEntity();
+        request.setTriggerType(TriggerType.API.code());
+
+        when(triggerRequestMapper.selectByTenantAndRequestId("t1", "req-invalid")).thenReturn(request);
+
+        assertThatThrownBy(() -> service.approvePendingCatchUp(command))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("not a catch-up request");
+
+        verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+    }
+
+    private TriggerLaunchRequest validRequest() {
+        TriggerLaunchRequest request = new TriggerLaunchRequest();
+        request.setTenantId("t1");
+        request.setJobCode("IMPORT_JOB");
+        request.setBizDate(LocalDate.of(2026, 3, 27));
+        request.setTriggerType(TriggerType.API);
+        request.setParams(Map.of());
+        return request;
+    }
+}

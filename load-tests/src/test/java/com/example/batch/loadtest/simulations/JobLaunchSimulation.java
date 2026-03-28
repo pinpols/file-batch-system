@@ -39,7 +39,7 @@ public class JobLaunchSimulation extends Simulation {
 
     // ── Protocol ───────────────────────────────────────────────────────────────
 
-    private final HttpProtocolBuilder http = http()
+    private final HttpProtocolBuilder httpProtocol = http
             .baseUrl(GatlingConfig.TRIGGER_BASE_URL)
             .acceptHeader("application/json")
             .contentTypeHeader("application/json")
@@ -95,7 +95,7 @@ public class JobLaunchSimulation extends Simulation {
                                 .during(GatlingConfig.DURATION_SECONDS)
                 )
         )
-                .protocols(http)
+                .protocols(httpProtocol)
                 .assertions(
                         global().responseTime().percentile(95).lt(GatlingConfig.WRITE_P95_MS),
                         global().failedRequests().percent().lt(GatlingConfig.MAX_ERROR_RATE_PCT)

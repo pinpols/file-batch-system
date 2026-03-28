@@ -1,10 +1,8 @@
 -- =========================================================
 -- V29 - ShedLock distributed lock table
---
--- Prevents multiple orchestrator instances from executing
--- the same @Scheduled task concurrently.
--- One row per named lock; row is upserted on lock acquire
--- and cleared (lock_until reset to past) on release.
+-- Notes:
+-- 1) Prevent multiple orchestrator instances from running the same scheduled task.
+-- 2) Keep one row per named lock and let the library manage lock acquire/release.
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.shedlock (

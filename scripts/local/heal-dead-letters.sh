@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# heal-dead-letters.sh — 自愈：批量重放 NEW 状态的死信任务
-#
-# 行为：
-#   查询 dead_letter_task 中 replay_status='NEW' 的记录，按 tenant_id 和 source_type 分组，
-#   调用控制台死信重放 API（POST /api/console/dead-letters/{id}/replay），
-#   并在超过 batch_size 时分批处理以避免打爆下游。
-#
+# =========================================================
+# heal-dead-letters.sh - 自愈：批量重放 NEW 状态的死信任务
+# Notes:
+# 1) 查询 dead_letter_task 中 replay_status='NEW' 的记录并按批处理。
+# 2) 调用控制台死信重放 API 触发重放。
+# =========================================================
 # 使用方法：
 #   # dry-run（默认）
 #   bash scripts/local/heal-dead-letters.sh

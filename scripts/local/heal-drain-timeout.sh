@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# heal-drain-timeout.sh — 自愈：对排空超时的 Worker 执行 force-offline
-#
-# 行为：
-#   查询 worker_registry 中 worker_status='DRAINING' 且 drain_deadline_at < NOW() 的记录，
-#   对每个 worker_code 调用控制台 force-offline API，触发 Orchestrator 接管其活跃任务并
-#   将 Worker 标为 DECOMMISSIONED。
-#
+# =========================================================
+# heal-drain-timeout.sh - 自愈：对排空超时的 Worker 执行 force-offline
+# Notes:
+# 1) 找出 DRAINING 且超时的 worker。
+# 2) 调用控制台 force-offline API 交给 Orchestrator 接管。
+# =========================================================
 # 使用方法（dry-run 模式默认开启，需显式关闭）：
 #   # 仅预览，不实际执行（默认）
 #   bash scripts/local/heal-drain-timeout.sh

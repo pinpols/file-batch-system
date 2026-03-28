@@ -1,7 +1,8 @@
 -- =========================================================
 -- V23 - Baseline runtime default parameters (design §20.11)
--- Mirrors Spring YAML / env defaults; authoritative for ops docs.
--- Runtime services read configuration from YAML/env — this table is the audited catalog.
+-- Notes:
+-- 1) Mirror Spring YAML / env defaults as an audited catalog for ops docs.
+-- 2) Keep the insert list aligned with runtime-default-parameters.md.
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.batch_runtime_default_parameter (

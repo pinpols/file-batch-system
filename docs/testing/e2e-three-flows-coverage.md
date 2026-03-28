@@ -4,7 +4,7 @@
 
 本文分析 `batch-e2e-tests` 中三个 E2E 测试类当前覆盖了哪些核心链路、哪些风险点仍未覆盖，并给出后续可执行的覆盖优化清单。
 
-涉及测试类（截至 2026-03-25，共 9 个 E2E）：
+涉及测试类（截至 2026-03-27，共 13 个 E2E）：
 
 **主链路（Happy Path）**
 - `ImportPipelineE2eIT`、`ExportPipelineE2eIT`、`DispatchPipelineE2eIT`
@@ -12,10 +12,14 @@
 - `ExportContentVerificationE2eIT`（内容级验证）
 
 **失败分支**
-- `ImportFailureE2eIT`、`ExportStorageFailureE2eIT`、`DispatchFailurePipelineE2eIT` (即 `DispatchPipelineE2eIT` 的失败场景变体)
+- `ImportFailureE2eIT`、`ImportFailurePipelineE2eIT`
+- `ExportFailurePipelineE2eIT`、`ExportStorageFailureE2eIT`
+- `DispatchFailurePipelineE2eIT`
 
 **稳健性**
 - `MultiTenantConcurrentE2eIT`（多租户并发隔离）
+- `DedupJobLaunchE2eIT`（顺序 + 并发 dedup 幂等）
+- `OutboxForwarderRetryE2eIT`（Outbox 失败重试）
 
 ---
 
@@ -71,7 +75,7 @@
 
 ---
 
-## 覆盖状态（截至 2026-03-25）
+## 覆盖状态（截至 2026-03-27）
 
 ### A. Outbox Forwarder 定时轮询机制 ✅ 已覆盖
 
@@ -80,8 +84,11 @@
 ### B. 异常与重试分支 ✅ 已覆盖
 
 - `ImportFailureE2eIT`：字段/模板不匹配，验证失败状态与错误记录落库
+- `ImportFailurePipelineE2eIT`：导入 pipeline 失败态推进与最终回报
+- `ExportFailurePipelineE2eIT`：导出 pipeline 失败态推进与最终回报
 - `ExportStorageFailureE2eIT`：存储阶段失败场景
 - `DispatchFailurePipelineE2eIT`：无效通道/目标不可达，验证失败与回执/补偿状态
+- `OutboxForwarderRetryE2eIT`：Outbox 首次失败后的重试推进
 
 ### C. 导出/分发产物内容级断言 ✅ 已覆盖
 
@@ -92,13 +99,17 @@
 
 `MultiTenantConcurrentE2eIT` 覆盖多租户并行触发与数据隔离。单 worker 并发 claim 竞争、同 dedupKey 幂等冲突场景尚未有专项 E2E（已有单元测试覆盖逻辑）。
 
-### E. 多租户隔离 ✅ 已覆盖
+### E. dedup 幂等 ✅ 已覆盖
+
+- `DedupJobLaunchE2eIT`：顺序重复提交和并发重复提交都能稳定落到同一 dedup 语义
+
+### F. 多租户隔离 ✅ 已覆盖
 
 `MultiTenantConcurrentE2eIT`：t1/t2/t3 租户同时触发，校验数据隔离、队列公平、无串租户污染。
 
 ---
 
-## 覆盖优化完成情况（截至 2026-03-25）
+## 覆盖优化完成情况（截至 2026-03-27）
 
 ## P0 ✅ 全部完成
 
@@ -112,10 +123,11 @@
 - ✅ `ExportContentVerificationE2eIT`：文件内容断言（行数/金额/MinIO 内容片段）—— `ExportFileVerifier`
 - ✅ `DispatchPipelineE2eIT`：回执一致性断言（文件状态/回执码/渠道码/审计条数）—— `DispatchReceiptVerifier`
 
-## P2 ✅ 已完成多租户；并发幂等待专项
+## P2 ✅ 已完成多租户 + dedup；单 worker claim 竞争仍待专项
 
 - ✅ `MultiTenantConcurrentE2eIT`：多租户并行触发与数据隔离
-- ⚠️ 单 worker 并发 claim 竞争、同 dedupKey 幂等冲突：暂无专项 E2E，由单元测试和集成测试覆盖
+- ✅ `DedupJobLaunchE2eIT`：顺序 + 并发 dedup 幂等
+- ⚠️ 单 worker 并发 claim 竞争：暂无专项 E2E，由单元测试和集成测试覆盖
 
 ---
 
@@ -135,8 +147,8 @@
 
 ---
 
-## 当前结论（截至 2026-03-25）
+## 当前结论（截至 2026-03-27）
 
-E2E 套件已覆盖：主链路（Import/Export/Dispatch）、Outbox 自动轮询、失败分支（三链路）、内容级验收（导出/分发）、多租户并发隔离、dedup 幂等（顺序 + 并发），共 10 个 E2E 测试类。
+E2E 套件已覆盖：主链路（Import/Export/Dispatch）、Outbox 自动轮询与重试、失败分支（三链路 + pipeline 级失败）、内容级验收（导出/分发）、多租户并发隔离、dedup 幂等（顺序 + 并发），共 13 个 E2E 测试类。
 
 能够作为生产风险防线级别的回归门禁。剩余未覆盖的场景：单 worker 并发 claim 竞争（低风险，有单元和集成测试兜底）。

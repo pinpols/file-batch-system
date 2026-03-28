@@ -1,132 +1,94 @@
 # Third-Party Software Licenses
 
-**Product**: batch-platform
-**Version**: 1.0.0-SNAPSHOT
-**Generated**: 2026-03-22 (manually compiled from pom.xml dependency declarations)
-**Authoritative source**: run `mvn -P compliance license:aggregate-add-third-party` to regenerate
+**Product**: `batch-platform`  
+**Version**: `1.0.0-SNAPSHOT`  
+**Generated**: `2026-03-28`  
+**Source**: curated from the current `pom.xml` / module POM files
 
-This document lists all third-party software components included in batch-platform and their applicable licenses.
-Internal modules (`com.example.batch:*`) are excluded.
+This document is a human-readable snapshot of the third-party components referenced by the repository at the time of generation.
+Internal modules under `com.example.batch:*` are excluded.
 
----
+For a machine-generated report, run:
+
+```bash
+mvn -P compliance license:aggregate-add-third-party
+```
+
+For an SBOM, run:
+
+```bash
+mvn -P compliance cyclonedx:makeAggregateBom
+```
 
 ## License Summary
 
-| License | Component Count |
+| License family | Representative components |
 |---|---|
-| Apache License 2.0 | 22 |
-| MIT License | 5 |
-| BSD 2-Clause / PostgreSQL License | 2 |
-| Eclipse Public License 2.0 | 3 |
-| Eclipse Public License 1.0 / LGPL 2.1 | 1 |
-| EPL-2.0 / GPL-2.0 with Classpath Exception | 2 |
+| Apache License 2.0 | Spring Boot, Spring Framework, Spring Kafka, Spring AI, Flyway, MyBatis starter, MinIO Java SDK, OkHttp, Apache POI, JSqlParser, ShedLock, Testcontainers, WireMock |
+| MIT License | Project Lombok |
+| BSD 2-Clause | PostgreSQL JDBC Driver |
+| BSD 3-Clause | JSch (mwiede fork) |
+| Eclipse Public License 2.0 | JUnit Jupiter, JUnit Platform, Jakarta EE APIs, Angus Mail |
+| Eclipse Public License 1.0 + LGPL 2.1 | Logback |
+| GPL-2.0 with Classpath Exception | Angus Mail transitive license notice |
 
----
+## Runtime Dependencies
 
-## Apache License 2.0
+These are the main runtime-facing third-party components currently used by the platform modules.
 
-Full text: https://www.apache.org/licenses/LICENSE-2.0
-
-| Component | Version | URL |
-|---|---|---|
-| Spring Boot | 4.0.3 | https://spring.io/projects/spring-boot |
-| Spring Framework | (managed by Spring Boot 4.0.3) | https://spring.io/projects/spring-framework |
-| Spring Kafka | (managed by Spring Boot 4.0.3) | https://spring.io/projects/spring-kafka |
-| Spring AI | 2.0.0-M3 | https://spring.io/projects/spring-ai |
-| MyBatis Spring Boot Starter | 4.0.0 | https://mybatis.org/spring-boot-starter/ |
-| Flyway Core | (managed by Spring Boot 4.0.3) | https://flywaydb.org |
-| Flyway Database PostgreSQL | (managed by Spring Boot 4.0.3) | https://flywaydb.org |
-| MinIO Java SDK | 8.6.0 | https://github.com/minio/minio-java |
-| Jackson Databind | (managed by Spring Boot 4.0.3) | https://github.com/FasterXML/jackson-databind |
-| Jackson Datatype JSR310 | (managed by Spring Boot 4.0.3) | https://github.com/FasterXML/jackson-modules-java8 |
-| Micrometer Registry Prometheus | (managed by Spring Boot 4.0.3) | https://micrometer.io |
-| OkHttp | 4.12.0 | https://square.github.io/okhttp |
-| WireMock | 3.9.1 | https://wiremock.org |
-| Apache POI | 5.4.0 | https://poi.apache.org |
-| Apache Kafka Client | (managed by Spring Boot 4.0.3) | https://kafka.apache.org |
-| Quartz Scheduler | (managed by Spring Boot 4.0.3) | http://www.quartz-scheduler.org |
-| SLF4J API | (managed by Spring Boot 4.0.3) | https://www.slf4j.org |
-| AssertJ Core | (managed by Spring Boot 4.0.3) | https://assertj.github.io/doc |
-| Byte Buddy | (transitive via Mockito) | https://bytebuddy.net |
-| Apache Commons Compress | (transitive via Apache POI 5.4.0) | https://commons.apache.org/proper/commons-compress |
-| Apache Commons Collections | (transitive via Apache POI 5.4.0) | https://commons.apache.org/proper/commons-collections |
-| Apache Commons Math | (transitive via Apache POI 5.4.0) | https://commons.apache.org/proper/commons-math |
-
----
-
-## MIT License
-
-Full text: https://opensource.org/licenses/MIT
-
-| Component | Version | URL |
-|---|---|---|
-| Project Lombok | 1.18.42 | https://projectlombok.org |
-| Testcontainers | 1.20.4 | https://testcontainers.com |
-| Mockito Core | (managed by Spring Boot 4.0.3) | https://site.mockito.org |
-| SLF4J Simple | (transitive) | https://www.slf4j.org |
-| Kotlin Standard Library | (transitive via OkHttp 4.x) | https://kotlinlang.org |
-
----
-
-## BSD 2-Clause / PostgreSQL License
-
-| Component | Version | License | URL |
+| Component | Version | License | Notes |
 |---|---|---|---|
-| PostgreSQL JDBC Driver | (managed by Spring Boot 4.0.3) | BSD 2-Clause | https://jdbc.postgresql.org |
-| JSch (mwiede fork) | 0.2.23 | BSD 3-Clause | https://github.com/mwiede/jsch |
+| Spring Boot | 4.0.3 | Apache-2.0 | Parent BOM |
+| Spring Framework | managed by Spring Boot 4.0.3 | Apache-2.0 | Transitive |
+| Spring Kafka | managed by Spring Boot 4.0.3 | Apache-2.0 | Runtime messaging |
+| Spring AI Starter Model OpenAI | 2.0.0-M3 | Apache-2.0 | Console AI feature |
+| MyBatis Spring Boot Starter | 4.0.0 | Apache-2.0 | Persistence layer |
+| Flyway Core | managed by Spring Boot 4.0.3 | Apache-2.0 | Platform migrations |
+| Flyway PostgreSQL support | managed by Spring Boot 4.0.3 | Apache-2.0 | PostgreSQL driver integration |
+| MinIO Java SDK | 8.6.0 | Apache-2.0 | Object storage access |
+| Jackson Databind | managed by Spring Boot 4.0.3 | Apache-2.0 | JSON serialization |
+| Jackson Datatype JSR310 | managed by Spring Boot 4.0.3 | Apache-2.0 | Java time module |
+| Micrometer Registry Prometheus | managed by Spring Boot 4.0.3 | Apache-2.0 | Metrics export |
+| OkHttp | 4.12.0 | Apache-2.0 | HTTP client and transport helper |
+| Apache POI | 5.4.0 | Apache-2.0 | Spreadsheet handling |
+| Quartz Scheduler | managed by Spring Boot 4.0.3 | Apache-2.0 | Trigger metadata / scheduling |
+| SLF4J API | managed by Spring Boot 4.0.3 | MIT | Logging facade |
+| PostgreSQL JDBC Driver | managed by Spring Boot 4.0.3 | BSD-2-Clause | Database driver |
+| JSch (mwiede fork) | 0.2.23 | BSD-3-Clause | SFTP support |
+| JUnit Jupiter | managed by Spring Boot 4.0.3 | EPL-2.0 | Test scope |
+| JUnit Platform | managed by Spring Boot 4.0.3 | EPL-2.0 | Test scope |
+| Jakarta EE APIs | managed by Spring Boot 4.0.3 | EPL-2.0 | API surface |
+| Angus Mail | managed by Spring Boot 4.0.3 | EPL-2.0 / GPL-2.0 with Classpath Exception | Mail support |
+| Logback Classic | managed by Spring Boot 4.0.3 | EPL-1.0 + LGPL-2.1 | Logging backend |
+| Project Lombok | 1.18.42 | MIT | Annotation processor |
+| JSqlParser | 4.5 | Apache-2.0 | SQL parsing support |
+| ShedLock | 6.3.0 | Apache-2.0 | Distributed lock |
 
----
+## Test and Tooling Dependencies
 
-## Eclipse Public License 2.0
+These packages are used in test or build tooling and are not shipped as production runtime artifacts.
 
-Full text: https://www.eclipse.org/legal/epl-2.0/
-
-| Component | Version | URL |
-|---|---|---|
-| JUnit Jupiter (JUnit 5) | (managed by Spring Boot 4.0.3) | https://junit.org/junit5 |
-| JUnit Platform | (managed by Spring Boot 4.0.3) | https://junit.org/junit5 |
-| Jakarta EE APIs | (managed by Spring Boot 4.0.3) | https://jakarta.ee |
-
----
-
-## Eclipse Public License 1.0 / GNU LGPL 2.1
-
-| Component | Version | License | URL |
+| Component | Version | License | Scope |
 |---|---|---|---|
-| Logback | (managed by Spring Boot 4.0.3) | EPL-1.0 + LGPL-2.1 | https://logback.qos.ch |
-
----
-
-## EPL-2.0 / GPL-2.0 with Classpath Exception (Jakarta EE Compatibility)
-
-| Component | Version | URL |
-|---|---|---|
-| Eclipse Angus Mail | (managed by Spring Boot 4.0.3) | https://eclipse-ee4j.github.io/angus-mail |
-| Jakarta Mail API | (managed by Spring Boot 4.0.3) | https://jakarta.ee/specifications/mail |
-
----
+| Testcontainers BOM / modules | 1.21.4 | Apache-2.0 | test |
+| Spring Boot starter test | managed by Spring Boot 4.0.3 | Apache-2.0 | test |
+| MyBatis starter test | managed by Spring Boot 4.0.3 | Apache-2.0 | test |
+| WireMock | 3.9.1 | Apache-2.0 | test |
+| MockWebServer | 4.12.0 | Apache-2.0 | test |
+| Okio / Okio JVM | 3.16.1 | Apache-2.0 | test/runtime helper |
+| AssertJ | managed by Spring Boot 4.0.3 | Apache-2.0 | test |
+| Mockito | managed by Spring Boot 4.0.3 | MIT | test |
+| Kotlin Standard Library | transitive via OkHttp 4.x | Apache-2.0 | transitive |
 
 ## Notes
 
-1. **Test-scoped dependencies** (Testcontainers, WireMock, Mockito, JUnit, AssertJ, spring-boot-starter-test) are **not** included in production build artifacts. Their licenses apply only to the development/CI environment.
+1. Some versions are managed by the Spring Boot 4.0.3 BOM and are intentionally shown as "managed by Spring Boot 4.0.3".
+2. Test-scoped dependencies are listed for completeness, but they do not ship in production images or jars.
+3. If you need the exact resolved dependency tree, run:
 
-2. **Transitive dependencies** managed by Spring Boot 4.0.3 BOM inherit the versions pinned in that BOM. Run `mvn dependency:tree -Dverbose` for the full resolved tree.
+```bash
+mvn dependency:tree -Dverbose
+```
 
-3. **Lombok** is a compile-time annotation processor; the Lombok runtime JAR is not shipped in production artifacts.
+4. If you need the machine-generated third-party report, regenerate it with the `compliance` Maven profile and use the output under `target/generated-sources/license/`.
 
-4. **"managed by Spring Boot 4.0.3"** means the version is pinned by the Spring Boot parent BOM and varies with that BOM. To retrieve exact resolved versions, run:
-   ```
-   mvn dependency:tree -Dincludes=<groupId>:<artifactId> -pl <module>
-   ```
-
-5. To regenerate this file automatically, activate the `compliance` Maven profile:
-   ```
-   mvn -P compliance license:aggregate-add-third-party
-   ```
-   The plugin writes to `target/generated-sources/license/THIRD-PARTY.txt` per module.
-
-6. To generate the CycloneDX SBOM:
-   ```
-   mvn -P compliance cyclonedx:makeAggregateBom
-   ```
-   Output: `target/bom.json` and `target/bom.xml` in the root module.

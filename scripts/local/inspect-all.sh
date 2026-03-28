@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# inspect-all.sh — 全量巡检主入口
-#
-# 依次运行所有巡检脚本，汇总结果并输出退出码：
-#   0 = 全部通过（含 WARN）
-#   1 = 至少一个脚本以 FAIL 退出
-#
-# 运行的脚本：
+# =========================================================
+# inspect-all.sh - 全量巡检主入口
+# Notes:
+# 1) 依次运行所有巡检脚本并汇总结果。
+# 2) 退出码 0 表示通过，1 表示至少一个脚本失败。
+# =========================================================
 #   1. inspect-observability.sh  — 服务 health / Prometheus 指标 / Kafka lag
 #   2. inspect-db.sh             — Flyway / 告警事件 / 卡死作业 / Outbox / 死信 / 重试积压
 #   3. inspect-workers.sh        — Worker 排空超时 / 心跳失联 / 孤儿任务

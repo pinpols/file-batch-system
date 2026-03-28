@@ -1,5 +1,8 @@
 -- =========================================================
 -- V21 - Create config release, secret version and change log tables
+-- Notes:
+-- 1) Keep configuration publishing and secret rotation history queryable.
+-- 2) Record versioning, gray release, and rollback lifecycle on the same schema.
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.config_release (

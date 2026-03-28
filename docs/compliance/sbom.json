@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:batch-platform-sbom-2026-03-22",
+  "serialNumber": "urn:uuid:batch-platform-sbom-2026-03-28",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-03-22T00:00:00Z",
+    "timestamp": "2026-03-28T00:00:00Z",
     "tools": [
       {
         "vendor": "batch-platform team",
@@ -30,6 +30,78 @@
       "version": "4.0.3",
       "licenses": [{ "license": { "id": "Apache-2.0" } }],
       "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-parent@4.0.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter@managed",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter-web@managed",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter-web",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-web"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter-security@managed",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter-security",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-security"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter-validation@managed",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter-validation",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-validation"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter-actuator@managed",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter-actuator",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-actuator"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter-jdbc@managed",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter-jdbc",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-jdbc"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter-data-jdbc@managed",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter-data-jdbc",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-data-jdbc"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.springframework.boot/spring-boot-starter-quartz@managed",
+      "group": "org.springframework.boot",
+      "name": "spring-boot-starter-quartz",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.springframework.boot/spring-boot-starter-quartz"
     },
     {
       "type": "library",
@@ -60,21 +132,30 @@
     },
     {
       "type": "library",
-      "bom-ref": "pkg:maven/org.postgresql/postgresql@managed",
-      "group": "org.postgresql",
-      "name": "postgresql",
-      "version": "managed-by-spring-boot-4.0.3",
-      "licenses": [{ "license": { "id": "BSD-2-Clause" } }],
-      "purl": "pkg:maven/org.postgresql/postgresql"
-    },
-    {
-      "type": "library",
       "bom-ref": "pkg:maven/org.flywaydb/flyway-core@managed",
       "group": "org.flywaydb",
       "name": "flyway-core",
       "version": "managed-by-spring-boot-4.0.3",
       "licenses": [{ "license": { "id": "Apache-2.0" } }],
       "purl": "pkg:maven/org.flywaydb/flyway-core"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.flywaydb/flyway-database-postgresql@managed",
+      "group": "org.flywaydb",
+      "name": "flyway-database-postgresql",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/org.flywaydb/flyway-database-postgresql"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.postgresql/postgresql@managed",
+      "group": "org.postgresql",
+      "name": "postgresql",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "BSD-2-Clause" } }],
+      "purl": "pkg:maven/org.postgresql/postgresql"
     },
     {
       "type": "library",
@@ -96,6 +177,15 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310@managed",
+      "group": "com.fasterxml.jackson.datatype",
+      "name": "jackson-datatype-jsr310",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310"
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:maven/io.micrometer/micrometer-registry-prometheus@managed",
       "group": "io.micrometer",
       "name": "micrometer-registry-prometheus",
@@ -105,13 +195,12 @@
     },
     {
       "type": "library",
-      "bom-ref": "pkg:maven/org.projectlombok/lombok@1.18.42",
-      "group": "org.projectlombok",
-      "name": "lombok",
-      "version": "1.18.42",
-      "scope": "optional",
-      "licenses": [{ "license": { "id": "MIT" } }],
-      "purl": "pkg:maven/org.projectlombok/lombok@1.18.42"
+      "bom-ref": "pkg:maven/io.micrometer/micrometer-core@managed",
+      "group": "io.micrometer",
+      "name": "micrometer-core",
+      "version": "managed-by-spring-boot-4.0.3",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/io.micrometer/micrometer-core"
     },
     {
       "type": "library",
@@ -124,12 +213,48 @@
     },
     {
       "type": "library",
-      "bom-ref": "pkg:maven/org.apache.poi/poi-ooxml@5.4.0",
-      "group": "org.apache.poi",
-      "name": "poi-ooxml",
-      "version": "5.4.0",
+      "bom-ref": "pkg:maven/com.squareup.okio/okio@3.16.1",
+      "group": "com.squareup.okio",
+      "name": "okio",
+      "version": "3.16.1",
       "licenses": [{ "license": { "id": "Apache-2.0" } }],
-      "purl": "pkg:maven/org.apache.poi/poi-ooxml@5.4.0"
+      "purl": "pkg:maven/com.squareup.okio/okio@3.16.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/com.squareup.okio/okio-jvm@3.16.1",
+      "group": "com.squareup.okio",
+      "name": "okio-jvm",
+      "version": "3.16.1",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/com.squareup.okio/okio-jvm@3.16.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/com.github.jsqlparser/jsqlparser@4.5",
+      "group": "com.github.jsqlparser",
+      "name": "jsqlparser",
+      "version": "4.5",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/com.github.jsqlparser/jsqlparser@4.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/net.javacrumbs.shedlock/shedlock-spring@6.3.0",
+      "group": "net.javacrumbs.shedlock",
+      "name": "shedlock-spring",
+      "version": "6.3.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/net.javacrumbs.shedlock/shedlock-spring@6.3.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/net.javacrumbs.shedlock/shedlock-provider-jdbc-template@6.3.0",
+      "group": "net.javacrumbs.shedlock",
+      "name": "shedlock-provider-jdbc-template",
+      "version": "6.3.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "purl": "pkg:maven/net.javacrumbs.shedlock/shedlock-provider-jdbc-template@6.3.0"
     },
     {
       "type": "library",
@@ -163,7 +288,17 @@
         { "license": { "id": "LGPL-2.1-only" } }
       ],
       "purl": "pkg:maven/ch.qos.logback/logback-classic"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:maven/org.projectlombok/lombok@1.18.42",
+      "group": "org.projectlombok",
+      "name": "lombok",
+      "version": "1.18.42",
+      "scope": "optional",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "purl": "pkg:maven/org.projectlombok/lombok@1.18.42"
     }
   ],
-  "_comment": "Authoritative SBOM is generated by cyclonedx-maven-plugin via: mvn -P compliance cyclonedx:makeAggregateBom. This file is a representative skeleton for version tracking. Test-scoped dependencies (Testcontainers, WireMock, JUnit, Mockito, AssertJ) are excluded as they are not shipped in production artifacts."
+  "_comment": "Curated SBOM snapshot for repository review. Authoritative machine-generated SBOM should be produced with: mvn -P compliance cyclonedx:makeAggregateBom. Test-scoped dependencies (Testcontainers, WireMock, JUnit, Mockito, AssertJ, POI test usage, Gatling) are excluded from this snapshot."
 }

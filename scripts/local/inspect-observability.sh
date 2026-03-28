@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+# =========================================================
+# inspect-observability.sh - 服务巡检：健康检查、指标和 Kafka lag
+# Notes:
+# 1) 检查各服务的 /actuator/health。
+# 2) 检查关键 Prometheus 指标和 Kafka consumer lag。
+# =========================================================
+# 使用方法：
+#   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:8080,http://localhost:8081,http://localhost:8082 \
+#   BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+#     bash scripts/local/inspect-observability.sh
 
 set -euo pipefail
 

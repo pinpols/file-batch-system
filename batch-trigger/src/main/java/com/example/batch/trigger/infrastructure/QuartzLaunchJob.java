@@ -26,6 +26,9 @@ public class QuartzLaunchJob implements Job {
     public static final String SCHEDULE_EXPRESSION = "scheduleExpression";
     public static final String TIMEZONE = "timezone";
     public static final String TRIGGER_MODE = "triggerMode";
+    public static final String CALENDAR_CODE = "calendarCode";
+    public static final String CATCH_UP_POLICY = "catchUpPolicy";
+    public static final String CATCH_UP_MAX_DAYS = "catchUpMaxDays";
 
     private final TriggerService triggerService;
     private final MisfireHandler misfireHandler;
@@ -41,6 +44,9 @@ public class QuartzLaunchJob implements Job {
         descriptor.setScheduleExpression(jobDataMap.getString(SCHEDULE_EXPRESSION));
         descriptor.setTimezone(jobDataMap.getString(TIMEZONE));
         descriptor.setTriggerMode(jobDataMap.getString(TRIGGER_MODE));
+        descriptor.setCalendarCode(jobDataMap.getString(CALENDAR_CODE));
+        descriptor.setCatchUpPolicy(jobDataMap.getString(CATCH_UP_POLICY));
+        descriptor.setCatchUpMaxDays(resolveCatchUpMaxDays(jobDataMap));
         descriptor.setEnabled(true);
         Instant scheduledFireTime = context.getScheduledFireTime().toInstant();
         Instant actualFireTime = context.getFireTime().toInstant();
@@ -111,5 +117,19 @@ public class QuartzLaunchJob implements Job {
         }
         long driftDays = Math.max(0L, java.time.Duration.between(scheduledFireTime, actualFireTime).toDays());
         return driftDays <= maxDays;
+    }
+
+    private Integer resolveCatchUpMaxDays(JobDataMap jobDataMap) {
+        Object rawValue = jobDataMap.get(CATCH_UP_MAX_DAYS);
+        if (rawValue instanceof Integer integer) {
+            return integer;
+        }
+        if (rawValue instanceof Number number) {
+            return number.intValue();
+        }
+        if (rawValue instanceof String string && !string.isBlank()) {
+            return Integer.parseInt(string);
+        }
+        return null;
     }
 }

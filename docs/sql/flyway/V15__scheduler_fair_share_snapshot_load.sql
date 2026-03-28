@@ -1,4 +1,10 @@
--- Fair-share group, burst, quota reset policy, scheduler snapshot audit, worker load.
+-- =========================================================
+-- V15 - Add scheduler fair-share snapshot and load fields
+-- Notes:
+-- 1) Extend quota / queue / worker tables with burst and fair-share controls.
+-- 2) Persist tenant-level scheduler snapshot for audit and tuning.
+-- 3) Keep the snapshot queryable by tenant and capture time.
+-- =========================================================
 
 ALTER TABLE batch.tenant_quota_policy
     ADD COLUMN IF NOT EXISTS fair_share_group VARCHAR(128),

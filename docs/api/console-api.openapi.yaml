@@ -1,0 +1,1521 @@
+openapi: 3.1.0
+info:
+  title: Batch Platform Console API
+  version: 0.1.0
+  description: >
+    Frontend-facing contract for the batch console.
+    This file is the machine-readable source of truth for UI integration,
+    code generation, and mock server stubs.
+    Whenever the API surface changes, update this file and console-api-protocol.md together.
+servers:
+  - url: http://localhost:8080
+    description: Local console-api
+tags:
+  - name: Jobs
+    description: Trigger, compensate, rerun, and dead-letter replay actions.
+  - name: Approvals
+    description: Approval workflow actions.
+  - name: Config
+    description: Config release, gray, rollback, and secret rotation.
+  - name: Workers
+    description: Worker drain, force-offline, and claimed tasks.
+  - name: Files
+    description: File governance and presigned download.
+  - name: Scheduler
+    description: Scheduler snapshot and history.
+  - name: Ops
+    description: Console summary and operation dashboard.
+  - name: Queries
+    description: Read-only list and detail views.
+  - name: AI
+    description: Console AI assistant.
+security:
+  - consoleToken: []
+paths:
+  /api/console/ops/summary:
+    get:
+      tags: [Ops]
+      summary: Get console summary
+      operationId: getConsoleSummary
+      parameters:
+        - $ref: '#/components/parameters/TenantIdHeader'
+      responses:
+        '200':
+          description: Summary payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleOpsSummary'
+  /api/console/jobs/trigger:
+    post:
+      tags: [Jobs]
+      summary: Trigger a job
+      operationId: triggerJob
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+        - $ref: '#/components/parameters/OperatorIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerRequest'
+      responses:
+        '200':
+          description: Trigger result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/jobs/compensations:
+    post:
+      tags: [Jobs]
+      summary: Create compensation command
+      operationId: createCompensationCommand
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompensationCommandRequest'
+      responses:
+        '200':
+          description: Compensation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/jobs/compensate:
+    post:
+      tags: [Jobs]
+      summary: Compensate a job instance
+      operationId: compensateJob
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompensateRequest'
+      responses:
+        '200':
+          description: Compensation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/jobs/rerun:
+    post:
+      tags: [Jobs]
+      summary: Rerun a failed job instance
+      operationId: rerunJob
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RerunRequest'
+      responses:
+        '200':
+          description: Rerun result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/jobs/dead-letters/replay:
+    post:
+      tags: [Jobs]
+      summary: Replay dead letters
+      operationId: replayDeadLetters
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeadLetterReplayRequest'
+      responses:
+        '200':
+          description: Replay result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/jobs/catch-up/approve:
+    post:
+      tags: [Jobs]
+      summary: Approve catch-up
+      operationId: approveCatchUp
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsoleCatchUpApprovalRequest'
+      responses:
+        '200':
+          description: Approval result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/approvals/{approvalNo}/approve:
+    post:
+      tags: [Approvals]
+      summary: Approve a command
+      operationId: approveCommand
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: approvalNo
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalActionRequest'
+      responses:
+        '200':
+          description: Approval result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/approvals/{approvalNo}/reject:
+    post:
+      tags: [Approvals]
+      summary: Reject a command
+      operationId: rejectCommand
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: approvalNo
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalActionRequest'
+      responses:
+        '200':
+          description: Approval result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/approvals/batch/approve:
+    post:
+      tags: [Approvals]
+      summary: Batch approve commands
+      operationId: batchApproveCommands
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchApprovalActionRequest'
+      responses:
+        '200':
+          description: Batch approval result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchApprovalResultList'
+  /api/console/approvals/batch/reject:
+    post:
+      tags: [Approvals]
+      summary: Batch reject commands
+      operationId: batchRejectCommands
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchApprovalActionRequest'
+      responses:
+        '200':
+          description: Batch rejection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchApprovalResultList'
+  /api/console/config/releases:
+    get:
+      tags: [Config]
+      summary: List config releases
+      operationId: listConfigReleases
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Release list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConfigReleaseList'
+    post:
+      tags: [Config]
+      summary: Create config release
+      operationId: createConfigRelease
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigReleaseUpsertRequest'
+      responses:
+        '200':
+          description: Release id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/config/releases/{releaseId}/publish:
+    post:
+      tags: [Config]
+      summary: Publish config release
+      operationId: publishConfigRelease
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: releaseId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigReleaseActionRequest'
+      responses:
+        '200':
+          description: Publish result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/config/releases/{releaseId}/gray:
+    post:
+      tags: [Config]
+      summary: Gray release
+      operationId: grayConfigRelease
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: releaseId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigReleaseActionRequest'
+      responses:
+        '200':
+          description: Gray result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/config/releases/{releaseId}/rollback:
+    post:
+      tags: [Config]
+      summary: Roll back config release
+      operationId: rollbackConfigRelease
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: releaseId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigReleaseActionRequest'
+      responses:
+        '200':
+          description: Rollback result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/config/secrets:
+    get:
+      tags: [Config]
+      summary: List secret versions
+      operationId: listSecretVersions
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Secret list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseSecretVersionList'
+  /api/console/config/secrets/rotate:
+    post:
+      tags: [Config]
+      summary: Rotate secret version
+      operationId: rotateSecretVersion
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretVersionRotateRequest'
+      responses:
+        '200':
+          description: Rotation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/config/change-logs:
+    get:
+      tags: [Config]
+      summary: List config change logs
+      operationId: listConfigChangeLogs
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Change log list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConfigChangeLogList'
+  /api/console/workers/{workerCode}/drain:
+    post:
+      tags: [Workers]
+      summary: Drain a worker
+      operationId: drainWorker
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: workerCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DrainWorkerRequest'
+      responses:
+        '200':
+          description: Drain result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapStringObject'
+  /api/console/workers/{workerCode}/force-offline:
+    post:
+      tags: [Workers]
+      summary: Force a worker offline
+      operationId: forceWorkerOffline
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: workerCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForceOfflineWorkerRequest'
+      responses:
+        '200':
+          description: Force-offline result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapStringObject'
+  /api/console/workers/{workerCode}/claimed-tasks:
+    get:
+      tags: [Workers]
+      summary: List claimed tasks of a worker
+      operationId: listClaimedTasks
+      parameters:
+        - name: workerCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Claimed task list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/files/archive:
+    post:
+      tags: [Files]
+      summary: Archive a file
+      operationId: archiveFile
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveFileRequest'
+      responses:
+        '200':
+          description: Archive result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/files/delete:
+    post:
+      tags: [Files]
+      summary: Delete a file
+      operationId: deleteFile
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteFileRequest'
+      responses:
+        '200':
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/files/redispatch:
+    post:
+      tags: [Files]
+      summary: Redispatch a file
+      operationId: redispatchFile
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedispatchFileRequest'
+      responses:
+        '200':
+          description: Redispatch result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/files/presign-download:
+    post:
+      tags: [Files]
+      summary: Create a presigned download URL
+      operationId: presignDownload
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignDownloadFileRequest'
+      responses:
+        '200':
+          description: Download URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/files/{fileId}/download:
+    get:
+      tags: [Files]
+      summary: Download a file
+      operationId: downloadFile
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File content or signed download redirect, depending on implementation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/files/arrival-groups/action:
+    post:
+      tags: [Files]
+      summary: Operate arrival group
+      operationId: operateArrivalGroup
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileArrivalGroupActionRequest'
+      responses:
+        '200':
+          description: Operation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/scheduler/snapshot:
+    get:
+      tags: [Scheduler]
+      summary: Get live scheduler snapshot
+      operationId: getSchedulerSnapshot
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Snapshot body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/scheduler/snapshot/history:
+    get:
+      tags: [Scheduler]
+      summary: Get scheduler snapshot history
+      operationId: getSchedulerSnapshotHistory
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 20
+      responses:
+        '200':
+          description: Snapshot history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/ai/chat:
+    post:
+      tags: [AI]
+      summary: Chat with console AI
+      operationId: chatWithConsoleAi
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiChatRequest'
+      responses:
+        '200':
+          description: Chat response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseAiChatResponse'
+  /api/console/query/audits:
+    get:
+      tags: [Queries]
+      summary: Query audit logs
+      operationId: queryAuditLogs
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Audit list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/alerts:
+    get:
+      tags: [Queries]
+      summary: Query alerts
+      operationId: queryAlerts
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseAlertEventList'
+  /api/console/query/approvals:
+    get:
+      tags: [Queries]
+      summary: Query approvals
+      operationId: queryApprovals
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Approval list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/files:
+    get:
+      tags: [Queries]
+      summary: Query file chains
+      operationId: queryFiles
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File chain list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseFileRecordList'
+  /api/console/query/job-definitions:
+    get:
+      tags: [Queries]
+      summary: Query job definitions
+      operationId: queryJobDefinitions
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Job definition list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseJobDefinitionList'
+  /api/console/query/outbox-retries:
+    get:
+      tags: [Queries]
+      summary: Query outbox retry logs
+      operationId: queryOutboxRetries
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Outbox retry list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/outbox-deliveries:
+    get:
+      tags: [Queries]
+      summary: Query outbox delivery logs
+      operationId: queryOutboxDeliveries
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Outbox delivery list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/file-pipelines:
+    get:
+      tags: [Queries]
+      summary: Query file pipelines
+      operationId: queryFilePipelines
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File pipeline list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/file-pipeline-steps:
+    get:
+      tags: [Queries]
+      summary: Query file pipeline steps
+      operationId: queryFilePipelineSteps
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File pipeline step list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/file-dispatches:
+    get:
+      tags: [Queries]
+      summary: Query file dispatch records
+      operationId: queryFileDispatches
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File dispatch list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/file-channels:
+    get:
+      tags: [Queries]
+      summary: Query file channels
+      operationId: queryFileChannels
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File channel list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/file-arrival-groups:
+    get:
+      tags: [Queries]
+      summary: Query file arrival groups
+      operationId: queryFileArrivalGroups
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File arrival group list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseFileArrivalGroupList'
+  /api/console/query/file-errors:
+    get:
+      tags: [Queries]
+      summary: Query file errors
+      operationId: queryFileErrors
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File error list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseFileErrorRecordList'
+  /api/console/query/file-templates:
+    get:
+      tags: [Queries]
+      summary: Query file templates
+      operationId: queryFileTemplates
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File template list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/instances:
+    get:
+      tags: [Queries]
+      summary: Query job instances
+      operationId: queryJobInstances
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Job instance list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseJobInstanceList'
+  /api/console/query/job-step-instances:
+    get:
+      tags: [Queries]
+      summary: Query job step instances
+      operationId: queryJobStepInstances
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Job step list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseJobStepInstanceList'
+  /api/console/query/workflow-definitions:
+    get:
+      tags: [Queries]
+      summary: Query workflow definitions
+      operationId: queryWorkflowDefinitions
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Workflow definition list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionList'
+  /api/console/query/workflow-nodes:
+    get:
+      tags: [Queries]
+      summary: Query workflow nodes
+      operationId: queryWorkflowNodes
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Workflow node list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowNodeList'
+  /api/console/query/workflow-edges:
+    get:
+      tags: [Queries]
+      summary: Query workflow edges
+      operationId: queryWorkflowEdges
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Workflow edge list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowEdgeList'
+  /api/console/query/workflow-runs:
+    get:
+      tags: [Queries]
+      summary: Query workflow runs
+      operationId: queryWorkflowRuns
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Workflow run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowRunList'
+  /api/console/query/workflow-node-runs:
+    get:
+      tags: [Queries]
+      summary: Query workflow node runs
+      operationId: queryWorkflowNodeRuns
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Workflow node run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowNodeRunList'
+  /api/console/query/workflow-topology:
+    get:
+      tags: [Queries]
+      summary: Query workflow topology
+      operationId: queryWorkflowTopology
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Workflow topology
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowTopologyView'
+  /api/console/query/ai-audits:
+    get:
+      tags: [Queries]
+      summary: Query AI audit logs
+      operationId: queryAiAuditLogs
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: AI audit log list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseMapList'
+  /api/console/query/dead-letters:
+    get:
+      tags: [Queries]
+      summary: Query dead letters
+      operationId: queryDeadLetters
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Dead letter list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseDeadLetterTaskList'
+  /api/console/query/retries:
+    get:
+      tags: [Queries]
+      summary: Query retry schedules
+      operationId: queryRetries
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Retry schedule list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseRetryScheduleList'
+  /api/console/query/catch-up-approvals:
+    get:
+      tags: [Queries]
+      summary: Query catch-up approvals
+      operationId: queryCatchUpApprovals
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Catch-up approval list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponsePendingCatchUpList'
+  /api/console/query/workers:
+    get:
+      tags: [Queries]
+      summary: Query workers
+      operationId: queryWorkers
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Worker list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkerRegistryList'
+components:
+  securitySchemes:
+    consoleToken:
+      type: apiKey
+      in: header
+      name: X-Console-Token
+  parameters:
+    RequestIdHeader:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    TraceIdHeader:
+      name: X-Trace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    TenantIdHeader:
+      name: X-Tenant-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    TenantIdQuery:
+      name: tenantId
+      in: query
+      required: false
+      schema:
+        type: string
+    OperatorIdHeader:
+      name: X-Operator-Id
+      in: header
+      required: false
+      schema:
+        type: string
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+  schemas:
+    CommonMeta:
+      type: object
+      properties:
+        requestId:
+          type: string
+        traceId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+      required: [requestId, traceId, timestamp]
+    CommonResponseString:
+      type: object
+      properties:
+        code:
+          type: string
+          example: SUCCESS
+        message:
+          type: string
+          example: success
+        data:
+          type: string
+        meta:
+          $ref: '#/components/schemas/CommonMeta'
+      required: [code, message, data, meta]
+    CommonResponseLong:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: integer
+          format: int64
+        meta:
+          $ref: '#/components/schemas/CommonMeta'
+      required: [code, message, data, meta]
+    CommonResponseObject:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          nullable: true
+        meta:
+          $ref: '#/components/schemas/CommonMeta'
+      required: [code, message, data, meta]
+    CommonResponseMapList:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        meta:
+          $ref: '#/components/schemas/CommonMeta'
+      required: [code, message, data, meta]
+    CommonResponseMapStringObject:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseBatchApprovalResultList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseConfigReleaseList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseSecretVersionList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseConfigChangeLogList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseAlertEventList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseFileRecordList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseJobDefinitionList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseJobInstanceList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseJobStepInstanceList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseWorkflowDefinitionList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseWorkflowNodeList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseWorkflowEdgeList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseWorkflowRunList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseWorkflowNodeRunList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseWorkflowTopologyView:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseObject'
+    CommonResponseDeadLetterTaskList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseRetryScheduleList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponsePendingCatchUpList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseWorkerRegistryList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseConsoleOpsSummary:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseObject'
+    CommonResponseAiChatResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AiChatResponse'
+        meta:
+          $ref: '#/components/schemas/CommonMeta'
+      required: [code, message, data, meta]
+    CommonResponseFileArrivalGroupList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+    CommonResponseFileErrorRecordList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseMapList'
+
+    TriggerRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        triggerType:
+          type: string
+          enum: [MANUAL, API, SCHEDULE, CATCH_UP]
+        payload:
+          type: string
+      required: [tenantId, jobCode, bizDate, triggerType]
+    CompensationCommandRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        compensationType:
+          type: string
+        targetId:
+          type: integer
+          format: int64
+        jobCode:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        batchNo:
+          type: string
+        relatedJobInstanceId:
+          type: integer
+          format: int64
+        relatedFileId:
+          type: integer
+          format: int64
+        approvalId:
+          type: string
+        operatorId:
+          type: string
+        reason:
+          type: string
+        strategy:
+          type: string
+        traceId:
+          type: string
+      required: [tenantId, compensationType]
+    CompensateRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        targetInstanceNo:
+          type: string
+        reason:
+          type: string
+      required: [tenantId, jobCode, bizDate, targetInstanceNo, reason]
+    RerunRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        targetInstanceNo:
+          type: string
+        reason:
+          type: string
+      required: [tenantId, jobCode, bizDate, targetInstanceNo, reason]
+    DeadLetterReplayRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        deadLetterId:
+          type: integer
+          format: int64
+        reason:
+          type: string
+      required: [tenantId, deadLetterId]
+    ConsoleCatchUpApprovalRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        approvalNo:
+          type: string
+        operatorId:
+          type: string
+        reason:
+          type: string
+      required: [tenantId, jobCode, bizDate, approvalNo]
+    ApprovalActionRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        operatorId:
+          type: string
+        reason:
+          type: string
+      required: [tenantId]
+    BatchApprovalActionRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        approvalNos:
+          type: array
+          items:
+            type: string
+        operatorId:
+          type: string
+        reason:
+          type: string
+      required: [tenantId, approvalNos]
+    ConfigReleaseUpsertRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        configType:
+          type: string
+        configKey:
+          type: string
+        configName:
+          type: string
+        configPayload:
+          type: object
+          additionalProperties: true
+        operatorId:
+          type: string
+        reason:
+          type: string
+      required: [tenantId, configType, configKey, configName]
+    ConfigReleaseActionRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        operatorId:
+          type: string
+        traceId:
+          type: string
+        reason:
+          type: string
+        grayScopeJson:
+          type: string
+      required: [tenantId]
+    SecretVersionRotateRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        secretRef:
+          type: string
+        secretName:
+          type: string
+        secretPayload:
+          type: object
+          additionalProperties: true
+        secretStatus:
+          type: string
+        operatorId:
+          type: string
+        reason:
+          type: string
+      required: [tenantId, secretRef, secretName]
+    DrainWorkerRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        timeoutSeconds:
+          type: integer
+          format: int32
+        reason:
+          type: string
+      required: [tenantId]
+    ForceOfflineWorkerRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        reason:
+          type: string
+      required: [tenantId]
+    ArchiveFileRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        fileId:
+          type: integer
+          format: int64
+        reason:
+          type: string
+      required: [tenantId, fileId]
+    DeleteFileRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        fileId:
+          type: integer
+          format: int64
+        reason:
+          type: string
+      required: [tenantId, fileId]
+    RedispatchFileRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        fileId:
+          type: integer
+          format: int64
+        reason:
+          type: string
+      required: [tenantId, fileId]
+    PresignDownloadFileRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        fileId:
+          type: integer
+          format: int64
+        reason:
+          type: string
+      required: [tenantId, fileId]
+    FileArrivalGroupActionRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        fileGroupCode:
+          type: string
+        action:
+          type: string
+        reason:
+          type: string
+      required: [tenantId, fileGroupCode, action]
+    AiChatRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        prompt:
+          type: string
+        model:
+          type: string
+        conversationId:
+          type: string
+      required: [tenantId, prompt]
+    AiChatResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+        conversationId:
+          type: string
+        model:
+          type: string
+        promptTokens:
+          type: integer
+        completionTokens:
+          type: integer
+      required: [answer]
+    ConsoleOpsSummary:
+      type: object
+      additionalProperties: true
