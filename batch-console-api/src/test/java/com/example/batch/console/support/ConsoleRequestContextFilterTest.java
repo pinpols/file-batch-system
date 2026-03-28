@@ -1,10 +1,12 @@
 package com.example.batch.console.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.common.exception.BizException;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.constants.CommonErrorMessages;
+import com.example.batch.console.support.ConsoleSecurityResponseWriter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,13 +27,13 @@ class ConsoleRequestContextFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new ConsoleRequestContextFilter();
+        filter = new ConsoleRequestContextFilter(new ConsoleSecurityResponseWriter(new ObjectMapper()));
         ReflectionTestUtils.setField(filter, "applicationName", "batch-console-api");
         SecurityContextHolder.clearContext();
     }
 
     @Test
-    void shouldRejectTenantMismatchWhenAuthenticatedPrincipalIsPresent() {
+    void shouldRejectTenantMismatchWhenAuthenticatedPrincipalIsPresent() throws Exception {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_ADMIN")),
                 "secret",
@@ -42,13 +44,11 @@ class ConsoleRequestContextFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicBoolean chainCalled = new AtomicBoolean(false);
 
-        assertThatThrownBy(() -> filter.doFilterInternal(request, response, noOpChain(chainCalled)))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("tenant mismatch");
-
+        filter.doFilter(request, response, noOpChain(chainCalled));
         assertThat(chainCalled).isFalse();
-        assertThat(response.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER)).isNull();
-        assertThat(response.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER)).isNull();
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
+        assertThat(response.getContentAsString()).contains(ResultCode.FORBIDDEN.name());
+        assertThat(response.getContentAsString()).contains(CommonErrorMessages.TENANT_MISMATCH);
     }
 
     private MockHttpServletRequest baseRequest() {

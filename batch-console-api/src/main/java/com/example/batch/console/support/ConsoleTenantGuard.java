@@ -1,5 +1,6 @@
 package com.example.batch.console.support;
 
+import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +22,10 @@ public class ConsoleTenantGuard {
             effectiveTenantId = requestTenantId;
         }
         if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
-            throw new BizException(ResultCode.UNAUTHORIZED, "tenant is required");
+            throw new BizException(ResultCode.UNAUTHORIZED, CommonErrorMessages.TENANT_REQUIRED);
         }
         if (requestTenantId != null && !requestTenantId.isBlank() && !requestTenantId.equals(effectiveTenantId)) {
-            throw new BizException(ResultCode.FORBIDDEN, "tenant mismatch");
+            throw new BizException(ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
         }
         return effectiveTenantId;
     }

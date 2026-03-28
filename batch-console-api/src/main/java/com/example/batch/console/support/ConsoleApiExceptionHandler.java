@@ -1,6 +1,7 @@
 package com.example.batch.console.support;
 
 import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
@@ -39,7 +40,8 @@ public class ConsoleApiExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining("; "));
         return ResponseEntity.badRequest()
-                .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, message.isBlank() ? ResultCode.VALIDATION_ERROR.defaultMessage() : message));
+                .body(responseFactory.failure(ResultCode.VALIDATION_ERROR,
+                        message.isBlank() ? CommonErrorMessages.VALIDATION_FAILED : message));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -54,12 +56,15 @@ public class ConsoleApiExceptionHandler {
                 ? ResultCode.MISSING_IDEMPOTENCY_KEY
                 : ResultCode.INVALID_ARGUMENT;
         return ResponseEntity.badRequest()
-                .body(responseFactory.failure(code, exception.getMessage()));
+                .body(responseFactory.failure(code,
+                        CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
+                                ? CommonErrorMessages.MISSING_IDEMPOTENCY_KEY
+                                : CommonErrorMessages.INVALID_ARGUMENT));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleException(Exception exception) {
         return ResponseEntity.internalServerError()
-                .body(responseFactory.failure(ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.defaultMessage()));
+                .body(responseFactory.failure(ResultCode.SYSTEM_ERROR, CommonErrorMessages.SYSTEM_ERROR));
     }
 }

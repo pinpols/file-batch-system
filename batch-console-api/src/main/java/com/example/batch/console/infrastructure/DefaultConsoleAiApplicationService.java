@@ -17,6 +17,7 @@ import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.request.AiChatRequest;
 import com.example.batch.console.web.response.AiChatResponse;
+import com.example.batch.common.utils.ConsoleTextSanitizer;
 import io.micrometer.common.util.StringUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -46,7 +47,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         String tenantId = resolveTenantId(request.getTenantId(), requestMetadata.tenantId());
         String sessionId = resolveSessionId(request.getSessionId(), requestMetadata.requestId());
-        AiPromptGateResult gateResult = promptGuard.check(request.getPrompt());
+        String prompt = ConsoleTextSanitizer.safeInput(request.getPrompt(), aiProperties.getMaxPromptLength());
+        AiPromptGateResult gateResult = promptGuard.check(prompt);
         String requestId = firstNonBlank(requestMetadata.requestId(), IdGenerator.newBusinessNo("ai"));
         String traceId = firstNonBlank(requestMetadata.traceId(), IdGenerator.newTraceId());
         if (!gateResult.approved()) {
@@ -60,9 +62,9 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                     gateResult.category(),
                     gateResult.decision(),
                     null,
-                    request.getPrompt(),
-                    response.getAnswer(),
-                    gateResult.reason()
+                    prompt,
+                    ConsoleTextSanitizer.safeInput(response.getAnswer(), aiProperties.getMaxResponseLength()),
+                    ConsoleTextSanitizer.safeInput(gateResult.reason(), 512)
             ));
             return response;
         }
@@ -71,13 +73,13 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         if (chatClient == null) {
             throw new BizException(ResultCode.FORBIDDEN, "ai assistant is not configured");
         }
-        String prompt = buildPrompt(tenantId, sessionId, request.getPrompt(), request.getContext(), gateResult.category());
+        String promptPayload = buildPrompt(tenantId, sessionId, prompt, request.getContext(), gateResult.category());
         String answer = chatClient.prompt()
                 .system(buildSystemPrompt())
-                .user(prompt)
+                .user(promptPayload)
                 .call()
                 .content();
-        answer = trim(answer, aiProperties.getMaxResponseLength());
+        answer = ConsoleTextSanitizer.safeDisplay(trim(answer, aiProperties.getMaxResponseLength()), aiProperties.getMaxResponseLength());
 
         AiChatResponse response = new AiChatResponse();
         response.setRequestId(requestId);
@@ -98,8 +100,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
                 gateResult.category(),
                 AiPromptDecision.APPROVED,
                 aiProperties.getModel(),
-                request.getPrompt(),
-                answer,
+                prompt,
+                ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()),
                 null
         ));
         return response;
@@ -116,8 +118,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         response.setPromptCategory(gateResult.category().code());
         response.setPromptDecision(gateResult.decision().code());
         response.setModelName(aiProperties.getModel());
-        response.setAnswer(refusalMessage(gateResult));
-        response.setRefusalReason(gateResult.reason());
+        response.setAnswer(ConsoleTextSanitizer.safeDisplay(refusalMessage(gateResult), aiProperties.getMaxResponseLength()));
+        response.setRefusalReason(ConsoleTextSanitizer.safeDisplay(gateResult.reason(), 512));
         return response;
     }
 

@@ -16,4 +16,14 @@
         </if>
         order by id desc
     </select>
+
+    <select id="countByStatuses" resultType="long">
+        select count(1)
+        from batch.event_outbox_retry
+        where tenant_id = #{tenantId}
+          and retry_status in
+        <foreach collection="statuses" item="status" open="(" close=")" separator=",">
+            #{status}
+        </foreach>
+    </select>
 </mapper>

@@ -4,7 +4,7 @@
 
 ## 目录分工
 
-- `dialog-1.md` 到 `dialog-6.md`：按轮次拆解的推进脚本
+- `dialog-1.md` 到 `dialog-7.md`：按轮次拆解的推进脚本
 
 ## 推荐阅读顺序
 
@@ -20,6 +20,7 @@
 - [dialog-4.md](./dialog-4.md)
 - [dialog-5.md](./dialog-5.md)
 - [dialog-6.md](./dialog-6.md)
+- [dialog-7.md](./dialog-7.md)
 
 ## 命名约定
 

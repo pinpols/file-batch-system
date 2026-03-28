@@ -15,6 +15,8 @@ import com.example.batch.console.application.ConsoleFileApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.response.ConsoleFileOperationResponse;
+import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,7 +61,7 @@ class ConsoleFileControllerTest {
 
     @Test
     void shouldArchiveAndReturnCommonResponseOnSuccess() throws Exception {
-        when(applicationService.archive(any(), anyString())).thenReturn("OK");
+        when(applicationService.archive(any(), anyString())).thenReturn(new ConsoleFileOperationResponse("OK"));
 
         mockMvc.perform(post("/api/console/files/archive")
                         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
@@ -69,7 +71,22 @@ class ConsoleFileControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data").value("OK"));
+                .andExpect(jsonPath("$.data.status").value("OK"));
+    }
+
+    @Test
+    void shouldPresignDownloadAndReturnCommonResponseOnSuccess() throws Exception {
+        when(applicationService.presignDownload(any(), anyString())).thenReturn(
+                new ConsolePresignDownloadResponse("appr-001", null));
+
+        mockMvc.perform(post("/api/console/files/presign-download")
+                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-002")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"tenantId":"t1","fileId":1,"reason":"ok"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.approvalNo").value("appr-001"));
     }
 }
-

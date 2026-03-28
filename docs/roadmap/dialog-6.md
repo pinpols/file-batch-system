@@ -17,7 +17,7 @@
 - 我：会补 `CommonResponse`、分页结构、错误码、请求头约定、tenant / operator / idempotency 规则，并把现有 `docs/api/console-api-protocol.md` 扩成可落地协议。
 - 验收：前端能按统一协议接入；写接口、查接口、错误返回都有稳定口径。
 - 交付：同步回写 `console-api-protocol.md` 和 `console-api.openapi.yaml`
-- 状态：未开始
+- 状态：已完成
 
 ## 第2轮：首页 / 运维总览
 
@@ -25,7 +25,7 @@
 - 我：会补 `ops/summary` 的稳定 DTO，覆盖作业数、运行中、失败、告警、worker 状态、outbox 积压和 SLA 概况。
 - 验收：控制台首页不再拼散接口，能直接拿到总览数据。
 - 交付：同步回写 `console-api-protocol.md` 和 `console-api.openapi.yaml`
-- 状态：未开始
+- 状态：已完成
 
 ## 第3轮：审批流 + 配置发布与回滚
 
@@ -33,7 +33,7 @@
 - 我：会补审批列表 / 详情 / approve / reject / batch approve，配置发布 / 灰度 / 回滚 / secret rotate / change log 的请求响应 DTO 和列表 DTO。
 - 验收：审批和配置页面有完整闭环，接口不再直接暴露实体。
 - 交付：同步回写 `console-api-protocol.md` 和 `console-api.openapi.yaml`
-- 状态：未开始
+- 状态：已完成（2026-03-28）
 
 ## 第4轮：Worker 和文件治理
 
@@ -41,7 +41,7 @@
 - 我：会补 drain / force-offline / claimed-tasks 的统一 DTO，文件 archive / delete / redispatch / presign-download / arrival-group action 的请求响应 DTO。
 - 验收：运维页和文件治理页可直接对接，接口语义清晰。
 - 交付：同步回写 `console-api-protocol.md` 和 `console-api.openapi.yaml`
-- 状态：未开始
+- 状态：已完成（2026-03-28）
 
 ## 第5轮：调度快照 + AI 聊天 + 全量查询入口
 
@@ -49,7 +49,7 @@
 - 我：会补 scheduler snapshot / history 的 DTO，AI chat request / response，查询列表统一的分页 DTO 和详情 DTO。
 - 验收：查询页、调度页、AI 页都能按统一契约接入。
 - 交付：同步回写 `console-api-protocol.md` 和 `console-api.openapi.yaml`
-- 状态：未开始
+- 状态：已完成（2026-03-28）
 
 ## 第6轮：联调收口
 

@@ -1,9 +1,8 @@
 package com.example.batch.console.application;
 
-import java.util.Map;
+import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
 
 public interface ConsoleOpsApplicationService {
 
-    Map<String, Object> summary(String tenantId);
+    ConsoleOpsSummaryResponse summary(String tenantId);
 }
-

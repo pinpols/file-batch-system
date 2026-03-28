@@ -10,6 +10,14 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `X-Tenant-Id`: optional, can be used by gateway or upstream
 - `X-Operator-Id`: optional in local mode, should be set by gateway in production
 - `Idempotency-Key`: required for all write APIs
+- `Authorization: Bearer <jwt>`: preferred authentication header for the console frontend
+- Security headers are emitted by the backend on every console response:
+  - `Content-Security-Policy`
+  - `X-Frame-Options`
+  - `X-Content-Type-Options`
+  - `Referrer-Policy`
+  - `Permissions-Policy`
+  - `Strict-Transport-Security`
 
 ## Common Response Body
 
@@ -26,11 +34,139 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 }
 ```
 
+## Standard Data Models
+
+### CommonResponse<T>
+
+- `code`: application-level status code
+- `message`: human-readable status message
+- `data`: typed payload, list, or documented primitive
+- `meta`: request tracing metadata
+
+### PageRequest
+
+- `pageNo`: 1-based page number
+- `pageSize`: number of items per page
+- New paginated endpoints should use `PageRequest` instead of ad hoc limit fields when practical.
+
+### PageResponse<T>
+
+- `total`: total number of items
+- `pageNo`: current page number
+- `pageSize`: requested page size
+- `items`: page items
+
+### Common Header Mapping
+
+- `X-Request-Id` and `X-Trace-Id` are propagated into response metadata.
+- `X-Tenant-Id` is the tenant context input used by gateway or upstream.
+- `X-Operator-Id` is the operator identity header for write actions and audit trails.
+- `Idempotency-Key` is mandatory for write actions and must remain stable for retryable submissions.
+- `Authorization: Bearer <jwt>` is the preferred console login/session credential.
+
+## API Contract Rules
+
+### Authentication And Authorization
+
+- Console endpoints are protected by Spring Security.
+- JWT bearer auth is the preferred login/session mechanism.
+- Legacy `X-Console-Token` header auth is retained for compatibility and migration.
+- `POST /api/console/auth/token` exchanges an authenticated console session for a JWT access token.
+- `GET /api/console/auth/me` returns the current authenticated principal.
+- `ROLE_ADMIN` can perform all write actions.
+- `ROLE_AUDITOR` is read-only for operational views and queries.
+- `ROLE_CONFIG_ADMIN` can access config and worker operations, but not all write actions.
+- AI endpoints require both role access and prompt authorization checks.
+
+### Tenant Rules
+
+- Every request must carry an explicit `tenantId` either in the request body, query string, or upstream header mapping.
+- Server-side tenant resolution is authoritative.
+- Tenant mismatch must fail fast with `FORBIDDEN` or `STATE_CONFLICT` depending on the route semantics.
+- Frontend must not treat tenant values as trusted client state.
+
+### Idempotency Rules
+
+- All write APIs require `Idempotency-Key`.
+- The key must be stable for the same business action and unique across distinct actions.
+- Duplicate write requests must be safe to retry.
+- If idempotency handling is missing, the request should fail with `MISSING_IDEMPOTENCY_KEY`.
+
+### Request And Response Rules
+
+- Use `GET` for read-only endpoints.
+- Use `POST` for commands, approvals, operations, and state transitions.
+- Response bodies should use the common envelope:
+  - `code`
+  - `message`
+  - `data`
+  - `meta`
+- `data` must be a typed DTO, list, or a documented primitive. Avoid anonymous `Map<String, Object>` in new endpoints.
+- Approval lists, config release lists, secret version lists, change logs, and batch approval results use dedicated response DTOs instead of raw entities or generic maps.
+- `meta` carries request tracing information and server timestamp.
+- Treat all response strings as plain text. The frontend must not inject untrusted content through `innerHTML` or equivalent HTML sinks.
+- New endpoints should prefer explicit DTOs over raw entities and should reuse `PageRequest` / `PageResponse` when pagination is required.
+
+### Query And Pagination Rules
+
+- Query endpoints should be filterable by `tenantId` and domain-specific identifiers.
+- For list endpoints, prefer bounded result sets and explicit limit defaults.
+- New list APIs should define pagination or at least `limit` semantics in both protocol and OpenAPI.
+- Sorting and filtering should be explicit in request DTOs; do not rely on implicit database ordering.
+
+### Error Semantics
+
+- Validation failures use `VALIDATION_ERROR` or `INVALID_ARGUMENT`.
+- Missing authentication maps to `UNAUTHORIZED`.
+- Access violations map to `FORBIDDEN`.
+- Missing resources map to `NOT_FOUND`.
+- Concurrent or state mismatch cases map to `CONFLICT` or `STATE_CONFLICT`.
+- Unimplemented or temporarily unavailable capabilities must not silently return success.
+
+### Compatibility Rules
+
+- Backward-compatible changes:
+  - adding nullable fields
+  - adding new endpoints
+  - adding new enum values when documented
+- Breaking changes:
+  - removing fields
+  - renaming fields
+  - changing field semantics
+  - changing idempotency or tenant behavior
+- Breaking changes must update this document, `console-api.openapi.yaml`, and the frontend contract together.
+- Prefer additive evolution over mutation of existing payloads.
+
+### Text Safety Rules
+
+- High-risk user-visible text fields are normalized before persistence or forwarding. These fields include reasons, titles, descriptions, prompts, and audit previews.
+- Rich text is not a supported input format for the console API.
+- Query and audit responses may contain escaped text. The frontend should render them as text nodes and not assume HTML markup.
+- If a field needs to carry structured data, it must be encoded as JSON and validated as JSON, not as free-form HTML.
+
+### Frontend Security Rules
+
+- Use text binding for all server-provided strings.
+- Do not render API strings via `innerHTML`, `v-html`, `dangerouslySetInnerHTML`, or similar APIs unless the content has been explicitly sanitized and approved.
+- Do not trust role claims for security decisions on the client. They are only for routing and menu visibility.
+- Treat `401` as login/session failure and `403` as authorization failure. Do not infer authorization by inspecting response body text.
+
 ## Current Route Catalog
 
 ### Ops
 
+- `POST /api/console/auth/token`
+- `GET /api/console/auth/me`
 - `GET /api/console/ops/summary`
+
+`GET /api/console/ops/summary` is the first-screen operational snapshot. The response is a typed summary payload and should be treated as the control plane entry for the console home page. It includes:
+
+- pending approvals
+- open alerts and critical alerts
+- running and failed jobs
+- SLA breach count
+- worker online, draining, and offline/decommissioned distribution
+- outbox retry backlog and delivery failures
 
 ### Jobs
 
@@ -47,6 +183,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `POST /api/console/approvals/{approvalNo}/reject`
 - `POST /api/console/approvals/batch/approve`
 - `POST /api/console/approvals/batch/reject`
+- Approval query views should use `ConsoleApprovalCommandResponse` and `ConsoleBatchApprovalResultResponse`, not raw entities.
 
 ### Config
 
@@ -58,6 +195,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/config/secrets`
 - `POST /api/console/config/secrets/rotate`
 - `GET /api/console/config/change-logs`
+- Config list views should use typed response DTOs for releases, secrets, and change logs.
 
 ### Workers
 
@@ -73,6 +211,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `POST /api/console/files/presign-download`
 - `POST /api/console/files/arrival-groups/action`
 - `GET /api/console/files/{fileId}/download`
+- File operation endpoints use `ConsoleFileOperationResponse`. `POST /api/console/files/presign-download` uses `ConsolePresignDownloadResponse`, where `approvalNo` and `downloadUrl` are mutually exclusive and one side may be `null` depending on whether the request goes through approval submission or direct presign execution.
 
 ### Scheduler
 
@@ -112,6 +251,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/query/retries`
 - `GET /api/console/query/catch-up-approvals`
 - `GET /api/console/query/workers`
+- Query endpoints must return typed list DTOs or documented view objects. Avoid raw entity lists and anonymous maps in new query APIs.
 
 ## Trigger API
 

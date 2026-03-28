@@ -36,4 +36,19 @@
         order by last_seen_at desc
         limit #{limit}
     </select>
+
+    <select id="countByStatus" resultType="long">
+        select count(1)
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+          and status = #{status}
+    </select>
+
+    <select id="countBySeverityAndStatus" resultType="long">
+        select count(1)
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+          and severity = #{severity}
+          and status = #{status}
+    </select>
 </mapper>
