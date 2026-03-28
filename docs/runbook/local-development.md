@@ -16,6 +16,7 @@
 ## 文件说明
 
 - `docker-compose.yml`：本地依赖编排
+- `.env.example`：环境变量样例
 - `.env.local`：本地默认环境变量
 - `.env.test`：测试环境环境变量
 - `.env.prod`：生产环境模板变量
@@ -41,7 +42,7 @@ docker compose --env-file .env.local -f docker-compose.yml up -d
 bash scripts/local/start-all.sh
 ```
 
-说明：启动脚本默认使用 `.env.local`，如需切换环境可先设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。脚本会等待 PostgreSQL、MinIO 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。
+说明：首次使用时先将 `.env.example` 复制为 `.env.local`。启动脚本默认使用 `.env.local`，如需切换环境可先设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。脚本会等待 PostgreSQL、MinIO 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。
 如果某些 Java 模块已经在运行，脚本会跳过它们，只补启动未运行或已退出的模块。
 
 查看状态：
