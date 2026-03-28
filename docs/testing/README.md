@@ -17,6 +17,7 @@
 
 ## 测试报告
 
+- [full-test-run-report.md](./full-test-run-report.md) - 最新一次仓库级全量回归结果
 - [failure-drill-report.md](./failure-drill-report.md) - 故障演练记录和残余风险
 - [e2e-three-flows-coverage.md](./e2e-three-flows-coverage.md) - 三条主链路的 E2E 覆盖分析
 - [e2e-individual-run-report.md](./e2e-individual-run-report.md) - 单次 E2E 执行记录

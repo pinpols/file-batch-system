@@ -8,7 +8,7 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import com.example.batch.orchestrator.infrastructure.scheduler.WorkerDrainTimeoutScheduler;
+import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.net.URI;
@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,7 @@ import org.springframework.test.context.jdbc.Sql;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "batch.worker.import.worker-type=IMPORT",
+                "batch.worker.import.worker-code=e2e-import-drain-1",
                 "batch.worker.drain.enabled=true",
                 "batch.worker.drain.check-interval-millis=600000"
         })
@@ -46,7 +48,7 @@ import org.springframework.test.context.jdbc.Sql;
 class WorkerDrainE2eIT extends AbstractIntegrationTest {
 
     private static final String TENANT = "t1";
-    private static final String WORKER_CODE = "e2e-import-1";
+    private static final String WORKER_CODE = "e2e-import-drain-1";
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 
     @Autowired
@@ -56,10 +58,18 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private WorkerDrainTimeoutScheduler workerDrainTimeoutScheduler;
+    private WorkerDrainGovernanceService workerDrainGovernanceService;
 
     @Value("${local.server.port}")
     private int localServerPort;
+
+    @AfterEach
+    void cleanupWorkerRegistry() {
+        jdbcTemplate.update(
+                "delete from batch.worker_registry where tenant_id = ? and worker_code = ?",
+                TENANT,
+                WORKER_CODE);
+    }
 
     @Test
     void drainTimeoutReclaimsRunningTaskAndDecommissionsWorker() throws Exception {
@@ -135,29 +145,41 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
             assertThat(worker.get("drain_deadline_at")).isNotNull();
         });
 
-        Thread.sleep(1300L);
-        workerDrainTimeoutScheduler.expireDrains();
-
-        Map<String, Object> workerAfterTimeout = jdbcTemplate.queryForMap(
+        jdbcTemplate.update(
                 """
-                        select status, drain_started_at, drain_deadline_at
-                        from batch.worker_registry
+                        update batch.worker_registry
+                        set drain_deadline_at = current_timestamp - interval '1 second',
+                            updated_at = current_timestamp
                         where tenant_id = ? and worker_code = ?
                         """,
                 TENANT,
                 WORKER_CODE);
-        assertThat(workerAfterTimeout.get("status")).isEqualTo("DECOMMISSIONED");
-        assertThat(workerAfterTimeout.get("drain_started_at")).isNull();
-        assertThat(workerAfterTimeout.get("drain_deadline_at")).isNull();
+        workerDrainGovernanceService.takeoverAfterDrainTimeout(TENANT, WORKER_CODE);
 
-        Map<String, Object> taskAfterTimeout = jdbcTemplate.queryForMap(
-                """
-                        select task_status, assigned_worker_code
-                        from batch.job_task
-                        where id = ?
-                        """,
-                taskId);
-        assertThat(taskAfterTimeout.get("task_status")).isEqualTo("READY");
-        assertThat(taskAfterTimeout.get("assigned_worker_code")).isNull();
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            Map<String, Object> workerAfterTimeout = jdbcTemplate.queryForMap(
+                    """
+                            select status, drain_started_at, drain_deadline_at
+                            from batch.worker_registry
+                            where tenant_id = ? and worker_code = ?
+                            """,
+                    TENANT,
+                    WORKER_CODE);
+            assertThat(workerAfterTimeout.get("status")).isEqualTo("DECOMMISSIONED");
+            assertThat(workerAfterTimeout.get("drain_started_at")).isNull();
+            assertThat(workerAfterTimeout.get("drain_deadline_at")).isNull();
+        });
+
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            Map<String, Object> taskAfterTimeout = jdbcTemplate.queryForMap(
+                    """
+                            select task_status, assigned_worker_code
+                            from batch.job_task
+                            where id = ?
+                            """,
+                    taskId);
+            assertThat(taskAfterTimeout.get("task_status")).isEqualTo("READY");
+            assertThat(taskAfterTimeout.get("assigned_worker_code")).isNull();
+        });
     }
 }

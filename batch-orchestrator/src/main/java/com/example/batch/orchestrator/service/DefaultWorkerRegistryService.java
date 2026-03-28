@@ -5,6 +5,7 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.value.JsonbString;
+import com.example.batch.orchestrator.repository.WorkerRegistryJdbcRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultWorkerRegistryService implements WorkerRegistryServerService {
 
     private final WorkerRegistryRepository workerRegistryRepository;
+    private final WorkerRegistryJdbcRepository workerRegistryJdbcRepository;
 
     @Override
     @Transactional
@@ -64,8 +66,14 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         JsonbString newTags = request.capabilityTags() != null
                 ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
                 : registry.capabilityTags();
-        registry = registry.withHeartbeat(newStatus, heartbeatAt, newLoad, newTags);
-        return workerRegistryRepository.save(registry);
+        workerRegistryJdbcRepository.touchHeartbeat(
+                request.tenantId(),
+                workerCode,
+                newStatus,
+                heartbeatAt,
+                newLoad,
+                newTags);
+        return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(request.tenantId(), workerCode);
     }
 
     @Override

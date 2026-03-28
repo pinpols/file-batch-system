@@ -19,6 +19,7 @@ import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.orchestrator.repository.WorkerRegistryJdbcRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 class DefaultWorkerDrainGovernanceServiceTest {
 
     private WorkerRegistryRepository workerRegistryRepository;
+    private WorkerRegistryJdbcRepository workerRegistryJdbcRepository;
     private JobTaskMapper jobTaskMapper;
     private RetryGovernanceService retryGovernanceService;
     private WorkerDrainProperties drainProperties;
@@ -36,12 +38,13 @@ class DefaultWorkerDrainGovernanceServiceTest {
     @BeforeEach
     void setUp() {
         workerRegistryRepository = mock(WorkerRegistryRepository.class);
+        workerRegistryJdbcRepository = mock(WorkerRegistryJdbcRepository.class);
         jobTaskMapper = mock(JobTaskMapper.class);
         retryGovernanceService = mock(RetryGovernanceService.class);
         drainProperties = new WorkerDrainProperties();
         drainProperties.setDefaultTimeoutSeconds(300);
         service = new DefaultWorkerDrainGovernanceService(
-                workerRegistryRepository, jobTaskMapper, retryGovernanceService, drainProperties);
+                workerRegistryRepository, workerRegistryJdbcRepository, jobTaskMapper, retryGovernanceService, drainProperties);
     }
 
     // ── startDrain ────────────────────────────────────────────────────────────
@@ -120,8 +123,12 @@ class DefaultWorkerDrainGovernanceServiceTest {
     @Test
     void shouldMarkDecommissionedAndTakeoverTasksOnForceOffline() {
         WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
-        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
+                .thenReturn(registry)
+                .thenReturn(registry)
+                .thenReturn(decommissioned);
+        when(workerRegistryJdbcRepository.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
 
         JobTaskEntity task = new JobTaskEntity();
         task.setId(100L);
@@ -138,8 +145,12 @@ class DefaultWorkerDrainGovernanceServiceTest {
     @Test
     void shouldCompleteForceOfflineEvenWhenNoActiveTasks() {
         WorkerRegistryRecord registry = onlineWorker("t1", "w1");
-        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1")).thenReturn(registry);
-        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
+        when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
+                .thenReturn(registry)
+                .thenReturn(registry)
+                .thenReturn(decommissioned);
+        when(workerRegistryJdbcRepository.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
         when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
                 TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of());
 
@@ -213,23 +224,25 @@ class DefaultWorkerDrainGovernanceServiceTest {
         when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
                 .thenReturn(registry)
                 .thenReturn(registry);
-        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(workerRegistryJdbcRepository.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
         when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
                 TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of());
 
         service.takeoverAfterDrainTimeout("t1", "w1");
 
-        verify(workerRegistryRepository).save(any());
+        verify(workerRegistryJdbcRepository).markDecommissioned(eq("t1"), eq("w1"), any());
     }
 
     @Test
     void shouldContinueTakeoverWhenOneTaskRetryFails() {
         WorkerRegistryRecord registry = onlineWorker("t1", "w1")
                 .withStatus(WorkerRegistryStatus.DRAINING.code(), Instant.now());
+        WorkerRegistryRecord decommissioned = registry.withDecommissioned(Instant.now());
         when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
                 .thenReturn(registry)
-                .thenReturn(registry);
-        when(workerRegistryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+                .thenReturn(registry)
+                .thenReturn(decommissioned);
+        when(workerRegistryJdbcRepository.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
 
         JobTaskEntity task1 = new JobTaskEntity();
         task1.setId(301L);

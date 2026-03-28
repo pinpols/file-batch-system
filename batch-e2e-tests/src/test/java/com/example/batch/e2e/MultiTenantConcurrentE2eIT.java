@@ -12,6 +12,7 @@ import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -75,6 +76,9 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
      */
     @Test
     void concurrentTenantJobsAreIsolatedAndBothSucceed() throws Exception {
+        seedTenantTemplates(T2);
+        seedWorkerRegistry(T2, "e2e-import-1", "import");
+
         // Prepare seeds for both tenants before launching (avoids DB contention in the fixture)
         LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
                 jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
@@ -192,7 +196,8 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
         // ── Isolation assertion 3: outbox_event ────────────────────────────────
 
-        // Count outbox events keyed to each job instance — they must be strictly under the correct tenant
+        // Count outbox events linked to each job instance via job_task.aggregate_id — they must stay under the
+        // correct tenant. aggregate_id stores job_task.id, not job_instance.id.
         Long t1JobInstanceId = jdbcTemplate.queryForObject(
                 "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
                 Long.class, T1, t1Seed.dedupKey());
@@ -203,13 +208,31 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         assertThat(t1JobInstanceId).isNotNull();
         assertThat(t2JobInstanceId).isNotNull();
 
-        // No outbox event for t1's instance should carry t2's tenant_id, and vice versa
+        // No outbox event linked to t1's tasks should carry t2's tenant_id, and vice versa.
         Long t1OutboxUnderT2 = jdbcTemplate.queryForObject(
-                "select count(*) from batch.outbox_event where tenant_id = ? and aggregate_id = ?",
-                Long.class, T2, t1JobInstanceId);
+                """
+                        select count(*)
+                        from batch.outbox_event oe
+                        join batch.job_task t on t.id = oe.aggregate_id
+                        where oe.aggregate_type = 'JOB_TASK'
+                          and oe.tenant_id = ?
+                          and t.job_instance_id = ?
+                        """,
+                Long.class,
+                T2,
+                t1JobInstanceId);
         Long t2OutboxUnderT1 = jdbcTemplate.queryForObject(
-                "select count(*) from batch.outbox_event where tenant_id = ? and aggregate_id = ?",
-                Long.class, T1, t2JobInstanceId);
+                """
+                        select count(*)
+                        from batch.outbox_event oe
+                        join batch.job_task t on t.id = oe.aggregate_id
+                        where oe.aggregate_type = 'JOB_TASK'
+                          and oe.tenant_id = ?
+                          and t.job_instance_id = ?
+                        """,
+                Long.class,
+                T1,
+                t2JobInstanceId);
         assertThat(t1OutboxUnderT2).isZero();
         assertThat(t2OutboxUnderT1).isZero();
 
@@ -292,6 +315,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
      */
     @Test
     void jobInstancesAreIsolatedBetweenTenants() {
+        seedTenantTemplates(T2);
         LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
                 jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
         LaunchSeed t2Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
@@ -355,6 +379,59 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private void seedTenantTemplates(String tenantId) {
+        jdbcTemplate.update(
+                """
+                        insert into batch.file_template_config (
+                            tenant_id, template_code, template_name, template_type, biz_type,
+                            file_format_type, charset, target_charset, with_bom,
+                            delimiter, quote_char, escape_char,
+                            record_length, header_rows, footer_rows,
+                            checksum_type, compress_type, encrypt_type,
+                            field_mappings, validation_rule_set, query_param_schema,
+                            streaming_enabled, page_size, fetch_size, chunk_size,
+                            content_encryption_enabled, encryption_key_ref,
+                            preview_masking_enabled, download_requires_approval,
+                            enabled, version, created_by, load_target_ref
+                        )
+                        select
+                            ?, template_code, template_name, template_type, biz_type,
+                            file_format_type, charset, target_charset, with_bom,
+                            delimiter, quote_char, escape_char,
+                            record_length, header_rows, footer_rows,
+                            checksum_type, compress_type, encrypt_type,
+                            field_mappings, validation_rule_set, query_param_schema,
+                            streaming_enabled, page_size, fetch_size, chunk_size,
+                            content_encryption_enabled, encryption_key_ref,
+                            preview_masking_enabled, download_requires_approval,
+                            enabled, version, created_by, load_target_ref
+                        from batch.file_template_config
+                        where tenant_id = ?
+                          and template_code = 'IMP-CUSTOMER-JSON-ARRAY'
+                        on conflict do nothing
+                        """,
+                tenantId,
+                T1);
+    }
+
+    private void seedWorkerRegistry(String tenantId, String workerCode, String workerGroup) {
+        jdbcTemplate.update(
+                "delete from batch.worker_registry where tenant_id = ? and worker_code = ?",
+                tenantId,
+                workerCode);
+        jdbcTemplate.update(
+                """
+                        insert into batch.worker_registry (
+                            tenant_id, worker_code, worker_group, capability_tags, resource_tag,
+                            status, heartbeat_at, current_load, drain_started_at, drain_deadline_at
+                        ) values (?, ?, ?, '{}'::jsonb, null, 'ONLINE', ?, 0, null, null)
+                        """,
+                tenantId,
+                workerCode,
+                workerGroup,
+                java.sql.Timestamp.from(Instant.now()));
+    }
 
     private String taskStatus(String tenantId, String dedupKey) {
         try {

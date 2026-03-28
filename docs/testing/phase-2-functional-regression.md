@@ -2,6 +2,18 @@
 
 更新时间：2026-03-28
 
+## 当前状态
+
+Phase 2 已收口完成。
+
+收口结果：
+
+- `batch-trigger` 首批 P0 门禁已补齐
+- 统一回归入口 `scripts/ci/run-full-regression.sh` 已落地
+- `batch-console-api` 历史集成测试失败已清零
+- `batch-e2e-tests` 历史失败已清零
+- 仓库级最终复跑结果见 `docs/testing/full-test-run-report.md`
+
 ## 目标
 
 本文件用于保留 Phase 2 的 P0 收口清单和后续增量项，便于单独查阅和维护。
@@ -70,6 +82,10 @@
 - `batch-console-api` 权限/租户负向测试
 - 同 task 并发 claim 竞争专项
 - Kafka 外部渠道失败与恢复专项（补了 `KafkaOutboxPublisher` 失败分支）
+- Worker drain / worker registry 状态保持修正
+- 多租户并发 E2E 隔离补种子与断言修正
+- 导出 / outbox E2E 断言与种子修正
+- 共享调度器关闭策略调整，清除 surefire 强杀噪音
 
 ## 补充说明
 
