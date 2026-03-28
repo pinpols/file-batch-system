@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,7 +79,11 @@ class DefaultTaskExecutionWrapperTest {
 
         assertThat(result.success()).isFalse();
         assertThat(result.message()).isEqualTo("parse failed");
-        verify(taskExecutionClient).report(any(TaskExecutionReport.class));
+        verify(taskExecutionClient).report(argThat(report ->
+                "ERR_PARSE".equals(report.getCode())
+                        && "parse failed".equals(report.getMessage())
+                        && "ERR_PARSE".equals(report.getErrorCode())
+                        && "parse failed".equals(report.getErrorMessage())));
         verify(activeTaskLeaseRegistry).remove("1002");
     }
 

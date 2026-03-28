@@ -1,7 +1,9 @@
 package com.example.batch.orchestrator.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,7 +13,9 @@ import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.service.TaskExecutionService;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.TaskController;
+import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -71,6 +75,26 @@ class TaskControllerTest {
                                 }
                                 """))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldFallbackToLegacyCodeAndMessageWhenErrorFieldsMissing() throws Exception {
+        mockMvc.perform(post("/internal/tasks/5/report")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tenantId": "t1",
+                                  "success": false,
+                                  "code": "ERR_PARSE",
+                                  "message": "parse failed"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<TaskOutcomeCommand> captor = ArgumentCaptor.forClass(TaskOutcomeCommand.class);
+        verify(taskExecutionService).applyTaskOutcome(captor.capture());
+        assertThat(captor.getValue().errorCode()).isEqualTo("ERR_PARSE");
+        assertThat(captor.getValue().errorMessage()).isEqualTo("parse failed");
     }
 
     @Test

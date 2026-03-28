@@ -32,7 +32,7 @@ import org.springframework.test.context.jdbc.Sql;
  *
  * <p>覆盖场景：
  * <ul>
- *   <li><b>场景 A</b>：未知模板（templateCode 不存在）导致失败，断言 task/job_instance 进入失败态且 failure_code 非空。</li>
+ *   <li><b>场景 A</b>：未知模板（templateCode 不存在）导致失败，断言 task/job_instance 进入失败态且 error_code 非空。</li>
  *   <li><b>场景 B</b>：数据质量失败（必填字段缺失）应写入 {@code batch.file_error_record}，用于逐行问题定位。</li>
  *   <li><b>场景 C</b>：配置重试预算（FIXED + retry_max_count）后，持续失败会触发重试调度并最终进入死信。</li>
  * </ul>
@@ -123,25 +123,25 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
                 seed.dedupKey());
         assertThat(instanceStatus).isIn("FAILED", "PARTIAL_FAILED");
 
-        // failure_code on the task must be non-null
-        String failureCode = jdbcTemplate.queryForObject(
+        // error_code on the task must be non-null
+        String errorCode = jdbcTemplate.queryForObject(
                 """
-                        select t.failure_code from batch.job_task t
+                        select t.error_code from batch.job_task t
                         join batch.job_instance ji on ji.id = t.job_instance_id
                         where ji.tenant_id = ? and ji.dedup_key = ?
                         """,
                 String.class,
                 TENANT,
                 seed.dedupKey());
-        assertThat(failureCode).isNotBlank();
+        assertThat(errorCode).isNotBlank();
     }
 
     // ── Scenario B: field-level validation failure via invalid record ────────────
 
     /**
      * Submits JSON content where a required field (customerNo) is blank.
-     * With the IMP-CUSTOMER-JSON-ARRAY template the data-quality service will flag the record.
-     * Because the template's skip-policy rejects non-skippable errors the job fails at VALIDATE stage.
+     * With the IMP-CUSTOMER-JSON-ARRAY-STRICT template the data-quality service will flag the record.
+     * The strict template uses a non-skippable validation error code, so the job fails at VALIDATE stage.
      * We verify:
      * <ul>
      *   <li>task_status = FAILED</li>
@@ -162,7 +162,7 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("fileFormatType", "JSON");
-        params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY");
+        params.put("templateCode", "IMP-CUSTOMER-JSON-ARRAY-STRICT");
         params.put("bizType", "CUSTOMER");
         // customerNo is blank → data quality should fail the record; certificateNo deliberately missing
         params.put("content",
@@ -244,17 +244,17 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
         assertThat(errorRecords.get(0).get("error_code")).isNotNull();
         assertThat(errorRecords.get(0).get("record_no")).isNotNull();
 
-        // failure_code on task must be non-null regardless of pipeline stage
-        String failureCode = jdbcTemplate.queryForObject(
+        // error_code on task must be non-null regardless of pipeline stage
+        String errorCode = jdbcTemplate.queryForObject(
                 """
-                        select t.failure_code from batch.job_task t
+                        select t.error_code from batch.job_task t
                         join batch.job_instance ji on ji.id = t.job_instance_id
                         where ji.tenant_id = ? and ji.dedup_key = ?
                         """,
                 String.class,
                 TENANT,
                 seed.dedupKey());
-        assertThat(failureCode).isNotBlank();
+        assertThat(errorCode).isNotBlank();
     }
 
     /**

@@ -10,9 +10,9 @@ import com.example.batch.worker.dispatchs.BatchWorkerDispatchApplication;
 import com.example.batch.worker.exports.BatchWorkerExportApplication;
 import com.example.batch.worker.exports.infrastructure.ExportStepExecutionAdapter;
 import com.example.batch.e2e.config.E2eKafkaProducerConfiguration;
-import com.example.batch.e2e.config.E2eKafkaConsumerConfiguration;
 import com.example.batch.e2e.config.E2ePlatformDataSourceConfiguration;
 import com.example.batch.e2e.config.E2ePlatformMybatisConfiguration;
+import com.example.batch.e2e.config.E2eShedLockConfiguration;
 import com.example.batch.worker.imports.BatchWorkerImportApplication;
 import com.example.batch.worker.imports.infrastructure.ImportStepExecutionAdapter;
 import org.mybatis.spring.annotation.MapperScan;
@@ -36,8 +36,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @Import({
     E2ePlatformDataSourceConfiguration.class,
     E2eKafkaProducerConfiguration.class,
-    E2eKafkaConsumerConfiguration.class,
-    E2ePlatformMybatisConfiguration.class
+    E2ePlatformMybatisConfiguration.class,
+    E2eShedLockConfiguration.class
 })
 @ComponentScan(
         basePackages = {
@@ -51,6 +51,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eImportApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eExportApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eDispatchApplication.class),
+                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class),
+                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.worker.dispatchs.config.ShedLockConfiguration.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerImportApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerExportApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerDispatchApplication.class),

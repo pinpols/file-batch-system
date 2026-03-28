@@ -43,6 +43,14 @@ public class ImportIngressScanner {
      */
     @Scheduled(fixedDelayString = "${batch.worker.import.scanner.poll-interval-millis:30000}")
     @SchedulerLock(name = "import_ingress_scan", lockAtMostFor = "PT2M", lockAtLeastFor = "PT20S")
+    public void scheduledScan() {
+        scan();
+    }
+
+    /**
+     * Lock-free entrypoint for tests and manual invocations. Scheduling concerns stay in
+     * {@link #scheduledScan()} so direct calls always execute scanner logic.
+     */
     public void scan() {
         if (!scannerProperties.isEnabled() || !StringUtils.hasText(workerConfiguration.tenantId())) {
             return;

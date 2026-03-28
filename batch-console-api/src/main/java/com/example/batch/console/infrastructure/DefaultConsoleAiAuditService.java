@@ -1,9 +1,10 @@
 package com.example.batch.console.infrastructure;
 
+import com.example.batch.common.enums.AiPromptCategory;
 import com.example.batch.console.domain.command.AiAuditCommand;
-import com.example.batch.console.support.ConsoleAiAuditService;
 import com.example.batch.console.domain.entity.ConsoleAiAuditLogEntity;
 import com.example.batch.console.mapper.ConsoleAiAuditLogMapper;
+import com.example.batch.console.support.ConsoleAiAuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +26,7 @@ public class DefaultConsoleAiAuditService implements ConsoleAiAuditService {
         entity.setTraceId(command.traceId());
         entity.setSessionId(command.sessionId());
         entity.setOperatorId(command.operatorId());
-        entity.setPromptCategory(command.promptCategory());
+        entity.setPromptCategory(resolvePromptCategory(command.promptCategory()));
         entity.setPromptDecision(command.promptDecision());
         entity.setModelName(command.modelName());
         entity.setPromptHash(command.promptHash());
@@ -34,5 +35,12 @@ public class DefaultConsoleAiAuditService implements ConsoleAiAuditService {
         entity.setResponsePreview(command.responsePreview());
         entity.setRefusalReason(command.refusalReason());
         consoleAiAuditLogMapper.insert(entity);
+    }
+
+    private String resolvePromptCategory(String promptCategory) {
+        if (promptCategory == null || promptCategory.isBlank()) {
+            return AiPromptCategory.OUT_OF_SCOPE.code();
+        }
+        return promptCategory;
     }
 }

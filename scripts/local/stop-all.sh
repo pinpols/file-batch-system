@@ -32,6 +32,11 @@ echo "已清除 PID 文件。"
 
 if [[ "${STOP_DOCKER:-}" == "1" ]]; then
   echo "==> Docker Compose 停止（STOP_DOCKER=1）..."
+  _LOCAL_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  # shellcheck source=docker-path.sh
+  source "${_LOCAL_SCRIPT_DIR}/docker-path.sh"
+  ensure_docker_on_path
+  unset _LOCAL_SCRIPT_DIR
   cd "$ROOT" && docker compose --env-file "$COMPOSE_ENV_FILE" down
 else
   echo "提示：仅停止 Java 进程；基础依赖仍在运行。停止容器请执行: docker compose down"

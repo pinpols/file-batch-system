@@ -5,11 +5,19 @@
 # 1) 启动 PostgreSQL / Kafka / MinIO 以及六个 Java 模块。
 # 2) 运行前需要 Docker、Docker Compose、JDK 和 Maven。
 # 3) PID 写入 logs/start-all.pids，日志写入 logs/<module>.log。
+# 4) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
+#    本脚本会尝试常见安装路径（Homebrew、Docker.app 等）。
 # =========================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+
+_LOCAL_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=docker-path.sh
+source "${_LOCAL_SCRIPT_DIR}/docker-path.sh"
+ensure_docker_on_path
+unset _LOCAL_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
@@ -33,7 +41,7 @@ POSTGRES_DB="${POSTGRES_DB:-batch_platform}"
 module_jar() {
   local module="$1"
   local jar
-  jar="$(ls "$ROOT/$module/target"/"${module}"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc' | head -1 || true)"
+  jar="$(ls "$ROOT/$module/target/${module}"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc' | head -1 || true)"
   if [[ -z "$jar" || ! -f "$jar" ]]; then
     echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar（请先成功执行 mvn package）" >&2
     exit 1

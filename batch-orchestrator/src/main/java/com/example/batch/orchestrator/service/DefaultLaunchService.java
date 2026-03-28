@@ -34,6 +34,8 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,7 +101,14 @@ public class DefaultLaunchService implements LaunchService {
         Map<String, Object> effectiveParams = mergeLaunchParams(loaded.jobDefinition(), request.params());
 
         // T1：先把 instance/workflow 落库并提交，避免 T2 执行期间持有更长时间锁。
-        PreparedLaunch prepared = self.prepareJobInstance(request, loaded, effectiveParams, traceId);
+        PreparedLaunch prepared;
+        try {
+            prepared = self.prepareJobInstance(request, loaded, effectiveParams, traceId);
+        } catch (DuplicateKeyException exception) {
+            return resolveConcurrentDuplicate(request, loaded, exception);
+        } catch (DataIntegrityViolationException exception) {
+            return resolveConcurrentDuplicate(request, loaded, exception);
+        }
 
         // T2：构建分片/任务/outbox，并推进运行态；该事务可在失败后独立重试。
         partitionDispatchService.dispatch(request, effectiveParams, traceId,
@@ -208,6 +217,19 @@ public class DefaultLaunchService implements LaunchService {
             merged.putAll(runtimeParams);
         }
         return merged;
+    }
+
+    private LaunchResponse resolveConcurrentDuplicate(LaunchRequest request,
+                                                      LaunchLoadResult loaded,
+                                                      RuntimeException exception) {
+        JobInstanceEntity existingInstance = jobInstanceMapper.selectByTenantAndDedupKey(
+                request.tenantId(), loaded.triggerRequest().getDedupKey());
+        if (existingInstance == null) {
+            throw exception;
+        }
+        triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
+                BatchStatusConstants.DUPLICATE, existingInstance.getId());
+        return new LaunchResponse(existingInstance.getInstanceNo(), existingInstance.getTraceId());
     }
 
     private String buildPayloadJson(Map<String, Object> params) {
