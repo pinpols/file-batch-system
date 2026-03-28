@@ -7,6 +7,7 @@ import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import com.example.batch.worker.dispatchs.config.DispatchWorkerConfiguration;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -47,7 +48,9 @@ public class DispatchTaskConsumer extends AbstractTaskConsumer {
     }
 
     @KafkaListener(id = "dispatch-task-consumer", topics = "#{__listener.topics()}", groupId = "#{__listener.consumerGroupId()}")
-    public void consume(String payload) {
-        doConsume(payload);
+    public void consume(String payload, Acknowledgment acknowledgment) {
+        if (doConsume(payload)) {
+            acknowledgment.acknowledge();
+        }
     }
 }

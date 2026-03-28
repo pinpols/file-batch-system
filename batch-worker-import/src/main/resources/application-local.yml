@@ -21,6 +21,8 @@ management:
         include: health,info,prometheus
 
 batch:
+  shedlock:
+    auto-create: true
   security:
     testing-open: true
     kms:
