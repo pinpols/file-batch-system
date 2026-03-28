@@ -35,6 +35,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleConfigApplicationService} 的默认实现：
+ * 基于本地 Mapper 维护配置发布单、密钥版本与变更日志。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleConfigApplicationService implements ConsoleConfigApplicationService {

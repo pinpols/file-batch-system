@@ -13,10 +13,10 @@
 
 | 类型 | 数量 | 覆盖模块 |
 |------|------|---------|
-| 单元测试 (`*Test.java`) | ~86 | common、orchestrator、worker-core、worker-import、worker-export、worker-dispatch、console-api |
-| 集成测试 (`*IT.java` / `*IntegrationTest.java`) | ~25 | orchestrator、worker-import、worker-export、worker-dispatch、console-api |
-| 端到端测试 (`*E2eIT.java`) | 14 | e2e（全链路） |
-| **合计** | **~125** | |
+| 单元测试 (`*Test.java`) | 156 | common、orchestrator、worker-core、worker-import、worker-export、worker-dispatch、console-api |
+| 集成测试 (`*IT.java` / `*IntegrationTest.java`) | 76 | orchestrator、worker-import、worker-export、worker-dispatch、console-api |
+| 端到端测试 (`*E2eIT.java`) | 27 | e2e（全链路） |
+| **合计** | **259** | |
 
 ### 1.2 测试基础设施
 
@@ -253,8 +253,11 @@ void shouldAllowReacquireAfterExpiry() {
 | 新测试文件 | 覆盖场景 |
 |-----------|---------|
 | `ConsoleHttpIntegrationIT.java` | trigger、drain、approve、archive、secret rotate、AI chat、download |
+| `ConsoleJobDefinitionExcelControllerTest.java` | job definition Excel export / upload / preview / apply |
+| `ConsoleWorkflowExcelControllerTest.java` | workflow Excel export / upload / preview / apply |
+| `ConsoleReportExcelControllerTest.java` | report Excel export-only routes |
 
-测试模式：使用 `@SpringBootTest(WebEnvironment.RANDOM_PORT)` + `WebTestClient` + `@MockitoBean`，同时覆盖 Controller 序列化层与授权过滤器。
+测试模式：使用 `@SpringBootTest(WebEnvironment.RANDOM_PORT)` + `WebTestClient` + `@MockitoBean`，同时覆盖 Controller 序列化层与授权过滤器；Excel 相关 controller 测试额外覆盖 export / upload / preview / apply 路由和报表导出路由。
 
 ---
 

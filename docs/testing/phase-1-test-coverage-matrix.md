@@ -39,7 +39,7 @@
 
 ### 结论 5：测试口径已统一到当前仓库基线
 
-当前统一口径为：80 个 `*Test.java`、44 个 `*IT.java` / `*IntegrationTest.java`、14 个 `*E2eIT.java`、17 个测试支撑类，合计 155 个测试相关文件。后续文档引用应以本文件和 `docs/testing/test-strategy.md` 为准。
+当前统一口径为：156 个 `*Test.java`、76 个 `*IT.java` / `*IntegrationTest.java`、27 个 `*E2eIT.java`、42 个测试支撑类，合计 301 个测试相关文件。后续文档引用应以本文件和 `docs/testing/test-strategy.md` 为准。
 
 ## 当前测试资产总览
 
@@ -52,7 +52,7 @@
 | `batch-worker-import` | 10 个测试文件 | 主链路覆盖较好 |
 | `batch-worker-export` | 12 个测试文件 | 主链路覆盖较好 |
 | `batch-worker-dispatch` | 8 个测试文件 | 主链路可用，外部渠道侧仍偏薄 |
-| `batch-console-api` | 17 个测试相关文件 | 查询与审计较强，HTTP smoke + 安全负向已补齐 |
+| `batch-console-api` | 31 个测试相关文件 | 查询、审计与 Excel 维护较强，HTTP smoke + 安全负向 + Excel 维护与报表导出已补齐 |
 | `batch-e2e-tests` | 26 个测试相关文件 | 端到端骨架已成型 |
 | `load-tests` | 5 个文件（3 个 Gatling Simulation + 2 个支撑/配置文件） | smoke 与 CI 编译门禁已接入 |
 
@@ -73,7 +73,7 @@
 | `batch-worker-import` | scanner、preprocess、parse、validate、load、KMS/RSA、ShedLock | 有 | 有 | 有 | 部分 | 主链路覆盖较好 | 缺更强的失败恢复和大文件容量边界验证 | P1 |
 | `batch-worker-export` | prepare、generate、store、register、MinIO、ShedLock | 有 | 有 | 有 | 部分 | 主链路覆盖较好 | 缺容量基线、部署后存储路径 smoke、更多异常恢复演练 | P1 |
 | `batch-worker-dispatch` | gateway、circuit breaker、health probe、receipt poll、stage executor、ShedLock | 有 | 有 | 有 | 部分 | 主链路可用 | 缺更贴近真实外部渠道的集成验证；SFTP/EMAIL/OSS 类场景仍偏 mock 化 | P1 |
-| `batch-console-api` | 查询、审批、AI 审计、DLQ、retry schedule、告警 | 有 | 有 | 部分 | 无 | 查询面覆盖不错，HTTP smoke + 权限/租户负向已补齐 | 仍可继续补少量查询负向与异常边界 | P1 |
+| `batch-console-api` | 查询、审批、AI 审计、DLQ、retry schedule、告警、Excel 维护、报表导出 | 有 | 有 | 部分 | 无 | 查询面覆盖不错，HTTP smoke + 权限/租户负向 + Excel 维护与报表导出已补齐 | 仍可继续补少量查询负向与异常边界 | P1 |
 | `batch-e2e-tests` | Import/Export/Dispatch 主链路、失败分支、Outbox、dedup、多租户 | 不适用 | 不适用 | 有 | 无 | 可以承担核心回归 | 仍缺部署后 smoke 场景 | P1 |
 | `load-tests` | trigger 写入、console 查询、混合基线压测 | 不适用 | 不适用 | 不适用 | 有 | smoke 与 CI 编译门禁已接入 | 仍不在 root reactor；容量基线表未填写 | P1 |
 | 部署与发布门禁 | Helm、启动脚本、巡检、自愈、升级、回滚 | 无 | 无 | 无 | 有 | 三层 workflow 已形成，部署验证已接入 | 已完成门禁接入；未完成真实 staging 实跑留档和 `--atomic` 失败观测 | P0 |
@@ -89,7 +89,7 @@
 | 部署验证 | `scripts/ci/run-full-regression.sh --with-deployment-verification`、`docs/testing/deployment-verification-report.md` | 升级 / 回滚执行链路已接入 | 仍缺真实 staging 留档和 `--atomic` 失败观测 |
 | 压测资产 | `JobLaunchSimulation`、`ConsoleQuerySimulation`、`CapacityBaselineSimulation` | 仅有脚本和空白基线表 | 仍缺实测数据和流水线接入 |
 | CI 工作流 | `.github/workflows/pr-gate.yml`、`.github/workflows/full-ci-gate.yml`、`.github/workflows/staging-gate.yml` 已存在；未发现 `.gitlab-ci.yml`、`Jenkinsfile` | 三层门禁已落地 | 下一步重点转为真实 staging 执行与回滚验证 |
-| 文档一致性 | 本轮已统一到 80 / 44 / 14 / 17 口径 | 以本文件、`test-strategy.md`、`release-gate.md` 为主 | 后续新增测试时需同步更新 |
+| 文档一致性 | 本轮已统一到 156 / 76 / 27 / 42 口径 | 以本文件、`test-strategy.md`、`release-gate.md` 为主 | 后续新增测试时需同步更新 |
 
 ## 说明
 

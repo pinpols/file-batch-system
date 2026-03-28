@@ -32,6 +32,8 @@ Phase 2 P0 回归范围见：`docs/testing/phase-2-functional-regression.md`
 - Phase 1 盘点矩阵：`docs/testing/phase-1-test-coverage-matrix.md`
 - Phase 2 P0 回归范围：`docs/testing/phase-2-functional-regression.md`
 - console-api 核心 HTTP smoke：`batch-console-api/src/test/java/com/example/batch/console/integration/ConsoleHttpIntegrationIT.java`
+- console-api Excel 导入/导出 controller 测试：`ConsoleFileTemplateExcelControllerTest`、`ConsoleFileChannelExcelControllerTest`、`ConsoleWorkflowExcelControllerTest`、`ConsoleJobDefinitionExcelControllerTest`、`ConsoleReportExcelControllerTest`
+- console-api Excel 导入/导出 service 负向测试：`DefaultConsoleFileTemplateExcelApplicationServiceTest`、`DefaultConsoleFileChannelExcelApplicationServiceTest`、`DefaultConsoleWorkflowExcelApplicationServiceTest`、`DefaultConsoleJobDefinitionExcelApplicationServiceTest`
 - console-api 安全负向：`batch-console-api/src/test/java/com/example/batch/console/config/ConsoleSecurityConfigurationTest.java`
 - console-request tenant mismatch：`batch-console-api/src/test/java/com/example/batch/console/support/ConsoleRequestContextFilterTest.java`
 - orchestrator 并发 claim：`batch-orchestrator/src/test/java/com/example/batch/orchestrator/integration/ConcurrentTaskClaimIntegrationTest.java`
@@ -39,14 +41,14 @@ Phase 2 P0 回归范围见：`docs/testing/phase-2-functional-regression.md`
 
 当前统一口径（截至 2026-03-28）：
 
-- 80 个 `*Test.java`
-- 44 个 `*IT.java` / `*IntegrationTest.java`
-- 14 个 `*E2eIT.java`
-- 17 个测试支撑类
+- 156 个 `*Test.java`
+- 76 个 `*IT.java` / `*IntegrationTest.java`
+- 27 个 `*E2eIT.java`
+- 42 个测试支撑类
 
 这说明项目已经完成了测试基线盘点和首轮 P0 回归收口。当前状态可以拆成两类：
 
-- 已完成：测试基线盘点、统一回归入口、P0 首轮收口、Phase 6 门禁接入 CI / staging workflow
+- 已完成：测试基线盘点、统一回归入口、P0 首轮收口、console-api Excel / HTTP smoke 收口、Phase 6 门禁接入 CI / staging workflow
 - 未完成：真实 staging 实跑留档、故障演练完整报告、压测基线数值回填、真实发布记录闭环、`helm upgrade --install --atomic` 失败观测
 
 ## 仍需补齐的事情

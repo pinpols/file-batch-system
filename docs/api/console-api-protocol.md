@@ -144,6 +144,21 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - Query and audit responses may contain escaped text. The frontend should render them as text nodes and not assume HTML markup.
 - If a field needs to carry structured data, it must be encoded as JSON and validated as JSON, not as free-form HTML.
 
+### Excel Config Maintenance Rules
+
+- Excel maintenance is a controlled extension of the console, not a general-purpose file upload feature.
+- All Excel-backed config flows must follow `upload -> preview -> apply -> export` through a dedicated adapter layer.
+- `file template config`, `file channel config`, and `workflow definition / node / edge` are the first-class editable domains.
+- Excel templates must be user-facing edit forms, not raw database dumps.
+- The main sheet should use frozen headers, required-field highlighting, enum dropdowns where practical, sample values, and automatic column sizing.
+- A workbook should include a concise instruction sheet and, where useful, a dictionary sheet for enum values and a validation sheet for preview errors.
+- Preview must report row numbers, column names, and validation reasons so the user can correct the sheet without guessing.
+- `workflow definition / node / edge` and the safe subset of `job definition` are exportable and optionally importable only under strict validation.
+- `config release`, `config change log`, `secret version`, `audit log`, `scheduler snapshot/history`, `worker registry`, and `outbox retry/delivery` are export-only records.
+- Secret material, tokens, passwords, approval records, and other runtime facts must never be accepted as Excel import sources.
+- Import payloads must be validated against a whitelist of editable columns before any write is applied.
+- Excel processing logic must stay inside a dedicated adapter layer; controllers must only handle HTTP boundaries.
+
 ### Frontend Security Rules
 
 - Use text binding for all server-provided strings.
@@ -159,7 +174,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/auth/me`
 - `GET /api/console/ops/summary`
 
-`GET /api/console/ops/summary` is the first-screen operational snapshot. The response is a typed summary payload and should be treated as the control plane entry for the console home page. It includes:
+`GET /api/console/ops/summary` is the first-screen operational snapshot. The server requires **`tenantId` as a query parameter** (not only `X-Tenant-Id`). The response is a typed summary payload inside `CommonResponse` and should be treated as the control plane entry for the console home page. It includes:
 
 - pending approvals
 - open alerts and critical alerts
@@ -195,7 +210,37 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/config/secrets`
 - `POST /api/console/config/secrets/rotate`
 - `GET /api/console/config/change-logs`
+- `GET /api/console/config/file-templates/excel/export`
+- `POST /api/console/config/file-templates/excel/upload`
+- `GET /api/console/config/file-templates/excel/preview/{uploadToken}`
+- `POST /api/console/config/file-templates/excel/apply/{uploadToken}`
+- `GET /api/console/config/file-channels/excel/export`
+- `POST /api/console/config/file-channels/excel/upload`
+- `GET /api/console/config/file-channels/excel/preview/{uploadToken}`
+- `POST /api/console/config/file-channels/excel/apply/{uploadToken}`
+- `GET /api/console/config/workflows/excel/export`
+- `POST /api/console/config/workflows/excel/upload`
+- `GET /api/console/config/workflows/excel/preview/{uploadToken}`
+- `POST /api/console/config/workflows/excel/apply/{uploadToken}`
+- `GET /api/console/config/job-definitions/excel/export`
+- `POST /api/console/config/job-definitions/excel/upload`
+- `GET /api/console/config/job-definitions/excel/preview/{uploadToken}`
+- `POST /api/console/config/job-definitions/excel/apply/{uploadToken}`
 - Config list views should use typed response DTOs for releases, secrets, and change logs.
+- Excel maintenance for `file template config` and `file channel config` follows the dedicated adapter flow: upload, preview, apply, then export.
+- Excel maintenance for `workflow definition / node / edge` follows the same dedicated adapter flow and keeps definition, node, and edge sheets aligned by workflow code + version.
+- Excel maintenance for the safe subset of `job definition` follows the same dedicated adapter flow, but only allows white-listed mutable columns and update-only apply semantics.
+- Export workbooks for editable Excel flows must stay as recoverable templates: data sheet first, then README / DICT / VALIDATION sheets, so users can edit and re-upload the same file family.
+- `GET /api/console/reports/excel/config-releases`
+- `GET /api/console/reports/excel/secrets`
+- `GET /api/console/reports/excel/change-logs`
+- `GET /api/console/reports/excel/audits`
+- `GET /api/console/reports/excel/scheduler-snapshot`
+- `GET /api/console/reports/excel/scheduler-history`
+- `GET /api/console/reports/excel/workers`
+- `GET /api/console/reports/excel/outbox-retries`
+- `GET /api/console/reports/excel/outbox-deliveries`
+- Report Excel exports are export-only snapshots or logs. They do not accept upload / preview / apply flows.
 
 ### Workers
 
@@ -312,7 +357,9 @@ Request body:
 
 ## File Download API
 
-- `GET /api/console/files/{fileId}/download`
+- `GET /api/console/files/{fileId}/download?tenantId={tenantId}&approvalId={optional}`
+- Response is **raw file bytes** (`Content-Disposition: attachment`, MIME from metadata or `application/octet-stream`), **not** the `CommonResponse` JSON envelope.
+- When the file’s template enforces download approval, `approvalId` must reference an **APPROVED** (or **EXECUTED**) approval; omit only when testing-open or policy does not require approval.
 
 ## Error Code Baseline
 

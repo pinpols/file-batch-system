@@ -25,6 +25,7 @@
 
 - 大部分脚本默认依赖 Docker / Docker Desktop、PostgreSQL、Kafka、MinIO 或对应的本地容器
 - 使用 Testcontainers 的脚本通常需要 `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` 和 `DOCKER_API_VERSION`
+- `start-all.sh` / `stop-all.sh` 默认使用 `.env.local`，如需切换环境可设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`
 - 如果脚本有额外环境变量要求，直接看脚本头部注释
 
 ## 常见顺序

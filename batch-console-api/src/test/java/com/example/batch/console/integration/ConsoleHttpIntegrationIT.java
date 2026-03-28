@@ -15,7 +15,10 @@ import com.example.batch.console.application.ConsoleConfigApplicationService;
 import com.example.batch.console.application.ConsoleFileApplicationService;
 import com.example.batch.console.application.ConsoleFileDownloadApplicationService;
 import com.example.batch.console.application.ConsoleJobApplicationService;
+import com.example.batch.console.application.ConsoleJobDefinitionExcelApplicationService;
+import com.example.batch.console.application.ConsoleReportExcelApplicationService;
 import com.example.batch.console.application.ConsoleWorkerApplicationService;
+import com.example.batch.console.application.ConsoleWorkflowExcelApplicationService;
 import com.example.batch.console.web.response.AiChatResponse;
 import com.example.batch.console.web.response.ConsoleFileOperationResponse;
 import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
@@ -30,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -52,7 +56,13 @@ class ConsoleHttpIntegrationIT extends AbstractIntegrationTest {
     private ConsoleJobApplicationService jobApplicationService;
 
     @MockitoBean
+    private ConsoleJobDefinitionExcelApplicationService jobDefinitionExcelApplicationService;
+
+    @MockitoBean
     private ConsoleWorkerApplicationService workerApplicationService;
+
+    @MockitoBean
+    private ConsoleWorkflowExcelApplicationService workflowExcelApplicationService;
 
     @MockitoBean
     private ConsoleApprovalApplicationService approvalApplicationService;
@@ -64,6 +74,9 @@ class ConsoleHttpIntegrationIT extends AbstractIntegrationTest {
     private ConsoleConfigApplicationService configApplicationService;
 
     @MockitoBean
+    private ConsoleReportExcelApplicationService reportExcelApplicationService;
+
+    @MockitoBean
     private ConsoleAiApplicationService aiApplicationService;
 
     @MockitoBean
@@ -73,7 +86,7 @@ class ConsoleHttpIntegrationIT extends AbstractIntegrationTest {
     void setUpClient() {
         webTestClient = WebTestClient.bindToServer()
                 .baseUrl("http://localhost:" + port)
-                .responseTimeout(Duration.ofSeconds(20))
+                .responseTimeout(Duration.ofSeconds(60))
                 .build();
     }
 
@@ -97,6 +110,51 @@ class ConsoleHttpIntegrationIT extends AbstractIntegrationTest {
                 });
 
         verify(jobApplicationService).trigger(any(), anyString());
+    }
+
+    @Test
+    void shouldExportJobDefinitionExcelViaHttp() {
+        byte[] content = "job-definition-excel".getBytes(StandardCharsets.UTF_8);
+        when(jobDefinitionExcelApplicationService.exportJobDefinitions(any())).thenReturn(
+                ResponseEntity.ok().body(new InputStreamResource(new ByteArrayInputStream(content)))
+        );
+
+        webTestClient.get()
+                .uri("/api/console/config/job-definitions/excel/export?tenantId=tenant-a")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(byte[].class)
+                .value(bytes -> assertThat(bytes).isEqualTo(content));
+    }
+
+    @Test
+    void shouldExportWorkflowExcelViaHttp() {
+        byte[] content = "workflow-excel".getBytes(StandardCharsets.UTF_8);
+        when(workflowExcelApplicationService.exportWorkflowExcel(any())).thenReturn(
+                ResponseEntity.ok().body(new InputStreamResource(new ByteArrayInputStream(content)))
+        );
+
+        webTestClient.get()
+                .uri("/api/console/config/workflows/excel/export?tenantId=tenant-a")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(byte[].class)
+                .value(bytes -> assertThat(bytes).isEqualTo(content));
+    }
+
+    @Test
+    void shouldExportConfigReleasesReportViaHttp() {
+        byte[] content = "config-releases-report".getBytes(StandardCharsets.UTF_8);
+        when(reportExcelApplicationService.exportConfigReleases(any())).thenReturn(
+                ResponseEntity.ok().body(new InputStreamResource(new ByteArrayInputStream(content)))
+        );
+
+        webTestClient.get()
+                .uri("/api/console/reports/excel/config-releases?tenantId=tenant-a")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(byte[].class)
+                .value(bytes -> assertThat(bytes).isEqualTo(content));
     }
 
     @Test

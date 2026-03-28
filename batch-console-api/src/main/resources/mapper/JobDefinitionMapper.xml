@@ -20,6 +20,7 @@
         <result column="execution_handler" property="executionHandler"/>
         <result column="param_schema" property="paramSchema"/>
         <result column="default_params" property="defaultParams"/>
+        <result column="description" property="description"/>
         <result column="enabled" property="enabled"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
@@ -40,4 +41,31 @@
         </if>
         order by id desc
     </select>
+
+    <select id="selectByUniqueKey" resultMap="JobDefinitionResultMap">
+        select *
+        from batch.job_definition
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+    </select>
+
+    <update id="updateJobDefinitionMaintenance">
+        update batch.job_definition
+        set job_name = #{jobName},
+            queue_code = #{queueCode},
+            worker_group = #{workerGroup},
+            schedule_expr = #{scheduleExpr},
+            calendar_code = #{calendarCode},
+            window_code = #{windowCode},
+            retry_policy = #{retryPolicy},
+            retry_max_count = #{retryMaxCount},
+            timeout_seconds = #{timeoutSeconds},
+            shard_strategy = #{shardStrategy},
+            enabled = #{enabled},
+            description = #{description},
+            updated_by = #{updatedBy},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+    </update>
 </mapper>

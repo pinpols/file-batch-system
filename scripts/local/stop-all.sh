@@ -9,6 +9,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PID_FILE="$ROOT/logs/start-all.pids"
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
 if [[ ! -f "$PID_FILE" ]]; then
   echo "未找到 $PID_FILE（可能没有执行过 ./scripts/local/start-all.sh）"
@@ -31,8 +32,8 @@ echo "已清除 PID 文件。"
 
 if [[ "${STOP_DOCKER:-}" == "1" ]]; then
   echo "==> Docker Compose 停止（STOP_DOCKER=1）..."
-  cd "$ROOT" && docker compose down
+  cd "$ROOT" && docker compose --env-file "$COMPOSE_ENV_FILE" down
 else
   echo "提示：仅停止 Java 进程；基础依赖仍在运行。停止容器请执行: docker compose down"
-  echo "     或: STOP_DOCKER=1 ./scripts/local/stop-all.sh"
+  echo "     或: COMPOSE_ENV_FILE=.env.test STOP_DOCKER=1 ./scripts/local/stop-all.sh"
 fi

@@ -5,16 +5,22 @@
 - `docker-compose.yml`：本地基础依赖
 - `docker-compose.app.yml`：应用容器部署
 
+建议按环境选择对应的 env 文件：
+
+- `.env.local`：本地开发
+- `.env.test`：测试环境
+- `.env.prod`：生产环境模板
+
 ## 构建应用镜像
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.app.yml --profile apps build
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.app.yml --profile apps build
 ```
 
 ## 启动完整容器栈
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.app.yml --profile apps up -d
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.app.yml --profile apps up -d
 ```
 
 这会启动：
@@ -32,7 +38,7 @@ docker compose -f docker-compose.yml -f docker-compose.app.yml --profile apps up
 ## 停止
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.app.yml --profile apps down
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.app.yml --profile apps down
 ```
 
 ## 说明

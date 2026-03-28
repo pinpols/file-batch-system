@@ -31,6 +31,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify console OpenAPI matches controllers
+        shell: bash
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/ci/check-console-openapi-paths.py
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:

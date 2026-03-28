@@ -7,12 +7,16 @@ import com.example.batch.console.mapper.ConsoleAiAuditLogMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * {@link com.example.batch.console.support.ConsoleAiAuditService} 的默认实现：写入 AI 审计表。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleAiAuditService implements ConsoleAiAuditService {
 
     private final ConsoleAiAuditLogMapper consoleAiAuditLogMapper;
 
+    /** 持久化 AI 审计实体。 */
     @Override
     public void record(AiAuditCommand command) {
         ConsoleAiAuditLogEntity entity = new ConsoleAiAuditLogEntity();

@@ -22,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 控制台 Worker 运维 REST：排空、强制下线、已认领任务查询。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/workers")
@@ -32,6 +35,7 @@ public class ConsoleWorkerController {
     private final ConsoleWorkerApplicationService applicationService;
     private final ConsoleResponseFactory responseFactory;
 
+    /** Worker 优雅排空。 */
     @PostMapping("/{workerCode}/drain")
     public CommonResponse<ConsoleWorkerRegistryResponse> drain(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -40,6 +44,7 @@ public class ConsoleWorkerController {
         return responseFactory.success(applicationService.drain(workerCode, request, idempotencyKey));
     }
 
+    /** Worker 强制下线。 */
     @PostMapping("/{workerCode}/force-offline")
     public CommonResponse<ConsoleWorkerRegistryResponse> forceOffline(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -48,6 +53,7 @@ public class ConsoleWorkerController {
         return responseFactory.success(applicationService.forceOffline(workerCode, request, idempotencyKey));
     }
 
+    /** 查询 Worker 当前已认领任务。 */
     @GetMapping("/{workerCode}/claimed-tasks")
     public CommonResponse<List<ConsoleWorkerClaimedTaskResponse>> claimedTasks(@PathVariable String workerCode,
                                                                   @RequestParam String tenantId) {

@@ -78,4 +78,79 @@
         order by version desc
         limit 1
     </select>
+
+    <select id="selectByUniqueKey" resultType="map">
+        select *
+        from batch.file_template_config
+        where tenant_id = #{tenantId}
+          and template_code = #{templateCode}
+          and version = #{version}
+        limit 1
+    </select>
+
+    <insert id="upsertFileTemplateConfig">
+        insert into batch.file_template_config (
+            tenant_id, template_code, template_name, template_type, biz_type, file_format_type,
+            charset, target_charset, with_bom, line_separator, delimiter, quote_char, escape_char,
+            record_length, header_rows, footer_rows, header_template, trailer_template, checksum_type,
+            compress_type, encrypt_type, naming_rule, field_mappings, validation_rule_set,
+            default_query_code, default_query_sql, query_param_schema, streaming_enabled, page_size,
+            fetch_size, chunk_size, preview_masking_enabled, error_line_masking_enabled,
+            log_masking_enabled, content_encryption_enabled, encryption_key_ref,
+            download_requires_approval, masking_rule_set, enabled, version, description,
+            created_by, updated_by, created_at, updated_at
+        ) values (
+            #{tenantId}, #{templateCode}, #{templateName}, #{templateType}, #{bizType}, #{fileFormatType},
+            #{charset}, #{targetCharset}, #{withBom}, #{lineSeparator}, #{delimiter}, #{quoteChar}, #{escapeChar},
+            #{recordLength}, #{headerRows}, #{footerRows}, #{headerTemplateJson,jdbcType=VARCHAR}::jsonb,
+            #{trailerTemplateJson,jdbcType=VARCHAR}::jsonb, #{checksumType}, #{compressType}, #{encryptType},
+            #{namingRule}, #{fieldMappingsJson,jdbcType=VARCHAR}::jsonb, #{validationRuleSetJson,jdbcType=VARCHAR}::jsonb,
+            #{defaultQueryCode}, #{defaultQuerySql}, #{queryParamSchemaJson,jdbcType=VARCHAR}::jsonb,
+            #{streamingEnabled}, #{pageSize}, #{fetchSize}, #{chunkSize}, #{previewMaskingEnabled},
+            #{errorLineMaskingEnabled}, #{logMaskingEnabled}, #{contentEncryptionEnabled}, #{encryptionKeyRef},
+            #{downloadRequiresApproval}, #{maskingRuleSet}, #{enabled}, #{version}, #{description},
+            #{createdBy}, #{updatedBy}, current_timestamp, current_timestamp
+        )
+        on conflict (tenant_id, template_code, version) do update set
+            template_name = excluded.template_name,
+            template_type = excluded.template_type,
+            biz_type = excluded.biz_type,
+            file_format_type = excluded.file_format_type,
+            charset = excluded.charset,
+            target_charset = excluded.target_charset,
+            with_bom = excluded.with_bom,
+            line_separator = excluded.line_separator,
+            delimiter = excluded.delimiter,
+            quote_char = excluded.quote_char,
+            escape_char = excluded.escape_char,
+            record_length = excluded.record_length,
+            header_rows = excluded.header_rows,
+            footer_rows = excluded.footer_rows,
+            header_template = excluded.header_template,
+            trailer_template = excluded.trailer_template,
+            checksum_type = excluded.checksum_type,
+            compress_type = excluded.compress_type,
+            encrypt_type = excluded.encrypt_type,
+            naming_rule = excluded.naming_rule,
+            field_mappings = excluded.field_mappings,
+            validation_rule_set = excluded.validation_rule_set,
+            default_query_code = excluded.default_query_code,
+            default_query_sql = excluded.default_query_sql,
+            query_param_schema = excluded.query_param_schema,
+            streaming_enabled = excluded.streaming_enabled,
+            page_size = excluded.page_size,
+            fetch_size = excluded.fetch_size,
+            chunk_size = excluded.chunk_size,
+            preview_masking_enabled = excluded.preview_masking_enabled,
+            error_line_masking_enabled = excluded.error_line_masking_enabled,
+            log_masking_enabled = excluded.log_masking_enabled,
+            content_encryption_enabled = excluded.content_encryption_enabled,
+            encryption_key_ref = excluded.encryption_key_ref,
+            download_requires_approval = excluded.download_requires_approval,
+            masking_rule_set = excluded.masking_rule_set,
+            enabled = excluded.enabled,
+            description = excluded.description,
+            updated_by = excluded.updated_by,
+            updated_at = current_timestamp
+    </insert>
 </mapper>

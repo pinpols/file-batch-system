@@ -24,6 +24,7 @@ public class JobDefinitionEntity {
     private String executionHandler;
     private String paramSchema;
     private String defaultParams;
+    private String description;
     private Boolean enabled;
     private Instant createdAt;
     private Instant updatedAt;

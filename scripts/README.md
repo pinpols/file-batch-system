@@ -4,12 +4,13 @@
 
 ## 目录分工
 
-- `scripts/ci/`：CI / staging 统一回归入口和门禁脚本
+- `scripts/ci/`：CI / staging 统一回归入口和门禁脚本（说明见 [scripts/ci/README.md](ci/README.md)）
 - `scripts/local/`：本地开发、联调、巡检、自愈脚本
 
 ## 主要入口
 
 - `scripts/ci/run-full-regression.sh`：统一回归入口，支持默认测试、IT/E2E、压测 smoke、部署 smoke、部署升级 / 回滚验证和巡检
+- `scripts/ci/check-console-openapi-paths.py`：Console OpenAPI 与 `Console*Controller` 路由一致性检查（CI 与本地均可运行，详见 [scripts/ci/README.md](ci/README.md)）
 - `scripts/local/run-e2e-tests.sh`：本地运行 `batch-e2e-tests`
 - `scripts/local/inspect-all.sh`：本地巡检总入口
 

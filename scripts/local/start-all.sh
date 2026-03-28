@@ -11,6 +11,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
+
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"
 PID_FILE="$LOG_DIR/start-all.pids"
@@ -60,7 +62,7 @@ wait_postgres() {
   echo "==> 等待 PostgreSQL 就绪..."
   local i
   for i in $(seq 1 90); do
-    if docker compose exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+    if docker compose --env-file "$COMPOSE_ENV_FILE" exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
       echo "  PostgreSQL 已就绪"
       return 0
     fi
@@ -112,7 +114,7 @@ wait_container_healthy() {
 }
 
 echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio）..."
-docker compose up -d
+docker compose --env-file "$COMPOSE_ENV_FILE" up -d
 wait_postgres
 wait_container_healthy batch-minio "MinIO"
 wait_container_exited_zero batch-kafka-init "Kafka topic init"

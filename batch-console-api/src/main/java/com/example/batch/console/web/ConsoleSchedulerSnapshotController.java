@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
 
+/**
+ * 调度快照代理 REST：转发编排器内部接口，供控制台查看租户调度状态与历史。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/scheduler")
@@ -27,6 +30,7 @@ public class ConsoleSchedulerSnapshotController {
     private final RestClient.Builder restClientBuilder;
     private final ConsoleResponseFactory responseFactory;
 
+    /** 当前调度快照。 */
     @GetMapping("/snapshot")
     public CommonResponse<ConsoleSchedulerSnapshotResponse> live(@RequestParam("tenantId") String tenantId) {
         RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
@@ -40,6 +44,7 @@ public class ConsoleSchedulerSnapshotController {
         return responseFactory.success(body);
     }
 
+    /** 调度快照历史。 */
     @GetMapping("/snapshot/history")
     public CommonResponse<List<ConsoleSchedulerSnapshotHistoryResponse>> history(@RequestParam("tenantId") String tenantId,
                                                                                 @RequestParam(value = "limit", defaultValue = "20") int limit) {

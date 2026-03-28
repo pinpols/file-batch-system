@@ -18,6 +18,9 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleWorkerApplicationService} 的默认实现：调用编排器 Worker 运维接口。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerApplicationService {
