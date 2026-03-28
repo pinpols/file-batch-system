@@ -8,6 +8,7 @@ import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.orchestrator.repository.WorkerRegistryJdbcRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import java.util.List;
@@ -23,6 +24,7 @@ import org.springframework.util.StringUtils;
 public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanceService {
 
     private final WorkerRegistryRepository workerRegistryRepository;
+    private final WorkerRegistryJdbcRepository workerRegistryJdbcRepository;
     private final JobTaskMapper jobTaskMapper;
     private final RetryGovernanceService retryGovernanceService;
     private final WorkerDrainProperties workerDrainProperties;
@@ -101,9 +103,9 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     }
 
     private WorkerRegistryRecord markDecommissioned(String tenantId, String workerCode) {
-        WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
-        registry = registry.withDecommissioned(Instant.now());
-        return workerRegistryRepository.save(registry);
+        requireRegistry(tenantId, workerCode);
+        workerRegistryJdbcRepository.markDecommissioned(tenantId, workerCode, Instant.now());
+        return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
     }
 
     private WorkerRegistryRecord requireRegistry(String tenantId, String workerCode) {

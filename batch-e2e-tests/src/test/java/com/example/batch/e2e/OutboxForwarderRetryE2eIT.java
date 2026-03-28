@@ -136,6 +136,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
         entity.setEventKey(eventKey);
         entity.setPayloadJson("{\"test\":true}");
         entity.setPublishStatus(OutboxPublishStatus.NEW.code());
+        entity.setPublishAttempt(0);
         entity.setTraceId("e2e-tr-" + eventKey);
         outboxEventMapper.insert(entity);
         return entity;
