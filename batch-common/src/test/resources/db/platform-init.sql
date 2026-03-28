@@ -243,6 +243,8 @@ CREATE TABLE IF NOT EXISTS batch.job_instance (
     finished_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_job_instance_tenant_instance_no UNIQUE (tenant_id, instance_no),
+    CONSTRAINT uk_job_instance_tenant_dedup UNIQUE (tenant_id, dedup_key),
     CONSTRAINT ck_job_instance_expected_duration_seconds CHECK (expected_duration_seconds >= 0)
 );
 
@@ -518,6 +520,8 @@ CREATE TABLE IF NOT EXISTS batch.file_template_config (
     encryption_key_ref VARCHAR(256),
     download_requires_approval BOOLEAN NOT NULL DEFAULT FALSE,
     masking_rule_set VARCHAR(128),
+    export_data_ref VARCHAR(128),
+    load_target_ref VARCHAR(128),
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     version INTEGER NOT NULL DEFAULT 1,
     description VARCHAR(1024),
@@ -591,6 +595,76 @@ CREATE TABLE IF NOT EXISTS batch.retry_schedule (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS batch.console_ai_audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    request_id VARCHAR(128) NOT NULL,
+    trace_id VARCHAR(128),
+    session_id VARCHAR(128),
+    operator_id VARCHAR(64),
+    prompt_category VARCHAR(32) NOT NULL,
+    prompt_decision VARCHAR(32) NOT NULL,
+    model_name VARCHAR(128),
+    prompt_hash VARCHAR(128),
+    prompt_preview VARCHAR(1024),
+    response_hash VARCHAR(128),
+    response_preview VARCHAR(1024),
+    refusal_reason VARCHAR(512),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_console_ai_audit_request UNIQUE (tenant_id, request_id)
+);
+
+CREATE TABLE IF NOT EXISTS batch.alert_event (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    service_name VARCHAR(64) NOT NULL,
+    alert_type VARCHAR(64) NOT NULL,
+    severity VARCHAR(16) NOT NULL,
+    title VARCHAR(512) NOT NULL,
+    detail_json JSONB,
+    dedup_fingerprint VARCHAR(128) NOT NULL,
+    occurrence_count INTEGER NOT NULL DEFAULT 1,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    trace_id VARCHAR(128),
+    status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_alert_event_dedup UNIQUE (tenant_id, dedup_fingerprint),
+    CONSTRAINT ck_alert_event_severity CHECK (severity IN ('INFO', 'WARN', 'ERROR', 'CRITICAL')),
+    CONSTRAINT ck_alert_event_status CHECK (status IN ('OPEN', 'ACKED', 'SUPPRESSED', 'CLOSED')),
+    CONSTRAINT ck_alert_event_occurrence CHECK (occurrence_count > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_alert_event_tenant_last_seen
+    ON batch.alert_event (tenant_id, last_seen_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_alert_event_type_severity
+    ON batch.alert_event (tenant_id, alert_type, severity);
+
+CREATE TABLE IF NOT EXISTS batch.file_channel_health (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    channel_code VARCHAR(128) NOT NULL,
+    channel_type VARCHAR(32) NOT NULL,
+    health_status VARCHAR(32) NOT NULL,
+    consecutive_failures INTEGER NOT NULL DEFAULT 0,
+    last_probe_at TIMESTAMPTZ,
+    last_success_at TIMESTAMPTZ,
+    last_failure_at TIMESTAMPTZ,
+    next_probe_at TIMESTAMPTZ,
+    probe_message VARCHAR(1024),
+    probe_evidence VARCHAR(1024),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_file_channel_health UNIQUE (tenant_id, channel_code),
+    CONSTRAINT ck_file_channel_health_status CHECK (health_status IN ('HEALTHY', 'DEGRADED', 'UNHEALTHY')),
+    CONSTRAINT ck_file_channel_health_failures CHECK (consecutive_failures >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_channel_health_next_probe
+    ON batch.file_channel_health (health_status, next_probe_at);
 
 CREATE TABLE IF NOT EXISTS batch.dead_letter_task (
     id BIGSERIAL PRIMARY KEY,

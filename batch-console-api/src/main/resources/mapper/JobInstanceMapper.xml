@@ -49,6 +49,11 @@
             and trace_id = #{traceId}
         </if>
         order by id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
     </select>
 
     <select id="countByStatuses" resultType="long">

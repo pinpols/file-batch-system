@@ -7,6 +7,7 @@ import com.example.batch.console.domain.entity.RetryScheduleEntity;
 import com.example.batch.console.domain.query.RetryScheduleQuery;
 import com.example.batch.console.mapper.RetryScheduleMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -90,7 +91,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
                         now(), now())
                 """,
                 tenantId, relatedType, relatedId, retryPolicy, retryCount,
-                Instant.now().plusSeconds(60),
+                Timestamp.from(Instant.now().plusSeconds(60)),
                 retryStatus,
                 tenantId + ":" + relatedId + ":" + retryCount + ":" + System.nanoTime());
     }

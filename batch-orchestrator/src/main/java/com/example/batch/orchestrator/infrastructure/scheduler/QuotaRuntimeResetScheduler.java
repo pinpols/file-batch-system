@@ -16,6 +16,14 @@ public class QuotaRuntimeResetScheduler {
 
     @Scheduled(fixedDelayString = "${batch.resource-scheduler.quota-reset-scan-interval-millis:60000}")
     @SchedulerLock(name = "quota_runtime_reset", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
+    public void scheduledReconcile() {
+        reconcile();
+    }
+
+    /**
+     * Business entrypoint intentionally kept lock-free so tests and manual invocations do not depend
+     * on ShedLock state left by background schedulers.
+     */
     public void reconcile() {
         if (!resourceSchedulerProperties.isQuotaResetEnabled()) {
             return;

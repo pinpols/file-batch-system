@@ -94,20 +94,12 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
             runExplainCheck(baseSql, baseParams, context);
         }
 
-        String cursorIdent = "\"" + spec.cursorColumn() + "\"";
-        String sql = """
-                WITH base AS (
-                %s
-                )
-                SELECT *
-                FROM base
-                WHERE (:__cursor IS NULL OR base.%s > :__cursor)
-                ORDER BY base.%s ASC
-                LIMIT :__limit
-                """.formatted(baseSql, cursorIdent, cursorIdent);
+        String sql = buildPagedSql(baseSql, spec.cursorColumn(), cursor != null);
 
         Map<String, Object> params = new LinkedHashMap<>(baseParams);
-        params.put("__cursor", cursor);
+        if (cursor != null) {
+            params.put("__cursor", cursor);
+        }
         params.put("__limit", limit);
 
         List<Map<String, Object>> rows = jdbc.queryForList(sql, params);
@@ -156,5 +148,19 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
             log.warn("sql_template_export EXPLAIN check failed unexpectedly (non-fatal), template={}: {}",
                     context.templateCode(), e.getMessage());
         }
+    }
+
+    static String buildPagedSql(String baseSql, String cursorColumn, boolean hasCursor) {
+        String cursorIdent = "\"" + cursorColumn + "\"";
+        String whereClause = hasCursor ? "WHERE base.%s > :__cursor%n".formatted(cursorIdent) : "";
+        return """
+                WITH base AS (
+                %s
+                )
+                SELECT *
+                FROM base
+                %sORDER BY base.%s ASC
+                LIMIT :__limit
+                """.formatted(baseSql, whereClause, cursorIdent);
     }
 }

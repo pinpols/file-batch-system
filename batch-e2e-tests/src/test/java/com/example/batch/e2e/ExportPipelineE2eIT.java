@@ -98,7 +98,7 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("batchNo", BATCH_NO);
-        params.put("templateCode", "EXP-CUSTOMER-JSON");
+        params.put("templateCode", "EXP-SETTLEMENT-JSON");
         params.put("bizDate", "2026-01-15");
         params.put("bizType", "SETTLEMENT");
         params.put("fileCode", "e2e-export-file");

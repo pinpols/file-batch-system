@@ -328,6 +328,53 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
+-- 7b. JSON array import with strict validation failure semantics for E2E negative path
+('t1', 'IMP-CUSTOMER-JSON-ARRAY-STRICT', 'Customer Import JSON Array Strict', 'IMPORT', 'CUSTOMER',
+ 'JSON', 'UTF-8', 'UTF-8', false,
+ null, null, null,
+ 0, 0, 0,
+ 'NONE', 'NONE', 'NONE',
+ '[
+   {"name":"customerNo","targetColumn":"customer_no","type":"STRING","required":true},
+   {"name":"customerName","targetColumn":"customer_name","type":"STRING","required":true},
+   {"name":"customerType","targetColumn":"customer_type","type":"STRING","required":true},
+   {"name":"creditLimit","targetColumn":"credit_limit","type":"DECIMAL","required":true},
+   {"name":"currencyCode","targetColumn":"currency_code","type":"STRING","required":true},
+   {"name":"email","targetColumn":"email","type":"EMAIL","required":false},
+   {"name":"phone","targetColumn":"phone","type":"STRING","required":false},
+   {"name":"status","targetColumn":"status","type":"STRING","required":true},
+   {"name":"openDate","targetColumn":"open_date","type":"DATE","required":true,"format":"yyyy-MM-dd"},
+   {"name":"remark","targetColumn":"remark","type":"STRING","required":false}
+ ]'::jsonb,
+ '{"fieldRules":{
+    "customerNo":{"required":true,"errorCode":"IMPORT_VALIDATE_REQUIRED_FATAL"},
+    "customerName":{"required":true,"errorCode":"IMPORT_VALIDATE_REQUIRED_FATAL"}
+  }}'::jsonb,
+ '{"jdbcMappedImport":{
+   "schema":"biz","table":"customer_account","tenantColumn":"tenant_id",
+   "columnMappings":[
+     {"from":"customerNo",   "to":"customer_no"},
+     {"from":"customerName", "to":"customer_name"},
+     {"from":"customerType", "to":"customer_type"},
+     {"from":"email",        "to":"email"},
+     {"from":"phone",        "to":"mobile_no"},
+     {"from":"status",       "to":"status"}
+   ],
+   "conflictColumns":["tenant_id","customer_no"],
+   "systemBindings":{
+     "source_file_name":"${sourceFileName}",
+     "source_batch_no":"${batchNo}",
+     "source_trace_id":"${traceId}",
+     "created_by":"${workerId}",
+     "updated_by":"${workerId}"
+   }
+ }}'::jsonb,
+ true, 1000, 1000, 500,
+ false, null,
+ false, false,
+ true, 1, 'test',
+ 'jdbc_mapped'),
+
 -- 8. JSON envelope import ({"records":[...]})
 ('t1', 'IMP-CUSTOMER-JSON-ENV', 'Customer Import JSON Envelope', 'IMPORT', 'CUSTOMER',
  'JSON', 'UTF-8', 'UTF-8', false,

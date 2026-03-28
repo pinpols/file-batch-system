@@ -8,7 +8,7 @@ import com.example.batch.console.domain.entity.JobInstanceEntity;
 import com.example.batch.console.domain.query.JobInstanceQuery;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.Instant;
+import java.sql.Date;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -105,16 +105,25 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
     private void insertJobInstance(String tenantId, String jobCode, String status,
                                    String instanceNo, String traceId) {
+        Long jobDefinitionId = jdbcTemplate.queryForObject("""
+                INSERT INTO batch.job_definition
+                  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
+                VALUES (?, ?, ?, 'FILE', 'MANUAL', 'Asia/Shanghai', now(), now())
+                RETURNING id
+                """,
+                Long.class,
+                tenantId, jobCode, jobCode + "-name");
+
         jdbcTemplate.update("""
                 INSERT INTO batch.job_instance
                   (tenant_id, job_definition_id, job_code, instance_no, biz_date,
-                   trigger_type, instance_status, priority, trace_id,
+                   trigger_type, instance_status, priority, dedup_key, trace_id,
                    created_at, updated_at)
-                VALUES (?, null, ?, ?, ?,
-                        'MANUAL', ?, 5, ?,
+                VALUES (?, ?, ?, ?, ?,
+                        'MANUAL', ?, 5, ?, ?,
                         now(), now())
                 """,
-                tenantId, jobCode, instanceNo, LocalDate.now().toString(),
-                status, traceId);
+                tenantId, jobDefinitionId, jobCode, instanceNo, Date.valueOf(LocalDate.now()),
+                status, tenantId + ":" + instanceNo, traceId);
     }
 }

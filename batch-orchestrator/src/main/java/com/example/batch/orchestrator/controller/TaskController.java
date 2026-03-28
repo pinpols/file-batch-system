@@ -7,6 +7,7 @@ import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,14 +35,16 @@ public class TaskController {
 
     @PostMapping("/{taskId}/report")
     public void report(@PathVariable Long taskId, @RequestBody TaskExecutionReportDto request) {
+        String errorCode = resolveFailureField(request.getErrorCode(), request.getCode(), request.isSuccess());
+        String errorMessage = resolveFailureField(request.getErrorMessage(), request.getMessage(), request.isSuccess());
         taskExecutionService.applyTaskOutcome(
                 new TaskOutcomeCommand(
                         request.getTenantId(),
                         taskId,
                         request.isSuccess(),
                         request.getResultSummary(),
-                        request.getErrorCode(),
-                        request.getErrorMessage()));
+                        errorCode,
+                        errorMessage));
     }
 
     @PostMapping("/{taskId}/renew")
@@ -57,6 +60,16 @@ public class TaskController {
                 && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
                 && workerId != null
                 && workerId.equals(task.getAssignedWorkerCode());
+    }
+
+    private String resolveFailureField(String primary, String fallback, boolean success) {
+        if (success) {
+            return null;
+        }
+        if (StringUtils.hasText(primary)) {
+            return primary;
+        }
+        return StringUtils.hasText(fallback) ? fallback : null;
     }
 
     public record TaskClaimRequest(String tenantId, String workerId) {

@@ -9,6 +9,7 @@ import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.trigger.BatchTriggerApplication;
 import com.example.batch.trigger.domain.TriggerRegistrationService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.quartz.Scheduler;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,11 @@ class TriggerRegistrationStartupIT extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        jdbcTemplate.update("delete from batch.job_definition where tenant_id = ?", "t-trigger");
+    }
+
+    @AfterEach
+    void tearDown() {
         jdbcTemplate.update("delete from batch.job_definition where tenant_id = ?", "t-trigger");
     }
 
@@ -106,4 +112,3 @@ class TriggerRegistrationStartupIT extends AbstractIntegrationTest {
         }
     }
 }
-

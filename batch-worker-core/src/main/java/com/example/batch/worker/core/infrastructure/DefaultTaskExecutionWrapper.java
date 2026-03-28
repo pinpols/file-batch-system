@@ -57,6 +57,10 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
             report.setSuccess(response.success());
             report.setCode(response.code());
             report.setMessage(response.message());
+            if (!response.success()) {
+                report.setErrorCode(response.code());
+                report.setErrorMessage(response.message());
+            }
             report.setResultSummary(JsonUtils.toJson(Map.of(
                     "code", response.code(),
                     "message", response.message())));

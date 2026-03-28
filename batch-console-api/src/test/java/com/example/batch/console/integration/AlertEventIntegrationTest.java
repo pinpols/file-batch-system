@@ -7,6 +7,7 @@ import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.console.domain.query.AlertEventQuery;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -39,22 +40,22 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     @Test
     void shouldPersistAndQueryAlertEventBySeverity() {
         String tenantId = "t-alert-" + System.currentTimeMillis();
-        insertAlertEvent(tenantId, "SLA_BREACH", "HIGH", "OPEN", "Job SLA exceeded");
-        insertAlertEvent(tenantId, "SLA_BREACH", "LOW", "OPEN", "File latency exceeded");
+        insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "Job SLA exceeded");
+        insertAlertEvent(tenantId, "SLA_BREACH", "WARN", "OPEN", "File latency exceeded");
 
         List<AlertEventEntity> highAlerts = alertEventMapper.selectByQuery(
-                new AlertEventQuery(tenantId, "HIGH", null, null, 10));
+                new AlertEventQuery(tenantId, "CRITICAL", null, null, 10));
 
         assertThat(highAlerts).hasSize(1);
-        assertThat(highAlerts.get(0).getSeverity()).isEqualTo("HIGH");
+        assertThat(highAlerts.get(0).getSeverity()).isEqualTo("CRITICAL");
         assertThat(highAlerts.get(0).getTitle()).isEqualTo("Job SLA exceeded");
     }
 
     @Test
     void shouldFilterAlertsByStatus() {
         String tenantId = "t-alert-status-" + System.currentTimeMillis();
-        insertAlertEvent(tenantId, "DISK_USAGE", "MEDIUM", "OPEN", "Disk 85% used");
-        insertAlertEvent(tenantId, "DISK_USAGE", "MEDIUM", "RESOLVED", "Disk resolved");
+        insertAlertEvent(tenantId, "DISK_USAGE", "WARN", "OPEN", "Disk 85% used");
+        insertAlertEvent(tenantId, "DISK_USAGE", "WARN", "CLOSED", "Disk resolved");
 
         List<AlertEventEntity> openAlerts = alertEventMapper.selectByQuery(
                 new AlertEventQuery(tenantId, null, "OPEN", null, 10));
@@ -66,8 +67,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     @Test
     void shouldFilterAlertsByAlertType() {
         String tenantId = "t-alert-type-" + System.currentTimeMillis();
-        insertAlertEvent(tenantId, "SLA_BREACH", "HIGH", "OPEN", "SLA alert");
-        insertAlertEvent(tenantId, "FILE_STUCK", "MEDIUM", "OPEN", "File stuck alert");
+        insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "SLA alert");
+        insertAlertEvent(tenantId, "FILE_STUCK", "WARN", "OPEN", "File stuck alert");
 
         List<AlertEventEntity> slaAlerts = alertEventMapper.selectByQuery(
                 new AlertEventQuery(tenantId, null, null, "SLA_BREACH", 10));
@@ -80,7 +81,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     void shouldRespectLimit() {
         String tenantId = "t-alert-limit-" + System.currentTimeMillis();
         for (int i = 0; i < 5; i++) {
-            insertAlertEvent(tenantId, "SLA_BREACH", "HIGH", "OPEN", "Alert " + i);
+            insertAlertEvent(tenantId, "SLA_BREACH", "CRITICAL", "OPEN", "Alert " + i);
         }
 
         List<AlertEventEntity> results = alertEventMapper.selectByQuery(
@@ -101,6 +102,6 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
                 """,
                 tenantId, alertType, severity, title,
                 tenantId + ":" + alertType + ":" + System.nanoTime(),
-                Instant.now(), Instant.now(), status);
+                Timestamp.from(Instant.now()), Timestamp.from(Instant.now()), status);
     }
 }
