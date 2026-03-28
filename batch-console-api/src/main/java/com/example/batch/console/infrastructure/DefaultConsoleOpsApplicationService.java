@@ -15,6 +15,9 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleOpsApplicationService} 的默认实现：聚合多表计数形成运维摘要。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleOpsApplicationService implements ConsoleOpsApplicationService {
@@ -27,6 +30,7 @@ public class DefaultConsoleOpsApplicationService implements ConsoleOpsApplicatio
     private final OutboxDeliveryLogMapper outboxDeliveryLogMapper;
     private final AlertEventMapper alertEventMapper;
 
+    /** 按租户聚合运维摘要指标。 */
     @Override
     public ConsoleOpsSummaryResponse summary(String tenantId) {
         String resolvedTenantId = tenantGuard.resolveTenant(tenantId);

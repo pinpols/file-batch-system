@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 控制台文件下载 REST：流式返回对象存储文件（与写操作 Controller 同路径前缀，按 HTTP 方法区分）。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/files")
@@ -20,6 +23,7 @@ public class ConsoleFileDownloadController {
 
     private final ConsoleFileDownloadApplicationService applicationService;
 
+    /** 下载文件二进制流。 */
     @GetMapping("/{fileId}/download")
     public ResponseEntity<InputStreamResource> download(@PathVariable Long fileId,
                                                         @RequestParam @NotNull String tenantId,

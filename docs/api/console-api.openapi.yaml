@@ -17,6 +17,8 @@ tags:
     description: Approval workflow actions.
   - name: Config
     description: Config release, gray, rollback, and secret rotation.
+  - name: Reports
+    description: Export-only Excel reports for config and runtime records.
   - name: Workers
     description: Worker drain, force-offline, and claimed tasks.
   - name: Files
@@ -69,7 +71,12 @@ paths:
       summary: Get console summary
       operationId: getConsoleSummary
       parameters:
-        - $ref: '#/components/parameters/TenantIdHeader'
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Tenant scope for aggregated metrics (matches server @RequestParam).
       responses:
         '200':
           description: Summary payload
@@ -449,6 +456,566 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConfigChangeLogList'
+  /api/console/config/file-templates/excel/export:
+    get:
+      tags: [Config]
+      summary: Export file template configs as Excel
+      operationId: exportFileTemplateExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: templateCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: templateType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/file-templates/excel/upload:
+    post:
+      tags: [Config]
+      summary: Upload file template Excel
+      operationId: uploadFileTemplateExcel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Upload session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileTemplateExcelUpload'
+  /api/console/config/file-templates/excel/preview/{uploadToken}:
+    get:
+      tags: [Config]
+      summary: Preview uploaded file template Excel
+      operationId: previewFileTemplateExcel
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preview result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileTemplateExcelPreview'
+  /api/console/config/file-templates/excel/apply/{uploadToken}:
+    post:
+      tags: [Config]
+      summary: Apply uploaded file template Excel
+      operationId: applyFileTemplateExcel
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileTemplateExcelApplyRequest'
+      responses:
+        '200':
+          description: Apply result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileTemplateExcelApply'
+  /api/console/config/file-channels/excel/export:
+    get:
+      tags: [Config]
+      summary: Export file channel configs as Excel
+      operationId: exportFileChannelExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: channelCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: channelType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/file-channels/excel/upload:
+    post:
+      tags: [Config]
+      summary: Upload file channel Excel
+      operationId: uploadFileChannelExcel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Upload session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileChannelExcelUpload'
+  /api/console/config/file-channels/excel/preview/{uploadToken}:
+    get:
+      tags: [Config]
+      summary: Preview uploaded file channel Excel
+      operationId: previewFileChannelExcel
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preview result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileChannelExcelPreview'
+  /api/console/config/file-channels/excel/apply/{uploadToken}:
+    post:
+      tags: [Config]
+      summary: Apply uploaded file channel Excel
+      operationId: applyFileChannelExcel
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileChannelExcelApplyRequest'
+      responses:
+        '200':
+          description: Apply result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileChannelExcelApply'
+  /api/console/config/workflows/excel/export:
+    get:
+      tags: [Config]
+      summary: Export workflow definitions, nodes, and edges as Excel
+      operationId: exportWorkflowExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: workflowCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: workflowType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/workflows/excel/upload:
+    post:
+      tags: [Config]
+      summary: Upload workflow Excel
+      operationId: uploadWorkflowExcel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Upload session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowExcelUpload'
+  /api/console/config/workflows/excel/preview/{uploadToken}:
+    get:
+      tags: [Config]
+      summary: Preview uploaded workflow Excel
+      operationId: previewWorkflowExcel
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preview result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowExcelPreview'
+  /api/console/config/workflows/excel/apply/{uploadToken}:
+    post:
+      tags: [Config]
+      summary: Apply uploaded workflow Excel
+      operationId: applyWorkflowExcel
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowExcelApplyRequest'
+      responses:
+        '200':
+          description: Apply result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowExcelApply'
+  /api/console/config/job-definitions/excel/export:
+    get:
+      tags: [Config]
+      summary: Export job definitions as Excel
+      operationId: exportJobDefinitionExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: jobCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: jobType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/job-definitions/excel/upload:
+    post:
+      tags: [Config]
+      summary: Upload job definition Excel
+      operationId: uploadJobDefinitionExcel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Upload session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleJobDefinitionExcelUpload'
+  /api/console/config/job-definitions/excel/preview/{uploadToken}:
+    get:
+      tags: [Config]
+      summary: Preview uploaded job definition Excel
+      operationId: previewJobDefinitionExcel
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preview result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleJobDefinitionExcelPreview'
+  /api/console/config/job-definitions/excel/apply/{uploadToken}:
+    post:
+      tags: [Config]
+      summary: Apply uploaded job definition Excel
+      operationId: applyJobDefinitionExcel
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobDefinitionExcelApplyRequest'
+      responses:
+        '200':
+          description: Apply result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleJobDefinitionExcelApply'
+  /api/console/reports/excel/config-releases:
+    get:
+      tags: [Reports]
+      summary: Export config releases as Excel
+      operationId: exportConfigReleasesReportExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: configType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: configCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: releaseStatus
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/reports/excel/secrets:
+    get:
+      tags: [Reports]
+      summary: Export secret versions as Excel
+      operationId: exportSecretVersionsReportExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: configCode
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/reports/excel/change-logs:
+    get:
+      tags: [Reports]
+      summary: Export config change logs as Excel
+      operationId: exportConfigChangeLogsReportExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/reports/excel/audits:
+    get:
+      tags: [Reports]
+      summary: Export audit logs as Excel
+      operationId: exportAuditLogsReportExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/reports/excel/scheduler-snapshot:
+    get:
+      tags: [Reports]
+      summary: Export scheduler snapshot as Excel
+      operationId: exportSchedulerSnapshotReportExcel
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/reports/excel/scheduler-history:
+    get:
+      tags: [Reports]
+      summary: Export scheduler snapshot history as Excel
+      operationId: exportSchedulerSnapshotHistoryReportExcel
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 20
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/reports/excel/workers:
+    get:
+      tags: [Reports]
+      summary: Export workers as Excel
+      operationId: exportWorkersReportExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/reports/excel/outbox-retries:
+    get:
+      tags: [Reports]
+      summary: Export outbox retry logs as Excel
+      operationId: exportOutboxRetriesReportExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/reports/excel/outbox-deliveries:
+    get:
+      tags: [Reports]
+      summary: Export outbox delivery logs as Excel
+      operationId: exportOutboxDeliveriesReportExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /api/console/workers/{workerCode}/drain:
     post:
       tags: [Workers]
@@ -602,6 +1169,9 @@ paths:
     get:
       tags: [Files]
       summary: Download a file
+      description: >
+        Returns raw file bytes (Content-Disposition attachment), not CommonResponse JSON.
+        When the file template requires download approval, pass approvalId from an approved flow.
       operationId: downloadFile
       parameters:
         - name: fileId
@@ -610,14 +1180,25 @@ paths:
           schema:
             type: integer
             format: int64
-        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: approvalId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional approval number when template mandates download approval.
       responses:
         '200':
-          description: File content or signed download redirect, depending on implementation
+          description: File binary stream (Content-Type from stored mime or application/octet-stream)
           content:
-            application/json:
+            application/octet-stream:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                type: string
+                format: binary
   /api/console/files/arrival-groups/action:
     post:
       tags: [Files]
@@ -1523,6 +2104,90 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ConsoleFileTemplateResponse'
+    CommonResponseConsoleFileTemplateExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleFileTemplateExcelUploadResponse'
+    CommonResponseConsoleFileTemplateExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleFileTemplateExcelPreviewResponse'
+    CommonResponseConsoleFileTemplateExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleFileTemplateExcelApplyResponse'
+    CommonResponseConsoleFileChannelExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleFileChannelExcelUploadResponse'
+    CommonResponseConsoleFileChannelExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleFileChannelExcelPreviewResponse'
+    CommonResponseConsoleFileChannelExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleFileChannelExcelApplyResponse'
+    CommonResponseConsoleWorkflowExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowExcelUploadResponse'
+    CommonResponseConsoleWorkflowExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowExcelPreviewResponse'
+    CommonResponseConsoleWorkflowExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowExcelApplyResponse'
+    CommonResponseConsoleJobDefinitionExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleJobDefinitionExcelUploadResponse'
+    CommonResponseConsoleJobDefinitionExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleJobDefinitionExcelPreviewResponse'
+    CommonResponseConsoleJobDefinitionExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleJobDefinitionExcelApplyResponse'
     CommonResponseAiAuditLogList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -1742,6 +2407,30 @@ components:
         reason:
           type: string
       required: [tenantId, secretRef, secretName]
+    FileTemplateExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    FileChannelExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    WorkflowExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    JobDefinitionExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
     DrainWorkerRequest:
       type: object
       properties:
@@ -3332,6 +4021,461 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, templateCode, templateName, templateType, bizType, fileFormatType, charset, targetCharset, withBom, lineSeparator, delimiter, quoteChar, escapeChar, recordLength, headerRows, footerRows, headerTemplate, trailerTemplate, checksumType, compressType, encryptType, namingRule, fieldMappings, validationRuleSet, defaultQueryCode, defaultQuerySql, queryParamSchema, streamingEnabled, pageSize, fetchSize, chunkSize, previewMaskingEnabled, errorLineMaskingEnabled, logMaskingEnabled, contentEncryptionEnabled, encryptionKeyRef, downloadRequiresApproval, maskingRuleSet, enabled, version, description, createdBy, updatedBy, createdAt, updatedAt]
+    ConsoleExcelRowIssueResponse:
+      type: object
+      properties:
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        templateCode:
+          type: string
+        version:
+          type: integer
+          format: int32
+        messages:
+          type: array
+          items:
+            type: string
+      required: [rowNo, rowKey, templateCode, version, messages]
+    ConsoleFileTemplateExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        rowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, sheetName, rowCount]
+    ConsoleFileTemplateExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleFileTemplateResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleExcelRowIssueResponse'
+      required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
+    ConsoleFileTemplateExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedRows:
+          type: integer
+          format: int32
+        insertedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+    ConsoleFileChannelExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        rowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, sheetName, rowCount]
+    ConsoleFileChannelExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleFileChannelResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleFileChannelExcelRowIssueResponse'
+      required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
+    ConsoleFileChannelExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedRows:
+          type: integer
+          format: int32
+        insertedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+    ConsoleWorkflowExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        definitionRows:
+          type: integer
+          format: int32
+        nodeRows:
+          type: integer
+          format: int32
+        edgeRows:
+          type: integer
+          format: int32
+        totalRows:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, definitionRows, nodeRows, edgeRows, totalRows]
+    ConsoleWorkflowExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        definitionRows:
+          type: integer
+          format: int32
+        nodeRows:
+          type: integer
+          format: int32
+        edgeRows:
+          type: integer
+          format: int32
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        definitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowDefinitionExcelRowResponse'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowNodeExcelRowResponse'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowEdgeExcelRowResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowExcelRowIssueResponse'
+      required: [uploadToken, fileName, definitionRows, nodeRows, edgeRows, totalRows, validRows, invalidRows, definitions, nodes, edges, issues]
+    ConsoleWorkflowExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        definitionRows:
+          type: integer
+          format: int32
+        nodeRows:
+          type: integer
+          format: int32
+        edgeRows:
+          type: integer
+          format: int32
+        insertedDefinitions:
+          type: integer
+          format: int32
+        updatedDefinitions:
+          type: integer
+          format: int32
+        insertedNodes:
+          type: integer
+          format: int32
+        updatedNodes:
+          type: integer
+          format: int32
+        insertedEdges:
+          type: integer
+          format: int32
+        updatedEdges:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, definitionRows, nodeRows, edgeRows, insertedDefinitions, updatedDefinitions, insertedNodes, updatedNodes, insertedEdges, updatedEdges]
+    ConsoleWorkflowExcelRowIssueResponse:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        workflowCode:
+          type: string
+        workflowVersion:
+          type: integer
+          format: int32
+        messages:
+          type: array
+          items:
+            type: string
+      required: [sheetName, rowNo, rowKey, workflowCode, workflowVersion, messages]
+    ConsoleJobDefinitionExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        rowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, rowCount]
+    ConsoleJobDefinitionExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleJobDefinitionExcelRowResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleJobDefinitionExcelRowIssueResponse'
+      required: [uploadToken, fileName, totalRows, validRows, invalidRows, rows, issues]
+    ConsoleJobDefinitionExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedRows, updatedRows]
+    ConsoleJobDefinitionExcelRowResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        jobName:
+          type: string
+        jobType:
+          type: string
+        queueCode:
+          type: string
+        workerGroup:
+          type: string
+        scheduleType:
+          type: string
+        scheduleExpr:
+          type: string
+        calendarCode:
+          type: string
+        windowCode:
+          type: string
+        retryPolicy:
+          type: string
+        retryMaxCount:
+          type: integer
+          format: int32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        shardStrategy:
+          type: string
+        executionHandler:
+          type: string
+        paramSchema:
+          type: string
+        defaultParams:
+          type: string
+        enabled:
+          type: boolean
+        description:
+          type: string
+      required: [tenantId, jobCode, jobName, jobType, queueCode, workerGroup, scheduleType, scheduleExpr, calendarCode, windowCode, retryPolicy, retryMaxCount, timeoutSeconds, shardStrategy, executionHandler, paramSchema, defaultParams, enabled, description]
+    ConsoleJobDefinitionExcelRowIssueResponse:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        jobCode:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [sheetName, rowNo, rowKey, jobCode, messages]
+    ConsoleWorkflowDefinitionExcelRowResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        workflowCode:
+          type: string
+        workflowName:
+          type: string
+        workflowType:
+          type: string
+        version:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+      required: [tenantId, workflowCode, workflowName, workflowType, version, enabled, description]
+    ConsoleWorkflowNodeExcelRowResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        workflowCode:
+          type: string
+        workflowVersion:
+          type: integer
+          format: int32
+        nodeCode:
+          type: string
+        nodeName:
+          type: string
+        nodeType:
+          type: string
+        relatedJobCode:
+          type: string
+        relatedPipelineCode:
+          type: string
+        workerGroup:
+          type: string
+        windowCode:
+          type: string
+        nodeOrder:
+          type: integer
+          format: int32
+        retryPolicy:
+          type: string
+        retryMaxCount:
+          type: integer
+          format: int32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        nodeParams:
+          type: string
+        enabled:
+          type: boolean
+      required: [tenantId, workflowCode, workflowVersion, nodeCode, nodeName, nodeType, relatedJobCode, relatedPipelineCode, workerGroup, windowCode, nodeOrder, retryPolicy, retryMaxCount, timeoutSeconds, nodeParams, enabled]
+    ConsoleWorkflowEdgeExcelRowResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        workflowCode:
+          type: string
+        workflowVersion:
+          type: integer
+          format: int32
+        fromNodeCode:
+          type: string
+        toNodeCode:
+          type: string
+        edgeType:
+          type: string
+        conditionExpr:
+          type: string
+        enabled:
+          type: boolean
+      required: [tenantId, workflowCode, workflowVersion, fromNodeCode, toNodeCode, edgeType, conditionExpr, enabled]
+    ConsoleFileChannelExcelRowIssueResponse:
+      type: object
+      properties:
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        channelCode:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [rowNo, rowKey, channelCode, messages]
     ConsoleOutboxRetryLogResponse:
       type: object
       properties:

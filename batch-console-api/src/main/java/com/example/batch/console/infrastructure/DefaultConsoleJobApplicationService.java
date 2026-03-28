@@ -28,6 +28,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleJobApplicationService} 的默认实现：
+ * 通过 RestClient 调用编排器与触发器开放 API，完成作业运维写操作。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleJobApplicationService implements ConsoleJobApplicationService {
@@ -38,6 +42,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
     private final ConsoleTenantGuard tenantGuard;
 
+    /** 手工/API 触发作业运行。 */
     @Override
     public String trigger(TriggerRequest request, String idempotencyKey) {
         return delegateLaunch(
@@ -50,6 +55,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         );
     }
 
+    /** 登记补偿命令。 */
     @Override
     public String compensation(CompensationCommandRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {
@@ -74,6 +80,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         ), idempotencyKey);
     }
 
+    /** 执行补偿。 */
     @Override
     public String compensate(CompensateRequest request, String idempotencyKey) {
         return submitCompensation(new CompensationPayload(
@@ -94,6 +101,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         ), idempotencyKey);
     }
 
+    /** 重跑实例或分区。 */
     @Override
     public String rerun(RerunRequest request, String idempotencyKey) {
         String compensationType = (request.getTargetId() != null
@@ -118,6 +126,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         ), idempotencyKey);
     }
 
+    /** 死信重放。 */
     @Override
     public String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {
@@ -142,6 +151,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         ), idempotencyKey);
     }
 
+    /** 审批通过 Catch-Up 请求。 */
     @Override
     public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {

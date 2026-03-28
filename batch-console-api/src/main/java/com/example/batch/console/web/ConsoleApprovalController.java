@@ -18,6 +18,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 控制台审批 REST：单条通过/拒绝与批量审批。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/approvals")
@@ -27,6 +30,7 @@ public class ConsoleApprovalController {
     private final ConsoleApprovalApplicationService approvalApplicationService;
     private final ConsoleResponseFactory responseFactory;
 
+    /** 审批通过。 */
     @PostMapping("/{approvalNo}/approve")
     public CommonResponse<String> approve(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                           @PathVariable String approvalNo,
@@ -34,6 +38,7 @@ public class ConsoleApprovalController {
         return responseFactory.success(approvalApplicationService.approve(request.getTenantId(), approvalNo, request.getOperatorId(), request.getReason()));
     }
 
+    /** 审批拒绝。 */
     @PostMapping("/{approvalNo}/reject")
     public CommonResponse<String> reject(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                          @PathVariable String approvalNo,
@@ -41,6 +46,7 @@ public class ConsoleApprovalController {
         return responseFactory.success(approvalApplicationService.reject(request.getTenantId(), approvalNo, request.getOperatorId(), request.getReason()));
     }
 
+    /** 批量审批通过。 */
     @PostMapping("/batch/approve")
     public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchApprove(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -50,6 +56,7 @@ public class ConsoleApprovalController {
         );
     }
 
+    /** 批量审批拒绝。 */
     @PostMapping("/batch/reject")
     public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchReject(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,

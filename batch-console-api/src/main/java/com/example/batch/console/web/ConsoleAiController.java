@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 控制台 AI 对话 REST（Spring AI）。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/ai")
@@ -24,6 +27,7 @@ public class ConsoleAiController {
     private final ConsoleAiApplicationService applicationService;
     private final ConsoleResponseFactory responseFactory;
 
+    /** AI 聊天一轮对话。 */
     @PostMapping("/chat")
     public CommonResponse<AiChatResponse> chat(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,

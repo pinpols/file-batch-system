@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 控制台作业运维 REST：触发、补偿、重跑、死信回放、Catch-Up 审批（需管理员角色）。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/jobs")
@@ -30,36 +33,42 @@ public class ConsoleJobController {
     private final ConsoleJobApplicationService applicationService;
     private final ConsoleResponseFactory responseFactory;
 
+    /** 手工触发作业运行。 */
     @PostMapping("/trigger")
     public CommonResponse<String> trigger(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                           @Valid @RequestBody TriggerRequest request) {
         return responseFactory.success(applicationService.trigger(request, idempotencyKey));
     }
 
+    /** 登记补偿命令。 */
     @PostMapping("/compensations")
     public CommonResponse<String> compensation(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                @Valid @RequestBody CompensationCommandRequest request) {
         return responseFactory.success(applicationService.compensation(request, idempotencyKey));
     }
 
+    /** 执行补偿。 */
     @PostMapping("/compensate")
     public CommonResponse<String> compensate(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                              @Valid @RequestBody CompensateRequest request) {
         return responseFactory.success(applicationService.compensate(request, idempotencyKey));
     }
 
+    /** 重跑实例或分区。 */
     @PostMapping("/rerun")
     public CommonResponse<String> rerun(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                         @Valid @RequestBody RerunRequest request) {
         return responseFactory.success(applicationService.rerun(request, idempotencyKey));
     }
 
+    /** 死信重放。 */
     @PostMapping("/dead-letters/replay")
     public CommonResponse<String> replayDeadLetter(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                    @Valid @RequestBody DeadLetterReplayRequest request) {
         return responseFactory.success(applicationService.replayDeadLetter(request, idempotencyKey));
     }
 
+    /** 审批通过 Catch-Up 请求。 */
     @PostMapping("/catch-up/approve")
     public CommonResponse<String> approveCatchUp(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                  @Valid @RequestBody ConsoleCatchUpApprovalRequest request) {

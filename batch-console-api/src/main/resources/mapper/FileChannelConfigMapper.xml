@@ -29,4 +29,35 @@
         </if>
         order by id desc
     </select>
+
+    <select id="selectByUniqueKey" resultType="map">
+        select *
+        from batch.file_channel_config
+        where tenant_id = #{tenantId}
+          and channel_code = #{channelCode}
+        limit 1
+    </select>
+
+    <insert id="upsertFileChannelConfig">
+        insert into batch.file_channel_config (
+            tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
+            config_json, receipt_policy, timeout_seconds, enabled, created_by, updated_by,
+            created_at, updated_at
+        ) values (
+            #{tenantId}, #{channelCode}, #{channelName}, #{channelType}, #{targetEndpoint}, #{authType},
+            #{configJson,jdbcType=VARCHAR}::jsonb, #{receiptPolicy}, #{timeoutSeconds}, #{enabled},
+            #{createdBy}, #{updatedBy}, current_timestamp, current_timestamp
+        )
+        on conflict (tenant_id, channel_code) do update set
+            channel_name = excluded.channel_name,
+            channel_type = excluded.channel_type,
+            target_endpoint = excluded.target_endpoint,
+            auth_type = excluded.auth_type,
+            config_json = excluded.config_json,
+            receipt_policy = excluded.receipt_policy,
+            timeout_seconds = excluded.timeout_seconds,
+            enabled = excluded.enabled,
+            updated_by = excluded.updated_by,
+            updated_at = current_timestamp
+    </insert>
 </mapper>

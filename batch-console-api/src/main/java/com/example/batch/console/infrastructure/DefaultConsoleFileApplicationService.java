@@ -20,6 +20,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleFileApplicationService} 的默认实现：转发编排器文件治理 API。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleFileApplicationService implements ConsoleFileApplicationService {

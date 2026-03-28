@@ -27,6 +27,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 控制台配置中心 REST：发布单、灰度、回滚、密钥轮换与变更日志（方法级权限见注解）。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/config")
@@ -36,12 +39,14 @@ public class ConsoleConfigController {
     private final ConsoleConfigApplicationService applicationService;
     private final ConsoleResponseFactory responseFactory;
 
+    /** 查询配置发布单列表。 */
     @GetMapping("/releases")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
     public CommonResponse<List<ConsoleConfigReleaseResponse>> configReleases(@Valid @ModelAttribute ConfigReleaseQueryRequest request) {
         return responseFactory.success(applicationService.configReleases(request));
     }
 
+    /** 创建配置发布单草稿。 */
     @PostMapping("/releases")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<Long> createConfigRelease(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -49,6 +54,7 @@ public class ConsoleConfigController {
         return responseFactory.success(applicationService.createConfigRelease(request));
     }
 
+    /** 全量发布配置。 */
     @PostMapping("/releases/{releaseId}/publish")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> publishConfigRelease(@PathVariable Long releaseId,
@@ -57,6 +63,7 @@ public class ConsoleConfigController {
         return responseFactory.success(applicationService.publishConfigRelease(releaseId, request));
     }
 
+    /** 灰度发布配置。 */
     @PostMapping("/releases/{releaseId}/gray")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> grayConfigRelease(@PathVariable Long releaseId,
@@ -65,6 +72,7 @@ public class ConsoleConfigController {
         return responseFactory.success(applicationService.grayConfigRelease(releaseId, request));
     }
 
+    /** 回滚配置发布。 */
     @PostMapping("/releases/{releaseId}/rollback")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> rollbackConfigRelease(@PathVariable Long releaseId,
@@ -73,12 +81,14 @@ public class ConsoleConfigController {
         return responseFactory.success(applicationService.rollbackConfigRelease(releaseId, request));
     }
 
+    /** 查询密钥版本。 */
     @GetMapping("/secrets")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
     public CommonResponse<List<ConsoleSecretVersionResponse>> secretVersions(@Valid @ModelAttribute SecretVersionQueryRequest request) {
         return responseFactory.success(applicationService.secretVersions(request));
     }
 
+    /** 轮换密钥。 */
     @PostMapping("/secrets/rotate")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<Long> rotateSecretVersion(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
@@ -86,6 +96,7 @@ public class ConsoleConfigController {
         return responseFactory.success(applicationService.rotateSecretVersion(request));
     }
 
+    /** 查询配置变更日志。 */
     @GetMapping("/change-logs")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
     public CommonResponse<List<ConsoleConfigChangeLogResponse>> configChangeLogs(@Valid @ModelAttribute ConfigChangeLogQueryRequest request) {

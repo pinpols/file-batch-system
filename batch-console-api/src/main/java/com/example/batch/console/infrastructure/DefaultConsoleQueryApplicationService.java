@@ -133,6 +133,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleQueryApplicationService} 的默认实现：
+ * 将 Web 查询条件转为领域查询、调用各 Mapper，并做租户隔离与内容脱敏等。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplicationService {

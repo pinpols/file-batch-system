@@ -24,6 +24,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleFileDownloadApplicationService} 的默认实现：
+ * 校验租户与审批上下文后，从 MinIO 流式读取对象（必要时解密）。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleFileDownloadApplicationService implements ConsoleFileDownloadApplicationService {

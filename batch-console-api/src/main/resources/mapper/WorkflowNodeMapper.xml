@@ -46,4 +46,60 @@
         </if>
         order by n.node_order asc, n.id asc
     </select>
+
+    <select id="selectByUniqueKey" resultMap="WorkflowNodeResultMap">
+        select *
+        from batch.workflow_node
+        where workflow_definition_id = #{workflowDefinitionId}
+          and node_code = #{nodeCode}
+        limit 1
+    </select>
+
+    <insert id="upsertWorkflowNode">
+        insert into batch.workflow_node (
+            workflow_definition_id,
+            node_code,
+            node_name,
+            node_type,
+            related_job_code,
+            related_pipeline_code,
+            worker_group,
+            window_code,
+            node_order,
+            retry_policy,
+            retry_max_count,
+            timeout_seconds,
+            node_params,
+            enabled
+        ) values (
+            #{workflowDefinitionId},
+            #{nodeCode},
+            #{nodeName},
+            #{nodeType},
+            #{relatedJobCode},
+            #{relatedPipelineCode},
+            #{workerGroup},
+            #{windowCode},
+            #{nodeOrder},
+            #{retryPolicy},
+            #{retryMaxCount},
+            #{timeoutSeconds},
+            #{nodeParams, jdbcType=VARCHAR}::jsonb,
+            #{enabled}
+        )
+        on conflict (workflow_definition_id, node_code) do update
+        set node_name = excluded.node_name,
+            node_type = excluded.node_type,
+            related_job_code = excluded.related_job_code,
+            related_pipeline_code = excluded.related_pipeline_code,
+            worker_group = excluded.worker_group,
+            window_code = excluded.window_code,
+            node_order = excluded.node_order,
+            retry_policy = excluded.retry_policy,
+            retry_max_count = excluded.retry_max_count,
+            timeout_seconds = excluded.timeout_seconds,
+            node_params = excluded.node_params,
+            enabled = excluded.enabled,
+            updated_at = current_timestamp
+    </insert>
 </mapper>

@@ -1,5 +1,9 @@
 .DS_Store
 .env
+.env.local
+.env.test
+.env.prod
+.env.*.local
 .local/
 target/
 **/target/
@@ -16,17 +20,12 @@ target/
 *.jar
 *.war
 *.ear
+*.hprof
+hs_err_pid*
+replay_pid*
 coverage/
 logs/
 tmp/
 *.bak
-.claude/settings.local.json
-# 忽略特定的 worktree
-.claude/worktrees/inspiring-pascal
-
-# 或者忽略所有 .claude/worktrees 下的内容
-.claude/worktrees/
-
-# 或者忽略整个 .claude 目录
 .claude/
-.claude/worktrees/
+

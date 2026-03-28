@@ -30,6 +30,10 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleAiApplicationService} 的默认实现：
+ * 集成 Spring AI、提示词门禁、授权校验与审计落库。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationService {
@@ -41,6 +45,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     private final ConsoleAiPromptGuard promptGuard;
     private final ConsoleAiAuditService auditService;
 
+    /** 执行一轮 AI 对话并写审计。 */
     @Override
     public AiChatResponse chat(AiChatRequest request, String idempotencyKey) {
         authorizationService.assertAllowed();

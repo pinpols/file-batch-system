@@ -21,6 +21,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 控制台认证 REST：签发 JWT、查询当前登录主体信息。
+ */
 @RestController
 @RequestMapping("/api/console/auth")
 @RequiredArgsConstructor
@@ -31,6 +34,7 @@ public class ConsoleAuthController {
     private final ConsoleSecurityProperties securityProperties;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
+    /** 为当前已认证用户签发 JWT。 */
     @PostMapping("/token")
     @PreAuthorize("isAuthenticated()")
     public CommonResponse<ConsoleAuthTokenResponse> token() {
@@ -43,6 +47,7 @@ public class ConsoleAuthController {
         return responseFactory.success(response);
     }
 
+    /** 当前用户画像（租户、角色等）。 */
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     public CommonResponse<ConsoleAuthProfileResponse> me() {

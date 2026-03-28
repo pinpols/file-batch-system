@@ -28,6 +28,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/** 控制台 JWT 签发与校验（HS256，含租户与角色声明）。 */
 @Service
 @RequiredArgsConstructor
 public class ConsoleJwtService {
@@ -39,6 +40,7 @@ public class ConsoleJwtService {
 
     private final ConsoleSecurityProperties properties;
 
+    /** 签发访问令牌及过期时间。 */
     public ConsoleAuthTokenResponse issueToken(String username, String tenantId, Set<String> authorities) {
         if (!StringUtils.hasText(username)) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "username is required");

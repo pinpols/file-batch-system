@@ -21,6 +21,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+/**
+ * {@link com.example.batch.console.application.ConsoleApprovalApplicationService} 的默认实现：
+ * 编排器审批 HTTP 调用，并在涉及文件/作业联动时委托其他应用服务。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleApprovalApplicationService implements ConsoleApprovalApplicationService {

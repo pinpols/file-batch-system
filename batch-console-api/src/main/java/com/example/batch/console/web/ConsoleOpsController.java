@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 控制台运维总览 REST：租户维度运行摘要。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/ops")
@@ -23,6 +26,7 @@ public class ConsoleOpsController {
     private final ConsoleOpsApplicationService opsApplicationService;
     private final ConsoleResponseFactory responseFactory;
 
+    /** 租户运维摘要。 */
     @GetMapping("/summary")
     public CommonResponse<ConsoleOpsSummaryResponse> summary(@RequestParam @NotBlank String tenantId) {
         return responseFactory.success(opsApplicationService.summary(tenantId));

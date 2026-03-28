@@ -15,12 +15,16 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+/**
+ * 控制台 AI 功能授权：按配置校验当前登录用户/角色是否允许使用 AI 助手。
+ */
 @Service
 @RequiredArgsConstructor
 public class ConsoleAiAuthorizationService {
 
     private final ConsoleAiProperties properties;
 
+    /** 未配置在白名单则抛出 FORBIDDEN。 */
     public void assertAllowed() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken) {

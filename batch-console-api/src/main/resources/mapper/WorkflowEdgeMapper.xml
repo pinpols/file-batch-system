@@ -41,4 +41,36 @@
         </if>
         order by e.id asc
     </select>
+
+    <select id="selectByUniqueKey" resultMap="WorkflowEdgeResultMap">
+        select *
+        from batch.workflow_edge
+        where workflow_definition_id = #{workflowDefinitionId}
+          and from_node_code = #{fromNodeCode}
+          and to_node_code = #{toNodeCode}
+          and edge_type = #{edgeType}
+        limit 1
+    </select>
+
+    <insert id="upsertWorkflowEdge">
+        insert into batch.workflow_edge (
+            workflow_definition_id,
+            from_node_code,
+            to_node_code,
+            edge_type,
+            condition_expr,
+            enabled
+        ) values (
+            #{workflowDefinitionId},
+            #{fromNodeCode},
+            #{toNodeCode},
+            #{edgeType},
+            #{conditionExpr},
+            #{enabled}
+        )
+        on conflict (workflow_definition_id, from_node_code, to_node_code, edge_type) do update
+        set condition_expr = excluded.condition_expr,
+            enabled = excluded.enabled,
+            updated_at = current_timestamp
+    </insert>
 </mapper>
