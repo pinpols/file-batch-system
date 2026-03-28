@@ -18,6 +18,7 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -41,7 +42,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     public String trigger(TriggerRequest request, String idempotencyKey) {
         return delegateLaunch(
                 resolveTenant(request.getTenantId()),
-                request.getJobCode(),
+                ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
                 request.getBizDate(),
                 resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL),
                 parsePayload(request.getPayload()),
@@ -57,18 +58,18 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
         return submitCompensation(new CompensationPayload(
                 resolveTenant(request.getTenantId()),
-                request.getCompensationType(),
+                ConsoleTextSanitizer.safeInput(request.getCompensationType(), 64),
                 request.getTargetId(),
-                request.getTargetInstanceNo(),
-                request.getJobCode(),
+                ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128),
+                ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
                 parseOptionalBizDate(request.getBizDate()),
-                request.getBatchNo(),
+                ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128),
                 request.getRelatedFileId(),
-                request.getChannelCode(),
-                request.getReason(),
-                request.getOperatorId(),
-                request.getApprovalId(),
-                request.getStrategy(),
+                ConsoleTextSanitizer.safeInput(request.getChannelCode(), 128),
+                ConsoleTextSanitizer.safeInput(request.getReason(), 512),
+                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+                ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64),
+                ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
                 null
         ), idempotencyKey);
     }
@@ -79,16 +80,16 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 resolveTenant(request.getTenantId()),
                 request.getCompensationType() == null || request.getCompensationType().isBlank() ? "JOB" : request.getCompensationType(),
                 request.getTargetId(),
-                request.getTargetInstanceNo(),
-                request.getJobCode(),
+                ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128),
+                ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
                 parseOptionalBizDate(request.getBizDate()),
-                request.getBatchNo(),
+                ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128),
                 request.getRelatedFileId(),
-                request.getChannelCode(),
-                request.getReason(),
-                request.getOperatorId(),
-                request.getApprovalId(),
-                request.getStrategy(),
+                ConsoleTextSanitizer.safeInput(request.getChannelCode(), 128),
+                ConsoleTextSanitizer.safeInput(request.getReason(), 512),
+                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+                ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64),
+                ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
                 null
         ), idempotencyKey);
     }
@@ -103,16 +104,16 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 resolveTenant(request.getTenantId()),
                 compensationType,
                 request.getTargetId(),
-                request.getTargetInstanceNo(),
-                request.getJobCode(),
+                ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128),
+                ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
                 parseOptionalBizDate(request.getBizDate()),
-                request.getBatchNo(),
+                ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128),
                 request.getRelatedFileId(),
                 null,
-                request.getReason(),
-                request.getOperatorId(),
-                request.getApprovalId(),
-                request.getStrategy(),
+                ConsoleTextSanitizer.safeInput(request.getReason(), 512),
+                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+                ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64),
+                ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
                 null
         ), idempotencyKey);
     }
@@ -133,10 +134,10 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 null,
                 null,
                 null,
-                request.getReason(),
-                request.getOperatorId(),
-                request.getApprovalId(),
-                request.getStrategy(),
+                ConsoleTextSanitizer.safeInput(request.getReason(), 512),
+                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+                ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64),
+                ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
                 null
         ), idempotencyKey);
     }
@@ -154,11 +155,11 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         params.put("operationType", "CATCH_UP_APPROVAL");
         params.put("approvalMode", "MANUAL_APPROVAL");
         params.put("catchUpApproved", true);
-        params.put("reason", request.getReason());
+        params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
         params.put("scheduledAt", request.getScheduledAt());
         return delegateLaunch(
                 resolveTenant(request.getTenantId()),
-                request.getJobCode(),
+                ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
                 request.getBizDate(),
                 TriggerType.CATCH_UP,
                 params,
@@ -177,8 +178,8 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
                 .body(new CatchUpApprovalPayload(
                         tenantId,
-                        request.getRequestId(),
-                        request.getReason()
+                        ConsoleTextSanitizer.safeInput(request.getRequestId(), 128),
+                        ConsoleTextSanitizer.safeInput(request.getReason(), 512)
                 ))
                 .retrieve()
                 .body(new org.springframework.core.ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {
@@ -207,7 +208,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
                 .body(new TriggerLaunchPayload(
                         tenantId,
-                        jobCode,
+                        ConsoleTextSanitizer.safeInput(jobCode, 128),
                         parseBizDate(bizDate),
                         triggerType,
                         params == null ? Map.of() : params
@@ -260,10 +261,10 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                         targetType,
                         targetId,
                         JsonUtils.toJson(payload),
-                        requestMetadata.operatorId(),
+                        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
                         requestMetadata.traceId(),
                         idempotencyKey,
-                        approvalReason
+                        ConsoleTextSanitizer.safeInput(approvalReason, 512)
                 ))
                 .retrieve()
                 .body(ApprovalResponse.class);

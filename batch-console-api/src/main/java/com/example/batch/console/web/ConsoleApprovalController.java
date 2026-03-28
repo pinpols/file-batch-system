@@ -3,12 +3,14 @@ package com.example.batch.console.web;
 import com.example.batch.console.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ApprovalActionRequest;
-import jakarta.validation.constraints.NotEmpty;
+import com.example.batch.console.web.response.ConsoleBatchApprovalResultResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Validated
 @RequestMapping("/api/console/approvals")
 @RequiredArgsConstructor
 public class ConsoleApprovalController {
@@ -39,7 +42,7 @@ public class ConsoleApprovalController {
     }
 
     @PostMapping("/batch/approve")
-    public CommonResponse<List<ConsoleApprovalApplicationService.BatchApprovalResult>> batchApprove(
+    public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchApprove(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody BatchApprovalActionRequest request) {
         return responseFactory.success(
@@ -48,7 +51,7 @@ public class ConsoleApprovalController {
     }
 
     @PostMapping("/batch/reject")
-    public CommonResponse<List<ConsoleApprovalApplicationService.BatchApprovalResult>> batchReject(
+    public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchReject(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody BatchApprovalActionRequest request) {
         return responseFactory.success(

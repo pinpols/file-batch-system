@@ -10,9 +10,12 @@ import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.PresignDownloadFileRequest;
+import com.example.batch.console.web.response.ConsoleBatchApprovalResultResponse;
+import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -51,7 +54,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             case "DOWNLOAD" -> {
                 PresignDownloadFileRequest request = JsonUtils.fromJson(record.payloadJson(), PresignDownloadFileRequest.class);
                 request.setApprovalId(approvalNo);
-                yield consoleFileApplicationService.presignDownload(request, approvalNo);
+                ConsolePresignDownloadResponse downloadResponse = consoleFileApplicationService.presignDownload(request, approvalNo);
+                yield downloadResponse == null ? null : downloadResponse.downloadUrl();
             }
             case "CATCH_UP" -> {
                 ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(record.payloadJson(), ConsoleCatchUpApprovalRequest.class);
@@ -71,40 +75,40 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     }
 
     @Override
-    public java.util.List<BatchApprovalResult> batchApprove(String tenantId,
-                                                            java.util.List<String> approvalNos,
-                                                            String operatorId,
-                                                            String reason) {
+    public java.util.List<ConsoleBatchApprovalResultResponse> batchApprove(String tenantId,
+                                                                           java.util.List<String> approvalNos,
+                                                                           String operatorId,
+                                                                           String reason) {
         if (approvalNos == null || approvalNos.isEmpty()) {
             return java.util.List.of();
         }
-        java.util.List<BatchApprovalResult> results = new java.util.ArrayList<>();
+        java.util.List<ConsoleBatchApprovalResultResponse> results = new java.util.ArrayList<>();
         for (String approvalNo : approvalNos) {
             try {
                 approve(tenantId, approvalNo, operatorId, reason);
-                results.add(new BatchApprovalResult(approvalNo, true, "APPROVED"));
+                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "APPROVED"));
             } catch (Exception ex) {
-                results.add(new BatchApprovalResult(approvalNo, false, ex.getMessage()));
+                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
             }
         }
         return java.util.List.copyOf(results);
     }
 
     @Override
-    public java.util.List<BatchApprovalResult> batchReject(String tenantId,
-                                                           java.util.List<String> approvalNos,
-                                                           String operatorId,
-                                                           String reason) {
+    public java.util.List<ConsoleBatchApprovalResultResponse> batchReject(String tenantId,
+                                                                          java.util.List<String> approvalNos,
+                                                                          String operatorId,
+                                                                          String reason) {
         if (approvalNos == null || approvalNos.isEmpty()) {
             return java.util.List.of();
         }
-        java.util.List<BatchApprovalResult> results = new java.util.ArrayList<>();
+        java.util.List<ConsoleBatchApprovalResultResponse> results = new java.util.ArrayList<>();
         for (String approvalNo : approvalNos) {
             try {
                 reject(tenantId, approvalNo, operatorId, reason);
-                results.add(new BatchApprovalResult(approvalNo, true, "REJECTED"));
+                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "REJECTED"));
             } catch (Exception ex) {
-                results.add(new BatchApprovalResult(approvalNo, false, ex.getMessage()));
+                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
             }
         }
         return java.util.List.copyOf(results);
@@ -129,7 +133,9 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-                .body(new ApprovalActionRequest(tenantId, operatorId, reason))
+                .body(new ApprovalActionRequest(tenantId,
+                        ConsoleTextSanitizer.safeInput(operatorId, 64),
+                        ConsoleTextSanitizer.safeInput(reason, 512)))
                 .retrieve()
                 .toBodilessEntity();
     }
@@ -141,7 +147,9 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-                .body(new ApprovalActionRequest(tenantId, operatorId, reason))
+                .body(new ApprovalActionRequest(tenantId,
+                        ConsoleTextSanitizer.safeInput(operatorId, 64),
+                        ConsoleTextSanitizer.safeInput(reason, 512)))
                 .retrieve()
                 .toBodilessEntity();
     }

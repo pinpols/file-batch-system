@@ -55,6 +55,14 @@ batch:
         - ROLE_ADMIN
         - ROLE_AUDITOR
         - ROLE_CONFIG_ADMIN
+      # 是否保留旧的 X-Console-Token 鉴权兼容路径
+      legacy-header-auth-enabled: ${BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:true}
+      # JWT 签发者
+      jwt-issuer: ${BATCH_CONSOLE_JWT_ISSUER:batch-console-api}
+      # JWT 对称签名密钥（生产环境务必使用环境变量或密钥管理注入）
+      jwt-secret: ${BATCH_CONSOLE_JWT_SECRET:console-jwt-secret-change-me}
+      # JWT 有效期
+      jwt-ttl: ${BATCH_CONSOLE_JWT_TTL:PT8H}
     ai:
       # Console AI 功能开关（仅在开启并满足白名单时生效）
       enabled: ${BATCH_CONSOLE_AI_ENABLED:false}

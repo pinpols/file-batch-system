@@ -11,8 +11,8 @@ import com.example.batch.console.application.ConsoleOpsApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
 import com.example.batch.common.dto.ResponseMeta;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -43,12 +43,15 @@ class ConsoleOpsControllerTest {
 
     @Test
     void shouldReturn200AndCommonResponseStructureOnSuccess() throws Exception {
-        when(opsApplicationService.summary(anyString())).thenReturn(Map.of("ok", true));
+        when(opsApplicationService.summary(anyString())).thenReturn(
+                new ConsoleOpsSummaryResponse("t1", 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L));
 
         mockMvc.perform(get("/api/console/ops/summary").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.ok").value(true));
+                .andExpect(jsonPath("$.data.tenantId").value("t1"))
+                .andExpect(jsonPath("$.data.pendingApprovals").value(1))
+                .andExpect(jsonPath("$.data.openAlerts").value(2))
+                .andExpect(jsonPath("$.data.criticalAlerts").value(3));
     }
 }
-

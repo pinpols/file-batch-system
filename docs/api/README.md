@@ -6,6 +6,9 @@
 
 - [console-api-protocol.md](./console-api-protocol.md)：人看的控制台接口总协议
 - [console-api.openapi.yaml](./console-api.openapi.yaml)：机器可读的控制台 OpenAPI 规范
+- 协议正文里已经包含权限、JWT 登录、tenant、幂等、分页、错误码和兼容性规则
+- 协议正文还包含浏览器安全响应头、文本安全规则和前端渲染约束
+- 协议正文和 OpenAPI 已补上统一的响应封装、分页模型和共通 header 约定
 
 ## 推荐用法
 

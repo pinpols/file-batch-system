@@ -15,8 +15,8 @@ import com.example.batch.console.application.ConsoleWorkerApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import java.time.Instant;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -60,7 +60,9 @@ class ConsoleWorkerControllerTest {
 
     @Test
     void shouldDrainAndReturnCommonResponseOnSuccess() throws Exception {
-        when(applicationService.drain(anyString(), any(), anyString())).thenReturn(Map.of("status", "DRAINING"));
+        when(applicationService.drain(anyString(), any(), anyString()))
+                .thenReturn(new ConsoleWorkerRegistryResponse(
+                        1L, "t1", "w1", "group-a", null, null, "DRAINING", Instant.now(), 0, null, null));
 
         mockMvc.perform(post("/api/console/workers/w1/drain")
                         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
@@ -73,4 +75,3 @@ class ConsoleWorkerControllerTest {
                 .andExpect(jsonPath("$.data.status").value("DRAINING"));
     }
 }
-

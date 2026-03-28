@@ -2,14 +2,15 @@ package com.example.batch.console.application;
 
 import com.example.batch.console.web.request.DrainWorkerRequest;
 import com.example.batch.console.web.request.ForceOfflineWorkerRequest;
+import com.example.batch.console.web.response.ConsoleWorkerClaimedTaskResponse;
+import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import java.util.List;
-import java.util.Map;
 
 public interface ConsoleWorkerApplicationService {
 
-    Map<String, Object> drain(String workerCode, DrainWorkerRequest request, String idempotencyKey);
+    ConsoleWorkerRegistryResponse drain(String workerCode, DrainWorkerRequest request, String idempotencyKey);
 
-    Map<String, Object> forceOffline(String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey);
+    ConsoleWorkerRegistryResponse forceOffline(String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey);
 
-    List<Map<String, Object>> claimedTasks(String tenantId, String workerCode);
+    List<ConsoleWorkerClaimedTaskResponse> claimedTasks(String tenantId, String workerCode);
 }

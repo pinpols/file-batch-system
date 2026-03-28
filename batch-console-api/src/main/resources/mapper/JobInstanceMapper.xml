@@ -50,4 +50,26 @@
         </if>
         order by id desc
     </select>
+
+    <select id="countByStatuses" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and instance_status in
+        <foreach collection="statuses" item="status" open="(" close=")" separator=",">
+            #{status}
+        </foreach>
+    </select>
+
+    <select id="countSlaBreaches" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and deadline_at is not null
+          and deadline_at &lt; current_timestamp
+          and instance_status in
+        <foreach collection="activeStatuses" item="status" open="(" close=")" separator=",">
+            #{status}
+        </foreach>
+    </select>
 </mapper>

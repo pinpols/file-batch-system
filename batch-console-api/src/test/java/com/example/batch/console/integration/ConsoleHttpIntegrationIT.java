@@ -17,11 +17,14 @@ import com.example.batch.console.application.ConsoleFileDownloadApplicationServi
 import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.application.ConsoleWorkerApplicationService;
 import com.example.batch.console.web.response.AiChatResponse;
+import com.example.batch.console.web.response.ConsoleFileOperationResponse;
+import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
+import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Map;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -116,7 +119,8 @@ class ConsoleHttpIntegrationIT extends AbstractIntegrationTest {
     @Test
     void shouldDrainWorkerViaHttp() {
         when(workerApplicationService.drain(anyString(), any(), anyString()))
-                .thenReturn(Map.of("status", "DRAINING"));
+                .thenReturn(new ConsoleWorkerRegistryResponse(
+                        1L, "tenant-a", "worker-001", "group-a", null, null, "DRAINING", Instant.now(), 0, null, null));
 
         webTestClient.post()
                 .uri("/api/console/workers/worker-001/drain")
@@ -161,7 +165,7 @@ class ConsoleHttpIntegrationIT extends AbstractIntegrationTest {
 
     @Test
     void shouldArchiveFileViaHttp() {
-        when(fileApplicationService.archive(any(), anyString())).thenReturn("ARCHIVED");
+        when(fileApplicationService.archive(any(), anyString())).thenReturn(new ConsoleFileOperationResponse("ARCHIVED"));
 
         webTestClient.post()
                 .uri("/api/console/files/archive")
@@ -175,10 +179,33 @@ class ConsoleHttpIntegrationIT extends AbstractIntegrationTest {
                 .expectBody(String.class)
                 .value(body -> {
                     assertThat(body).contains("\"code\":\"SUCCESS\"");
-                    assertThat(body).contains("\"ARCHIVED\"");
+                    assertThat(body).contains("\"status\":\"ARCHIVED\"");
                 });
 
         verify(fileApplicationService).archive(any(), anyString());
+    }
+
+    @Test
+    void shouldPresignDownloadFileViaHttp() {
+        when(fileApplicationService.presignDownload(any(), anyString()))
+                .thenReturn(new ConsolePresignDownloadResponse("appr-001", null));
+
+        webTestClient.post()
+                .uri("/api/console/files/presign-download")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-002")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"tenantId":"tenant-a","fileId":1001,"reason":"cleanup","approvalId":"appr-001"}
+                        """)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(body -> {
+                    assertThat(body).contains("\"code\":\"SUCCESS\"");
+                    assertThat(body).contains("\"approvalNo\":\"appr-001\"");
+                });
+
+        verify(fileApplicationService).presignDownload(any(), anyString());
     }
 
     @Test

@@ -59,6 +59,10 @@ batch:
         - ROLE_ADMIN
         - ROLE_AUDITOR
         - ROLE_CONFIG_ADMIN
+      legacy-header-auth-enabled: true
+      jwt-issuer: batch-console-api
+      jwt-secret: console-jwt-secret-change-me
+      jwt-ttl: PT8H
     ai:
       enabled: false
       model: gpt-4o-mini

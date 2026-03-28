@@ -9,9 +9,12 @@ import com.example.batch.console.web.request.DeleteFileRequest;
 import com.example.batch.console.web.request.PresignDownloadFileRequest;
 import com.example.batch.console.web.request.FileArrivalGroupActionRequest;
 import com.example.batch.console.web.request.RedispatchFileRequest;
+import com.example.batch.console.web.response.ConsoleFileOperationResponse;
+import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,17 +29,17 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
     @Override
-    public String archive(ArchiveFileRequest request, String idempotencyKey) {
+    public ConsoleFileOperationResponse archive(ArchiveFileRequest request, String idempotencyKey) {
         return executeFileOperation(request.getTenantId(), request.getFileId(), null, request.getReason(), idempotencyKey, "archive", null);
     }
 
     @Override
-    public String delete(DeleteFileRequest request, String idempotencyKey) {
+    public ConsoleFileOperationResponse delete(DeleteFileRequest request, String idempotencyKey) {
         return executeFileOperation(request.getTenantId(), request.getFileId(), null, request.getReason(), idempotencyKey, "delete", null);
     }
 
     @Override
-    public String redispatch(RedispatchFileRequest request, String idempotencyKey) {
+    public ConsoleFileOperationResponse redispatch(RedispatchFileRequest request, String idempotencyKey) {
         return executeFileOperation(
                 request.getTenantId(),
                 request.getFileId(),
@@ -49,7 +52,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     }
 
     @Override
-    public String presignDownload(PresignDownloadFileRequest request, String idempotencyKey) {
+    public ConsolePresignDownloadResponse presignDownload(PresignDownloadFileRequest request, String idempotencyKey) {
         if (request.getApprovalId() == null || request.getApprovalId().isBlank()) {
             return submitApproval("DOWNLOAD", "DOWNLOAD", "FILE", String.valueOf(request.getFileId()), request, request.getReason(), idempotencyKey);
         }
@@ -64,18 +67,18 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                 .body(new FileOperationRequest(
                         request.getTenantId(),
                         null,
-                        requestMetadata.operatorId(),
+                        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
                         requestMetadata.traceId(),
-                        request.getReason(),
+                        ConsoleTextSanitizer.safeInput(request.getReason(), 512),
                         request.getApprovalId()
                 ))
                 .retrieve()
                 .body(FileDownloadResponse.class);
-        return response == null ? null : response.downloadUrl();
+        return response == null ? null : new ConsolePresignDownloadResponse(null, response.downloadUrl());
     }
 
     @Override
-    public String operateArrivalGroup(FileArrivalGroupActionRequest request, String idempotencyKey) {
+    public ConsoleFileOperationResponse operateArrivalGroup(FileArrivalGroupActionRequest request, String idempotencyKey) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
         FileOperationResponse response = restClient.post()
@@ -86,23 +89,23 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                 .body(new ArrivalGroupOperationRequest(
                         request.getTenantId(),
                         request.getAction(),
-                        requestMetadata.operatorId(),
+                        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
                         requestMetadata.traceId(),
-                        request.getReason(),
+                        ConsoleTextSanitizer.safeInput(request.getReason(), 512),
                         request.getExtendWaitSeconds()
                 ))
                 .retrieve()
                 .body(FileOperationResponse.class);
-        return response == null ? null : response.status();
+        return response == null ? null : new ConsoleFileOperationResponse(response.status());
     }
 
-    private String executeFileOperation(String tenantId,
-                                        Long fileId,
-                                        String channelCode,
-                                        String reason,
-                                        String idempotencyKey,
-                                        String operation,
-                                        String approvalId) {
+    private ConsoleFileOperationResponse executeFileOperation(String tenantId,
+                                                              Long fileId,
+                                                              String channelCode,
+                                                              String reason,
+                                                              String idempotencyKey,
+                                                              String operation,
+                                                              String approvalId) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
         FileOperationResponse response = restClient.post()
@@ -112,24 +115,24 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
                 .body(new FileOperationRequest(
                         tenantId,
-                        channelCode,
-                        requestMetadata.operatorId(),
+                        ConsoleTextSanitizer.safeInput(channelCode, 128),
+                        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
                         requestMetadata.traceId(),
-                        reason,
+                        ConsoleTextSanitizer.safeInput(reason, 512),
                         approvalId
                 ))
                 .retrieve()
                 .body(FileOperationResponse.class);
-        return response == null ? null : response.status();
+        return response == null ? null : new ConsoleFileOperationResponse(response.status());
     }
 
-    private String submitApproval(String approvalType,
-                                  String actionType,
-                                  String targetType,
-                                  String targetId,
-                                  Object payload,
-                                  String approvalReason,
-                                  String idempotencyKey) {
+    private ConsolePresignDownloadResponse submitApproval(String approvalType,
+                                                          String actionType,
+                                                          String targetType,
+                                                          String targetId,
+                                                          Object payload,
+                                                          String approvalReason,
+                                                          String idempotencyKey) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
         ApprovalResponse response = restClient.post()
@@ -144,17 +147,17 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                         targetType,
                         targetId,
                         JsonUtils.toJson(payload),
-                        requestMetadata.operatorId(),
+                        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
                         requestMetadata.traceId(),
                         idempotencyKey,
-                        approvalReason
+                        ConsoleTextSanitizer.safeInput(approvalReason, 512)
                 ))
                 .retrieve()
                 .body(ApprovalResponse.class);
         if (response == null || response.approvalNo() == null || response.approvalNo().isBlank()) {
             throw new BizException(ResultCode.SYSTEM_ERROR, "approval service returned empty response");
         }
-        return response.approvalNo();
+        return new ConsolePresignDownloadResponse(response.approvalNo(), null);
     }
 
     private void requireApprovedApproval(String tenantId, String approvalNo) {

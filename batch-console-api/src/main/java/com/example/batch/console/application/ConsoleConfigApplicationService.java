@@ -1,19 +1,19 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.domain.entity.ConfigChangeLogEntity;
-import com.example.batch.console.domain.entity.ConfigReleaseEntity;
-import com.example.batch.console.domain.entity.SecretVersionEntity;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;
 import com.example.batch.console.web.query.SecretVersionQueryRequest;
 import com.example.batch.console.web.request.ConfigReleaseActionRequest;
 import com.example.batch.console.web.request.ConfigReleaseUpsertRequest;
 import com.example.batch.console.web.request.SecretVersionRotateRequest;
+import com.example.batch.console.web.response.ConsoleConfigChangeLogResponse;
+import com.example.batch.console.web.response.ConsoleConfigReleaseResponse;
+import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
 import java.util.List;
 
 public interface ConsoleConfigApplicationService {
 
-    List<ConfigReleaseEntity> configReleases(ConfigReleaseQueryRequest request);
+    List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request);
 
     Long createConfigRelease(ConfigReleaseUpsertRequest request);
 
@@ -23,9 +23,9 @@ public interface ConsoleConfigApplicationService {
 
     String rollbackConfigRelease(Long releaseId, ConfigReleaseActionRequest request);
 
-    List<SecretVersionEntity> secretVersions(SecretVersionQueryRequest request);
+    List<ConsoleSecretVersionResponse> secretVersions(SecretVersionQueryRequest request);
 
     Long rotateSecretVersion(SecretVersionRotateRequest request);
 
-    List<ConfigChangeLogEntity> configChangeLogs(ConfigChangeLogQueryRequest request);
+    List<ConsoleConfigChangeLogResponse> configChangeLogs(ConfigChangeLogQueryRequest request);
 }

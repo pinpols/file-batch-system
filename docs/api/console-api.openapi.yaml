@@ -25,13 +25,44 @@ tags:
     description: Scheduler snapshot and history.
   - name: Ops
     description: Console summary and operation dashboard.
+  - name: Auth
+    description: JWT login exchange and current principal.
   - name: Queries
     description: Read-only list and detail views.
   - name: AI
     description: Console AI assistant.
 security:
+  - bearerAuth: []
   - consoleToken: []
 paths:
+  /api/console/auth/token:
+    post:
+      tags: [Auth]
+      summary: Exchange current console session for a JWT token
+      operationId: issueConsoleToken
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - consoleToken: []
+      responses:
+        '200':
+          description: JWT token payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAuthTokenResponse'
+  /api/console/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated principal
+      operationId: getConsolePrincipal
+      responses:
+        '200':
+          description: Principal payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAuthProfileResponse'
   /api/console/ops/summary:
     get:
       tags: [Ops]
@@ -45,7 +76,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleOpsSummary'
+                $ref: '#/components/schemas/CommonResponseConsoleOpsSummaryResponse'
   /api/console/jobs/trigger:
     post:
       tags: [Jobs]
@@ -442,7 +473,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapStringObject'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkerRegistryResponse'
   /api/console/workers/{workerCode}/force-offline:
     post:
       tags: [Workers]
@@ -467,7 +498,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapStringObject'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkerRegistryResponse'
   /api/console/workers/{workerCode}/claimed-tasks:
     get:
       tags: [Workers]
@@ -486,7 +517,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkerClaimedTaskList'
   /api/console/files/archive:
     post:
       tags: [Files]
@@ -506,7 +537,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
   /api/console/files/delete:
     post:
       tags: [Files]
@@ -526,7 +557,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
   /api/console/files/redispatch:
     post:
       tags: [Files]
@@ -546,7 +577,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
   /api/console/files/presign-download:
     post:
       tags: [Files]
@@ -566,7 +597,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsolePresignDownloadResponse'
   /api/console/files/{fileId}/download:
     get:
       tags: [Files]
@@ -606,7 +637,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
   /api/console/scheduler/snapshot:
     get:
       tags: [Scheduler]
@@ -620,7 +651,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseConsoleSchedulerSnapshotResponse'
   /api/console/scheduler/snapshot/history:
     get:
       tags: [Scheduler]
@@ -641,7 +672,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleSchedulerSnapshotHistoryList'
   /api/console/ai/chat:
     post:
       tags: [AI]
@@ -675,7 +706,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
   /api/console/query/alerts:
     get:
       tags: [Queries]
@@ -703,7 +734,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleApprovalCommandList'
   /api/console/query/files:
     get:
       tags: [Queries]
@@ -745,7 +776,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleOutboxRetryLogList'
   /api/console/query/outbox-deliveries:
     get:
       tags: [Queries]
@@ -759,7 +790,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleOutboxDeliveryLogList'
   /api/console/query/file-pipelines:
     get:
       tags: [Queries]
@@ -773,7 +804,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleFilePipelineList'
   /api/console/query/file-pipeline-steps:
     get:
       tags: [Queries]
@@ -787,7 +818,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleFilePipelineStepList'
   /api/console/query/file-dispatches:
     get:
       tags: [Queries]
@@ -801,7 +832,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleFileDispatchRecordList'
   /api/console/query/file-channels:
     get:
       tags: [Queries]
@@ -815,7 +846,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleFileChannelList'
   /api/console/query/file-arrival-groups:
     get:
       tags: [Queries]
@@ -857,7 +888,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseConsoleFileTemplateList'
   /api/console/query/instances:
     get:
       tags: [Queries]
@@ -983,7 +1014,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseMapList'
+                $ref: '#/components/schemas/CommonResponseAiAuditLogList'
   /api/console/query/dead-letters:
     get:
       tags: [Queries]
@@ -1042,6 +1073,13 @@ paths:
                 $ref: '#/components/schemas/CommonResponseWorkerRegistryList'
 components:
   securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
     consoleToken:
       type: apiKey
       in: header
@@ -1095,141 +1133,430 @@ components:
           type: string
           format: date-time
       required: [requestId, traceId, timestamp]
-    CommonResponseString:
+    CommonResponseBase:
       type: object
       properties:
         code:
           type: string
-          example: SUCCESS
+          description: Application-level status code.
         message:
           type: string
-          example: success
-        data:
-          type: string
+          description: Human-readable status message.
         meta:
           $ref: '#/components/schemas/CommonMeta'
-      required: [code, message, data, meta]
-    CommonResponseLong:
+      required: [code, message, meta]
+    PageRequest:
       type: object
       properties:
-        code:
-          type: string
-        message:
-          type: string
-        data:
+        pageNo:
+          type: integer
+          format: int32
+          minimum: 1
+          default: 1
+        pageSize:
+          type: integer
+          format: int32
+          minimum: 1
+          default: 20
+      required: [pageNo, pageSize]
+    PageResponse:
+      type: object
+      properties:
+        total:
           type: integer
           format: int64
-        meta:
-          $ref: '#/components/schemas/CommonMeta'
-      required: [code, message, data, meta]
-    CommonResponseObject:
-      type: object
-      properties:
-        code:
-          type: string
-        message:
-          type: string
-        data:
-          nullable: true
-        meta:
-          $ref: '#/components/schemas/CommonMeta'
-      required: [code, message, data, meta]
-    CommonResponseMapList:
-      type: object
-      properties:
-        code:
-          type: string
-        message:
-          type: string
-        data:
+        pageNo:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        items:
           type: array
-          items:
-            type: object
-            additionalProperties: true
-        meta:
-          $ref: '#/components/schemas/CommonMeta'
-      required: [code, message, data, meta]
+          items: {}
+      required: [total, pageNo, pageSize, items]
+    CommonResponseString:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: string
+    CommonResponseLong:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: integer
+              format: int64
+    CommonResponseConsoleAuthTokenResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleAuthTokenResponse'
+    CommonResponseConsoleAuthProfileResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleAuthProfileResponse'
+    CommonResponseConsoleFileOperationResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleFileOperationResponse'
+    CommonResponseConsolePresignDownloadResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsolePresignDownloadResponse'
+    CommonResponseObject:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              nullable: true
+    CommonResponseMapList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
     CommonResponseMapStringObject:
       allOf:
         - $ref: '#/components/schemas/CommonResponseMapList'
     CommonResponseBatchApprovalResultList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleBatchApprovalResultResponse'
+    CommonResponseConsoleApprovalCommandList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleApprovalCommandResponse'
     CommonResponseConfigReleaseList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleConfigReleaseResponse'
     CommonResponseSecretVersionList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleSecretVersionResponse'
     CommonResponseConfigChangeLogList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleConfigChangeLogResponse'
     CommonResponseAlertEventList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleAlertEventResponse'
     CommonResponseFileRecordList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleFileRecordResponse'
     CommonResponseJobDefinitionList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleJobDefinitionResponse'
     CommonResponseJobInstanceList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleJobInstanceResponse'
     CommonResponseJobStepInstanceList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleJobStepInstanceResponse'
     CommonResponseWorkflowDefinitionList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleWorkflowDefinitionResponse'
     CommonResponseWorkflowNodeList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleWorkflowNodeResponse'
     CommonResponseWorkflowEdgeList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleWorkflowEdgeResponse'
     CommonResponseWorkflowRunList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleWorkflowRunResponse'
     CommonResponseWorkflowNodeRunList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
     CommonResponseWorkflowTopologyView:
       allOf:
         - $ref: '#/components/schemas/CommonResponseObject'
     CommonResponseDeadLetterTaskList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleDeadLetterTaskResponse'
     CommonResponseRetryScheduleList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleRetryScheduleResponse'
     CommonResponsePendingCatchUpList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsolePendingCatchUpResponse'
     CommonResponseWorkerRegistryList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
-    CommonResponseConsoleOpsSummary:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleWorkerRegistryResponse'
+    CommonResponseConsoleOpsSummaryResponse:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseObject'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleOpsSummaryResponse'
+    CommonResponseConsoleWorkerRegistryResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkerRegistryResponse'
+    CommonResponseConsoleWorkerClaimedTaskList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleWorkerClaimedTaskResponse'
+    CommonResponseConsoleSchedulerSnapshotResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleSchedulerSnapshotResponse'
+    CommonResponseConsoleSchedulerSnapshotHistoryList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleSchedulerSnapshotHistoryResponse'
+    CommonResponseConsoleAuditLogList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleAuditLogResponse'
+    CommonResponseConsoleOutboxRetryLogList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleOutboxRetryLogResponse'
+    CommonResponseConsoleOutboxDeliveryLogList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleOutboxDeliveryLogResponse'
+    CommonResponseConsoleFilePipelineList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleFilePipelineResponse'
+    CommonResponseConsoleFilePipelineStepList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleFilePipelineStepResponse'
+    CommonResponseConsoleFileDispatchRecordList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleFileDispatchRecordResponse'
+    CommonResponseConsoleFileChannelList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleFileChannelResponse'
+    CommonResponseConsoleFileTemplateList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleFileTemplateResponse'
+    CommonResponseAiAuditLogList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AiAuditLogResponse'
     CommonResponseAiChatResponse:
-      type: object
-      properties:
-        code:
-          type: string
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/AiChatResponse'
-        meta:
-          $ref: '#/components/schemas/CommonMeta'
-      required: [code, message, data, meta]
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AiChatResponse'
     CommonResponseFileArrivalGroupList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleFileArrivalGroupResponse'
     CommonResponseFileErrorRecordList:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseMapList'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleFileErrorRecordResponse'
 
     TriggerRequest:
       type: object
@@ -1516,6 +1843,1549 @@ components:
         completionTokens:
           type: integer
       required: [answer]
-    ConsoleOpsSummary:
+    AiAuditLogResponse:
       type: object
-      additionalProperties: true
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        requestId:
+          type: string
+        traceId:
+          type: string
+        sessionId:
+          type: string
+        operatorId:
+          type: string
+        promptCategory:
+          type: string
+        promptDecision:
+          type: string
+        modelName:
+          type: string
+        promptPreview:
+          type: string
+        responsePreview:
+          type: string
+        refusalReason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, requestId, traceId, sessionId, operatorId, promptCategory, promptDecision, modelName, promptPreview, responsePreview, refusalReason, createdAt]
+    ConsoleAlertEventResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        serviceName:
+          type: string
+        alertType:
+          type: string
+        severity:
+          type: string
+        title:
+          type: string
+        detailJson:
+          type: string
+        dedupFingerprint:
+          type: string
+        occurrenceCount:
+          type: integer
+          format: int32
+        firstSeenAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, serviceName, alertType, severity, title, detailJson, dedupFingerprint, occurrenceCount, firstSeenAt, lastSeenAt, traceId, status, createdAt, updatedAt]
+    ConsoleFileRecordResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        bizType:
+          type: string
+        fileName:
+          type: string
+        fileStatus:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        traceId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, bizType, fileName, fileStatus, bizDate, traceId, createdAt, updatedAt]
+    ConsoleJobDefinitionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        jobName:
+          type: string
+        jobType:
+          type: string
+        queueCode:
+          type: string
+        workerGroup:
+          type: string
+        scheduleType:
+          type: string
+        scheduleExpr:
+          type: string
+        calendarCode:
+          type: string
+        windowCode:
+          type: string
+        retryPolicy:
+          type: string
+        retryMaxCount:
+          type: integer
+          format: int32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        shardStrategy:
+          type: string
+        executionHandler:
+          type: string
+        paramSchema:
+          type: string
+        defaultParams:
+          type: string
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, jobCode, jobName, jobType, queueCode, workerGroup, scheduleType, scheduleExpr, calendarCode, windowCode, retryPolicy, retryMaxCount, timeoutSeconds, shardStrategy, executionHandler, paramSchema, defaultParams, enabled, createdAt, updatedAt]
+    ConsoleJobInstanceResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        instanceNo:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        triggerType:
+          type: string
+        instanceStatus:
+          type: string
+        batchNo:
+          type: string
+        operatorId:
+          type: string
+        rerunFlag:
+          type: boolean
+        retryFlag:
+          type: boolean
+        rerunReason:
+          type: string
+        relatedFileId:
+          type: integer
+          format: int64
+        parentInstanceId:
+          type: integer
+          format: int64
+        queueCode:
+          type: string
+        workerGroup:
+          type: string
+        priority:
+          type: integer
+          format: int32
+        traceId:
+          type: string
+        paramsSnapshot:
+          type: string
+        resultSummary:
+          type: string
+        deadlineAt:
+          type: string
+          format: date-time
+        expectedDurationSeconds:
+          type: integer
+          format: int32
+        slaAlertedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, jobCode, instanceNo, bizDate, triggerType, instanceStatus, batchNo, operatorId, rerunFlag, retryFlag, rerunReason, relatedFileId, parentInstanceId, queueCode, workerGroup, priority, traceId, paramsSnapshot, resultSummary, deadlineAt, expectedDurationSeconds, slaAlertedAt, startedAt, finishedAt]
+    ConsoleJobStepInstanceResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        jobInstanceId:
+          type: integer
+          format: int64
+        jobPartitionId:
+          type: integer
+          format: int64
+        jobTaskId:
+          type: integer
+          format: int64
+        stepCode:
+          type: string
+        stepType:
+          type: string
+        stepStatus:
+          type: string
+        retryCount:
+          type: integer
+          format: int32
+        relatedFileId:
+          type: integer
+          format: int64
+        resultSummary:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, jobInstanceId, jobPartitionId, jobTaskId, stepCode, stepType, stepStatus, retryCount, relatedFileId, resultSummary, errorCode, errorMessage, startedAt, finishedAt]
+    ConsoleWorkflowDefinitionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        workflowCode:
+          type: string
+        workflowName:
+          type: string
+        workflowType:
+          type: string
+        version:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, workflowCode, workflowName, workflowType, version, enabled, description, createdAt, updatedAt]
+    ConsoleWorkflowNodeResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        workflowDefinitionId:
+          type: integer
+          format: int64
+        nodeCode:
+          type: string
+        nodeName:
+          type: string
+        nodeType:
+          type: string
+        relatedJobCode:
+          type: string
+        relatedPipelineCode:
+          type: string
+        workerGroup:
+          type: string
+        windowCode:
+          type: string
+        nodeOrder:
+          type: integer
+          format: int32
+        retryPolicy:
+          type: string
+        retryMaxCount:
+          type: integer
+          format: int32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        nodeParams:
+          type: string
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, workflowDefinitionId, nodeCode, nodeName, nodeType, relatedJobCode, relatedPipelineCode, workerGroup, windowCode, nodeOrder, retryPolicy, retryMaxCount, timeoutSeconds, nodeParams, enabled, createdAt, updatedAt]
+    ConsoleWorkflowEdgeResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        workflowDefinitionId:
+          type: integer
+          format: int64
+        fromNodeCode:
+          type: string
+        toNodeCode:
+          type: string
+        edgeType:
+          type: string
+        conditionExpr:
+          type: string
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, workflowDefinitionId, fromNodeCode, toNodeCode, edgeType, conditionExpr, enabled, createdAt, updatedAt]
+    ConsoleWorkflowRunResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        workflowDefinitionId:
+          type: integer
+          format: int64
+        relatedJobInstanceId:
+          type: integer
+          format: int64
+        bizDate:
+          type: string
+          format: date
+        runStatus:
+          type: string
+        currentNodeCode:
+          type: string
+        traceId:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, workflowDefinitionId, relatedJobInstanceId, bizDate, runStatus, currentNodeCode, traceId, startedAt, finishedAt, createdAt, updatedAt]
+    ConsoleWorkflowNodeRunResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        workflowRunId:
+          type: integer
+          format: int64
+        nodeCode:
+          type: string
+        nodeType:
+          type: string
+        runSeq:
+          type: integer
+          format: int32
+        nodeStatus:
+          type: string
+        retryCount:
+          type: integer
+          format: int32
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+          format: int64
+      required: [id, workflowRunId, nodeCode, nodeType, runSeq, nodeStatus, retryCount, errorCode, errorMessage, startedAt, finishedAt, durationMs]
+    ConsoleDeadLetterTaskResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        sourceType:
+          type: string
+        sourceId:
+          type: integer
+          format: int64
+        deadLetterReason:
+          type: string
+        payloadRef:
+          type: string
+        replayStatus:
+          type: string
+        replayCount:
+          type: integer
+          format: int32
+        lastReplayAt:
+          type: string
+          format: date-time
+        lastReplayResult:
+          type: string
+        traceId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, sourceType, sourceId, deadLetterReason, payloadRef, replayStatus, replayCount, lastReplayAt, lastReplayResult, traceId, createdAt, updatedAt]
+    ConsoleRetryScheduleResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        relatedType:
+          type: string
+        relatedId:
+          type: integer
+          format: int64
+        retryPolicy:
+          type: string
+        retryCount:
+          type: integer
+          format: int32
+        maxRetryCount:
+          type: integer
+          format: int32
+        nextRetryAt:
+          type: string
+          format: date-time
+        retryStatus:
+          type: string
+        dedupKey:
+          type: string
+        lastErrorCode:
+          type: string
+        lastErrorMessage:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, relatedType, relatedId, retryPolicy, retryCount, maxRetryCount, nextRetryAt, retryStatus, dedupKey, lastErrorCode, lastErrorMessage, createdAt, updatedAt]
+    ConsolePendingCatchUpResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        requestId:
+          type: string
+        jobCode:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        requestStatus:
+          type: string
+        traceId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, requestId, jobCode, bizDate, requestStatus, traceId, createdAt, updatedAt]
+    ConsoleFileArrivalGroupResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        fileGroupCode:
+          type: string
+        waitFileGroupMode:
+          type: string
+        requiredFileSet:
+          type: string
+        arrivalTimeoutAction:
+          type: string
+        arrivalState:
+          type: string
+        expectedArrivalTime:
+          type: string
+          format: date-time
+        latestTolerableTime:
+          type: string
+          format: date-time
+        arrivedCount:
+          type: integer
+          format: int64
+        triggeredCount:
+          type: integer
+          format: int64
+        timeoutCount:
+          type: integer
+          format: int64
+        waitingCount:
+          type: integer
+          format: int64
+        lastUpdatedAt:
+          type: string
+          format: date-time
+      required: [tenantId, fileGroupCode, waitFileGroupMode, requiredFileSet, arrivalTimeoutAction, arrivalState, expectedArrivalTime, latestTolerableTime, arrivedCount, triggeredCount, timeoutCount, waitingCount, lastUpdatedAt]
+    ConsoleFileErrorRecordResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        fileId:
+          type: integer
+          format: int64
+        pipelineInstanceId:
+          type: integer
+          format: int64
+        pipelineStepRunId:
+          type: integer
+          format: int64
+        recordNo:
+          type: integer
+          format: int64
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        errorStage:
+          type: string
+        skipped:
+          type: boolean
+        skipAction:
+          type: string
+        rawRecord:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, fileId, pipelineInstanceId, pipelineStepRunId, recordNo, errorCode, errorMessage, errorStage, skipped, skipAction, rawRecord, createdAt]
+    ConsoleWorkerRegistryResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        workerCode:
+          type: string
+        workerGroup:
+          type: string
+        capabilityTags:
+          type: string
+        resourceTag:
+          type: string
+        status:
+          type: string
+        heartbeatAt:
+          type: string
+          format: date-time
+        currentLoad:
+          type: integer
+          format: int32
+        drainStartedAt:
+          type: string
+          format: date-time
+        drainDeadlineAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, workerCode, workerGroup, capabilityTags, resourceTag, status, heartbeatAt, currentLoad, drainStartedAt, drainDeadlineAt]
+    ConsoleAuthTokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        issuedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        username:
+          type: string
+        tenantId:
+          type: string
+        authorities:
+          type: array
+          items:
+            type: string
+      required: [accessToken, tokenType, issuedAt, expiresAt, username, tenantId, authorities]
+    ConsoleAuthProfileResponse:
+      type: object
+      properties:
+        username:
+          type: string
+        tenantId:
+          type: string
+        authorities:
+          type: array
+          items:
+            type: string
+      required: [username, tenantId, authorities]
+    ConsoleFileOperationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+    ConsolePresignDownloadResponse:
+      type: object
+      properties:
+        approvalNo:
+          type: string
+          nullable: true
+        downloadUrl:
+          type: string
+          nullable: true
+    ConsoleBatchApprovalResultResponse:
+      type: object
+      properties:
+        approvalNo:
+          type: string
+        success:
+          type: boolean
+        message:
+          type: string
+      required: [approvalNo, success, message]
+    ConsoleApprovalCommandResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        approvalNo:
+          type: string
+        approvalType:
+          type: string
+        actionType:
+          type: string
+        targetType:
+          type: string
+        targetId:
+          type: string
+        payloadJson:
+          type: string
+        approvalStatus:
+          type: string
+        requesterId:
+          type: string
+        approverId:
+          type: string
+        rejectionReason:
+          type: string
+        approvalReason:
+          type: string
+        sourceTraceId:
+          type: string
+        sourceIdempotencyKey:
+          type: string
+        approvedAt:
+          type: string
+          format: date-time
+        executedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - approvalNo
+        - approvalType
+        - actionType
+        - targetType
+        - targetId
+        - payloadJson
+        - approvalStatus
+        - requesterId
+        - approverId
+        - rejectionReason
+        - approvalReason
+        - sourceTraceId
+        - sourceIdempotencyKey
+        - approvedAt
+        - executedAt
+        - createdAt
+        - updatedAt
+    ConsoleConfigReleaseResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        configType:
+          type: string
+        configKey:
+          type: string
+        configName:
+          type: string
+        configStatus:
+          type: string
+        versionNo:
+          type: integer
+          format: int32
+        grayScopeJson:
+          type: string
+        configPayloadJson:
+          type: string
+        effectiveFromAt:
+          type: string
+          format: date-time
+        effectiveToAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+        rolledBackAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - configType
+        - configKey
+        - configName
+        - configStatus
+        - versionNo
+        - grayScopeJson
+        - configPayloadJson
+        - effectiveFromAt
+        - effectiveToAt
+        - publishedAt
+        - rolledBackAt
+        - createdBy
+        - updatedBy
+        - createdAt
+        - updatedAt
+    ConsoleSecretVersionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        secretRef:
+          type: string
+        secretName:
+          type: string
+        versionNo:
+          type: integer
+          format: int32
+        secretStatus:
+          type: string
+        currentVersion:
+          type: boolean
+        rotationWindowStartAt:
+          type: string
+          format: date-time
+        rotationWindowEndAt:
+          type: string
+          format: date-time
+        effectiveFromAt:
+          type: string
+          format: date-time
+        effectiveToAt:
+          type: string
+          format: date-time
+        secretPayloadJson:
+          type: string
+        rotationReason:
+          type: string
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - secretRef
+        - secretName
+        - versionNo
+        - secretStatus
+        - currentVersion
+        - rotationWindowStartAt
+        - rotationWindowEndAt
+        - effectiveFromAt
+        - effectiveToAt
+        - secretPayloadJson
+        - rotationReason
+        - createdBy
+        - updatedBy
+        - createdAt
+        - updatedAt
+    ConsoleConfigChangeLogResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        configType:
+          type: string
+        configKey:
+          type: string
+        versionNo:
+          type: integer
+          format: int32
+        changeAction:
+          type: string
+        changeResult:
+          type: string
+        operatorType:
+          type: string
+        operatorId:
+          type: string
+        traceId:
+          type: string
+        changeSummaryJson:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tenantId
+        - configType
+        - configKey
+        - versionNo
+        - changeAction
+        - changeResult
+        - operatorType
+        - operatorId
+        - traceId
+        - changeSummaryJson
+        - createdAt
+    ConsoleOpsSummaryResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        pendingApprovals:
+          type: integer
+          format: int64
+        openAlerts:
+          type: integer
+          format: int64
+        criticalAlerts:
+          type: integer
+          format: int64
+        runningJobs:
+          type: integer
+          format: int64
+        failedJobs:
+          type: integer
+          format: int64
+        slaBreaches:
+          type: integer
+          format: int64
+        onlineWorkers:
+          type: integer
+          format: int64
+        drainingWorkers:
+          type: integer
+          format: int64
+        offlineWorkers:
+          type: integer
+          format: int64
+        outboxRetryBacklog:
+          type: integer
+          format: int64
+        outboxDeliveryFailures:
+          type: integer
+          format: int64
+      required:
+        - tenantId
+        - pendingApprovals
+        - openAlerts
+        - criticalAlerts
+        - runningJobs
+        - failedJobs
+        - slaBreaches
+        - onlineWorkers
+        - drainingWorkers
+        - offlineWorkers
+        - outboxRetryBacklog
+        - outboxDeliveryFailures
+    ConsoleWorkerClaimedTaskResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        jobInstanceId:
+          type: integer
+          format: int64
+        jobPartitionId:
+          type: integer
+          format: int64
+        taskType:
+          type: string
+        taskSeq:
+          type: integer
+          format: int32
+        taskStatus:
+          type: string
+        assignedWorkerCode:
+          type: string
+        taskPayload:
+          type: string
+        resultSummary:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, jobInstanceId, jobPartitionId, taskType, taskSeq, taskStatus, assignedWorkerCode, taskPayload, resultSummary, errorCode, errorMessage, startedAt, finishedAt, createdAt, updatedAt]
+    ConsoleSchedulerSnapshotResponse:
+      type: object
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        tenantId:
+          type: string
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleSchedulerPolicySnapshot'
+        queues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleSchedulerQueueSnapshot'
+        workers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleSchedulerWorkerLoadSnapshot'
+      required: [generatedAt, tenantId, policies, queues, workers]
+    ConsoleSchedulerPolicySnapshot:
+      type: object
+      properties:
+        policyCode:
+          type: string
+        fairShareGroup:
+          type: string
+        fairShareWeight:
+          type: integer
+          format: int32
+        maxRunningJobsPerTenant:
+          type: integer
+          format: int32
+        burstLimit:
+          type: integer
+          format: int32
+        partitionBurstLimit:
+          type: integer
+          format: int32
+        quotaResetPolicy:
+          type: string
+        quotaBurstPeakBorrowed:
+          type: integer
+          format: int32
+        quotaBurstRemaining:
+          type: integer
+          format: int32
+        quotaResetWindowStartedAt:
+          type: string
+          format: date-time
+        quotaResetWindowExpiresAt:
+          type: string
+          format: date-time
+        groupSharedMaxRunningJobs:
+          type: integer
+          format: int32
+        activeJobs:
+          type: integer
+          format: int64
+        activePartitions:
+          type: integer
+          format: int64
+        groupActiveJobs:
+          type: integer
+          format: int64
+        effectiveTenantJobCap:
+          type: integer
+          format: int32
+        effectiveTenantPartitionCap:
+          type: integer
+          format: int32
+      required: [policyCode, fairShareGroup, fairShareWeight, maxRunningJobsPerTenant, burstLimit, partitionBurstLimit, quotaResetPolicy, quotaBurstPeakBorrowed, quotaBurstRemaining, quotaResetWindowStartedAt, quotaResetWindowExpiresAt, groupSharedMaxRunningJobs, activeJobs, activePartitions, groupActiveJobs, effectiveTenantJobCap, effectiveTenantPartitionCap]
+    ConsoleSchedulerQueueSnapshot:
+      type: object
+      properties:
+        queueCode:
+          type: string
+        fairShareGroup:
+          type: string
+        fairShareWeight:
+          type: integer
+          format: int32
+        maxRunningJobs:
+          type: integer
+          format: int32
+        burstLimit:
+          type: integer
+          format: int32
+        effectiveMaxRunningJobs:
+          type: integer
+          format: int32
+        quotaResetPolicy:
+          type: string
+        quotaBurstPeakBorrowed:
+          type: integer
+          format: int32
+        quotaBurstRemaining:
+          type: integer
+          format: int32
+        quotaResetWindowStartedAt:
+          type: string
+          format: date-time
+        quotaResetWindowExpiresAt:
+          type: string
+          format: date-time
+        groupSharedMaxRunningJobs:
+          type: integer
+          format: int32
+        activeJobs:
+          type: integer
+          format: int64
+      required: [queueCode, fairShareGroup, fairShareWeight, maxRunningJobs, burstLimit, effectiveMaxRunningJobs, quotaResetPolicy, quotaBurstPeakBorrowed, quotaBurstRemaining, quotaResetWindowStartedAt, quotaResetWindowExpiresAt, groupSharedMaxRunningJobs, activeJobs]
+    ConsoleSchedulerWorkerLoadSnapshot:
+      type: object
+      properties:
+        workerCode:
+          type: string
+        workerGroup:
+          type: string
+        currentLoad:
+          type: integer
+          format: int32
+        heartbeatAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+      required: [workerCode, workerGroup, currentLoad, heartbeatAt, status]
+    ConsoleSchedulerSnapshotHistoryResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        snapshotAt:
+          type: string
+          format: date-time
+        fairShareGroup:
+          type: string
+        policyCode:
+          type: string
+        activeJobs:
+          type: integer
+          format: int32
+        activePartitions:
+          type: integer
+          format: int32
+        maxJobsBase:
+          type: integer
+          format: int32
+        burstLimit:
+          type: integer
+          format: int32
+        effectiveJobCap:
+          type: integer
+          format: int32
+        groupActiveJobs:
+          type: integer
+          format: int32
+        groupMaxJobs:
+          type: integer
+          format: int32
+        quotaResetPolicy:
+          type: string
+        onlineWorkers:
+          type: integer
+          format: int32
+        detailJson:
+          type: string
+      required: [id, tenantId, snapshotAt, fairShareGroup, policyCode, activeJobs, activePartitions, maxJobsBase, burstLimit, effectiveJobCap, groupActiveJobs, groupMaxJobs, quotaResetPolicy, onlineWorkers, detailJson]
+    ConsoleAuditLogResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        fileId:
+          type: integer
+          format: int64
+        operationType:
+          type: string
+        operationResult:
+          type: string
+        operatorType:
+          type: string
+        operatorId:
+          type: string
+        traceId:
+          type: string
+        evidenceRef:
+          type: string
+        detailSummary:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, fileId, operationType, operationResult, operatorType, operatorId, traceId, evidenceRef, detailSummary, createdAt]
+    ConsoleFilePipelineResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        pipelineDefinitionId:
+          type: integer
+          format: int64
+        pipelineCode:
+          type: string
+        pipelineType:
+          type: string
+        fileId:
+          type: integer
+          format: int64
+        relatedJobInstanceId:
+          type: integer
+          format: int64
+        currentStage:
+          type: string
+        lastSuccessStage:
+          type: string
+        runStatus:
+          type: string
+        traceId:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, pipelineDefinitionId, pipelineCode, pipelineType, fileId, relatedJobInstanceId, currentStage, lastSuccessStage, runStatus, traceId, startedAt, finishedAt, createdAt, updatedAt]
+    ConsoleFilePipelineStepResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        pipelineInstanceId:
+          type: integer
+          format: int64
+        stepCode:
+          type: string
+        stageCode:
+          type: string
+        runSeq:
+          type: integer
+          format: int32
+        stepStatus:
+          type: string
+        inputSummary:
+          type: string
+        outputSummary:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        retryCount:
+          type: integer
+          format: int32
+        durationMs:
+          type: integer
+          format: int64
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+      required: [id, pipelineInstanceId, stepCode, stageCode, runSeq, stepStatus, inputSummary, outputSummary, errorCode, errorMessage, retryCount, durationMs, startedAt, finishedAt]
+    ConsoleFileDispatchRecordResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        fileId:
+          type: integer
+          format: int64
+        pipelineInstanceId:
+          type: integer
+          format: int64
+        channelCode:
+          type: string
+        dispatchTarget:
+          type: string
+        dispatchStatus:
+          type: string
+        dispatchAttempt:
+          type: integer
+          format: int32
+        receiptCode:
+          type: string
+        receiptStatus:
+          type: string
+        externalRequestId:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        dispatchedAt:
+          type: string
+          format: date-time
+        ackAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, fileId, pipelineInstanceId, channelCode, dispatchTarget, dispatchStatus, dispatchAttempt, receiptCode, receiptStatus, externalRequestId, errorCode, errorMessage, dispatchedAt, ackAt, createdAt, updatedAt]
+    ConsoleFileChannelResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        channelCode:
+          type: string
+        channelName:
+          type: string
+        channelType:
+          type: string
+        targetEndpoint:
+          type: string
+        authType:
+          type: string
+        configJson:
+          type: string
+        receiptPolicy:
+          type: string
+        timeoutSeconds:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, channelCode, channelName, channelType, targetEndpoint, authType, configJson, receiptPolicy, timeoutSeconds, enabled, createdAt, updatedAt]
+    ConsoleFileTemplateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        templateCode:
+          type: string
+        templateName:
+          type: string
+        templateType:
+          type: string
+        bizType:
+          type: string
+        fileFormatType:
+          type: string
+        charset:
+          type: string
+        targetCharset:
+          type: string
+        withBom:
+          type: boolean
+        lineSeparator:
+          type: string
+        delimiter:
+          type: string
+        quoteChar:
+          type: string
+        escapeChar:
+          type: string
+        recordLength:
+          type: integer
+          format: int32
+        headerRows:
+          type: integer
+          format: int32
+        footerRows:
+          type: integer
+          format: int32
+        headerTemplate:
+          type: string
+        trailerTemplate:
+          type: string
+        checksumType:
+          type: string
+        compressType:
+          type: string
+        encryptType:
+          type: string
+        namingRule:
+          type: string
+        fieldMappings:
+          type: string
+        validationRuleSet:
+          type: string
+        defaultQueryCode:
+          type: string
+        defaultQuerySql:
+          type: string
+        queryParamSchema:
+          type: string
+        streamingEnabled:
+          type: boolean
+        pageSize:
+          type: integer
+          format: int32
+        fetchSize:
+          type: integer
+          format: int32
+        chunkSize:
+          type: integer
+          format: int32
+        previewMaskingEnabled:
+          type: boolean
+        errorLineMaskingEnabled:
+          type: boolean
+        logMaskingEnabled:
+          type: boolean
+        contentEncryptionEnabled:
+          type: boolean
+        encryptionKeyRef:
+          type: string
+        downloadRequiresApproval:
+          type: boolean
+        maskingRuleSet:
+          type: string
+        enabled:
+          type: boolean
+        version:
+          type: integer
+          format: int32
+        description:
+          type: string
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, templateCode, templateName, templateType, bizType, fileFormatType, charset, targetCharset, withBom, lineSeparator, delimiter, quoteChar, escapeChar, recordLength, headerRows, footerRows, headerTemplate, trailerTemplate, checksumType, compressType, encryptType, namingRule, fieldMappings, validationRuleSet, defaultQueryCode, defaultQuerySql, queryParamSchema, streamingEnabled, pageSize, fetchSize, chunkSize, previewMaskingEnabled, errorLineMaskingEnabled, logMaskingEnabled, contentEncryptionEnabled, encryptionKeyRef, downloadRequiresApproval, maskingRuleSet, enabled, version, description, createdBy, updatedBy, createdAt, updatedAt]
+    ConsoleOutboxRetryLogResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        eventType:
+          type: string
+        eventKey:
+          type: string
+        retryStatus:
+          type: string
+        retryCount:
+          type: integer
+          format: int32
+        retryPolicy:
+          type: string
+        nextRetryAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, eventType, eventKey, retryStatus, retryCount, retryPolicy, nextRetryAt, createdAt, updatedAt]
+    ConsoleOutboxDeliveryLogResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        eventType:
+          type: string
+        eventKey:
+          type: string
+        deliveryStatus:
+          type: string
+        targetTopic:
+          type: string
+        deliveryAttempt:
+          type: integer
+          format: int32
+        errorMessage:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, eventType, eventKey, deliveryStatus, targetTopic, deliveryAttempt, errorMessage, createdAt, updatedAt]

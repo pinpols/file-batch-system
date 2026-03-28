@@ -1,8 +1,8 @@
 package com.example.batch.console.support;
 
 import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
-import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.IdGenerator;
@@ -11,19 +11,24 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import lombok.RequiredArgsConstructor;
 
 @Component
+@RequiredArgsConstructor
 public class ConsoleRequestContextFilter extends OncePerRequestFilter {
 
     public static final String REQUEST_METADATA_ATTRIBUTE = "consoleRequestMetadata";
 
     @Value("${spring.application.name:batch-console-api}")
     private String applicationName;
+
+    private final ConsoleSecurityResponseWriter responseWriter;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -34,7 +39,10 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
         String operatorId = request.getHeader(CommonConstants.DEFAULT_OPERATOR_ID_HEADER);
         String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
         String clientIp = firstNonBlank(request.getHeader(CommonConstants.DEFAULT_FORWARDED_FOR_HEADER), request.getRemoteAddr());
-        String tenantId = resolveTenantId(request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER));
+        String tenantId = resolveTenantId(request, response, request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER));
+        if (tenantId == null && response.isCommitted()) {
+            return;
+        }
 
         ConsoleRequestMetadata metadata = new ConsoleRequestMetadata(
                 requestId,
@@ -60,11 +68,16 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
         }
     }
 
-    private String resolveTenantId(String requestedTenantId) {
+    private String resolveTenantId(HttpServletRequest request, HttpServletResponse response, String requestedTenantId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
             if (requestedTenantId != null && !requestedTenantId.isBlank() && !requestedTenantId.equals(principal.tenantId())) {
-                throw new BizException(ResultCode.FORBIDDEN, "tenant mismatch");
+                try {
+                    responseWriter.write(response, HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
+                } catch (IOException exception) {
+                    throw new IllegalStateException("failed to write tenant mismatch response", exception);
+                }
+                return null;
             }
             return principal.tenantId();
         }

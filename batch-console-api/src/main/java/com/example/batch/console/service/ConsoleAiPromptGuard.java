@@ -3,6 +3,7 @@ package com.example.batch.console.service;
 import com.example.batch.common.enums.AiPromptCategory;
 import com.example.batch.console.support.AiPromptGateResult;
 import com.example.batch.common.enums.AiPromptDecision;
+import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.console.config.ConsoleAiProperties;
@@ -19,13 +20,16 @@ public class ConsoleAiPromptGuard {
 
     public AiPromptGateResult check(String prompt) {
         if (!properties.isEnabled()) {
-            return AiPromptGateResult.rejected(AiPromptDecision.REJECTED_DISABLED, AiPromptCategory.OUT_OF_SCOPE, "ai assistant is disabled");
+            return AiPromptGateResult.rejected(
+                    AiPromptDecision.REJECTED_DISABLED,
+                    AiPromptCategory.OUT_OF_SCOPE,
+                    CommonErrorMessages.AI_ASSISTANT_DISABLED);
         }
         if (!StringUtils.hasText(prompt)) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "prompt is required");
+            throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_REQUIRED);
         }
         if (prompt.length() > properties.getMaxPromptLength()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "prompt is too long");
+            throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_TOO_LONG);
         }
         String normalized = prompt.trim();
         String lower = normalized.toLowerCase(Locale.ROOT);
@@ -34,7 +38,7 @@ public class ConsoleAiPromptGuard {
                 return AiPromptGateResult.rejected(
                         AiPromptDecision.REJECTED_SAFETY,
                         AiPromptCategory.OUT_OF_SCOPE,
-                        "prompt violates safety policy"
+                        CommonErrorMessages.PROMPT_VIOLATES_SAFETY_POLICY
                 );
             }
         }
@@ -46,7 +50,7 @@ public class ConsoleAiPromptGuard {
         return AiPromptGateResult.rejected(
                 AiPromptDecision.REJECTED_SCOPE,
                 AiPromptCategory.OUT_OF_SCOPE,
-                "prompt is outside the platform scope"
+                CommonErrorMessages.PROMPT_OUT_OF_SCOPE
         );
     }
 

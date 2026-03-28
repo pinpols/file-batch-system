@@ -3,9 +3,6 @@ package com.example.batch.console.web;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleConfigApplicationService;
-import com.example.batch.console.domain.entity.ConfigChangeLogEntity;
-import com.example.batch.console.domain.entity.ConfigReleaseEntity;
-import com.example.batch.console.domain.entity.SecretVersionEntity;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;
@@ -13,9 +10,13 @@ import com.example.batch.console.web.query.SecretVersionQueryRequest;
 import com.example.batch.console.web.request.ConfigReleaseActionRequest;
 import com.example.batch.console.web.request.ConfigReleaseUpsertRequest;
 import com.example.batch.console.web.request.SecretVersionRotateRequest;
+import com.example.batch.console.web.response.ConsoleConfigChangeLogResponse;
+import com.example.batch.console.web.response.ConsoleConfigReleaseResponse;
+import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Validated
 @RequestMapping("/api/console/config")
 @RequiredArgsConstructor
 public class ConsoleConfigController {
@@ -36,7 +38,7 @@ public class ConsoleConfigController {
 
     @GetMapping("/releases")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<List<ConfigReleaseEntity>> configReleases(@Valid @ModelAttribute ConfigReleaseQueryRequest request) {
+    public CommonResponse<List<ConsoleConfigReleaseResponse>> configReleases(@Valid @ModelAttribute ConfigReleaseQueryRequest request) {
         return responseFactory.success(applicationService.configReleases(request));
     }
 
@@ -73,7 +75,7 @@ public class ConsoleConfigController {
 
     @GetMapping("/secrets")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<List<SecretVersionEntity>> secretVersions(@Valid @ModelAttribute SecretVersionQueryRequest request) {
+    public CommonResponse<List<ConsoleSecretVersionResponse>> secretVersions(@Valid @ModelAttribute SecretVersionQueryRequest request) {
         return responseFactory.success(applicationService.secretVersions(request));
     }
 
@@ -86,7 +88,7 @@ public class ConsoleConfigController {
 
     @GetMapping("/change-logs")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<List<ConfigChangeLogEntity>> configChangeLogs(@Valid @ModelAttribute ConfigChangeLogQueryRequest request) {
+    public CommonResponse<List<ConsoleConfigChangeLogResponse>> configChangeLogs(@Valid @ModelAttribute ConfigChangeLogQueryRequest request) {
         return responseFactory.success(applicationService.configChangeLogs(request));
     }
 }

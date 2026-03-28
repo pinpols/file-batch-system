@@ -1,5 +1,6 @@
 package com.example.batch.console.service;
 
+import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.config.ConsoleAiProperties;
@@ -23,14 +24,14 @@ public class ConsoleAiAuthorizationService {
     public void assertAllowed() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken) {
-            throw new BizException(ResultCode.FORBIDDEN, "ai assistant requires authenticated user");
+            throw new BizException(ResultCode.FORBIDDEN, CommonErrorMessages.AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER);
         }
         String username = authentication.getName();
         Set<String> authorities = authorities(authentication.getAuthorities());
         boolean allowedByUser = properties.getAllowedUsers().stream().anyMatch(user -> Objects.equals(user, username));
         boolean allowedByAuthority = properties.getAllowedAuthorities().stream().anyMatch(authorities::contains);
         if (!allowedByUser && !allowedByAuthority) {
-            throw new BizException(ResultCode.FORBIDDEN, "ai assistant access is not granted");
+            throw new BizException(ResultCode.FORBIDDEN, CommonErrorMessages.AI_ASSISTANT_ACCESS_NOT_GRANTED);
         }
     }
 
