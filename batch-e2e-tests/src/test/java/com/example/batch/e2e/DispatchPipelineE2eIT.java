@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.e2e.apps.E2eDispatchApplication;
+import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.e2e.support.E2eOutboxPublishSupport;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
@@ -45,7 +46,9 @@ import org.springframework.test.context.jdbc.Sql;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "batch.worker.dispatch.worker-type=DISPATCH")
 @ActiveProfiles({"test", "e2e"})
-@Sql(scripts = "classpath:sql/e2e-biz-schema.sql")
+@Sql(scripts = {
+        E2eTestSql.BIZ_SCHEMA,
+})
 @Tag("e2e")
 class DispatchPipelineE2eIT extends AbstractIntegrationTest {
 

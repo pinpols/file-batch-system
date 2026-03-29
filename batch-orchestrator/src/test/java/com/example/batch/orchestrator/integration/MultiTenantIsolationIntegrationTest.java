@@ -11,6 +11,7 @@ import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixtu
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
+import com.example.batch.testing.PlatformTestdataSql;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,7 @@ import org.springframework.test.context.jdbc.Sql;
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@Sql(scripts = "classpath:db/testdata/multi-tenant-seed.sql")
+@Sql(scripts = {PlatformTestdataSql.MULTI_TENANT_SEED})
 class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired

@@ -24,7 +24,8 @@ public final class GatlingConfig {
 
     /**
      * Pre-existing job code (must be seeded in the target DB before running).
-     * Use the job code from import-template-config-seed.sql or create a dedicated one.
+     * Align with {@code docs/sql/load-test/load-test-seed.sql} or
+     * {@code batch-e2e-tests/src/test/resources/db/testdata/import-template-config-seed.sql} job codes.
      */
     public static final String JOB_CODE =
             System.getProperty("jobCode", "E2E_IMPORT_LOAD");

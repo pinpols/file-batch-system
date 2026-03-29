@@ -68,14 +68,14 @@
 
 ---
 
-## 4) E2E 专用业务库 schema 脚本
+## 4) E2E 业务库 schema 脚本（与 business 单源）
 
-- **目录**：`batch-e2e-tests/src/test/resources/sql/`
-- **典型文件**：`e2e-biz-schema.sql`
+- **权威文件**：`docs/sql/business/V1__create_biz_example_tables.sql`
+- **测试 classpath**：`batch-e2e-tests` 的 `pom.xml` 将该文件复制到 `target/test-classes/sql/`，供 `@Sql` 使用（不再维护 `e2e-biz-schema.sql` 副本）
 - **作用**：
   - 为 E2E 测试创建 `batch_business.biz` 示例业务表（如导入/导出相关表）
 - **执行方**：
-  - E2E 测试类通过 `@Sql("classpath:sql/e2e-biz-schema.sql")` 执行
+  - E2E 测试类通过 `E2eTestSql.BIZ_SCHEMA`（即 `classpath:sql/V1__create_biz_example_tables.sql`）执行
 - **适用场景**：
   - 端到端测试需要业务侧真实表结构
 - **注意事项**：
@@ -85,13 +85,10 @@
 
 ## 5) 测试数据 seed 脚本（模块内）
 
-- **目录**：
-  - `batch-orchestrator/src/test/resources/db/testdata/`
-  - `batch-e2e-tests/src/test/resources/db/testdata/`
+- **目录**：`batch-e2e-tests/src/test/resources/db/testdata/`（平台种子集中维护；`batch-orchestrator` 集成测试经 POM `testResource` 引入 `multi-tenant-seed.sql`）
 - **典型文件**：
   - `import-template-config-seed.sql`
   - `export-template-config-seed.sql`
-  - `dispatch-channel-config-seed.sql`
   - `multi-tenant-seed.sql`
 - **作用**：
   - 给特定测试用例补齐最小前置数据（模板、worker、租户、路由等）
@@ -157,7 +154,7 @@
 
 1. **生产结构变更**：优先放 `docs/sql/flyway/`
 2. **单个测试场景数据**：放 `src/test/resources/db/testdata/`，由 `@Sql` 加载
-3. **E2E 业务表示例**：放 `batch-e2e-tests/src/test/resources/sql/`
+3. **E2E 业务表示例**：维护在 `docs/sql/business/`，由 `batch-e2e-tests` 的 `testResource` 打进测试 classpath
 4. **本地容器起库**：仅改 `docker/postgres/init/`
 5. **系统联调固定数据**：使用 `docs/sql/system-test/`
 

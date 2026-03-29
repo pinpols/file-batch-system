@@ -9,6 +9,7 @@ import com.example.batch.e2e.apps.E2eExportApplication;
 import com.example.batch.e2e.support.E2eOutboxPublishSupport;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
@@ -47,8 +48,8 @@ import org.springframework.test.context.jdbc.Sql;
         properties = "batch.worker.export.worker-type=EXPORT")
 @ActiveProfiles({"test", "e2e"})
 @Sql(scripts = {
-        "classpath:sql/e2e-biz-schema.sql",
-        "classpath:db/testdata/export-template-config-seed.sql"
+        E2eTestSql.BIZ_SCHEMA,
+        E2eTestSql.EXPORT_TEMPLATE_SEED,
 })
 @Tag("e2e")
 class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
