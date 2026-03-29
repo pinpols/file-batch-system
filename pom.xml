@@ -152,19 +152,19 @@
     </build>
 
     <!--
-      Compliance profile — generate SBOM and third-party license report.
-      Activate with: mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party
+      合规（compliance）Profile：生成 SBOM 与第三方许可证报告。
+      启用方式：mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party
 
-      cyclonedx-maven-plugin  : produces target/bom.json + target/bom.xml (CycloneDX v1.6 format)
-      license-maven-plugin    : produces target/generated-sources/license/THIRD-PARTY.txt per module
-                                and target/site/licenses.html in aggregate
+      cyclonedx-maven-plugin：生成 target/bom.json 与 target/bom.xml（CycloneDX v1.6 格式）
+      license-maven-plugin：各模块生成 target/generated-sources/license/THIRD-PARTY.txt，
+                           聚合时在 target/site/licenses.html 汇总
     -->
     <profiles>
         <profile>
             <id>compliance</id>
             <build>
                 <plugins>
-                    <!-- CycloneDX SBOM generator -->
+                    <!-- CycloneDX SBOM 生成器 -->
                     <plugin>
                         <groupId>org.cyclonedx</groupId>
                         <artifactId>cyclonedx-maven-plugin</artifactId>
@@ -195,7 +195,7 @@
                         </configuration>
                     </plugin>
 
-                    <!-- Third-party license aggregation -->
+                    <!-- 第三方许可证聚合 -->
                     <plugin>
                         <groupId>org.codehaus.mojo</groupId>
                         <artifactId>license-maven-plugin</artifactId>
