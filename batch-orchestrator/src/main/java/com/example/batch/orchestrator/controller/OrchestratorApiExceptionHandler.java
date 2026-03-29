@@ -16,18 +16,21 @@ public class OrchestratorApiExceptionHandler {
 
     @ExceptionHandler(BizException.class)
     public ResponseEntity<CommonResponse<Void>> handleBizException(BizException exception) {
+        log.warn("orchestrator biz exception", exception);
         return ResponseEntity.status(exception.getCode().httpStatus())
                 .body(CommonResponse.failure(exception.getCode(), exception.getMessage()));
     }
 
     @ExceptionHandler(SystemException.class)
     public ResponseEntity<CommonResponse<Void>> handleSystemException(SystemException exception) {
+        log.error("orchestrator system exception", exception);
         return ResponseEntity.status(exception.getCode().httpStatus())
                 .body(CommonResponse.failure(exception.getCode(), exception.getMessage()));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<CommonResponse<Void>> handleResponseStatus(ResponseStatusException exception) {
+        log.warn("orchestrator response status exception", exception);
         ResultCode code = switch (exception.getStatusCode().value()) {
             case 404 -> ResultCode.NOT_FOUND;
             case 409 -> ResultCode.CONFLICT;

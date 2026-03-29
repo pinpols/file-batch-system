@@ -108,6 +108,28 @@ class ConsoleSecurityConfigurationTest {
     }
 
     @Test
+    void shouldAuthenticateAsAdminInDemoModeWithoutToken() throws Exception {
+        batchSecurityProperties.setDemoOpen(true);
+        MockHttpServletRequest request = baseRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.doFilter(request, response, new FilterChain() {
+            @Override
+            public void doFilter(jakarta.servlet.ServletRequest servletRequest, jakarta.servlet.ServletResponse servletResponse) {
+                chainCalled.set(true);
+                com.example.batch.console.support.ConsolePrincipal principal =
+                        (com.example.batch.console.support.ConsolePrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+                assertThat(principal.authorities()).contains("ROLE_ADMIN");
+            }
+        });
+
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
+        assertThat(chainCalled).isTrue();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
     void shouldAuthenticateWithJwtBearerToken() throws Exception {
         ConsoleJwtService jwtService = new ConsoleJwtService(properties);
         String token = jwtService.issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN")).accessToken();

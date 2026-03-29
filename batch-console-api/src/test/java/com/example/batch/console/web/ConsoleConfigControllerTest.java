@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.ResponseMeta;
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.console.application.ConsoleConfigApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
@@ -37,7 +38,7 @@ class ConsoleConfigControllerTest {
     @BeforeEach
     void setUp() {
         ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory);
+        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
 
         when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
 
