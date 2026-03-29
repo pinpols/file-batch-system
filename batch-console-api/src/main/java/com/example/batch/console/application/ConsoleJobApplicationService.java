@@ -2,10 +2,12 @@ package com.example.batch.console.application;
 
 import com.example.batch.console.web.request.CompensateRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
+import com.example.batch.console.web.request.BatchDayCatchUpRequest;
 import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
 import com.example.batch.console.web.request.TriggerRequest;
+import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
 
 /**
  * 控制台作业运维应用服务：触发、补偿、重跑、死信回放、Catch-Up 审批等写操作，经 HTTP 调用编排器与触发器。
@@ -29,4 +31,9 @@ public interface ConsoleJobApplicationService {
 
     /** 审批通过待处理的 Catch-Up 请求。 */
     String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey);
+
+    /** 按批量日发起 catch-up。 */
+    ConsoleBatchDayCatchUpResponse catchUpBatchDay(String bizDate,
+                                                  BatchDayCatchUpRequest request,
+                                                  String idempotencyKey);
 }

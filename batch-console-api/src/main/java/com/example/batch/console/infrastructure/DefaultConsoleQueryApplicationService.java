@@ -20,6 +20,8 @@ import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.console.domain.query.AlertEventQuery;
+import com.example.batch.console.web.query.BatchDayQueryRequest;
+import com.example.batch.console.web.query.BatchDayWindowQueryRequest;
 import com.example.batch.console.domain.query.AuditLogQuery;
 import com.example.batch.console.domain.query.ApprovalCommandQuery;
 import com.example.batch.console.domain.query.DeadLetterTaskQuery;
@@ -42,6 +44,9 @@ import com.example.batch.console.domain.query.WorkflowNodeRunQuery;
 import com.example.batch.console.domain.query.ConsoleAiAuditLogQuery;
 import com.example.batch.console.web.response.AiAuditLogResponse;
 import com.example.batch.console.web.response.ConsoleAlertEventResponse;
+import com.example.batch.console.web.response.ConsoleBatchDayResponse;
+import com.example.batch.console.web.response.ConsoleBatchDaySummaryResponse;
+import com.example.batch.console.web.response.ConsoleBatchDayWindowResponse;
 import com.example.batch.console.web.response.ConsoleDeadLetterTaskResponse;
 import com.example.batch.console.web.response.ConsoleFileArrivalGroupResponse;
 import com.example.batch.console.web.response.ConsoleFileErrorRecordResponse;
@@ -69,6 +74,8 @@ import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.console.mapper.AuditLogMapper;
+import com.example.batch.console.mapper.BatchDayMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.ApprovalCommandMapper;
 import com.example.batch.console.mapper.DeadLetterTaskMapper;
 import com.example.batch.console.mapper.FileErrorRecordMapper;
@@ -129,9 +136,13 @@ import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.ContentMaskingUtils;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -150,6 +161,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     private final ConsoleTenantGuard tenantGuard;
     private final AuditLogMapper auditLogMapper;
     private final AlertEventMapper alertEventMapper;
+    private final BatchDayMapper batchDayMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
     private final ApprovalCommandMapper approvalCommandMapper;
     private final JobDefinitionMapper jobDefinitionMapper;
     private final JobInstanceMapper jobInstanceMapper;
@@ -799,6 +812,38 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
+    public PageResponse<ConsoleBatchDayResponse> batchDays(BatchDayQueryRequest request) {
+        PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+        String tenantId = resolveTenant(request.getTenantId());
+        LocalDate fromBizDate = parseLocalDate(request.getFrom(), "from");
+        LocalDate toBizDate = parseLocalDate(request.getTo(), "to");
+        List<Map<String, Object>> rows = batchDayMapper.selectByQuery(
+                tenantId,
+                request.getCalendarCode(),
+                fromBizDate,
+                toBizDate,
+                pageRequest
+        );
+        long total = batchDayMapper.countByQuery(tenantId, request.getCalendarCode(), fromBizDate, toBizDate);
+        List<ConsoleBatchDayResponse> responses = rows.stream()
+                .map(row -> toBatchDayResponse(tenantId, request.getCalendarCode(), row))
+                .toList();
+        return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), responses);
+    }
+
+    @Override
+    public ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request) {
+        String tenantId = resolveTenant(request.getTenantId());
+        LocalDate parsedBizDate = parseLocalDate(bizDate, "bizDate");
+        return toBatchDayWindowResponse(
+                tenantId,
+                request.getCalendarCode(),
+                parsedBizDate,
+                batchDayMapper.selectWindow(tenantId, request.getCalendarCode(), parsedBizDate)
+        );
+    }
+
+    @Override
     public PageResponse<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
         ApprovalCommandQuery query = new ApprovalCommandQuery();
@@ -1027,6 +1072,105 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+    private ConsoleBatchDayResponse toBatchDayResponse(String tenantId,
+                                                       String calendarCode,
+                                                       Map<String, Object> row) {
+        LocalDate bizDate = localDateValue(row, "bizDate");
+        List<ConsoleBatchDaySummaryResponse> summaries = loadBatchDaySummaries(tenantId, calendarCode, bizDate);
+        List<ConsoleBatchDaySummaryResponse> catchupSummary = summaries.stream()
+                .filter(summary -> safeInt(summary.failedJobCount()) > 0 || safeInt(summary.catchupCount()) > 0)
+                .toList();
+        return new ConsoleBatchDayResponse(
+                bizDate,
+                stringValue(row, "dayStatus"),
+                instantValue(row, "openAt"),
+                instantValue(row, "cutoffAt"),
+                instantValue(row, "settledAt"),
+                instantValue(row, "slaDeadlineAt"),
+                resolveSlaStatus(instantValue(row, "slaDeadlineAt"), instantValue(row, "settledAt")),
+                intValue(row, "totalJobCount"),
+                intValue(row, "successJobCount"),
+                intValue(row, "failedJobCount"),
+                intValue(row, "inFlightJobCount"),
+                intValue(row, "lateCount"),
+                intValue(row, "catchupCount"),
+                catchupSummary
+        );
+    }
+
+    private ConsoleBatchDayWindowResponse toBatchDayWindowResponse(String tenantId,
+                                                                   String calendarCode,
+                                                                   LocalDate bizDate,
+                                                                   Map<String, Object> row) {
+        Instant cutoffAt = instantValue(row, "cutoffAt");
+        Instant slaDeadlineAt = instantValue(row, "slaDeadlineAt");
+        Instant now = Instant.now();
+        Long timeUntilCutoffSeconds = cutoffAt == null ? null : ChronoUnit.SECONDS.between(now, cutoffAt);
+        Instant lateArrivalWindowClosesAt = resolveLateArrivalWindowClosesAt(tenantId, calendarCode, cutoffAt);
+        List<ConsoleBatchDaySummaryResponse> jobs = loadBatchDaySummaries(tenantId, calendarCode, bizDate);
+        return new ConsoleBatchDayWindowResponse(
+                bizDate,
+                stringValue(row, "dayStatus"),
+                cutoffAt,
+                slaDeadlineAt,
+                now,
+                timeUntilCutoffSeconds,
+                lateArrivalWindowClosesAt,
+                jobs
+        );
+    }
+
+    private List<ConsoleBatchDaySummaryResponse> loadBatchDaySummaries(String tenantId,
+                                                                       String calendarCode,
+                                                                       LocalDate bizDate) {
+        if (bizDate == null) {
+            return List.of();
+        }
+        List<Map<String, Object>> rows = batchDayMapper.selectJobSummaries(tenantId, calendarCode, bizDate);
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        return rows.stream().map(this::toBatchDaySummaryResponse).toList();
+    }
+
+    private ConsoleBatchDaySummaryResponse toBatchDaySummaryResponse(Map<String, Object> row) {
+        return new ConsoleBatchDaySummaryResponse(
+                stringValue(row, "jobCode"),
+                intValue(row, "totalJobCount"),
+                intValue(row, "successJobCount"),
+                intValue(row, "failedJobCount"),
+                intValue(row, "inFlightJobCount"),
+                intValue(row, "catchupCount")
+        );
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private Instant resolveLateArrivalWindowClosesAt(String tenantId, String calendarCode, Instant cutoffAt) {
+        if (cutoffAt == null) {
+            return null;
+        }
+        Map<String, Object> calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
+        Integer tolerance = intValue(calendar, "lateArrivalToleranceMin");
+        if (tolerance == null || tolerance <= 0) {
+            return cutoffAt;
+        }
+        return cutoffAt.plusSeconds(tolerance * 60L);
+    }
+
+    private String resolveSlaStatus(Instant slaDeadlineAt, Instant settledAt) {
+        if (slaDeadlineAt == null) {
+            return "NO_SLA";
+        }
+        Instant now = Instant.now();
+        if (settledAt != null) {
+            return settledAt.isAfter(slaDeadlineAt) ? "SLA_BREACH" : "ON_TIME";
+        }
+        return now.isAfter(slaDeadlineAt) ? "SLA_TIMEOUT" : "ON_TIME";
     }
 
     private ConsoleAlertEventResponse toAlertEventResponse(AlertEventEntity entity) {
@@ -1336,6 +1480,20 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         return value == null ? null : ConsoleTextSanitizer.safeDisplay(value);
     }
 
+    private LocalDate localDateValue(Map<String, Object> row, String key) {
+        Object value = row == null ? null : row.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        if (value instanceof java.sql.Date sqlDate) {
+            return sqlDate.toLocalDate();
+        }
+        return LocalDate.parse(String.valueOf(value));
+    }
+
     private Long longValue(Map<String, Object> row, String key) {
         Object value = row == null ? null : row.get(key);
         if (value == null) {
@@ -1397,6 +1555,17 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
             return Instant.parse(value);
         } catch (DateTimeParseException exception) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must be ISO-8601 datetime");
+        }
+    }
+
+    private LocalDate parseLocalDate(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must use yyyy-MM-dd");
         }
     }
 

@@ -16,7 +16,7 @@
 ## 1) 平台库 Flyway 迁移脚本
 
 - **目录**：`docs/sql/flyway/`
-- **典型文件**：`V1__create_schema.sql` 到 `V26__approval_command.sql`
+- **典型文件**：`V1__create_schema.sql` 到当前最新平台迁移（例如 `V31__add_batch_day_support.sql`）
 - **作用**：
   - 演进平台库 `batch_platform` 结构（`batch`/`quartz` schema 下平台相关表）
   - 作为平台数据库结构的主干变更渠道
@@ -172,4 +172,3 @@
 
 建议保持“**结构迁移**”与“**场景数据**”分离：  
 结构走 Flyway，数据走 testdata/system-test。
-

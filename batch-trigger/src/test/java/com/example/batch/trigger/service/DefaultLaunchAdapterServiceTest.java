@@ -7,15 +7,18 @@ import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
+import com.example.batch.trigger.support.CalendarBizDateDefinition;
 import com.example.batch.trigger.support.TriggerDescriptor;
 import com.example.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class DefaultLaunchAdapterServiceTest {
 
-    private final DefaultLaunchAdapterService service = new DefaultLaunchAdapterService();
+    private final DefaultLaunchAdapterService service = new DefaultLaunchAdapterService(new CalendarBizDateResolver());
 
     @Test
     void shouldBuildApiLaunchRequestFromControllerPayload() {
@@ -55,15 +58,22 @@ class DefaultLaunchAdapterServiceTest {
         descriptor.setCatchUpPolicy(CatchUpPolicyType.MANUAL_APPROVAL.code());
 
         Instant fireTime = Instant.parse("2026-03-27T16:30:00Z");
+        CalendarBizDateDefinition calendar = new CalendarBizDateDefinition(
+                "Asia/Shanghai",
+                LocalTime.of(6, 0),
+                "SKIP",
+                Set.of(),
+                Set.of()
+        );
         LaunchRequest launchRequest = service.fromScheduledTrigger(new ScheduledTriggerCommand(
                 descriptor,
                 fireTime,
                 TriggerType.CATCH_UP,
                 "req-002",
                 "trace-002"
-        ));
+        ), calendar);
 
-        assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, 3, 28));
+        assertThat(launchRequest.bizDate()).isEqualTo(LocalDate.of(2026, 3, 27));
         assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.CATCH_UP);
         assertThat(launchRequest.params())
                 .containsEntry("scheduleType", "CRON")
@@ -93,7 +103,7 @@ class DefaultLaunchAdapterServiceTest {
                 null,
                 "req-003",
                 "trace-003"
-        ));
+        ), null);
 
         assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.SCHEDULED);
         assertThat(launchRequest.params())

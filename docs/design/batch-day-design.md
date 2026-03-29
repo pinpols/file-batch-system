@@ -284,13 +284,13 @@ MANUAL_APPROVAL:  创建 catch-up trigger_request，状态 ACCEPTED，
 ### 批量日视图
 
 ```
-GET /console/query/batch-days
+GET /api/console/query/batch-days
     ?tenantId=&calendarCode=&from=2026-03-01&to=2026-03-31
     &pageNo=1&pageSize=20
 
-Response: PageResponse<BatchDayView>
+Response: PageResponse<ConsoleBatchDayResponse>
 
-BatchDayView:
+ConsoleBatchDayResponse:
   bizDate           DATE
   dayStatus         String           // OPEN/CUTOFF/IN_FLIGHT/SETTLED/FAILED
   openAt            OffsetDateTime
@@ -304,26 +304,26 @@ BatchDayView:
   inFlightJobCount  int
   lateCount         int
   catchupCount      int
-  catchupSummary    List<CatchUpSummary>
+  catchupSummary    List<ConsoleBatchDaySummaryResponse>
 ```
 
 ### 窗口状态视图
 
 ```
-GET /console/query/batch-days/{bizDate}/window
+GET /api/console/query/batch-days/{bizDate}/window
     ?tenantId=&calendarCode=
 
-Response: BatchDayWindowView
+Response: ConsoleBatchDayWindowResponse
   bizDate, dayStatus, cutoffAt, slaDeadlineAt
   currentSystemTime, timeUntilCutoff (seconds, 负数表示已过 cutoff)
   lateArrivalWindowClosesAt
-  jobs: List<JobDaySummary>   // 该批量日所有 job 的状态汇总
+  jobs: List<ConsoleBatchDaySummaryResponse>   // 该批量日所有 job 的状态汇总
 ```
 
 ### 补跑入口
 
 ```
-POST /console/command/batch-days/{bizDate}/catchup
+POST /api/console/jobs/batch-days/{bizDate}/catchup
     Body: { tenantId, calendarCode, jobCodes?: [] }
 
 → 对指定 bizDate 的 FAILED job（或指定 jobCodes）触发 catch-up
@@ -359,7 +359,7 @@ Phase 5：Late arrival + catch-up 驱动
   └─ BatchDaySettleScheduler → FAILED 时驱动 catch-up
 
 Phase 6：前端 API
-  └─ BatchDayView DTO + 查询接口
+  └─ ConsoleBatchDayResponse DTO + 查询接口
   └─ 窗口状态接口
   └─ 补跑入口接口
   └─ OpenAPI 回写

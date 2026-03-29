@@ -1,6 +1,8 @@
 package com.example.batch.console.application;
 
 import com.example.batch.console.web.query.AlertEventQueryRequest;
+import com.example.batch.console.web.query.BatchDayQueryRequest;
+import com.example.batch.console.web.query.BatchDayWindowQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.ConsoleAiAuditLogQueryRequest;
@@ -29,6 +31,8 @@ import com.example.batch.console.web.query.WorkflowRunQueryRequest;
 import com.example.batch.console.web.query.WorkflowTopologyQueryRequest;
 import com.example.batch.console.web.response.AiAuditLogResponse;
 import com.example.batch.console.web.response.ConsoleAlertEventResponse;
+import com.example.batch.console.web.response.ConsoleBatchDayResponse;
+import com.example.batch.console.web.response.ConsoleBatchDayWindowResponse;
 import com.example.batch.console.web.response.ConsoleDeadLetterTaskResponse;
 import com.example.batch.console.web.response.ConsoleFileArrivalGroupResponse;
 import com.example.batch.console.web.response.ConsoleFileErrorRecordResponse;
@@ -156,4 +160,10 @@ public interface ConsoleQueryApplicationService {
 
     /** 查询审批指令记录。 */
     PageResponse<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request);
+
+    /** 查询批量日列表。 */
+    PageResponse<ConsoleBatchDayResponse> batchDays(BatchDayQueryRequest request);
+
+    /** 查询批量日窗口状态。 */
+    ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request);
 }

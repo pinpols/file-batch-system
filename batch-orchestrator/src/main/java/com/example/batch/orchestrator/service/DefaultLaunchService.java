@@ -16,6 +16,8 @@ import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.service.PartitionDispatchService;
 import com.example.batch.orchestrator.application.service.WorkflowDagService;
+import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
+import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -23,6 +25,8 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
+import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
+import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -40,6 +44,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 批任务启动（Launch）的核心入口：把一次触发请求落地为可调度的运行态，并驱动后续分片/任务派发。
@@ -64,6 +69,8 @@ public class DefaultLaunchService implements LaunchService {
     private final WorkflowRunMapper workflowRunMapper;
     private final WorkflowNodeRunMapper workflowNodeRunMapper;
     private final WorkflowDagService workflowDagService;
+    private final BusinessCalendarRepository businessCalendarRepository;
+    private final BatchDayInstanceRepository batchDayInstanceRepository;
 
     /**
      * 通过延迟注入的 self 触发 AOP 拦截，确保 {@link #prepareJobInstance} 的 {@code @Transactional} 在同类调用中仍生效。
@@ -78,7 +85,9 @@ public class DefaultLaunchService implements LaunchService {
                                  JobInstanceMapper jobInstanceMapper,
                                  WorkflowRunMapper workflowRunMapper,
                                  WorkflowNodeRunMapper workflowNodeRunMapper,
-                                 WorkflowDagService workflowDagService) {
+                                 WorkflowDagService workflowDagService,
+                                 BusinessCalendarRepository businessCalendarRepository,
+                                 BatchDayInstanceRepository batchDayInstanceRepository) {
         this.launchValidationService = launchValidationService;
         this.partitionDispatchService = partitionDispatchService;
         this.triggerRequestMapper = triggerRequestMapper;
@@ -86,6 +95,8 @@ public class DefaultLaunchService implements LaunchService {
         this.workflowRunMapper = workflowRunMapper;
         this.workflowNodeRunMapper = workflowNodeRunMapper;
         this.workflowDagService = workflowDagService;
+        this.businessCalendarRepository = businessCalendarRepository;
+        this.batchDayInstanceRepository = batchDayInstanceRepository;
     }
 
     @Override
@@ -100,16 +111,17 @@ public class DefaultLaunchService implements LaunchService {
 
         String traceId = request.traceId() == null || request.traceId().isBlank()
                 ? IdGenerator.newTraceId() : request.traceId();
+        LaunchRequest routedRequest = routeLateArrivalIfNeeded(request, loaded);
         Map<String, Object> effectiveParams = mergeLaunchParams(
                 loaded.jobDefinition(),
-                request.triggerType(),
-                request.params()
+                routedRequest.triggerType(),
+                routedRequest.params()
         );
 
         // T1：先把 instance/workflow 落库并提交，避免 T2 执行期间持有更长时间锁。
         PreparedLaunch prepared;
         try {
-            prepared = self.prepareJobInstance(request, loaded, effectiveParams, traceId);
+            prepared = self.prepareJobInstance(routedRequest, loaded, effectiveParams, traceId);
         } catch (DuplicateKeyException exception) {
             return resolveConcurrentDuplicate(request, loaded, exception);
         } catch (DataIntegrityViolationException exception) {
@@ -163,10 +175,23 @@ public class DefaultLaunchService implements LaunchService {
         jobInstance.setTraceId(traceId);
         jobInstance.setParamsSnapshot(buildParamsSnapshot(loaded.jobDefinition(), request, effectiveParams, traceId));
         jobInstance.setResultSummary(null);
-        jobInstance.setDeadlineAt(resolveDeadlineAt(request.bizDate(), effectiveParams));
+        Instant batchDaySlaDeadlineAt = resolveBatchDaySlaDeadlineAt(
+                request.tenantId(),
+                loaded.jobDefinition().calendarCode(),
+                request.bizDate()
+        );
+        Instant createdAt = Instant.now();
+        jobInstance.setDeadlineAt(resolveDeadlineAt(
+                createdAt,
+                request.bizDate(),
+                loaded.jobDefinition(),
+                effectiveParams,
+                batchDaySlaDeadlineAt
+        ));
         jobInstance.setExpectedDurationSeconds(resolveExpectedDurationSeconds(loaded.jobDefinition(), effectiveParams));
         jobInstance.setSlaAlertedAt(null);
         jobInstanceMapper.insert(jobInstance);
+        upsertBatchDayInstance(request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
 
         List<WorkflowDagService.DagNodeResolution> initialNodes = workflowDagService.resolveInitialNodes(
                 loaded.workflowDefinition().id(), buildPayloadJson(effectiveParams));
@@ -339,6 +364,176 @@ public class DefaultLaunchService implements LaunchService {
         return v == null ? null : String.valueOf(v).trim();
     }
 
+    private void upsertBatchDayInstance(LaunchRequest request,
+                                        JobDefinitionRecord jobDefinition,
+                                        Map<String, Object> effectiveParams,
+                                        Instant batchDaySlaDeadlineAt) {
+        if (request == null || request.bizDate() == null || jobDefinition == null) {
+            return;
+        }
+        String calendarCode = textValue(jobDefinition.calendarCode());
+        if (!StringUtils.hasText(calendarCode)) {
+            return;
+        }
+        Instant now = Instant.now();
+        BatchDayInstanceRecord existing = batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
+                request.tenantId(), calendarCode, request.bizDate());
+        if (existing == null) {
+            boolean catchUpLaunch = isCatchUpLaunch(request);
+            boolean lateAccepted = isLateAccepted(effectiveParams);
+            batchDayInstanceRepository.save(new BatchDayInstanceRecord(
+                    null,
+                    request.tenantId(),
+                    calendarCode,
+                    request.bizDate(),
+                    (catchUpLaunch || lateAccepted) ? "IN_FLIGHT" : "OPEN",
+                    now,
+                    null,
+                    null,
+                    batchDaySlaDeadlineAt,
+                    lateAccepted ? 1 : 0,
+                    catchUpLaunch ? 1 : 0,
+                    now,
+                    now
+            ));
+            return;
+        }
+        boolean lateAccepted = isLateAccepted(effectiveParams);
+        boolean catchUpLaunch = isCatchUpLaunch(request);
+        boolean shouldReopen = shouldReopenBatchDay(existing.dayStatus()) || lateAccepted || catchUpLaunch;
+        BatchDayInstanceRecord updated = existing;
+        boolean changed = false;
+        if (updated.slaDeadlineAt() == null && batchDaySlaDeadlineAt != null) {
+            updated = updated.withSlaDeadlineAt(batchDaySlaDeadlineAt, now);
+            changed = true;
+        }
+        if (lateAccepted) {
+            updated = updated.withLateCount(safeIncrement(updated.lateCount()), now);
+            changed = true;
+        }
+        if (catchUpLaunch) {
+            updated = updated.withCatchupCount(safeIncrement(updated.catchupCount()), now);
+            changed = true;
+        }
+        if (shouldReopen) {
+            updated = updated.withReopened(now);
+            changed = true;
+        }
+        if (!changed) {
+            return;
+        }
+        batchDayInstanceRepository.save(updated);
+    }
+
+    private Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
+        BusinessCalendarRecord calendar = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
+                tenantId, calendarCode, true);
+        if (calendar == null || calendar.slaOffsetMin() == null || calendar.slaOffsetMin() <= 0) {
+            return null;
+        }
+        LocalTime cutoffTime = calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
+        ZoneId zoneId = StringUtils.hasText(calendar.timezone())
+                ? ZoneId.of(calendar.timezone())
+                : ZoneId.systemDefault();
+        Instant cutoffAt = bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
+        return cutoffAt.plusSeconds(calendar.slaOffsetMin() * 60L);
+    }
+
+    private boolean shouldReopenBatchDay(String dayStatus) {
+        return "FAILED".equalsIgnoreCase(dayStatus) || "SETTLED".equalsIgnoreCase(dayStatus);
+    }
+
+    private boolean isLateAccepted(Map<String, Object> params) {
+        if (params == null) {
+            return false;
+        }
+        Object lateArrival = params.get("lateArrival");
+        Object arrivalStatus = params.get("arrivalStatus");
+        return toBoolean(lateArrival) && "LATE_ACCEPTED".equalsIgnoreCase(textValue(arrivalStatus));
+    }
+
+    private boolean isCatchUpLaunch(LaunchRequest request) {
+        return request != null && TriggerType.CATCH_UP == request.triggerType();
+    }
+
+    private LaunchRequest routeLateArrivalIfNeeded(LaunchRequest request, LaunchLoadResult loaded) {
+        if (request == null || request.triggerType() != TriggerType.EVENT || loaded == null
+                || loaded.jobDefinition() == null || request.bizDate() == null) {
+            return request;
+        }
+        String calendarCode = textValue(loaded.jobDefinition().calendarCode());
+        if (!StringUtils.hasText(calendarCode)) {
+            return request;
+        }
+        BatchDayInstanceRecord batchDay = batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
+                request.tenantId(),
+                calendarCode,
+                request.bizDate()
+        );
+        if (batchDay == null || batchDay.dayStatus() == null) {
+            return request;
+        }
+        String dayStatus = batchDay.dayStatus();
+        if ("OPEN".equalsIgnoreCase(dayStatus) || "IN_FLIGHT".equalsIgnoreCase(dayStatus)) {
+            return request;
+        }
+
+        boolean lateAccepted = "CUTOFF".equalsIgnoreCase(dayStatus)
+                && isWithinLateArrivalTolerance(batchDay, calendarCode);
+        Map<String, Object> routedParams = new LinkedHashMap<>();
+        if (request.params() != null) {
+            routedParams.putAll(request.params());
+        }
+        routedParams.put("lateArrival", true);
+        routedParams.put("arrivalStatus", lateAccepted ? "LATE_ACCEPTED" : "LATE_REJECTED");
+        routedParams.put("batchDayStatus", dayStatus);
+        if (batchDay.cutoffAt() != null) {
+            routedParams.put("batchDayCutoffAt", batchDay.cutoffAt().toString());
+        }
+        if (lateAccepted) {
+            routedParams.put("lateArrivalToleranceMin", resolveLateArrivalToleranceMin(request.tenantId(), calendarCode));
+        } else {
+            routedParams.put("catchUpReason", "LATE_ARRIVAL_OR_CLOSED_BATCH_DAY");
+            loaded.triggerRequest().setTriggerType(TriggerType.CATCH_UP.code());
+            triggerRequestMapper.updateTriggerType(request.tenantId(), request.requestId(), TriggerType.CATCH_UP.code());
+        }
+        return new LaunchRequest(
+                request.tenantId(),
+                request.jobCode(),
+                request.bizDate(),
+                lateAccepted ? TriggerType.EVENT : TriggerType.CATCH_UP,
+                request.requestId(),
+                request.traceId(),
+                routedParams
+        );
+    }
+
+    private boolean isWithinLateArrivalTolerance(BatchDayInstanceRecord batchDay, String calendarCode) {
+        if (batchDay == null || batchDay.cutoffAt() == null || !StringUtils.hasText(calendarCode)) {
+            return false;
+        }
+        Instant cutoffCloseAt = batchDay.cutoffAt().plusSeconds(
+                Math.max(0, resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode)) * 60L
+        );
+        return !Instant.now().isAfter(cutoffCloseAt);
+    }
+
+    private Integer resolveLateArrivalToleranceMin(String tenantId, String calendarCode) {
+        BusinessCalendarRecord calendar = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
+                tenantId,
+                calendarCode,
+                true
+        );
+        if (calendar == null || calendar.lateArrivalToleranceMin() == null || calendar.lateArrivalToleranceMin() < 0) {
+            return 0;
+        }
+        return calendar.lateArrivalToleranceMin();
+    }
+
+    private Integer safeIncrement(Integer value) {
+        return value == null ? 1 : value + 1;
+    }
+
     private Long resolveRelatedFileId(Map<String, Object> params) {
         return toPositiveLong(firstNonNull(params.get("relatedFileId"), params.get("fileId"),
                 params.get("sourceFileId")));
@@ -348,11 +543,38 @@ public class DefaultLaunchService implements LaunchService {
         return toPositiveLong(firstNonNull(params.get("parentInstanceId"), params.get("targetInstanceId")));
     }
 
-    private Instant resolveDeadlineAt(LocalDate bizDate, Map<String, Object> params) {
+    private Instant resolveDeadlineAt(Instant createdAt,
+                                      LocalDate bizDate,
+                                      JobDefinitionRecord jobDefinition,
+                                      Map<String, Object> params,
+                                      Instant batchDaySlaDeadlineAt) {
         Instant explicit = parseDeadlineInstant(
                 firstNonNull(params.get("deadlineAt"), params.get("deadline"), params.get("slaDeadlineAt")),
                 bizDate);
-        return explicit != null ? explicit : parseDeadlineInstant(params.get("deadlineTime"), bizDate);
+        Instant deadlineTime = parseDeadlineInstant(params.get("deadlineTime"), bizDate);
+        Instant jobDeadlineAt = resolveJobDeadlineAt(createdAt, jobDefinition);
+        return earliest(explicit, deadlineTime, jobDeadlineAt, batchDaySlaDeadlineAt);
+    }
+
+    private Instant resolveJobDeadlineAt(Instant createdAt, JobDefinitionRecord jobDefinition) {
+        if (createdAt == null || jobDefinition == null || jobDefinition.timeoutSeconds() == null
+                || jobDefinition.timeoutSeconds() <= 0) {
+            return null;
+        }
+        return createdAt.plusSeconds(jobDefinition.timeoutSeconds());
+    }
+
+    private Instant earliest(Instant... candidates) {
+        Instant result = null;
+        for (Instant candidate : candidates) {
+            if (candidate == null) {
+                continue;
+            }
+            if (result == null || candidate.isBefore(result)) {
+                result = candidate;
+            }
+        }
+        return result;
     }
 
     private Object firstNonNull(Object... candidates) {

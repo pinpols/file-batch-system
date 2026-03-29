@@ -77,9 +77,14 @@ CREATE TABLE IF NOT EXISTS batch.business_calendar (
     holiday_roll_rule VARCHAR(32) NOT NULL DEFAULT 'SKIP',
     catch_up_policy VARCHAR(32) NOT NULL DEFAULT 'NONE',
     catch_up_max_days INTEGER NOT NULL DEFAULT 0,
+    cutoff_time TIME NOT NULL DEFAULT '06:00:00',
+    late_arrival_tolerance_min INTEGER NOT NULL DEFAULT 60,
+    sla_offset_min INTEGER NOT NULL DEFAULT 0,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_business_calendar_late_arrival_tolerance_min CHECK (late_arrival_tolerance_min >= 0),
+    CONSTRAINT ck_business_calendar_sla_offset_min CHECK (sla_offset_min >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS batch.calendar_holiday (
@@ -91,6 +96,26 @@ CREATE TABLE IF NOT EXISTS batch.calendar_holiday (
     description VARCHAR(512),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS batch.batch_day_instance (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL,
+    calendar_code VARCHAR(128) NOT NULL,
+    biz_date DATE NOT NULL,
+    day_status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
+    open_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cutoff_at TIMESTAMPTZ,
+    settled_at TIMESTAMPTZ,
+    sla_deadline_at TIMESTAMPTZ,
+    late_count INTEGER NOT NULL DEFAULT 0,
+    catchup_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_batch_day_instance UNIQUE (tenant_id, calendar_code, biz_date),
+    CONSTRAINT ck_batch_day_instance_status CHECK (day_status IN ('OPEN', 'CUTOFF', 'IN_FLIGHT', 'SETTLED', 'FAILED')),
+    CONSTRAINT ck_batch_day_instance_late_count CHECK (late_count >= 0),
+    CONSTRAINT ck_batch_day_instance_catchup_count CHECK (catchup_count >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS batch.worker_registry (
@@ -771,6 +796,9 @@ CREATE TABLE IF NOT EXISTS batch.quota_runtime_state (
 
 CREATE INDEX IF NOT EXISTS idx_quota_runtime_state_expire
     ON batch.quota_runtime_state (window_expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_batch_day_instance_status
+    ON batch.batch_day_instance (day_status, biz_date DESC);
 
 -- Align with Flyway V26 — required by ApprovalCommandMapper / approval workflow ITs
 CREATE TABLE IF NOT EXISTS batch.approval_command (

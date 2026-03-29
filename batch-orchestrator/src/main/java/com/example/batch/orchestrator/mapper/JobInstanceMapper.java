@@ -1,7 +1,9 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.domain.query.JobInstanceQuery;
+import java.time.LocalDate;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -55,4 +57,12 @@ public interface JobInstanceMapper {
                                          @Param("queueCode") String queueCode);
 
     long countActiveByFairShareGroup(@Param("fairShareGroup") String fairShareGroup);
+
+    BatchDayInstanceMetrics selectBatchDayMetrics(@Param("tenantId") String tenantId,
+                                                  @Param("calendarCode") String calendarCode,
+                                                  @Param("bizDate") LocalDate bizDate);
+
+    List<JobInstanceEntity> selectBatchDayCatchUpCandidates(@Param("tenantId") String tenantId,
+                                                            @Param("calendarCode") String calendarCode,
+                                                            @Param("bizDate") LocalDate bizDate);
 }

@@ -17,8 +17,12 @@ import com.example.batch.common.exception.SystemException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
+import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
+import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
+import com.example.batch.trigger.support.TriggerDescriptor;
+import java.time.Instant;
 import com.example.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.LocalDate;
 import java.util.Map;
@@ -38,12 +42,19 @@ class DefaultTriggerServiceTest {
     private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
     @Mock
     private TriggerRequestMapper triggerRequestMapper;
+    @Mock
+    private BusinessCalendarMapper businessCalendarMapper;
 
     private DefaultTriggerService service;
 
     @BeforeEach
     void setUp() {
-        service = new DefaultTriggerService(launchAdapterService, orchestratorTriggerAdapter, triggerRequestMapper);
+        service = new DefaultTriggerService(
+                launchAdapterService,
+                orchestratorTriggerAdapter,
+                triggerRequestMapper,
+                businessCalendarMapper
+        );
     }
 
     @Test
@@ -162,6 +173,35 @@ class DefaultTriggerServiceTest {
         verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
     }
 
+    @Test
+    void shouldSkipScheduledTriggerWhenBizDateResolutionReturnsNull() {
+        ScheduledTriggerCommand command = new ScheduledTriggerCommand(
+                scheduledDescriptor(),
+                Instant.parse("2026-03-28T18:00:00Z"),
+                TriggerType.SCHEDULED,
+                "req-skip",
+                "trace-skip"
+        );
+        LaunchRequest launchRequest = new LaunchRequest(
+                "t1",
+                "IMPORT_JOB",
+                null,
+                TriggerType.SCHEDULED,
+                "req-skip",
+                "trace-skip",
+                Map.of("calendarCode", "BIZ_CAL")
+        );
+
+        when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
+
+        LaunchResponse response = service.launchScheduled(command);
+
+        assertThat(response.instanceNo()).isNull();
+        assertThat(response.traceId()).isEqualTo("trace-skip");
+        verify(triggerRequestMapper, never()).insert(any());
+        verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+    }
+
     private TriggerLaunchRequest validRequest() {
         TriggerLaunchRequest request = new TriggerLaunchRequest();
         request.setTenantId("t1");
@@ -170,5 +210,14 @@ class DefaultTriggerServiceTest {
         request.setTriggerType(TriggerType.API);
         request.setParams(Map.of());
         return request;
+    }
+
+    private TriggerDescriptor scheduledDescriptor() {
+        TriggerDescriptor descriptor = new TriggerDescriptor();
+        descriptor.setTenantId("t1");
+        descriptor.setJobCode("IMPORT_JOB");
+        descriptor.setTimezone("Asia/Shanghai");
+        descriptor.setCalendarCode("BIZ_CAL");
+        return descriptor;
     }
 }

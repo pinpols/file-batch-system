@@ -209,6 +209,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
+  /api/console/jobs/batch-days/{bizDate}/catchup:
+    post:
+      tags: [Jobs]
+      summary: Launch batch-day catch-up
+      operationId: batchDayCatchUp
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: bizDate
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDayCatchUpRequest'
+      responses:
+        '200':
+          description: Catch-up result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleBatchDayCatchUpResponse'
   /api/console/approvals/{approvalNo}/approve:
     post:
       tags: [Approvals]
@@ -1912,6 +1938,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponsePendingCatchUpList'
+  /api/console/query/batch-days:
+    get:
+      tags: [Queries]
+      summary: Query batch day instances
+      operationId: queryBatchDays
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/CalendarCodeQuery'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Batch day list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleBatchDayList'
+  /api/console/query/batch-days/{bizDate}/window:
+    get:
+      tags: [Queries]
+      summary: Query batch day window status
+      operationId: queryBatchDayWindow
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/CalendarCodeQuery'
+        - name: bizDate
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Batch day window status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleBatchDayWindowResponse'
   /api/console/query/workers:
     get:
       tags: [Queries]
@@ -1966,6 +2042,12 @@ components:
       name: tenantId
       in: query
       required: false
+      schema:
+        type: string
+    CalendarCodeQuery:
+      name: calendarCode
+      in: query
+      required: true
       schema:
         type: string
     PageNoQuery:
@@ -2291,6 +2373,27 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    CommonResponseConsoleBatchDayList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PageResponse'
+    CommonResponseConsoleBatchDayWindowResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBatchDayWindowResponse'
+    CommonResponseConsoleBatchDayCatchUpResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBatchDayCatchUpResponse'
     CommonResponseWorkerRegistryList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -2522,6 +2625,53 @@ components:
         payload:
           type: string
       required: [tenantId, jobCode, bizDate, triggerType]
+    BatchDayQueryRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        calendarCode:
+          type: string
+          maxLength: 128
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        pageNo:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      required: [calendarCode]
+    BatchDayWindowQueryRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        calendarCode:
+          type: string
+          maxLength: 128
+      required: [calendarCode]
+    BatchDayCatchUpRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        calendarCode:
+          type: string
+          maxLength: 128
+        jobCodes:
+          type: array
+          items:
+            type: string
+            maxLength: 128
+        reason:
+          type: string
+          maxLength: 512
+      required: [calendarCode]
     CompensationCommandRequest:
       type: object
       properties:
@@ -3621,6 +3771,138 @@ components:
         - approvalStatus
         - createdAt
         - updatedAt
+    ConsoleBatchDaySummaryResponse:
+      type: object
+      properties:
+        jobCode:
+          type: string
+        totalJobCount:
+          type: integer
+          format: int32
+        successJobCount:
+          type: integer
+          format: int32
+        failedJobCount:
+          type: integer
+          format: int32
+        inFlightJobCount:
+          type: integer
+          format: int32
+        catchupCount:
+          type: integer
+          format: int32
+      required: [jobCode, totalJobCount, successJobCount, failedJobCount, inFlightJobCount, catchupCount]
+    ConsoleBatchDayResponse:
+      type: object
+      properties:
+        bizDate:
+          type: string
+          format: date
+        dayStatus:
+          type: string
+        openAt:
+          type: string
+          format: date-time
+        cutoffAt:
+          type: string
+          format: date-time
+          nullable: true
+        settledAt:
+          type: string
+          format: date-time
+          nullable: true
+        slaDeadlineAt:
+          type: string
+          format: date-time
+          nullable: true
+        slaStatus:
+          type: string
+        totalJobCount:
+          type: integer
+          format: int32
+        successJobCount:
+          type: integer
+          format: int32
+        failedJobCount:
+          type: integer
+          format: int32
+        inFlightJobCount:
+          type: integer
+          format: int32
+        lateCount:
+          type: integer
+          format: int32
+        catchupCount:
+          type: integer
+          format: int32
+        catchupSummary:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleBatchDaySummaryResponse'
+      required: [bizDate, dayStatus, openAt, slaStatus, totalJobCount, successJobCount, failedJobCount, inFlightJobCount, lateCount, catchupCount, catchupSummary]
+    ConsoleBatchDayWindowResponse:
+      type: object
+      properties:
+        bizDate:
+          type: string
+          format: date
+        dayStatus:
+          type: string
+        cutoffAt:
+          type: string
+          format: date-time
+          nullable: true
+        slaDeadlineAt:
+          type: string
+          format: date-time
+          nullable: true
+        currentSystemTime:
+          type: string
+          format: date-time
+        timeUntilCutoffSeconds:
+          type: integer
+          format: int64
+          nullable: true
+        lateArrivalWindowClosesAt:
+          type: string
+          format: date-time
+          nullable: true
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleBatchDaySummaryResponse'
+      required: [bizDate, dayStatus, currentSystemTime, jobs]
+    ConsoleBatchDayCatchUpItemResponse:
+      type: object
+      properties:
+        jobCode:
+          type: string
+        actionType:
+          type: string
+        referenceNo:
+          type: string
+        triggerType:
+          type: string
+        requestStatus:
+          type: string
+      required: [jobCode, actionType, referenceNo, triggerType, requestStatus]
+    ConsoleBatchDayCatchUpResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        calendarCode:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        catchUpPolicy:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleBatchDayCatchUpItemResponse'
+      required: [tenantId, calendarCode, bizDate, catchUpPolicy, items]
     ConsoleConfigReleaseResponse:
       type: object
       properties:
