@@ -104,7 +104,8 @@ INSERT INTO batch.job_task (
 ) VALUES
     (4210, 'default-tenant', 4005, 4111, 'EXECUTION', 1, 'CREATED', NULL, jsonb_build_object('stage', 'created'), NULL, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
     (4211, 'default-tenant', 4006, 4112, 'EXECUTION', 1, 'CANCELLED', 'dispatch-node-1', jsonb_build_object('stage', 'cancelled'), NULL, NULL, 'Cancelled by operator', TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:01:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:01:11+08'),
-    (4212, 'default-tenant', 4009, 4114, 'REPLAY', 1, 'TERMINATED', 'dispatch-node-1', jsonb_build_object('stage', 'terminated'), jsonb_build_object('result', 'terminated'), 'JOB_TERMINATED', 'Job terminated before completion', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08');
+    (4212, 'default-tenant', 4009, 4114, 'REPLAY', 1, 'TERMINATED', 'dispatch-node-1', jsonb_build_object('stage', 'terminated'), jsonb_build_object('result', 'terminated'), 'JOB_TERMINATED', 'Job terminated before completion', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08'),
+    (4213, 'default-tenant', 4009, 4114, 'EXECUTION', 2, 'TERMINATED', 'dispatch-node-1', jsonb_build_object('stage', 'terminated'), jsonb_build_object('result', 'terminated'), 'JOB_TERMINATED', 'Job terminated before completion', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08');
 
 INSERT INTO batch.job_step_instance (
     id, tenant_id, job_instance_id, job_partition_id, job_task_id, step_code, step_type, step_status, retry_count,
@@ -112,8 +113,8 @@ INSERT INTO batch.job_step_instance (
 ) VALUES
     (4310, 'default-tenant', 4005, 4111, 4210, 'general_prepare', 'PREPARE', 'WAITING', 0, NULL, NULL, NULL, NULL, 0, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
     (4311, 'default-tenant', 4006, 4112, 4211, 'dispatch_retry', 'RETRY', 'RETRYING', 1, NULL, jsonb_build_object('attempts', 1), 'HTTP_503', 'Downstream unavailable', 1, TIMESTAMPTZ '2026-03-22 09:00:11+08', NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08'),
-    (4312, 'default-tenant', 4007, 4113, 4211, 'general_cancel', 'CANCEL', 'CANCELLED', 0, NULL, NULL, NULL, NULL, 0, TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:01:12+08', TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:01:12+08'),
-    (4313, 'default-tenant', 4009, 4114, 4212, 'general_stop', 'STOP', 'TERMINATED', 0, NULL, NULL, 'JOB_TERMINATED', 'Stopped by operator', 1, TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08');
+    (4312, 'default-tenant', 4007, 4113, 4212, 'general_cancel', 'CANCEL', 'CANCELLED', 0, NULL, NULL, NULL, NULL, 0, TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:01:12+08', TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:01:12+08'),
+    (4313, 'default-tenant', 4009, 4114, 4213, 'general_stop', 'STOP', 'TERMINATED', 0, NULL, NULL, 'JOB_TERMINATED', 'Stopped by operator', 1, TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08');
 
 INSERT INTO batch.workflow_run (
     id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date, run_status, current_node_code,

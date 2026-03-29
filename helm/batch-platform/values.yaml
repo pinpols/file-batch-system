@@ -40,6 +40,7 @@ orchestratorBaseUrl: "http://batch-orchestrator:8082"
 
 security:
   testingOpen: "false"
+  demoOpen: "false"
 
 # ── console-api ────────────────────────────────────────────────────────────────
 

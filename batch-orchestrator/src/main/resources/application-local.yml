@@ -1,6 +1,6 @@
 # 本地联调：仓库根目录先执行 `mvn package/install`；IDEA 直接运行主类时读取 `db/migration`。
-# 若 Docker 数据卷里已有对象但没有 `flyway_schema_history`，可用 `baseline-on-migrate + baseline-version` 接管。
-# 默认假定历史初始化已对齐到 `V30`，后续只补跑 `V31+`；若报“已存在”或缺表，请清卷或调整 baseline。
+# 本地联调默认要求“干净库 + 从 V1 开始完整迁移”。
+# 如果旧数据卷里已经残留了 `flyway_schema_history`，请先 `docker compose down -v` 再启动。
 server:
   port: 8082
 
@@ -19,9 +19,8 @@ spring:
     schemas:
       - batch
       - quartz
-    # 方案 A：非空库无历史表时 Flyway 会拒绝 migrate；先 baseline 再执行 baselineVersion 之后的脚本
-    baseline-on-migrate: true
-    baseline-version: 30
+    # 本地联调默认全量执行 V1..V32，不做 baseline 接管。
+    baseline-on-migrate: false
   sql:
     init:
       mode: never
