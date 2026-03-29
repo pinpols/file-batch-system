@@ -2,6 +2,9 @@
 spring:
   flyway:
     locations: classpath:db/migration
+    # Testcontainers 先跑 platform-init.sql 再启 Spring：batch 已非空且无 flyway_schema_history，需 baseline
+    baseline-on-migrate: true
+    baseline-version: 32
 
 batch:
   sla:
