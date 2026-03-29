@@ -17,7 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test: DefaultCompensationService validate() and guard conditions.
+ * 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。
  */
 class DefaultCompensationServiceTest {
 

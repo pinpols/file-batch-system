@@ -1,6 +1,5 @@
--- ShedLock table shared by all batch modules using @SchedulerLock.
--- This migration lives in batch-common so every service that depends on it
--- can create the table through Flyway on startup.
+-- 各模块通过 @SchedulerLock 共用的 ShedLock 表。
+-- 放在 batch-common，依赖本模块的服务启动时由 Flyway 统一建表。
 
 CREATE TABLE IF NOT EXISTS batch.shedlock (
     name        VARCHAR(64)  NOT NULL PRIMARY KEY,

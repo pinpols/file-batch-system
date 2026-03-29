@@ -28,14 +28,14 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
         if (target instanceof Enum<?> enumValue) {
             return enumValue.name();
         }
-        // Compile-time-safe path: entities that implement Stateful are resolved without reflection.
+        // 编译期安全路径：实现 Stateful 的实体不经反射解析。
         if (target instanceof Stateful stateful) {
             String status = stateful.getStatus();
             if (StringUtils.hasText(status)) {
                 return status;
             }
         }
-        // Reflection fallback for types that do not yet implement Stateful.
+        // 尚未实现 Stateful 的类型走反射兜底。
         for (String methodName : List.of(
                 "getInstanceStatus",
                 "getPartitionStatus",

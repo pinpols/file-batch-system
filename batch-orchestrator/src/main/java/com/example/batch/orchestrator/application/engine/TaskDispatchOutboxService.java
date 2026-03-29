@@ -117,7 +117,7 @@ public class TaskDispatchOutboxService {
                 return new LinkedHashMap<>((Map<String, Object>) payloadMap);
             }
         } catch (RuntimeException ignored) {
-            // Ignore malformed payload and fall back to an empty map so we can still stamp run_mode.
+            // 载荷 JSON 异常时忽略并退回空 Map，仍可为消息打上 run_mode。
         }
         return new LinkedHashMap<>();
     }

@@ -1,10 +1,10 @@
 # ============================================================
-# OpenTelemetry Collector — batch-platform pipeline config
+# OpenTelemetry 采集器（Collector）— batch-platform 流水线配置
 #
-# Pipeline:
-#   Apps (OTLP HTTP/gRPC) → Collector → Jaeger (Traces)
-#                                     → Loki   (Logs)
-#   Metrics: 保持 Prometheus scrape 不变（/actuator/prometheus）
+# 数据流：
+#   应用（OTLP HTTP/gRPC）→ Collector → Jaeger（链路）
+#                                     → Loki（日志）
+#   指标：仍由 Prometheus 抓取（/actuator/prometheus），保持不变
 #
 # 本文件挂载到 Collector 容器的 /etc/otelcol/config.yaml
 # ============================================================
@@ -15,16 +15,16 @@ extensions:
   pprof:
     endpoint: 0.0.0.0:1777
 
-# ── Receivers ─────────────────────────────────────────────────────
+# ── 接收器（Receivers）──────────────────────────────────────────
 receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 0.0.0.0:4317   # apps → collector（gRPC）
+        endpoint: 0.0.0.0:4317   # 应用 → Collector（gRPC）
       http:
-        endpoint: 0.0.0.0:4318   # apps → collector（HTTP）Spring Boot 默认用此端口
+        endpoint: 0.0.0.0:4318   # 应用 → Collector（HTTP）；Spring Boot 默认走此端口
 
-# ── Processors ────────────────────────────────────────────────────
+# ── 处理器（Processors）──────────────────────────────────────────
 processors:
   # 内存保护：超出 384MiB 触发 GC，超出 512MiB 开始丢弃（优先丢低优先级数据）
   memory_limiter:
@@ -48,15 +48,15 @@ processors:
         value: batch-platform
         action: upsert
 
-# ── Exporters ─────────────────────────────────────────────────────
+# ── 导出器（Exporters）────────────────────────────────────────────
 exporters:
-  # Traces → Jaeger（Jaeger 1.35+ 原生支持 OTLP gRPC 4317）
+  # 链路 → Jaeger（Jaeger 1.35+ 原生支持 OTLP gRPC 4317）
   otlp/jaeger:
     endpoint: jaeger:4317
     tls:
       insecure: true
 
-  # Logs → Loki（Loki 2.9+ 原生支持 OTLP HTTP /otlp/v1/logs）
+  # 日志 → Loki（Loki 2.9+ 原生支持 OTLP HTTP /otlp/v1/logs）
   otlphttp/loki:
     endpoint: http://loki:3100/otlp
     tls:
@@ -66,7 +66,7 @@ exporters:
   debug:
     verbosity: basic
 
-# ── Service ───────────────────────────────────────────────────────
+# ── 服务（Service）────────────────────────────────────────────────
 service:
   extensions: [health_check, pprof]
   telemetry:

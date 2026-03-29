@@ -24,7 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test: JobSlaScheduler.scanViolations() paths.
+ * 单元测试：{@link JobSlaScheduler#scanViolations()} 各路径。
  */
 class JobSlaSchedulerTest {
 

@@ -15,8 +15,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test: DefaultApprovalWorkflowService state transitions.
- * Covers submit → PENDING, approve → APPROVED, reject → REJECTED, markExecuted → EXECUTED.
+ * 单元测试：{@link DefaultApprovalWorkflowService} 状态流转。
+ * 覆盖 submit→PENDING、approve→APPROVED、reject→REJECTED、markExecuted→EXECUTED。
  */
 class DefaultApprovalWorkflowServiceTest {
 

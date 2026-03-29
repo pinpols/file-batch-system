@@ -23,9 +23,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test: ParseStep streaming path — verifies §9.12 "边查边写" contract.
- * All JSON input paths (array, {"records":[...]}, single object) must write
- * records to disk one-by-one via NDJSON, never loading the full payload into memory.
+ * 单元测试：ParseStep 流式路径，校验设计文档 9.12「边查边写」约定。
+ * 数组、{@code {"records":[...]}}、单对象等 JSON 形态均需按条经 NDJSON 落盘，不得整包载入内存。
  */
 class ParseStepStreamingTest {
 

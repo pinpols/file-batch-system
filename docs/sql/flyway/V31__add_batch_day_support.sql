@@ -1,8 +1,8 @@
 -- =========================================================
--- V31 - Add batch day support
--- Notes:
--- 1) Extend business_calendar with cutoff, late-arrival tolerance, and SLA offset.
--- 2) Introduce batch_day_instance as the lifecycle projection for one business day.
+-- V31：批量日（batch day）支持
+-- 说明：
+-- 1) 扩展 business_calendar：cutoff、晚到容忍、SLA 偏移
+-- 2) 新增 batch_day_instance：单个业务日的生命周期投影
 -- =========================================================
 
 ALTER TABLE batch.business_calendar

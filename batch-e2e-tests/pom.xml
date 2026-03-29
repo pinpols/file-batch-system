@@ -86,9 +86,9 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <!--
-                      Docker Engine 29+ / Docker Desktop 4.52+ negotiates minimum API 1.44.
-                      docker-java (via Testcontainers 1.20.x) defaults to 1.32 → HTTP 400 and empty
-                      /info JSON during discovery. See testcontainers-java #11235, #11419.
+                      Docker Engine 29+ / Docker Desktop 4.52+ 协商的最低 API 为 1.44。
+                      docker-java（经 Testcontainers 1.20.x）默认仍为 1.32 → 探测阶段 HTTP 400 且
+                      /info JSON 为空。参见 testcontainers-java #11235、#11419。
                     -->
                     <systemPropertyVariables>
                         <api.version>1.44</api.version>
@@ -99,11 +99,11 @@
     </build>
 
     <!--
-      Docker Desktop on macOS often exposes the engine socket under ~/.docker/run/docker.sock only.
-      Testcontainers defaults to /var/run/docker.sock (Linux) and may skip tests with disabledWithoutDocker=true.
-      Alternative: Docker Desktop → Settings → Advanced → enable "Allow the default Docker socket to be used".
-      If the socket exists but tests still skip with HTTP 400 + empty /info JSON, the usual cause is Docker 29+
-      requiring API ≥ 1.44; this module sets api.version=1.44 for Surefire (see plugin configuration above).
+      macOS 上 Docker Desktop 常仅将引擎套接字暴露在 ~/.docker/run/docker.sock。
+      Testcontainers 默认使用 /var/run/docker.sock（Linux），可能因 disabledWithoutDocker=true 跳过测试。
+      可选：Docker Desktop → Settings → Advanced → 开启「Allow the default Docker socket to be used」。
+      若套接字存在但测试仍因 HTTP 400 与空 /info JSON 跳过，常见原因是 Docker 29+ 要求 API ≥ 1.44；
+      本模块为 Surefire 设置 api.version=1.44（见上方插件配置）。
     -->
     <profiles>
         <profile>

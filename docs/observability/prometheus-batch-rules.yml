@@ -67,9 +67,9 @@ groups:
           summary: "Heap usage is high"
           description: "Heap usage exceeds 85% for one or more batch services."
 
-      # Requires kafka-exporter (e.g. danielqsj/kafka-exporter) or Prometheus Kafka adapter
-      # to expose the kafka_consumergroup_lag metric. The batch workers register consumer groups
-      # batch-worker-import, batch-worker-export, and batch-worker-dispatch.
+      # 需 kafka-exporter（如 danielqsj/kafka-exporter）或 Prometheus Kafka 适配器
+      # 暴露 kafka_consumergroup_lag 指标。各 batch worker 使用的消费组为
+      # batch-worker-import、batch-worker-export、batch-worker-dispatch。
       - alert: BatchKafkaConsumerLagHigh
         expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|dispatch)"} > 1000
         for: 10m

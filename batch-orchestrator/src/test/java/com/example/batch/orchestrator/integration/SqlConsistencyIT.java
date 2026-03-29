@@ -16,12 +16,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * SQL consistency gate: Flyway chain on an empty PostgreSQL, plus core unique constraints and a
- * representative {@code ON CONFLICT} path.
+ * SQL 一致性门禁：在空 PostgreSQL 上跑通 Flyway 全链，并校验核心唯一约束及一条典型的 {@code ON CONFLICT} 路径。
  *
- * <p>Note: {@code docs/sql/system-test/platform_seed.sql} contains PL/pgSQL blocks and cannot be
- * replayed reliably via Spring's semicolon-based script splitter; Flyway migrations are the
- * authoritative DDL/DML baseline this test guards.
+ * <p>说明：{@code docs/sql/system-test/platform_seed.sql} 含 PL/pgSQL 块，经 Spring 按分号切分的脚本加载器回放不可靠；
+ * 本测试以 Flyway 迁移为权威的 DDL/DML 基线。
  */
 @Tag("integration")
 @ActiveProfiles("test")

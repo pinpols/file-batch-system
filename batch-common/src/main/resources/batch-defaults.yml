@@ -52,7 +52,7 @@ management:
     sampling:
       # 生产建议 0.1（10%）；staging/压测设为 1.0；本地默认 1.0 方便调试
       probability: ${OTEL_SAMPLING_PROBABILITY:1.0}
-  # ── OTLP 导出（Trace + Log → OTel Collector）────────────────────
+  # ── OTLP 导出（链路 Trace 与日志 → OTel Collector）────────────────────
   otlp:
     tracing:
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://otel-collector:4318}/v1/traces
@@ -89,11 +89,11 @@ batch:
   # MinIO 对象存储（orchestrator + 所有 worker + console）
   storage:
     minio:
-      # MinIO endpoint（http/https）
+      # MinIO 访问地址（http/https）
       endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
-      # MinIO access key
+      # MinIO 访问密钥 ID
       access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
-      # MinIO secret key
+      # MinIO 秘密访问密钥
       secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
       # 默认 bucket
       bucket: ${BATCH_MINIO_BUCKET:batch-dev}

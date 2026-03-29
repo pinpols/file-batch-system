@@ -26,7 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test: PartitionLeaseReclaimScheduler.reclaimExpiredPartitions() paths.
+ * 单元测试：{@link PartitionLeaseReclaimScheduler#reclaimExpiredPartitions()} 各分支路径。
  */
 class PartitionLeaseReclaimSchedulerTest {
 
@@ -120,9 +120,7 @@ class PartitionLeaseReclaimSchedulerTest {
 
     @Test
     void shouldNotRunConcurrently() throws InterruptedException {
-        // First call starts without finishing (simulated by blocking selectExpiredLeasesGlobal)
-        // This test verifies the AtomicBoolean guard via thread racing
-        // Simple sequential test: calling twice should process both
+        // 本用例以连续两次调用近似验证互斥：两次均应进入扫描（未模拟阻塞 select）
         when(jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code())).thenReturn(List.of());
 
         scheduler.reclaimExpiredPartitions();
@@ -131,7 +129,7 @@ class PartitionLeaseReclaimSchedulerTest {
         verify(jobPartitionMapper, times(2)).selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
     }
 
-    // ── helpers ───────────────────────────────────────────────────────────────
+    // ── 辅助方法 ───────────────────────────────────────────────────────────────
 
     private static JobPartitionEntity expiredPartition(String tenantId, Long partitionId, Long jobInstanceId) {
         JobPartitionEntity p = new JobPartitionEntity();
