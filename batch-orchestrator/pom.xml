@@ -119,11 +119,24 @@
     </dependencies>
 
     <build>
+        <!-- 本地 IDEA 配置（application-local.yml）下的完整平台 Flyway 迁移链。 -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/../docs/sql/flyway</directory>
+                <targetPath>db/migration-platform</targetPath>
+                <includes>
+                    <include>V*.sql</include>
+                </includes>
+            </resource>
+        </resources>
         <testResources>
             <testResource>
                 <directory>src/test/resources</directory>
             </testResource>
-            <!-- Full platform schema for integration tests (see docs/sql/flyway). -->
+            <!-- 集成测试使用的完整平台库表结构（参见 docs/sql/flyway）。 -->
             <testResource>
                 <directory>${project.basedir}/../docs/sql/flyway</directory>
                 <targetPath>db/migration-integration</targetPath>
@@ -134,8 +147,8 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <!-- Keep the original jar intact so batch-e2e-tests can depend on it as a library.
-                         The executable fat jar is produced with the "exec" classifier instead. -->
+                    <!-- 保留原始 jar 不变，便于 batch-e2e-tests 作为库依赖；
+                         可执行的 fat jar 改用 classifier「exec」单独产出。 -->
                     <classifier>exec</classifier>
                 </configuration>
             </plugin>
