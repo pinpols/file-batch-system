@@ -23,6 +23,8 @@ tags:
     description: Worker drain, force-offline, and claimed tasks.
   - name: Files
     description: File governance and presigned download.
+  - name: Alerts
+    description: Alert acknowledgement, silencing, and closure actions.
   - name: Scheduler
     description: Scheduler snapshot and history.
   - name: Ops
@@ -1219,6 +1221,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
+  /api/console/alerts/{alertId}/ack:
+    post:
+      tags: [Alerts]
+      summary: Acknowledge alert
+      operationId: acknowledgeAlert
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertActionRequest'
+      responses:
+        '200':
+          description: Alert action result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAlertActionResponse'
+  /api/console/alerts/{alertId}/silence:
+    post:
+      tags: [Alerts]
+      summary: Silence alert
+      operationId: silenceAlert
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertActionRequest'
+      responses:
+        '200':
+          description: Alert action result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAlertActionResponse'
+  /api/console/alerts/{alertId}/close:
+    post:
+      tags: [Alerts]
+      summary: Close alert
+      operationId: closeAlert
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertActionRequest'
+      responses:
+        '200':
+          description: Alert action result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAlertActionResponse'
   /api/console/scheduler/snapshot:
     get:
       tags: [Scheduler]
@@ -1286,6 +1366,22 @@ paths:
       responses:
         '200':
           description: Audit list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
+  /api/console/query/execution-logs:
+    get:
+      tags: [Queries]
+      summary: Query execution logs
+      operationId: queryExecutionLogs
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Execution log list
           content:
             application/json:
               schema:
@@ -1743,7 +1839,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseWorkflowTopologyView'
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowTopologyResponse'
   /api/console/query/ai-audits:
     get:
       tags: [Queries]
@@ -2069,6 +2165,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    CommonResponseConsoleAlertActionResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleAlertActionResponse'
     CommonResponseFileRecordList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -2160,9 +2263,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
-    CommonResponseWorkflowTopologyView:
+    CommonResponseConsoleWorkflowTopologyResponse:
       allOf:
-        - $ref: '#/components/schemas/CommonResponseObject'
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowTopologyResponse'
     CommonResponseDeadLetterTaskList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -2780,6 +2887,29 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, serviceName, alertType, severity, title, detailJson, dedupFingerprint, occurrenceCount, firstSeenAt, lastSeenAt, traceId, status, createdAt, updatedAt]
+    AlertActionRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        operatorId:
+          type: string
+        reason:
+          type: string
+      required: [tenantId]
+    ConsoleAlertActionResponse:
+      type: object
+      properties:
+        alertId:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        action:
+          type: string
+        status:
+          type: string
+      required: [alertId, tenantId, action, status]
     ConsoleFileRecordResponse:
       type: object
       properties:
@@ -3133,6 +3263,28 @@ components:
           type: integer
           format: int64
       required: [id, workflowRunId, nodeCode, nodeType, runSeq, nodeStatus, retryCount, errorCode, errorMessage, startedAt, finishedAt, durationMs]
+    ConsoleWorkflowTopologyResponse:
+      type: object
+      properties:
+        workflowDefinition:
+          $ref: '#/components/schemas/ConsoleWorkflowDefinitionResponse'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowNodeResponse'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowEdgeResponse'
+        workflowRuns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowRunResponse'
+        nodeRuns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
+      required: [nodes, edges, workflowRuns, nodeRuns]
     ConsoleDeadLetterTaskResponse:
       type: object
       properties:

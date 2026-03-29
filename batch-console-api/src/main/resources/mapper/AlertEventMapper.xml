@@ -20,6 +20,14 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
+    <select id="selectById" resultMap="AlertEventResultMap">
+        select *
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+          and id = #{id}
+        limit 1
+    </select>
+
     <select id="selectByQuery" resultMap="AlertEventResultMap">
         select *
         from batch.alert_event
@@ -70,4 +78,12 @@
           and severity = #{severity}
           and status = #{status}
     </select>
+
+    <update id="updateStatus">
+        update batch.alert_event
+        set status = #{status},
+            updated_at = now()
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
 </mapper>

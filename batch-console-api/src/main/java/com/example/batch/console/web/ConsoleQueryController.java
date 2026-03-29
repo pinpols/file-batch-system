@@ -54,8 +54,8 @@ import com.example.batch.console.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
+import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
-import com.example.batch.console.web.view.WorkflowTopologyView;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
 import jakarta.validation.Valid;
@@ -86,6 +86,12 @@ public class ConsoleQueryController {
     @GetMapping("/audits")
     public CommonResponse<PageResponse<ConsoleAuditLogResponse>> audits(@Valid @ModelAttribute AuditLogQueryRequest request) {
         return responseFactory.success(applicationService.auditLogs(request));
+    }
+
+    /** GET /execution-logs — 执行日志列表（审计日志别名）。 */
+    @GetMapping("/execution-logs")
+    public CommonResponse<PageResponse<ConsoleAuditLogResponse>> executionLogs(@Valid @ModelAttribute AuditLogQueryRequest request) {
+        return responseFactory.success(applicationService.executionLogs(request));
     }
 
     /** GET /alerts — 告警事件列表。 */
@@ -238,7 +244,7 @@ public class ConsoleQueryController {
 
     /** GET /workflow-topology — 工作流拓扑视图。 */
     @GetMapping("/workflow-topology")
-    public CommonResponse<WorkflowTopologyView> workflowTopology(@Valid @ModelAttribute WorkflowTopologyQueryRequest request) {
+    public CommonResponse<ConsoleWorkflowTopologyResponse> workflowTopology(@Valid @ModelAttribute WorkflowTopologyQueryRequest request) {
         return responseFactory.success(applicationService.workflowTopology(request));
     }
 

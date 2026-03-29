@@ -83,7 +83,8 @@ public abstract class AbstractWorkerLoop {
         try {
             workerRuntimeFacade.heartbeat(current.getWorkerId());
         } catch (Exception ex) {
-            log.warn("{} worker heartbeat failed: {}", workerGroup(), ex.getMessage(), ex);
+            log.warn("{} worker heartbeat unavailable: {} ({})",
+                    workerGroup(), ex.getMessage(), ex.getClass().getSimpleName());
         }
     }
 
@@ -121,7 +122,12 @@ public abstract class AbstractWorkerLoop {
     @PreDestroy
     public void shutdown() {
         if (registration != null) {
-            workerRuntimeFacade.shutdown(registration.getWorkerId());
+            try {
+                workerRuntimeFacade.shutdown(registration.getWorkerId());
+            } catch (Exception ex) {
+                log.warn("{} worker shutdown signal failed: {} ({})",
+                        workerGroup(), ex.getMessage(), ex.getClass().getSimpleName());
+            }
         }
     }
 

@@ -4,12 +4,11 @@ import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepositor
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.worker.imports.config.ImportScannerProperties;
-import io.minio.BucketExistsArgs;
 import io.minio.ListObjectsArgs;
-import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.Result;
 import io.minio.messages.Item;
+import com.example.batch.common.utils.MinioBucketSupport;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -55,7 +54,9 @@ public class ImportIngressScanner {
         if (!scannerProperties.isEnabled() || !StringUtils.hasText(workerConfiguration.tenantId())) {
             return;
         }
-        ensureBucket();
+        if (!ensureBucket()) {
+            return;
+        }
         Map<String, ObjectSnapshot> snapshots = listSnapshots();
         Set<String> currentObjects = new HashSet<>(snapshots.keySet());
         for (Map.Entry<String, ObjectSnapshot> entry : snapshots.entrySet()) {
@@ -232,17 +233,12 @@ public class ImportIngressScanner {
         return fileName == null ? "object" : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
-    private void ensureBucket() {
-        try {
-            boolean exists = minioClient.bucketExists(
-                    BucketExistsArgs.builder().bucket(minioStorageProperties.getBucket()).build()
-            );
-            if (!exists) {
-                minioClient.makeBucket(MakeBucketArgs.builder().bucket(minioStorageProperties.getBucket()).build());
-            }
-        } catch (Exception exception) {
-            throw new IllegalStateException("failed to ensure import scanner bucket", exception);
-        }
+    private boolean ensureBucket() {
+        return MinioBucketSupport.ensureBucket(
+                minioClient,
+                minioStorageProperties.getBucket(),
+                log,
+                "import scanner");
     }
 
     private record ObjectSnapshot(String objectName, long size, String etag, Instant lastModified) {

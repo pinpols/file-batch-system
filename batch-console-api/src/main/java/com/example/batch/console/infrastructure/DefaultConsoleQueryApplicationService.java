@@ -40,7 +40,6 @@ import com.example.batch.console.domain.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.query.WorkflowRunQuery;
 import com.example.batch.console.domain.query.WorkflowNodeRunQuery;
 import com.example.batch.console.domain.query.ConsoleAiAuditLogQuery;
-import com.example.batch.console.web.view.WorkflowTopologyView;
 import com.example.batch.console.web.response.AiAuditLogResponse;
 import com.example.batch.console.web.response.ConsoleAlertEventResponse;
 import com.example.batch.console.web.response.ConsoleDeadLetterTaskResponse;
@@ -66,6 +65,7 @@ import com.example.batch.console.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
+import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.console.mapper.AuditLogMapper;
@@ -189,6 +189,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         List<Map<String, Object>> rows = auditLogMapper.selectByQuery(query);
         long total = auditLogMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toAuditLogResponse);
+    }
+
+    @Override
+    public PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request) {
+        return auditLogs(request);
     }
 
     @Override
@@ -611,8 +616,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public WorkflowTopologyView workflowTopology(WorkflowTopologyQueryRequest request) {
-        WorkflowTopologyView view = new WorkflowTopologyView();
+    public ConsoleWorkflowTopologyResponse workflowTopology(WorkflowTopologyQueryRequest request) {
         WorkflowDefinitionQuery definitionQuery = new WorkflowDefinitionQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowCode(),
@@ -623,11 +627,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         );
         List<WorkflowDefinitionEntity> definitions = workflowDefinitionMapper.selectByQuery(definitionQuery);
         WorkflowDefinitionEntity selectedDefinition = definitions.isEmpty() ? null : definitions.get(0);
-        view.setWorkflowDefinition(selectedDefinition);
         if (selectedDefinition == null) {
-            return view;
+            return new ConsoleWorkflowTopologyResponse(null, List.of(), List.of(), List.of(), List.of());
         }
-        view.setNodes(workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
+        List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
                 resolveTenant(request.getTenantId()),
                 selectedDefinition.getId(),
                 null,
@@ -635,8 +638,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 null,
                 true,
                 null
-        )));
-        view.setEdges(workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
+        ));
+        List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
                 resolveTenant(request.getTenantId()),
                 selectedDefinition.getId(),
                 null,
@@ -645,7 +648,9 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 null,
                 true,
                 null
-        )));
+        ));
+        List<WorkflowRunEntity> workflowRuns = List.of();
+        List<WorkflowNodeRunEntity> nodeRuns = List.of();
         if (request.getWorkflowRunId() != null) {
             WorkflowRunEntity run = workflowRunMapper.selectByQuery(new WorkflowRunQuery(
                     resolveTenant(request.getTenantId()),
@@ -660,16 +665,22 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                     .findFirst()
                     .orElse(null);
             if (run != null) {
-                view.getWorkflowRuns().add(run);
-                view.getNodeRuns().addAll(workflowNodeRunMapper.selectByQuery(new WorkflowNodeRunQuery(
+                workflowRuns = List.of(run);
+                nodeRuns = workflowNodeRunMapper.selectByQuery(new WorkflowNodeRunQuery(
                         request.getWorkflowRunId(),
                         null,
                         null,
                         null
-                )));
+                ));
             }
         }
-        return view;
+        return new ConsoleWorkflowTopologyResponse(
+                toWorkflowDefinitionResponse(selectedDefinition),
+                nodes.stream().map(this::toWorkflowNodeResponse).toList(),
+                edges.stream().map(this::toWorkflowEdgeResponse).toList(),
+                workflowRuns.stream().map(this::toWorkflowRunResponse).toList(),
+                nodeRuns.stream().map(this::toWorkflowNodeRunResponse).toList()
+        );
     }
 
     @Override

@@ -53,7 +53,7 @@ import com.example.batch.console.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
-import com.example.batch.console.web.view.WorkflowTopologyView;
+import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.common.model.PageResponse;
 
 /**
@@ -63,6 +63,9 @@ public interface ConsoleQueryApplicationService {
 
     /** 按条件分页查询审计日志。 */
     PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request);
+
+    /** 按条件分页查询执行日志（审计日志别名）。 */
+    PageResponse<ConsoleAuditLogResponse> executionLogs(AuditLogQueryRequest request);
 
     /** 查询文件链路（文件记录链）列表。 */
     PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request);
@@ -130,8 +133,8 @@ public interface ConsoleQueryApplicationService {
     /** 查询工作流节点运行详情。 */
     ConsoleWorkflowNodeRunResponse workflowNodeRun(String tenantId, Long id);
 
-    /** 查询工作流拓扑视图（节点+边+运行态摘要）。 */
-    WorkflowTopologyView workflowTopology(WorkflowTopologyQueryRequest request);
+    /** 查询工作流拓扑视图（定义、节点、边、运行态）。 */
+    ConsoleWorkflowTopologyResponse workflowTopology(WorkflowTopologyQueryRequest request);
 
     /** 查询控制台 AI 审计日志。 */
     PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request);

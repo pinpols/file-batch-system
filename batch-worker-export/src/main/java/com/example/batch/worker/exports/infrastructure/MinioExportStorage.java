@@ -2,15 +2,14 @@ package com.example.batch.worker.exports.infrastructure;
 
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
-import io.minio.BucketExistsArgs;
 import io.minio.CopyObjectArgs;
 import io.minio.CopySource;
 import io.minio.GetObjectArgs;
-import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
+import com.example.batch.common.utils.MinioBucketSupport;
 import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -21,8 +20,10 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class MinioExportStorage {
@@ -43,7 +44,7 @@ public class MinioExportStorage {
     }
 
     public String writeObject(String objectName, byte[] content, String contentType) {
-        ensureBucket();
+        ensureBucketOrThrow();
         String targetObjectName = objectName;
         if (targetObjectName == null || targetObjectName.isBlank()) {
             targetObjectName = BatchFileConstants.EXPORT_OBJECT_PREFIX + UUID.randomUUID() + BatchFileConstants.BIN_SUFFIX;
@@ -64,7 +65,7 @@ public class MinioExportStorage {
     }
 
     public String writeObject(String objectName, Path contentPath, String contentType) {
-        ensureBucket();
+        ensureBucketOrThrow();
         if (contentPath == null || !Files.exists(contentPath)) {
             throw new IllegalArgumentException("contentPath is required");
         }
@@ -88,7 +89,7 @@ public class MinioExportStorage {
     }
 
     public void copyObject(String sourceObjectName, String targetObjectName) {
-        ensureBucket();
+        ensureBucketOrThrow();
         try {
             minioClient.copyObject(
                     CopyObjectArgs.builder()
@@ -106,7 +107,7 @@ public class MinioExportStorage {
     }
 
     public void removeObject(String objectName) {
-        ensureBucket();
+        ensureBucketOrThrow();
         try {
             minioClient.removeObject(
                     RemoveObjectArgs.builder()
@@ -127,7 +128,7 @@ public class MinioExportStorage {
      * SHA-256 of object bytes in the bucket (for verifying .part before promote, and final after copy).
      */
     public String sha256Hex(String objectName) {
-        ensureBucket();
+        ensureBucketOrThrow();
         if (objectName == null || objectName.isBlank()) {
             throw new IllegalArgumentException("objectName is required");
         }
@@ -154,7 +155,9 @@ public class MinioExportStorage {
     }
 
     public boolean objectExists(String objectName) {
-        ensureBucket();
+        if (!ensureBucket()) {
+            return false;
+        }
         if (objectName == null || objectName.isBlank()) {
             return false;
         }
@@ -171,16 +174,13 @@ public class MinioExportStorage {
         }
     }
 
-    private void ensureBucket() {
-        try {
-            boolean exists = minioClient.bucketExists(
-                    BucketExistsArgs.builder().bucket(properties.getBucket()).build()
-            );
-            if (!exists) {
-                minioClient.makeBucket(MakeBucketArgs.builder().bucket(properties.getBucket()).build());
-            }
-        } catch (Exception ex) {
-            throw new IllegalStateException("failed to ensure bucket", ex);
+    private boolean ensureBucket() {
+        return MinioBucketSupport.ensureBucket(minioClient, properties.getBucket(), log, "export storage");
+    }
+
+    private void ensureBucketOrThrow() {
+        if (!ensureBucket()) {
+            throw new IllegalStateException("minio bucket unavailable: " + properties.getBucket());
         }
     }
 }

@@ -9,6 +9,8 @@ public interface AlertEventMapper {
 
     List<AlertEventEntity> selectByQuery(AlertEventQuery query);
 
+    AlertEventEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
     long countByQuery(AlertEventQuery query);
 
     long countByStatus(@Param("tenantId") String tenantId, @Param("status") String status);
@@ -16,4 +18,6 @@ public interface AlertEventMapper {
     long countBySeverityAndStatus(@Param("tenantId") String tenantId,
                                   @Param("severity") String severity,
                                   @Param("status") String status);
+
+    int updateStatus(@Param("tenantId") String tenantId, @Param("id") Long id, @Param("status") String status);
 }
