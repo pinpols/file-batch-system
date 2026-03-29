@@ -31,5 +31,25 @@
             and trace_id = #{traceId}
         </if>
         order by id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.dead_letter_task
+        where tenant_id = #{tenantId}
+        <if test="sourceType != null and sourceType != ''">
+            and source_type = #{sourceType}
+        </if>
+        <if test="replayStatus != null and replayStatus != ''">
+            and replay_status = #{replayStatus}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
     </select>
 </mapper>

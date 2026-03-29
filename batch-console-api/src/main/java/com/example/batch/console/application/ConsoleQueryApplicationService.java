@@ -54,7 +54,7 @@ import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.web.view.WorkflowTopologyView;
-import java.util.List;
+import com.example.batch.common.model.PageResponse;
 
 /**
  * 控制台只读查询应用服务：将 Web 查询条件转换为领域查询并返回列表或视图数据。
@@ -62,83 +62,95 @@ import java.util.List;
 public interface ConsoleQueryApplicationService {
 
     /** 按条件分页查询审计日志。 */
-    List<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request);
+    PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request);
 
     /** 查询文件链路（文件记录链）列表。 */
-    List<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request);
+    PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request);
 
     /** 查询文件流水线列表。 */
-    List<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request);
+    PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request);
 
     /** 查询文件流水线步骤运行记录。 */
-    List<ConsoleFilePipelineStepResponse> filePipelineSteps(FilePipelineStepQueryRequest request);
+    PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(FilePipelineStepQueryRequest request);
 
     /** 查询文件派发记录。 */
-    List<ConsoleFileDispatchRecordResponse> fileDispatchRecords(FileDispatchRecordQueryRequest request);
+    PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(FileDispatchRecordQueryRequest request);
 
     /** 查询文件通道配置。 */
-    List<ConsoleFileChannelResponse> fileChannels(FileChannelQueryRequest request);
+    PageResponse<ConsoleFileChannelResponse> fileChannels(FileChannelQueryRequest request);
 
     /** 查询文件模板配置。 */
-    List<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request);
+    PageResponse<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request);
 
     /** 查询作业定义。 */
-    List<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request);
+    PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request);
 
     /** 查询 Outbox 重试日志。 */
-    List<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request);
+    PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request);
 
     /** 查询 Outbox 投递日志。 */
-    List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(OutboxDeliveryLogQueryRequest request);
+    PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(OutboxDeliveryLogQueryRequest request);
 
     /** 查询文件到达组。 */
-    List<ConsoleFileArrivalGroupResponse> fileArrivalGroups(FileArrivalGroupQueryRequest request);
+    PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(FileArrivalGroupQueryRequest request);
 
     /** 查询文件错误记录。 */
-    List<ConsoleFileErrorRecordResponse> fileErrorRecords(FileErrorRecordQueryRequest request);
+    PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(FileErrorRecordQueryRequest request);
 
     /** 查询作业实例列表。 */
-    List<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request);
+    PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request);
+
+    /** 查询作业实例详情。 */
+    ConsoleJobInstanceResponse jobInstance(String tenantId, Long id);
 
     /** 查询作业步骤实例列表。 */
-    List<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request);
+    PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request);
+
+    /** 查询作业步骤实例详情。 */
+    ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id);
 
     /** 查询工作流定义。 */
-    List<ConsoleWorkflowDefinitionResponse> workflowDefinitions(WorkflowDefinitionQueryRequest request);
+    PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(WorkflowDefinitionQueryRequest request);
 
     /** 查询工作流节点定义。 */
-    List<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request);
+    PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request);
 
     /** 查询工作流边定义。 */
-    List<ConsoleWorkflowEdgeResponse> workflowEdges(WorkflowEdgeQueryRequest request);
+    PageResponse<ConsoleWorkflowEdgeResponse> workflowEdges(WorkflowEdgeQueryRequest request);
 
     /** 查询工作流运行实例。 */
-    List<ConsoleWorkflowRunResponse> workflowRuns(WorkflowRunQueryRequest request);
+    PageResponse<ConsoleWorkflowRunResponse> workflowRuns(WorkflowRunQueryRequest request);
+
+    /** 查询工作流运行详情。 */
+    ConsoleWorkflowRunResponse workflowRun(String tenantId, Long id);
 
     /** 查询工作流节点运行记录。 */
-    List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(WorkflowNodeRunQueryRequest request);
+    PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(WorkflowNodeRunQueryRequest request);
+
+    /** 查询工作流节点运行详情。 */
+    ConsoleWorkflowNodeRunResponse workflowNodeRun(String tenantId, Long id);
 
     /** 查询工作流拓扑视图（节点+边+运行态摘要）。 */
     WorkflowTopologyView workflowTopology(WorkflowTopologyQueryRequest request);
 
     /** 查询控制台 AI 审计日志。 */
-    List<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request);
+    PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request);
 
     /** 查询死信任务列表。 */
-    List<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request);
+    PageResponse<ConsoleDeadLetterTaskResponse> deadLetters(DeadLetterQueryRequest request);
 
     /** 查询重试计划列表。 */
-    List<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request);
+    PageResponse<ConsoleRetryScheduleResponse> retries(RetryScheduleQueryRequest request);
 
     /** 查询待审批的 Catch-Up 请求。 */
-    List<ConsolePendingCatchUpResponse> pendingCatchUps(PendingCatchUpQueryRequest request);
+    PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(PendingCatchUpQueryRequest request);
 
     /** 查询 Worker 注册与心跳信息。 */
-    List<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request);
+    PageResponse<ConsoleWorkerRegistryResponse> workers(WorkerRegistryQueryRequest request);
 
     /** 查询告警事件。 */
-    List<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request);
+    PageResponse<ConsoleAlertEventResponse> alertEvents(AlertEventQueryRequest request);
 
     /** 查询审批指令记录。 */
-    List<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request);
+    PageResponse<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request);
 }

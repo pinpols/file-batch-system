@@ -7,4 +7,6 @@ import java.util.List;
 public interface FileArrivalGroupMapper {
 
     List<FileArrivalGroupEntity> selectByQuery(FileArrivalGroupQuery query);
+
+    long countByQuery(FileArrivalGroupQuery query);
 }

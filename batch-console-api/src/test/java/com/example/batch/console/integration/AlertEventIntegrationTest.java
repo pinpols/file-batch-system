@@ -7,6 +7,7 @@ import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.console.domain.query.AlertEventQuery;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
+import com.example.batch.common.model.PageRequest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -32,7 +33,8 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
     @Test
     void shouldReturnEmptyWhenNoAlertsExist() {
         List<AlertEventEntity> results = alertEventMapper.selectByQuery(
-                new AlertEventQuery("no-such-tenant-" + System.currentTimeMillis(), null, null, null, 10));
+                new AlertEventQuery("no-such-tenant-" + System.currentTimeMillis(), null, null, null,
+                        new PageRequest(1, 10)));
 
         assertThat(results).isEmpty();
     }
@@ -44,7 +46,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
         insertAlertEvent(tenantId, "SLA_BREACH", "WARN", "OPEN", "File latency exceeded");
 
         List<AlertEventEntity> highAlerts = alertEventMapper.selectByQuery(
-                new AlertEventQuery(tenantId, "CRITICAL", null, null, 10));
+                new AlertEventQuery(tenantId, "CRITICAL", null, null, new PageRequest(1, 10)));
 
         assertThat(highAlerts).hasSize(1);
         assertThat(highAlerts.get(0).getSeverity()).isEqualTo("CRITICAL");
@@ -58,7 +60,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
         insertAlertEvent(tenantId, "DISK_USAGE", "WARN", "CLOSED", "Disk resolved");
 
         List<AlertEventEntity> openAlerts = alertEventMapper.selectByQuery(
-                new AlertEventQuery(tenantId, null, "OPEN", null, 10));
+                new AlertEventQuery(tenantId, null, "OPEN", null, new PageRequest(1, 10)));
 
         assertThat(openAlerts).hasSize(1);
         assertThat(openAlerts.get(0).getStatus()).isEqualTo("OPEN");
@@ -71,7 +73,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
         insertAlertEvent(tenantId, "FILE_STUCK", "WARN", "OPEN", "File stuck alert");
 
         List<AlertEventEntity> slaAlerts = alertEventMapper.selectByQuery(
-                new AlertEventQuery(tenantId, null, null, "SLA_BREACH", 10));
+                new AlertEventQuery(tenantId, null, null, "SLA_BREACH", new PageRequest(1, 10)));
 
         assertThat(slaAlerts).hasSize(1);
         assertThat(slaAlerts.get(0).getAlertType()).isEqualTo("SLA_BREACH");
@@ -85,7 +87,7 @@ class AlertEventIntegrationTest extends AbstractIntegrationTest {
         }
 
         List<AlertEventEntity> results = alertEventMapper.selectByQuery(
-                new AlertEventQuery(tenantId, null, null, null, 3));
+                new AlertEventQuery(tenantId, null, null, null, new PageRequest(1, 3)));
 
         assertThat(results).hasSize(3);
     }

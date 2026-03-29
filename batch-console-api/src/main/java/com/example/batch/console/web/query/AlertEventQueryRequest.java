@@ -1,15 +1,11 @@
 package com.example.batch.console.web.query;
 
 import com.example.batch.common.validation.ValidTenantId;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class AlertEventQueryRequest {
-
-    private static final int DEFAULT_LIMIT = 100;
+public class AlertEventQueryRequest extends PageQueryRequest {
 
     @ValidTenantId
     private String tenantId;
@@ -19,7 +15,4 @@ public class AlertEventQueryRequest {
     private String status;
     @Size(max = 64, message = "alertType too long (max 64)")
     private String alertType;
-    @Min(1)
-    @Max(500)
-    private Integer limit = DEFAULT_LIMIT;
 }

@@ -1,5 +1,7 @@
 package com.example.batch.console.domain.query;
 
+import com.example.batch.common.model.PageRequest;
+
 public record WorkflowEdgeQuery(
         String tenantId,
         Long workflowDefinitionId,
@@ -7,6 +9,7 @@ public record WorkflowEdgeQuery(
         String fromNodeCode,
         String toNodeCode,
         String edgeType,
-        Boolean enabled
+        Boolean enabled,
+        PageRequest pageRequest
 ) {
 }

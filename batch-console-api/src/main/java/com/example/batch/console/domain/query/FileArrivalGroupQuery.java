@@ -1,5 +1,6 @@
 package com.example.batch.console.domain.query;
 
+import com.example.batch.common.model.PageRequest;
 import java.time.Instant;
 
 public record FileArrivalGroupQuery(
@@ -7,6 +8,7 @@ public record FileArrivalGroupQuery(
         String fileGroupCode,
         String arrivalState,
         Instant fromTime,
-        Instant toTime
+        Instant toTime,
+        PageRequest pageRequest
 ) {
 }

@@ -1,6 +1,8 @@
 package com.example.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,6 +15,11 @@ import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.ConsoleAlertEventResponse;
 import com.example.batch.console.web.response.ConsoleApprovalCommandResponse;
+import com.example.batch.console.web.response.ConsoleJobInstanceResponse;
+import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
+import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
+import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
+import com.example.batch.common.model.PageResponse;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -47,24 +54,24 @@ class ConsoleQueryControllerTest {
 
     @Test
     void shouldReturnApprovalDtos() throws Exception {
-        when(queryApplicationService.approvals(any())).thenReturn(List.of(
+        when(queryApplicationService.approvals(any())).thenReturn(new PageResponse<>(1L, 1, 20, List.of(
                 new ConsoleApprovalCommandResponse(1L, "t1", "appr-001", "DOWNLOAD", "DOWNLOAD", "FILE", "1001",
                         "{}", "PENDING", "req-1", null, null, null, "trace-1", "idem-1",
                         OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC), null,
                         OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
                         OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC))
-        ));
+        )));
 
         mockMvc.perform(get("/api/console/query/approvals").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data[0].approvalNo").value("appr-001"))
-                .andExpect(jsonPath("$.data[0].approvalStatus").value("PENDING"));
+                .andExpect(jsonPath("$.data.items[0].approvalNo").value("appr-001"))
+                .andExpect(jsonPath("$.data.items[0].approvalStatus").value("PENDING"));
     }
 
     @Test
     void shouldReturnAlertDtos() throws Exception {
-        when(queryApplicationService.alertEvents(any())).thenReturn(List.of(
+        when(queryApplicationService.alertEvents(any())).thenReturn(new PageResponse<>(1L, 1, 20, List.of(
                 new ConsoleAlertEventResponse(
                         1L,
                         "t1",
@@ -82,12 +89,250 @@ class ConsoleQueryControllerTest {
                         Instant.EPOCH,
                         Instant.EPOCH
                 )
-        ));
+        )));
 
         mockMvc.perform(get("/api/console/query/alerts").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data[0].severity").value("HIGH"))
-                .andExpect(jsonPath("$.data[0].title").value("file failed"));
+                .andExpect(jsonPath("$.data.items[0].severity").value("HIGH"))
+                .andExpect(jsonPath("$.data.items[0].title").value("file failed"));
+    }
+
+    @Test
+    void shouldReturnFileChainsPage() throws Exception {
+        when(queryApplicationService.fileChains(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/files").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnFilePipelinesPage() throws Exception {
+        when(queryApplicationService.filePipelines(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/file-pipelines").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnFilePipelineStepsPage() throws Exception {
+        when(queryApplicationService.filePipelineSteps(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/file-pipeline-steps"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnFileDispatchesPage() throws Exception {
+        when(queryApplicationService.fileDispatchRecords(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/file-dispatches").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnFileChannelsPage() throws Exception {
+        when(queryApplicationService.fileChannels(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/file-channels").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnFileArrivalGroupsPage() throws Exception {
+        when(queryApplicationService.fileArrivalGroups(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/file-arrival-groups").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnFileErrorsPage() throws Exception {
+        when(queryApplicationService.fileErrorRecords(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/file-errors").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnFileTemplatesPage() throws Exception {
+        when(queryApplicationService.fileTemplates(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/file-templates").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnWorkflowDefinitionsPage() throws Exception {
+        when(queryApplicationService.workflowDefinitions(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/workflow-definitions").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnWorkflowNodesPage() throws Exception {
+        when(queryApplicationService.workflowNodes(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/workflow-nodes").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnWorkflowEdgesPage() throws Exception {
+        when(queryApplicationService.workflowEdges(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/workflow-edges").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnAiAuditsPage() throws Exception {
+        when(queryApplicationService.aiAuditLogs(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/ai-audits").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnOutboxRetriesPage() throws Exception {
+        when(queryApplicationService.outboxRetries(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/outbox-retries").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnOutboxDeliveriesPage() throws Exception {
+        when(queryApplicationService.outboxDeliveries(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/outbox-deliveries").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnJobInstanceDetail() throws Exception {
+        when(queryApplicationService.jobInstance(anyString(), anyLong())).thenReturn(new ConsoleJobInstanceResponse(
+                11L,
+                "t1",
+                "job-001",
+                "inst-001",
+                java.time.LocalDate.of(2026, 3, 29),
+                "MANUAL",
+                "SUCCESS",
+                "batch-1",
+                "operator-1",
+                false,
+                false,
+                null,
+                null,
+                null,
+                "queue-1",
+                "worker-group-1",
+                5,
+                "trace-1",
+                "{}",
+                "ok",
+                Instant.EPOCH,
+                3600,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH
+        ));
+
+        mockMvc.perform(get("/api/console/query/instances/11").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.instanceNo").value("inst-001"))
+                .andExpect(jsonPath("$.data.instanceStatus").value("SUCCESS"));
+    }
+
+    @Test
+    void shouldReturnJobStepInstanceDetail() throws Exception {
+        when(queryApplicationService.jobStepInstance(anyString(), anyLong())).thenReturn(new ConsoleJobStepInstanceResponse(
+                21L,
+                "t1",
+                11L,
+                1L,
+                1001L,
+                "step-1",
+                "MAIN",
+                "SUCCESS",
+                0,
+                null,
+                "ok",
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH
+        ));
+
+        mockMvc.perform(get("/api/console/query/job-step-instances/21").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stepCode").value("step-1"))
+                .andExpect(jsonPath("$.data.stepStatus").value("SUCCESS"));
+    }
+
+    @Test
+    void shouldReturnWorkflowRunDetail() throws Exception {
+        when(queryApplicationService.workflowRun(anyString(), anyLong())).thenReturn(new ConsoleWorkflowRunResponse(
+                31L,
+                "t1",
+                100L,
+                11L,
+                java.time.LocalDate.of(2026, 3, 29),
+                "RUNNING",
+                "node-1",
+                "trace-1",
+                Instant.EPOCH,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH
+        ));
+
+        mockMvc.perform(get("/api/console/query/workflow-runs/31").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.runStatus").value("RUNNING"))
+                .andExpect(jsonPath("$.data.currentNodeCode").value("node-1"));
+    }
+
+    @Test
+    void shouldReturnWorkflowNodeRunDetail() throws Exception {
+        when(queryApplicationService.workflowNodeRun(anyString(), anyLong())).thenReturn(new ConsoleWorkflowNodeRunResponse(
+                41L,
+                31L,
+                "node-1",
+                "MAIN",
+                1,
+                "SUCCESS",
+                0,
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                120L
+        ));
+
+        mockMvc.perform(get("/api/console/query/workflow-node-runs/41").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.nodeCode").value("node-1"))
+                .andExpect(jsonPath("$.data.nodeStatus").value("SUCCESS"));
+    }
+
+    private <T> PageResponse<T> emptyPage() {
+        return new PageResponse<>(0L, 1, 20, List.of());
     }
 }

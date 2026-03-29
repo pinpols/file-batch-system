@@ -9,4 +9,6 @@ public interface ConsoleAiAuditLogMapper {
     int insert(ConsoleAiAuditLogEntity entity);
 
     List<ConsoleAiAuditLogEntity> selectByQuery(ConsoleAiAuditLogQuery query);
+
+    long countByQuery(ConsoleAiAuditLogQuery query);
 }

@@ -40,6 +40,26 @@
             and enabled = #{enabled}
         </if>
         order by id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.job_definition
+        where tenant_id = #{tenantId}
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="jobType != null and jobType != ''">
+            and job_type = #{jobType}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
     </select>
 
     <select id="selectByUniqueKey" resultMap="JobDefinitionResultMap">

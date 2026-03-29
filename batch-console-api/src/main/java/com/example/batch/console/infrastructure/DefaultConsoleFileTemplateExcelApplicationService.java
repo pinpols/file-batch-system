@@ -129,7 +129,8 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
                 tenantId,
                 request.getTemplateCode(),
                 request.getTemplateType(),
-                request.getEnabled()
+                request.getEnabled(),
+                null
         );
         byte[] workbookBytes = writeWorkbook(rows);
         InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));

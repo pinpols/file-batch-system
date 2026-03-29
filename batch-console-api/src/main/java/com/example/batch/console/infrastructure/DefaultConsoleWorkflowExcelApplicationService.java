@@ -147,7 +147,8 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                 request.getWorkflowCode(),
                 request.getWorkflowType(),
                 request.getVersion(),
-                request.getEnabled()
+                request.getEnabled(),
+                null
         ));
         byte[] workbookBytes = writeWorkbook(tenantId, definitions);
         InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
@@ -542,6 +543,7 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                         definition.getWorkflowCode(),
                         null,
                         null,
+                        null,
                         null
                 ));
                 for (WorkflowNodeEntity node : nodes) {
@@ -567,6 +569,7 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                         tenantId,
                         definition.getId(),
                         definition.getWorkflowCode(),
+                        null,
                         null,
                         null,
                         null,

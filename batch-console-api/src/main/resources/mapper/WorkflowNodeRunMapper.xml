@@ -30,5 +30,33 @@
             and node_status = #{nodeStatus}
         </if>
         order by run_seq desc, id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="selectById" resultMap="WorkflowNodeRunResultMap">
+        select n.*
+        from batch.workflow_node_run n
+        join batch.workflow_run r on r.id = n.workflow_run_id
+        where r.tenant_id = #{tenantId}
+          and n.id = #{id}
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.workflow_node_run
+        where 1 = 1
+        <if test="workflowRunId != null">
+            and workflow_run_id = #{workflowRunId}
+        </if>
+        <if test="nodeCode != null and nodeCode != ''">
+            and node_code = #{nodeCode}
+        </if>
+        <if test="nodeStatus != null and nodeStatus != ''">
+            and node_status = #{nodeStatus}
+        </if>
     </select>
 </mapper>

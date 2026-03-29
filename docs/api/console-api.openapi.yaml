@@ -1281,6 +1281,8 @@ paths:
       operationId: queryAuditLogs
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Audit list
@@ -1295,6 +1297,10 @@ paths:
       operationId: queryAlerts
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Alert list
@@ -1309,6 +1315,10 @@ paths:
       operationId: queryApprovals
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Approval list
@@ -1323,6 +1333,10 @@ paths:
       operationId: queryFiles
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: File chain list
@@ -1337,6 +1351,10 @@ paths:
       operationId: queryJobDefinitions
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Job definition list
@@ -1351,6 +1369,10 @@ paths:
       operationId: queryOutboxRetries
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Outbox retry list
@@ -1365,6 +1387,10 @@ paths:
       operationId: queryOutboxDeliveries
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Outbox delivery list
@@ -1379,6 +1405,10 @@ paths:
       operationId: queryFilePipelines
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: File pipeline list
@@ -1393,6 +1423,10 @@ paths:
       operationId: queryFilePipelineSteps
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: File pipeline step list
@@ -1407,6 +1441,10 @@ paths:
       operationId: queryFileDispatches
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: File dispatch list
@@ -1421,6 +1459,10 @@ paths:
       operationId: queryFileChannels
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: File channel list
@@ -1435,6 +1477,10 @@ paths:
       operationId: queryFileArrivalGroups
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: File arrival group list
@@ -1449,6 +1495,10 @@ paths:
       operationId: queryFileErrors
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: File error list
@@ -1463,6 +1513,10 @@ paths:
       operationId: queryFileTemplates
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: File template list
@@ -1477,6 +1531,10 @@ paths:
       operationId: queryJobInstances
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Job instance list
@@ -1484,6 +1542,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseJobInstanceList'
+  /api/console/query/instances/{id}:
+    get:
+      tags: [Queries]
+      summary: Query job instance detail
+      operationId: queryJobInstanceDetail
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Job instance detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleJobInstanceResponse'
   /api/console/query/job-step-instances:
     get:
       tags: [Queries]
@@ -1491,6 +1569,10 @@ paths:
       operationId: queryJobStepInstances
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Job step list
@@ -1498,6 +1580,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseJobStepInstanceList'
+  /api/console/query/job-step-instances/{id}:
+    get:
+      tags: [Queries]
+      summary: Query job step instance detail
+      operationId: queryJobStepInstanceDetail
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Job step instance detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleJobStepInstanceResponse'
   /api/console/query/workflow-definitions:
     get:
       tags: [Queries]
@@ -1505,6 +1607,10 @@ paths:
       operationId: queryWorkflowDefinitions
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Workflow definition list
@@ -1519,6 +1625,10 @@ paths:
       operationId: queryWorkflowNodes
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Workflow node list
@@ -1533,6 +1643,10 @@ paths:
       operationId: queryWorkflowEdges
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Workflow edge list
@@ -1547,6 +1661,10 @@ paths:
       operationId: queryWorkflowRuns
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Workflow run list
@@ -1554,6 +1672,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowRunList'
+  /api/console/query/workflow-runs/{id}:
+    get:
+      tags: [Queries]
+      summary: Query workflow run detail
+      operationId: queryWorkflowRunDetail
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Workflow run detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunResponse'
   /api/console/query/workflow-node-runs:
     get:
       tags: [Queries]
@@ -1561,6 +1699,10 @@ paths:
       operationId: queryWorkflowNodeRuns
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Workflow node run list
@@ -1568,6 +1710,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowNodeRunList'
+  /api/console/query/workflow-node-runs/{id}:
+    get:
+      tags: [Queries]
+      summary: Query workflow node run detail
+      operationId: queryWorkflowNodeRunDetail
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Workflow node run detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowNodeRunResponse'
   /api/console/query/workflow-topology:
     get:
       tags: [Queries]
@@ -1589,6 +1751,10 @@ paths:
       operationId: queryAiAuditLogs
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: AI audit log list
@@ -1603,6 +1769,10 @@ paths:
       operationId: queryDeadLetters
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Dead letter list
@@ -1617,6 +1787,10 @@ paths:
       operationId: queryRetries
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Retry schedule list
@@ -1631,6 +1805,10 @@ paths:
       operationId: queryCatchUpApprovals
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Catch-up approval list
@@ -1645,6 +1823,10 @@ paths:
       operationId: queryWorkers
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
       responses:
         '200':
           description: Worker list
@@ -1690,6 +1872,24 @@ components:
       required: false
       schema:
         type: string
+    PageNoQuery:
+      name: pageNo
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        default: 1
+    PageSizeQuery:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        default: 20
     OperatorIdHeader:
       name: X-Operator-Id
       in: header
@@ -1834,9 +2034,7 @@ components:
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleApprovalCommandResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConfigReleaseList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -1870,90 +2068,98 @@ components:
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleAlertEventResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseFileRecordList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleFileRecordResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseJobDefinitionList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleJobDefinitionResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseJobInstanceList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleJobInstanceResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseJobStepInstanceList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleJobStepInstanceResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseWorkflowDefinitionList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleWorkflowDefinitionResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseWorkflowNodeList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleWorkflowNodeResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseWorkflowEdgeList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleWorkflowEdgeResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseWorkflowRunList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleWorkflowRunResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseWorkflowNodeRunList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
+              $ref: '#/components/schemas/PageResponse'
+    CommonResponseConsoleJobInstanceResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleJobInstanceResponse'
+    CommonResponseConsoleJobStepInstanceResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleJobStepInstanceResponse'
+    CommonResponseConsoleWorkflowRunResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowRunResponse'
+    CommonResponseConsoleWorkflowNodeRunResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
     CommonResponseWorkflowTopologyView:
       allOf:
         - $ref: '#/components/schemas/CommonResponseObject'
@@ -1963,36 +2169,28 @@ components:
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleDeadLetterTaskResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseRetryScheduleList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleRetryScheduleResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponsePendingCatchUpList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsolePendingCatchUpResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseWorkerRegistryList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleWorkerRegistryResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleOpsSummaryResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -2038,72 +2236,56 @@ components:
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleAuditLogResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleOutboxRetryLogList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleOutboxRetryLogResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleOutboxDeliveryLogList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleOutboxDeliveryLogResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleFilePipelineList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleFilePipelineResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleFilePipelineStepList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleFilePipelineStepResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleFileDispatchRecordList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleFileDispatchRecordResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleFileChannelList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleFileChannelResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleFileTemplateList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleFileTemplateResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseConsoleFileTemplateExcelUpload:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -2194,9 +2376,7 @@ components:
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/AiAuditLogResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseAiChatResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -2210,18 +2390,14 @@ components:
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleFileArrivalGroupResponse'
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseFileErrorRecordList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
         - type: object
           properties:
             data:
-              type: array
-              items:
-                $ref: '#/components/schemas/ConsoleFileErrorRecordResponse'
+              $ref: '#/components/schemas/PageResponse'
 
     TriggerRequest:
       type: object

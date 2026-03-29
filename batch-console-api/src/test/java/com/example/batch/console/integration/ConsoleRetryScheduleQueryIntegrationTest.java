@@ -7,6 +7,7 @@ import com.example.batch.console.domain.entity.RetryScheduleEntity;
 import com.example.batch.console.domain.query.RetryScheduleQuery;
 import com.example.batch.console.mapper.RetryScheduleMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
+import com.example.batch.common.model.PageRequest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +34,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
     void shouldReturnEmptyWhenNoRetrySchedulesExist() {
         List<RetryScheduleEntity> results = retryScheduleMapper.selectByQuery(
                 new RetryScheduleQuery("no-such-tenant-" + System.currentTimeMillis(),
-                        null, null, null));
+                        null, null, null, new PageRequest(1, 10)));
 
         assertThat(results).isEmpty();
     }
@@ -46,7 +47,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
         insertRetrySchedule(tenantId, "JOB_PARTITION", 102L, "FIXED", "FAILED", 1);
 
         List<RetryScheduleEntity> waiting = retryScheduleMapper.selectByQuery(
-                new RetryScheduleQuery(tenantId, null, null, "WAITING"));
+                new RetryScheduleQuery(tenantId, null, null, "WAITING", new PageRequest(1, 10)));
 
         assertThat(waiting).hasSize(1);
         assertThat(waiting.get(0).getRetryStatus()).isEqualTo("WAITING");
@@ -59,7 +60,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
         insertRetrySchedule(tenantId, "JOB_PARTITION", 201L, "EXPONENTIAL", "WAITING", 1);
 
         List<RetryScheduleEntity> exponential = retryScheduleMapper.selectByQuery(
-                new RetryScheduleQuery(tenantId, null, "EXPONENTIAL", null));
+                new RetryScheduleQuery(tenantId, null, "EXPONENTIAL", null, new PageRequest(1, 10)));
 
         assertThat(exponential).hasSize(1);
         assertThat(exponential.get(0).getRetryPolicy()).isEqualTo("EXPONENTIAL");
@@ -72,7 +73,7 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
         insertRetrySchedule(tenantId, "JOB_PARTITION", 301L, "FIXED", "WAITING", 1);
 
         List<RetryScheduleEntity> partitionRetries = retryScheduleMapper.selectByQuery(
-                new RetryScheduleQuery(tenantId, "JOB_PARTITION", null, null));
+                new RetryScheduleQuery(tenantId, "JOB_PARTITION", null, null, new PageRequest(1, 10)));
 
         assertThat(partitionRetries).hasSize(2);
         assertThat(partitionRetries).allMatch(r -> "JOB_PARTITION".equals(r.getRelatedType()));

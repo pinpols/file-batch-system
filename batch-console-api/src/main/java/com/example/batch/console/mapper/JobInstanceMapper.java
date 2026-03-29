@@ -9,6 +9,10 @@ public interface JobInstanceMapper {
 
     List<JobInstanceEntity> selectByQuery(JobInstanceQuery query);
 
+    JobInstanceEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+    long countByQuery(JobInstanceQuery query);
+
     long countByStatuses(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 
     long countSlaBreaches(@Param("tenantId") String tenantId, @Param("activeStatuses") List<String> activeStatuses);

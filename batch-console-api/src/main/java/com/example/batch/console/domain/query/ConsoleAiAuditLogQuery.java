@@ -1,5 +1,6 @@
 package com.example.batch.console.domain.query;
 
+import com.example.batch.common.model.PageRequest;
 import java.time.Instant;
 
 public record ConsoleAiAuditLogQuery(
@@ -9,6 +10,7 @@ public record ConsoleAiAuditLogQuery(
         String promptCategory,
         String promptDecision,
         Instant fromTime,
-        Instant toTime
+        Instant toTime,
+        PageRequest pageRequest
 ) {
 }

@@ -6,6 +6,7 @@ import com.example.batch.console.BatchConsoleApiApplication;
 import com.example.batch.console.domain.query.ApprovalCommandQuery;
 import com.example.batch.console.mapper.ApprovalCommandMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
+import com.example.batch.common.model.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,7 +27,7 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
     void shouldReturnEmptyWhenNoApprovalsExist() {
         ApprovalCommandQuery query = new ApprovalCommandQuery();
         query.setTenantId("no-such-tenant-" + System.currentTimeMillis());
-        query.setLimit(10);
+        query.setPageRequest(new PageRequest(1, 10));
         assertThat(approvalCommandMapper.selectByQuery(query)).isEmpty();
     }
 
@@ -39,7 +40,7 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
         ApprovalCommandQuery query = new ApprovalCommandQuery();
         query.setTenantId(tenantId);
         query.setApprovalStatus("PENDING");
-        query.setLimit(10);
+        query.setPageRequest(new PageRequest(1, 10));
 
         assertThat(approvalCommandMapper.selectByQuery(query)).hasSize(1);
         assertThat(approvalCommandMapper.countByStatus(tenantId, "PENDING")).isEqualTo(1);
@@ -57,4 +58,3 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
                 """, tenantId, approvalNo, approvalType, actionType, status);
     }
 }
-

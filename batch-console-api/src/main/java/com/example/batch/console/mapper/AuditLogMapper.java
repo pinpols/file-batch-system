@@ -7,4 +7,6 @@ import java.util.Map;
 public interface AuditLogMapper {
 
     List<Map<String, Object>> selectByQuery(AuditLogQuery query);
+
+    long countByQuery(AuditLogQuery query);
 }

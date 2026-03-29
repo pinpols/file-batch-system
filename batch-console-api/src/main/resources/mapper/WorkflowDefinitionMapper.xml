@@ -34,6 +34,30 @@
             and enabled = #{enabled}
         </if>
         order by workflow_code, version desc, id desc
+        <if test="pageRequest != null">
+            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.workflow_definition
+        where 1 = 1
+        <if test="tenantId != null and tenantId != ''">
+            and tenant_id = #{tenantId}
+        </if>
+        <if test="workflowCode != null and workflowCode != ''">
+            and workflow_code = #{workflowCode}
+        </if>
+        <if test="workflowType != null and workflowType != ''">
+            and workflow_type = #{workflowType}
+        </if>
+        <if test="version != null">
+            and version = #{version}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
     </select>
 
     <select id="selectByUniqueKey" resultMap="WorkflowDefinitionResultMap">

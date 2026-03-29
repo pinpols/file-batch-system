@@ -34,7 +34,26 @@
             and alert_type = #{alertType}
         </if>
         order by last_seen_at desc
-        limit #{limit}
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.alert_event
+        where tenant_id = #{tenantId}
+        <if test="severity != null and severity != ''">
+            and severity = #{severity}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        <if test="alertType != null and alertType != ''">
+            and alert_type = #{alertType}
+        </if>
     </select>
 
     <select id="countByStatus" resultType="long">

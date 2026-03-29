@@ -9,6 +9,8 @@ public interface AlertEventMapper {
 
     List<AlertEventEntity> selectByQuery(AlertEventQuery query);
 
+    long countByQuery(AlertEventQuery query);
+
     long countByStatus(@Param("tenantId") String tenantId, @Param("status") String status);
 
     long countBySeverityAndStatus(@Param("tenantId") String tenantId,

@@ -56,6 +56,34 @@
         </if>
     </select>
 
+    <select id="selectById" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="instanceStatus != null and instanceStatus != ''">
+            and instance_status = #{instanceStatus}
+        </if>
+        <if test="instanceNo != null and instanceNo != ''">
+            and instance_no = #{instanceNo}
+        </if>
+        <if test="bizDate != null and bizDate != ''">
+            and cast(biz_date as varchar) = #{bizDate}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
+    </select>
+
     <select id="countByStatuses" resultType="long">
         select count(1)
         from batch.job_instance

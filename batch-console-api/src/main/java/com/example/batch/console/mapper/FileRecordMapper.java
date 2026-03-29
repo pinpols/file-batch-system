@@ -10,6 +10,8 @@ public interface FileRecordMapper {
 
     List<FileRecordEntity> selectByQuery(FileRecordQuery query);
 
+    long countByQuery(FileRecordQuery query);
+
     String selectTemplateCodeByFileId(@Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
     Map<String, Object> selectFileRecordById(@Param("tenantId") String tenantId, @Param("fileId") Long fileId);
