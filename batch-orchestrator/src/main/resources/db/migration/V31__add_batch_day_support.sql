@@ -1,5 +1,9 @@
--- Add batch day support to business_calendar and introduce batch_day_instance.
--- Safe to run multiple times (IF NOT EXISTS).
+-- =========================================================
+-- V31：批量日（batch day）支持
+-- 说明：
+-- 1) 扩展 business_calendar：cutoff、晚到容忍、SLA 偏移
+-- 2) 新增 batch_day_instance：单个业务日的生命周期投影
+-- =========================================================
 
 ALTER TABLE batch.business_calendar
     ADD COLUMN IF NOT EXISTS cutoff_time TIME NOT NULL DEFAULT TIME '06:00:00',
@@ -7,11 +11,11 @@ ALTER TABLE batch.business_calendar
     ADD COLUMN IF NOT EXISTS sla_offset_min INTEGER NOT NULL DEFAULT 0;
 
 COMMENT ON COLUMN batch.business_calendar.cutoff_time IS
-    'Business day cutoff time. Triggers before cutoff belong to the previous business day.';
+    '批量日切换时间。在该时间之前触发的批次，biz_date 归属前一个业务日。';
 COMMENT ON COLUMN batch.business_calendar.late_arrival_tolerance_min IS
-    'Late arrival tolerance window in minutes after cutoff.';
+    'cutoff 之后的容忍窗口（分钟），用于接收晚到数据。';
 COMMENT ON COLUMN batch.business_calendar.sla_offset_min IS
-    'Business day SLA deadline offset in minutes from cutoff time.';
+    '批量日 SLA deadline = cutoff_time + sla_offset_min。';
 
 DO $$
 BEGIN

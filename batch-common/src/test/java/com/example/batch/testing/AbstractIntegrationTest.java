@@ -7,16 +7,15 @@ import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Shared integration-test base for modules that need real PostgreSQL, Kafka, and MinIO.
+ * 集成测试基类：需要真实 PostgreSQL、Kafka、MinIO 的模块继承本类。
  *
- * <p>Subclasses should only declare Spring test configuration and test methods.
- * Do not duplicate container setup in child classes.
+ * <p>子类只声明 Spring 测试配置与用例方法；不要在子类中重复容器启动逻辑。
  */
 @BatchIntegrationTest
 public abstract class AbstractIntegrationTest {
 
     private static final String POSTGRES_IMAGE = "postgres:16";
-    /** {@link KafkaContainer} only supports apache/kafka (not Confluent); see Testcontainers Kafka module docs. */
+    /** {@link KafkaContainer} 仅支持 apache/kafka 镜像（非 Confluent）；详见 Testcontainers Kafka 文档。 */
     private static final String KAFKA_IMAGE = "apache/kafka:4.1.2";
     private static final String DEFAULT_DB_USER = "batch_user";
     private static final String DEFAULT_DB_PASSWORD = "batch_pass_123";

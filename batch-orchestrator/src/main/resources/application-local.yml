@@ -1,3 +1,5 @@
+# 本地联调（docker-compose + start-all.sh）：请在仓库根目录先执行 mvn package/install，
+# 勿单独只打 batch-orchestrator 而跳过 batch-common，否则易出现 ClassNotFoundException（如 RunMode）。
 server:
   port: 8082
 
@@ -10,8 +12,8 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
   flyway:
-    # Use packaged docs/sql/flyway (db/migration-platform): schema.sql + partial db/migration cannot
-    # bootstrap an empty Docker DB (job_instance etc. come from V1–V28, not orchestrator's db/migration).
+    # 使用打包的 docs/sql/flyway（classpath:db/migration-platform）。仅靠 schema.sql 与 orchestrator 自带
+    # db/migration 无法撑起空库（job_instance 等对象来自 V1–V28）。
     enabled: true
     locations: classpath:db/migration-platform
     default-schema: batch

@@ -48,19 +48,18 @@ ALTER TABLE batch.worker_registry
     ADD COLUMN IF NOT EXISTS drain_started_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS drain_deadline_at TIMESTAMPTZ;
 
--- Same DDL as db/migration/V31__add_batch_day_support.sql. No DO $$ blocks: spring.sql.init splits on ';'
--- and would break PL/pgSQL (CHECK (...); inside DO is treated as end-of-statement).
+-- 与 db/migration/V31 语义一致；此处不用 DO $$：spring.sql.init 按分号切语句，会截断 PL/pgSQL。
 ALTER TABLE batch.business_calendar
     ADD COLUMN IF NOT EXISTS cutoff_time TIME NOT NULL DEFAULT TIME '06:00:00',
     ADD COLUMN IF NOT EXISTS late_arrival_tolerance_min INTEGER NOT NULL DEFAULT 60,
     ADD COLUMN IF NOT EXISTS sla_offset_min INTEGER NOT NULL DEFAULT 0;
 
 COMMENT ON COLUMN batch.business_calendar.cutoff_time IS
-    'Business day cutoff time. Triggers before cutoff belong to the previous business day.';
+    '批量日切换时间。在该时间之前触发的批次，biz_date 归属前一个业务日。';
 COMMENT ON COLUMN batch.business_calendar.late_arrival_tolerance_min IS
-    'Late arrival tolerance window in minutes after cutoff.';
+    'cutoff 之后的容忍窗口（分钟），用于接收晚到数据。';
 COMMENT ON COLUMN batch.business_calendar.sla_offset_min IS
-    'Business day SLA deadline offset in minutes from cutoff time.';
+    '批量日 SLA deadline = cutoff_time + sla_offset_min。';
 
 ALTER TABLE batch.business_calendar DROP CONSTRAINT IF EXISTS ck_business_calendar_late_arrival_tolerance_min;
 ALTER TABLE batch.business_calendar ADD CONSTRAINT ck_business_calendar_late_arrival_tolerance_min CHECK (late_arrival_tolerance_min >= 0);

@@ -222,7 +222,7 @@ public class DefaultLaunchService implements LaunchService {
         return new PreparedLaunch(jobInstance, workflowRun, initialNodes, startedAt);
     }
 
-    // ── helpers ─────────────────────────────────────────────────────────────────
+    // ── 辅助方法 ─────────────────────────────────────────────────────────────────
 
     private String resolveInitialCurrentNode(List<WorkflowDagService.DagNodeResolution> initialNodes) {
         if (initialNodes == null || initialNodes.isEmpty()) {

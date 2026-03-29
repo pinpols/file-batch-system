@@ -5,14 +5,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!--
-      Standalone Gatling load-test module — NOT included in root pom.xml modules list.
-      Run independently:
+      独立 Gatling 压测模块 — 未列入根 pom.xml 的 modules 列表。
+      单独运行示例：
         cd load-tests
         mvn gatling:test -Dsimulation=JobLaunchSimulation
         mvn gatling:test -Dsimulation=ConsoleQuerySimulation
         mvn gatling:test -Dsimulation=CapacityBaselineSimulation
 
-      Target environment config (override via -D or environment-specific profiles):
+      目标环境参数（可通过 -D 或各环境 profile 覆盖）：
         -Dtrigger.baseUrl=http://localhost:8081
         -Dconsole.baseUrl=http://localhost:8080
         -DjobCode=E2E_IMPORT_123456
@@ -51,7 +51,7 @@
                 <artifactId>gatling-maven-plugin</artifactId>
                 <version>${gatling-maven-plugin.version}</version>
                 <configuration>
-                    <!-- Override with -Dsimulation=ClassName -->
+                    <!-- 使用 -Dsimulation=类名 覆盖 -->
                     <simulationClass>${simulation}</simulationClass>
                     <resultsFolder>${project.build.directory}/gatling-results</resultsFolder>
                 </configuration>
@@ -68,7 +68,7 @@
     </build>
 
     <profiles>
-        <!-- Local dev environment -->
+        <!-- 本地开发环境 -->
         <profile>
             <id>local</id>
             <activation>
@@ -83,7 +83,7 @@
             </properties>
         </profile>
 
-        <!-- Staging environment -->
+        <!-- 预发（staging）环境 -->
         <profile>
             <id>staging</id>
             <properties>
@@ -95,7 +95,7 @@
             </properties>
         </profile>
 
-        <!-- Production capacity probe (read-only, conservative) -->
+        <!-- 生产容量探测（只读、保守参数） -->
         <profile>
             <id>prod-probe</id>
             <properties>

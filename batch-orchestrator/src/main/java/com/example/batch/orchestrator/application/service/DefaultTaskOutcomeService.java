@@ -292,7 +292,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 throw new BizException(ResultCode.STATE_CONFLICT, "job instance progress conflict");
             }
             jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
-            // If this job was launched as a JOB-node child, signal back to the parent
+            // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
             if (allPartitionsFinished && !dagContinues && isTerminalJobInstanceStatus(instanceStatus)) {
                 signalParentVirtualTask(jobInstance, instanceStatus, command, finishedAt);
             }

@@ -23,9 +23,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test: PreprocessStep KMS round-trip — verifies that a BATCHENC-formatted payload
- * (produced by BatchObjectCryptoService, e.g. from StoreStep) is correctly decrypted
- * before the ImportPreprocessPipeline runs, closing the export-encrypt / import-decrypt loop.
+ * 单元测试：PreprocessStep 与 KMS 加解密闭环。
+ * 校验 BATCHENC 载荷（由 {@link BatchObjectCryptoService} 产生，例如 StoreStep）在 ImportPreprocessPipeline
+ * 运行前被正确解密，贯通导出加密与导入解密链路。
  */
 class PreprocessStepKmsDecryptTest {
 

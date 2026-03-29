@@ -93,7 +93,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             partitionCount = partitions.size();
             dispatchable = decision.isDispatchable();
         }
-        // markLaunchRuntime inline
+        // 内联调用 markLaunchRuntime
         if (dispatchable) {
             // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
             int updated = jobInstanceMapper.markRunning(

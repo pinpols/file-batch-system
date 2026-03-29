@@ -1,4 +1,4 @@
-# Align with orchestrator integration tests: Flyway from docs/sql/flyway; quiet background jobs.
+# 与 orchestrator 集成测试对齐：Flyway 使用 docs/sql/flyway；后台任务尽量静默。
 spring:
   flyway:
     locations: classpath:db/migration-integration

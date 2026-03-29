@@ -3,20 +3,16 @@ package com.example.batch.common.utils;
 import java.util.regex.Pattern;
 
 /**
- * Best-effort redaction for previews, logs, and bad-record payloads. Not a replacement for
- * field-level tokenization; keeps obvious digit sequences and email-like tokens from appearing
- * verbatim.
+ * 面向预览、日志、坏件载荷的尽力脱敏，不能替代字段级令牌化；避免长数字串、类邮箱片段原样外露。
  *
- * <p>Supported rule set codes (case-insensitive, multiple can be combined with "_" or by containing
- * the keyword):
+ * <p>支持的规则集代码（大小写不敏感，可用 "_" 组合或关键字包含）：
  * <ul>
- *   <li>{@code STRICT} — name/address/phone key=value pairs</li>
- *   <li>{@code PCI} — card expiry patterns (MM/YY, MM/YYYY); digit runs and emails already
- *       cover card numbers and CVV</li>
- *   <li>{@code GDPR} — IP addresses, UK/US postal codes</li>
+ *   <li>{@code STRICT}：姓名/地址/电话等 key=value</li>
+ *   <li>{@code PCI}：卡有效期（MM/YY、MM/YYYY）；长数字与邮箱规则已覆盖卡号、CVV 等</li>
+ *   <li>{@code GDPR}：IPv4、英/美邮编形态</li>
  * </ul>
  *
- * <p>All named rule sets imply STRICT masking for named fields.
+ * <p>命名规则集均隐含对命名字段采用 STRICT 脱敏。
  */
 public final class ContentMaskingUtils {
 

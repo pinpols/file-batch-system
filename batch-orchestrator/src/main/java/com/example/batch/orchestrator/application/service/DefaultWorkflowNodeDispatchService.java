@@ -235,10 +235,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             return 0;
         }
 
-        // Mark node as READY immediately (same as TASK/FILE_STEP nodes)
+        // 与 TASK/FILE_STEP 节点一致：立即将节点标为 READY
         recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
 
-        // Determine partition_no for the virtual partition
+        // 计算虚拟分区的 partition_no
         List<JobPartitionEntity> existingPartitions = jobPartitionMapper.selectByQuery(new JobPartitionQuery(
                 jobInstance.getTenantId(), jobInstance.getId(), null, null));
         int virtualPartitionNo = existingPartitions.stream()
@@ -247,7 +247,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                 .max(Integer::compareTo)
                 .orElse(0) + 1;
 
-        // Create virtual partition (RUNNING – no worker needs to claim it)
+        // 创建虚拟分区（RUNNING，无需 worker 领取）
         String idempotencyKey = jobInstance.getTenantId() + ":wf:" + workflowRun.getId() + ":" + node.nodeCode();
         JobPartitionEntity virtualPartition = new JobPartitionEntity();
         virtualPartition.setTenantId(jobInstance.getTenantId());
@@ -261,15 +261,14 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         virtualPartition.setIdempotencyKey(idempotencyKey);
         jobPartitionMapper.insert(virtualPartition);
 
-        // Build virtual task payload – mirrors what TASK nodes do so the outcome service
-        // can resolve workflowNodeCode / workflowNodeType correctly
+        // 构造虚拟 task 载荷，与 TASK 节点对齐，便于 outcome 服务解析 workflowNodeCode / workflowNodeType
         Map<String, Object> payloadMap = new LinkedHashMap<>(parsePayloadMap(sourcePayload));
         payloadMap.put("workflowNodeCode", node.nodeCode());
         payloadMap.put("workflowNodeType", node.nodeType());
         payloadMap.put("targetJobCode", refJobCode);
         String taskPayload = JsonUtils.toJson(payloadMap);
 
-        // Create virtual task (RUNNING) – no outbox dispatch event
+        // 创建虚拟 task（RUNNING），不产生 outbox 派发事件
         JobTaskEntity virtualTaskTemplate = new JobTaskEntity();
         virtualTaskTemplate.setTenantId(jobInstance.getTenantId());
         virtualTaskTemplate.setJobInstanceId(jobInstance.getId());
@@ -281,7 +280,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         virtualTaskTemplate.setTaskPayload(taskPayload);
         JobTaskEntity virtualTask = taskExecutionServiceProvider.getObject().createTask(virtualTaskTemplate);
 
-        // Update parent job's expected partition count (optimistic-lock pattern)
+        // 更新父作业期望分区数（乐观锁）
         int currentExpected = jobInstance.getExpectedPartitionCount() == null
                 ? 0 : jobInstance.getExpectedPartitionCount();
         int updated = jobInstanceMapper.updateExpectedPartitionCount(
@@ -296,7 +295,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         jobInstance.setExpectedPartitionCount(currentExpected + 1);
         jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
 
-        // Create trigger_request for the child job so LaunchValidationService.load() can find it
+        // 为子作业写入 trigger_request，供 LaunchValidationService.load() 加载
         String childRequestId = IdGenerator.newTraceId();
         String childDedupKey = idempotencyKey + ":child";
         TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
@@ -310,7 +309,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         triggerRequest.setTraceId(traceId);
         triggerRequestMapper.insert(triggerRequest);
 
-        // Build child launch params – include back-reference so the child can signal this task
+        // 子作业启动参数含回指字段，便于子作业完成后回写本虚拟 task
         Map<String, Object> childParams = new LinkedHashMap<>(parsePayloadMap(sourcePayload));
         childParams.put("parentInstanceId", jobInstance.getId());
         childParams.put("_parentVirtualTaskId", virtualTask.getId());

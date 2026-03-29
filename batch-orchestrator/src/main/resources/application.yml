@@ -23,7 +23,7 @@ spring:
       - quartz
   datasource:
     hikari:
-      # orchestrator platform pool（调度/状态推进/查询为主）
+      # 调度侧平台库 Hikari 连接池（调度 / 状态推进 / 查询为主）
       maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:10}
       minimum-idle: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MIN_IDLE:3}
       connection-timeout: ${BATCH_ORCHESTRATOR_PLATFORM_DB_CONNECTION_TIMEOUT_MS:3000}
@@ -132,7 +132,7 @@ batch:
       batch-size: ${BATCH_FILE_GOVERNANCE_ARRIVAL_BATCH_SIZE:200}
       # 超时默认动作（例如 MANUAL_CONFIRM）
       default-timeout-action: ${BATCH_FILE_GOVERNANCE_ARRIVAL_DEFAULT_TIMEOUT_ACTION:MANUAL_CONFIRM}
-      # 文件 complete 时是否触发到达事件
+      # 文件处于 complete 状态时是否触发到达事件
       trigger-on-complete: ${BATCH_FILE_GOVERNANCE_ARRIVAL_TRIGGER_ON_COMPLETE:true}
       # 人工等待延长期（秒）：用于人工确认前延长窗口
       manual-wait-extension-seconds: ${BATCH_FILE_GOVERNANCE_ARRIVAL_MANUAL_WAIT_EXTENSION_SECONDS:1800}

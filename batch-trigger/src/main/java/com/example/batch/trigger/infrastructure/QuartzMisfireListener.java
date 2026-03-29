@@ -10,7 +10,7 @@ public class QuartzMisfireListener implements MisfireHandler {
 
     @Override
     public void handle(String triggerName) {
-        // Misfire 当前只做审计留痕，真正的 catch-up/补偿决策仍由编排层统一处理。
+        // 错失触发当前仅做审计留痕，追赶与补偿策略由编排层统一决策。
         log.warn("Quartz trigger misfire detected, triggerName={}", triggerName);
     }
 }

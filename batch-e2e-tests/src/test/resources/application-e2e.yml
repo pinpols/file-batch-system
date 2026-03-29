@@ -1,4 +1,4 @@
-# Merged orchestrator + worker: serve HTTP for /internal/tasks (claim/report) while workers stay non-web.
+# 合并 orchestrator 与 worker：对外提供 /internal/tasks（领取/上报）HTTP，worker 本体仍非 Web。
 spring:
   main:
     web-application-type: servlet
@@ -8,7 +8,7 @@ spring:
 
 batch:
   retry:
-    # Fast retry cadence for E2E (orchestrator schedules partition retries without multi-minute waits).
+    # E2E 加快重试节奏（分区重试不必等待数分钟）。
     fixed-delay-seconds: 1
     poll-interval-millis: 400
   orchestrator:

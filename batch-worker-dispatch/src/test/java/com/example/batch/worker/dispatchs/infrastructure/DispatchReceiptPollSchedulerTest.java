@@ -18,7 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit test: DispatchReceiptPollScheduler.poll() guarded behavior.
+ * 单元测试：{@link DispatchReceiptPollScheduler#poll()} 的互斥与守卫行为。
  */
 class DispatchReceiptPollSchedulerTest {
 

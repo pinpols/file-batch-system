@@ -13,15 +13,15 @@
 #                  otel-collector jaeger loki grafana
 #
 # 访问地址：
-#   Jaeger UI  : http://localhost:16686
-#   Grafana    : http://localhost:3000  (admin / admin)
-#   Loki       : http://localhost:3100
-#   Collector  : grpc=4317  http=4318
+#   Jaeger 界面：http://localhost:16686
+#   Grafana：http://localhost:3000（默认 admin / admin）
+#   Loki：http://localhost:3100
+#   Collector：gRPC 4317，HTTP 4318
 # ============================================================
 
 services:
 
-  # ── OpenTelemetry Collector ─────────────────────────────────────
+  # ── OpenTelemetry 采集器（Collector）────────────────────────────
   otel-collector:
     image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_IMAGE_TAG:-0.116.0}
     container_name: batch-otel-collector
@@ -30,10 +30,10 @@ services:
     volumes:
       - ./docs/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
     ports:
-      - "${OTEL_GRPC_PORT:-4317}:4317"    # OTLP gRPC
-      - "${OTEL_HTTP_PORT:-4318}:4318"    # OTLP HTTP
+      - "${OTEL_GRPC_PORT:-4317}:4317"    # OTLP gRPC 端口
+      - "${OTEL_HTTP_PORT:-4318}:4318"    # OTLP HTTP 端口
       - "8888:8888"                        # Collector 自身指标
-      - "13133:13133"                      # Health check
+      - "13133:13133"                      # 健康检查
     environment:
       - DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT:-local}
     depends_on:
@@ -52,12 +52,12 @@ services:
     profiles: [observability]
     environment:
       - COLLECTOR_OTLP_ENABLED=true
-      - SPAN_STORAGE_TYPE=memory    # 生产替换为 elasticsearch 或 cassandra
+      - SPAN_STORAGE_TYPE=memory    # 生产环境可改为 elasticsearch 或 cassandra
       - TZ=${TZ:-Asia/Shanghai}
     ports:
-      - "${JAEGER_UI_PORT:-16686}:16686"   # Jaeger UI
+      - "${JAEGER_UI_PORT:-16686}:16686"   # Jaeger 可视化界面
       - "4317:4317"                         # OTLP gRPC（collector → jaeger）
-      - "14250:14250"                       # Jaeger gRPC
+      - "14250:14250"                       # Jaeger gRPC 端口
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:14269/"]
       interval: 10s
@@ -86,7 +86,7 @@ services:
     networks:
       - batch-network
 
-  # ── Grafana（统一可视化：Metrics + Traces + Logs）────────────────
+  # ── Grafana（统一可视化：指标 + 链路 + 日志）────────────────────
   grafana:
     image: grafana/grafana:${GRAFANA_IMAGE_TAG:-11.4.0}
     container_name: batch-grafana
