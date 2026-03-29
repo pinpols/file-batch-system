@@ -720,7 +720,9 @@ CREATE TABLE IF NOT EXISTS batch.outbox_event (
     next_publish_at TIMESTAMPTZ,
     trace_id VARCHAR(128),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Used by OutboxEventMapper: ON CONFLICT (tenant_id, event_key) DO NOTHING
+    CONSTRAINT uk_outbox_event_key UNIQUE (tenant_id, event_key)
 );
 
 CREATE TABLE IF NOT EXISTS batch.event_outbox_retry (

@@ -4,6 +4,7 @@ import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.imports.domain.ImportPayload;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.Set;
@@ -131,12 +132,59 @@ public class ReceiveStep implements ImportStageStep {
         }
         try {
             ImportPayload importPayload = objectMapper.readValue(rawPayload, ImportPayload.class);
-            return importPayload == null ? new ImportPayload(null, null, null, null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, null, null, null, null, null, Map.of()) : importPayload;
+            if (importPayload == null) {
+                return new ImportPayload(null, null, null, null, null, null, null, null, null, null, null,
+                        null, null, null, null, null, null, null, null, null, null, null, Map.of());
+            }
+
+            // content 可能不在顶层（例如 params/content）。当解析出来的 content 为空时做一次递归回填。
+            if (!StringUtils.hasText(importPayload.content()) && !StringUtils.hasText(importPayload.contentBase64())) {
+                JsonNode root = objectMapper.readTree(rawPayload);
+                String extracted = findFirstText(root, "content");
+                if (StringUtils.hasText(extracted)) {
+                    String trimmed = extracted.trim();
+                    // Only accept extracted payload that looks like JSON content (array or object).
+                    if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
+                        return importPayload;
+                    }
+                    Map<String, Object> asMap = objectMapper.convertValue(importPayload, Map.class);
+                    asMap.put("content", trimmed);
+                    asMap.put("contentBase64", null);
+                    return objectMapper.convertValue(asMap, ImportPayload.class);
+                }
+            }
+
+            return importPayload;
         } catch (Exception ignored) {
             return new ImportPayload(null, null, null, null, null, null, null, null, null, null, null,
                     null, null, null, null, null, null, null, null, null, null, null, Map.of());
         }
+    }
+
+    private String findFirstText(JsonNode node, String fieldName) {
+        if (node == null || !StringUtils.hasText(fieldName)) {
+            return null;
+        }
+        if (node.isObject()) {
+            JsonNode v = node.get(fieldName);
+            if (v != null && v.isTextual()) {
+                return v.asText();
+            }
+            for (JsonNode child : node) {
+                String found = findFirstText(child, fieldName);
+                if (StringUtils.hasText(found)) {
+                    return found;
+                }
+            }
+        } else if (node.isArray()) {
+            for (JsonNode child : node) {
+                String found = findFirstText(child, fieldName);
+                if (StringUtils.hasText(found)) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     private String resolveFileName(ImportPayload payload, String fileFormatType, String traceId) {

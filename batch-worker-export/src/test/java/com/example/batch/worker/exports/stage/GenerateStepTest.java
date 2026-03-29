@@ -401,7 +401,7 @@ class GenerateStepTest {
         context.setWorkerId("worker-1");
 
         ExportPayload payload = new ExportPayload(
-                null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, Map.of()
+                null, null, "TMPL_001", "BATCH-001", null, null, null, null, null, null, Map.of()
         );
         context.getAttributes().put("exportPayload", payload);
         context.getAttributes().put("exportFileFormatType", fileFormatType);

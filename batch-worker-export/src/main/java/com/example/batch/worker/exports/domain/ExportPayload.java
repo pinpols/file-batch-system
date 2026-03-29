@@ -1,5 +1,8 @@
 package com.example.batch.worker.exports.domain;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public record ExportPayload(
         String fileCode,
         String bizType,
@@ -10,6 +13,9 @@ public record ExportPayload(
         String bizDate,
         String targetPath,
         Boolean autoDispatch,
+        @JsonProperty("run_mode")
+        @JsonAlias("runMode")
+        String runMode,
         java.util.Map<String, Object> metadata
 ) {
 }

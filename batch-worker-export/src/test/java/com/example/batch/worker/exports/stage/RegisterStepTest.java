@@ -108,7 +108,7 @@ class RegisterStepTest {
         ctx.getAttributes().put("fileName", "f.json");
         ctx.getAttributes().put("exportFileFormatType", "JSON");
         ctx.getAttributes().put("exportPayload", new ExportPayload(
-                "FC1", "BIZ", "TPL_1", "B001", "f.json", null, "2026-03-25", null, Boolean.FALSE, Map.of()
+                "FC1", "BIZ", "TPL_1", "B001", "f.json", null, "2026-03-25", null, Boolean.FALSE, null, Map.of()
         ));
         ctx.getAttributes().put("exportBatch", Map.of("id", 10L));
         ctx.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "trace-1");

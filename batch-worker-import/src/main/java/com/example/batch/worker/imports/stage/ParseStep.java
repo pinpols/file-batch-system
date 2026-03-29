@@ -14,6 +14,7 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
@@ -521,8 +522,29 @@ public class ParseStep implements ImportStageStep {
                 return parseJsonArray(context, parser, writer, preserveLogicalRow);
             }
             if (token == JsonToken.START_OBJECT) {
-                // Streaming path for {"records":[...]} envelope: avoid loading the full array into memory.
-                return parseJsonObjectStreaming(context, parser, writer, preserveLogicalRow);
+                // Envelope path: {"records":[...]} or single-record object.
+                // If records array is absent, treat the root object as one logical record.
+                JsonNode rootObj = objectMapper.readTree(parser);
+                JsonNode recordsNode = rootObj == null ? null : rootObj.get("records");
+                if (recordsNode != null && recordsNode.isArray()) {
+                    long recordNo = 0L;
+                    for (JsonNode record : recordsNode) {
+                        if (record == null || record.isNull()) {
+                            continue;
+                        }
+                        recordNo++;
+                        collectSchemaFields(context, record);
+                        writeJsonRecord(context, writer, record, recordNo, preserveLogicalRow);
+                    }
+                    return recordNo;
+                }
+
+                if (rootObj == null || rootObj.isNull()) {
+                    return 0L;
+                }
+                collectSchemaFields(context, rootObj);
+                writeJsonRecord(context, writer, rootObj, 1L, preserveLogicalRow);
+                return 1L;
             }
             JsonNode node = objectMapper.readTree(parser);
             if (node == null || node.isNull()) {
@@ -817,12 +839,27 @@ public class ParseStep implements ImportStageStep {
         }
         Object value = row;
         if (!preserveLogicalRow) {
-            CustomerImportPayload payload = objectMapper.convertValue(row, CustomerImportPayload.class);
-            if (payload == null) {
-                recordParseError(context, recordNo, errorCode, "record cannot convert to payload", rawRecord);
-                return;
+            try {
+                CustomerImportPayload payload = objectMapper.convertValue(row, CustomerImportPayload.class);
+                if (payload == null) {
+                    recordParseError(context, recordNo, errorCode, "record cannot convert to payload", rawRecord);
+                    return;
+                }
+                value = payload;
+            } catch (RuntimeException ex) {
+                // Some JSON payloads may carry additional fields in the parsed row map.
+                // CustomerImportPayload only models mapped biz columns; ignore unknown fields.
+                if (row == null) {
+                    throw ex;
+                }
+                ObjectMapper lenient = objectMapper.copy().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                CustomerImportPayload payload = lenient.convertValue(row, CustomerImportPayload.class);
+                if (payload == null) {
+                    recordParseError(context, recordNo, errorCode, "record cannot convert to payload", rawRecord);
+                    return;
+                }
+                value = payload;
             }
-            value = payload;
         }
         writeNdjsonValue(writer, value);
         writer.newLine();
@@ -843,11 +880,15 @@ public class ParseStep implements ImportStageStep {
         if (!(templateConfigObject instanceof Map<?, ?> templateConfig)) {
             return false;
         }
+        // Template config from MyBatis may use different key styles (snake_case vs camelCase).
         Object direct = templateConfig.get("load_target_ref");
+        if (direct == null) {
+            direct = templateConfig.get("loadTargetRef");
+        }
         if (direct != null && WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(String.valueOf(direct).trim())) {
             return true;
         }
-        if (templateConfig.get("jdbc_mapped_import") != null) {
+        if (templateConfig.get("jdbc_mapped_import") != null || templateConfig.get("jdbcMappedImport") != null) {
             return true;
         }
         Map<String, Object> querySchema = readJsonObject(templateConfig.get("query_param_schema"));
