@@ -81,7 +81,7 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
 
     @Override
     public ResponseEntity<InputStreamResource> exportAuditLogs(AuditLogQueryRequest request) {
-        return exportRows("audit_logs", "audit-logs", "audit logs", queryApplicationService.auditLogs(request), ConsoleAuditLogResponse.class);
+        return exportRows("audit_logs", "audit-logs", "audit logs", queryApplicationService.auditLogs(request).items(), ConsoleAuditLogResponse.class);
     }
 
     @Override
@@ -99,17 +99,17 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
 
     @Override
     public ResponseEntity<InputStreamResource> exportWorkers(WorkerRegistryQueryRequest request) {
-        return exportRows("workers", "workers", "workers", queryApplicationService.workers(request), ConsoleWorkerRegistryResponse.class);
+        return exportRows("workers", "workers", "workers", queryApplicationService.workers(request).items(), ConsoleWorkerRegistryResponse.class);
     }
 
     @Override
     public ResponseEntity<InputStreamResource> exportOutboxRetries(OutboxRetryLogQueryRequest request) {
-        return exportRows("outbox_retries", "outbox-retries", "outbox retries", queryApplicationService.outboxRetries(request), ConsoleOutboxRetryLogResponse.class);
+        return exportRows("outbox_retries", "outbox-retries", "outbox retries", queryApplicationService.outboxRetries(request).items(), ConsoleOutboxRetryLogResponse.class);
     }
 
     @Override
     public ResponseEntity<InputStreamResource> exportOutboxDeliveries(OutboxDeliveryLogQueryRequest request) {
-        return exportRows("outbox_deliveries", "outbox-deliveries", "outbox deliveries", queryApplicationService.outboxDeliveries(request), ConsoleOutboxDeliveryLogResponse.class);
+        return exportRows("outbox_deliveries", "outbox-deliveries", "outbox deliveries", queryApplicationService.outboxDeliveries(request).items(), ConsoleOutboxDeliveryLogResponse.class);
     }
 
     private ConsoleSchedulerSnapshotResponse fetchSnapshot(String tenantId) {

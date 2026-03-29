@@ -29,5 +29,28 @@
             and created_at &lt;= #{toTime}
         </if>
         order by id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.file_audit_log
+        where tenant_id = #{tenantId}
+        <if test="operationType != null and operationType != ''">
+            and operation_type = #{operationType}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
+        <if test="fromTime != null">
+            and created_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and created_at &lt;= #{toTime}
+        </if>
     </select>
 </mapper>

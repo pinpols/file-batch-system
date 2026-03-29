@@ -32,5 +32,25 @@
             and retry_status = #{retryStatus}
         </if>
         order by next_retry_at asc, id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.retry_schedule
+        where tenant_id = #{tenantId}
+        <if test="relatedType != null and relatedType != ''">
+            and related_type = #{relatedType}
+        </if>
+        <if test="retryPolicy != null and retryPolicy != ''">
+            and retry_policy = #{retryPolicy}
+        </if>
+        <if test="retryStatus != null and retryStatus != ''">
+            and retry_status = #{retryStatus}
+        </if>
     </select>
 </mapper>

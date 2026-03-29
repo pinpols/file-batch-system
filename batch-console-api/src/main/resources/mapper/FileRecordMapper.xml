@@ -31,6 +31,36 @@
             and created_at &lt;= #{toTime}
         </if>
         order by id desc
+        <if test="pageRequest != null">
+            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.file_record
+        where tenant_id = #{tenantId}
+        <if test="fileId != null">
+            and id = #{fileId}
+        </if>
+        <if test="bizType != null and bizType != ''">
+            and biz_type = #{bizType}
+        </if>
+        <if test="fileStatus != null and fileStatus != ''">
+            and file_status = #{fileStatus}
+        </if>
+        <if test="fileName != null and fileName != ''">
+            and file_name ilike concat('%', #{fileName}, '%')
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
+        <if test="fromTime != null">
+            and created_at &gt;= #{fromTime}
+        </if>
+        <if test="toTime != null">
+            and created_at &lt;= #{toTime}
+        </if>
     </select>
 
     <select id="selectTemplateCodeByFileId" resultType="string">

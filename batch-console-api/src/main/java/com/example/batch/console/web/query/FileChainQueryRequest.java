@@ -3,7 +3,7 @@ package com.example.batch.console.web.query;
 import lombok.Data;
 
 @Data
-public class FileChainQueryRequest {
+public class FileChainQueryRequest extends PageQueryRequest {
 
     private String tenantId;
     private String pipelineType;

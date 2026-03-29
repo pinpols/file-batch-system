@@ -39,5 +39,41 @@
             and trace_id = #{traceId}
         </if>
         order by id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="selectById" resultMap="WorkflowRunResultMap">
+        select *
+        from batch.workflow_run
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.workflow_run
+        where 1 = 1
+        <if test="tenantId != null and tenantId != ''">
+            and tenant_id = #{tenantId}
+        </if>
+        <if test="workflowDefinitionId != null">
+            and workflow_definition_id = #{workflowDefinitionId}
+        </if>
+        <if test="relatedJobInstanceId != null">
+            and related_job_instance_id = #{relatedJobInstanceId}
+        </if>
+        <if test="runStatus != null and runStatus != ''">
+            and run_status = #{runStatus}
+        </if>
+        <if test="currentNodeCode != null and currentNodeCode != ''">
+            and current_node_code = #{currentNodeCode}
+        </if>
+        <if test="traceId != null and traceId != ''">
+            and trace_id = #{traceId}
+        </if>
     </select>
 </mapper>

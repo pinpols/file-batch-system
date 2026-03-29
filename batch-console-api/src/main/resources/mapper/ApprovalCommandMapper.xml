@@ -41,7 +41,29 @@
             and approval_status = #{approvalStatus}
         </if>
         order by created_at desc
-        limit #{limit}
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.approval_command
+        where tenant_id = #{tenantId}
+        <if test="approvalNo != null and approvalNo != ''">
+            and approval_no = #{approvalNo}
+        </if>
+        <if test="approvalType != null and approvalType != ''">
+            and approval_type = #{approvalType}
+        </if>
+        <if test="actionType != null and actionType != ''">
+            and action_type = #{actionType}
+        </if>
+        <if test="approvalStatus != null and approvalStatus != ''">
+            and approval_status = #{approvalStatus}
+        </if>
     </select>
 
     <select id="countByStatus" resultType="long">
@@ -51,4 +73,3 @@
           and approval_status = #{approvalStatus}
     </select>
 </mapper>
-

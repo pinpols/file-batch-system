@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class WorkerRegistryQueryRequest {
+public class WorkerRegistryQueryRequest extends PageQueryRequest {
 
     @ValidTenantId
     private String tenantId;

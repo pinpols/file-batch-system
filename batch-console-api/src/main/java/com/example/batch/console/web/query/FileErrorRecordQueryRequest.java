@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class FileErrorRecordQueryRequest {
+public class FileErrorRecordQueryRequest extends PageQueryRequest {
 
     @ValidTenantId
     private String tenantId;

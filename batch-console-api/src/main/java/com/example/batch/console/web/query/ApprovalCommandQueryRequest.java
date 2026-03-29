@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
-public class ApprovalCommandQueryRequest {
+public class ApprovalCommandQueryRequest extends PageQueryRequest {
 
     @NotBlank
     private String tenantId;
@@ -12,6 +12,4 @@ public class ApprovalCommandQueryRequest {
     private String approvalType;
     private String actionType;
     private String approvalStatus;
-    private Integer limit;
 }
-

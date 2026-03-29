@@ -7,4 +7,6 @@ import java.util.List;
 public interface PendingCatchUpMapper {
 
     List<PendingCatchUpEntity> selectByQuery(PendingCatchUpQuery query);
+
+    long countByQuery(PendingCatchUpQuery query);
 }

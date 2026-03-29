@@ -73,7 +73,7 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
         row.put("receipt_policy", "SYNC");
         row.put("timeout_seconds", 30);
         row.put("enabled", true);
-        when(fileChannelConfigMapper.selectByQuery(any(), any(), any(), any())).thenReturn(List.of(row));
+        when(fileChannelConfigMapper.selectByQuery(any(), any(), any(), any(), any())).thenReturn(List.of(row));
 
         ResponseEntity<InputStreamResource> response = service.exportFileChannels(new FileChannelQueryRequest());
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();

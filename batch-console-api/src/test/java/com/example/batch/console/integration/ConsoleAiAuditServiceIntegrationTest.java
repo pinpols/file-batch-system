@@ -52,7 +52,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
         auditService.record(command);
 
         List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(
-                new ConsoleAiAuditLogQuery("t1", "session-001", "op-001", "PLATFORM", "APPROVED", null, null)
+                new ConsoleAiAuditLogQuery("t1", "session-001", "op-001", "PLATFORM", "APPROVED", null, null, null)
         );
         assertThat(results).hasSize(1);
         ConsoleAiAuditLogEntity entry = results.get(0);
@@ -85,7 +85,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
         auditService.record(command);
 
         List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(
-                new ConsoleAiAuditLogQuery("t1", "session-002", null, null, "REJECTED_SAFETY", null, null)
+                new ConsoleAiAuditLogQuery("t1", "session-002", null, null, "REJECTED_SAFETY", null, null, null)
         );
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getRefusalReason()).isEqualTo("blocked_keyword:password");
@@ -104,7 +104,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
         }
 
         List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(
-                new ConsoleAiAuditLogQuery("t1", sessionId, null, null, null, null, null)
+                new ConsoleAiAuditLogQuery("t1", sessionId, null, null, null, null, null, null)
         );
         assertThat(results).hasSize(3);
     }
@@ -112,7 +112,7 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     @Test
     void shouldReturnEmptyWhenNoMatchingEntries() {
         List<ConsoleAiAuditLogEntity> results = auditLogMapper.selectByQuery(
-                new ConsoleAiAuditLogQuery("t1", "no-such-session-" + System.currentTimeMillis(), null, null, null, null, null)
+                new ConsoleAiAuditLogQuery("t1", "no-such-session-" + System.currentTimeMillis(), null, null, null, null, null, null)
         );
         assertThat(results).isEmpty();
     }

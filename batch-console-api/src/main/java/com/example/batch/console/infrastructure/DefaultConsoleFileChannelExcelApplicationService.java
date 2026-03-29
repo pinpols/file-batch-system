@@ -95,7 +95,8 @@ public class DefaultConsoleFileChannelExcelApplicationService implements Console
                 tenantId,
                 request.getChannelCode(),
                 request.getChannelType(),
-                request.getEnabled()
+                request.getEnabled(),
+                null
         );
         byte[] workbookBytes = writeWorkbook(rows);
         InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));

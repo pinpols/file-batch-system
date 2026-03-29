@@ -8,6 +8,8 @@ public interface WorkflowDefinitionMapper {
 
     List<WorkflowDefinitionEntity> selectByQuery(WorkflowDefinitionQuery query);
 
+    long countByQuery(WorkflowDefinitionQuery query);
+
     WorkflowDefinitionEntity selectByUniqueKey(String tenantId, String workflowCode, Integer version);
 
     int upsertWorkflowDefinition(String tenantId,

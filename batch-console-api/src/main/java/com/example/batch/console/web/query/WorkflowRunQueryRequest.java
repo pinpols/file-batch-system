@@ -3,7 +3,7 @@ package com.example.batch.console.web.query;
 import lombok.Data;
 
 @Data
-public class WorkflowRunQueryRequest {
+public class WorkflowRunQueryRequest extends PageQueryRequest {
 
     private String tenantId;
     private Long workflowDefinitionId;

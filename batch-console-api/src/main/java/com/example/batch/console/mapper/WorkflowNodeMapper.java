@@ -8,6 +8,8 @@ public interface WorkflowNodeMapper {
 
     List<WorkflowNodeEntity> selectByQuery(WorkflowNodeQuery query);
 
+    long countByQuery(WorkflowNodeQuery query);
+
     WorkflowNodeEntity selectByUniqueKey(Long workflowDefinitionId, String nodeCode);
 
     int upsertWorkflowNode(Long workflowDefinitionId,

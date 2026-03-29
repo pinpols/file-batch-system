@@ -8,6 +8,8 @@ public interface JobDefinitionMapper {
 
     List<JobDefinitionEntity> selectByQuery(JobDefinitionQuery query);
 
+    long countByQuery(JobDefinitionQuery query);
+
     JobDefinitionEntity selectByUniqueKey(String tenantId, String jobCode);
 
     int updateJobDefinitionMaintenance(String tenantId,

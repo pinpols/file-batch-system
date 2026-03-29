@@ -7,4 +7,6 @@ import java.util.List;
 public interface DeadLetterTaskMapper {
 
     List<DeadLetterTaskEntity> selectByQuery(DeadLetterTaskQuery query);
+
+    long countByQuery(DeadLetterTaskQuery query);
 }

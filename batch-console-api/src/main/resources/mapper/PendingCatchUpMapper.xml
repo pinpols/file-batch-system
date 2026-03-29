@@ -26,5 +26,24 @@
             and request_id = #{requestId}
         </if>
         order by id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.trigger_request
+        where tenant_id = #{tenantId}
+          and trigger_type = 'CATCH_UP'
+          and request_status = 'ACCEPTED'
+        <if test="jobCode != null and jobCode != ''">
+            and job_code = #{jobCode}
+        </if>
+        <if test="requestId != null and requestId != ''">
+            and request_id = #{requestId}
+        </if>
     </select>
 </mapper>

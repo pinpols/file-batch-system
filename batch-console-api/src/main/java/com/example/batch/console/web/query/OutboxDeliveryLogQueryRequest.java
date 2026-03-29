@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class OutboxDeliveryLogQueryRequest {
+public class OutboxDeliveryLogQueryRequest extends PageQueryRequest {
 
     @ValidTenantId
     private String tenantId;

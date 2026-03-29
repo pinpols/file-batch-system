@@ -3,7 +3,7 @@ package com.example.batch.console.web.query;
 import lombok.Data;
 
 @Data
-public class AuditLogQueryRequest {
+public class AuditLogQueryRequest extends PageQueryRequest {
 
     private String tenantId;
     private String operationType;
