@@ -14,11 +14,13 @@ import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
 import com.example.batch.orchestrator.domain.entity.CompensationCommandEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -39,6 +41,7 @@ public class DefaultCompensationService implements CompensationService {
 
     private final CompensationCommandMapper compensationCommandMapper;
     private final JobInstanceMapper jobInstanceMapper;
+    private final JobPartitionMapper jobPartitionMapper;
     private final JobStepInstanceMapper jobStepInstanceMapper;
     private final JobTaskMapper jobTaskMapper;
     private final TriggerRequestMapper triggerRequestMapper;
@@ -52,6 +55,7 @@ public class DefaultCompensationService implements CompensationService {
 
     public DefaultCompensationService(CompensationCommandMapper compensationCommandMapper,
                                       JobInstanceMapper jobInstanceMapper,
+                                      JobPartitionMapper jobPartitionMapper,
                                       JobStepInstanceMapper jobStepInstanceMapper,
                                       JobTaskMapper jobTaskMapper,
                                       TriggerRequestMapper triggerRequestMapper,
@@ -61,6 +65,7 @@ public class DefaultCompensationService implements CompensationService {
                                       TaskExecutionService taskExecutionService) {
         this.compensationCommandMapper = compensationCommandMapper;
         this.jobInstanceMapper = jobInstanceMapper;
+        this.jobPartitionMapper = jobPartitionMapper;
         this.jobStepInstanceMapper = jobStepInstanceMapper;
         this.jobTaskMapper = jobTaskMapper;
         this.triggerRequestMapper = triggerRequestMapper;
@@ -83,7 +88,11 @@ public class DefaultCompensationService implements CompensationService {
     public String submit(CompensationSubmitCommand command) {
         validate(command);
         String commandNo = IdGenerator.newBusinessNo("cmp");
-        String traceId = StringUtils.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId();
+        String normalizedType = normalizeType(command.compensationType());
+        String resolvedTraceId = resolveTraceIdFromTarget(command, normalizedType);
+        String traceId = StringUtils.hasText(resolvedTraceId)
+                ? resolvedTraceId
+                : (StringUtils.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
         CompensationCommandEntity entity = buildCommandEntity(command, commandNo, traceId);
         assertNoRunningConflict(command);
         try {
@@ -123,6 +132,35 @@ public class DefaultCompensationService implements CompensationService {
             appendCompensationLog(command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception);
             throw exception;
         }
+    }
+
+    private String resolveTraceIdFromTarget(CompensationSubmitCommand command, String normalizedType) {
+        if (!StringUtils.hasText(command.tenantId()) || command.targetId() == null) {
+            return null;
+        }
+        return switch (normalizedType) {
+            case "JOB" -> {
+                JobInstanceEntity sourceInstance = resolveJobInstance(command);
+                yield sourceInstance == null ? null : sourceInstance.getTraceId();
+            }
+            case "STEP" -> {
+                JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectById(command.tenantId(), command.targetId());
+                if (stepInstance == null) {
+                    yield null;
+                }
+                JobInstanceEntity inst = jobInstanceMapper.selectById(command.tenantId(), stepInstance.getJobInstanceId());
+                yield inst == null ? null : inst.getTraceId();
+            }
+            case "PARTITION" -> {
+                JobPartitionEntity partition = jobPartitionMapper.selectById(command.tenantId(), command.targetId());
+                if (partition == null) {
+                    yield null;
+                }
+                JobInstanceEntity inst = jobInstanceMapper.selectById(command.tenantId(), partition.getJobInstanceId());
+                yield inst == null ? null : inst.getTraceId();
+            }
+            default -> null;
+        };
     }
 
     private Map<String, Object> execute(CompensationSubmitCommand command,

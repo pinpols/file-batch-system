@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.repository;
 
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.repository.CrudRepository;
@@ -15,4 +16,8 @@ public interface BatchDayInstanceRepository extends CrudRepository<BatchDayInsta
     );
 
     List<BatchDayInstanceRecord> findByDayStatusIn(Collection<String> dayStatuses);
+
+    List<BatchDayInstanceRecord> findByDayStatusInAndCutoffAtLessThanEqual(Collection<String> dayStatuses, Instant cutoffAt);
+
+    List<BatchDayInstanceRecord> findByDayStatusInAndCutoffAtIsNull(Collection<String> dayStatuses);
 }

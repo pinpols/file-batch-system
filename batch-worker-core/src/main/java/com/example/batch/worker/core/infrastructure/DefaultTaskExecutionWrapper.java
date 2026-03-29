@@ -67,6 +67,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
                 report.setErrorCode(response.code());
                 report.setErrorMessage(response.message());
             }
+            // carry traceId to orchestrator so status updates and retry/dlq become traceable end-to-end
+            report.setTraceId(task.getTraceId());
             report.setResultSummary(JsonUtils.toJson(Map.of(
                     "code", response.code(),
                     "message", response.message())));

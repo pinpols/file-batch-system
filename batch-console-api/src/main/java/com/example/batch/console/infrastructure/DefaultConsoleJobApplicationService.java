@@ -13,7 +13,9 @@ import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensateRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
+import com.example.batch.console.web.request.PartitionReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
+import com.example.batch.console.web.request.TaskReplayRequest;
 import com.example.batch.console.web.request.TriggerRequest;
 import com.example.batch.console.web.response.ConsoleBatchDayCatchUpItemResponse;
 import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
@@ -161,6 +163,53 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
                 null
         ), idempotencyKey);
+    }
+
+    /** 任务重放（job_task 粒度）。 */
+    @Override
+    public String replayTask(TaskReplayRequest request, String idempotencyKey) {
+        if (!hasText(request.getApprovalId())) {
+            // approvalType 受数据库约束，这里复用 COMPENSATION + RETRY。
+            return submitApproval(
+                    "COMPENSATION",
+                    "RETRY",
+                    "JOB_TASK",
+                    String.valueOf(request.getTaskId()),
+                    request,
+                    request.getReason(),
+                    idempotencyKey
+            );
+        }
+        requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
+        return triggerRecovery(
+                resolveTenant(request.getTenantId()),
+                "/internal/recoveries/tasks/{taskId}/replay",
+                request.getTaskId(),
+                idempotencyKey
+        );
+    }
+
+    /** 分区重放（job_partition 粒度）。 */
+    @Override
+    public String replayPartition(PartitionReplayRequest request, String idempotencyKey) {
+        if (!hasText(request.getApprovalId())) {
+            return submitApproval(
+                    "COMPENSATION",
+                    "RETRY",
+                    "JOB_PARTITION",
+                    String.valueOf(request.getPartitionId()),
+                    request,
+                    request.getReason(),
+                    idempotencyKey
+            );
+        }
+        requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
+        return triggerRecovery(
+                resolveTenant(request.getTenantId()),
+                "/internal/recoveries/partitions/{partitionId}/replay",
+                request.getPartitionId(),
+                idempotencyKey
+        );
     }
 
     /** 审批通过 Catch-Up 请求。 */
@@ -346,6 +395,30 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         return response.data().commandNo();
     }
 
+    private record RecoveryOperationResponse(String operationNo) {
+    }
+
+    private String triggerRecovery(String tenantId,
+                                    String uriTemplate,
+                                    Long targetId,
+                                    String idempotencyKey) {
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        CommonResponse<RecoveryOperationResponse> response = restClient.post()
+                .uri(uriTemplate, targetId)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+                .body(Map.of("tenantId", tenantId))
+                .retrieve()
+                .body(new org.springframework.core.ParameterizedTypeReference<CommonResponse<RecoveryOperationResponse>>() {
+                });
+        if (response == null || response.data() == null) {
+            throw new BizException(ResultCode.SYSTEM_ERROR, "orchestrator returned empty recovery response");
+        }
+        return response.data().operationNo();
+    }
+
     private String submitApproval(String approvalType,
                                   String actionType,
                                   String targetType,
@@ -403,6 +476,12 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
             return request.getTenantId();
         }
         if (payload instanceof DeadLetterReplayRequest request) {
+            return request.getTenantId();
+        }
+        if (payload instanceof TaskReplayRequest request) {
+            return request.getTenantId();
+        }
+        if (payload instanceof PartitionReplayRequest request) {
             return request.getTenantId();
         }
         if (payload instanceof ConsoleCatchUpApprovalRequest request) {

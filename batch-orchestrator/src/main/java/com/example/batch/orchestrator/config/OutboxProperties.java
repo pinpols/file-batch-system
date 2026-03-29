@@ -13,4 +13,11 @@ public class OutboxProperties {
     private int maxRetryAttempts = 5;
     private String producerName = "batch-orchestrator";
     private String defaultTopic = "batch.outbox.event";
+
+    /**
+     * Outbox 投递熔断：当连续若干轮推进中出现失败，进入 cooldown，避免失败重试放大问题。
+     */
+    private boolean circuitBreakerEnabled = true;
+    private int circuitBreakerFailureThresholdConsecutivePolls = 3;
+    private long circuitBreakerCooldownMillis = 60000L;
 }

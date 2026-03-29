@@ -7,8 +7,10 @@ import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensateRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
+import com.example.batch.console.web.request.PartitionReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
 import com.example.batch.console.web.request.TriggerRequest;
+import com.example.batch.console.web.request.TaskReplayRequest;
 import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
@@ -69,6 +71,20 @@ public class ConsoleJobController {
     public CommonResponse<String> replayDeadLetter(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                    @Valid @RequestBody DeadLetterReplayRequest request) {
         return responseFactory.success(applicationService.replayDeadLetter(request, idempotencyKey));
+    }
+
+    /** 任务重放（job_task 粒度）。 */
+    @PostMapping("/tasks/replay")
+    public CommonResponse<String> replayTask(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+                                              @Valid @RequestBody TaskReplayRequest request) {
+        return responseFactory.success(applicationService.replayTask(request, idempotencyKey));
+    }
+
+    /** 分区重放（job_partition 粒度）。 */
+    @PostMapping("/partitions/replay")
+    public CommonResponse<String> replayPartition(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+                                                 @Valid @RequestBody PartitionReplayRequest request) {
+        return responseFactory.success(applicationService.replayPartition(request, idempotencyKey));
     }
 
     /** 审批通过 Catch-Up 请求。 */

@@ -19,7 +19,10 @@
 
 - `heal-drain-timeout.sh`：处理超时的 DRAINING Worker
 - `heal-dead-letters.sh`：重放新的死信任务
+- `heal-retry-tasks.sh`：重放指定条件下的失败任务（job_task 粒度）
+- `heal-retry-partitions.sh`：重放指定条件下的失败分区（job_partition 粒度）
 - `heal-stuck-outbox.sh`：重置卡住的 Outbox 事件
+- `trigger-compensation.sh`：手工触发补偿（Console API）
 
 ## 运行前提
 

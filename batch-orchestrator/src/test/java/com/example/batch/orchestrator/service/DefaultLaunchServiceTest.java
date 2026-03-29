@@ -21,6 +21,7 @@ import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
@@ -48,6 +49,7 @@ class DefaultLaunchServiceTest {
     private WorkflowDagService workflowDagService;
     private BusinessCalendarRepository businessCalendarRepository;
     private BatchDayInstanceRepository batchDayInstanceRepository;
+    private JobExecutionLogMapper jobExecutionLogMapper;
     private DefaultLaunchService service;
 
     @BeforeEach
@@ -61,6 +63,7 @@ class DefaultLaunchServiceTest {
         workflowDagService = mock(WorkflowDagService.class);
         businessCalendarRepository = mock(BusinessCalendarRepository.class);
         batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
+        jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
         service = new DefaultLaunchService(
                 launchValidationService,
                 partitionDispatchService,
@@ -70,7 +73,8 @@ class DefaultLaunchServiceTest {
                 workflowNodeRunMapper,
                 workflowDagService,
                 businessCalendarRepository,
-                batchDayInstanceRepository
+                batchDayInstanceRepository,
+                jobExecutionLogMapper
         );
         ReflectionTestUtils.setField(service, "self", service);
     }
@@ -131,7 +135,15 @@ class DefaultLaunchServiceTest {
         assertThat(saved.tenantId()).isEqualTo("t1");
         assertThat(saved.calendarCode()).isEqualTo("BIZ_CAL");
         assertThat(saved.bizDate()).isEqualTo(request.bizDate());
-        assertThat(saved.dayStatus()).isEqualTo("OPEN");
+        // day_status 在 first launch 时会根据 cutoff_time 是否已到达自动初始化为 OPEN 或 CUTOFF
+        Instant now = Instant.now();
+        Instant cutoffAt = request.bizDate()
+                .plusDays(1)
+                .atTime(LocalTime.of(6, 0))
+                .atZone(ZoneId.of("Asia/Shanghai"))
+                .toInstant();
+        String expectedDayStatus = !now.isBefore(cutoffAt) ? "CUTOFF" : "OPEN";
+        assertThat(saved.dayStatus()).isEqualTo(expectedDayStatus);
         assertThat(saved.slaDeadlineAt()).isEqualTo(expectedSlaDeadline());
     }
 

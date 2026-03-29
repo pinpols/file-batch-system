@@ -5,7 +5,9 @@ import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.BatchDayCatchUpRequest;
 import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
+import com.example.batch.console.web.request.PartitionReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
+import com.example.batch.console.web.request.TaskReplayRequest;
 import com.example.batch.console.web.request.TriggerRequest;
 import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
 
@@ -28,6 +30,12 @@ public interface ConsoleJobApplicationService {
 
     /** 重放死信任务。 */
     String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey);
+
+    /** 重放指定任务（job_task 粒度）。 */
+    String replayTask(TaskReplayRequest request, String idempotencyKey);
+
+    /** 重放指定分区（job_partition 粒度）。 */
+    String replayPartition(PartitionReplayRequest request, String idempotencyKey);
 
     /** 审批通过待处理的 Catch-Up 请求。 */
     String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey);

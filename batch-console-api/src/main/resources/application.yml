@@ -14,7 +14,7 @@ spring:
       # OpenAI 接入地址（可按代理/私有化环境覆盖）
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
       # API Key：强烈建议通过环境变量注入，避免在仓库中明文保存真实密钥
-      api-key: ${OPENAI_API_KEY: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}
+      api-key: ${OPENAI_API_KEY:}
       chat:
         options:
           # 默认模型（Console 内置 AI 功能使用；也会被 batch.console.ai.model 覆盖）

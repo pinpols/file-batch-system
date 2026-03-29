@@ -42,6 +42,7 @@
             #{nextPublishAt},
             #{traceId}
         )
+        on conflict (tenant_id, event_key) do nothing
     </insert>
 
     <select id="selectPending" resultMap="OutboxEventResultMap">

@@ -12,6 +12,8 @@ import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.common.logging.BatchMdc;
+import com.example.batch.common.logging.StructuredLogField;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
@@ -65,17 +67,24 @@ public class PartitionLeaseReclaimScheduler {
         if (jobInstance == null) {
             return;
         }
-        jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
-        jobTaskMapper.resetForRetry(partition.getTenantId(), task.getId(), TaskStatus.READY.code(), task.getVersion());
-        taskDispatchOutboxService.writeDispatchEvent(
-                jobInstance,
-                task,
-                partition,
-                jobInstance.getTraceId(),
-                partition.getTenantId() + ":reclaim:" + partition.getId() + ":" + System.currentTimeMillis(),
-                RunMode.RECOVER
-        );
-        log.warn("expired partition reclaimed and re-dispatched: tenantId={}, partitionId={}, leaseWindowSeconds={}",
-                partition.getTenantId(), partition.getId(), partitionLeaseProperties.getExpireSeconds());
+        BatchMdc.withTenantAndTrace(jobInstance.getTenantId(), jobInstance.getTraceId(), () -> {
+            BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
+            try {
+                jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
+                jobTaskMapper.resetForRetry(partition.getTenantId(), task.getId(), TaskStatus.READY.code(), task.getVersion());
+                taskDispatchOutboxService.writeDispatchEvent(
+                        jobInstance,
+                        task,
+                        partition,
+                        jobInstance.getTraceId(),
+                        partition.getTenantId() + ":reclaim:" + partition.getId(),
+                        RunMode.RECOVER
+                );
+                log.warn("expired partition reclaimed and re-dispatched: tenantId={}, partitionId={}, leaseWindowSeconds={}",
+                        partition.getTenantId(), partition.getId(), partitionLeaseProperties.getExpireSeconds());
+            } finally {
+                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+            }
+        });
     }
 }

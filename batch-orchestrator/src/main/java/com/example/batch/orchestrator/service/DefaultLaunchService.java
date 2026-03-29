@@ -20,11 +20,13 @@ import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
+import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
@@ -72,6 +74,7 @@ public class DefaultLaunchService implements LaunchService {
     private final WorkflowDagService workflowDagService;
     private final BusinessCalendarRepository businessCalendarRepository;
     private final BatchDayInstanceRepository batchDayInstanceRepository;
+    private final JobExecutionLogMapper jobExecutionLogMapper;
 
     /**
      * 通过延迟注入的 self 触发 AOP 拦截，确保 {@link #prepareJobInstance} 的 {@code @Transactional} 在同类调用中仍生效。
@@ -88,7 +91,8 @@ public class DefaultLaunchService implements LaunchService {
                                  WorkflowNodeRunMapper workflowNodeRunMapper,
                                  WorkflowDagService workflowDagService,
                                  BusinessCalendarRepository businessCalendarRepository,
-                                 BatchDayInstanceRepository batchDayInstanceRepository) {
+                                 BatchDayInstanceRepository batchDayInstanceRepository,
+                                 JobExecutionLogMapper jobExecutionLogMapper) {
         this.launchValidationService = launchValidationService;
         this.partitionDispatchService = partitionDispatchService;
         this.triggerRequestMapper = triggerRequestMapper;
@@ -98,6 +102,7 @@ public class DefaultLaunchService implements LaunchService {
         this.workflowDagService = workflowDagService;
         this.businessCalendarRepository = businessCalendarRepository;
         this.batchDayInstanceRepository = batchDayInstanceRepository;
+        this.jobExecutionLogMapper = jobExecutionLogMapper;
     }
 
     @Override
@@ -400,17 +405,28 @@ public class DefaultLaunchService implements LaunchService {
         Instant now = Instant.now();
         BatchDayInstanceRecord existing = batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
                 request.tenantId(), calendarCode, request.bizDate());
+        Instant cutoffAt = resolveBatchDayCutoffAt(request.tenantId(), calendarCode, request.bizDate());
+        String operatorId = resolveOperatorId(effectiveParams);
+        String auditOperatorId = StringUtils.hasText(operatorId) ? operatorId : "SYSTEM";
+        String auditOperatorType = StringUtils.hasText(operatorId) ? "REQUEST" : "SYSTEM";
         if (existing == null) {
             boolean catchUpLaunch = isCatchUpLaunch(request);
             boolean lateAccepted = isLateAccepted(effectiveParams);
+            boolean pastCutoff = cutoffAt != null && !now.isBefore(cutoffAt);
+            String dayStatus = (catchUpLaunch || lateAccepted)
+                    ? "IN_FLIGHT"
+                    : (pastCutoff ? "CUTOFF" : "OPEN");
+            String reasonCode = (catchUpLaunch || lateAccepted)
+                    ? (lateAccepted ? "LATE_ACCEPTED" : "CATCH_UP_LAUNCHED")
+                    : (pastCutoff ? "CUTOFF_REACHED_ON_CREATE" : "BATCH_DAY_OPENED");
             batchDayInstanceRepository.save(new BatchDayInstanceRecord(
                     null,
                     request.tenantId(),
                     calendarCode,
                     request.bizDate(),
-                    (catchUpLaunch || lateAccepted) ? "IN_FLIGHT" : "OPEN",
+                    dayStatus,
                     now,
-                    null,
+                    cutoffAt,
                     null,
                     batchDaySlaDeadlineAt,
                     lateAccepted ? 1 : 0,
@@ -418,33 +434,128 @@ public class DefaultLaunchService implements LaunchService {
                     now,
                     now
             ));
+            appendBatchDayAuditLog(
+                    request.tenantId(),
+                    request.traceId(),
+                    null,
+                    dayStatus,
+                    calendarCode,
+                    request.bizDate(),
+                    reasonCode,
+                    auditOperatorId,
+                    auditOperatorType,
+                    lateAccepted ? 1 : 0,
+                    catchUpLaunch ? 1 : 0,
+                    cutoffAt
+            );
             return;
         }
         boolean lateAccepted = isLateAccepted(effectiveParams);
         boolean catchUpLaunch = isCatchUpLaunch(request);
+        boolean pastCutoff = cutoffAt != null && !now.isBefore(cutoffAt);
+        boolean shouldMoveToCutoff = "OPEN".equalsIgnoreCase(existing.dayStatus()) && pastCutoff;
         boolean shouldReopen = shouldReopenBatchDay(existing.dayStatus()) || lateAccepted || catchUpLaunch;
         BatchDayInstanceRecord updated = existing;
         boolean changed = false;
+        String fromDayStatus = existing.dayStatus();
+        String toDayStatus = existing.dayStatus();
+        String reasonCode = null;
         if (updated.slaDeadlineAt() == null && batchDaySlaDeadlineAt != null) {
             updated = updated.withSlaDeadlineAt(batchDaySlaDeadlineAt, now);
             changed = true;
         }
+        if (updated.cutoffAt() == null && cutoffAt != null) {
+            updated = updated.withCutoffAt(cutoffAt, now);
+            changed = true;
+        }
+        if (shouldMoveToCutoff && !lateAccepted && !catchUpLaunch) {
+            updated = updated.withDayStatus("CUTOFF", now);
+            changed = true;
+            reasonCode = "CUTOFF_REACHED";
+        }
         if (lateAccepted) {
             updated = updated.withLateCount(safeIncrement(updated.lateCount()), now);
             changed = true;
+            reasonCode = "LATE_ACCEPTED";
         }
         if (catchUpLaunch) {
             updated = updated.withCatchupCount(safeIncrement(updated.catchupCount()), now);
             changed = true;
+            reasonCode = "CATCH_UP_LAUNCHED";
         }
         if (shouldReopen) {
             updated = updated.withReopened(now);
             changed = true;
+            reasonCode = lateAccepted ? "LATE_ACCEPTED_REOPEN" : (catchUpLaunch ? "CATCH_UP_REOPEN" : "BATCH_DAY_REOPENED");
         }
         if (!changed) {
             return;
         }
+        toDayStatus = updated.dayStatus();
         batchDayInstanceRepository.save(updated);
+        appendBatchDayAuditLog(
+                request.tenantId(),
+                request.traceId(),
+                fromDayStatus,
+                toDayStatus,
+                calendarCode,
+                request.bizDate(),
+                reasonCode == null ? "BATCH_DAY_UPDATED" : reasonCode,
+                auditOperatorId,
+                auditOperatorType,
+                updated.lateCount(),
+                updated.catchupCount(),
+                cutoffAt
+        );
+    }
+
+    private Instant resolveBatchDayCutoffAt(String tenantId, String calendarCode, LocalDate bizDate) {
+        BusinessCalendarRecord calendar = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
+                tenantId, calendarCode, true);
+        if (calendar == null) {
+            return null;
+        }
+        LocalTime cutoffTime = calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
+        ZoneId zoneId = StringUtils.hasText(calendar.timezone())
+                ? ZoneId.of(calendar.timezone())
+                : ZoneId.systemDefault();
+        return bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
+    }
+
+    private void appendBatchDayAuditLog(String tenantId,
+                                         String traceId,
+                                         String fromDayStatus,
+                                         String toDayStatus,
+                                         String calendarCode,
+                                         LocalDate bizDate,
+                                         String reasonCode,
+                                         String operatorId,
+                                         String operatorType,
+                                         Integer lateCount,
+                                         Integer catchupCount,
+                                         Instant cutoffAt) {
+        JobExecutionLogEntity logEntity = new JobExecutionLogEntity();
+        logEntity.setTenantId(tenantId);
+        logEntity.setJobInstanceId(null);
+        logEntity.setJobPartitionId(null);
+        logEntity.setLogLevel("INFO");
+        logEntity.setLogType("AUDIT");
+        logEntity.setTraceId(traceId);
+        logEntity.setMessage("BATCH_DAY_INSTANCE_STATE_CHANGED");
+        logEntity.setDetailRef("batch_day_instance");
+        logEntity.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {{
+            put("calendarCode", calendarCode);
+            put("bizDate", bizDate == null ? null : bizDate.toString());
+            put("fromDayStatus", fromDayStatus);
+            put("toDayStatus", toDayStatus);
+            put("reasonCode", reasonCode);
+            put("operatorId", operatorId);
+            put("operatorType", operatorType);
+            put("lateCount", lateCount);
+            put("catchupCount", catchupCount);
+            put("cutoffAt", cutoffAt == null ? null : cutoffAt.toString());
+        }}));
+        jobExecutionLogMapper.insert(logEntity);
     }
 
     private Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
@@ -496,12 +607,14 @@ public class DefaultLaunchService implements LaunchService {
             return request;
         }
         String dayStatus = batchDay.dayStatus();
-        if ("OPEN".equalsIgnoreCase(dayStatus) || "IN_FLIGHT".equalsIgnoreCase(dayStatus)) {
+        // OPEN 仍可能已到 cutoff 时间（例如定时任务延迟切换），此时也应按 CUTOFF 逻辑评估 late arrival
+        boolean pastCutoff = isPastBatchDayCutoff(batchDay, calendarCode);
+        if ("IN_FLIGHT".equalsIgnoreCase(dayStatus) || ("OPEN".equalsIgnoreCase(dayStatus) && !pastCutoff)) {
             return request;
         }
 
-        boolean lateAccepted = "CUTOFF".equalsIgnoreCase(dayStatus)
-                && isWithinLateArrivalTolerance(batchDay, calendarCode);
+        boolean treatAsCutoff = "CUTOFF".equalsIgnoreCase(dayStatus) || pastCutoff;
+        boolean lateAccepted = treatAsCutoff && isWithinLateArrivalTolerance(batchDay, calendarCode);
         Map<String, Object> routedParams = new LinkedHashMap<>();
         if (request.params() != null) {
             routedParams.putAll(request.params());
@@ -530,11 +643,29 @@ public class DefaultLaunchService implements LaunchService {
         );
     }
 
-    private boolean isWithinLateArrivalTolerance(BatchDayInstanceRecord batchDay, String calendarCode) {
-        if (batchDay == null || batchDay.cutoffAt() == null || !StringUtils.hasText(calendarCode)) {
+    private boolean isPastBatchDayCutoff(BatchDayInstanceRecord batchDay, String calendarCode) {
+        if (batchDay == null || batchDay.bizDate() == null || batchDay.tenantId() == null) {
             return false;
         }
-        Instant cutoffCloseAt = batchDay.cutoffAt().plusSeconds(
+        Instant cutoffAt = batchDay.cutoffAt();
+        if (cutoffAt == null) {
+            cutoffAt = resolveBatchDayCutoffAt(batchDay.tenantId(), calendarCode, batchDay.bizDate());
+        }
+        return cutoffAt != null && !Instant.now().isBefore(cutoffAt);
+    }
+
+    private boolean isWithinLateArrivalTolerance(BatchDayInstanceRecord batchDay, String calendarCode) {
+        if (batchDay == null || !StringUtils.hasText(calendarCode)) {
+            return false;
+        }
+        Instant cutoffAt = batchDay.cutoffAt();
+        if (cutoffAt == null) {
+            cutoffAt = resolveBatchDayCutoffAt(batchDay.tenantId(), calendarCode, batchDay.bizDate());
+        }
+        if (cutoffAt == null) {
+            return false;
+        }
+        Instant cutoffCloseAt = cutoffAt.plusSeconds(
                 Math.max(0, resolveLateArrivalToleranceMin(batchDay.tenantId(), calendarCode)) * 60L
         );
         return !Instant.now().isAfter(cutoffCloseAt);

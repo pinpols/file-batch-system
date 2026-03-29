@@ -5,6 +5,8 @@ import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import com.example.batch.orchestrator.application.ratelimit.RateLimitAction;
+import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import com.example.batch.orchestrator.application.scheduler.ResourceScheduler;
 import com.example.batch.orchestrator.application.service.PartitionLifecycleService;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
@@ -13,6 +15,8 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.logging.BatchMdc;
+import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -44,6 +48,7 @@ public class WaitingPartitionDispatchScheduler {
     private final JobDefinitionRepository jobDefinitionRepository;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
     private final PartitionLifecycleService partitionLifecycleService;
+    private final TenantActionRateLimiter tenantActionRateLimiter;
 
     /**
      * WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。
@@ -102,51 +107,62 @@ public class WaitingPartitionDispatchScheduler {
         if (partition == null || task == null || jobInstance == null || decision == null || !decision.isDispatchable()) {
             return;
         }
-        if (!partitionLifecycleService.releaseForDispatch(
-                partition,
-                task,
-                PartitionStatus.WAITING.code(),
-                TaskStatus.CREATED.code()
-        )) {
-            return;
-        }
-        taskDispatchOutboxService.writeDispatchEvent(
-                jobInstance,
-                task,
-                partition,
-                jobInstance.getTraceId(),
-                task.getTenantId() + ":waiting-release:" + task.getId()
-        );
-        if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
-            int updated = jobInstanceMapper.markRunning(
-                    jobInstance.getTenantId(),
-                    jobInstance.getId(),
-                    JobInstanceStatus.RUNNING.code(),
-                    jobInstance.getExpectedPartitionCount(),
-                    Instant.now(),
-                    jobInstance.getVersion()
-            );
-            if (updated > 0) {
-                jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+        BatchMdc.withTenantAndTrace(jobInstance.getTenantId(), jobInstance.getTraceId(), () -> {
+            BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
+            try {
+                boolean allowed = tenantActionRateLimiter.tryConsume(jobInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE);
+                if (!allowed) {
+                    return;
+                }
+                if (!partitionLifecycleService.releaseForDispatch(
+                        partition,
+                        task,
+                        PartitionStatus.WAITING.code(),
+                        TaskStatus.CREATED.code()
+                )) {
+                    return;
+                }
+                taskDispatchOutboxService.writeDispatchEvent(
+                        jobInstance,
+                        task,
+                        partition,
+                        jobInstance.getTraceId(),
+                        task.getTenantId() + ":" + task.getId()
+                );
+                if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
+                    int updated = jobInstanceMapper.markRunning(
+                            jobInstance.getTenantId(),
+                            jobInstance.getId(),
+                            JobInstanceStatus.RUNNING.code(),
+                            jobInstance.getExpectedPartitionCount(),
+                            Instant.now(),
+                            jobInstance.getVersion()
+                    );
+                    if (updated > 0) {
+                        jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+                    }
+                }
+                WorkflowRunEntity workflowRun = workflowRunMapper.selectByRelatedJobInstanceId(jobInstance.getTenantId(), jobInstance.getId());
+                if (workflowRun != null && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
+                    workflowRunMapper.markRunning(
+                            workflowRun.getTenantId(),
+                            workflowRun.getId(),
+                            WorkflowRunStatus.RUNNING.code(),
+                            workflowRun.getCurrentNodeCode(),
+                            Instant.now()
+                    );
+                }
+                log.info("waiting partition released: tenantId={}, partitionId={}, taskId={}, fairnessScore={}, tenantWeight={}, queueWeight={}",
+                        partition.getTenantId(),
+                        partition.getId(),
+                        task.getId(),
+                        decision.getFairnessScore(),
+                        decision.getTenantWeight(),
+                        decision.getQueueWeight());
+            } finally {
+                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
             }
-        }
-        WorkflowRunEntity workflowRun = workflowRunMapper.selectByRelatedJobInstanceId(jobInstance.getTenantId(), jobInstance.getId());
-        if (workflowRun != null && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
-            workflowRunMapper.markRunning(
-                    workflowRun.getTenantId(),
-                    workflowRun.getId(),
-                    WorkflowRunStatus.RUNNING.code(),
-                    workflowRun.getCurrentNodeCode(),
-                    Instant.now()
-            );
-        }
-        log.info("waiting partition released: tenantId={}, partitionId={}, taskId={}, fairnessScore={}, tenantWeight={}, queueWeight={}",
-                partition.getTenantId(),
-                partition.getId(),
-                task.getId(),
-                decision.getFairnessScore(),
-                decision.getTenantWeight(),
-                decision.getQueueWeight());
+        });
     }
 
     private ResourceSchedulingRequest buildRequest(JobInstanceEntity jobInstance,

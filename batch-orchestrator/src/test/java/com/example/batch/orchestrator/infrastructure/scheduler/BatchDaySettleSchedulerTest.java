@@ -13,6 +13,7 @@ import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
+import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
@@ -30,6 +31,7 @@ class BatchDaySettleSchedulerTest {
 
     private BatchDayInstanceRepository batchDayInstanceRepository;
     private JobInstanceMapper jobInstanceMapper;
+    private JobExecutionLogMapper jobExecutionLogMapper;
     private TriggerRequestMapper triggerRequestMapper;
     private BusinessCalendarRepository businessCalendarRepository;
     private LaunchService launchService;
@@ -39,12 +41,14 @@ class BatchDaySettleSchedulerTest {
     void setUp() {
         batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
         jobInstanceMapper = mock(JobInstanceMapper.class);
+        jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
         triggerRequestMapper = mock(TriggerRequestMapper.class);
         businessCalendarRepository = mock(BusinessCalendarRepository.class);
         launchService = mock(LaunchService.class);
         scheduler = new BatchDaySettleScheduler(
                 batchDayInstanceRepository,
                 jobInstanceMapper,
+                jobExecutionLogMapper,
                 triggerRequestMapper,
                 businessCalendarRepository,
                 launchService

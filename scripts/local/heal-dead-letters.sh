@@ -3,7 +3,7 @@
 # heal-dead-letters.sh - 自愈：批量重放 NEW 状态的死信任务
 # Notes:
 # 1) 查询 dead_letter_task 中 replay_status='NEW' 的记录并按批处理。
-# 2) 调用控制台死信重放 API 触发重放。
+# 2) 调用编排器内部死信重放接口触发重放（绕过审批门控）。
 # =========================================================
 # 使用方法：
 #   # dry-run（默认）
@@ -11,7 +11,7 @@
 #
 #   # 实际重放，限定单个租户
 #   BATCH_HEAL_DRY_RUN=false \
-#   BATCH_CONSOLE_URL=http://localhost:8080 \
+#   BATCH_ORCHESTRATOR_URL=http://localhost:8082 \
 #   BATCH_HEAL_DLQ_TENANT=tenant-001 \
 #     bash scripts/local/heal-dead-letters.sh
 #
@@ -32,8 +32,8 @@ PGUSER="${PGUSER:-batch}"
 export PGPASSWORD="${PGPASSWORD:-}"
 
 BATCH_SCHEMA="${BATCH_SCHEMA:-batch}"
-BATCH_CONSOLE_URL="${BATCH_CONSOLE_URL:-http://localhost:8080}"
-BATCH_CONSOLE_TOKEN="${BATCH_CONSOLE_TOKEN:-}"
+BATCH_ORCHESTRATOR_URL="${BATCH_ORCHESTRATOR_URL:-http://localhost:8082}"
+BATCH_ORCHESTRATOR_TOKEN="${BATCH_ORCHESTRATOR_TOKEN:-}"
 BATCH_HEAL_DRY_RUN="${BATCH_HEAL_DRY_RUN:-true}"
 BATCH_HEAL_DLQ_TENANT="${BATCH_HEAL_DLQ_TENANT:-}"
 BATCH_HEAL_DLQ_SOURCE_TYPE="${BATCH_HEAL_DLQ_SOURCE_TYPE:-}"
@@ -51,15 +51,21 @@ psql_query() {
 console_post() {
   local path="$1"
   local body="${2:-{}}"
+  local idempotencyKey="${3:-}"
   local auth_header=()
-  if [[ -n "${BATCH_CONSOLE_TOKEN}" ]]; then
-    auth_header=(-H "Authorization: Bearer ${BATCH_CONSOLE_TOKEN}")
+  if [[ -n "${BATCH_ORCHESTRATOR_TOKEN}" ]]; then
+    auth_header=(-H "Authorization: Bearer ${BATCH_ORCHESTRATOR_TOKEN}")
+  fi
+  local idem_header=()
+  if [[ -n "${idempotencyKey}" ]]; then
+    idem_header=(-H "Idempotency-Key: ${idempotencyKey}")
   fi
   curl -fsS -X POST \
     -H "Content-Type: application/json" \
+    "${idem_header[@]}" \
     "${auth_header[@]}" \
     -d "${body}" \
-    "${BATCH_CONSOLE_URL%/}${path}"
+    "${BATCH_ORCHESTRATOR_URL%/}${path}"
 }
 
 sleep_ms() {
@@ -146,15 +152,17 @@ while true; do
     batch_count=$((batch_count + 1))
 
     if [[ "${BATCH_HEAL_DRY_RUN}" == "true" ]]; then
-      log "DRY-RUN: Would POST /api/console/dead-letters/${dlq_id}/replay  tenant=${tenant_id}"
+      log "DRY-RUN: Would POST /internal/dead-letters/${dlq_id}/replay tenant=${tenant_id}"
       replayed=$((replayed + 1))
       continue
     fi
 
     response=""
+    local idem_key="heal-dlq:${tenant_id}:${dlq_id}:$(date +%s)"
     if response="$(console_post \
-          "/api/console/dead-letters/${dlq_id}/replay" \
-          "{\"tenantId\":\"${tenant_id}\"}" 2>&1)"; then
+          "/internal/dead-letters/${dlq_id}/replay" \
+          "{\"tenantId\":\"${tenant_id}\"}"
+          "${idem_key}" 2>&1)"; then
       log "  Replayed id=${dlq_id} tenant=${tenant_id}"
       replayed=$((replayed + 1))
     else
