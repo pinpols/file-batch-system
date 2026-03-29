@@ -39,7 +39,7 @@ class SqlConsistencyIT {
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .schemas("batch", "quartz")
                 .defaultSchema("batch")
-                .locations("classpath:db/migration-integration")
+                .locations("classpath:db/migration")
                 .load()
                 .migrate();
 

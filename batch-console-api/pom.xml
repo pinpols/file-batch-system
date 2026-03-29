@@ -142,7 +142,7 @@
             </testResource>
             <testResource>
                 <directory>${project.basedir}/../docs/sql/flyway</directory>
-                <targetPath>db/migration-integration</targetPath>
+                <targetPath>db/migration</targetPath>
             </testResource>
         </testResources>
         <plugins>

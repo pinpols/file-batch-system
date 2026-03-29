@@ -3,6 +3,7 @@ BEGIN;
 TRUNCATE TABLE
     batch.alert_event,
     batch.approval_command,
+    batch.batch_day_instance,
     batch.batch_window,
     batch.business_calendar,
     batch.calendar_holiday,

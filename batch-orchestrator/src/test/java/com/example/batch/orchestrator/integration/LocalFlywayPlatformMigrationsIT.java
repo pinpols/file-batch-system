@@ -13,7 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * 校验与 {@code application-local.yml} 相同的 Flyway 路径（{@code classpath:db/migration-platform}）。
+ * 校验与 {@code application-local.yml} 相同的 Flyway 路径（{@code classpath:db/migration}，源为 {@code docs/sql/flyway}）。
  */
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
@@ -32,7 +32,7 @@ class LocalFlywayPlatformMigrationsIT {
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .schemas("batch", "quartz")
                 .defaultSchema("batch")
-                .locations("classpath:db/migration-platform")
+                .locations("classpath:db/migration")
                 .load()
                 .migrate();
 
