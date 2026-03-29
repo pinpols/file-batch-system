@@ -1,9 +1,12 @@
 package com.example.batch.e2e.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.io.Resource;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,8 +28,16 @@ public class E2ePlatformMybatisConfiguration {
     public SqlSessionFactory sqlSessionFactory(@Qualifier("dataSource") DataSource dataSource) throws Exception {
         SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
         factoryBean.setDataSource(dataSource);
-        factoryBean.setMapperLocations(
-                new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/*.xml"));
+        // 勿用 mapper/**/*.xml：会重复加载多模块 XML 导致冲突；仅追加 business 子目录
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+        List<Resource> mapperLocs = new ArrayList<>();
+        for (Resource res : resolver.getResources("classpath*:mapper/*.xml")) {
+            mapperLocs.add(res);
+        }
+        for (Resource res : resolver.getResources("classpath*:mapper/business/*.xml")) {
+            mapperLocs.add(res);
+        }
+        factoryBean.setMapperLocations(mapperLocs.toArray(Resource[]::new));
         org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
         configuration.setMapUnderscoreToCamelCase(true);
         factoryBean.setConfiguration(configuration);

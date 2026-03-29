@@ -54,9 +54,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eExportApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eDispatchApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.worker.exports.config.PlatformDataSourceConfiguration.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.worker.exports.config.BusinessDataSourceConfiguration.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.worker.exports.config.ShedLockConfiguration.class),
+                // REGEX 按全限定类名匹配，避免 ASSIGNABLE_TYPE 在注解解析期加载 worker-export 配置类（不完整 jar 会 CNFE）
+                @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.example\\.batch\\.worker\\.exports\\.config\\.PlatformDataSourceConfiguration"),
+                @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.example\\.batch\\.worker\\.exports\\.config\\.BusinessDataSourceConfiguration"),
+                @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.example\\.batch\\.worker\\.exports\\.config\\.ShedLockConfiguration"),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerImportApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerExportApplication.class),
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerDispatchApplication.class),
@@ -73,6 +74,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
 @MapperScan(basePackages = "com.example.batch.orchestrator.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
 @MapperScan(basePackages = "com.example.batch.worker.core.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(basePackages = "com.example.batch.worker.exports.mapper.business", sqlSessionFactoryRef = "sqlSessionFactory")
 public class E2eExportApplication {
 
     public static void main(String[] args) {

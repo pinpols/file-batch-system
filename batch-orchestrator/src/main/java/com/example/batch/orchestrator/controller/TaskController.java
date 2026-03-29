@@ -69,7 +69,11 @@ public class TaskController {
         if (StringUtils.hasText(primary)) {
             return primary;
         }
-        return StringUtils.hasText(fallback) ? fallback : null;
+        if (StringUtils.hasText(fallback)) {
+            return fallback;
+        }
+        // Worker 或序列化路径可能未带 code/errorCode；失败态仍应落库可观测的错误码
+        return "UNKNOWN";
     }
 
     public record TaskClaimRequest(String tenantId, String workerId) {

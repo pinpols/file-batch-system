@@ -93,6 +93,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- *E2eIT 不符合 Surefire 默认 **/*Test.java，需显式包含否则 verify/test 会 0 用例“成功” -->
+                    <includes>
+                        <include>**/*E2eIT.java</include>
+                    </includes>
                     <!--
                       Docker Engine 29+ / Docker Desktop 4.52+ 协商的最低 API 为 1.44。
                       docker-java（经 Testcontainers 1.20.x）默认仍为 1.32 → 探测阶段 HTTP 400 且
@@ -127,6 +131,9 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration combine.children="merge">
+                            <includes combine.children="merge">
+                                <include>**/*E2eIT.java</include>
+                            </includes>
                             <environmentVariables combine.children="merge">
                                 <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>${user.home}/.docker/run/docker.sock</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
                             </environmentVariables>

@@ -1,6 +1,6 @@
-# 本地联调：仓库根目录先 mvn package/install；IDEA 运行主类时可不设 profile（Flyway 使用 docs/sql/flyway → classpath:db/migration）。
-# 保留 Docker 数据卷且库中已有对象但无 flyway_schema_history 时：baseline-on-migrate + baseline-version
-# 假定历史 init 已对齐至 V30，仅补跑 V31+。若迁移报「已存在」或缺表，请调高/调低 baseline-version 或清 volume。
+# 本地联调：仓库根目录先执行 `mvn package/install`；IDEA 直接运行主类时读取 `db/migration`。
+# 若 Docker 数据卷里已有对象但没有 `flyway_schema_history`，可用 `baseline-on-migrate + baseline-version` 接管。
+# 默认假定历史初始化已对齐到 `V30`，后续只补跑 `V31+`；若报“已存在”或缺表，请清卷或调整 baseline。
 server:
   port: 8082
 

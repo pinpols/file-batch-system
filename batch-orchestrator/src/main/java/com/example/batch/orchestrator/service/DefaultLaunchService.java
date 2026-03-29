@@ -33,6 +33,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -126,6 +127,12 @@ public class DefaultLaunchService implements LaunchService {
             return resolveConcurrentDuplicate(request, loaded, exception);
         } catch (DataIntegrityViolationException exception) {
             return resolveConcurrentDuplicate(request, loaded, exception);
+        } catch (RuntimeException exception) {
+            // PG 唯一约束等可能被包装为 TransactionSystemException / UncategorizedDataAccess 等，需沿 cause 识别 23505
+            if (hasSqlStateInChain(exception, "23505")) {
+                return resolveConcurrentDuplicate(request, loaded, exception);
+            }
+            throw exception;
         }
 
         // T2：构建分片/任务/outbox，并推进运行态；该事务可在失败后独立重试。
@@ -249,6 +256,21 @@ public class DefaultLaunchService implements LaunchService {
             merged.putAll(runtimeParams);
         }
         return RunModeSupport.copyWithDefault(merged, resolveRunMode(triggerType, merged));
+    }
+
+    private static boolean hasSqlStateInChain(Throwable throwable, String sqlState) {
+        for (Throwable t = throwable; t != null; t = t.getCause()) {
+            if (t instanceof SQLException sql) {
+                if (sqlState.equals(sql.getSQLState())) {
+                    return true;
+                }
+                String m = sql.getMessage();
+                if (m != null && m.contains("uk_job_instance_tenant_dedup")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private LaunchResponse resolveConcurrentDuplicate(LaunchRequest request,
