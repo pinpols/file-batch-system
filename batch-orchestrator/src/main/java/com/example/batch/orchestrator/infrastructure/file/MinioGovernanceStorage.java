@@ -1,21 +1,22 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
 import com.example.batch.common.config.MinioStorageProperties;
-import io.minio.BucketExistsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.ListObjectsArgs;
-import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.RemoveObjectArgs;
 import io.minio.Result;
 import io.minio.http.Method;
 import io.minio.messages.Item;
+import com.example.batch.common.utils.MinioBucketSupport;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class MinioGovernanceStorage {
@@ -26,7 +27,9 @@ public class MinioGovernanceStorage {
      * 治理任务只做对象清点和清理，不在这里承载业务编排。
      */
     public List<StorageObjectView> listObjects(String prefix, int limit, boolean includeTemporaryObjects) {
-        ensureBucket();
+        if (!ensureBucket()) {
+            return List.of();
+        }
         List<StorageObjectView> objects = new ArrayList<>();
         try {
             Iterable<Result<Item>> results = client().listObjects(
@@ -60,7 +63,9 @@ public class MinioGovernanceStorage {
     }
 
     public void removeObject(String objectName) {
-        ensureBucket();
+        if (!ensureBucket()) {
+            throw new IllegalStateException("minio bucket unavailable: " + properties.getBucket());
+        }
         try {
             client().removeObject(
                     RemoveObjectArgs.builder()
@@ -76,7 +81,9 @@ public class MinioGovernanceStorage {
     public String createPresignedDownloadUrl(String bucket, String objectName, int expirySeconds) {
         try {
             String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
-            ensureBucket(targetBucket);
+            if (!ensureBucket(targetBucket)) {
+                throw new IllegalStateException("minio bucket unavailable: " + targetBucket);
+            }
             return client().getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
@@ -90,19 +97,12 @@ public class MinioGovernanceStorage {
         }
     }
 
-    private void ensureBucket() {
-        ensureBucket(properties.getBucket());
+    private boolean ensureBucket() {
+        return ensureBucket(properties.getBucket());
     }
 
-    private void ensureBucket(String bucket) {
-        try {
-            boolean exists = client().bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
-            if (!exists) {
-                client().makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-            }
-        } catch (Exception exception) {
-            throw new IllegalStateException("failed to ensure minio bucket: " + bucket, exception);
-        }
+    private boolean ensureBucket(String bucket) {
+        return MinioBucketSupport.ensureBucket(client(), bucket, log, "orchestrator governance");
     }
 
     private MinioClient client() {

@@ -25,9 +25,9 @@
   - 多服务存在 Hikari `Thread starvation or clock leap detected`
 - 这些问题不阻塞前端页面构建，但会直接影响联调结论、稳定性判断和后续验收可信度
 
-## 本轮要收口的后端待确认项
+## 本轮收口的后端待确认项
 
-以下 10 项保留为联调 checklist，前端当前实现已做 fallback 或保守处理，后端收口后应逐项回填真实契约：
+以下 10 项保留为联调 checklist，前端当前实现已做 fallback 或保守处理；其中第 4 轮已经把下载、审批、执行日志和告警动作收口成明确契约：
 
 1. 列表分页：`GET .../query/*` 目前多为仅 tenantId 查询，需确认是否补服务端分页和过滤
 2. Job / Workflow 详情：需确认是否补 `instances/{id}`、`workflow-runs/{id}` 这类 detail 接口
@@ -37,8 +37,15 @@
 6. 审批状态枚举：需确认终态是否稳定为 `APPROVED` / `REJECTED` / `CLOSED` / `CANCELLED`
 7. 执行日志：当前以前端 `query/audits` 代替，需要确认是否存在专用 execution-log API
 8. 告警治理：需确认 confirm / silence / close 等 command 路径
-9. 调度快照：当前前端只消费 `ConsoleSchedulerSnapshotResponse.policies / queues`，需确认后端是否继续保持此形状
-10. `query/workflow-topology`：当前 Designer 仍用 `workflow-nodes + workflow-edges` 组 DAG，需确认是否统一拓扑格式
+9. 调度快照：已统一为 `ConsoleSchedulerSnapshotResponse.policies / queues / workers`
+10. `query/workflow-topology`：已统一为 `ConsoleWorkflowTopologyResponse`
+
+第 4 轮已完成的收口项：
+
+- 报表下载成功返回 raw bytes，失败返回标准 JSON 错误 envelope
+- 审批终态枚举固定为 `PENDING / APPROVED / REJECTED / EXECUTED`
+- 执行日志新增 `GET /api/console/query/execution-logs`，作为 `audits` 的别名视图
+- 告警动作新增 `ack / silence / close` 命令路径
 
 ## 第1轮：查询契约收口
 
@@ -94,34 +101,34 @@
   - 前端上传链路不再靠魔法常量兜底
   - Excel 预览错误可直接映射页面提示
 - 交付：Excel 协议说明、OpenAPI 回写、前端 adapter TODO 清单
-- 状态：未开始
+- 状态：已完成，四条 Excel 流程的 `file / uploadToken / apply` 协议已和 controller / OpenAPI 对齐
 
 ## 第4轮：下载、审批、执行日志、告警动作收口
 
 - 用户：把“能查不能做”或“只能猜状态”的页面动作补成可执行闭环。
-- 我：会重点确认：
-  - 报表下载失败时 blob / JSON 约定
-  - 审批终态枚举
-  - execution-log 是否有专用查询接口
-  - alert confirm / silence / close command 路径
+- 我：会把以下项收口成明确契约并落到后端：
+  - 报表下载成功返回 raw bytes，失败仍走 JSON 错误 envelope
+  - 审批终态枚举固定为 `PENDING / APPROVED / REJECTED / EXECUTED`
+  - execution-log 以 `query/execution-logs` 作为 `audits` 的别名视图
+  - alert confirm / silence / close command 路径补齐
 - 验收：
   - 前端不再硬编码审批终态集合
   - 执行日志页不再拿 audit 假装日志
   - 告警页可从只读列表演进到最小治理闭环
 - 交付：命令接口清单、状态枚举表、错误体约定
-- 状态：未开始
+- 状态：已完成
 
 ## 第5轮：调度快照与工作流拓扑格式统一
 
 - 用户：把当前“能展示但格式不统一”的调度和拓扑数据定成长期契约。
-- 我：会确认：
-  - `ConsoleSchedulerSnapshotResponse` 是否继续以 `policies / queues` 为展示主对象
-  - `query/workflow-topology` 是否保留，若保留其 shape 是否统一到可直接驱动 Designer
+- 我：已经统一为：
+  - `ConsoleSchedulerSnapshotResponse` 继续以 `policies / queues / workers` 作为展示主对象
+  - `query/workflow-topology` 返回 `ConsoleWorkflowTopologyResponse`，字段固定为 `workflowDefinition / nodes / edges / workflowRuns / nodeRuns`
 - 验收：
   - `QuotaPanel` / `QueueConfig` 无需前端猜字段
   - Designer 不再同时维护两套 DAG 输入格式
 - 交付：拓扑 DTO、调度快照 DTO、前端组件数据映射说明
-- 状态：未开始
+- 状态：已完成
 
 ## 第6轮：真实联调清单
 
@@ -174,7 +181,12 @@
   - `/Users/dengchao/Downloads/file-batch-system_副本/logs/console.log`
   - `/Users/dengchao/Downloads/file-batch-system_副本/logs/trigger.log`
 - 交付：稳定性问题清单、根因假设、修复顺序和观测指标
-- 状态：未开始
+- 这轮实际落地的收口：
+  - MinIO bucket 自检失败改为带冷却时间的 best-effort 检查，失败时调度直接跳过本轮，不再每次刷堆栈
+  - `worker heartbeat` 和 `shutdown` 失败改为降级告警，避免网络抖动把进程日志打满
+  - `worker shutdown` 现在会在状态同步失败时仍然清理本地 runtime state
+  - Hikari 的 `Thread starvation or clock leap detected` 仍然保留为环境噪音归因项，不在本轮强行改业务逻辑
+- 状态：已完成
 
 ## 建议执行顺序
 

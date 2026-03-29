@@ -48,16 +48,21 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
         activeRegistration.setActive(Boolean.FALSE);
 
         // Always mark as DRAINING first so orchestrator can stop dispatching new tasks immediately.
-        workerRegistryService.updateStatus(activeRegistration, WorkerRegistryStatus.DRAINING.code());
-
         String finalStatus = hasActiveLeases(workerId)
                 ? WorkerRegistryStatus.DRAINING.code()
                 : WorkerRegistryStatus.DECOMMISSIONED.code();
-        if (!WorkerRegistryStatus.DRAINING.code().equals(finalStatus)) {
-            workerRegistryService.updateStatus(activeRegistration, finalStatus);
+        try {
+            workerRegistryService.updateStatus(activeRegistration, WorkerRegistryStatus.DRAINING.code());
+            if (!WorkerRegistryStatus.DRAINING.code().equals(finalStatus)) {
+                workerRegistryService.updateStatus(activeRegistration, finalStatus);
+            }
+        } catch (Exception exception) {
+            log.warn("worker shutdown status sync failed: workerId={}, targetStatus={}, cause={}",
+                    workerId, finalStatus, exception.getMessage());
+        } finally {
+            workerRuntimeState.remove(workerId);
         }
-        workerRuntimeState.remove(workerId);
-        log.info("worker shutdown: workerId={}, status={}", workerId, finalStatus);
+        log.info("worker shutdown handled: workerId={}, targetStatus={}", workerId, finalStatus);
     }
 
     private boolean hasActiveLeases(String workerId) {

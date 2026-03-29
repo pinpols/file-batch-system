@@ -53,6 +53,10 @@
             <artifactId>spring-web</artifactId>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+        </dependency>
 
         <!-- ── Distributed tracing (OTEL bridge + OTLP exporter) ── -->
         <!-- micrometer-tracing-bridge-otel 将 Micrometer Observation API 桥接到 OTEL SDK -->
@@ -112,11 +116,6 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>kafka</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.minio</groupId>
-            <artifactId>minio</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

@@ -106,6 +106,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `meta` carries request tracing information and server timestamp.
 - Treat all response strings as plain text. The frontend must not inject untrusted content through `innerHTML` or equivalent HTML sinks.
 - New endpoints should prefer explicit DTOs over raw entities and should reuse `PageRequest` / `PageResponse` when pagination is required.
+- Approval status values currently exposed by the backend are `PENDING`, `APPROVED`, `REJECTED`, and `EXECUTED`; the frontend should not assume `CLOSED` or `CANCELLED` are terminal approval states.
 
 ### Query And Pagination Rules
 
@@ -148,6 +149,11 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 - Excel maintenance is a controlled extension of the console, not a general-purpose file upload feature.
 - All Excel-backed config flows must follow `upload -> preview -> apply -> export` through a dedicated adapter layer.
+- Upload requests must use `multipart/form-data` with a single form field named `file`.
+- `upload` returns an `uploadToken` and the token is the only handle used by `preview` and `apply`.
+- `preview` must be a read-only check; it may validate and summarize rows, but it must not persist anything.
+- `apply` must take the `uploadToken` in the path and the idempotency key header in the request headers.
+- `export` remains a raw `.xlsx` download, not a JSON response.
 - `file template config`, `file channel config`, and `workflow definition / node / edge` are the first-class editable domains.
 - Excel templates must be user-facing edit forms, not raw database dumps.
 - The main sheet should use frozen headers, required-field highlighting, enum dropdowns where practical, sample values, and automatic column sizing.
@@ -257,11 +263,23 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `POST /api/console/files/arrival-groups/action`
 - `GET /api/console/files/{fileId}/download`
 - File operation endpoints use `ConsoleFileOperationResponse`. `POST /api/console/files/presign-download` uses `ConsolePresignDownloadResponse`, where `approvalNo` and `downloadUrl` are mutually exclusive and one side may be `null` depending on whether the request goes through approval submission or direct presign execution.
+- Download success responses are raw file bytes with `Content-Disposition: attachment`; validation or state errors still return the normal JSON error envelope via the global exception handler.
+
+### Alerts
+
+- `GET /api/console/query/alerts`
+- `POST /api/console/alerts/{alertId}/ack`
+- `POST /api/console/alerts/{alertId}/silence`
+- `POST /api/console/alerts/{alertId}/close`
+- `ack` is the UI-facing confirm action. It maps to backend alert status `ACKED`.
+- `silence` maps to backend alert status `SUPPRESSED`.
+- `close` maps to backend alert status `CLOSED`.
 
 ### Scheduler
 
 - `GET /api/console/scheduler/snapshot`
 - `GET /api/console/scheduler/snapshot/history`
+- Scheduler snapshot responses keep the stable display slices `policies / queues / workers`; the frontend should treat those lists as the primary render contract.
 
 ### AI
 
@@ -270,6 +288,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 ### Queries
 
 - `GET /api/console/query/audits`
+- `GET /api/console/query/execution-logs`
 - `GET /api/console/query/alerts`
 - `GET /api/console/query/approvals`
 - `GET /api/console/query/files`
@@ -297,6 +316,8 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/query/catch-up-approvals`
 - `GET /api/console/query/workers`
 - Query endpoints must return typed list DTOs or documented view objects. Avoid raw entity lists and anonymous maps in new query APIs.
+- `execution-logs` is a UI alias for `audits` and uses the same response shape.
+- `workflow-topology` returns `ConsoleWorkflowTopologyResponse` with `workflowDefinition`, `nodes`, `edges`, `workflowRuns`, and `nodeRuns`; the frontend should use those five fields directly instead of reconstructing a generic object map.
 
 ## Trigger API
 

@@ -135,6 +135,17 @@ class AbstractWorkerLoopTest {
         verify(workerRuntimeFacade, never()).shutdown(any());
     }
 
+    @Test
+    void shutdown_doesNotPropagateFacadeFailure() {
+        loop.ensureStarted();
+        org.mockito.Mockito.doThrow(new RuntimeException("shutdown failed"))
+                .when(workerRuntimeFacade).shutdown(any());
+
+        loop.shutdown();
+
+        verify(workerRuntimeFacade, times(1)).shutdown("test-worker-001");
+    }
+
     // ── minimal concrete subclass for testing ──────────────────────────────
 
     private static class TestWorkerLoop extends AbstractWorkerLoop {

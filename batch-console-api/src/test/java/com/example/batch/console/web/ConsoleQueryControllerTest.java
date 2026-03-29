@@ -19,6 +19,7 @@ import com.example.batch.console.web.response.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
+import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.common.model.PageResponse;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -96,6 +97,30 @@ class ConsoleQueryControllerTest {
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.items[0].severity").value("HIGH"))
                 .andExpect(jsonPath("$.data.items[0].title").value("file failed"));
+    }
+
+    @Test
+    void shouldReturnExecutionLogDtos() throws Exception {
+        when(queryApplicationService.executionLogs(any())).thenReturn(new PageResponse<>(1L, 1, 20, List.of(
+                new com.example.batch.console.web.response.ConsoleAuditLogResponse(
+                        1L,
+                        "t1",
+                        1001L,
+                        "FILE_UPLOAD",
+                        "SUCCESS",
+                        "OPERATOR",
+                        "u1",
+                        "trace-1",
+                        "evidence-1",
+                        "summary",
+                        Instant.EPOCH
+                )
+        )));
+
+        mockMvc.perform(get("/api/console/query/execution-logs").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.items[0].operationType").value("FILE_UPLOAD"));
     }
 
     @Test
@@ -195,6 +220,18 @@ class ConsoleQueryControllerTest {
         mockMvc.perform(get("/api/console/query/workflow-edges").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void shouldReturnWorkflowTopology() throws Exception {
+        when(queryApplicationService.workflowTopology(any())).thenReturn(
+                new ConsoleWorkflowTopologyResponse(null, List.of(), List.of(), List.of(), List.of()));
+
+        mockMvc.perform(get("/api/console/query/workflow-topology").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.nodes").isArray())
+                .andExpect(jsonPath("$.data.edges").isArray());
     }
 
     @Test

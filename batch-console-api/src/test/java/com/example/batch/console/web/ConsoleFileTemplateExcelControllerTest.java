@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static com.example.batch.common.constants.CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -22,6 +23,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -59,6 +61,11 @@ class ConsoleFileTemplateExcelControllerTest {
                 List.of()
         ));
         when(excelService.apply(anyString(), any())).thenReturn(new ConsoleFileTemplateExcelApplyResponse("token-1", "t1", 1, 1, 0));
+
+        mockMvc.perform(multipart("/api/console/config/file-templates/excel/upload")
+                        .file(new MockMultipartFile("file", "template.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", new byte[] {1, 2, 3})))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rowCount").value(1));
 
         mockMvc.perform(get("/api/console/config/file-templates/excel/preview/token-1"))
                 .andExpect(status().isOk())
