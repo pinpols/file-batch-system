@@ -15,6 +15,8 @@ spring:
   flyway:
     # 数据库版本管理（迁移脚本执行）
     enabled: true
+    # 唯一脚本源：仓库 docs/sql/flyway（Maven 打进 classpath:db/migration，与 Spring Boot 默认一致）
+    locations: classpath:db/migration
     # 默认 schema（未显式指定时使用）
     default-schema: batch
     # 需要由 Flyway 管理的 schema 列表

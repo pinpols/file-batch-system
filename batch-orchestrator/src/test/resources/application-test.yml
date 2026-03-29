@@ -6,7 +6,7 @@ spring:
     import: "optional:classpath:batch-defaults.yml"
   flyway:
     # 集成测试使用独立的迁移脚本目录，避免与正式环境迁移互相影响
-    locations: classpath:db/migration-integration
+    locations: classpath:db/migration
 
 mybatis:
   # 即使 batch-defaults.yml 不在 classpath，也要保证测试可自包含运行

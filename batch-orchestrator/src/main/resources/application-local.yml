@@ -1,5 +1,6 @@
-# 本地联调（docker-compose + start-all.sh）：请在仓库根目录先执行 mvn package/install，
-# 勿单独只打 batch-orchestrator 而跳过 batch-common，否则易出现 ClassNotFoundException（如 RunMode）。
+# 本地联调：仓库根目录先 mvn package/install；IDEA 运行主类时可不设 profile（Flyway 使用 docs/sql/flyway → classpath:db/migration）。
+# 保留 Docker 数据卷且库中已有对象但无 flyway_schema_history 时：baseline-on-migrate + baseline-version
+# 假定历史 init 已对齐至 V30，仅补跑 V31+。若迁移报「已存在」或缺表，请调高/调低 baseline-version 或清 volume。
 server:
   port: 8082
 
@@ -12,14 +13,15 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
   flyway:
-    # 使用打包的 docs/sql/flyway（classpath:db/migration-platform）。仅靠 schema.sql 与 orchestrator 自带
-    # db/migration 无法撑起空库（job_instance 等对象来自 V1–V28）。
     enabled: true
-    locations: classpath:db/migration-platform
+    locations: classpath:db/migration
     default-schema: batch
     schemas:
       - batch
       - quartz
+    # 方案 A：非空库无历史表时 Flyway 会拒绝 migrate；先 baseline 再执行 baselineVersion 之后的脚本
+    baseline-on-migrate: true
+    baseline-version: 30
   sql:
     init:
       mode: never

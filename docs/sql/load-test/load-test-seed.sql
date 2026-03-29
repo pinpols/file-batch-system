@@ -22,7 +22,7 @@ INSERT INTO batch.workflow_definition (
     tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
 ) VALUES (
     't1', 'E2E_IMPORT_LOAD', 'Load Test Workflow', 'DAG', 1, true
-) ON CONFLICT (tenant_id, workflow_code) DO NOTHING;
+) ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
 
 -- 3. 多租户扩展（t2 / t3，压测多租户隔离场景时使用）
 INSERT INTO batch.job_definition (
@@ -44,7 +44,7 @@ INSERT INTO batch.workflow_definition (
 ) VALUES
     ('t2', 'E2E_IMPORT_LOAD', 'Load Test Workflow (t2)', 'DAG', 1, true),
     ('t3', 'E2E_IMPORT_LOAD', 'Load Test Workflow (t3)', 'DAG', 1, true)
-ON CONFLICT (tenant_id, workflow_code) DO NOTHING;
+ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
 
 -- 注意：trigger_request 行由 Gatling 在运行时通过 API 调用动态创建，
 --       不需要预先在此处手动插入（LaunchService 会在 launch 时读取已有行，

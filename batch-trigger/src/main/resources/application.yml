@@ -29,8 +29,9 @@ spring:
             # 集群模式：多实例共同抢占/执行触发任务
             isClustered: true
   flyway:
-    # 迁移脚本执行：负责 batch/quartz schema 的建表/升级
+    # 迁移脚本执行：与 orchestrator 同源 docs/sql/flyway（打包为 classpath:db/migration）
     enabled: true
+    locations: classpath:db/migration
     # 默认 schema
     default-schema: batch
     # 需要管理的 schema 列表

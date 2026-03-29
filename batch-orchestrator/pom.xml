@@ -65,9 +65,10 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Spring Boot 4：Flyway 自动配置在 starter 中，仅 flyway-core 不会执行迁移 -->
         <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
@@ -119,14 +120,14 @@
     </dependencies>
 
     <build>
-        <!-- 本地 IDEA 配置（application-local.yml）下的完整平台 Flyway 迁移链。 -->
+        <!-- 平台 Flyway：唯一脚本源 docs/sql/flyway，打包为 Spring Boot 默认路径 db/migration -->
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
             </resource>
             <resource>
                 <directory>${project.basedir}/../docs/sql/flyway</directory>
-                <targetPath>db/migration-platform</targetPath>
+                <targetPath>db/migration</targetPath>
                 <includes>
                     <include>V*.sql</include>
                 </includes>
@@ -135,11 +136,6 @@
         <testResources>
             <testResource>
                 <directory>src/test/resources</directory>
-            </testResource>
-            <!-- 集成测试使用的完整平台库表结构（参见 docs/sql/flyway）。 -->
-            <testResource>
-                <directory>${project.basedir}/../docs/sql/flyway</directory>
-                <targetPath>db/migration-integration</targetPath>
             </testResource>
         </testResources>
         <plugins>
