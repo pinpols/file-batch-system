@@ -137,6 +137,14 @@
             <testResource>
                 <directory>src/test/resources</directory>
             </testResource>
+            <!-- multi-tenant-seed.sql 唯一副本在 batch-e2e-tests，此处仅打进测试 classpath -->
+            <testResource>
+                <directory>${project.basedir}/../batch-e2e-tests/src/test/resources/db/testdata</directory>
+                <targetPath>db/testdata</targetPath>
+                <includes>
+                    <include>multi-tenant-seed.sql</include>
+                </includes>
+            </testResource>
         </testResources>
         <plugins>
             <plugin>

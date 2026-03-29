@@ -79,6 +79,14 @@
                 <directory>${project.basedir}/../docs/sql/flyway</directory>
                 <targetPath>db/migration</targetPath>
             </testResource>
+            <!-- 业务库示例 DDL：单源 docs/sql/business/V1__create_biz_example_tables.sql -->
+            <testResource>
+                <directory>${project.basedir}/../docs/sql/business</directory>
+                <targetPath>sql</targetPath>
+                <includes>
+                    <include>V1__create_biz_example_tables.sql</include>
+                </includes>
+            </testResource>
         </testResources>
         <plugins>
             <plugin>

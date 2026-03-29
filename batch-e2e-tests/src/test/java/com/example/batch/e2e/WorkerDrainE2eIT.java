@@ -7,6 +7,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eScenarioFixture;
+import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.service.LaunchService;
@@ -41,8 +42,8 @@ import org.springframework.test.context.jdbc.Sql;
         })
 @ActiveProfiles({"test", "e2e"})
 @Sql(scripts = {
-        "classpath:sql/e2e-biz-schema.sql",
-        "classpath:db/testdata/import-template-config-seed.sql"
+        E2eTestSql.BIZ_SCHEMA,
+        E2eTestSql.IMPORT_TEMPLATE_SEED,
 })
 @Tag("e2e")
 class WorkerDrainE2eIT extends AbstractIntegrationTest {

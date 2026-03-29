@@ -161,17 +161,15 @@
 
 ### 测试数据脚本
 
-**Seed SQL（`batch-orchestrator/src/test/resources/db/testdata/`）**
+**Seed SQL（`batch-e2e-tests/src/test/resources/db/testdata/`，由 E2E / 经 Maven testResource 引用的集成测试共用）**
 
 | 文件 | 内容 |
 |---|---|
-| `job-instance-seed.sql` | 批量调度作业定义（IMPORT/EXPORT/DISPATCH × t1） |
-| `worker-registry-seed.sql` | Worker 注册（ONLINE × 3 + DRAINING × 1，t1） |
-| `quota-policy-seed.sql` | 租户配额策略（NONE/SLIDING_WINDOW/CALENDAR_DAY，t1） |
-| `import-template-config-seed.sql` | 导入模板完整矩阵（CSV/Pipe/Tab/FW/Excel/XML/JSON-array/JSON-envelope/AES-encrypted/GZIP-pipe，t1） |
-| `export-template-config-seed.sql` | 导出模板完整矩阵（CSV/Pipe/Tab-noheader/FW/Excel/JSON/AES+GZIP，t1） |
-| `dispatch-channel-config-seed.sql` | 渠道配置（SFTP×2/API-push/API-pull/EMAIL/NAS/OSS/LOCAL，t1） |
-| `multi-tenant-seed.sql` | 多租户扩展（t2 finance + t3 risk，含作业定义/配额/Worker/模板） |
+| `import-template-config-seed.sql` | 导入模板矩阵（t1，`@Sql` / `E2eTestSql`） |
+| `export-template-config-seed.sql` | 导出模板矩阵（t1） |
+| `multi-tenant-seed.sql` | 多租户 t2/t3（`MultiTenantIsolationIntegrationTest` 等） |
+
+说明：原 `batch-orchestrator/.../db/testdata/` 下未引用副本（job/worker/quota/dispatch 等）已删除，避免与 Flyway 漂移且无人执行。
 
 **Fixture 文件（`batch-worker-import/src/test/resources/fixtures/`）**
 
