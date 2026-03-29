@@ -8,7 +8,6 @@ import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
-import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -27,6 +26,7 @@ import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -64,7 +64,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     private final JobInstanceMapper jobInstanceMapper;
     private final JobStepInstanceMapper jobStepInstanceMapper;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
-    private final RetryGovernanceProperties retryGovernanceProperties;
+    private final BatchOrchestratorGovernanceProperties governance;
 
     @Override
     @Transactional
@@ -134,7 +134,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 null,
                 RetryScheduleStatus.WAITING.code(),
                 Instant.now(),
-                retryGovernanceProperties.getBatchSize()
+                governance.retry().getBatchSize()
         ));
         for (RetryScheduleEntity retrySchedule : dueRetries) {
             if (retryScheduleMapper.markRunning(retrySchedule.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()) <= 0) {
@@ -324,35 +324,35 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
     private RetryPolicyPlan resolveRetryPolicy(Long jobDefinitionId) {
         if (jobDefinitionId == null) {
-            return new RetryPolicyPlan(RetryPolicyType.FIXED.code(), retryGovernanceProperties.getDefaultMaxRetryCount());
+            return new RetryPolicyPlan(RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
         }
         JobDefinitionRecord jobDefinitionRecord = jobDefinitionRepository.findById(jobDefinitionId).orElse(null);
         if (jobDefinitionRecord == null) {
-            return new RetryPolicyPlan(RetryPolicyType.FIXED.code(), retryGovernanceProperties.getDefaultMaxRetryCount());
+            return new RetryPolicyPlan(RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
         }
         String retryPolicy = jobDefinitionRecord.retryPolicy();
         Integer retryMaxCount = jobDefinitionRecord.retryMaxCount();
         if (retryPolicy == null || retryPolicy.isBlank()) {
             retryPolicy = RetryPolicyType.FIXED.code();
         }
-        return new RetryPolicyPlan(retryPolicy, retryMaxCount == null ? retryGovernanceProperties.getDefaultMaxRetryCount() : retryMaxCount);
+        return new RetryPolicyPlan(retryPolicy, retryMaxCount == null ? governance.retry().getDefaultMaxRetryCount() : retryMaxCount);
     }
 
     /**
      * 重试时间由治理层统一计算，避免调度器和业务处理各自散落一套 backoff 规则。
      */
     private Instant calculateNextRetryAt(String retryPolicy, int retryCount) {
-        long delaySeconds = retryGovernanceProperties.getFixedDelaySeconds();
+        long delaySeconds = governance.retry().getFixedDelaySeconds();
         if (RetryPolicyType.EXPONENTIAL.code().equalsIgnoreCase(retryPolicy)) {
-            long multiplier = Math.max(1L, retryGovernanceProperties.getExponentialMultiplier());
+            long multiplier = Math.max(1L, governance.retry().getExponentialMultiplier());
             long candidate = delaySeconds;
             for (int i = 1; i < retryCount; i++) {
-                if (candidate >= retryGovernanceProperties.getMaxDelaySeconds()) {
-                    candidate = retryGovernanceProperties.getMaxDelaySeconds();
+                if (candidate >= governance.retry().getMaxDelaySeconds()) {
+                    candidate = governance.retry().getMaxDelaySeconds();
                     break;
                 }
                 candidate = Math.min(
-                        retryGovernanceProperties.getMaxDelaySeconds(),
+                        governance.retry().getMaxDelaySeconds(),
                         candidate * multiplier
                 );
             }

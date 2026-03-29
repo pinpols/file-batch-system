@@ -1,6 +1,6 @@
 package com.example.batch.orchestrator.application.ratelimit;
 
-import com.example.batch.orchestrator.config.RateLimitProperties;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantActionRateLimiter {
 
-    private final RateLimitProperties rateLimitProperties;
+    private final BatchOrchestratorGovernanceProperties governance;
 
     // 更方便测试；当前未注入自定义 clock，直接使用系统时间
     private final Clock clock = Clock.systemDefaultZone();
@@ -17,7 +17,7 @@ public class TenantActionRateLimiter {
     private final TokenBucketRateLimiter limiter = new TokenBucketRateLimiter();
 
     public boolean tryConsume(String tenantId, RateLimitAction action) {
-        if (!rateLimitProperties.isEnabled()) {
+        if (!governance.rateLimit().isEnabled()) {
             return true;
         }
         if (tenantId == null || tenantId.isBlank()) {
@@ -25,9 +25,9 @@ public class TenantActionRateLimiter {
         }
         long max;
         if (action == RateLimitAction.LAUNCH) {
-            max = rateLimitProperties.getMaxNewRequestsPerTenantPerMinute();
+            max = governance.rateLimit().getMaxNewRequestsPerTenantPerMinute();
         } else if (action == RateLimitAction.DISPATCH_RELEASE) {
-            max = rateLimitProperties.getMaxReleaseRequestsPerTenantPerMinute();
+            max = governance.rateLimit().getMaxReleaseRequestsPerTenantPerMinute();
         } else {
             max = 0;
         }

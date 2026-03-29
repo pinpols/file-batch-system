@@ -3,11 +3,11 @@ package com.example.batch.orchestrator.application.engine;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
-import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.domain.query.OutboxEventQuery;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
@@ -23,7 +23,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     private final OutboxEventMapper outboxEventMapper;
     private final EventOutboxRetryMapper eventOutboxRetryMapper;
     private final OutboxPublisher outboxPublisher;
-    private final OutboxProperties outboxProperties;
+    private final BatchOrchestratorGovernanceProperties governance;
 
     @Override
     @Transactional
@@ -40,7 +40,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         int publishSucceeded = 0;
         int publishFailed = 0;
 
-        for (OutboxEventEntity event : pendingEvents.stream().limit(outboxProperties.getBatchSize()).toList()) {
+        for (OutboxEventEntity event : pendingEvents.stream()
+                .limit(governance.outbox().getBatchSize())
+                .toList()) {
             // Ensure outbox forwarding logs can be correlated by traceId.
             BatchMdc.put(StructuredLogField.TENANT_ID, event.getTenantId());
             BatchMdc.put(StructuredLogField.TRACE_ID, event.getTraceId());
@@ -58,9 +60,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                         outboxEventMapper.markPublished(event.getTenantId(), event.getId(), OutboxPublishStatus.PUBLISHED.code());
                     } else {
                         publishFailed++;
-                        Instant nextRetryAt = Instant.now().plusSeconds(outboxProperties.getRetryDelaySeconds());
+                        Instant nextRetryAt = Instant.now().plusSeconds(governance.outbox().getRetryDelaySeconds());
                         int publishAttemptNo = event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
-                        if (publishAttemptNo >= outboxProperties.getMaxRetryAttempts()) {
+                        if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
                             outboxEventMapper.markGiveUp(event.getTenantId(), event.getId(), OutboxPublishStatus.GIVE_UP.code());
                             recordRetry(event, publishAttemptNo, null, "retry attempts exhausted");
                         } else {

@@ -21,6 +21,7 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,11 +43,15 @@ class PartitionLeaseReclaimSchedulerTest {
         jobTaskMapper = mock(JobTaskMapper.class);
         jobInstanceMapper = mock(JobInstanceMapper.class);
         taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+
         PartitionLeaseProperties props = new PartitionLeaseProperties();
         props.setExpireSeconds(60L);
+        BatchOrchestratorGovernanceProperties governance = mock(BatchOrchestratorGovernanceProperties.class);
+        when(governance.partitionLease()).thenReturn(props);
+
         scheduler = new PartitionLeaseReclaimScheduler(
                 jobPartitionMapper, jobTaskMapper, jobInstanceMapper,
-                taskDispatchOutboxService, props);
+                taskDispatchOutboxService, governance);
     }
 
     @Test

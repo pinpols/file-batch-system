@@ -12,6 +12,7 @@ import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.config.OutboxProperties;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
@@ -27,6 +28,7 @@ class KafkaOutboxPublisherTest {
     private KafkaTemplate<String, String> kafkaTemplate;
     private BatchMqTopicsProperties batchMqTopicsProperties;
     private OutboxProperties outboxProperties;
+    private BatchOrchestratorGovernanceProperties governance;
     private EventDeliveryLogMapper eventDeliveryLogMapper;
     private KafkaOutboxPublisher publisher;
 
@@ -36,7 +38,10 @@ class KafkaOutboxPublisherTest {
         batchMqTopicsProperties = new BatchMqTopicsProperties();
         outboxProperties = new OutboxProperties();
         eventDeliveryLogMapper = mock(EventDeliveryLogMapper.class);
-        publisher = new KafkaOutboxPublisher(kafkaTemplate, batchMqTopicsProperties, outboxProperties, eventDeliveryLogMapper);
+        governance = mock(BatchOrchestratorGovernanceProperties.class);
+        when(governance.mqTopics()).thenReturn(batchMqTopicsProperties);
+        when(governance.outbox()).thenReturn(outboxProperties);
+        publisher = new KafkaOutboxPublisher(kafkaTemplate, governance, eventDeliveryLogMapper);
     }
 
     @Test

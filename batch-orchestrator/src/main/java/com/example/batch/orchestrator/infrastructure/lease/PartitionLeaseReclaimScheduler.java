@@ -4,7 +4,6 @@ import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
-import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -12,6 +11,7 @@ import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import java.util.List;
@@ -32,7 +32,7 @@ public class PartitionLeaseReclaimScheduler {
     private final JobTaskMapper jobTaskMapper;
     private final JobInstanceMapper jobInstanceMapper;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
-    private final PartitionLeaseProperties partitionLeaseProperties;
+    private final BatchOrchestratorGovernanceProperties governance;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Scheduled(fixedDelayString = "${batch.partition-lease.reclaim-interval-millis:15000}")
@@ -81,7 +81,7 @@ public class PartitionLeaseReclaimScheduler {
                         RunMode.RECOVER
                 );
                 log.warn("expired partition reclaimed and re-dispatched: tenantId={}, partitionId={}, leaseWindowSeconds={}",
-                        partition.getTenantId(), partition.getId(), partitionLeaseProperties.getExpireSeconds());
+                        partition.getTenantId(), partition.getId(), governance.partitionLease().getExpireSeconds());
             } finally {
                 BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
             }

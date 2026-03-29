@@ -2,7 +2,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.orchestrator.application.scheduler.PartitionThrottle;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
-import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
@@ -22,7 +22,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
     private final JobPartitionMapper jobPartitionMapper;
     private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
     private final QuotaRuntimeStateService quotaRuntimeStateService;
-    private final ResourceSchedulerProperties resourceSchedulerProperties;
+    private final BatchOrchestratorGovernanceProperties governance;
 
     @Override
     public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
@@ -45,7 +45,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
                     pburst,
                     tenantActivePartitions,
                     requestedPartitions,
-                    resourceSchedulerProperties.getQuotaResetSlidingWindowHours(),
+                    governance.resourceScheduler().getQuotaResetSlidingWindowHours(),
                     "TENANT_PARTITION_LIMIT",
                     "tenant running partitions exceed quota (including partition burst)"
             );
@@ -67,7 +67,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
                     burst,
                     queueActivePartitions,
                     requestedPartitions,
-                    resourceSchedulerProperties.getQuotaResetSlidingWindowHours(),
+                    governance.resourceScheduler().getQuotaResetSlidingWindowHours(),
                     "QUEUE_PARTITION_LIMIT",
                     "resource queue running partitions exceed limit"
             );

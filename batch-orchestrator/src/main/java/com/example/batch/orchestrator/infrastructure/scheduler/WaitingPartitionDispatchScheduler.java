@@ -9,7 +9,6 @@ import com.example.batch.orchestrator.application.ratelimit.RateLimitAction;
 import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import com.example.batch.orchestrator.application.scheduler.ResourceScheduler;
 import com.example.batch.orchestrator.application.service.PartitionLifecycleService;
-import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -23,6 +22,7 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -40,7 +40,7 @@ import org.springframework.stereotype.Service;
 public class WaitingPartitionDispatchScheduler {
 
     private final ResourceScheduler resourceScheduler;
-    private final ResourceSchedulerProperties resourceSchedulerProperties;
+    private final BatchOrchestratorGovernanceProperties governance;
     private final JobPartitionMapper jobPartitionMapper;
     private final JobTaskMapper jobTaskMapper;
     private final JobInstanceMapper jobInstanceMapper;
@@ -57,7 +57,7 @@ public class WaitingPartitionDispatchScheduler {
     @SchedulerLock(name = "waiting_partition_dispatch", lockAtMostFor = "PT1M", lockAtLeastFor = "PT5S")
     public void dispatchWaitingPartitions() {
         List<JobPartitionEntity> waitingPartitions = jobPartitionMapper.selectWaitingPartitionsGlobal(
-                resourceSchedulerProperties.getWaitingDispatchBatchSize(),
+                governance.resourceScheduler().getWaitingDispatchBatchSize(),
                 PartitionStatus.WAITING.code()
         );
         List<WaitingDispatchCandidate> candidates = new ArrayList<>();

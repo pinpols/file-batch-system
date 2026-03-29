@@ -3,7 +3,6 @@ package com.example.batch.orchestrator.infrastructure.mq;
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
-import com.example.batch.orchestrator.config.OutboxProperties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Component;
 public class OutboxPollScheduler {
 
     private final DefaultScheduleForwarder scheduleForwarder;
-    private final OutboxProperties outboxProperties;
     private final OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
