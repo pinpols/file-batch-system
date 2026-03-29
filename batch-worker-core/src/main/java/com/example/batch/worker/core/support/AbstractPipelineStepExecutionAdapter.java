@@ -37,6 +37,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
             BatchMdc.remove(StructuredLogField.TRACE_ID);
             BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
             BatchMdc.remove(StructuredLogField.WORKER_ID);
+            BatchMdc.remove(StructuredLogField.RUN_MODE);
         }
     }
 
@@ -48,14 +49,16 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
             BatchMdc.putIfAbsent(StructuredLogField.JOB_INSTANCE_ID, String.valueOf(jobInstanceId));
         }
         BatchMdc.putIfAbsent(StructuredLogField.WORKER_ID, request.workerId());
+        String runMode = resolveText(attributes, PipelineRuntimeKeys.RUN_MODE, PipelineRuntimeKeys.LEGACY_RUN_MODE);
+        BatchMdc.putIfAbsent(StructuredLogField.RUN_MODE, runMode);
     }
 
     private StepExecutionResponse doExecute(StepExecutionRequest request, Map<String, Object> attributes, String traceId) {
-        String pipelineCode = resolvePipelineCode(request, attributes);
+        String jobCode = resolveJobCode(request, attributes);
         Long fileId = runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
         Long pipelineDefinitionId = runtimeRepository.ensurePipelineDefinition(
                 request.tenantId(),
-                pipelineCode,
+                jobCode,
                 pipelineType(),
                 pipelineWorkerGroup(),
                 pipelineDescription(),
@@ -71,7 +74,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
         Long pipelineInstanceId = runtimeRepository.createPipelineInstance(
                 request.tenantId(),
                 pipelineDefinitionId,
-                pipelineCode,
+                jobCode,
                 pipelineType(),
                 fileId,
                 runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
@@ -79,11 +82,11 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
                 traceId
         );
         attributes.put(PipelineRuntimeKeys.TRACE_ID, traceId);
-        attributes.put(PipelineRuntimeKeys.PIPELINE_CODE, pipelineCode);
+        attributes.put(PipelineRuntimeKeys.JOB_CODE, jobCode);
         attributes.put(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID, pipelineDefinitionId);
         attributes.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
         attributes.put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, pipelineSteps);
-        attributes.putIfAbsent("jobCode", request.jobCode());
+        attributes.putIfAbsent(PipelineRuntimeKeys.JOB_CODE, request.jobCode());
         attributes.putIfAbsent("stepCode", request.stepCode());
         attributes.putIfAbsent(PipelineRuntimeKeys.FILE_ID, fileId);
         if (fileId != null) {
@@ -143,10 +146,10 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
         return StringUtils.hasText(traceId) ? traceId : pipelineType().toLowerCase() + "-" + UUID.randomUUID();
     }
 
-    protected String resolvePipelineCode(StepExecutionRequest request, Map<String, Object> attributes) {
-        String pipelineCode = resolveText(attributes, PipelineRuntimeKeys.PIPELINE_CODE, "pipelineCode");
-        if (StringUtils.hasText(pipelineCode)) {
-            return pipelineCode;
+    protected String resolveJobCode(StepExecutionRequest request, Map<String, Object> attributes) {
+        String jobCode = resolveText(attributes, PipelineRuntimeKeys.JOB_CODE, PipelineRuntimeKeys.PIPELINE_CODE, "jobCode", "pipelineCode");
+        if (StringUtils.hasText(jobCode)) {
+            return jobCode;
         }
         if (request != null && StringUtils.hasText(request.jobCode())) {
             return request.jobCode();

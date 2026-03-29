@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.lease;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
@@ -65,7 +67,7 @@ class PartitionLeaseReclaimSchedulerTest {
         scheduler.reclaimExpiredPartitions();
 
         verify(jobPartitionMapper).resetForDispatch("t1", 1L, PartitionStatus.READY.code(), 0L);
-        verify(taskDispatchOutboxService, never()).writeDispatchEvent(any(), any(), any(), anyString(), anyString());
+        verify(taskDispatchOutboxService, never()).writeDispatchEvent(any(), any(), any(), anyString(), anyString(), any());
     }
 
     @Test
@@ -78,7 +80,7 @@ class PartitionLeaseReclaimSchedulerTest {
 
         scheduler.reclaimExpiredPartitions();
 
-        verify(taskDispatchOutboxService, never()).writeDispatchEvent(any(), any(), any(), anyString(), anyString());
+        verify(taskDispatchOutboxService, never()).writeDispatchEvent(any(), any(), any(), anyString(), anyString(), any());
     }
 
     @Test
@@ -94,7 +96,7 @@ class PartitionLeaseReclaimSchedulerTest {
 
         verify(jobPartitionMapper).resetForDispatch("t1", 3L, PartitionStatus.READY.code(), 0L);
         verify(jobTaskMapper).resetForRetry("t1", 300L, TaskStatus.READY.code(), 0L);
-        verify(taskDispatchOutboxService).writeDispatchEvent(any(), any(), any(), anyString(), anyString());
+        verify(taskDispatchOutboxService).writeDispatchEvent(any(), any(), any(), anyString(), anyString(), eq(RunMode.RECOVER));
     }
 
     @Test
@@ -113,7 +115,7 @@ class PartitionLeaseReclaimSchedulerTest {
 
         scheduler.reclaimExpiredPartitions();
 
-        verify(taskDispatchOutboxService, times(2)).writeDispatchEvent(any(), any(), any(), anyString(), anyString());
+        verify(taskDispatchOutboxService, times(2)).writeDispatchEvent(any(), any(), any(), anyString(), anyString(), eq(RunMode.RECOVER));
     }
 
     @Test

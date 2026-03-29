@@ -12,6 +12,12 @@ public class WorkflowNodeEntity {
     private String nodeName;
     private String nodeType;
     private String relatedJobCode;
+    /**
+     * Workflow-to-pipeline linkage code for node-level orchestration.
+     *
+     * <p>Do not confuse this with the canonical job code used by
+     * pipeline definitions and runtime context.
+     */
     private String relatedPipelineCode;
     private String workerGroup;
     private String windowCode;

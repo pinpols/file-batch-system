@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.application.route.WorkerRouter;
-import com.example.batch.orchestrator.domain.pipeline.PipelineContext;
+import com.example.batch.orchestrator.domain.pipeline.ExecutionContext;
 import com.example.batch.orchestrator.domain.pipeline.PipelineDefinition;
 import com.example.batch.orchestrator.domain.pipeline.PipelineExecutionResult;
 import com.example.batch.orchestrator.domain.pipeline.Step;
@@ -40,7 +40,7 @@ class DefaultPipelineExecutorTest {
 
     @Test
     void shouldReturnEmptyResultWhenDefinitionIsNull() {
-        PipelineContext context = new PipelineContext();
+        ExecutionContext context = new ExecutionContext();
         context.setPipelineDefinition(null);
 
         PipelineExecutionResult result = executor.execute(context);
@@ -51,7 +51,7 @@ class DefaultPipelineExecutorTest {
 
     @Test
     void shouldReturnEmptyResultWhenStepsIsNull() {
-        PipelineContext context = contextWithSteps(null);
+        ExecutionContext context = contextWithSteps(null);
 
         PipelineExecutionResult result = executor.execute(context);
 
@@ -62,7 +62,7 @@ class DefaultPipelineExecutorTest {
     @Test
     void shouldSkipDisabledSteps() {
         StepDefinition disabled = stepDef("DISABLED", 1, false, null);
-        PipelineContext context = contextWithSteps(List.of(disabled));
+        ExecutionContext context = contextWithSteps(List.of(disabled));
 
         executor.execute(context);
 
@@ -82,7 +82,7 @@ class DefaultPipelineExecutorTest {
         route.setWorkerType("IMPORT");
         when(workerRouter.route(anyString(), anyString(), anyString())).thenReturn(route);
 
-        PipelineContext context = contextWithSteps(List.of(s1, s2));
+        ExecutionContext context = contextWithSteps(List.of(s1, s2));
 
         executor.execute(context);
 
@@ -97,7 +97,7 @@ class DefaultPipelineExecutorTest {
         StepDefinition s1 = stepDef("UNKNOWN", 1, true, null);
         when(stepRegistry.find("UNKNOWN")).thenReturn(Optional.empty());
 
-        PipelineContext context = contextWithSteps(List.of(s1));
+        ExecutionContext context = contextWithSteps(List.of(s1));
         // Should not throw; result should be non-null
         PipelineExecutionResult result = executor.execute(context);
         assertThat(result).isNotNull();
@@ -124,7 +124,7 @@ class DefaultPipelineExecutorTest {
         });
         when(stepRegistry.find("S1")).thenReturn(Optional.of(mockStep));
 
-        PipelineContext context = contextWithSteps(List.of(s1));
+        ExecutionContext context = contextWithSteps(List.of(s1));
         context.setDefaultWorkerRoute(defaultRoute);
 
         executor.execute(context);
@@ -145,7 +145,7 @@ class DefaultPipelineExecutorTest {
         });
         when(stepRegistry.find("S1")).thenReturn(Optional.of(mockStep));
 
-        PipelineContext context = contextWithSteps(List.of(s1));
+        ExecutionContext context = contextWithSteps(List.of(s1));
         context.setDefaultWorkerRoute(defaultRoute);
 
         executor.execute(context);
@@ -169,7 +169,7 @@ class DefaultPipelineExecutorTest {
         });
         when(stepRegistry.find("S1")).thenReturn(Optional.of(mockStep));
 
-        PipelineContext context = contextWithSteps(List.of(s1));
+        ExecutionContext context = contextWithSteps(List.of(s1));
         // defaultWorkerRoute is null
 
         executor.execute(context);
@@ -179,12 +179,12 @@ class DefaultPipelineExecutorTest {
 
     // --- helpers ---
 
-    private static PipelineContext contextWithSteps(List<StepDefinition> steps) {
+    private static ExecutionContext contextWithSteps(List<StepDefinition> steps) {
         PipelineDefinition definition = new PipelineDefinition();
-        definition.setPipelineCode("TEST_PIPELINE");
+        definition.setJobCode("TEST_PIPELINE");
         definition.setSteps(steps);
 
-        PipelineContext context = new PipelineContext();
+        ExecutionContext context = new ExecutionContext();
         context.setTenantId("t1");
         context.setPipelineDefinition(definition);
         return context;

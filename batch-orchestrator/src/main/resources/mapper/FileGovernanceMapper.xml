@@ -215,7 +215,7 @@
     <select id="selectProcessingDelaySamples" resultType="map">
         select tenant_id,
                id,
-               pipeline_code,
+               job_code,
                pipeline_type,
                related_job_instance_id,
                started_at,

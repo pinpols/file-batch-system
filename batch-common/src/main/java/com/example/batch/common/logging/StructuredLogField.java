@@ -13,6 +13,7 @@ public final class StructuredLogField {
     public static final String TASK_ID = "taskId";
     public static final String WORKER_ID = "workerId";
     public static final String WORKER_TYPE = "workerType";
+    public static final String RUN_MODE = "runMode";
     public static final String STAGE = "stage";
     public static final String FILE_ID = "fileId";
 

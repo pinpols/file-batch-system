@@ -6,9 +6,17 @@ import lombok.Data;
 @Data
 public class WorkerRegistration {
 
+    /**
+     * Registry-side worker identity.
+     *
+     * <p>Use this as the stable runtime instance key for heartbeats and lease ownership.
+     */
     private String workerId;
     private String tenantId;
     private String workerType;
+    /**
+     * Orchestrator scheduling / consumer grouping key.
+     */
     private String workerGroup;
     private String status;
     private String host;

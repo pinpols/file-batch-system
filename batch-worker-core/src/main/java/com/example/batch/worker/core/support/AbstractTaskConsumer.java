@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.support;
 
+import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.logging.BatchMdc;
@@ -9,6 +10,7 @@ import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -104,6 +106,7 @@ public abstract class AbstractTaskConsumer {
             BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
             BatchMdc.remove(StructuredLogField.WORKER_TYPE);
             BatchMdc.remove(StructuredLogField.WORKER_ID);
+            BatchMdc.remove(StructuredLogField.RUN_MODE);
         }
     }
 
@@ -156,6 +159,23 @@ public abstract class AbstractTaskConsumer {
         BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, message.jobInstanceId() == null ? null : String.valueOf(message.jobInstanceId()));
         BatchMdc.put(StructuredLogField.WORKER_TYPE, workerConfiguration().workerType());
         BatchMdc.put(StructuredLogField.WORKER_ID, registration == null ? null : registration.getWorkerId());
+        BatchMdc.put(StructuredLogField.RUN_MODE, resolveRunMode(message));
+    }
+
+    @SuppressWarnings("unchecked")
+    private String resolveRunMode(TaskDispatchMessage message) {
+        if (message == null || message.payload() == null || message.payload().isBlank()) {
+            return null;
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(message.payload(), Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                return RunModeSupport.resolveCode((Map<String, Object>) payloadMap);
+            }
+        } catch (RuntimeException ignored) {
+            // Ignore malformed payload and keep logs flowing without run_mode.
+        }
+        return null;
     }
 
     /**

@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS batch.file_record (
 CREATE TABLE IF NOT EXISTS batch.pipeline_definition (
     id                       BIGSERIAL PRIMARY KEY,
     tenant_id                VARCHAR(64)  NOT NULL,
-    pipeline_code            VARCHAR(128) NOT NULL,
+    job_code                 VARCHAR(128) NOT NULL,
     pipeline_name            VARCHAR(256) NOT NULL,
     pipeline_type            VARCHAR(32)  NOT NULL,
     biz_type                 VARCHAR(64),
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS batch.pipeline_definition (
     description              VARCHAR(512),
     created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_pipeline_definition_tenant_code_version UNIQUE (tenant_id, pipeline_code, version),
+    CONSTRAINT uk_pipeline_definition_tenant_code_version UNIQUE (tenant_id, job_code, version),
     CONSTRAINT ck_pipeline_definition_type CHECK (pipeline_type IN ('IMPORT', 'EXPORT', 'DISPATCH')),
     CONSTRAINT ck_pipeline_definition_version CHECK (version > 0)
 );
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS batch.pipeline_instance (
     id                       BIGSERIAL PRIMARY KEY,
     tenant_id                VARCHAR(64)  NOT NULL,
     pipeline_definition_id   BIGINT       NOT NULL REFERENCES batch.pipeline_definition(id),
-    pipeline_code            VARCHAR(128) NOT NULL,
+    job_code                 VARCHAR(128) NOT NULL,
     pipeline_type            VARCHAR(32)  NOT NULL,
     file_id                  BIGINT       REFERENCES batch.file_record(id),
     related_job_instance_id  BIGINT       REFERENCES batch.job_instance(id),

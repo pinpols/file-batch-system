@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.enums.StepInstanceStatus;
@@ -247,7 +248,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 task,
                 partition,
                 jobInstance.getTraceId(),
-                eventKey
+                eventKey,
+                RunMode.RETRY
         );
     }
 
@@ -267,7 +269,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 task,
                 null,
                 jobInstance.getTraceId(),
-                eventKey
+                eventKey,
+                RunMode.RETRY
         );
     }
 

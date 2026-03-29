@@ -3473,8 +3473,10 @@ components:
           type: string
         capabilityTags:
           type: string
+          nullable: true
         resourceTag:
           type: string
+          nullable: true
         status:
           type: string
         heartbeatAt:
@@ -3483,13 +3485,16 @@ components:
         currentLoad:
           type: integer
           format: int32
+          nullable: true
         drainStartedAt:
           type: string
           format: date-time
+          nullable: true
         drainDeadlineAt:
           type: string
           format: date-time
-      required: [id, tenantId, workerCode, workerGroup, capabilityTags, resourceTag, status, heartbeatAt, currentLoad, drainStartedAt, drainDeadlineAt]
+          nullable: true
+      required: [id, tenantId, workerCode, workerGroup, status, heartbeatAt]
     ConsoleAuthTokenResponse:
       type: object
       properties:
@@ -3568,28 +3573,37 @@ components:
           type: string
         targetId:
           type: string
+          nullable: true
         payloadJson:
           type: string
         approvalStatus:
           type: string
         requesterId:
           type: string
+          nullable: true
         approverId:
           type: string
+          nullable: true
         rejectionReason:
           type: string
+          nullable: true
         approvalReason:
           type: string
+          nullable: true
         sourceTraceId:
           type: string
+          nullable: true
         sourceIdempotencyKey:
           type: string
+          nullable: true
         approvedAt:
           type: string
           format: date-time
+          nullable: true
         executedAt:
           type: string
           format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -3603,17 +3617,8 @@ components:
         - approvalType
         - actionType
         - targetType
-        - targetId
         - payloadJson
         - approvalStatus
-        - requesterId
-        - approverId
-        - rejectionReason
-        - approvalReason
-        - sourceTraceId
-        - sourceIdempotencyKey
-        - approvedAt
-        - executedAt
         - createdAt
         - updatedAt
     ConsoleConfigReleaseResponse:
@@ -4093,37 +4098,44 @@ components:
         pipelineDefinitionId:
           type: integer
           format: int64
-        pipelineCode:
+        jobCode:
           type: string
         pipelineType:
           type: string
         fileId:
           type: integer
           format: int64
+          nullable: true
         relatedJobInstanceId:
           type: integer
           format: int64
+          nullable: true
         currentStage:
           type: string
+          nullable: true
         lastSuccessStage:
           type: string
+          nullable: true
         runStatus:
           type: string
         traceId:
           type: string
+          nullable: true
         startedAt:
           type: string
           format: date-time
+          nullable: true
         finishedAt:
           type: string
           format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
-      required: [id, tenantId, pipelineDefinitionId, pipelineCode, pipelineType, fileId, relatedJobInstanceId, currentStage, lastSuccessStage, runStatus, traceId, startedAt, finishedAt, createdAt, updatedAt]
+      required: [id, tenantId, pipelineDefinitionId, jobCode, pipelineType, runStatus, createdAt, updatedAt]
     ConsoleFilePipelineStepResponse:
       type: object
       properties:

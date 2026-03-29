@@ -2,6 +2,7 @@
 
 分析日期：2026-03-22
 分析基准：`docs/architecture/design-gap-audit.md`、全量 `src/main` 代码、测试补全结果（对话_5 完成后更新于 2026-03-25）
+核心模型统一口径见：`docs/architecture/core-model.md`
 
 更新记录：
 - 2026-03-25：补齐 K8s 健康探针（Actuator probes）默认配置；Worker 停机时先标记 DRAINING 并停止 Kafka Listener 拉取新消息；Worker 运行方式调整为可对外提供 Actuator HTTP 端点（用于 readiness/liveness 探针）。

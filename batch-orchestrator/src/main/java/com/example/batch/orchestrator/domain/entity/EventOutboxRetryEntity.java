@@ -10,7 +10,12 @@ public class EventOutboxRetryEntity {
     private String tenantId;
     private Long outboxEventId;
     private String eventKey;
-    private Integer retryAttempt;
+    /**
+     * Publish attempt sequence for the outbox event.
+     *
+     * <p>This is distinct from business retry counters on job/runtime entities.
+     */
+    private Integer publishAttempt;
     private String retryStatus;
     private String retryReason;
     private Instant nextRetryAt;

@@ -8,6 +8,7 @@
         <result column="node_name" property="nodeName"/>
         <result column="node_type" property="nodeType"/>
         <result column="related_job_code" property="relatedJobCode"/>
+        <!-- Node-level workflow linkage; not the canonical job code for pipeline definitions. -->
         <result column="related_pipeline_code" property="relatedPipelineCode"/>
         <result column="worker_group" property="workerGroup"/>
         <result column="window_code" property="windowCode"/>

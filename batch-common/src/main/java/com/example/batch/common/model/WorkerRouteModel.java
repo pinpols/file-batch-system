@@ -4,7 +4,14 @@ import java.util.Set;
 
 public class WorkerRouteModel {
 
-    private String workerId;
+    /**
+     * Selected worker code for routing or assignment.
+     *
+     * <p>Kept separate from the runtime worker instance id used in logs and
+     * heartbeats. Existing callers may still access it via {@code workerId}
+     * compatibility accessors.
+     */
+    private String workerCode;
     private String workerType;
     private Set<String> capabilityTags;
     private String resourceProfile;
@@ -12,11 +19,19 @@ public class WorkerRouteModel {
     private Boolean available;
 
     public String getWorkerId() {
-        return workerId;
+        return workerCode;
     }
 
     public void setWorkerId(String workerId) {
-        this.workerId = workerId;
+        this.workerCode = workerId;
+    }
+
+    public String getWorkerCode() {
+        return workerCode;
+    }
+
+    public void setWorkerCode(String workerCode) {
+        this.workerCode = workerCode;
     }
 
     public String getWorkerType() {

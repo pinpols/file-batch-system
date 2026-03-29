@@ -133,7 +133,7 @@ INSERT INTO batch.workflow_node_run (
     (4506, 4405, 'GATEWAY_SPLIT', 'GATEWAY', 1, 'READY', 0, NULL, NULL, NULL, NULL, 0);
 
 INSERT INTO batch.pipeline_instance (
-    id, tenant_id, pipeline_definition_id, pipeline_code, pipeline_type, file_id, related_job_instance_id,
+    id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id, related_job_instance_id,
     current_stage, last_success_stage, run_status, trace_id, started_at, finished_at, created_at, updated_at
 ) VALUES
     (5304, 'default-tenant', 4601, 'import_customer_pipeline', 'IMPORT', 5207, 4005, 'RECEIVE', NULL, 'CREATED', 'trace-gen-001', NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),

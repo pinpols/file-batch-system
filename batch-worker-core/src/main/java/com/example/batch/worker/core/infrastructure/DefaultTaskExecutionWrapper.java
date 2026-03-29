@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
+import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.domain.PulledTask;
@@ -30,7 +31,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     @Override
     public WorkerExecutionResult execute(PulledTask task) {
         Map<String, Object> executionContext = new LinkedHashMap<>();
-        executionContext.put("payload", task.getPayload() == null ? "" : task.getPayload());
+        String payload = task.getPayload() == null ? "" : task.getPayload();
+        executionContext.put("payload", payload);
         executionContext.put("taskId", task.getTaskId());
         executionContext.put("workerId", task.getWorkerId());
         executionContext.put("jobCode", task.getJobCode() == null ? task.getTaskType() : task.getJobCode());
@@ -40,6 +42,10 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         executionContext.put("jobPartitionId", task.getJobPartitionId());
         executionContext.put("taskSeq", task.getTaskSeq());
         executionContext.put("idempotencyKey", task.getIdempotencyKey() == null ? "" : task.getIdempotencyKey());
+        String runMode = resolveRunMode(payload);
+        if (runMode != null) {
+            executionContext.put(PipelineRuntimeKeys.RUN_MODE, runMode);
+        }
         StepExecutionRequest request = new StepExecutionRequest(
                 task.getTenantId(),
                 task.getJobCode(),
@@ -69,5 +75,21 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
         } finally {
             activeTaskLeaseRegistry.remove(task.getTaskId());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String resolveRunMode(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return null;
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payload, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                return RunModeSupport.resolveCode((Map<String, Object>) payloadMap);
+            }
+        } catch (RuntimeException ignored) {
+            // Leave run_mode absent when payload is not valid JSON.
+        }
+        return null;
     }
 }

@@ -26,10 +26,10 @@ import java.util.Map;
  *
  * <p>Subclasses provide domain-specific implementations via the abstract template methods.
  *
- * @param <C> pipeline context type (must implement {@link PipelineContext})
+ * @param <C> pipeline context type (must implement {@link ExecutionContext})
  * @param <R> stage result type (must implement {@link StageExecutionResult})
  */
-public abstract class AbstractStageExecutor<C extends PipelineContext, R extends StageExecutionResult> {
+public abstract class AbstractStageExecutor<C extends ExecutionContext, R extends StageExecutionResult> {
 
     protected final PlatformFileRuntimeRepository runtimeRepository;
 

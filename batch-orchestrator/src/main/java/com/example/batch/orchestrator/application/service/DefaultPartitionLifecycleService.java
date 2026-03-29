@@ -40,7 +40,7 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             partitionEntity.setPartitionKey(partitionPlan.getPartitionKey());
             partitionEntity.setPartitionStatus(resolveInitialPartitionStatus(partitionPlan, initialStatus));
             partitionEntity.setWorkerGroup(plan.getWorkerGroup());
-            partitionEntity.setWorkerCode(partitionPlan.getWorkerRoute() == null ? null : partitionPlan.getWorkerRoute().getWorkerId());
+            partitionEntity.setWorkerCode(partitionPlan.getWorkerRoute() == null ? null : partitionPlan.getWorkerRoute().getWorkerCode());
             partitionEntity.setVersion(0L);
             partitionEntity.setRetryCount(0);
             partitionEntity.setBusinessKey(partitionPlan.getBusinessKey());

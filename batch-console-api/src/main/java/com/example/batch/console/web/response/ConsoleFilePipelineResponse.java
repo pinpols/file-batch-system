@@ -6,7 +6,7 @@ public record ConsoleFilePipelineResponse(
         Long id,
         String tenantId,
         Long pipelineDefinitionId,
-        String pipelineCode,
+        String jobCode,
         String pipelineType,
         Long fileId,
         Long relatedJobInstanceId,

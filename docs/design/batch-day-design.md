@@ -23,6 +23,19 @@
 
 ---
 
+## 与统一核心模型对齐
+
+本方案的术语与数据库边界统一以 [`docs/architecture/core-model.md`](../architecture/core-model.md) 为准，补充约束如下：
+
+- 本文统一使用 `jobCode`，不再引入 `pipelineCode` / `flowCode` 作为新的主口径。
+- `batch_day_instance` 是批量日生命周期实体，但 `attempt` 仍不是主运行态一等实体；本方案只新增 `late_count`、`catchup_count` 这类计数字段，不新增通用 attempt 表。
+- catch-up、late arrival、审批等动作不要求把 `run_mode` 落进 `job_instance` 或 `batch_day_instance`；运行时意图继续由触发类型、命令载荷和 worker context 承接。
+- 如果未来真的需要按 `run_mode` 做筛选、统计、报表或审计检索，优先落到命令表或审计表，不优先改主状态表。
+- 本方案只包含增量表 / 列，不包含 `job_code`、`workflow_code`、`worker_code`、`worker_group`、`publish_attempt`、`run_seq`、`retry_count` 等物理列重命名。
+- worker 相关既有边界保持不变：`workerCode` 是稳定路由 / 注册标识，`workerGroup` 是调度分组；本方案不引入新的 worker 主命名。
+
+---
+
 ## 数据模型变更
 
 ### 变更 1：business_calendar 加三列
@@ -96,8 +109,13 @@ IN_FLIGHT ── 存在 FAILED 且无覆盖 ──────────→ FA
 
 ### 变更 3：Flyway 版本号
 
-当前最新版本需确认（执行 `select version from flyway_schema_history order by installed_rank desc limit 1` 查看）。
-新迁移文件命名：`V14__add_batch_day_support.sql`（若当前最新是 V13）。
+迁移编号需以实施时的当前主迁移线为准，不在本文预设固定版本号。
+
+落地时建议同时检查：
+- 运行侧实际生效的 migration 目录
+- 文档侧 SQL 基线是否同步
+
+建议新增一份**纯增量**迁移，例如按当前基线递增的 `Vxx__add_batch_day_support.sql`；不要把批量日方案和物理列 rename 混在同一批 DDL 中。
 
 ---
 
@@ -318,7 +336,7 @@ POST /console/command/batch-days/{bizDate}/catchup
 
 ```
 Phase 1：数据模型（不影响现有行为）
-  └─ Flyway V14：business_calendar 加三列，新建 batch_day_instance 表
+  └─ 新增一份批量日增量 migration：business_calendar 加三列，新建 batch_day_instance 表
   └─ 更新 BusinessCalendarRecord 实体
 
 Phase 2：biz_date 算法修复（影响 SCHEDULED 触发路径）
@@ -365,7 +383,7 @@ Phase 6：前端 API
 
 | 场景 | 预期行为 |
 |---|---|
-| 事件在 cutoff 前到达 | EARLY，正常创建实例 |
+| 事件在 cutoff 前到达 | EARLY，正常创建实例 |[architecture-truth.md](../architecture/architecture-truth.md)
 | 事件在 cutoff 后、容忍窗口内到达 | LATE_ACCEPTED，正常创建实例，late_count+1 |
 | 事件在容忍窗口关闭后到达 | LATE_REJECTED，路由 catch-up |
 | batch_day SETTLED 后事件到达 | LATE_REJECTED，路由 catch-up |

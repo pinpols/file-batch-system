@@ -6,7 +6,7 @@
         <result column="tenant_id" property="tenantId"/>
         <result column="outbox_event_id" property="outboxEventId"/>
         <result column="event_key" property="eventKey"/>
-        <result column="retry_attempt" property="retryAttempt"/>
+        <result column="retry_attempt" property="publishAttempt"/>
         <result column="retry_status" property="retryStatus"/>
         <result column="retry_reason" property="retryReason"/>
         <result column="next_retry_at" property="nextRetryAt"/>
@@ -30,7 +30,7 @@
             #{tenantId},
             #{outboxEventId},
             #{eventKey},
-            #{retryAttempt},
+            #{publishAttempt},
             #{retryStatus},
             #{retryReason},
             #{nextRetryAt},

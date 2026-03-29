@@ -1,10 +1,27 @@
 package com.example.batch.worker.core.infrastructure;
 
+import com.example.batch.common.context.RunModeSupport;
+
+/**
+ * Shared runtime attribute keys for worker-side pipeline execution.
+ *
+ * <p>Keep these keys aligned with {@code docs/architecture/core-model.md} and
+ * avoid introducing module-local synonyms for the same runtime concept.
+ */
 public final class PipelineRuntimeKeys {
 
     public static final String TASK_ID = "taskId";
     public static final String TRACE_ID = "traceId";
-    public static final String PIPELINE_CODE = "pipelineCode";
+    public static final String RUN_MODE = RunModeSupport.RUN_MODE;
+    /**
+     * Legacy alias kept for compatibility with older payload maps.
+     */
+    public static final String LEGACY_RUN_MODE = RunModeSupport.LEGACY_RUN_MODE;
+    public static final String JOB_CODE = "jobCode";
+    /**
+     * Legacy alias kept for compatibility with older worker contexts.
+     */
+    public static final String PIPELINE_CODE = JOB_CODE;
     public static final String PIPELINE_DEFINITION_ID = "pipelineDefinitionId";
     public static final String PIPELINE_INSTANCE_ID = "pipelineInstanceId";
     public static final String PIPELINE_STEP_RUN_ID = "pipelineStepRunId";

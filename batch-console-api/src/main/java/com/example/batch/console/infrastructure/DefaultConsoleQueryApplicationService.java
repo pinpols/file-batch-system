@@ -850,7 +850,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 longValue(row, "id"),
                 stringValue(row, "tenant_id"),
                 longValue(row, "pipeline_definition_id"),
-                stringValue(row, "pipeline_code"),
+                stringValue(row, "job_code"),
                 stringValue(row, "pipeline_type"),
                 longValue(row, "file_id"),
                 longValue(row, "related_job_instance_id"),

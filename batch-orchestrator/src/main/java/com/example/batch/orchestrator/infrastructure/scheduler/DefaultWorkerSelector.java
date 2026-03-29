@@ -51,7 +51,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
             route.setAvailable(false);
             return route;
         }
-        route.setWorkerId(selected.workerCode());
+        route.setWorkerCode(selected.workerCode());
         route.setAvailable(true);
         return route;
     }

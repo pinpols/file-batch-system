@@ -2,7 +2,7 @@ package com.example.batch.orchestrator.infrastructure.pipeline;
 
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.application.route.WorkerRouter;
-import com.example.batch.orchestrator.domain.pipeline.PipelineContext;
+import com.example.batch.orchestrator.domain.pipeline.ExecutionContext;
 import com.example.batch.orchestrator.domain.pipeline.PipelineDefinition;
 import com.example.batch.orchestrator.domain.pipeline.PipelineExecutionResult;
 import com.example.batch.orchestrator.domain.pipeline.PipelineExecutor;
@@ -24,7 +24,7 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
     private final WorkerRouter workerRouter;
 
     @Override
-    public PipelineExecutionResult execute(PipelineContext context) {
+    public PipelineExecutionResult execute(ExecutionContext context) {
         PipelineDefinition definition = context.getPipelineDefinition();
         List<StepResult> results = new ArrayList<>();
         if (definition == null || definition.getSteps() == null) {
@@ -38,7 +38,7 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
         return emptyResult(context, results);
     }
 
-    private StepResult executeStep(PipelineContext context, PipelineDefinition definition, com.example.batch.orchestrator.domain.pipeline.StepDefinition stepDefinition) {
+    private StepResult executeStep(ExecutionContext context, PipelineDefinition definition, com.example.batch.orchestrator.domain.pipeline.StepDefinition stepDefinition) {
         WorkerRouteModel workerRouteModel = resolveWorkerRoute(context, definition, stepDefinition);
         Optional<Step> step = stepRegistry.find(stepDefinition.getStepCode());
         if (step.isEmpty()) {
@@ -47,10 +47,10 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
         return step.get().execute(context, workerRouteModel);
     }
 
-    private WorkerRouteModel resolveWorkerRoute(PipelineContext context, PipelineDefinition definition, com.example.batch.orchestrator.domain.pipeline.StepDefinition stepDefinition) {
+    private WorkerRouteModel resolveWorkerRoute(ExecutionContext context, PipelineDefinition definition, com.example.batch.orchestrator.domain.pipeline.StepDefinition stepDefinition) {
         WorkerRouteModel route = context.getDefaultWorkerRoute();
         if (route == null) {
-            route = workerRouter.route(context.getTenantId(), definition.getPipelineCode(), stepDefinition.getStepCode());
+            route = workerRouter.route(context.getTenantId(), definition.getJobCode(), stepDefinition.getStepCode());
         }
         if (route == null) {
             route = new WorkerRouteModel();
@@ -67,7 +67,7 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
 
     private WorkerRouteModel copyRoute(WorkerRouteModel source) {
         WorkerRouteModel target = new WorkerRouteModel();
-        target.setWorkerId(source.getWorkerId());
+        target.setWorkerCode(source.getWorkerCode());
         target.setWorkerType(source.getWorkerType());
         target.setCapabilityTags(source.getCapabilityTags());
         target.setResourceProfile(source.getResourceProfile());
@@ -76,7 +76,7 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
         return target;
     }
 
-    private PipelineExecutionResult emptyResult(PipelineContext context, List<StepResult> results) {
+    private PipelineExecutionResult emptyResult(ExecutionContext context, List<StepResult> results) {
         PipelineExecutionResult result = new PipelineExecutionResult();
         return result;
     }

@@ -6,6 +6,7 @@
 
 - 设计文档全章节：`docs/批量调度系统设计说明书（完整版）-20260321.md`
 - 架构真相文档：`docs/architecture/architecture-truth.md`（含 ADR-001 ~ ADR-008）
+- 核心模型统一口径：`docs/architecture/core-model.md`
 - 实现状态跟踪：`docs/architecture/implementation-status-2026-03-22.md`
 - 代码现状：8 个 Maven 模块全部 `src/main` 代码
 - 校验结果：`mvn -q compile` 通过
@@ -168,7 +169,7 @@
 
 以下核心缺口已在对话_5（12轮）中全部完成：
 - ✅ Worker 生命周期/消费者模板抽象（AbstractWorkerLoop / AbstractTaskConsumer / AbstractStageExecutor）
-- ✅ Stage 异常处理契约统一（StageFailureCode / PipelineContext / StageExecutionContext）
+- ✅ Stage 异常处理契约统一（StageFailureCode / ExecutionContext / StageExecutionContext）
 - ✅ 配置基线模块化（batch-defaults.yml + spring.config.import）
 - ✅ 架构真相文档与 ADR 体系（architecture-truth.md + ADR-001~ADR-008）
 - ✅ 产物内容级验收标准化（ExportFileVerifier / DispatchReceiptVerifier + Micrometer 指标）

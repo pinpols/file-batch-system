@@ -51,17 +51,17 @@
         select id
         from batch.pipeline_definition
         where tenant_id = #{tenantId}
-          and pipeline_code = #{pipelineCode}
+          and job_code = #{jobCode}
         order by version desc
         limit 1
     </select>
 
     <insert id="insertPipelineDefinition" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.pipeline_definition (
-            tenant_id, pipeline_code, pipeline_name, pipeline_type,
+            tenant_id, job_code, pipeline_name, pipeline_type,
             worker_group, version, enabled, description
         ) values (
-            #{tenantId}, #{pipelineCode}, #{pipelineName}, #{pipelineType},
+            #{tenantId}, #{jobCode}, #{pipelineName}, #{pipelineType},
             #{workerGroup}, 1, true, #{description}
         )
     </insert>
@@ -88,11 +88,11 @@
 
     <insert id="insertPipelineInstance" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.pipeline_instance (
-            tenant_id, pipeline_definition_id, pipeline_code, pipeline_type,
+            tenant_id, pipeline_definition_id, job_code, pipeline_type,
             file_id, related_job_instance_id, current_stage, run_status,
             trace_id, started_at, created_at, updated_at
         ) values (
-            #{tenantId}, #{pipelineDefinitionId}, #{pipelineCode}, #{pipelineType},
+            #{tenantId}, #{pipelineDefinitionId}, #{jobCode}, #{pipelineType},
             #{fileId}, #{relatedJobInstanceId}, #{currentStage}, #{runStatus},
             #{traceId}, current_timestamp, current_timestamp, current_timestamp
         )

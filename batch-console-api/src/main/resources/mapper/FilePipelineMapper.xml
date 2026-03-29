@@ -6,7 +6,7 @@
             id,
             tenant_id,
             pipeline_definition_id,
-            pipeline_code,
+            job_code,
             pipeline_type,
             file_id,
             related_job_instance_id,

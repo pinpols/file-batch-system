@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.config.BatchSecurityProperties;
@@ -159,7 +160,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 task,
                 partition,
                 command.traceId(),
-                command.tenantId() + ":manual-redispatch:" + task.getId()
+                command.tenantId() + ":manual-redispatch:" + task.getId(),
+                RunMode.COMPENSATE
         );
         fileGovernanceRepository.appendAudit(
                 command.tenantId(),

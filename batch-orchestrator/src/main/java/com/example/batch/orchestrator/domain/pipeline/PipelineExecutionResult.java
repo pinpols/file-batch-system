@@ -4,17 +4,25 @@ import java.util.List;
 
 public class PipelineExecutionResult {
 
-    private String pipelineCode;
+    private String jobCode;
     private String runStatus;
     private String message;
     private List<StepResult> stepResults;
 
     public String getPipelineCode() {
-        return pipelineCode;
+        return jobCode;
     }
 
     public void setPipelineCode(String pipelineCode) {
-        this.pipelineCode = pipelineCode;
+        this.jobCode = pipelineCode;
+    }
+
+    public String getJobCode() {
+        return jobCode;
+    }
+
+    public void setJobCode(String jobCode) {
+        this.jobCode = jobCode;
     }
 
     public String getRunStatus() {

@@ -20,6 +20,7 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -136,6 +137,79 @@ class AbstractTaskConsumerBackpressureTest {
         verify(container, times(1)).resume();
     }
 
+    @Test
+    void shouldExposeRunModeInMdcDuringConsumption() {
+        KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
+        TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
+        WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
+        when(runtimeFacade.start(org.mockito.Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
+        when(executor.execute(org.mockito.Mockito.any(), org.mockito.Mockito.anyString())).thenAnswer(inv -> {
+            assertThat(MDC.get("runMode")).isEqualTo("RETRY");
+            return new WorkerExecutionResult("1", true, "ok");
+        });
+
+        AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry) {
+            @Override
+            protected AbstractWorkerLoop workerLoop() {
+                return new AbstractWorkerLoop(runtimeFacade) {
+                    @Override
+                    protected WorkerConfiguration workerConfiguration() {
+                        return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
+                    }
+
+                    @Override
+                    protected String workerGroup() {
+                        return "test";
+                    }
+
+                    @Override
+                    protected int workerPort() {
+                        return 0;
+                    }
+                };
+            }
+
+            @Override
+            protected WorkerConfiguration workerConfiguration() {
+                return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
+            }
+
+            @Override
+            protected TaskDispatchExecutor taskDispatchExecutor() {
+                return executor;
+            }
+
+            @Override
+            protected String listenerId() {
+                return "test-listener";
+            }
+        };
+
+        String msg = JsonUtils.toJson(new TaskDispatchMessage(
+                "v1",
+                "t1",
+                1L,
+                null,
+                1L,
+                null,
+                null,
+                "EXECUTION",
+                1,
+                "IMPORT",
+                null,
+                null,
+                null,
+                "{\"run_mode\":\"RETRY\"}",
+                "tr",
+                "k",
+                null
+        ));
+
+        ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg);
+
+        assertThat(MDC.get("runMode")).isNull();
+    }
+
     private WorkerConfiguration workerConfiguration() {
         return new WorkerConfiguration() {
             @Override
@@ -170,4 +244,3 @@ class AbstractTaskConsumerBackpressureTest {
         };
     }
 }
-
