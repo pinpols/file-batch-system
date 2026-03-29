@@ -399,7 +399,7 @@ CREATE TABLE IF NOT EXISTS batch.file_record (
 CREATE TABLE IF NOT EXISTS batch.pipeline_definition (
     id BIGSERIAL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
-    pipeline_code VARCHAR(128) NOT NULL,
+    job_code VARCHAR(128) NOT NULL,
     pipeline_name VARCHAR(256) NOT NULL,
     pipeline_type VARCHAR(32) NOT NULL,
     biz_type VARCHAR(64),
@@ -432,7 +432,7 @@ CREATE TABLE IF NOT EXISTS batch.pipeline_instance (
     id BIGSERIAL PRIMARY KEY,
     tenant_id VARCHAR(64) NOT NULL,
     pipeline_definition_id BIGINT NOT NULL,
-    pipeline_code VARCHAR(128) NOT NULL,
+    job_code VARCHAR(128) NOT NULL,
     pipeline_type VARCHAR(32) NOT NULL,
     file_id BIGINT,
     related_job_instance_id BIGINT,

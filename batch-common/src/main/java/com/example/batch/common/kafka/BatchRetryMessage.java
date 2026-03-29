@@ -13,6 +13,11 @@ public record BatchRetryMessage(
         String retryKey,
         String idempotencyKey,
         String traceId,
+        /**
+         * Message delivery attempt sequence for retry scheduling.
+         *
+         * <p>This is not the same as a DB-side business retry counter.
+         */
         int attemptNo,
         int maxAttempts,
         Instant nextRetryAt,

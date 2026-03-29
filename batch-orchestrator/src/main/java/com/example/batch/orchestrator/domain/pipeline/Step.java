@@ -6,5 +6,5 @@ public interface Step {
 
     String stepCode();
 
-    StepResult execute(PipelineContext context, WorkerRouteModel workerRouteModel);
+    StepResult execute(ExecutionContext context, WorkerRouteModel workerRouteModel);
 }

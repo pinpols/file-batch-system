@@ -132,6 +132,21 @@ class DefaultTaskExecutionWrapperTest {
         wrapper.execute(task);
     }
 
+    @Test
+    void shouldExposeRunModeFromTaskPayload() {
+        PulledTask task = sampleTask("1005", "t1", "w1");
+        task.setPayload("{\"run_mode\":\"RETRY\"}");
+
+        when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
+                .thenAnswer(invocation -> {
+                    StepExecutionRequest req = invocation.getArgument(0);
+                    assertThat(req.context()).containsEntry(PipelineRuntimeKeys.RUN_MODE, "RETRY");
+                    return StepExecutionResponse.successResponse();
+                });
+
+        wrapper.execute(task);
+    }
+
     // --- helpers ---
 
     private static PulledTask sampleTask(String taskId, String tenantId, String workerId) {

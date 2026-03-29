@@ -210,7 +210,7 @@ INSERT INTO batch.workflow_node_run (
     (4503, 4401, 'EXPORT_STEP', 'TASK', 1, 'READY', 0, NULL, NULL, NULL, NULL, 0);
 
 INSERT INTO batch.pipeline_definition (
-    id, tenant_id, pipeline_code, pipeline_name, pipeline_type, biz_type, worker_group, version, enabled, description, created_at, updated_at
+    id, tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group, version, enabled, description, created_at, updated_at
 ) VALUES
     (4601, 'default-tenant', 'import_customer_pipeline', 'Customer Import Pipeline', 'IMPORT', 'CUSTOMER', 'import', 1, TRUE, 'System test import pipeline', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
     (4602, 'default-tenant', 'export_settlement_pipeline', 'Settlement Export Pipeline', 'EXPORT', 'SETTLEMENT', 'export', 1, TRUE, 'System test export pipeline', TIMESTAMPTZ '2026-03-22 08:00:00+08', TIMESTAMPTZ '2026-03-22 08:00:00+08'),
@@ -281,7 +281,7 @@ INSERT INTO batch.file_record (
     (5206, 'default-tenant', 'FILE-DIS-001', 'OUTPUT', 'OUTPUT', 'dispatch-envelope.json', 'dispatch-envelope.json', 'json', 'JSON', 'UTF-8', 'application/json', 1024, 'SHA-256', 'sha256-dispatch-001', 'LOCAL', '/tmp/batch/dispatch-envelope.json', NULL, 'v1', 1, TRUE, 'SYSTEM', 'dispatch-job', 'DISPATCHED', DATE '2026-03-22', 'trace-dispatch-001', jsonb_build_object('channelCode', 'api_push_dispatch', 'receiptStatus', 'PENDING'), TIMESTAMPTZ '2026-03-22 08:15:00+08', TIMESTAMPTZ '2026-03-22 08:15:00+08');
 
 INSERT INTO batch.pipeline_instance (
-    id, tenant_id, pipeline_definition_id, pipeline_code, pipeline_type, file_id, related_job_instance_id,
+    id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id, related_job_instance_id,
     current_stage, last_success_stage, run_status, trace_id, started_at, finished_at, created_at, updated_at
 ) VALUES
     (5301, 'default-tenant', 4601, 'import_customer_pipeline', 'IMPORT', 5201, 4001, 'VALIDATE', 'PARSE', 'RUNNING', 'trace-import-001', TIMESTAMPTZ '2026-03-22 08:00:13+08', NULL, TIMESTAMPTZ '2026-03-22 08:00:13+08', TIMESTAMPTZ '2026-03-22 08:00:13+08'),

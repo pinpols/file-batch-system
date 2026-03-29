@@ -229,7 +229,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             return partition.getWorkerCode();
         }
         if (plan != null && plan.getDefaultWorkerRoute() != null) {
-            return plan.getDefaultWorkerRoute().getWorkerId();
+            return plan.getDefaultWorkerRoute().getWorkerCode();
         }
         return null;
     }

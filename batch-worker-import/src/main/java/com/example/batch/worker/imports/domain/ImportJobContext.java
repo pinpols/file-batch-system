@@ -1,12 +1,12 @@
 package com.example.batch.worker.imports.domain;
 
-import com.example.batch.worker.core.support.PipelineContext;
+import com.example.batch.worker.core.support.ExecutionContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Data;
 
 @Data
-public class ImportJobContext implements PipelineContext {
+public class ImportJobContext implements ExecutionContext {
 
     private String tenantId;
     private String jobCode;

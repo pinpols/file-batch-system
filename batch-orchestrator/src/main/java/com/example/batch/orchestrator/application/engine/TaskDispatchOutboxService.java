@@ -1,5 +1,7 @@
 package com.example.batch.orchestrator.application.engine;
 
+import com.example.batch.common.context.RunModeSupport;
+import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.utils.JsonUtils;
@@ -9,6 +11,8 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -43,6 +47,15 @@ public class TaskDispatchOutboxService {
                                    JobPartitionEntity partition,
                                    String traceId,
                                    String eventKey) {
+        writeDispatchEvent(jobInstance, task, partition, traceId, eventKey, null);
+    }
+
+    public void writeDispatchEvent(JobInstanceEntity jobInstance,
+                                   JobTaskEntity task,
+                                   JobPartitionEntity partition,
+                                   String traceId,
+                                   String eventKey,
+                                   RunMode runModeOverride) {
         Long jobPartitionId = partition != null ? partition.getId() : null;
         String businessKey = partition != null
                 ? partition.getBusinessKey()
@@ -50,6 +63,7 @@ public class TaskDispatchOutboxService {
         String idempotencyKey = partition != null
                 ? partition.getIdempotencyKey()
                 : resolveIdempotencyKeyWithoutPartition(task, eventKey);
+        String taskPayload = resolveDispatchPayload(task == null ? null : task.getTaskPayload(), runModeOverride);
         TaskDispatchMessage message = new TaskDispatchMessage(
                 "v1",
                 task.getTenantId(),
@@ -64,7 +78,7 @@ public class TaskDispatchOutboxService {
                 task.getAssignedWorkerCode(),
                 resolvePriorityBand(jobInstance.getPriority()),
                 businessKey,
-                task.getTaskPayload(),
+                taskPayload,
                 traceId,
                 idempotencyKey,
                 Instant.now()
@@ -81,6 +95,31 @@ public class TaskDispatchOutboxService {
         event.setPublishAttempt(0);
         event.setTraceId(traceId);
         outboxEventMapper.insert(event);
+    }
+
+    private String resolveDispatchPayload(String payloadJson, RunMode runModeOverride) {
+        if (runModeOverride == null) {
+            return payloadJson == null ? "{}" : payloadJson;
+        }
+        Map<String, Object> payload = parsePayloadMap(payloadJson);
+        RunModeSupport.putCanonical(payload, runModeOverride);
+        return JsonUtils.toJson(payload);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parsePayloadMap(String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
+            if (payloadObject instanceof Map<?, ?> payloadMap) {
+                return new LinkedHashMap<>((Map<String, Object>) payloadMap);
+            }
+        } catch (RuntimeException ignored) {
+            // Ignore malformed payload and fall back to an empty map so we can still stamp run_mode.
+        }
+        return new LinkedHashMap<>();
     }
 
     private static String buildFallbackBusinessKey(JobInstanceEntity jobInstance, JobTaskEntity task) {

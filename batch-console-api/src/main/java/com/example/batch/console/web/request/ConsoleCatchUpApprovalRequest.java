@@ -16,6 +16,9 @@ public class ConsoleCatchUpApprovalRequest {
     private String requestId;
     @NotBlank
     @Size(max = 128, message = "jobCode too long (max 128)")
+    /**
+     * Business job identifier used to resolve the catch-up target.
+     */
     private String jobCode;
     @NotBlank
     @ValidBizDate

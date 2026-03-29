@@ -48,10 +48,10 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                             outboxEventMapper.markPublished(event.getTenantId(), event.getId(), OutboxPublishStatus.PUBLISHED.code());
                         } else {
                             Instant nextRetryAt = Instant.now().plusSeconds(outboxProperties.getRetryDelaySeconds());
-                            int attemptNo = event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
-                            if (attemptNo >= outboxProperties.getMaxRetryAttempts()) {
+                            int publishAttemptNo = event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
+                            if (publishAttemptNo >= outboxProperties.getMaxRetryAttempts()) {
                                 outboxEventMapper.markGiveUp(event.getTenantId(), event.getId(), OutboxPublishStatus.GIVE_UP.code());
-                                recordRetry(event, attemptNo, null, "retry attempts exhausted");
+                                recordRetry(event, publishAttemptNo, null, "retry attempts exhausted");
                             } else {
                                 outboxEventMapper.markFailed(
                                         event.getTenantId(),
@@ -59,22 +59,25 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                                         OutboxPublishStatus.FAILED.code(),
                                         nextRetryAt
                                 );
-                                recordRetry(event, attemptNo, nextRetryAt, "publish failed");
+                                recordRetry(event, publishAttemptNo, nextRetryAt, "publish failed");
                             }
                         }
                     }
                 });
     }
 
+    /**
+     * Persist outbox publish retry attempts separately from business retry counters.
+     */
     private void recordRetry(OutboxEventEntity event,
-                             int attemptNo,
+                             int publishAttemptNo,
                              Instant nextRetryAt,
                              String reason) {
         EventOutboxRetryEntity retry = new EventOutboxRetryEntity();
         retry.setTenantId(event.getTenantId());
         retry.setOutboxEventId(event.getId());
         retry.setEventKey(event.getEventKey());
-        retry.setRetryAttempt(attemptNo);
+        retry.setPublishAttempt(publishAttemptNo);
         retry.setRetryStatus(nextRetryAt == null
                 ? com.example.batch.common.enums.RetryScheduleStatus.EXHAUSTED.code()
                 : com.example.batch.common.enums.RetryScheduleStatus.FAILED.code());

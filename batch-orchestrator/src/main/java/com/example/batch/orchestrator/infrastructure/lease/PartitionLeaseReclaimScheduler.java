@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.lease;
 
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
@@ -71,7 +72,8 @@ public class PartitionLeaseReclaimScheduler {
                 task,
                 partition,
                 jobInstance.getTraceId(),
-                partition.getTenantId() + ":reclaim:" + partition.getId() + ":" + System.currentTimeMillis()
+                partition.getTenantId() + ":reclaim:" + partition.getId() + ":" + System.currentTimeMillis(),
+                RunMode.RECOVER
         );
         log.warn("expired partition reclaimed and re-dispatched: tenantId={}, partitionId={}, leaseWindowSeconds={}",
                 partition.getTenantId(), partition.getId(), partitionLeaseProperties.getExpireSeconds());

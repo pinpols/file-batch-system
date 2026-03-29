@@ -14,6 +14,11 @@ public class OutboxEventEntity {
     private String eventKey;
     private String payloadJson;
     private String publishStatus;
+    /**
+     * Outbox publish attempt sequence.
+     *
+     * <p>This is distinct from business retry counters stored on runtime entities.
+     */
     private Integer publishAttempt;
     private Instant nextPublishAt;
     private String traceId;

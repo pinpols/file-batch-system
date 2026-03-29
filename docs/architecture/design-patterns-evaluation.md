@@ -75,7 +75,7 @@ if ("DELIMITED".equalsIgnoreCase(fileFormatType)) {
 
 **方案**：抽 `AbstractStageExecutor<S extends StageStep, R extends StageResult>` 基类，封装通用循环骨架，子类只需提供 `stageSupplier()` 和 `onStageComplete()` 钩子。
 
-**实现说明**：`batch-worker-core` 新增 `PipelineContext` 接口（`getTenantId/getJobCode/getWorkerId/getAttributes`）和 `StageExecutionResult` 接口（`success/code/message`）；三个 `*JobContext` 类实现 `PipelineContext`，三个 `*StageResult` record 实现 `StageExecutionResult`；`AbstractStageExecutor<C,R>` 封装完整 while 循环（guard、updatePipelineStage、startStepRun、executeOneStep、finishStepRun、resolveNextStep），子类只需实现 6 个模板方法；三个具体 Executor 继承基类，`execute()` 改为一行 `return runStageLoop(context)`（Import 保留 try/finally 用于 finalizeErrorOutput）。
+**实现说明**：`batch-worker-core` 新增 `ExecutionContext` SPI（历史名 `PipelineContext`，接口方法为 `getTenantId/getJobCode/getWorkerId/getAttributes`）和 `StageExecutionResult` 接口（`success/code/message`）；三个 `*JobContext` 类实现 `ExecutionContext`，三个 `*StageResult` record 实现 `StageExecutionResult`；`AbstractStageExecutor<C,R>` 封装完整 while 循环（guard、updatePipelineStage、startStepRun、executeOneStep、finishStepRun、resolveNextStep），子类只需实现 6 个模板方法；三个具体 Executor 继承基类，`execute()` 改为一行 `return runStageLoop(context)`（Import 保留 try/finally 用于 finalizeErrorOutput）。
 
 ---
 

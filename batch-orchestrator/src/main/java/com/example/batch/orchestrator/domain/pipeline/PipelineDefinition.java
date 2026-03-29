@@ -2,9 +2,15 @@ package com.example.batch.orchestrator.domain.pipeline;
 
 import java.util.List;
 
+/**
+ * Orchestrator-side pipeline definition model.
+ *
+ * <p>The canonical business key is {@code jobCode}. {@code pipelineCode} is
+ * kept as a compatibility alias for older call sites and serialized payloads.
+ */
 public class PipelineDefinition {
 
-    private String pipelineCode;
+    private String jobCode;
     private String pipelineName;
     private String pipelineType;
     private String defaultWorkerType;
@@ -12,11 +18,19 @@ public class PipelineDefinition {
     private List<StepDefinition> steps;
 
     public String getPipelineCode() {
-        return pipelineCode;
+        return jobCode;
     }
 
     public void setPipelineCode(String pipelineCode) {
-        this.pipelineCode = pipelineCode;
+        this.jobCode = pipelineCode;
+    }
+
+    public void setJobCode(String jobCode) {
+        this.jobCode = jobCode;
+    }
+
+    public String getJobCode() {
+        return jobCode;
     }
 
     public String getPipelineName() {

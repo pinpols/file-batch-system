@@ -40,7 +40,7 @@
 ## Step 7 - Pipeline 执行引擎
 
 - 目标：生成文件链路与任务链路执行引擎骨架
-- 内容：PipelineDefinition、PipelineContext、PipelineExecutor、Step SPI、StepRegistry、StepResult、默认执行顺序模型
+- 内容：PipelineDefinition、ExecutionContext（历史名 PipelineContext）、PipelineExecutor、Step SPI、StepRegistry、StepResult、默认执行顺序模型
 - 约束：支持 Pipeline 默认 Worker 路由和 Step 级 Worker 覆盖
 状态：已完成（2026-03-06）
 ## Step 8 - Worker Core

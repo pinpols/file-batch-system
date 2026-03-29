@@ -5,7 +5,13 @@ import java.time.Instant;
 public record ConsoleWorkerRegistryResponse(
         Long id,
         String tenantId,
+        /**
+         * Stable worker registration code in storage.
+         */
         String workerCode,
+        /**
+         * Scheduling and consumption grouping key.
+         */
         String workerGroup,
         String capabilityTags,
         String resourceTag,

@@ -76,22 +76,22 @@ public class PlatformFileRuntimeRepository {
     }
 
     public Long ensurePipelineDefinition(String tenantId,
-                                         String pipelineCode,
+                                         String jobCode,
                                          String pipelineType,
                                          String workerGroup,
                                          String description,
                                          List<PipelineStepTemplate> defaultSteps) {
-        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(pipelineCode) || !StringUtils.hasText(pipelineType)) {
+        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(jobCode) || !StringUtils.hasText(pipelineType)) {
             return null;
         }
         Long pipelineDefinitionId = platformFileRuntimeMapper.selectLatestPipelineDefinitionId(
-                params("tenantId", tenantId, "pipelineCode", pipelineCode)
+                params("tenantId", tenantId, "jobCode", jobCode)
         );
         if (pipelineDefinitionId == null) {
             Map<String, Object> paramMap = params(
                     "tenantId", tenantId,
-                    "pipelineCode", pipelineCode,
-                    "pipelineName", pipelineCode,
+                    "jobCode", jobCode,
+                    "pipelineName", jobCode,
                     "pipelineType", pipelineType,
                     "workerGroup", workerGroup,
                     "description", description
@@ -115,7 +115,7 @@ public class PlatformFileRuntimeRepository {
 
     public Long createPipelineInstance(String tenantId,
                                        Long pipelineDefinitionId,
-                                       String pipelineCode,
+                                       String jobCode,
                                        String pipelineType,
                                        Long fileId,
                                        Long relatedJobInstanceId,
@@ -127,7 +127,7 @@ public class PlatformFileRuntimeRepository {
         Map<String, Object> paramMap = params(
                 "tenantId", tenantId,
                 "pipelineDefinitionId", pipelineDefinitionId,
-                "pipelineCode", pipelineCode,
+                "jobCode", jobCode,
                 "pipelineType", pipelineType,
                 "fileId", fileId,
                 "relatedJobInstanceId", relatedJobInstanceId,
@@ -182,14 +182,14 @@ public class PlatformFileRuntimeRepository {
         if (pipelineInstanceId == null || !StringUtils.hasText(stepCode) || !StringUtils.hasText(stageCode)) {
             return null;
         }
-        Integer nextRunSeq = platformFileRuntimeMapper.selectNextStepRunSeq(
+        Integer nextExecutionSeq = platformFileRuntimeMapper.selectNextStepRunSeq(
                 params("pipelineInstanceId", pipelineInstanceId, "stepCode", stepCode)
         );
         Map<String, Object> paramMap = params(
                 "pipelineInstanceId", pipelineInstanceId,
                 "stepCode", stepCode,
                 "stageCode", stageCode,
-                "runSeq", nextRunSeq == null ? 1 : nextRunSeq,
+                "runSeq", nextExecutionSeq == null ? 1 : nextExecutionSeq,
                 "stepStatus", com.example.batch.common.enums.PipelineRunStatus.RUNNING.name(),
                 "inputSummaryJson", toJson(inputSummary)
         );

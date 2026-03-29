@@ -1,9 +1,11 @@
 package com.example.batch.orchestrator.service;
 
 import com.example.batch.common.constants.BatchStatusConstants;
+import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
@@ -98,7 +100,11 @@ public class DefaultLaunchService implements LaunchService {
 
         String traceId = request.traceId() == null || request.traceId().isBlank()
                 ? IdGenerator.newTraceId() : request.traceId();
-        Map<String, Object> effectiveParams = mergeLaunchParams(loaded.jobDefinition(), request.params());
+        Map<String, Object> effectiveParams = mergeLaunchParams(
+                loaded.jobDefinition(),
+                request.triggerType(),
+                request.params()
+        );
 
         // T1：先把 instance/workflow 落库并提交，避免 T2 执行期间持有更长时间锁。
         PreparedLaunch prepared;
@@ -208,7 +214,8 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private Map<String, Object> mergeLaunchParams(JobDefinitionRecord jobDefinition,
-                                                   Map<String, Object> runtimeParams) {
+                                                  TriggerType triggerType,
+                                                  Map<String, Object> runtimeParams) {
         Map<String, Object> merged = new LinkedHashMap<>();
         if (jobDefinition != null && jobDefinition.defaultParams() != null) {
             merged.putAll(jobDefinition.defaultParams());
@@ -216,7 +223,7 @@ public class DefaultLaunchService implements LaunchService {
         if (runtimeParams != null) {
             merged.putAll(runtimeParams);
         }
-        return merged;
+        return RunModeSupport.copyWithDefault(merged, resolveRunMode(triggerType, merged));
     }
 
     private LaunchResponse resolveConcurrentDuplicate(LaunchRequest request,
@@ -304,6 +311,27 @@ public class DefaultLaunchService implements LaunchService {
         return "RETRY".equalsIgnoreCase(operationType)
                 || "PARTITION_RETRY".equalsIgnoreCase(operationType)
                 || "DLQ_REPLAY".equalsIgnoreCase(operationType);
+    }
+
+    private RunMode resolveRunMode(TriggerType triggerType, Map<String, Object> params) {
+        RunMode explicit = RunModeSupport.resolve(params);
+        if (explicit != null) {
+            return explicit;
+        }
+        String operationType = textValue(params.get("operationType"));
+        if ("COMPENSATE".equalsIgnoreCase(operationType) || "COMPENSATION".equalsIgnoreCase(operationType)) {
+            return RunMode.COMPENSATE;
+        }
+        if ("RECOVER".equalsIgnoreCase(operationType) || "FAILOVER_RECOVER".equalsIgnoreCase(operationType)) {
+            return RunMode.RECOVER;
+        }
+        if (resolveRetryFlag(params)) {
+            return RunMode.RETRY;
+        }
+        if (resolveRerunFlag(triggerType, params)) {
+            return RunMode.RERUN;
+        }
+        return RunMode.NORMAL;
     }
 
     private String resolveRerunReason(Map<String, Object> params) {

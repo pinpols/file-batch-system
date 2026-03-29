@@ -5,10 +5,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class PipelineContext {
+/**
+ * Orchestrator-side workflow execution context.
+ *
+ * <p>This is the canonical orchestrator pipeline context. It carries
+ * workflow-specific fields such as pipeline definition, biz date, trace id,
+ * and collected step results.
+ */
+public class ExecutionContext {
 
     private String tenantId;
-    private String pipelineCode;
+    private String jobCode;
     private String bizDate;
     private String traceId;
     private PipelineDefinition pipelineDefinition;
@@ -25,11 +32,19 @@ public class PipelineContext {
     }
 
     public String getPipelineCode() {
-        return pipelineCode;
+        return jobCode;
     }
 
     public void setPipelineCode(String pipelineCode) {
-        this.pipelineCode = pipelineCode;
+        this.jobCode = pipelineCode;
+    }
+
+    public String getJobCode() {
+        return jobCode;
+    }
+
+    public void setJobCode(String jobCode) {
+        this.jobCode = jobCode;
     }
 
     public String getBizDate() {

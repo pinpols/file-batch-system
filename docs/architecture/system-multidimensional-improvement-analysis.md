@@ -37,7 +37,7 @@
 
 - **设计层面** ✅：架构真相文档（`architecture-truth.md`）+ ADR-001~ADR-008 体系落地；配置装配契约通过 `batch-defaults.yml` 统一。
 - **工程层面** ✅：`AbstractWorkerLoop` / `AbstractTaskConsumer` / `AbstractStageExecutor` 消除三链路重复循环；`batch-defaults.yml` + `spring.config.import` 解决配置漂移；SQL 一致性守卫 `SqlConsistencyIT` 建立 CI 门禁。
-- **编码层面** ✅：`StageFailureCode` / `PipelineContext` / `StageExecutionContext` 统一异常处理契约；`HttpTaskExecutionClient` 韧性层（重试/超时/断路）补齐；关键状态更新已引入数据库层原子 CAS。
+- **编码层面** ✅：`StageFailureCode` / `ExecutionContext` / `StageExecutionContext` 统一异常处理契约；`HttpTaskExecutionClient` 韧性层（重试/超时/断路）补齐；关键状态更新已引入数据库层原子 CAS。
 - **业务层面** ✅：失败分支 E2E（Import/Export/Dispatch）、Outbox 自动轮询 E2E、多租户并发 E2E、内容级验收（ExportFileVerifier/DispatchReceiptVerifier）全部落地。
 
 一句话判断：**当前系统已完成结构化治理，核心链路高置信度可回归；剩余差距仅在生产部署产物和运营产品化层面。**
@@ -283,7 +283,7 @@
 ## P0 ✅ 已完成
 
 - ✅ 统一 worker 生命周期/consumer 模板（`AbstractWorkerLoop` / `AbstractTaskConsumer` / `AbstractStageExecutor`）
-- ✅ 统一 stage 异常处理契约（`StageFailureCode` / `PipelineContext` / `StageExecutionContext`）
+- ✅ 统一 stage 异常处理契约（`StageFailureCode` / `ExecutionContext` / `StageExecutionContext`）
 - ✅ 增加 outbox-forwarder 真轮询 E2E（`OutboxForwarderE2eIT`）
 - ✅ 增加关键 SQL 原子更新保护（状态 compare-and-set，Orchestrator 主写路径）
 
