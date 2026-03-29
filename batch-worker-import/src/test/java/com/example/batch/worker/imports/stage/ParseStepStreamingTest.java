@@ -114,15 +114,15 @@ class ParseStepStreamingTest {
 
     @Test
     void shouldReturnEmpty_forJsonObjectWithoutRecordsField() {
-        // A plain JSON object without "records" field → 0 records → IMPORT_PARSE_EMPTY
+        // A plain JSON object without "records" field → treated as 1 record
         String json = "{\"batchId\":\"B001\",\"totalAmount\":100}";
 
         ImportJobContext context = buildContext(json, "JSON");
         ImportStageResult result = parseStep.execute(context);
 
-        // No records means failure code IMPORT_PARSE_EMPTY
-        assertThat(result.success()).isFalse();
-        assertThat(result.code()).isEqualTo("IMPORT_PARSE_EMPTY");
+        assertThat(result.success()).isTrue();
+        assertThat(context.getAttributes().get("totalCount")).isEqualTo(1L);
+        assertNdjsonRecordCount(context, 1);
     }
 
     // ── DELIMITED path ─────────────────────────────────────────────────────────

@@ -186,13 +186,38 @@ public abstract class AbstractTaskConsumer {
     public String[] topics() {
         WorkerConfiguration cfg = workerConfiguration();
         String configuredWorkerCode = cfg.workerCode();
-        if (configuredWorkerCode == null || configuredWorkerCode.isBlank()) {
-            return new String[]{cfg.topic()};
+        String baseTopic = cfg.topic();
+        if (baseTopic == null || baseTopic.isBlank()) {
+            // e2e / local 环境可能不完整注入 topic；兜底保证 @KafkaListener(topics=...) 不会解析成 null。
+            String workerType = cfg.workerType();
+            if (workerType != null && "IMPORT".equalsIgnoreCase(workerType)) {
+                baseTopic = BatchTopics.TASK_DISPATCH_IMPORT;
+            } else if (workerType != null && "EXPORT".equalsIgnoreCase(workerType)) {
+                baseTopic = BatchTopics.TASK_DISPATCH_EXPORT;
+            } else if (workerType != null && "DISPATCH".equalsIgnoreCase(workerType)) {
+                baseTopic = BatchTopics.TASK_DISPATCH_DISPATCH;
+            }
+
+            // 最后兜底：仅根据 workerCode 文本推断，避免返回空数组导致 Spring Kafka 启动失败。
+            if (baseTopic == null || baseTopic.isBlank()) {
+                String wc = configuredWorkerCode == null ? "" : configuredWorkerCode.toLowerCase();
+                if (wc.contains("import")) {
+                    baseTopic = BatchTopics.TASK_DISPATCH_IMPORT;
+                } else if (wc.contains("export")) {
+                    baseTopic = BatchTopics.TASK_DISPATCH_EXPORT;
+                } else if (wc.contains("dispatch")) {
+                    baseTopic = BatchTopics.TASK_DISPATCH_DISPATCH;
+                }
+            }
         }
-        return new String[]{
-                cfg.topic(),
-                BatchTopics.directDispatchTopic(cfg.topic(), configuredWorkerCode)
-        };
+        if (baseTopic == null || baseTopic.isBlank()) {
+            // 保底：绝不返回空数组，确保 @KafkaListener(topics=...) 至少有一个值可用。
+            baseTopic = BatchTopics.TASK_DISPATCH_DISPATCH;
+        }
+        if (configuredWorkerCode == null || configuredWorkerCode.isBlank()) {
+            return new String[]{baseTopic};
+        }
+        return new String[]{baseTopic, BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode)};
     }
 
     /**

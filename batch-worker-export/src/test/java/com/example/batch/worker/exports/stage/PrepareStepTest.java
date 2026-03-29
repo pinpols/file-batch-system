@@ -55,6 +55,7 @@ class PrepareStepTest {
                 "2026-03-25",
                 null,
                 Boolean.FALSE,
+                null,
                 Map.of()
         );
         ExportJobContext ctx = new ExportJobContext();
@@ -89,7 +90,7 @@ class PrepareStepTest {
         ctx.setBizDate("2026-03-25");
         ctx.setRawPayload("{not-valid-json");
         ctx.getAttributes().put("exportPayload", new ExportPayload(
-                "FC1", "BIZ", "TPL_1", "B001", "fixed.json", "obj.json", "2026-03-25", null, Boolean.FALSE, Map.of()
+                "FC1", "BIZ", "TPL_1", "B001", "fixed.json", "obj.json", "2026-03-25", null, Boolean.FALSE, null, Map.of()
         ));
 
         var result = step.execute(ctx);
