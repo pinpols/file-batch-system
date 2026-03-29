@@ -3,26 +3,36 @@ package com.example.batch.console.infrastructure;
 import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
+import com.example.batch.console.mapper.BatchDayMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.web.request.BatchDayCatchUpRequest;
 import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensateRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
 import com.example.batch.console.web.request.TriggerRequest;
+import com.example.batch.console.web.response.ConsoleBatchDayCatchUpItemResponse;
+import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.dto.LaunchResponse;
+import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -41,6 +51,8 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
     private final ConsoleTenantGuard tenantGuard;
+    private final BatchDayMapper batchDayMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
 
     /** 手工/API 触发作业运行。 */
     @Override
@@ -177,6 +189,75 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         );
     }
 
+    @Override
+    public ConsoleBatchDayCatchUpResponse catchUpBatchDay(String bizDate,
+                                                          BatchDayCatchUpRequest request,
+                                                          String idempotencyKey) {
+        String tenantId = resolveTenant(request.getTenantId());
+        String calendarCode = ConsoleTextSanitizer.safeInput(request.getCalendarCode(), 128);
+        Map<String, Object> calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
+        if (calendar == null || calendar.isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, "business calendar not found");
+        }
+        String catchUpPolicy = stringValue(calendar.get("catchUpPolicy"));
+        CatchUpPolicyType policyType = CatchUpPolicyType.fromCode(catchUpPolicy);
+        List<String> jobCodes = resolveJobCodes(tenantId, calendarCode, parseBizDate(bizDate), request.getJobCodes());
+        List<ConsoleBatchDayCatchUpItemResponse> items = new ArrayList<>();
+        for (String jobCode : jobCodes) {
+            String itemRequestId = IdGenerator.newBusinessNo("catchup");
+            String itemIdempotencyKey = idempotencyKey + ":" + jobCode;
+            if (policyType == CatchUpPolicyType.AUTO) {
+                Map<String, Object> params = new LinkedHashMap<>();
+                params.put("operationType", "BATCH_DAY_CATCH_UP");
+                params.put("approvalMode", "AUTO");
+                params.put("batchDayCatchUp", true);
+                params.put("batchDayBizDate", bizDate);
+                params.put("batchDayCalendarCode", calendarCode);
+                params.put("jobCode", jobCode);
+                params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
+                params.put("catchUpPolicy", catchUpPolicy);
+                String instanceNo = delegateLaunch(
+                        tenantId,
+                        jobCode,
+                        bizDate,
+                        TriggerType.CATCH_UP,
+                        params,
+                        itemIdempotencyKey
+                );
+                items.add(new ConsoleBatchDayCatchUpItemResponse(
+                        jobCode,
+                        "LAUNCHED",
+                        instanceNo,
+                        TriggerType.CATCH_UP.code(),
+                        "LAUNCHED"
+                ));
+            } else {
+                ConsoleCatchUpApprovalRequest approvalRequest = new ConsoleCatchUpApprovalRequest();
+                approvalRequest.setTenantId(tenantId);
+                approvalRequest.setRequestId(itemRequestId);
+                approvalRequest.setJobCode(jobCode);
+                approvalRequest.setBizDate(bizDate);
+                approvalRequest.setScheduledAt(Instant.now().toString());
+                approvalRequest.setReason(ConsoleTextSanitizer.safeInput(request.getReason(), 512));
+                String approvalNo = approveCatchUp(approvalRequest, itemIdempotencyKey);
+                items.add(new ConsoleBatchDayCatchUpItemResponse(
+                        jobCode,
+                        "APPROVAL_CREATED",
+                        approvalNo,
+                        TriggerType.CATCH_UP.code(),
+                        "PENDING"
+                ));
+            }
+        }
+        return new ConsoleBatchDayCatchUpResponse(
+                tenantId,
+                calendarCode,
+                bizDate,
+                catchUpPolicy,
+                items
+        );
+    }
+
     private String approvePendingCatchUpRequest(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
         String tenantId = resolveTenant(request.getTenantId());
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
@@ -230,6 +311,21 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
             throw new BizException(ResultCode.SYSTEM_ERROR, "trigger service returned empty response");
         }
         return response.data().instanceNo();
+    }
+
+    private List<String> resolveJobCodes(String tenantId,
+                                         String calendarCode,
+                                         LocalDate bizDate,
+                                         List<String> requestedJobCodes) {
+        if (requestedJobCodes != null && !requestedJobCodes.isEmpty()) {
+            return requestedJobCodes.stream()
+                    .filter(this::hasText)
+                    .map(code -> ConsoleTextSanitizer.safeInput(code, 128))
+                    .distinct()
+                    .toList();
+        }
+        List<String> failedJobCodes = batchDayMapper.selectFailedJobCodes(tenantId, calendarCode, bizDate);
+        return failedJobCodes == null ? List.of() : failedJobCodes;
     }
 
     private String submitCompensation(CompensationPayload payload, String idempotencyKey) {
@@ -359,6 +455,10 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
             return null;
         }
         return parseBizDate(bizDate);
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     private record TriggerLaunchPayload(

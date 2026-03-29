@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.BatchDayMapper">
+    <select id="selectByQuery" resultType="map">
+        select
+            bdi.biz_date as bizDate,
+            bdi.day_status as dayStatus,
+            bdi.open_at as openAt,
+            bdi.cutoff_at as cutoffAt,
+            bdi.settled_at as settledAt,
+            bdi.sla_deadline_at as slaDeadlineAt,
+            bdi.late_count as lateCount,
+            bdi.catchup_count as catchupCount,
+            coalesce(stats.total_job_count, 0) as totalJobCount,
+            coalesce(stats.success_job_count, 0) as successJobCount,
+            coalesce(stats.failed_job_count, 0) as failedJobCount,
+            coalesce(stats.in_flight_job_count, 0) as inFlightJobCount
+        from batch.batch_day_instance bdi
+        left join (
+            select ji.tenant_id,
+                   jd.calendar_code,
+                   ji.biz_date,
+                   count(1) as total_job_count,
+                   coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as success_job_count,
+                   coalesce(sum(case when ji.instance_status in ('FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as failed_job_count,
+                   coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING') then 1 else 0 end), 0) as in_flight_job_count
+            from batch.job_instance ji
+                     join batch.job_definition jd on jd.id = ji.job_definition_id
+            where ji.tenant_id = #{tenantId}
+              and jd.calendar_code = #{calendarCode}
+            <if test="fromBizDate != null">
+              and ji.biz_date &gt;= #{fromBizDate}
+            </if>
+            <if test="toBizDate != null">
+              and ji.biz_date &lt;= #{toBizDate}
+            </if>
+            group by ji.tenant_id, jd.calendar_code, ji.biz_date
+        ) stats on stats.tenant_id = bdi.tenant_id
+            and stats.calendar_code = bdi.calendar_code
+            and stats.biz_date = bdi.biz_date
+        where bdi.tenant_id = #{tenantId}
+          and bdi.calendar_code = #{calendarCode}
+        <if test="fromBizDate != null">
+          and bdi.biz_date &gt;= #{fromBizDate}
+        </if>
+        <if test="toBizDate != null">
+          and bdi.biz_date &lt;= #{toBizDate}
+        </if>
+        order by bdi.biz_date desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.batch_day_instance bdi
+        where bdi.tenant_id = #{tenantId}
+          and bdi.calendar_code = #{calendarCode}
+        <if test="fromBizDate != null">
+          and bdi.biz_date &gt;= #{fromBizDate}
+        </if>
+        <if test="toBizDate != null">
+          and bdi.biz_date &lt;= #{toBizDate}
+        </if>
+    </select>
+
+    <select id="selectWindow" resultType="map">
+        select
+            bdi.biz_date as bizDate,
+            bdi.day_status as dayStatus,
+            bdi.cutoff_at as cutoffAt,
+            bdi.sla_deadline_at as slaDeadlineAt,
+            bdi.open_at as openAt,
+            bdi.settled_at as settledAt,
+            bdi.late_count as lateCount,
+            bdi.catchup_count as catchupCount,
+            coalesce(stats.total_job_count, 0) as totalJobCount,
+            coalesce(stats.success_job_count, 0) as successJobCount,
+            coalesce(stats.failed_job_count, 0) as failedJobCount,
+            coalesce(stats.in_flight_job_count, 0) as inFlightJobCount
+        from batch.batch_day_instance bdi
+        left join (
+            select ji.tenant_id,
+                   jd.calendar_code,
+                   ji.biz_date,
+                   count(1) as total_job_count,
+                   coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as success_job_count,
+                   coalesce(sum(case when ji.instance_status in ('FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as failed_job_count,
+                   coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING') then 1 else 0 end), 0) as in_flight_job_count
+            from batch.job_instance ji
+                     join batch.job_definition jd on jd.id = ji.job_definition_id
+            where ji.tenant_id = #{tenantId}
+              and jd.calendar_code = #{calendarCode}
+              and ji.biz_date = #{bizDate}
+            group by ji.tenant_id, jd.calendar_code, ji.biz_date
+        ) stats on stats.tenant_id = bdi.tenant_id
+            and stats.calendar_code = bdi.calendar_code
+            and stats.biz_date = bdi.biz_date
+        where bdi.tenant_id = #{tenantId}
+          and bdi.calendar_code = #{calendarCode}
+          and bdi.biz_date = #{bizDate}
+    </select>
+
+    <select id="selectJobSummaries" resultType="map">
+        select
+            ji.job_code as jobCode,
+            count(1) as totalJobCount,
+            coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as successJobCount,
+            coalesce(sum(case when ji.instance_status in ('FAILED', 'PARTIAL_FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as failedJobCount,
+            coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING') then 1 else 0 end), 0) as inFlightJobCount,
+            coalesce(catchups.catchup_count, 0) as catchupCount
+        from batch.job_instance ji
+                 join batch.job_definition jd on jd.id = ji.job_definition_id
+                 left join (
+                    select tenant_id, job_code, biz_date, count(1) as catchup_count
+                    from batch.trigger_request
+                    where tenant_id = #{tenantId}
+                      and trigger_type = 'CATCH_UP'
+                      and request_status in ('ACCEPTED', 'LAUNCHED')
+                      and biz_date = #{bizDate}
+                    group by tenant_id, job_code, biz_date
+                 ) catchups on catchups.tenant_id = ji.tenant_id
+                    and catchups.job_code = ji.job_code
+                    and catchups.biz_date = ji.biz_date
+        where ji.tenant_id = #{tenantId}
+          and jd.calendar_code = #{calendarCode}
+          and ji.biz_date = #{bizDate}
+        group by ji.job_code, catchups.catchup_count
+        order by ji.job_code asc
+    </select>
+
+    <select id="selectFailedJobCodes" resultType="string">
+        select distinct ji.job_code
+        from batch.job_instance ji
+                 join batch.job_definition jd on jd.id = ji.job_definition_id
+        where ji.tenant_id = #{tenantId}
+          and jd.calendar_code = #{calendarCode}
+          and ji.biz_date = #{bizDate}
+          and ji.instance_status in ('FAILED', 'PARTIAL_FAILED')
+        order by ji.job_code asc
+    </select>
+</mapper>

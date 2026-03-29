@@ -11,18 +11,31 @@ import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
+import com.example.batch.trigger.support.CalendarBizDateDefinition;
+import com.example.batch.trigger.support.CalendarHolidayRule;
+import com.example.batch.trigger.support.TriggerCalendarConfig;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DefaultTriggerService implements TriggerService {
 
     private final LaunchAdapterService launchAdapterService;
     private final OrchestratorTriggerAdapter orchestratorTriggerAdapter;
     private final TriggerRequestMapper triggerRequestMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
 
     @Override
     @Transactional
@@ -35,7 +48,10 @@ public class DefaultTriggerService implements TriggerService {
     @Override
     @Transactional
     public LaunchResponse launchScheduled(ScheduledTriggerCommand command) {
-        LaunchRequest launchRequest = launchAdapterService.fromScheduledTrigger(command);
+        LaunchRequest launchRequest = launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
+        if (launchRequest.bizDate() == null) {
+            return skipScheduled(command);
+        }
         String dedupKey = buildScheduledDedupKey(command);
         return persistAndForward(launchRequest, dedupKey);
     }
@@ -43,7 +59,10 @@ public class DefaultTriggerService implements TriggerService {
     @Override
     @Transactional
     public LaunchResponse createPendingCatchUp(ScheduledTriggerCommand command) {
-        LaunchRequest launchRequest = launchAdapterService.fromScheduledTrigger(command);
+        LaunchRequest launchRequest = launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
+        if (launchRequest.bizDate() == null) {
+            return skipScheduled(command);
+        }
         String dedupKey = buildScheduledDedupKey(command);
         return persistPending(launchRequest, dedupKey);
     }
@@ -132,6 +151,63 @@ public class DefaultTriggerService implements TriggerService {
 
     private String buildScheduledDedupKey(ScheduledTriggerCommand command) {
         return command.descriptor().getTenantId() + ":" + command.descriptor().getJobCode() + ":" + command.fireTime();
+    }
+
+    private LaunchResponse skipScheduled(ScheduledTriggerCommand command) {
+        log.info(
+                "scheduled trigger skipped by business calendar: tenantId={}, jobCode={}, calendarCode={}, fireTime={}",
+                command.descriptor().getTenantId(),
+                command.descriptor().getJobCode(),
+                command.descriptor().getCalendarCode(),
+                command.fireTime()
+        );
+        return LaunchResponse.skipped(command.traceId());
+    }
+
+    private CalendarBizDateDefinition loadCalendarDefinition(ScheduledTriggerCommand command) {
+        if (command == null || command.descriptor() == null) {
+            return null;
+        }
+        String calendarCode = command.descriptor().getCalendarCode();
+        if (!StringUtils.hasText(calendarCode)) {
+            return null;
+        }
+        TriggerCalendarConfig calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
+                command.descriptor().getTenantId(),
+                calendarCode
+        );
+        if (calendar == null || calendar.getId() == null) {
+            return null;
+        }
+        List<CalendarHolidayRule> rules = businessCalendarMapper.selectHolidayRulesByCalendarId(calendar.getId());
+        if (rules == null) {
+            rules = List.of();
+        }
+        Set<LocalDate> holidays = rules.stream()
+                .filter(rule -> isDayType(rule, "HOLIDAY"))
+                .map(CalendarHolidayRule::getBizDate)
+                .collect(Collectors.toSet());
+        Set<LocalDate> workdayOverrides = rules.stream()
+                .filter(rule -> isDayType(rule, "WORKDAY_OVERRIDE"))
+                .map(CalendarHolidayRule::getBizDate)
+                .collect(Collectors.toSet());
+        return new CalendarBizDateDefinition(
+                calendar.getTimezone(),
+                calendar.getCutoffTime(),
+                calendar.getHolidayRollRule(),
+                holidays,
+                workdayOverrides
+        );
+    }
+
+    private boolean isDayType(CalendarHolidayRule rule, String expectedType) {
+        return rule != null
+                && rule.getBizDate() != null
+                && expectedType.equalsIgnoreCase(normalize(rule.getDayType()));
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
     private void validateRequest(TriggerLaunchCommand command) {

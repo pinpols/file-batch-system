@@ -2,12 +2,14 @@ package com.example.batch.console.web;
 
 import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.web.request.BatchDayCatchUpRequest;
 import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensateRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.RerunRequest;
 import com.example.batch.console.web.request.TriggerRequest;
+import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;
@@ -15,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -73,5 +76,13 @@ public class ConsoleJobController {
     public CommonResponse<String> approveCatchUp(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                  @Valid @RequestBody ConsoleCatchUpApprovalRequest request) {
         return responseFactory.success(applicationService.approveCatchUp(request, idempotencyKey));
+    }
+
+    /** 按批量日发起 catch-up。 */
+    @PostMapping("/batch-days/{bizDate}/catchup")
+    public CommonResponse<ConsoleBatchDayCatchUpResponse> batchDayCatchUp(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+                                                                          @PathVariable String bizDate,
+                                                                          @Valid @RequestBody BatchDayCatchUpRequest request) {
+        return responseFactory.success(applicationService.catchUpBatchDay(bizDate, request, idempotencyKey));
     }
 }

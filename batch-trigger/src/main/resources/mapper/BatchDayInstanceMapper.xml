@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.trigger.mapper.BatchDayInstanceMapper">
+    <resultMap id="BatchDayCutoffCandidateResultMap" type="com.example.batch.trigger.support.BatchDayCutoffCandidate">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="calendar_code" property="calendarCode"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="day_status" property="dayStatus"/>
+        <result column="timezone" property="timezone"/>
+        <result column="cutoff_time" property="cutoffTime"/>
+    </resultMap>
+
+    <select id="selectOpenCutoffCandidates" resultMap="BatchDayCutoffCandidateResultMap">
+        select
+            bdi.id,
+            bdi.tenant_id,
+            bdi.calendar_code,
+            bdi.biz_date,
+            bdi.day_status,
+            bc.timezone,
+            bc.cutoff_time
+        from batch.batch_day_instance bdi
+                 join batch.business_calendar bc
+                      on bc.tenant_id = bdi.tenant_id
+                     and bc.calendar_code = bdi.calendar_code
+                     and bc.enabled = true
+        where bdi.day_status = 'OPEN'
+          and bdi.cutoff_at is null
+        order by bdi.biz_date asc, bdi.id asc
+    </select>
+
+    <update id="markCutoff">
+        update batch.batch_day_instance
+        set day_status = 'CUTOFF',
+            cutoff_at = #{cutoffAt},
+            updated_at = current_timestamp
+        where id = #{id}
+          and tenant_id = #{tenantId}
+          and calendar_code = #{calendarCode}
+          and biz_date = #{bizDate}
+          and day_status = 'OPEN'
+          and cutoff_at is null
+    </update>
+</mapper>

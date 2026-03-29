@@ -23,6 +23,13 @@
           and request_id = #{requestId}
     </select>
 
+    <select id="selectByTenantAndDedupKey" resultMap="TriggerRequestResultMap">
+        select *
+        from batch.trigger_request
+        where tenant_id = #{tenantId}
+          and dedup_key = #{dedupKey}
+    </select>
+
     <insert id="insert" parameterType="com.example.batch.common.persistence.entity.TriggerRequestEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.trigger_request (
@@ -50,6 +57,14 @@
         update batch.trigger_request
         set request_status = #{requestStatus},
             related_job_instance_id = #{relatedJobInstanceId},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and request_id = #{requestId}
+    </update>
+
+    <update id="updateTriggerType">
+        update batch.trigger_request
+        set trigger_type = #{triggerType},
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and request_id = #{requestId}

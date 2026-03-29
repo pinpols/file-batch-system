@@ -245,4 +245,28 @@
                 and fair_share_group = #{fairShareGroup}
           )
     </select>
+
+    <select id="selectBatchDayMetrics" resultType="com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics">
+        select
+            count(1) as total_count,
+            coalesce(sum(case when ji.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING') then 1 else 0 end), 0) as active_count,
+            coalesce(sum(case when ji.instance_status = 'SUCCESS' then 1 else 0 end), 0) as success_count,
+            coalesce(sum(case when ji.instance_status in ('PARTIAL_FAILED', 'FAILED', 'CANCELLED', 'TERMINATED') then 1 else 0 end), 0) as failed_count
+        from batch.job_instance ji
+                 join batch.job_definition jd on jd.id = ji.job_definition_id
+        where ji.tenant_id = #{tenantId}
+          and jd.calendar_code = #{calendarCode}
+          and ji.biz_date = #{bizDate}
+    </select>
+
+    <select id="selectBatchDayCatchUpCandidates" resultMap="JobInstanceResultMap">
+        select distinct on (ji.job_code) ji.*
+        from batch.job_instance ji
+                 join batch.job_definition jd on jd.id = ji.job_definition_id
+        where ji.tenant_id = #{tenantId}
+          and jd.calendar_code = #{calendarCode}
+          and ji.biz_date = #{bizDate}
+          and ji.instance_status in ('FAILED', 'PARTIAL_FAILED')
+        order by ji.job_code, ji.id desc
+    </select>
 </mapper>

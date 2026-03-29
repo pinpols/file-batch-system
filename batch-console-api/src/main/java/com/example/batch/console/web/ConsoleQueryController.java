@@ -3,6 +3,8 @@ package com.example.batch.console.web;
 import com.example.batch.console.application.ConsoleQueryApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
+import com.example.batch.console.web.query.BatchDayQueryRequest;
+import com.example.batch.console.web.query.BatchDayWindowQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.ConsoleAiAuditLogQueryRequest;
@@ -31,6 +33,8 @@ import com.example.batch.console.web.query.WorkflowRunQueryRequest;
 import com.example.batch.console.web.query.WorkflowTopologyQueryRequest;
 import com.example.batch.console.web.response.AiAuditLogResponse;
 import com.example.batch.console.web.response.ConsoleAlertEventResponse;
+import com.example.batch.console.web.response.ConsoleBatchDayResponse;
+import com.example.batch.console.web.response.ConsoleBatchDayWindowResponse;
 import com.example.batch.console.web.response.ConsoleDeadLetterTaskResponse;
 import com.example.batch.console.web.response.ConsoleApprovalCommandResponse;
 import com.example.batch.console.web.response.ConsoleAuditLogResponse;
@@ -100,10 +104,23 @@ public class ConsoleQueryController {
         return responseFactory.success(applicationService.alertEvents(request));
     }
 
+    /** GET /batch-days — 批量日列表。 */
+    @GetMapping("/batch-days")
+    public CommonResponse<PageResponse<ConsoleBatchDayResponse>> batchDays(@Valid @ModelAttribute BatchDayQueryRequest request) {
+        return responseFactory.success(applicationService.batchDays(request));
+    }
+
     /** GET /approvals — 审批指令列表。 */
     @GetMapping("/approvals")
     public CommonResponse<PageResponse<ConsoleApprovalCommandResponse>> approvals(@Valid @ModelAttribute ApprovalCommandQueryRequest request) {
         return responseFactory.success(applicationService.approvals(request));
+    }
+
+    /** GET /batch-days/{bizDate}/window — 批量日窗口状态。 */
+    @GetMapping("/batch-days/{bizDate}/window")
+    public CommonResponse<ConsoleBatchDayWindowResponse> batchDayWindow(@PathVariable String bizDate,
+                                                                        @Valid @ModelAttribute BatchDayWindowQueryRequest request) {
+        return responseFactory.success(applicationService.batchDayWindow(bizDate, request));
     }
 
     /** GET /files — 文件链路记录。 */

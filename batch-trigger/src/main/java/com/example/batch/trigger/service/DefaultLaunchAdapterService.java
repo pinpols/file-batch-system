@@ -5,14 +5,20 @@ import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
+import com.example.batch.trigger.support.CalendarBizDateDefinition;
 import java.util.LinkedHashMap;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
+@RequiredArgsConstructor
 public class DefaultLaunchAdapterService implements LaunchAdapterService {
+
+    private final CalendarBizDateResolver calendarBizDateResolver;
 
     @Override
     public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
@@ -29,10 +35,12 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     }
 
     @Override
-    public LaunchRequest fromScheduledTrigger(ScheduledTriggerCommand command) {
+    public LaunchRequest fromScheduledTrigger(ScheduledTriggerCommand command, CalendarBizDateDefinition calendar) {
         var descriptor = command.descriptor();
-        ZoneId zoneId = ZoneId.of(descriptor.getTimezone());
-        LocalDate bizDate = command.fireTime().atZone(zoneId).toLocalDate();
+        ZoneId zoneId = StringUtils.hasText(descriptor.getTimezone())
+                ? ZoneId.of(descriptor.getTimezone())
+                : ZoneId.systemDefault();
+        LocalDate bizDate = calendarBizDateResolver.resolve(command.fireTime(), zoneId, calendar);
         TriggerType triggerType = command.triggerType() == null ? TriggerType.SCHEDULED : command.triggerType();
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("scheduleType", descriptor.getScheduleType());
