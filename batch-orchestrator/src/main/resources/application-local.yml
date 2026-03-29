@@ -50,6 +50,9 @@ batch:
     poll-interval-millis: 5000
     retry-delay-seconds: 60
     max-retry-attempts: 5
+    circuit-breaker-enabled: true
+    circuit-breaker-failure-threshold-consecutive-polls: 3
+    circuit-breaker-cooldown-millis: 60000
   partition-lease:
     expire-seconds: 60
     reclaim-interval-millis: 15000
@@ -63,6 +66,11 @@ batch:
   resource-scheduler:
     waiting-dispatch-batch-size: 100
     waiting-dispatch-interval-millis: 10000
+    global-max-running-jobs: ${BATCH_RESOURCE_SCHEDULER_GLOBAL_MAX_RUNNING_JOBS:0}
+  rate-limit:
+    enabled: ${BATCH_RATE_LIMIT_ENABLED:false}
+    max-new-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_NEW_PER_TENANT_PER_MINUTE:0}
+    max-release-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_RELEASE_PER_TENANT_PER_MINUTE:0}
   sla:
     enabled: true
     poll-interval-millis: 30000

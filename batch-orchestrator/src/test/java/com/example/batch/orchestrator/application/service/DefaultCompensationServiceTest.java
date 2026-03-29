@@ -8,6 +8,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -23,6 +24,7 @@ class DefaultCompensationServiceTest {
 
     private CompensationCommandMapper compensationCommandMapper;
     private JobInstanceMapper jobInstanceMapper;
+    private JobPartitionMapper jobPartitionMapper;
     private JobStepInstanceMapper jobStepInstanceMapper;
     private JobTaskMapper jobTaskMapper;
     private TriggerRequestMapper triggerRequestMapper;
@@ -36,6 +38,7 @@ class DefaultCompensationServiceTest {
     void setUp() {
         compensationCommandMapper = mock(CompensationCommandMapper.class);
         jobInstanceMapper = mock(JobInstanceMapper.class);
+        jobPartitionMapper = mock(JobPartitionMapper.class);
         jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
         jobTaskMapper = mock(JobTaskMapper.class);
         triggerRequestMapper = mock(TriggerRequestMapper.class);
@@ -47,6 +50,7 @@ class DefaultCompensationServiceTest {
         service = new DefaultCompensationService(
                 compensationCommandMapper,
                 jobInstanceMapper,
+                jobPartitionMapper,
                 jobStepInstanceMapper,
                 jobTaskMapper,
                 triggerRequestMapper,

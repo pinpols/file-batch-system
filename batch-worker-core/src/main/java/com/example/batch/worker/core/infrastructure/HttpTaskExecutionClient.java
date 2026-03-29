@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,9 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.utils.IdGenerator;
 
 /**
  * Calls orchestrator internal task APIs with explicit timeouts, bounded retries on transient failures,
@@ -47,11 +51,15 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
 
     @Override
     public boolean claim(String tenantId, Long taskId, String workerId) {
+        String traceId = currentTraceId();
+        String resolvedTraceId = StringUtils.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         return executeClaimLike(
                 "claim",
                 () -> client().post()
                         .uri("/internal/tasks/{taskId}/claim", taskId)
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
                         .body(new ClaimRequest(tenantId, workerId))
                         .retrieve()
                         .toBodilessEntity());
@@ -59,11 +67,15 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
 
     @Override
     public boolean renewLease(String tenantId, Long taskId, String workerId) {
+        String traceId = currentTraceId();
+        String resolvedTraceId = StringUtils.hasText(traceId) ? traceId : IdGenerator.newTraceId();
         return executeClaimLike(
                 "renew",
                 () -> client().post()
                         .uri("/internal/tasks/{taskId}/renew", taskId)
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
                         .body(new ClaimRequest(tenantId, workerId))
                         .retrieve()
                         .toBodilessEntity());
@@ -74,11 +86,18 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
         int max = Math.max(1, properties.getReportMaxAttempts());
         long backoff = Math.max(1L, properties.getReportInitialBackoffMillis());
         long cap = Math.max(backoff, properties.getReportMaxBackoffMillis());
+        String traceFallback = currentTraceId();
         for (int attempt = 1; attempt <= max; attempt++) {
+            String traceId = firstNonBlank(report.getTraceId(), traceFallback);
+            if (!StringUtils.hasText(traceId)) {
+                traceId = IdGenerator.newTraceId();
+            }
             try {
                 client().post()
                         .uri("/internal/tasks/{taskId}/report", report.getTaskId())
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, report.getTenantId())
+                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
                         .body(report)
                         .retrieve()
                         .toBodilessEntity();
@@ -159,6 +178,18 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("interrupted during orchestrator client backoff", ie);
         }
+    }
+
+    private String currentTraceId() {
+        String value = MDC.get(StructuredLogField.TRACE_ID);
+        return StringUtils.hasText(value) ? value : null;
+    }
+
+    private static String firstNonBlank(String value, String fallback) {
+        if (StringUtils.hasText(value)) {
+            return value;
+        }
+        return StringUtils.hasText(fallback) ? fallback : null;
     }
 
     private RestClient client() {

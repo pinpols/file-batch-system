@@ -58,6 +58,11 @@ public interface JobInstanceMapper {
 
     long countActiveByFairShareGroup(@Param("fairShareGroup") String fairShareGroup);
 
+    /**
+     * 统计所有租户的运行中任务总量（WAITING/READY/RUNNING）。
+     */
+    long countActiveAll();
+
     BatchDayInstanceMetrics selectBatchDayMetrics(@Param("tenantId") String tenantId,
                                                   @Param("calendarCode") String calendarCode,
                                                   @Param("bizDate") LocalDate bizDate);

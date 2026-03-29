@@ -43,6 +43,11 @@ public record BatchDayInstanceRecord(
                 cutoffAt, settledAt, slaDeadlineAt, lateCount, catchupCount, createdAt, updatedAt);
     }
 
+    public BatchDayInstanceRecord withCutoffAt(Instant cutoffAt, Instant updatedAt) {
+        return new BatchDayInstanceRecord(id, tenantId, calendarCode, bizDate, dayStatus, openAt,
+                cutoffAt, settledAt, slaDeadlineAt, lateCount, catchupCount, createdAt, updatedAt);
+    }
+
     public BatchDayInstanceRecord withCutoff(Instant cutoffAt, Instant updatedAt) {
         return new BatchDayInstanceRecord(id, tenantId, calendarCode, bizDate, "CUTOFF", openAt,
                 cutoffAt, settledAt, slaDeadlineAt, lateCount, catchupCount, createdAt, updatedAt);

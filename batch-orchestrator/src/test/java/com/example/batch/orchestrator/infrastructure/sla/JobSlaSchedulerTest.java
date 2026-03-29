@@ -103,7 +103,7 @@ class JobSlaSchedulerTest {
 
         scheduler.scanViolations();
 
-        verify(jobExecutionLogMapper).insert(any());
+        verify(jobExecutionLogMapper, times(2)).insert(any());
         verify(alertEventService).emit(any(AlertEmitRequest.class));
     }
 
@@ -127,7 +127,7 @@ class JobSlaSchedulerTest {
 
         scheduler.scanViolations();
 
-        verify(jobExecutionLogMapper).insert(any());
+        verify(jobExecutionLogMapper, times(2)).insert(any());
         verify(alertEventService).emit(any(AlertEmitRequest.class));
     }
 
@@ -142,7 +142,7 @@ class JobSlaSchedulerTest {
 
         scheduler.scanViolations();
 
-        verify(jobExecutionLogMapper, times(2)).insert(any());
+        verify(jobExecutionLogMapper, times(4)).insert(any());
         verify(alertEventService, times(2)).emit(any());
     }
 

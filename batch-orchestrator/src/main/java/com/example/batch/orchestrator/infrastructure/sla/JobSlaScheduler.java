@@ -1,6 +1,8 @@
 package com.example.batch.orchestrator.infrastructure.sla;
 
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.logging.BatchMdc;
+import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.orchestrator.application.service.AlertEventService;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
@@ -54,28 +56,54 @@ public class JobSlaScheduler {
             if (jobInstanceMapper.markSlaAlerted(candidate.getTenantId(), candidate.getId(), now) <= 0) {
                 continue;
             }
-            JobExecutionLogEntity logEntity = new JobExecutionLogEntity();
-            logEntity.setTenantId(candidate.getTenantId());
-            logEntity.setJobInstanceId(candidate.getId());
-            logEntity.setLogLevel("WARN");
-            logEntity.setLogType("ALARM");
-            logEntity.setTraceId(candidate.getTraceId());
-            logEntity.setMessage(buildMessage(candidate, now));
-            logEntity.setDetailRef("job-sla");
-            logEntity.setExtraJson(JsonUtils.toJson(buildExtra(candidate, now)));
-            jobExecutionLogMapper.insert(logEntity);
-            log.warn("job SLA violation detected: tenantId={}, jobInstanceId={}, instanceNo={}, extra={}",
-                    candidate.getTenantId(), candidate.getId(), candidate.getInstanceNo(), buildExtra(candidate, now));
-            alertEventService.emit(new AlertEmitRequest(
-                    candidate.getTenantId(),
-                    "batch-orchestrator",
-                    "JOB_SLA_VIOLATION",
-                    "WARN",
-                    buildMessage(candidate, now),
-                    JsonUtils.toJson(buildExtra(candidate, now)),
-                    String.valueOf(candidate.getId()),
-                    candidate.getTraceId()
-            ));
+            BatchMdc.put(StructuredLogField.TENANT_ID, candidate.getTenantId());
+            BatchMdc.put(StructuredLogField.TRACE_ID, candidate.getTraceId());
+            BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID,
+                    candidate.getId() == null ? null : String.valueOf(candidate.getId()));
+            try {
+                JobExecutionLogEntity logEntity = new JobExecutionLogEntity();
+                logEntity.setTenantId(candidate.getTenantId());
+                logEntity.setJobInstanceId(candidate.getId());
+                logEntity.setLogLevel("WARN");
+                logEntity.setLogType("ALARM");
+                logEntity.setTraceId(candidate.getTraceId());
+                logEntity.setMessage(buildMessage(candidate, now));
+                logEntity.setDetailRef("job-sla");
+                logEntity.setExtraJson(JsonUtils.toJson(buildExtra(candidate, now)));
+                jobExecutionLogMapper.insert(logEntity);
+
+                // 同步落审计：sla_alerted_at 属于状态变更，需要追溯操作者与原因
+                JobExecutionLogEntity auditEntity = new JobExecutionLogEntity();
+                auditEntity.setTenantId(candidate.getTenantId());
+                auditEntity.setJobInstanceId(candidate.getId());
+                auditEntity.setJobPartitionId(null);
+                auditEntity.setLogLevel("INFO");
+                auditEntity.setLogType("AUDIT");
+                auditEntity.setTraceId(candidate.getTraceId());
+                auditEntity.setMessage("SLA_ALERTED_AT_UPDATED");
+                auditEntity.setDetailRef("job_instance.sla_alerted_at");
+                Map<String, Object> auditExtra = new LinkedHashMap<>(buildExtra(candidate, now));
+                auditExtra.put("operatorId", "SYSTEM_SLA_SCHEDULER");
+                auditExtra.put("operatorType", "SYSTEM");
+                auditEntity.setExtraJson(JsonUtils.toJson(auditExtra));
+                jobExecutionLogMapper.insert(auditEntity);
+                log.warn("job SLA violation detected: tenantId={}, jobInstanceId={}, instanceNo={}, extra={}",
+                        candidate.getTenantId(), candidate.getId(), candidate.getInstanceNo(), buildExtra(candidate, now));
+                alertEventService.emit(new AlertEmitRequest(
+                        candidate.getTenantId(),
+                        "batch-orchestrator",
+                        "JOB_SLA_VIOLATION",
+                        "WARN",
+                        buildMessage(candidate, now),
+                        JsonUtils.toJson(buildExtra(candidate, now)),
+                        String.valueOf(candidate.getId()),
+                        candidate.getTraceId()
+                ));
+            } finally {
+                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+                BatchMdc.remove(StructuredLogField.TRACE_ID);
+                BatchMdc.remove(StructuredLogField.TENANT_ID);
+            }
         }
     }
 

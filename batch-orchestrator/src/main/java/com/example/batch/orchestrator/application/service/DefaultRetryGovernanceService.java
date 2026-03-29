@@ -25,6 +25,8 @@ import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
+import com.example.batch.common.logging.BatchMdc;
+import com.example.batch.common.logging.StructuredLogField;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -75,6 +77,15 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         if (task == null || partition == null || jobInstance == null) {
             return false;
         }
+        String tenantId = task.getTenantId();
+        String traceId = jobInstance.getTraceId();
+        boolean injectMdc = traceId != null && !traceId.isBlank();
+        if (injectMdc) {
+            BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+            BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
+        }
+        try {
         RetryPolicyPlan retryPolicyPlan = resolveRetryPolicy(jobInstance.getJobDefinitionId());
         if (RetryPolicyType.NONE.code().equals(retryPolicyPlan.retryPolicy())
                 || retryPolicyPlan.maxRetryCount() <= 0) {
@@ -106,6 +117,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         log.info("retry scheduled: tenantId={}, partitionId={}, retryCount={}",
                 task.getTenantId(), partition.getId(), nextRetryCount);
         return true;
+        } finally {
+            if (injectMdc) {
+                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+                BatchMdc.remove(StructuredLogField.TRACE_ID);
+                BatchMdc.remove(StructuredLogField.TENANT_ID);
+            }
+        }
     }
 
     @Override
@@ -165,6 +183,14 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         if (deadLetterTask == null) {
             throw new IllegalStateException("dead letter task not found");
         }
+        String traceId = deadLetterTask.getTraceId();
+        boolean injectMdc = traceId != null && !traceId.isBlank();
+        if (injectMdc) {
+            BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+            BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, null);
+        }
+        try {
         if (!DeadLetterReplayStatus.NEW.code().equals(deadLetterTask.getReplayStatus())
                 && !DeadLetterReplayStatus.FAILED.code().equals(deadLetterTask.getReplayStatus())) {
             throw new IllegalStateException("dead letter task is not replayable");
@@ -203,6 +229,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             );
             throw exception;
         }
+        } finally {
+            if (injectMdc) {
+                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+                BatchMdc.remove(StructuredLogField.TRACE_ID);
+                BatchMdc.remove(StructuredLogField.TENANT_ID);
+            }
+        }
     }
 
     private void requeuePartition(RetryScheduleEntity retrySchedule) {
@@ -222,35 +255,50 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         if (jobInstance == null) {
             throw new IllegalStateException("retry job instance not found");
         }
-        List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(new JobTaskQuery(
-                tenantId,
-                jobInstance.getId(),
-                partition.getId(),
-                null,
-                null
-        ));
-        JobTaskEntity task = tasks.stream()
-                .sorted((left, right) -> Integer.compare(
-                        left.getTaskSeq() == null ? 0 : left.getTaskSeq(),
-                        right.getTaskSeq() == null ? 0 : right.getTaskSeq()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("retry task not found"));
-
-        JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
-        if (stepInstance != null) {
-            int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
-            jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
+        String traceId = jobInstance.getTraceId();
+        boolean injectMdc = traceId != null && !traceId.isBlank();
+        if (injectMdc) {
+            BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+            BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
         }
-        jobPartitionMapper.resetForDispatch(tenantId, partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
-        jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion());
-        taskDispatchOutboxService.writeDispatchEvent(
-                jobInstance,
-                task,
-                partition,
-                jobInstance.getTraceId(),
-                eventKey,
-                RunMode.RETRY
-        );
+        try {
+            List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(new JobTaskQuery(
+                    tenantId,
+                    jobInstance.getId(),
+                    partition.getId(),
+                    null,
+                    null
+            ));
+            JobTaskEntity task = tasks.stream()
+                    .sorted((left, right) -> Integer.compare(
+                            left.getTaskSeq() == null ? 0 : left.getTaskSeq(),
+                            right.getTaskSeq() == null ? 0 : right.getTaskSeq()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("retry task not found"));
+
+            JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
+            if (stepInstance != null) {
+                int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
+                jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
+            }
+            jobPartitionMapper.resetForDispatch(tenantId, partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
+            jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion());
+            taskDispatchOutboxService.writeDispatchEvent(
+                    jobInstance,
+                    task,
+                    partition,
+                    jobInstance.getTraceId(),
+                    eventKey,
+                    RunMode.RETRY
+            );
+        } finally {
+            if (injectMdc) {
+                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+                BatchMdc.remove(StructuredLogField.TRACE_ID);
+                BatchMdc.remove(StructuredLogField.TENANT_ID);
+            }
+        }
     }
 
     private void requeueTaskWithoutPartition(String tenantId, JobTaskEntity task, String eventKey) {

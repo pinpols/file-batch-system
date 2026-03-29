@@ -28,6 +28,18 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
         if (request == null || !StringUtils.hasText(request.getTenantId())) {
             return ResourceCheck.allow();
         }
+
+        long globalCap = resourceSchedulerProperties.getGlobalMaxRunningJobs();
+        if (globalCap > 0) {
+            long activeAll = jobInstanceMapper.countActiveAll();
+            if (activeAll + 1 > globalCap) {
+                return ResourceCheck.waitForCapacity(
+                        "GLOBAL_RUNNING_JOB_LIMIT",
+                        "global running jobs exceed cap"
+                );
+            }
+        }
+
         TenantQuotaPolicyRecord quotaPolicy = resolveQuotaPolicy(request.getTenantId());
         long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(request.getTenantId());
 

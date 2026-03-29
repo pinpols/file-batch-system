@@ -246,6 +246,12 @@
           )
     </select>
 
+    <select id="countActiveAll" resultType="long">
+        select count(1)
+        from batch.job_instance
+        where instance_status in ('WAITING', 'READY', 'RUNNING')
+    </select>
+
     <select id="selectBatchDayMetrics" resultType="com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics">
         select
             count(1) as total_count,

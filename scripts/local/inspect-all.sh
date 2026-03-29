@@ -101,6 +101,8 @@ if [[ "${overall_status}" -ne 0 ]]; then
   printf 'Self-healing scripts available:\n'
   printf '  heal-drain-timeout.sh  — force-offline DRAINING workers past deadline\n'
   printf '  heal-dead-letters.sh   — replay NEW dead-letter tasks\n'
+  printf '  heal-retry-tasks.sh    — replay FAILED job_task tasks\n'
+  printf '  heal-retry-partitions.sh — replay FAILED job_partition partitions\n'
   printf '  heal-stuck-outbox.sh   — reset stuck outbox events\n'
   exit 1
 fi

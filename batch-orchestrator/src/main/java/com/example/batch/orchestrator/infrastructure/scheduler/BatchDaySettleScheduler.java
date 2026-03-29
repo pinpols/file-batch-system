@@ -5,11 +5,14 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.IdGenerator;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
@@ -37,6 +40,7 @@ public class BatchDaySettleScheduler {
 
     private final BatchDayInstanceRepository batchDayInstanceRepository;
     private final JobInstanceMapper jobInstanceMapper;
+    private final JobExecutionLogMapper jobExecutionLogMapper;
     private final TriggerRequestMapper triggerRequestMapper;
     private final BusinessCalendarRepository businessCalendarRepository;
     private final LaunchService launchService;
@@ -71,7 +75,10 @@ public class BatchDaySettleScheduler {
             long totalCount = value(metrics.getTotalCount());
             if (activeCount > 0) {
                 if (!"IN_FLIGHT".equals(candidate.dayStatus())) {
-                    batchDayInstanceRepository.save(candidate.withDayStatus("IN_FLIGHT", now));
+                        BatchDayInstanceRecord from = candidate;
+                        BatchDayInstanceRecord to = candidate.withDayStatus("IN_FLIGHT", now);
+                        batchDayInstanceRepository.save(to);
+                        appendBatchDayAuditLog(from, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES", now);
                 }
                 continue;
             }
@@ -79,13 +86,19 @@ public class BatchDaySettleScheduler {
                 continue;
             }
             if (failedCount > 0L) {
-                batchDayInstanceRepository.save(candidate.withSettled("FAILED", now, now));
+                BatchDayInstanceRecord from = candidate;
+                BatchDayInstanceRecord to = candidate.withSettled("FAILED", now, now);
+                batchDayInstanceRepository.save(to);
+                appendBatchDayAuditLog(from, to, "BATCH_DAY_FAILED", now);
                 driveCatchUp(candidate, now);
                 log.info("batch day settled as FAILED: tenantId={}, calendarCode={}, bizDate={}",
                         candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
                 continue;
             }
-            batchDayInstanceRepository.save(candidate.withSettled("SETTLED", now, now));
+            BatchDayInstanceRecord from = candidate;
+            BatchDayInstanceRecord to = candidate.withSettled("SETTLED", now, now);
+            batchDayInstanceRepository.save(to);
+            appendBatchDayAuditLog(from, to, "BATCH_DAY_SETTLED", now);
             log.info("batch day settled as SETTLED: tenantId={}, calendarCode={}, bizDate={}",
                     candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
         }
@@ -147,6 +160,33 @@ public class BatchDaySettleScheduler {
                         request.getRequestId(), response == null ? null : response.instanceNo());
             }
         }
+    }
+
+    private void appendBatchDayAuditLog(BatchDayInstanceRecord from,
+                                         BatchDayInstanceRecord to,
+                                         String reasonCode,
+                                         Instant now) {
+        JobExecutionLogEntity audit = new JobExecutionLogEntity();
+        audit.setTenantId(from.tenantId());
+        audit.setJobInstanceId(null);
+        audit.setJobPartitionId(null);
+        audit.setLogLevel("INFO");
+        audit.setLogType("AUDIT");
+        audit.setTraceId(null);
+        audit.setMessage("BATCH_DAY_INSTANCE_STATUS_CHANGED");
+        audit.setDetailRef("batch_day_instance");
+        audit.setExtraJson(JsonUtils.toJson(new java.util.LinkedHashMap<>() {{
+            put("calendarCode", from.calendarCode());
+            put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
+            put("fromDayStatus", from.dayStatus());
+            put("toDayStatus", to.dayStatus());
+            put("reasonCode", reasonCode);
+            put("operatorId", "SYSTEM_BATCH_DAY_SETTLE");
+            put("operatorType", "SYSTEM");
+            put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
+            put("settledAt", to.settledAt() == null ? null : to.settledAt().toString());
+        }}));
+        jobExecutionLogMapper.insert(audit);
     }
 
     private boolean isLaunchable(TriggerRequestEntity request) {

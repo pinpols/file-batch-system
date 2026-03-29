@@ -35,6 +35,8 @@ mybatis:
   type-aliases-package: com.example.batch.orchestrator.domain
 
 batch:
+  startup-self-check:
+    enabled: true
   scheduler:
     # 是否持久化调度器快照（用于恢复/审计；关闭可减少写库）
     snapshot-persist-enabled: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST:true}
@@ -49,6 +51,10 @@ batch:
     retry-delay-seconds: ${BATCH_OUTBOX_RETRY_DELAY_SECONDS:60}
     # Outbox 最大重试次数
     max-retry-attempts: ${BATCH_OUTBOX_MAX_RETRY_ATTEMPTS:5}
+    # Outbox 投递熔断（全局）：连续若干轮推进失败后进入 cooldown
+    circuit-breaker-enabled: ${BATCH_OUTBOX_CIRCUIT_BREAKER_ENABLED:true}
+    circuit-breaker-failure-threshold-consecutive-polls: ${BATCH_OUTBOX_CIRCUIT_BREAKER_FAILURE_THRESHOLD_CONSECUTIVE_POLLS:3}
+    circuit-breaker-cooldown-millis: ${BATCH_OUTBOX_CIRCUIT_BREAKER_COOLDOWN_MILLIS:60000}
   worker:
     drain:
       # Worker drain 默认超时（秒）
@@ -84,6 +90,15 @@ batch:
     quota-reset-sliding-window-hours: ${BATCH_RESOURCE_SCHEDULER_QUOTA_RESET_SLIDING_WINDOW_HOURS:24}
     # 配额重置扫描间隔（毫秒）
     quota-reset-scan-interval-millis: ${BATCH_RESOURCE_SCHEDULER_QUOTA_RESET_SCAN_INTERVAL_MILLIS:60000}
+    # 全局并发上限（所有租户合计运行中任务数）：<=0 表示关闭
+    global-max-running-jobs: ${BATCH_RESOURCE_SCHEDULER_GLOBAL_MAX_RUNNING_JOBS:0}
+  rate-limit:
+    # 是否启用显式限流（时间窗/令牌桶）：默认关闭，避免影响现有行为
+    enabled: ${BATCH_RATE_LIMIT_ENABLED:false}
+    # 每租户每分钟最大新建（launch）请求数：<=0 表示关闭该维度
+    max-new-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_NEW_PER_TENANT_PER_MINUTE:0}
+    # 每租户每分钟最大释放（waiting partition dispatch release）请求数：<=0 表示关闭该维度
+    max-release-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_RELEASE_PER_TENANT_PER_MINUTE:0}
   sla:
     # SLA 监控开关（超时/延迟等规则）
     enabled: ${BATCH_SLA_ENABLED:true}

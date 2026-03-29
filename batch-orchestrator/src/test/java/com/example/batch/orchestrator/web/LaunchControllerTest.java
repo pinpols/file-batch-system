@@ -13,6 +13,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.controller.LaunchController;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.service.LaunchService;
+import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -20,12 +21,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class LaunchControllerTest {
 
     private final LaunchService launchService = org.mockito.Mockito.mock(LaunchService.class);
-    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new LaunchController(launchService))
+    private final TenantActionRateLimiter tenantActionRateLimiter = org.mockito.Mockito.mock(TenantActionRateLimiter.class);
+
+    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new LaunchController(launchService, tenantActionRateLimiter))
             .setControllerAdvice(new OrchestratorApiExceptionHandler())
             .build();
 
     @Test
     void shouldReturnLaunchResponseOnSuccess() throws Exception {
+        when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
         when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-001"));
 
         mockMvc.perform(post("/internal/orchestrator/launch")
@@ -48,6 +52,7 @@ class LaunchControllerTest {
 
     @Test
     void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
+        when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
         when(launchService.launch(any())).thenThrow(new BizException(ResultCode.INVALID_ARGUMENT, "bad request"));
 
         mockMvc.perform(post("/internal/orchestrator/launch")
