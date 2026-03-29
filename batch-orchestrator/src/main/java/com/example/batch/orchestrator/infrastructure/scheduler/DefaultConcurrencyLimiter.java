@@ -2,13 +2,13 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
-import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -21,7 +21,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     private final JobInstanceMapper jobInstanceMapper;
     private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
     private final QuotaRuntimeStateService quotaRuntimeStateService;
-    private final ResourceSchedulerProperties resourceSchedulerProperties;
+    private final BatchOrchestratorGovernanceProperties governance;
 
     @Override
     public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
@@ -29,7 +29,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
             return ResourceCheck.allow();
         }
 
-        long globalCap = resourceSchedulerProperties.getGlobalMaxRunningJobs();
+        long globalCap = governance.resourceScheduler().getGlobalMaxRunningJobs();
         if (globalCap > 0) {
             long activeAll = jobInstanceMapper.countActiveAll();
             if (activeAll + 1 > globalCap) {
@@ -69,7 +69,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
                     burst,
                     tenantActiveJobs,
                     1,
-                    resourceSchedulerProperties.getQuotaResetSlidingWindowHours(),
+                    governance.resourceScheduler().getQuotaResetSlidingWindowHours(),
                     "TENANT_JOB_LIMIT",
                     "tenant running jobs exceed quota (including burst)"
             );
@@ -93,7 +93,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
                     qburst,
                     queueActiveJobs,
                     1,
-                    resourceSchedulerProperties.getQuotaResetSlidingWindowHours(),
+                    governance.resourceScheduler().getQuotaResetSlidingWindowHours(),
                     "QUEUE_JOB_LIMIT",
                     "resource queue running jobs exceed limit (including burst)"
             );

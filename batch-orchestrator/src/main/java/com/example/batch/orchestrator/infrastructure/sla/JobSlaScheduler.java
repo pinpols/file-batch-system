@@ -4,7 +4,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.orchestrator.application.service.AlertEventService;
-import com.example.batch.orchestrator.config.SlaGovernanceProperties;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -30,7 +30,7 @@ public class JobSlaScheduler {
 
     private final JobInstanceMapper jobInstanceMapper;
     private final JobExecutionLogMapper jobExecutionLogMapper;
-    private final SlaGovernanceProperties properties;
+    private final BatchOrchestratorGovernanceProperties governance;
     private final MeterRegistry meterRegistry;
     private final AlertEventService alertEventService;
     private final AtomicLong violationCount = new AtomicLong();
@@ -43,11 +43,11 @@ public class JobSlaScheduler {
     @Scheduled(fixedDelayString = "${batch.sla.poll-interval-millis:30000}")
     @SchedulerLock(name = "job_sla_scan", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
     public void scanViolations() {
-        if (!properties.isEnabled()) {
+        if (!governance.sla().isEnabled()) {
             return;
         }
         violationCount.set(jobInstanceMapper.countSlaViolationCandidates());
-        List<JobInstanceEntity> candidates = jobInstanceMapper.selectSlaViolationCandidates(properties.getBatchSize());
+        List<JobInstanceEntity> candidates = jobInstanceMapper.selectSlaViolationCandidates(governance.sla().getBatchSize());
         Instant now = Instant.now();
         for (JobInstanceEntity candidate : candidates) {
             if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {

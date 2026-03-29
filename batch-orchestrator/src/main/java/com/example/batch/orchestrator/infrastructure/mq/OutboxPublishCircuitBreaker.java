@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.mq;
 
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Component;
@@ -20,8 +21,8 @@ public class OutboxPublishCircuitBreaker {
      */
     private volatile long openUntilEpochMilli = 0L;
 
-    public OutboxPublishCircuitBreaker(OutboxProperties outboxProperties) {
-        this.outboxProperties = outboxProperties;
+    public OutboxPublishCircuitBreaker(BatchOrchestratorGovernanceProperties governance) {
+        this.outboxProperties = governance.outbox();
     }
 
     /**

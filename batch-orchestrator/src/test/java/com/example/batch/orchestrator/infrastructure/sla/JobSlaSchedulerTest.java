@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.orchestrator.application.service.AlertEventService;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -31,6 +32,7 @@ class JobSlaSchedulerTest {
     private JobInstanceMapper jobInstanceMapper;
     private JobExecutionLogMapper jobExecutionLogMapper;
     private SlaGovernanceProperties properties;
+    private BatchOrchestratorGovernanceProperties governance;
     private AlertEventService alertEventService;
     private JobSlaScheduler scheduler;
 
@@ -39,12 +41,14 @@ class JobSlaSchedulerTest {
         jobInstanceMapper = mock(JobInstanceMapper.class);
         jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
         alertEventService = mock(AlertEventService.class);
+        governance = mock(BatchOrchestratorGovernanceProperties.class);
         properties = new SlaGovernanceProperties();
         properties.setEnabled(true);
         properties.setBatchSize(200);
+        when(governance.sla()).thenReturn(properties);
 
         scheduler = new JobSlaScheduler(
-                jobInstanceMapper, jobExecutionLogMapper, properties,
+                jobInstanceMapper, jobExecutionLogMapper, governance,
                 new SimpleMeterRegistry(), alertEventService);
         scheduler.initializeMeters();
     }

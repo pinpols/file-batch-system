@@ -7,8 +7,7 @@ import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
-import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
-import com.example.batch.orchestrator.config.OutboxProperties;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
@@ -40,13 +39,12 @@ import org.springframework.stereotype.Component;
 public class KafkaOutboxPublisher implements OutboxPublisher {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
-    private final BatchMqTopicsProperties batchMqTopicsProperties;
-    private final OutboxProperties outboxProperties;
+    private final BatchOrchestratorGovernanceProperties governance;
     private final EventDeliveryLogMapper eventDeliveryLogMapper;
 
     @Override
     public boolean publish(OutboxEventEntity event) {
-        String topic = batchMqTopicsProperties.resolveDispatchTopic(event.getEventType());
+        String topic = governance.mqTopics().resolveDispatchTopic(event.getEventType());
         if (topic != null) {
             // 任务派发：payloadJson 是 TaskDispatchMessage 的 JSON，直接按 eventKey 作为 Kafka key 投递。
             TaskDispatchMessage dispatchMessage = JsonUtils.fromJson(event.getPayloadJson(), TaskDispatchMessage.class);
@@ -66,7 +64,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
         }
 
         // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
-        String fallbackTopic = outboxProperties.getDefaultTopic();
+        String fallbackTopic = governance.outbox().getDefaultTopic();
         BatchEventMessage message = new BatchEventMessage(
                 "v1",
                 BatchMessageType.OUTBOX_EVENT,
@@ -79,7 +77,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
                 event.getTraceId(),
                 event.getEventKey(),
                 event.getAggregateType(),
-                outboxProperties.getProducerName(),
+                governance.outbox().getProducerName(),
                 event.getEventType(),
                 fallbackTopic,
                 event.getEventKey(),

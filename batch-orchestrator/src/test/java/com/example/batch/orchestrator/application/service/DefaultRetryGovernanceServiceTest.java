@@ -26,6 +26,7 @@ import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +45,7 @@ class DefaultRetryGovernanceServiceTest {
     private JobStepInstanceMapper jobStepInstanceMapper;
     private TaskDispatchOutboxService taskDispatchOutboxService;
     private RetryGovernanceProperties properties;
+    private BatchOrchestratorGovernanceProperties governance;
     private DefaultRetryGovernanceService service;
 
     @BeforeEach
@@ -61,11 +63,13 @@ class DefaultRetryGovernanceServiceTest {
         properties.setExponentialMultiplier(2L);
         properties.setMaxDelaySeconds(3600L);
         properties.setDefaultMaxRetryCount(3);
+        governance = mock(BatchOrchestratorGovernanceProperties.class);
+        when(governance.retry()).thenReturn(properties);
 
         service = new DefaultRetryGovernanceService(
                 retryScheduleMapper, deadLetterTaskMapper, jobDefinitionRepository,
                 jobTaskMapper, jobPartitionMapper, jobInstanceMapper, jobStepInstanceMapper,
-                taskDispatchOutboxService, properties);
+                taskDispatchOutboxService, governance);
     }
 
     // ── scheduleRetryIfNecessary — null guards ────────────────────────────────
