@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.sla;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.orchestrator.application.service.AlertEventService;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
@@ -65,10 +66,10 @@ public class JobSlaScheduler {
                 logEntity.setTenantId(candidate.getTenantId());
                 logEntity.setJobInstanceId(candidate.getId());
                 logEntity.setLogLevel("WARN");
-                logEntity.setLogType("ALARM");
+                logEntity.setLogType(AuditLogConstants.LOG_TYPE_ALARM);
                 logEntity.setTraceId(candidate.getTraceId());
                 logEntity.setMessage(buildMessage(candidate, now));
-                logEntity.setDetailRef("job-sla");
+                logEntity.setDetailRef(AuditLogConstants.DETAIL_REF_JOB_SLA);
                 logEntity.setExtraJson(JsonUtils.toJson(buildExtra(candidate, now)));
                 jobExecutionLogMapper.insert(logEntity);
 
@@ -78,13 +79,13 @@ public class JobSlaScheduler {
                 auditEntity.setJobInstanceId(candidate.getId());
                 auditEntity.setJobPartitionId(null);
                 auditEntity.setLogLevel("INFO");
-                auditEntity.setLogType("AUDIT");
+                auditEntity.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
                 auditEntity.setTraceId(candidate.getTraceId());
                 auditEntity.setMessage("SLA_ALERTED_AT_UPDATED");
-                auditEntity.setDetailRef("job_instance.sla_alerted_at");
+                auditEntity.setDetailRef(AuditLogConstants.DETAIL_REF_JOB_INSTANCE_SLA_ALERTED_AT);
                 Map<String, Object> auditExtra = new LinkedHashMap<>(buildExtra(candidate, now));
-                auditExtra.put("operatorId", "SYSTEM_SLA_SCHEDULER");
-                auditExtra.put("operatorType", "SYSTEM");
+                auditExtra.put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_SLA_SCHEDULER);
+                auditExtra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
                 auditEntity.setExtraJson(JsonUtils.toJson(auditExtra));
                 jobExecutionLogMapper.insert(auditEntity);
                 log.warn("job SLA violation detected: tenantId={}, jobInstanceId={}, instanceNo={}, extra={}",

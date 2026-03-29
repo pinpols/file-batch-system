@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,7 +62,7 @@ public class DefaultCompensationService implements CompensationService {
                                       TriggerRequestMapper triggerRequestMapper,
                                       RetryGovernanceService retryGovernanceService,
                                       FileGovernanceService fileGovernanceService,
-                                      LaunchService launchService,
+                                      @Lazy LaunchService launchService,
                                       TaskExecutionService taskExecutionService) {
         this.compensationCommandMapper = compensationCommandMapper;
         this.jobInstanceMapper = jobInstanceMapper;
