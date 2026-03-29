@@ -11,6 +11,7 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Component;
  * <p>设计目标：不因为自检失败阻断启动；而是把关键信息写到日志里，便于定位。
  */
 @Component
+@RequiredArgsConstructor
 public class StartupSelfCheck {
 
     private static final Logger log = LoggerFactory.getLogger(StartupSelfCheck.class);
@@ -32,11 +34,6 @@ public class StartupSelfCheck {
 
     @Value("${batch.startup-self-check.enabled:true}")
     private boolean enabled;
-
-    public StartupSelfCheck(DataSource dataSource, Flyway flyway) {
-        this.dataSource = dataSource;
-        this.flyway = flyway;
-    }
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {

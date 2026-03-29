@@ -14,6 +14,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.orchestrator.application.service.PartitionDispatchService;
 import com.example.batch.orchestrator.application.service.WorkflowDagService;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
@@ -42,9 +43,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.context.ApplicationContext;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.annotation.Lazy;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -63,6 +66,7 @@ import org.springframework.util.StringUtils;
  * <p>注意：{@link #prepareJobInstance} 必须通过 self-proxy 调用，才能让 Spring AOP 的 {@code @Transactional} 生效。
  */
 @Service
+@RequiredArgsConstructor
 public class DefaultLaunchService implements LaunchService {
 
     private final LaunchValidationService launchValidationService;
@@ -82,28 +86,6 @@ public class DefaultLaunchService implements LaunchService {
     @Lazy
     @Autowired
     private DefaultLaunchService self;
-
-    public DefaultLaunchService(LaunchValidationService launchValidationService,
-                                 PartitionDispatchService partitionDispatchService,
-                                 TriggerRequestMapper triggerRequestMapper,
-                                 JobInstanceMapper jobInstanceMapper,
-                                 WorkflowRunMapper workflowRunMapper,
-                                 WorkflowNodeRunMapper workflowNodeRunMapper,
-                                 WorkflowDagService workflowDagService,
-                                 BusinessCalendarRepository businessCalendarRepository,
-                                 BatchDayInstanceRepository batchDayInstanceRepository,
-                                 JobExecutionLogMapper jobExecutionLogMapper) {
-        this.launchValidationService = launchValidationService;
-        this.partitionDispatchService = partitionDispatchService;
-        this.triggerRequestMapper = triggerRequestMapper;
-        this.jobInstanceMapper = jobInstanceMapper;
-        this.workflowRunMapper = workflowRunMapper;
-        this.workflowNodeRunMapper = workflowNodeRunMapper;
-        this.workflowDagService = workflowDagService;
-        this.businessCalendarRepository = businessCalendarRepository;
-        this.batchDayInstanceRepository = batchDayInstanceRepository;
-        this.jobExecutionLogMapper = jobExecutionLogMapper;
-    }
 
     @Override
     public LaunchResponse launch(LaunchRequest request) {
@@ -407,8 +389,8 @@ public class DefaultLaunchService implements LaunchService {
                 request.tenantId(), calendarCode, request.bizDate());
         Instant cutoffAt = resolveBatchDayCutoffAt(request.tenantId(), calendarCode, request.bizDate());
         String operatorId = resolveOperatorId(effectiveParams);
-        String auditOperatorId = StringUtils.hasText(operatorId) ? operatorId : "SYSTEM";
-        String auditOperatorType = StringUtils.hasText(operatorId) ? "REQUEST" : "SYSTEM";
+        String auditOperatorId = StringUtils.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM;
+        String auditOperatorType = StringUtils.hasText(operatorId) ? AuditLogConstants.OPERATOR_TYPE_REQUEST : AuditLogConstants.OPERATOR_TYPE_SYSTEM;
         if (existing == null) {
             boolean catchUpLaunch = isCatchUpLaunch(request);
             boolean lateAccepted = isLateAccepted(effectiveParams);
@@ -539,10 +521,10 @@ public class DefaultLaunchService implements LaunchService {
         logEntity.setJobInstanceId(null);
         logEntity.setJobPartitionId(null);
         logEntity.setLogLevel("INFO");
-        logEntity.setLogType("AUDIT");
+        logEntity.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
         logEntity.setTraceId(traceId);
         logEntity.setMessage("BATCH_DAY_INSTANCE_STATE_CHANGED");
-        logEntity.setDetailRef("batch_day_instance");
+        logEntity.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
         logEntity.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {{
             put("calendarCode", calendarCode);
             put("bizDate", bizDate == null ? null : bizDate.toString());

@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component;
  * 聚合到一棵复合配置树，统一命名/层次/边界，减少重复注入点。</p>
  */
 @Component
+@RequiredArgsConstructor
 public class BatchOrchestratorGovernanceProperties {
 
     private final OutboxProperties outbox;
@@ -29,26 +31,6 @@ public class BatchOrchestratorGovernanceProperties {
     private final WorkerDrainProperties workerDrain;
     private final FileGovernanceProperties fileGovernance;
     private final BatchMqTopicsProperties mqTopics;
-
-    public BatchOrchestratorGovernanceProperties(OutboxProperties outbox,
-                                                 ResourceSchedulerProperties resourceScheduler,
-                                                 RateLimitProperties rateLimit,
-                                                 SlaGovernanceProperties sla,
-                                                 RetryGovernanceProperties retry,
-                                                 PartitionLeaseProperties partitionLease,
-                                                 WorkerDrainProperties workerDrain,
-                                                 FileGovernanceProperties fileGovernance,
-                                                 BatchMqTopicsProperties mqTopics) {
-        this.outbox = outbox;
-        this.resourceScheduler = resourceScheduler;
-        this.rateLimit = rateLimit;
-        this.sla = sla;
-        this.retry = retry;
-        this.partitionLease = partitionLease;
-        this.workerDrain = workerDrain;
-        this.fileGovernance = fileGovernance;
-        this.mqTopics = mqTopics;
-    }
 
     public OutboxProperties outbox() {
         return outbox;

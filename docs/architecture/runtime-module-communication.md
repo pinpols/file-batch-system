@@ -82,6 +82,13 @@ flowchart LR
   O -->|"retry / dead-letter / replay path -><br/>insert retry_schedule or dead_letter_task +<br/>update dead_letter_task replay status +<br/>reset job_partition + reset job_task +<br/>insert outbox_event"| P
 ```
 
+### 内部 Task HTTP 协议要点（联调用）
+- `POST /internal/tasks/{taskId}/claim`：body 为 `TaskClaimRequest { tenantId, workerId }`；冲突/不存在任务时返回 `404/409`
+- `POST /internal/tasks/{taskId}/renew`：body 为 `TaskClaimRequest { tenantId, workerId }`；续租失败返回 `409`
+- `POST /internal/tasks/{taskId}/report`：body 为 `TaskExecutionReportDto`
+  - `traceId` 用于串起 worker→orchestrator 的状态推进与审计日志（controller 层接收 body traceId 并回写到 trace 相关 log 字段）
+  - `success=false` 且缺失 `errorCode/errorMessage` 时，服务端会落库兜底可观测错误信息（`UNKNOWN`）
+
 ## 读图要点
 
 - `console-api` 既查库，也通过 HTTP 把触发和高危动作交给 `trigger` 或 `orchestrator`。
