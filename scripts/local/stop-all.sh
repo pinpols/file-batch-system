@@ -12,7 +12,7 @@ PID_FILE="$ROOT/logs/start-all.pids"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
 if [[ ! -f "$PID_FILE" ]]; then
-  echo "未找到 $PID_FILE（可能没有执行过 ./scripts/local/start-all.sh）"
+  echo "未找到 $PID_FILE [可能没有执行过 ./scripts/local/start-all.sh]"
   exit 0
 fi
 
