@@ -148,3 +148,18 @@ java.lang.IllegalStateException: failed to register quartz trigger: export_settl
 - `trigger` 对 Quartz 表的依赖在本地没有被完整满足
 - 启动自检存在，但它不是强校验门禁，覆盖范围也不够全
 
+## 修复进展
+
+已修复的联调问题：
+
+- `console-api` 的 REST 异常处理补齐了 `log.error` / `log.warn`，系统异常会打印堆栈。
+- `batch-console-api` 的 `file arrival group` 查询从 `metadata_json ? 'fileGroupCode'` 改为 `jsonb_exists(...)`，避免 MyBatis 把 JSONB `?` 运算符误判成参数占位符。
+- `batch-orchestrator` 的启动自检扩展为检查 `quartz.QRTZ_*` 关键表，不再只看 schema。
+- Quartz 官方 JDBC JobStore 建表脚本已纳入 `docs/sql/flyway/V33__create_quartz_tables_postgres_2_5_2.sql`，本地空库启动会走全量迁移。
+- 本地 `batch-orchestrator` 联调配置已切换为不再 baseline 到 `V30`，避免空库接管成半残状态。
+
+仍需继续保持的事项：
+
+- 新增迁移必须继续按版本号递增，不要回写旧版本。
+- 业务 seed 和测试 seed 仍要尽量保持幂等，避免重复执行中断联调。
+

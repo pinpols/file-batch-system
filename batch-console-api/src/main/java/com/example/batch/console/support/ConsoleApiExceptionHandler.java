@@ -7,6 +7,8 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
+import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.common.utils.JsonUtils;
 import jakarta.validation.ConstraintViolationException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -15,10 +17,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.RestClientResponseException;
 
 @RestControllerAdvice
 @RequiredArgsConstructor
@@ -71,6 +75,40 @@ public class ConsoleApiExceptionHandler {
                         CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
                                 ? CommonErrorMessages.MISSING_IDEMPOTENCY_KEY
                                 : CommonErrorMessages.INVALID_ARGUMENT));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<?> handleMethodNotSupported(HttpRequestMethodNotSupportedException exception) {
+        log.warn("console method not supported", exception);
+        return ResponseEntity.status(405)
+                .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+    }
+
+    /**
+     * Console 作为 BFF 调用下游（orchestrator/trigger）时，RestClient 会直接抛出异常。
+     * 这里尽量把下游返回的 {@link CommonResponse} 语义透传给前端，避免一律降级成 SYSTEM_ERROR。
+     */
+    @ExceptionHandler(RestClientResponseException.class)
+    public ResponseEntity<?> handleDownstreamRestError(RestClientResponseException exception) {
+        String body = exception.getResponseBodyAsString();
+        log.warn("console downstream rest error: status={}, body={}", exception.getStatusCode().value(), body);
+        try {
+            CommonResponse<?> downstream = JsonUtils.fromJson(body, CommonResponse.class);
+            if (downstream != null && downstream.code() != null) {
+                // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
+                return ResponseEntity.status(downstream.code().httpStatus())
+                        .body(responseFactory.failure(downstream.code(),
+                                downstream.message() == null || downstream.message().isBlank()
+                                        ? downstream.code().defaultMessage()
+                                        : downstream.message()));
+            }
+        } catch (RuntimeException ignored) {
+            // fall through
+        }
+        // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），避免前端只看到 500
+        return ResponseEntity.status(exception.getStatusCode())
+                .body(responseFactory.failure(ResultCode.SYSTEM_ERROR,
+                        body == null || body.isBlank() ? exception.getMessage() : body));
     }
 
     @ExceptionHandler(Exception.class)

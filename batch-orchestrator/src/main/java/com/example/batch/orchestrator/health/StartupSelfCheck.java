@@ -71,6 +71,7 @@ public class StartupSelfCheck {
 
         checkTableExists(jdbc, problems, "batch", "batch_day_instance");
         checkTableExists(jdbc, problems, "batch", "business_calendar");
+        checkQuartzTables(jdbc, problems);
 
         // batch.business_calendar 关键列（来自 V31__add_batch_day_support.sql）
         checkColumnExists(jdbc, problems, "batch", "business_calendar", "cutoff_time");
@@ -137,6 +138,25 @@ public class StartupSelfCheck {
         );
         if (cnt == null || cnt == 0) {
             problems.add("缺少列：`" + schemaName + "." + tableName + "." + columnName + "`（请确认 V31__add_batch_day_support.sql 已执行）。");
+        }
+    }
+
+    private static void checkQuartzTables(JdbcTemplate jdbc, List<String> problems) {
+        List<String> quartzTables = List.of(
+                "qrtz_job_details",
+                "qrtz_triggers",
+                "qrtz_simple_triggers",
+                "qrtz_cron_triggers",
+                "qrtz_simprop_triggers",
+                "qrtz_blob_triggers",
+                "qrtz_calendars",
+                "qrtz_paused_trigger_grps",
+                "qrtz_fired_triggers",
+                "qrtz_scheduler_state",
+                "qrtz_locks"
+        );
+        for (String tableName : quartzTables) {
+            checkTableExists(jdbc, problems, "quartz", tableName);
         }
     }
 }

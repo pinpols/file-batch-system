@@ -32,7 +32,7 @@
                count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') like 'WAITING%') as waiting_count,
                max(updated_at) as last_updated_at
         from batch.file_record
-        where metadata_json ? 'fileGroupCode'
+        where jsonb_exists(metadata_json, 'fileGroupCode')
           <if test="tenantId != null and tenantId != ''">
               and tenant_id = #{tenantId}
           </if>
@@ -67,7 +67,7 @@
         from (
             select 1
             from batch.file_record
-            where metadata_json ? 'fileGroupCode'
+            where jsonb_exists(metadata_json, 'fileGroupCode')
               <if test="tenantId != null and tenantId != ''">
                   and tenant_id = #{tenantId}
               </if>
