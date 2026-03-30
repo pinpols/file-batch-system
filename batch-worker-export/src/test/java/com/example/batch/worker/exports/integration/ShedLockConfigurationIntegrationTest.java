@@ -25,7 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(classes = {PlatformDataSourceConfiguration.class, ShedLockConfiguration.class},
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class ShedLockConfigurationIT extends AbstractIntegrationTest {
+class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     DataSource dataSource;

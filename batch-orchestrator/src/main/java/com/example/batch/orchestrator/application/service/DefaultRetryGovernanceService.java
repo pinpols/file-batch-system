@@ -150,7 +150,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                         RetryScheduleStatus.FAILED.code(),
                         "RETRY_DISPATCH_FAILED",
                         exception.getMessage(),
-                        null
+                        Instant.now()
                 );
             }
         }

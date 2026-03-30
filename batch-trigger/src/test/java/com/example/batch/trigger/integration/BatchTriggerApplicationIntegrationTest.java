@@ -18,7 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
                 "spring.quartz.jdbc.initialize-schema=always"
         }
 )
-class BatchTriggerApplicationIT extends AbstractIntegrationTest {
+class BatchTriggerApplicationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     Scheduler scheduler;

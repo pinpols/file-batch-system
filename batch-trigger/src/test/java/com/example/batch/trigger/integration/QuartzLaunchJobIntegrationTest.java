@@ -30,8 +30,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
                 "spring.autoconfigure.exclude=org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration"
         }
 )
-@Import(QuartzLaunchJobIT.TestConfig.class)
-class QuartzLaunchJobIT extends AbstractIntegrationTest {
+@Import(QuartzLaunchJobIntegrationTest.TestConfig.class)
+class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     QuartzLaunchJob quartzLaunchJob;

@@ -26,7 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
                 "spring.quartz.jdbc.initialize-schema=always"
         }
 )
-class MisfireHandlerIT extends AbstractIntegrationTest {
+class MisfireHandlerIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     MisfireHandler misfireHandler;

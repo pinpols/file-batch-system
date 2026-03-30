@@ -24,7 +24,7 @@ import org.testcontainers.utility.DockerImageName;
 @Tag("integration")
 @ActiveProfiles("test")
 @Testcontainers(disabledWithoutDocker = true)
-class SqlConsistencyIT {
+class SqlConsistencyIntegrationTest {
 
     @Container
     @SuppressWarnings("resource")

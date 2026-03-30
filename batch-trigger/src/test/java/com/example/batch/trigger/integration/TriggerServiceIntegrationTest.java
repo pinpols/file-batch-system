@@ -38,8 +38,8 @@ import static org.mockito.Mockito.mock;
                 "batch.orchestrator.base-url=http://localhost:8082"
         }
 )
-@Import(TriggerServiceIntegrationIT.TestConfig.class)
-class TriggerServiceIntegrationIT extends AbstractIntegrationTest {
+@Import(TriggerServiceIntegrationTest.TestConfig.class)
+class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private TriggerService triggerService;

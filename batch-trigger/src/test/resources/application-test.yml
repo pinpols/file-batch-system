@@ -1,4 +1,8 @@
 spring:
+  flyway:
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 32
   quartz:
     jdbc:
       schema: classpath:db/quartz/tables_postgres_quartz_schema.sql

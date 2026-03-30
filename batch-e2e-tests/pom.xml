@@ -93,7 +93,6 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!-- *E2eIT 不符合 Surefire 默认 **/*Test.java，需显式包含否则 verify/test 会 0 用例“成功” -->
                     <includes>
                         <include>**/*E2eIT.java</include>
                     </includes>

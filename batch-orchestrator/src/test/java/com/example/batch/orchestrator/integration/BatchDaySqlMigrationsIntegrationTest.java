@@ -18,7 +18,7 @@ import org.testcontainers.utility.DockerImageName;
 
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
-class BatchDaySqlMigrationsIT {
+class BatchDaySqlMigrationsIntegrationTest {
 
     @Container
     @SuppressWarnings("resource")
