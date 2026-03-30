@@ -16,6 +16,6 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVE
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
 
 exec mvn -pl batch-e2e-tests -am test \
-  -Dtest=ImportPipelineE2eIT,ExportPipelineE2eIT,DispatchPipelineE2eIT \
+  --no-transfer-progress \
   -Dsurefire.failIfNoSpecifiedTests=false \
   "$@"

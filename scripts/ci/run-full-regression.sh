@@ -2,7 +2,7 @@
 # =========================================================
 # run-full-regression.sh - CI / staging 统一回归入口
 # Notes:
-# 1) 默认执行 Maven 默认测试和显式 IT / E2E。
+# 1) 默认执行 Maven 默认测试（单元 + *IntegrationTest）和 E2E 套件（*E2eIT）。
 # 2) 可选执行压测 smoke、部署 smoke、升级/回滚验证和巡检。
 # 3) 支持在 `--` 之后透传额外 Maven 参数。
 # =========================================================
@@ -40,7 +40,7 @@ Usage:
 
 Options:
   --skip-default-tests   Skip reactor default tests (*Test / *IntegrationTest)
-  --skip-it-suite        Skip explicit IT / E2E suite (*IT)
+  --skip-it-suite        Skip E2E suite (batch-e2e-tests, *E2eIT)
   --with-load-smoke      Run Gatling JobLaunchSimulation smoke
   --with-deploy-smoke    Run Helm lint/template deployment smoke
   --with-deployment-verification
@@ -456,8 +456,8 @@ fi
 
 if [[ "$RUN_IT_SUITE" == true ]]; then
   run_step \
-    "Reactor IT / E2E Suite (*IT)" \
-    run_mvn test -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false
+    "E2E Suite (batch-e2e-tests, *E2eIT)" \
+    run_mvn test -pl batch-e2e-tests -am -Dsurefire.failIfNoSpecifiedTests=false
 fi
 
 if [[ "$RUN_LOAD_SMOKE" == true ]]; then
