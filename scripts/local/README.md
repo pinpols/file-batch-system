@@ -4,7 +4,14 @@
 
 ## 常用脚本
 
-- `run-e2e-tests.sh`：运行 `batch-e2e-tests`
+- `run-tests.sh`：**本地一键测试入口**（推荐）
+  - 默认：单元 + 集成（跳过 E2E，无需 Docker 以外的额外服务）
+  - `--unit`：仅单元测试，秒级，无容器
+  - `--it`：仅集成测试（`*IntegrationTest`）
+  - `--e2e`：仅 E2E 测试（`*E2eIT`，等同于 `run-e2e-tests.sh`）
+  - `--all`：单元 + 集成 + E2E 全量
+  - `-- <mvn args>`：透传 Maven 参数，如 `-pl batch-orchestrator -am`
+- `run-e2e-tests.sh`：直接运行全部 E2E 测试（`batch-e2e-tests`）
 - `start-all.sh`：启动本地相关服务
 - `stop-all.sh`：停止本地相关服务
 - `inspect-all.sh`：依次执行服务、数据库、Worker 巡检
@@ -35,9 +42,10 @@
 
 1. 先执行 `start-all.sh` 或准备好本地依赖
 2. 再执行 `init-kafka-topics.sh`、`init-minio.sh`、`load-system-test-data.sh`
-3. 本地联调时运行 `run-e2e-tests.sh`
-4. 最后用 `inspect-all.sh` 做一次巡检
-5. 出现异常时再考虑对应的 `heal-*.sh`
+3. 日常开发：`bash scripts/local/run-tests.sh`（单元 + 集成，约 2~3 分钟）
+4. 提交前：`bash scripts/local/run-tests.sh --all`（含 E2E，约 10 分钟）
+5. 最后用 `inspect-all.sh` 做一次巡检
+6. 出现异常时再考虑对应的 `heal-*.sh`
 
 ## 相关文档
 
