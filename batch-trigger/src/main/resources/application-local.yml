@@ -27,6 +27,10 @@ spring:
     schemas:
       - batch
       - quartz
+    # 本地联调：Docker init 会预建 batch schema + shedlock 表，导致 Flyway 看到 non-empty schema。
+    # baseline-version: 1 → 跳过 V1（schema 已由 Docker init 建好），从 V2 开始执行全部迁移。
+    baseline-on-migrate: true
+    baseline-version: 1
 
 mybatis:
   mapper-locations: classpath*:mapper/*.xml

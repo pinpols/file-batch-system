@@ -36,6 +36,9 @@ batch:
   orchestrator:
     base-url: http://localhost:8082
   worker:
+    registry:
+      # 本地联调：orchestrator 可能比 worker 晚启动，不 fail-fast 改为心跳重试注册
+      fail-fast-on-startup: false
     type: DISPATCH
     lease:
       renew-interval-millis: 10000
