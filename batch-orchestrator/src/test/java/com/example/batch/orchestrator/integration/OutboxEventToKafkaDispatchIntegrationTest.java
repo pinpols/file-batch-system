@@ -1,0 +1,168 @@
+package com.example.batch.orchestrator.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.kafka.BatchTopics;
+import com.example.batch.orchestrator.BatchOrchestratorApplication;
+import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
+import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
+import com.example.batch.orchestrator.application.plan.SchedulePlan;
+import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
+import com.example.batch.orchestrator.mapper.OutboxEventMapper;
+import com.example.batch.testing.AbstractIntegrationTest;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+/**
+ * Integration test: outbox event → Kafka/MQ dispatch via the scheduler forwarder.
+ *
+ * <p>Rather than driving {@link com.example.batch.orchestrator.infrastructure.mq.OutboxPollScheduler}
+ * directly (which has ShedLock and a long fixed-delay by default), this test calls
+ * {@link DefaultScheduleForwarder#advance} directly — the same code executed by the scheduler.
+ *
+ * <p>Verifies:
+ * <ul>
+ *   <li>A NEW outbox_event is picked up and published to the correct Kafka topic.</li>
+ *   <li>The outbox_event row transitions to {@code PUBLISHED} in the database.</li>
+ *   <li>The message is consumable from the Kafka topic with the correct idempotency key.</li>
+ *   <li>A DISPATCH-type event is routed to {@link BatchTopics#TASK_DISPATCH_IMPORT}.</li>
+ * </ul>
+ */
+@SpringBootTest(
+        classes = BatchOrchestratorApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private DefaultScheduleForwarder scheduleForwarder;
+
+    @Autowired
+    private OutboxEventMapper outboxEventMapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void newOutboxEvent_advanceForwarder_publishesToKafkaAndMarksPublished() throws Exception {
+        String idempotencyKey = "dispatch-it-kafka-" + System.nanoTime();
+        OutboxEventEntity event = buildImportDispatchEvent("t1", idempotencyKey);
+        outboxEventMapper.insert(event);
+
+        // Confirm event is NEW in DB
+        String statusBefore = jdbcTemplate.queryForObject(
+                "select publish_status from batch.outbox_event where id = ?",
+                String.class, event.getId());
+        assertThat(statusBefore).isEqualTo(OutboxPublishStatus.NEW.code());
+
+        // Drive forwarder (same code as the scheduler poll)
+        ScheduleForwarderResult result = scheduleForwarder.advance(new SchedulePlan());
+        assertThat(result).isNotNull();
+
+        // Outbox row should now be PUBLISHED
+        await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+            String statusAfter = jdbcTemplate.queryForObject(
+                    "select publish_status from batch.outbox_event where id = ?",
+                    String.class, event.getId());
+            assertThat(statusAfter).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+        });
+
+        // Verify the message is on the Kafka topic
+        try (KafkaConsumer<String, String> consumer = buildConsumer("dispatch-it-" + System.nanoTime())) {
+            consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT));
+            await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(500)).untilAsserted(() -> {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+                boolean found = false;
+                for (ConsumerRecord<String, String> record : records) {
+                    if (idempotencyKey.equals(record.key())) {
+                        found = true;
+                        break;
+                    }
+                }
+                assertThat(found).as("message with key %s should be on topic %s", idempotencyKey, BatchTopics.TASK_DISPATCH_IMPORT).isTrue();
+            });
+        }
+    }
+
+    @Test
+    void multipleNewEvents_advanceForwarder_publishesAll() {
+        String key1 = "multi-it-001-" + System.nanoTime();
+        String key2 = "multi-it-002-" + System.nanoTime();
+        OutboxEventEntity e1 = buildImportDispatchEvent("t1", key1);
+        OutboxEventEntity e2 = buildImportDispatchEvent("t1", key2);
+        outboxEventMapper.insert(e1);
+        outboxEventMapper.insert(e2);
+
+        scheduleForwarder.advance(new SchedulePlan());
+
+        await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+            String s1 = jdbcTemplate.queryForObject(
+                    "select publish_status from batch.outbox_event where id = ?",
+                    String.class, e1.getId());
+            String s2 = jdbcTemplate.queryForObject(
+                    "select publish_status from batch.outbox_event where id = ?",
+                    String.class, e2.getId());
+            assertThat(s1).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+            assertThat(s2).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+        });
+    }
+
+    // --- helpers ---
+
+    private static OutboxEventEntity buildImportDispatchEvent(String tenantId, String idempotencyKey) {
+        OutboxEventEntity e = new OutboxEventEntity();
+        e.setTenantId(tenantId);
+        e.setAggregateType("JOB_PARTITION");
+        e.setAggregateId(System.nanoTime());
+        e.setEventType("IMPORT");
+        e.setEventKey(idempotencyKey);
+        e.setPayloadJson("""
+                {
+                  "schemaVersion":"v1",
+                  "tenantId":"%s",
+                  "jobInstanceId":1,
+                  "jobPartitionId":1,
+                  "taskId":1,
+                  "instanceNo":"it-dispatch-001",
+                  "jobCode":"IT_OUTBOX_DISPATCH",
+                  "taskType":"EXECUTION",
+                  "taskSeq":1,
+                  "workerType":"IMPORT",
+                  "selectedWorkerId":null,
+                  "priorityBand":"NORMAL",
+                  "businessKey":"biz-outbox-dispatch",
+                  "payload":"{}",
+                  "traceId":"trace-outbox-dispatch",
+                  "idempotencyKey":"%s",
+                  "dispatchAt":"2026-01-15T00:00:00Z"
+                }
+                """.formatted(tenantId, idempotencyKey));
+        e.setPublishStatus(OutboxPublishStatus.NEW.code());
+        e.setPublishAttempt(0);
+        e.setNextPublishAt(Instant.now());
+        e.setTraceId("trace-outbox-dispatch");
+        return e;
+    }
+
+    private static KafkaConsumer<String, String> buildConsumer(String groupId) {
+        return new KafkaConsumer<>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG, groupId,
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class
+        ));
+    }
+}

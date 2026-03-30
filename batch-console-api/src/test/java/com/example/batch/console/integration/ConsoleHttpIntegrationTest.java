@@ -45,7 +45,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
                 "batch.console.ai.enabled=false"
         }
 )
-class ConsoleHttpIntegrationIT extends AbstractIntegrationTest {
+class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
     @LocalServerPort
     private int port;

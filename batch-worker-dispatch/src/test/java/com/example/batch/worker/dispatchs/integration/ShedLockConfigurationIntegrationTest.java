@@ -33,11 +33,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * Integration smoke: ensures ShedLock wiring survives Flyway and test init scripts.
  */
 @SpringBootTest(classes = {
-        ShedLockConfigurationIT.DispatchTestDataSourceConfiguration.class,
+        ShedLockConfigurationIntegrationTest.DispatchTestDataSourceConfiguration.class,
         ShedLockConfiguration.class
 },
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class ShedLockConfigurationIT extends AbstractIntegrationTest {
+class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     DataSource dataSource;

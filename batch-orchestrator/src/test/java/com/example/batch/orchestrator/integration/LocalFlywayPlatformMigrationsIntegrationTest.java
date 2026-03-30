@@ -17,7 +17,7 @@ import org.testcontainers.utility.DockerImageName;
  */
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
-class LocalFlywayPlatformMigrationsIT {
+class LocalFlywayPlatformMigrationsIntegrationTest {
 
     @Container
     @SuppressWarnings("resource")

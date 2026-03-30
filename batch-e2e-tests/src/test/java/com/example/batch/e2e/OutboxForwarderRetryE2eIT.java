@@ -50,7 +50,8 @@ import org.springframework.test.context.DynamicPropertySource;
         properties = {
                 "batch.outbox.poll-interval-millis=200",
                 "batch.outbox.retry-delay-seconds=0",
-                "batch.outbox.max-retry-attempts=2"
+                "batch.outbox.max-retry-attempts=2",
+                "batch.outbox.circuit-breaker-enabled=false"
         })
 @ActiveProfiles({"test", "e2e"})
 @Tag("e2e")

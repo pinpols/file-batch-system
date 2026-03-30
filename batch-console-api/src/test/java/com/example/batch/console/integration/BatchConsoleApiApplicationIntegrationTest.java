@@ -13,7 +13,7 @@ import org.springframework.context.ApplicationContext;
  * Console API with real Postgres, Kafka, MinIO; Flyway applies {@code docs/sql/flyway} on the platform DB.
  */
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
-class BatchConsoleApiApplicationIT extends AbstractIntegrationTest {
+class BatchConsoleApiApplicationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     ApplicationContext applicationContext;

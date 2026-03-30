@@ -1,10 +1,9 @@
-package com.example.batch.worker.imports.integration;
+package com.example.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.testing.AbstractIntegrationTest;
-import com.example.batch.worker.imports.config.PlatformDataSourceConfiguration;
-import com.example.batch.worker.imports.config.ShedLockConfiguration;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -24,21 +23,23 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration smoke: ensures ShedLock wiring survives Flyway and test init scripts.
+ * 集成冒烟：确认 ShedLock 在 Flyway 与测试初始化脚本之后仍可正常装配。
  */
-@SpringBootTest(classes = {PlatformDataSourceConfiguration.class, ShedLockConfiguration.class},
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class ShedLockConfigurationIT extends AbstractIntegrationTest {
+@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
+class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
-    DataSource dataSource;
+    JdbcTemplate jdbcTemplate;
 
     @Autowired
     LockProvider lockProvider;
 
+    @Autowired
+    DataSource dataSource;
+
     @Test
     void shouldCreateShedLockTableAndConfigureJdbcTemplateLockProvider() {
-        Integer tableCount = new JdbcTemplate(dataSource).queryForObject(
+        Integer tableCount = jdbcTemplate.queryForObject(
                 """
                 select count(*)
                 from information_schema.tables
@@ -95,6 +96,7 @@ class ShedLockConfigurationIT extends AbstractIntegrationTest {
         ));
         assertThat(first).isPresent();
 
+        // Don't unlock; rely on lockAtMostFor expiry.
         Thread.sleep(1_200);
 
         Optional<SimpleLock> second = lockProvider.lock(new LockConfiguration(

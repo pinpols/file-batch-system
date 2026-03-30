@@ -16,7 +16,7 @@ import org.springframework.context.ApplicationContext;
  * container setup here.
  */
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class BatchOrchestratorApplicationStartupIT extends AbstractIntegrationTest {
+class BatchOrchestratorApplicationStartupIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     ApplicationContext applicationContext;

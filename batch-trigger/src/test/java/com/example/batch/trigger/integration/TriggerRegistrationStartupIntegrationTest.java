@@ -27,8 +27,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
                 "spring.autoconfigure.exclude=org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration"
         }
 )
-@Import(TriggerRegistrationStartupIT.TestConfig.class)
-class TriggerRegistrationStartupIT extends AbstractIntegrationTest {
+@Import(TriggerRegistrationStartupIntegrationTest.TestConfig.class)
+class TriggerRegistrationStartupIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     JdbcTemplate jdbcTemplate;

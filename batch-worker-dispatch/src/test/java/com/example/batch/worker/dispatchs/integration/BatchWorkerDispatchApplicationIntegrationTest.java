@@ -1,10 +1,10 @@
-package com.example.batch.worker.exports.integration;
+package com.example.batch.worker.dispatchs.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.testing.OrchestratorWireMockSupport;
-import com.example.batch.worker.exports.BatchWorkerExportApplication;
+import com.example.batch.worker.dispatchs.BatchWorkerDispatchApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,8 +12,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-@SpringBootTest(classes = BatchWorkerExportApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
-class BatchWorkerExportApplicationIT extends AbstractIntegrationTest {
+@SpringBootTest(classes = BatchWorkerDispatchApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
+class BatchWorkerDispatchApplicationIntegrationTest extends AbstractIntegrationTest {
 
     @DynamicPropertySource
     static void orchestratorStub(DynamicPropertyRegistry registry) {

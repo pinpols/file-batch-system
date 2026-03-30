@@ -1,7 +1,9 @@
 package com.example.batch.worker.imports.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Map;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record ImportPayload(
         String fileCode,
         String fileName,
