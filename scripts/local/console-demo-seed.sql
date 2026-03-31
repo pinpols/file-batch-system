@@ -88,10 +88,11 @@ INSERT INTO batch.batch_window (
 -- ── 4. business_calendar ─────────────────────────────────────
 INSERT INTO batch.business_calendar (
     id, tenant_id, calendar_code, calendar_name, timezone,
-    holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
+    holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled,
+    cutoff_time, late_arrival_tolerance_min, sla_offset_min
 ) VALUES
-(10301,'default-tenant','default-calendar','Default Calendar','Asia/Shanghai','NEXT_WORKDAY','AUTO',3,TRUE),
-(10302,'default-tenant','strict-calendar','Strict Calendar','Asia/Shanghai','SKIP','MANUAL_APPROVAL',2,TRUE);
+(10301,'default-tenant','default-calendar','Default Calendar','Asia/Shanghai','NEXT_WORKDAY','AUTO',3,TRUE,TIME '06:00:00',60,480),
+(10302,'default-tenant','strict-calendar','Strict Calendar','Asia/Shanghai','SKIP','MANUAL_APPROVAL',2,TRUE,TIME '18:00:00',30,240);
 
 -- ── 5. calendar_holiday ──────────────────────────────────────
 INSERT INTO batch.calendar_holiday (id, calendar_id, biz_date, day_type, holiday_name, description) VALUES
@@ -358,7 +359,7 @@ DECLARE
     retry_statuses TEXT[] := ARRAY['WAITING','WAITING','WAITING','FAILED','EXHAUSTED'];
 BEGIN
 
--- trigger_request (55)
+-- trigger_request (58: 50 LAUNCHED + 5 ACCEPTED(incl CATCH_UP) + 3 REJECTED)
 INSERT INTO batch.trigger_request (
     id, tenant_id, request_id, trigger_type, job_code, biz_date,
     dedup_key, request_payload_hash, request_status,
@@ -373,12 +374,12 @@ SELECT
     DATE '2026-03-01' + ((n-1) % 29),
     'default-tenant:req-demo-' || lpad(n::text, 3, '0'),
     md5('req-demo-' || n),
-    CASE WHEN n <= 50 THEN 'LAUNCHED' WHEN n <= 53 THEN 'ACCEPTED' ELSE 'REJECTED' END,
+    CASE WHEN n <= 50 THEN 'LAUNCHED' WHEN n <= 55 THEN 'ACCEPTED' ELSE 'REJECTED' END,
     CASE WHEN n <= 50 THEN 40000 + n ELSE NULL END,
     'trace-demo-' || lpad(n::text, 3, '0'),
     ts_base + (n * interval '8 hour'),
     ts_base + (n * interval '8 hour')
-FROM generate_series(1, 55) AS n;
+FROM generate_series(1, 58) AS n;
 
 -- job_instance (50)
 INSERT INTO batch.job_instance (
@@ -933,7 +934,21 @@ SELECT
     approval_types[((n-1) % 10) + 1],
     (ARRAY['JOB_PARTITION','FILE','JOB','DEAD_LETTER_TASK','JOB_PARTITION','FILE','JOB','DEAD_LETTER_TASK','JOB_PARTITION','FILE'])[(n-1) % 10 + 1],
     (41000 + n)::text,
-    jsonb_build_object('seq', n, 'reason', 'Demo approval ' || n),
+    CASE approval_types[((n-1) % 10) + 1]
+        WHEN 'COMPENSATION' THEN jsonb_build_object(
+            'tenantId','default-tenant','compensationType','PARTITION','targetId',41000+n,
+            'jobCode',job_codes[((n-1) % 25)+1],'bizDate','2026-03-' || lpad(((n-1) % 28 + 1)::text,2,'0'),
+            'reason','Compensation for partition ' || n,'strategy','STEP_RETRY')
+        WHEN 'DOWNLOAD' THEN jsonb_build_object(
+            'tenantId','default-tenant','fileId',52000+n,'reason','Download file for audit')
+        WHEN 'CATCH_UP' THEN jsonb_build_object(
+            'tenantId','default-tenant','requestId','req-catchup-' || n,
+            'jobCode',job_codes[((n-1) % 25)+1],'bizDate','2026-03-' || lpad(((n-1) % 28 + 1)::text,2,'0'),
+            'reason','Catch-up for missed schedule')
+        WHEN 'DLQ_REPLAY' THEN jsonb_build_object(
+            'tenantId','default-tenant','deadLetterId',59000+((n-1)%25)+1,
+            'reason','Replay dead letter task','strategy','STEP_RETRY')
+    END,
     approval_statuses[((n-1) % 10) + 1],
     CASE WHEN n % 2 = 0 THEN 'admin' ELSE 'ops-user' END,
     CASE WHEN approval_statuses[((n-1) % 10) + 1] IN ('APPROVED','REJECTED','EXECUTED') THEN 'sre-lead' ELSE NULL END,

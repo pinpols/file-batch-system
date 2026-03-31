@@ -13,7 +13,7 @@ public record ConsoleWorkerRegistryResponse(
          * Scheduling and consumption grouping key.
          */
         String workerGroup,
-        String capabilityTags,
+        Object capabilityTags,
         String resourceTag,
         String status,
         Instant heartbeatAt,

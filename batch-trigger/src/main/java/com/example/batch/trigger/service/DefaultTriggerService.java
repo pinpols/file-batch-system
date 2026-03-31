@@ -24,7 +24,10 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -36,9 +39,9 @@ public class DefaultTriggerService implements TriggerService {
     private final OrchestratorTriggerAdapter orchestratorTriggerAdapter;
     private final TriggerRequestMapper triggerRequestMapper;
     private final BusinessCalendarMapper businessCalendarMapper;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
-    @Transactional
     public LaunchResponse launch(TriggerLaunchCommand command) {
         validateRequest(command);
         LaunchRequest launchRequest = launchAdapterService.fromApiRequest(command);
@@ -46,7 +49,6 @@ public class DefaultTriggerService implements TriggerService {
     }
 
     @Override
-    @Transactional
     public LaunchResponse launchScheduled(ScheduledTriggerCommand command) {
         LaunchRequest launchRequest = launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
         if (launchRequest.bizDate() == null) {
@@ -109,16 +111,21 @@ public class DefaultTriggerService implements TriggerService {
             return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
         }
 
-        TriggerRequestEntity entity = new TriggerRequestEntity();
-        entity.setTenantId(launchRequest.tenantId());
-        entity.setRequestId(launchRequest.requestId());
-        entity.setTriggerType(launchRequest.triggerType().code());
-        entity.setJobCode(launchRequest.jobCode());
-        entity.setBizDate(launchRequest.bizDate());
-        entity.setDedupKey(dedupKey);
-        entity.setRequestStatus("ACCEPTED");
-        entity.setTraceId(launchRequest.traceId());
-        triggerRequestMapper.insert(entity);
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        tx.execute(_ -> {
+            TriggerRequestEntity entity = new TriggerRequestEntity();
+            entity.setTenantId(launchRequest.tenantId());
+            entity.setRequestId(launchRequest.requestId());
+            entity.setTriggerType(launchRequest.triggerType().code());
+            entity.setJobCode(launchRequest.jobCode());
+            entity.setBizDate(launchRequest.bizDate());
+            entity.setDedupKey(dedupKey);
+            entity.setRequestStatus("ACCEPTED");
+            entity.setTraceId(launchRequest.traceId());
+            triggerRequestMapper.insert(entity);
+            return null;
+        });
 
         try {
             return orchestratorTriggerAdapter.sendTrigger(launchRequest);

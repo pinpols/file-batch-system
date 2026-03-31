@@ -5,6 +5,7 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import com.example.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
 import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord;
+import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
@@ -59,7 +60,7 @@ public class TenantSchedulerSnapshotRecorder {
                             tenantId,
                             WorkerRegistryStatus.ONLINE.code()
                     ),
-                    JsonUtils.toJson(snap)
+                    JsonbString.of(JsonUtils.toJson(snap))
             );
             snapshotRepository.save(row);
         }
