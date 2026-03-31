@@ -325,7 +325,7 @@ public class FileGovernanceScheduler {
                     tenantId,
                     fileId,
                     "ARRIVAL_GROUP_" + arrivalState,
-                    "TRIGGERED".equals(arrivalState) ? "SUCCESS" : "PENDING",
+                    "SUCCESS",
                     "SYSTEM",
                     "file-governance-scheduler",
                     "arrival-group-" + key.fileGroupCode(),
