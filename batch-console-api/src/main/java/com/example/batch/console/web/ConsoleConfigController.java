@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -101,5 +102,19 @@ public class ConsoleConfigController {
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
     public CommonResponse<List<ConsoleConfigChangeLogResponse>> configChangeLogs(@Valid @ModelAttribute ConfigChangeLogQueryRequest request) {
         return responseFactory.success(applicationService.configChangeLogs(request));
+    }
+
+    @GetMapping("/releases/{releaseId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+    public CommonResponse<ConsoleConfigReleaseResponse> configReleaseDetail(@PathVariable Long releaseId,
+                                                                             @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.configReleaseDetail(tenantId, releaseId));
+    }
+
+    @GetMapping("/secrets/{secretVersionId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+    public CommonResponse<ConsoleSecretVersionResponse> secretVersionDetail(@PathVariable Long secretVersionId,
+                                                                             @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.secretVersionDetail(tenantId, secretVersionId));
     }
 }

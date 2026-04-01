@@ -7,6 +7,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.ConsoleFileChannelExcelApplicationService;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
+import com.example.batch.console.mapper.param.FileChannelConfigUpsertParam;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -149,20 +151,20 @@ public class DefaultConsoleFileChannelExcelApplicationService implements Console
         int updated = 0;
         for (ChannelRow row : validationResult.rows()) {
             Map<String, Object> existing = fileChannelConfigMapper.selectByUniqueKey(session.tenantId(), row.channelCode());
-            fileChannelConfigMapper.upsertFileChannelConfig(
-                    session.tenantId(),
-                    row.channelCode(),
-                    row.channelName(),
-                    row.channelType(),
-                    row.targetEndpoint(),
-                    row.authType(),
-                    row.configJson(),
-                    row.receiptPolicy(),
-                    row.timeoutSeconds(),
-                    row.enabled(),
-                    ConsoleTextSanitizer.safeInput(operatorId, 64),
-                    ConsoleTextSanitizer.safeInput(operatorId, 64)
-            );
+            FileChannelConfigUpsertParam param = new FileChannelConfigUpsertParam();
+            param.setTenantId(session.tenantId());
+            param.setChannelCode(row.channelCode());
+            param.setChannelName(row.channelName());
+            param.setChannelType(row.channelType());
+            param.setTargetEndpoint(row.targetEndpoint());
+            param.setAuthType(row.authType());
+            param.setConfigJson(row.configJson());
+            param.setReceiptPolicy(row.receiptPolicy());
+            param.setTimeoutSeconds(row.timeoutSeconds());
+            param.setEnabled(row.enabled());
+            param.setCreatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
+            param.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
+            fileChannelConfigMapper.upsertFileChannelConfig(param);
             if (existing == null || existing.isEmpty()) {
                 inserted++;
                 logChange(session.tenantId(), row, request.getReason(), operatorId, traceId, "CREATE");
@@ -240,7 +242,17 @@ public class DefaultConsoleFileChannelExcelApplicationService implements Console
             rowNo++;
         }
         int totalRows = session.rows().size();
-        return new ValidationResult(totalRows, rows.size(), totalRows - rows.size(), rows, issues);
+        return ValidationResult.builder()
+                .counts(ValidationCounts.builder()
+                        .totalRows(totalRows)
+                        .validRows(rows.size())
+                        .invalidRows(totalRows - rows.size())
+                        .build())
+                .data(ValidationData.builder()
+                        .rows(rows)
+                        .issues(issues)
+                        .build())
+                .build();
     }
 
     private ChannelRow toChannelRow(String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
@@ -250,21 +262,25 @@ public class DefaultConsoleFileChannelExcelApplicationService implements Console
         } else if (!tenantId.equals(effectiveTenant)) {
             issues.add("tenant_id must match current tenant: " + tenantId);
         }
-        String channelCode = requireText(values, "channel_code", 128, issues);
-        String channelName = requireText(values, "channel_name", 256, issues);
-        String channelType = requireEnum(values, "channel_type", CHANNEL_TYPES, 32, issues);
-        String targetEndpoint = optionalText(values, "target_endpoint", 1024, issues);
-        String authType = requireEnum(values, "auth_type", AUTH_TYPES, 32, issues);
-        String configJson = requireJson(values, "config_json", issues);
-        String receiptPolicy = requireEnum(values, "receipt_policy", RECEIPT_POLICIES, 32, issues);
-        Integer timeoutSeconds = requireInteger(values, "timeout_seconds", 0, issues);
-        Boolean enabled = optionalBoolean(values, "enabled", true, issues);
-        if (issues.isEmpty()) {
-            return new ChannelRow(rowNo, effectiveTenant, channelCode, channelName, channelType, targetEndpoint, authType,
-                    configJson, receiptPolicy, timeoutSeconds, enabled);
-        }
-        return new ChannelRow(rowNo, effectiveTenant, channelCode, channelName, channelType, targetEndpoint, authType,
-                configJson, receiptPolicy, timeoutSeconds, enabled);
+        return ChannelRow.builder()
+                .identity(ChannelIdentity.builder()
+                        .rowNo(rowNo)
+                        .tenantId(effectiveTenant)
+                        .channelCode(requireText(values, "channel_code", 128, issues))
+                        .build())
+                .definition(ChannelDefinition.builder()
+                        .channelName(requireText(values, "channel_name", 256, issues))
+                        .channelType(requireEnum(values, "channel_type", CHANNEL_TYPES, 32, issues))
+                        .targetEndpoint(optionalText(values, "target_endpoint", 1024, issues))
+                        .authType(requireEnum(values, "auth_type", AUTH_TYPES, 32, issues))
+                        .build())
+                .delivery(ChannelDelivery.builder()
+                        .configJson(requireJson(values, "config_json", issues))
+                        .receiptPolicy(requireEnum(values, "receipt_policy", RECEIPT_POLICIES, 32, issues))
+                        .timeoutSeconds(requireInteger(values, "timeout_seconds", 0, issues))
+                        .enabled(optionalBoolean(values, "enabled", true, issues))
+                        .build())
+                .build();
     }
 
     private String requireText(Map<String, String> values, String key, int maxLength, List<String> issues) {
@@ -598,21 +614,107 @@ public class DefaultConsoleFileChannelExcelApplicationService implements Console
     private record ParsedSession(String fileName, String tenantId, String sheetName, Instant uploadedAt, List<Map<String, String>> rows) {
     }
 
-    private record ValidationResult(int totalRows, int validRows, int invalidRows, List<ChannelRow> rows, List<ConsoleFileChannelExcelRowIssueResponse> issues) {
+    @Builder
+    private record ValidationResult(ValidationCounts counts,
+                                    ValidationData data) {
+        int totalRows() {
+            return counts.totalRows();
+        }
+
+        int validRows() {
+            return counts.validRows();
+        }
+
+        int invalidRows() {
+            return counts.invalidRows();
+        }
+
+        List<ChannelRow> rows() {
+            return data.rows();
+        }
+
+        List<ConsoleFileChannelExcelRowIssueResponse> issues() {
+            return data.issues();
+        }
     }
 
-    private record ChannelRow(
-            int rowNo,
-            String tenantId,
-            String channelCode,
-            String channelName,
-            String channelType,
-            String targetEndpoint,
-            String authType,
-            String configJson,
-            String receiptPolicy,
-            Integer timeoutSeconds,
-            Boolean enabled
-    ) {
+    @Builder
+    private record ValidationCounts(int totalRows,
+                                    int validRows,
+                                    int invalidRows) {
+    }
+
+    @Builder
+    private record ValidationData(List<ChannelRow> rows,
+                                  List<ConsoleFileChannelExcelRowIssueResponse> issues) {
+    }
+
+    @Builder
+    private record ChannelRow(ChannelIdentity identity,
+                              ChannelDefinition definition,
+                              ChannelDelivery delivery) {
+        int rowNo() {
+            return identity.rowNo();
+        }
+
+        String tenantId() {
+            return identity.tenantId();
+        }
+
+        String channelCode() {
+            return identity.channelCode();
+        }
+
+        String channelName() {
+            return definition.channelName();
+        }
+
+        String channelType() {
+            return definition.channelType();
+        }
+
+        String targetEndpoint() {
+            return definition.targetEndpoint();
+        }
+
+        String authType() {
+            return definition.authType();
+        }
+
+        String configJson() {
+            return delivery.configJson();
+        }
+
+        String receiptPolicy() {
+            return delivery.receiptPolicy();
+        }
+
+        Integer timeoutSeconds() {
+            return delivery.timeoutSeconds();
+        }
+
+        Boolean enabled() {
+            return delivery.enabled();
+        }
+    }
+
+    @Builder
+    private record ChannelIdentity(int rowNo,
+                                   String tenantId,
+                                   String channelCode) {
+    }
+
+    @Builder
+    private record ChannelDefinition(String channelName,
+                                     String channelType,
+                                     String targetEndpoint,
+                                     String authType) {
+    }
+
+    @Builder
+    private record ChannelDelivery(String configJson,
+                                   String receiptPolicy,
+                                   Integer timeoutSeconds,
+                                   Boolean enabled) {
     }
 }

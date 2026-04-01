@@ -16,7 +16,7 @@ public class JobStepInstanceEntity implements Stateful {
     private String stepType;
     private String stepStatus;
     /**
-     * Business retry counter for the step lifecycle.
+     * 步骤生命周期内的业务重试次数。
      */
     private Integer retryCount;
     private Long relatedFileId;

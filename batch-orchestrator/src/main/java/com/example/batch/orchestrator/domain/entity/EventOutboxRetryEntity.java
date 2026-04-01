@@ -11,9 +11,9 @@ public class EventOutboxRetryEntity {
     private Long outboxEventId;
     private String eventKey;
     /**
-     * Publish attempt sequence for the outbox event.
+     * outbox 事件的投递尝试序号。
      *
-     * <p>This is distinct from business retry counters on job/runtime entities.
+     * <p>它与作业/运行时实体上的业务重试计数是两套不同概念。
      */
     private Integer publishAttempt;
     private String retryStatus;

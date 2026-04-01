@@ -94,11 +94,18 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
         String ownerCode = "sched-eval-" + System.currentTimeMillis();
 
         // base=10, burst=5, active=8, requested=1 — within cap
-        var result = quotaRuntimeStateService.evaluateAndReserve(
-                "t1", "JOB", ownerCode, "SLIDING_WINDOW",
-                10, 5, 8, 1,
-                resourceSchedulerProperties.getQuotaResetSlidingWindowHours(),
-                "OVER_CAP", "over");
+        var result = quotaRuntimeStateService.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
+                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
+                new QuotaRuntimeStateService.QuotaReservationPolicy(
+                        "SLIDING_WINDOW",
+                        10,
+                        5,
+                        resourceSchedulerProperties.getQuotaResetSlidingWindowHours()
+                ),
+                8,
+                1,
+                new QuotaRuntimeStateService.QuotaReservationReason("OVER_CAP", "over")
+        ));
 
         assertThat(result.allowed()).isTrue();
     }
@@ -108,11 +115,18 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
         String ownerCode = "sched-burst-" + System.currentTimeMillis();
 
         // base=5, burst=2, active=10, requested=1 → borrowed=6 > burst=2
-        var result = quotaRuntimeStateService.evaluateAndReserve(
-                "t1", "JOB", ownerCode, "SLIDING_WINDOW",
-                5, 2, 10, 1,
-                resourceSchedulerProperties.getQuotaResetSlidingWindowHours(),
-                "OVER_BURST", "over burst");
+        var result = quotaRuntimeStateService.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
+                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
+                new QuotaRuntimeStateService.QuotaReservationPolicy(
+                        "SLIDING_WINDOW",
+                        5,
+                        2,
+                        resourceSchedulerProperties.getQuotaResetSlidingWindowHours()
+                ),
+                10,
+                1,
+                new QuotaRuntimeStateService.QuotaReservationReason("OVER_BURST", "over burst")
+        ));
 
         assertThat(result.allowed()).isFalse();
         assertThat(result.reasonCode()).isNotBlank();

@@ -2,7 +2,9 @@ package com.example.batch.console.mapper;
 
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.query.WorkflowNodeQuery;
+import com.example.batch.console.mapper.param.WorkflowNodeUpsertParam;
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowNodeMapper {
 
@@ -12,18 +14,7 @@ public interface WorkflowNodeMapper {
 
     WorkflowNodeEntity selectByUniqueKey(Long workflowDefinitionId, String nodeCode);
 
-    int upsertWorkflowNode(Long workflowDefinitionId,
-                           String nodeCode,
-                           String nodeName,
-                           String nodeType,
-                           String relatedJobCode,
-                           String relatedPipelineCode,
-                           String workerGroup,
-                           String windowCode,
-                           Integer nodeOrder,
-                           String retryPolicy,
-                           Integer retryMaxCount,
-                           Integer timeoutSeconds,
-                           String nodeParams,
-                           Boolean enabled);
+    int deleteByWorkflowDefinitionId(@Param("workflowDefinitionId") Long workflowDefinitionId);
+
+    int upsertWorkflowNode(WorkflowNodeUpsertParam param);
 }

@@ -11,15 +11,15 @@ public class WorkflowNodeRunEntity {
     private String nodeCode;
     private String nodeType;
     /**
-     * Execution sequence for the same workflow node.
+     * 同一工作流节点的执行序号。
      *
-     * <p>This is not a retry counter; it distinguishes multiple runs of the same
-     * node under the same workflow instance.
+     * <p>这不是重试计数，而是用于区分同一个工作流实例下，
+     * 同一节点的多次执行记录。
      */
     private Integer runSeq;
     private String nodeStatus;
     /**
-     * Retry counter for the node execution lifecycle.
+     * 节点执行生命周期内的重试次数。
      */
     private Integer retryCount;
     private String errorCode;

@@ -1,85 +1,40 @@
 package com.example.batch.common.config;
 
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+@Data
 @ConfigurationProperties(prefix = "batch.scheduling")
 public class BatchSchedulingProperties {
 
     /**
-     * Shared scheduler pool size for @Scheduled tasks across batch services.
+     * batch 各服务中 `@Scheduled` 任务共用的调度线程池大小。
      */
     private int poolSize = 8;
 
     /**
-     * Prefix used for scheduler threads.
+     * 调度线程名前缀。
      */
     private String threadNamePrefix = "batch-scheduler-";
 
     /**
-     * Whether the shared scheduler should wait for running tasks during shutdown.
+     * 服务关闭时，共享调度器是否等待正在执行的任务完成。
      */
     private boolean waitForTasksToCompleteOnShutdown = false;
 
     /**
-     * Maximum time to wait for running tasks during shutdown.
+     * 关闭时等待任务完成的最长时间。
      */
     private int awaitTerminationSeconds = 30;
 
     /**
-     * Whether periodic tasks already scheduled should continue after shutdown starts.
+     * 开始关闭后，已调度的周期任务是否继续执行。
      */
     private boolean continueExistingPeriodicTasksAfterShutdown = false;
 
     /**
-     * Whether delayed tasks already scheduled should execute after shutdown starts.
+     * 开始关闭后，已调度的延迟任务是否继续执行。
      */
     private boolean executeExistingDelayedTasksAfterShutdown = false;
 
-    public int getPoolSize() {
-        return poolSize;
-    }
-
-    public void setPoolSize(int poolSize) {
-        this.poolSize = poolSize;
-    }
-
-    public String getThreadNamePrefix() {
-        return threadNamePrefix;
-    }
-
-    public void setThreadNamePrefix(String threadNamePrefix) {
-        this.threadNamePrefix = threadNamePrefix;
-    }
-
-    public boolean isWaitForTasksToCompleteOnShutdown() {
-        return waitForTasksToCompleteOnShutdown;
-    }
-
-    public void setWaitForTasksToCompleteOnShutdown(boolean waitForTasksToCompleteOnShutdown) {
-        this.waitForTasksToCompleteOnShutdown = waitForTasksToCompleteOnShutdown;
-    }
-
-    public int getAwaitTerminationSeconds() {
-        return awaitTerminationSeconds;
-    }
-
-    public void setAwaitTerminationSeconds(int awaitTerminationSeconds) {
-        this.awaitTerminationSeconds = awaitTerminationSeconds;
-    }
-
-    public boolean isContinueExistingPeriodicTasksAfterShutdown() {
-        return continueExistingPeriodicTasksAfterShutdown;
-    }
-
-    public void setContinueExistingPeriodicTasksAfterShutdown(boolean continueExistingPeriodicTasksAfterShutdown) {
-        this.continueExistingPeriodicTasksAfterShutdown = continueExistingPeriodicTasksAfterShutdown;
-    }
-
-    public boolean isExecuteExistingDelayedTasksAfterShutdown() {
-        return executeExistingDelayedTasksAfterShutdown;
-    }
-
-    public void setExecuteExistingDelayedTasksAfterShutdown(boolean executeExistingDelayedTasksAfterShutdown) {
-        this.executeExistingDelayedTasksAfterShutdown = executeExistingDelayedTasksAfterShutdown;
-    }
 }

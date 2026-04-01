@@ -60,19 +60,25 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
                 && quotaPolicy.maxRunningJobsPerTenant() != null
                 && quotaPolicy.maxRunningJobsPerTenant() > 0) {
             int burst = quotaPolicy.burstLimit() == null ? 0 : Math.max(0, quotaPolicy.burstLimit());
-            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
-                    request.getTenantId(),
-                    "TENANT_JOBS",
-                    request.getTenantId(),
-                    quotaPolicy.quotaResetPolicy(),
-                    quotaPolicy.maxRunningJobsPerTenant(),
-                    burst,
+            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
+                    new QuotaRuntimeStateService.QuotaReservationOwner(
+                            request.getTenantId(),
+                            "TENANT_JOBS",
+                            request.getTenantId()
+                    ),
+                    new QuotaRuntimeStateService.QuotaReservationPolicy(
+                            quotaPolicy.quotaResetPolicy(),
+                            quotaPolicy.maxRunningJobsPerTenant(),
+                            burst,
+                            governance.resourceScheduler().getQuotaResetSlidingWindowHours()
+                    ),
                     tenantActiveJobs,
                     1,
-                    governance.resourceScheduler().getQuotaResetSlidingWindowHours(),
-                    "TENANT_JOB_LIMIT",
-                    "tenant running jobs exceed quota (including burst)"
-            );
+                    new QuotaRuntimeStateService.QuotaReservationReason(
+                            "TENANT_JOB_LIMIT",
+                            "tenant running jobs exceed quota (including burst)"
+                    )
+            ));
             if (!burstCheck.allowed()) {
                 return burstCheck;
             }
@@ -84,19 +90,25 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
                 && queue.maxRunningJobs() > 0) {
             long queueActiveJobs = jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.queueCode());
             int qburst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
-            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
-                    request.getTenantId(),
-                    "QUEUE_JOBS",
-                    queue.queueCode(),
-                    queue.quotaResetPolicy(),
-                    queue.maxRunningJobs(),
-                    qburst,
+            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
+                    new QuotaRuntimeStateService.QuotaReservationOwner(
+                            request.getTenantId(),
+                            "QUEUE_JOBS",
+                            queue.queueCode()
+                    ),
+                    new QuotaRuntimeStateService.QuotaReservationPolicy(
+                            queue.quotaResetPolicy(),
+                            queue.maxRunningJobs(),
+                            qburst,
+                            governance.resourceScheduler().getQuotaResetSlidingWindowHours()
+                    ),
                     queueActiveJobs,
                     1,
-                    governance.resourceScheduler().getQuotaResetSlidingWindowHours(),
-                    "QUEUE_JOB_LIMIT",
-                    "resource queue running jobs exceed limit (including burst)"
-            );
+                    new QuotaRuntimeStateService.QuotaReservationReason(
+                            "QUEUE_JOB_LIMIT",
+                            "resource queue running jobs exceed limit (including burst)"
+                    )
+            ));
             if (!burstCheck.allowed()) {
                 return burstCheck;
             }

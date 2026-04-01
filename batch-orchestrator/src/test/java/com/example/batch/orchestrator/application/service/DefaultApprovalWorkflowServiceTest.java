@@ -35,9 +35,9 @@ class DefaultApprovalWorkflowServiceTest {
     void shouldInsertApprovalWithPendingStatusOnSubmit() {
         when(approvalCommandMapper.insert(any())).thenReturn(1);
 
-        String approvalNo = service.submit(
+        String approvalNo = service.submit(submitCommand(
                 "t1", "COMPENSATION", "DLQ_REPLAY", "DEAD_LETTER", "500",
-                "{\"reason\":\"test\"}", "op-001", "trace-001", "idem-001", "test approval");
+                "{\"reason\":\"test\"}", "op-001", "trace-001", "idem-001", "test approval"));
 
         assertThat(approvalNo).isNotBlank();
         assertThat(approvalNo).startsWith("apr");
@@ -48,7 +48,8 @@ class DefaultApprovalWorkflowServiceTest {
     void shouldUseEmptyJsonWhenPayloadIsNull() {
         when(approvalCommandMapper.insert(any())).thenReturn(1);
 
-        service.submit("t1", "COMPENSATION", "RETRY", "JOB", "1", null, "op", "trace", "idem", "reason");
+        service.submit(submitCommand(
+                "t1", "COMPENSATION", "RETRY", "JOB", "1", null, "op", "trace", "idem", "reason"));
 
         verify(approvalCommandMapper).insert(any());
     }
@@ -185,5 +186,33 @@ class DefaultApprovalWorkflowServiceTest {
         e.setSourceIdempotencyKey("idem-001");
         e.setApprovalReason("test approval");
         return e;
+    }
+
+    private static ApprovalWorkflowService.ApprovalSubmitCommand submitCommand(String tenantId,
+                                                                               String approvalType,
+                                                                               String actionType,
+                                                                               String targetType,
+                                                                               String targetId,
+                                                                               String payloadJson,
+                                                                               String requesterId,
+                                                                               String sourceTraceId,
+                                                                               String sourceIdempotencyKey,
+                                                                               String approvalReason) {
+        return ApprovalWorkflowService.ApprovalSubmitCommand.of(
+                tenantId,
+                new ApprovalWorkflowService.ApprovalTarget(
+                        approvalType,
+                        actionType,
+                        targetType,
+                        targetId,
+                        payloadJson
+                ),
+                new ApprovalWorkflowService.ApprovalSource(
+                        requesterId,
+                        sourceTraceId,
+                        sourceIdempotencyKey,
+                        approvalReason
+                )
+        );
     }
 }

@@ -17,7 +17,10 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -38,31 +41,31 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     @Override
     public String approve(String tenantId, String approvalNo, String operatorId, String reason) {
         ApprovalRecordResponse recordResponse = loadApproval(tenantId, approvalNo);
-        ApprovalRecordResponse.ApprovalRecord record = recordResponse.record();
-        if (!"PENDING".equalsIgnoreCase(record.approvalStatus())) {
+        ApprovalRecord record = recordResponse.getRecord();
+        if (!"PENDING".equalsIgnoreCase(record.getApprovalStatus())) {
             return approvalNo;
         }
         approveRemote(tenantId, approvalNo, operatorId, reason);
-        String actionType = record.actionType();
+        String actionType = record.getActionType();
         String result = switch (actionType) {
             case "COMPENSATION" -> {
-                CompensationCommandRequest request = JsonUtils.fromJson(record.payloadJson(), CompensationCommandRequest.class);
+                CompensationCommandRequest request = JsonUtils.fromJson(record.getPayloadJson(), CompensationCommandRequest.class);
                 request.setApprovalId(approvalNo);
                 yield consoleJobApplicationService.compensation(request, approvalNo);
             }
             case "DLQ_REPLAY" -> {
-                DeadLetterReplayRequest request = JsonUtils.fromJson(record.payloadJson(), DeadLetterReplayRequest.class);
+                DeadLetterReplayRequest request = JsonUtils.fromJson(record.getPayloadJson(), DeadLetterReplayRequest.class);
                 request.setApprovalId(approvalNo);
                 yield consoleJobApplicationService.replayDeadLetter(request, approvalNo);
             }
             case "DOWNLOAD" -> {
-                PresignDownloadFileRequest request = JsonUtils.fromJson(record.payloadJson(), PresignDownloadFileRequest.class);
+                PresignDownloadFileRequest request = JsonUtils.fromJson(record.getPayloadJson(), PresignDownloadFileRequest.class);
                 request.setApprovalId(approvalNo);
                 ConsolePresignDownloadResponse downloadResponse = consoleFileApplicationService.presignDownload(request, approvalNo);
                 yield downloadResponse == null ? null : downloadResponse.downloadUrl();
             }
             case "CATCH_UP" -> {
-                ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(record.payloadJson(), ConsoleCatchUpApprovalRequest.class);
+                ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(record.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
                 request.setApprovalId(approvalNo);
                 yield consoleJobApplicationService.approveCatchUp(request, approvalNo);
             }
@@ -124,7 +127,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
                 .retrieve()
                 .body(ApprovalRecordResponse.class);
-        if (response == null || response.record() == null) {
+        if (response == null || response.getRecord() == null) {
             throw new BizException(ResultCode.NOT_FOUND, "approval request not found");
         }
         return response;
@@ -173,21 +176,30 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     private record ApprovalTenantRequest(String tenantId) {
     }
 
-    private record ApprovalRecordResponse(ApprovalRecord record) {
-        private record ApprovalRecord(String tenantId,
-                                      String approvalNo,
-                                      String approvalType,
-                                      String actionType,
-                                      String targetType,
-                                      String targetId,
-                                      String payloadJson,
-                                      String approvalStatus,
-                                      String requesterId,
-                                      String approverId,
-                                      String rejectionReason,
-                                      String approvalReason,
-                                      String sourceTraceId,
-                                      String sourceIdempotencyKey) {
-        }
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    private static class ApprovalRecordResponse {
+        private ApprovalRecord record;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    private static class ApprovalRecord {
+        private String tenantId;
+        private String approvalNo;
+        private String approvalType;
+        private String actionType;
+        private String targetType;
+        private String targetId;
+        private String payloadJson;
+        private String approvalStatus;
+        private String requesterId;
+        private String approverId;
+        private String rejectionReason;
+        private String approvalReason;
+        private String sourceTraceId;
+        private String sourceIdempotencyKey;
     }
 }

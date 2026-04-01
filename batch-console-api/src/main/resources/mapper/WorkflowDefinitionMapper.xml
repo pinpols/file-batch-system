@@ -69,6 +69,58 @@
         limit 1
     </select>
 
+    <select id="selectById" resultMap="WorkflowDefinitionResultMap">
+        select *
+        from batch.workflow_definition
+        where tenant_id = #{tenantId}
+          and id = #{id}
+        limit 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into batch.workflow_definition (
+            tenant_id,
+            workflow_code,
+            workflow_name,
+            workflow_type,
+            version,
+            enabled,
+            description
+        ) values (
+            #{tenantId},
+            #{workflowCode},
+            #{workflowName},
+            #{workflowType},
+            #{version},
+            #{enabled},
+            #{description}
+        )
+    </insert>
+
+    <update id="updateWorkflowDefinition">
+        update batch.workflow_definition
+        set workflow_name = #{workflowName},
+            workflow_type = #{workflowType},
+            enabled = #{enabled},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
+    <delete id="deleteByTenantAndId">
+        delete from batch.workflow_definition
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </delete>
+
+    <update id="toggleEnabled">
+        update batch.workflow_definition
+        set enabled = #{enabled},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
+
     <insert id="upsertWorkflowDefinition">
         insert into batch.workflow_definition (
             tenant_id,
@@ -88,7 +140,7 @@
             #{version},
             #{enabled},
             #{description},
-            #{operatorId},
+            #{createdBy},
             #{updatedBy}
         )
         on conflict (tenant_id, workflow_code, version) do update

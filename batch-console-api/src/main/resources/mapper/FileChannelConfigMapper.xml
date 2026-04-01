@@ -56,15 +56,59 @@
         limit 1
     </select>
 
+    <select id="selectById" resultType="map">
+        select * from batch.file_channel_config
+        where tenant_id = #{tenantId} and id = #{id}
+        limit 1
+    </select>
+
+    <update id="toggleEnabled">
+        update batch.file_channel_config
+        set enabled = #{enabled}, updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from batch.file_channel_config
+        where tenant_id = #{tenantId} and id = #{id}
+    </delete>
+
+    <insert id="insertFileChannelConfig" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.file_channel_config (
+            tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
+            config_json, receipt_policy, timeout_seconds, enabled, created_by, updated_by,
+            created_at, updated_at
+        ) values (
+            #{p.tenantId}, #{p.channelCode}, #{p.channelName}, #{p.channelType}, #{p.targetEndpoint}, #{p.authType},
+            #{p.configJson,jdbcType=VARCHAR}::jsonb, #{p.receiptPolicy}, #{p.timeoutSeconds}, #{p.enabled},
+            #{p.createdBy}, #{p.updatedBy}, current_timestamp, current_timestamp
+        )
+    </insert>
+
+    <update id="updateFileChannelConfig">
+        update batch.file_channel_config
+        set channel_name     = #{p.channelName},
+            channel_type     = #{p.channelType},
+            target_endpoint  = #{p.targetEndpoint},
+            auth_type        = #{p.authType},
+            config_json      = #{p.configJson,jdbcType=VARCHAR}::jsonb,
+            receipt_policy   = #{p.receiptPolicy},
+            timeout_seconds  = #{p.timeoutSeconds},
+            enabled          = #{p.enabled},
+            updated_by       = #{p.updatedBy},
+            updated_at       = current_timestamp
+        where tenant_id = #{p.tenantId} and id = #{p.id}
+    </update>
+
     <insert id="upsertFileChannelConfig">
         insert into batch.file_channel_config (
             tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
             config_json, receipt_policy, timeout_seconds, enabled, created_by, updated_by,
             created_at, updated_at
         ) values (
-            #{tenantId}, #{channelCode}, #{channelName}, #{channelType}, #{targetEndpoint}, #{authType},
-            #{configJson,jdbcType=VARCHAR}::jsonb, #{receiptPolicy}, #{timeoutSeconds}, #{enabled},
-            #{createdBy}, #{updatedBy}, current_timestamp, current_timestamp
+            #{p.tenantId}, #{p.channelCode}, #{p.channelName}, #{p.channelType}, #{p.targetEndpoint}, #{p.authType},
+            #{p.configJson,jdbcType=VARCHAR}::jsonb, #{p.receiptPolicy}, #{p.timeoutSeconds}, #{p.enabled},
+            #{p.createdBy}, #{p.updatedBy}, current_timestamp, current_timestamp
         )
         on conflict (tenant_id, channel_code) do update set
             channel_name = excluded.channel_name,

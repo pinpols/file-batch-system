@@ -1214,12 +1214,16 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 display(entity.getJobCode()),
                 display(entity.getJobName()),
                 display(entity.getJobType()),
+                display(entity.getBizType()),
                 display(entity.getQueueCode()),
                 display(entity.getWorkerGroup()),
                 display(entity.getScheduleType()),
                 display(entity.getScheduleExpr()),
+                display(entity.getTimezone()),
                 display(entity.getCalendarCode()),
                 display(entity.getWindowCode()),
+                display(entity.getTriggerMode()),
+                entity.getDagEnabled(),
                 display(entity.getRetryPolicy()),
                 entity.getRetryMaxCount(),
                 entity.getTimeoutSeconds(),
@@ -1227,7 +1231,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 display(entity.getExecutionHandler()),
                 display(entity.getParamSchema()),
                 display(entity.getDefaultParams()),
+                entity.getPriority(),
+                entity.getVersion(),
                 entity.getEnabled(),
+                display(entity.getDescription()),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
@@ -1578,6 +1585,49 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         } catch (NumberFormatException exception) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must be a number");
         }
+    }
+
+    @Override
+    public Map<String, Object> fileChannelDetail(String tenantId, String channelCode) {
+        String resolved = resolveTenant(tenantId);
+        Map<String, Object> row = fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode);
+        if (row == null || row.isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, "file channel not found: " + channelCode);
+        }
+        return row;
+    }
+
+    @Override
+    public Map<String, Object> fileTemplateDetail(String tenantId, String templateCode, Integer version) {
+        String resolved = resolveTenant(tenantId);
+        Integer ver = version != null ? version : 1;
+        Map<String, Object> row = fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver);
+        if (row == null || row.isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, "file template not found: " + templateCode);
+        }
+        return row;
+    }
+
+    @Override
+    public Map<String, Object> fileRecordDetail(String tenantId, Long fileId) {
+        String resolved = resolveTenant(tenantId);
+        Map<String, Object> row = fileRecordMapper.selectFileRecordById(resolved, fileId);
+        if (row == null || row.isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, "file record not found: " + fileId);
+        }
+        return row;
+    }
+
+    @Override
+    public ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {
+        String resolved = resolveTenant(tenantId);
+        PageRequest page = new PageRequest(1, 1);
+        List<Map<String, Object>> rows = filePipelineMapper.selectByQuery(
+                resolved, null, id, null, null, null, null, null, page);
+        if (rows.isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, "pipeline instance not found: " + id);
+        }
+        return toFilePipelineResponse(rows.get(0));
     }
 
     private String resolveTenant(String requestTenantId) {

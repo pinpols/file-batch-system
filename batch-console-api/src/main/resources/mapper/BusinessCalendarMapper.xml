@@ -17,4 +17,77 @@
         order by id desc
         limit 1
     </select>
+
+    <select id="selectByQuery" resultType="map">
+        select
+            id, tenant_id as "tenantId", calendar_code as "calendarCode",
+            calendar_name as "calendarName", timezone,
+            holiday_roll_rule as "holidayRollRule", catch_up_policy as "catchUpPolicy",
+            catch_up_max_days as "catchUpMaxDays", enabled,
+            created_at as "createdAt", updated_at as "updatedAt"
+        from batch.business_calendar
+        where tenant_id = #{tenantId}
+        <if test="calendarCode != null and calendarCode != ''">
+            and calendar_code = #{calendarCode}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+        order by id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.business_calendar
+        where tenant_id = #{tenantId}
+        <if test="calendarCode != null and calendarCode != ''">
+            and calendar_code = #{calendarCode}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+    </select>
+
+    <select id="selectById" resultType="map">
+        select
+            id, tenant_id as "tenantId", calendar_code as "calendarCode",
+            calendar_name as "calendarName", timezone,
+            holiday_roll_rule as "holidayRollRule", catch_up_policy as "catchUpPolicy",
+            catch_up_max_days as "catchUpMaxDays", enabled,
+            created_at as "createdAt", updated_at as "updatedAt"
+        from batch.business_calendar
+        where tenant_id = #{tenantId} and id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.business_calendar (
+            tenant_id, calendar_code, calendar_name, timezone,
+            holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
+        ) values (
+            #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
+            #{holidayRollRule}, #{catchUpPolicy}, #{catchUpMaxDays}, #{enabled}
+        )
+    </insert>
+
+    <update id="update" parameterType="map">
+        update batch.business_calendar
+        set calendar_name = #{calendarName},
+            timezone = #{timezone},
+            holiday_roll_rule = #{holidayRollRule},
+            catch_up_policy = #{catchUpPolicy},
+            catch_up_max_days = #{catchUpMaxDays},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
+
+    <update id="toggleEnabled">
+        update batch.business_calendar
+        set enabled = #{enabled}, updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
 </mapper>

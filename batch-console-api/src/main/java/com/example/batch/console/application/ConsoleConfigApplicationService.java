@@ -39,4 +39,8 @@ public interface ConsoleConfigApplicationService {
 
     /** 查询配置变更日志。 */
     List<ConsoleConfigChangeLogResponse> configChangeLogs(ConfigChangeLogQueryRequest request);
+
+    ConsoleConfigReleaseResponse configReleaseDetail(String tenantId, Long releaseId);
+
+    ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId);
 }

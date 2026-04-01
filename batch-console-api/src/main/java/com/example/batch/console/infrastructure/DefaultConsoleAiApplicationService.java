@@ -25,6 +25,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.ObjectProvider;
@@ -58,19 +59,22 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         String traceId = firstNonBlank(requestMetadata.traceId(), IdGenerator.newTraceId());
         if (!gateResult.approved()) {
             AiChatResponse response = buildRejectedResponse(requestId, traceId, sessionId, gateResult);
-            auditService.record(buildAuditCommand(
-                    tenantId,
-                    requestId,
-                    traceId,
-                    sessionId,
-                    requestMetadata.operatorId(),
-                    gateResult.category(),
-                    gateResult.decision(),
-                    null,
-                    prompt,
-                    ConsoleTextSanitizer.safeInput(response.getAnswer(), aiProperties.getMaxResponseLength()),
-                    ConsoleTextSanitizer.safeInput(gateResult.reason(), 512)
-            ));
+            auditService.record(buildAuditCommand(AuditContext.builder()
+                    .request(AuditRequest.builder()
+                            .tenantId(tenantId)
+                            .requestId(requestId)
+                            .traceId(traceId)
+                            .sessionId(sessionId)
+                            .operatorId(requestMetadata.operatorId())
+                            .build())
+                    .result(AuditResult.builder()
+                            .promptCategory(gateResult.category())
+                            .decision(gateResult.decision())
+                            .prompt(prompt)
+                            .response(ConsoleTextSanitizer.safeInput(response.getAnswer(), aiProperties.getMaxResponseLength()))
+                            .refusalReason(ConsoleTextSanitizer.safeInput(gateResult.reason(), 512))
+                            .build())
+                    .build()));
             return response;
         }
 
@@ -96,19 +100,22 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         response.setAnswer(answer);
         response.setRefusalReason(null);
 
-        auditService.record(buildAuditCommand(
-                tenantId,
-                requestId,
-                traceId,
-                sessionId,
-                requestMetadata.operatorId(),
-                gateResult.category(),
-                AiPromptDecision.APPROVED,
-                aiProperties.getModel(),
-                prompt,
-                ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()),
-                null
-        ));
+        auditService.record(buildAuditCommand(AuditContext.builder()
+                .request(AuditRequest.builder()
+                        .tenantId(tenantId)
+                        .requestId(requestId)
+                        .traceId(traceId)
+                        .sessionId(sessionId)
+                        .operatorId(requestMetadata.operatorId())
+                        .build())
+                .result(AuditResult.builder()
+                        .promptCategory(gateResult.category())
+                        .decision(AiPromptDecision.APPROVED)
+                        .modelName(aiProperties.getModel())
+                        .prompt(prompt)
+                        .response(ConsoleTextSanitizer.safeInput(answer, aiProperties.getMaxResponseLength()))
+                        .build())
+                .build()));
         return response;
     }
 
@@ -137,31 +144,21 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         };
     }
 
-    private AiAuditCommand buildAuditCommand(String tenantId,
-                                             String requestId,
-                                             String traceId,
-                                             String sessionId,
-                                             String operatorId,
-                                             AiPromptCategory promptCategory,
-                                             AiPromptDecision decision,
-                                             String modelName,
-                                             String prompt,
-                                             String response,
-                                             String refusalReason) {
+    private AiAuditCommand buildAuditCommand(AuditContext context) {
         return new AiAuditCommand(
-                tenantId,
-                requestId,
-                traceId,
-                sessionId,
-                operatorId,
-                promptCategory == null ? AiPromptCategory.OUT_OF_SCOPE.code() : promptCategory.code(),
-                decision.code(),
-                modelName,
-                hash(prompt),
-                preview(prompt, 512),
-                hash(response),
-                preview(response, 512),
-                refusalReason,
+                context.request().tenantId(),
+                context.request().requestId(),
+                context.request().traceId(),
+                context.request().sessionId(),
+                context.request().operatorId(),
+                context.result().promptCategory() == null ? AiPromptCategory.OUT_OF_SCOPE.code() : context.result().promptCategory().code(),
+                context.result().decision().code(),
+                context.result().modelName(),
+                hash(context.result().prompt()),
+                preview(context.result().prompt(), 512),
+                hash(context.result().response()),
+                preview(context.result().response(), 512),
+                context.result().refusalReason(),
                 Instant.now()
         );
     }
@@ -237,5 +234,26 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
     private String firstNonBlank(String value, String fallback) {
         return StringUtils.isNotBlank(value) ? value : fallback;
+    }
+
+    @Builder
+    private record AuditContext(AuditRequest request, AuditResult result) {
+    }
+
+    @Builder
+    private record AuditRequest(String tenantId,
+                                String requestId,
+                                String traceId,
+                                String sessionId,
+                                String operatorId) {
+    }
+
+    @Builder
+    private record AuditResult(AiPromptCategory promptCategory,
+                               AiPromptDecision decision,
+                               String modelName,
+                               String prompt,
+                               String response,
+                               String refusalReason) {
     }
 }

@@ -1,7 +1,9 @@
 package com.example.batch.orchestrator.domain.pipeline;
 
 import java.util.Set;
+import lombok.Data;
 
+@Data
 public class StepDefinitionModel {
 
     private Long id;

@@ -20,6 +20,49 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class FileGovernanceRepository {
 
+    public record FileIdentity(
+            String tenantId,
+            String fileCategory,
+            String fileName,
+            String fileFormatType
+    ) {
+    }
+
+    public record FileStorage(
+            String storageType,
+            String storagePath,
+            String storageBucket
+    ) {
+    }
+
+    public record ReconciledFileRecordCommand(
+            FileIdentity identity,
+            long fileSizeBytes,
+            FileStorage storage,
+            String sourceType,
+            String fileStatus,
+            String traceId,
+            Object metadata
+    ) {
+    }
+
+    public record FileAuditActor(
+            String operatorType,
+            String operatorId
+    ) {
+    }
+
+    public record FileAuditCommand(
+            String tenantId,
+            Long fileId,
+            String operationType,
+            String operationResult,
+            FileAuditActor actor,
+            String traceId,
+            Object detailSummary
+    ) {
+    }
+
     private final FileGovernanceMapper fileGovernanceMapper;
 
     public Map<String, Object> loadFileRecord(String tenantId, Long fileId) {
@@ -171,33 +214,22 @@ public class FileGovernanceRepository {
         return count != null && count > 0;
     }
 
-    public Long createReconciledFileRecord(String tenantId,
-                                           String fileCategory,
-                                           String fileName,
-                                           String fileFormatType,
-                                           long fileSizeBytes,
-                                           String storageType,
-                                           String storagePath,
-                                           String storageBucket,
-                                           String sourceType,
-                                           String fileStatus,
-                                           String traceId,
-                                           Object metadata) {
+    public Long createReconciledFileRecord(ReconciledFileRecordCommand command) {
         Map<String, Object> params = params(
-                "tenantId", tenantId,
-                "fileCategory", fileCategory,
-                "fileName", fileName,
-                "fileExt", resolveFileExt(fileName),
-                "fileFormatType", fileFormatType,
-                "mimeType", resolveMimeType(fileFormatType),
-                "fileSizeBytes", Math.max(fileSizeBytes, 0L),
-                "storageType", storageType,
-                "storagePath", storagePath,
-                "storageBucket", storageBucket,
-                "sourceType", sourceType,
-                "fileStatus", fileStatus,
-                "traceId", traceId,
-                "metadataJson", toJson(metadata)
+                "tenantId", command.identity().tenantId(),
+                "fileCategory", command.identity().fileCategory(),
+                "fileName", command.identity().fileName(),
+                "fileExt", resolveFileExt(command.identity().fileName()),
+                "fileFormatType", command.identity().fileFormatType(),
+                "mimeType", resolveMimeType(command.identity().fileFormatType()),
+                "fileSizeBytes", Math.max(command.fileSizeBytes(), 0L),
+                "storageType", command.storage().storageType(),
+                "storagePath", command.storage().storagePath(),
+                "storageBucket", command.storage().storageBucket(),
+                "sourceType", command.sourceType(),
+                "fileStatus", command.fileStatus(),
+                "traceId", command.traceId(),
+                "metadataJson", toJson(command.metadata())
         );
         fileGovernanceMapper.insertReconciledFileRecord(params);
         return toLong(params.get("id"));
@@ -229,26 +261,23 @@ public class FileGovernanceRepository {
         );
     }
 
-    public void appendAudit(String tenantId,
-                            Long fileId,
-                            String operationType,
-                            String operationResult,
-                            String operatorType,
-                            String operatorId,
-                            String traceId,
-                            Object detailSummary) {
-        if (!StringUtils.hasText(tenantId) || fileId == null || !StringUtils.hasText(operationType) || !StringUtils.hasText(operationResult)) {
+    public void appendAudit(FileAuditCommand command) {
+        if (command == null
+                || !StringUtils.hasText(command.tenantId())
+                || command.fileId() == null
+                || !StringUtils.hasText(command.operationType())
+                || !StringUtils.hasText(command.operationResult())) {
             return;
         }
         fileGovernanceMapper.insertFileAuditLog(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "operationType", operationType,
-                "operationResult", operationResult,
-                "operatorType", defaultText(operatorType, "API"),
-                "operatorId", operatorId,
-                "traceId", traceId,
-                "detailSummaryJson", toJson(detailSummary)
+                "tenantId", command.tenantId(),
+                "fileId", command.fileId(),
+                "operationType", command.operationType(),
+                "operationResult", command.operationResult(),
+                "operatorType", defaultText(command.actor() == null ? null : command.actor().operatorType(), "API"),
+                "operatorId", command.actor() == null ? null : command.actor().operatorId(),
+                "traceId", command.traceId(),
+                "detailSummaryJson", toJson(command.detailSummary())
         ));
     }
 

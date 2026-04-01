@@ -57,6 +57,11 @@
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
         <!-- ── 分布式追踪（OTEL 桥接 + OTLP 导出器）── -->
         <!-- micrometer-tracing-bridge-otel：将 Micrometer Observation API 桥接到 OpenTelemetry SDK -->

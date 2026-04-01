@@ -19,18 +19,22 @@ public class ApprovalController {
 
     @PostMapping
     public ApprovalResponse submit(@RequestBody ApprovalRequest request) {
-        return new ApprovalResponse(approvalWorkflowService.submit(
+        return new ApprovalResponse(approvalWorkflowService.submit(ApprovalWorkflowService.ApprovalSubmitCommand.of(
                 request.tenantId(),
-                request.approvalType(),
-                request.actionType(),
-                request.targetType(),
-                request.targetId(),
-                request.payloadJson(),
-                request.requesterId(),
-                request.sourceTraceId(),
-                request.sourceIdempotencyKey(),
-                request.approvalReason()
-        ));
+                new ApprovalWorkflowService.ApprovalTarget(
+                        request.approvalType(),
+                        request.actionType(),
+                        request.targetType(),
+                        request.targetId(),
+                        request.payloadJson()
+                ),
+                new ApprovalWorkflowService.ApprovalSource(
+                        request.requesterId(),
+                        request.sourceTraceId(),
+                        request.sourceIdempotencyKey(),
+                        request.approvalReason()
+                )
+        )));
     }
 
     @GetMapping("/{approvalNo}")

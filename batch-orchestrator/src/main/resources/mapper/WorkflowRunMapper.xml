@@ -37,6 +37,13 @@
         )
     </insert>
 
+    <select id="selectById" resultMap="WorkflowRunResultMap">
+        select *
+        from batch.workflow_run
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
     <select id="selectByRelatedJobInstanceId" resultMap="WorkflowRunResultMap">
         select *
         from batch.workflow_run

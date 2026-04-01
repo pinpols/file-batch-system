@@ -30,46 +30,71 @@ public class QuotaRuntimeStateService {
 
     private final QuotaRuntimeStateRepository quotaRuntimeStateRepository;
 
+    public record QuotaReservationOwner(
+            String tenantId,
+            String quotaScope,
+            String ownerCode
+    ) {
+    }
+
+    public record QuotaReservationPolicy(
+            String quotaResetPolicy,
+            int baseCap,
+            int burstLimit,
+            int slidingWindowHours
+    ) {
+    }
+
+    public record QuotaReservationReason(
+            String reasonCode,
+            String reasonMessage
+    ) {
+    }
+
+    public record QuotaReservationRequest(
+            QuotaReservationOwner owner,
+            QuotaReservationPolicy policy,
+            long currentActiveCount,
+            int requestedCount,
+            QuotaReservationReason reason
+    ) {
+    }
+
     @Transactional
-    public ResourceCheck evaluateAndReserve(String tenantId,
-                                            String quotaScope,
-                                            String ownerCode,
-                                            String quotaResetPolicy,
-                                            int baseCap,
-                                            int burstLimit,
-                                            long currentActiveCount,
-                                            int requestedCount,
-                                            int slidingWindowHours,
-                                            String reasonCode,
-                                            String reasonMessage) {
-        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(quotaScope) || !StringUtils.hasText(ownerCode)) {
+    public ResourceCheck evaluateAndReserve(QuotaReservationRequest request) {
+        if (request == null
+                || request.owner() == null
+                || !StringUtils.hasText(request.owner().tenantId())
+                || !StringUtils.hasText(request.owner().quotaScope())
+                || !StringUtils.hasText(request.owner().ownerCode())) {
             return ResourceCheck.allow();
         }
-        if (baseCap <= 0) {
+        if (request.policy() == null || request.policy().baseCap() <= 0) {
             return ResourceCheck.allow();
         }
-        int normalizedBurst = Math.max(0, burstLimit);
-        int normalizedRequested = Math.max(1, requestedCount);
-        QuotaResetPolicy policy = QuotaResetPolicy.from(quotaResetPolicy);
+        int normalizedBurst = Math.max(0, request.policy().burstLimit());
+        int normalizedRequested = Math.max(1, request.requestedCount());
+        QuotaResetPolicy policy = QuotaResetPolicy.from(request.policy().quotaResetPolicy());
         if (!policy.isRuntimeManaged() || normalizedBurst == 0) {
-            long cap = (long) baseCap + normalizedBurst;
-            if (currentActiveCount + normalizedRequested > cap) {
-                return ResourceCheck.waitForCapacity(reasonCode, reasonMessage);
+            long cap = (long) request.policy().baseCap() + normalizedBurst;
+            if (request.currentActiveCount() + normalizedRequested > cap) {
+                return waitForCapacity(request);
             }
             return ResourceCheck.allow();
         }
 
         Instant now = Instant.now();
-        QuotaRuntimeStateRecord state = loadOrCreate(tenantId, quotaScope, ownerCode, policy.name(), now, slidingWindowHours);
-        state = refreshState(state, policy, now, slidingWindowHours);
+        QuotaRuntimeStateRecord state = loadOrCreate(new StateContext(
+                request.owner(), policy.name(), now, request.policy().slidingWindowHours()));
+        state = refreshState(state, policy, now, request.policy().slidingWindowHours());
 
-        int borrowedNeeded = Math.max(0, (int) (currentActiveCount + normalizedRequested - baseCap));
+        int borrowedNeeded = Math.max(0, (int) (request.currentActiveCount() + normalizedRequested - request.policy().baseCap()));
         if (borrowedNeeded == 0) {
             quotaRuntimeStateRepository.save(state);
             return ResourceCheck.allow();
         }
         if (borrowedNeeded > normalizedBurst) {
-            return ResourceCheck.waitForCapacity(reasonCode, reasonMessage);
+            return waitForCapacity(request);
         }
         int currentPeak = state.peakBorrowedCount() == null ? 0 : Math.max(0, state.peakBorrowedCount());
         if (borrowedNeeded > currentPeak) {
@@ -82,13 +107,22 @@ public class QuotaRuntimeStateService {
         return ResourceCheck.allow();
     }
 
+    public record QuotaDescribeRequest(
+            QuotaReservationOwner owner,
+            String quotaResetPolicy,
+            int burstLimit,
+            int slidingWindowHours
+    ) {
+    }
+
     @Transactional(readOnly = true)
-    public QuotaRuntimeSnapshot describe(String tenantId,
-                                         String quotaScope,
-                                         String ownerCode,
-                                         String quotaResetPolicy,
-                                         int burstLimit,
-                                         int slidingWindowHours) {
+    public QuotaRuntimeSnapshot describe(QuotaDescribeRequest request) {
+        String tenantId = request.owner().tenantId();
+        String quotaScope = request.owner().quotaScope();
+        String ownerCode = request.owner().ownerCode();
+        String quotaResetPolicy = request.quotaResetPolicy();
+        int burstLimit = request.burstLimit();
+        int slidingWindowHours = request.slidingWindowHours();
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(quotaScope) || !StringUtils.hasText(ownerCode)) {
             return new QuotaRuntimeSnapshot(normalizePolicy(quotaResetPolicy), Math.max(0, burstLimit), 0, Math.max(0, burstLimit), null, null, null);
         }
@@ -127,20 +161,26 @@ public class QuotaRuntimeStateService {
         }
     }
 
-    private QuotaRuntimeStateRecord loadOrCreate(String tenantId,
-                                                 String quotaScope,
-                                                 String ownerCode,
-                                                 String quotaResetPolicy,
-                                                 Instant now,
-                                                 int slidingWindowHours) {
+    private record StateContext(
+            QuotaReservationOwner owner,
+            String quotaResetPolicy,
+            Instant now,
+            int slidingWindowHours
+    ) {
+    }
+
+    private QuotaRuntimeStateRecord loadOrCreate(StateContext ctx) {
+        String tenantId = ctx.owner().tenantId();
+        String quotaScope = ctx.owner().quotaScope();
+        String ownerCode = ctx.owner().ownerCode();
         QuotaRuntimeStateRecord state = quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(tenantId, quotaScope, ownerCode);
         if (state != null) {
             return state;
         }
         QuotaRuntimeStateRecord created = new QuotaRuntimeStateRecord(
-                null, tenantId, quotaScope, ownerCode, quotaResetPolicy,
-                null, null, 0, null, now, now);
-        created = refreshState(created, QuotaResetPolicy.from(quotaResetPolicy), now, slidingWindowHours, false);
+                null, tenantId, quotaScope, ownerCode, ctx.quotaResetPolicy(),
+                null, null, 0, null, ctx.now(), ctx.now());
+        created = refreshState(created, QuotaResetPolicy.from(ctx.quotaResetPolicy()), ctx.now(), ctx.slidingWindowHours(), false);
         return created;
     }
 
@@ -201,5 +241,13 @@ public class QuotaRuntimeStateService {
 
     private String normalizePolicy(String policy) {
         return QuotaResetPolicy.from(policy).name();
+    }
+
+    private ResourceCheck waitForCapacity(QuotaReservationRequest request) {
+        QuotaReservationReason reason = request.reason();
+        return ResourceCheck.waitForCapacity(
+                reason == null ? null : reason.reasonCode(),
+                reason == null ? null : reason.reasonMessage()
+        );
     }
 }

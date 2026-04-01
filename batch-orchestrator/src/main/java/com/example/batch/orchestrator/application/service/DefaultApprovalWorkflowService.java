@@ -17,30 +17,21 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
 
     @Override
     @Transactional
-    public String submit(String tenantId,
-                         String approvalType,
-                         String actionType,
-                         String targetType,
-                         String targetId,
-                         String payloadJson,
-                         String requesterId,
-                         String sourceTraceId,
-                         String sourceIdempotencyKey,
-                         String approvalReason) {
+    public String submit(ApprovalSubmitCommand command) {
         String approvalNo = IdGenerator.newBusinessNo("apr");
         ApprovalCommandEntity entity = new ApprovalCommandEntity();
-        entity.setTenantId(tenantId);
+        entity.setTenantId(command.tenantId());
         entity.setApprovalNo(approvalNo);
-        entity.setApprovalType(approvalType);
-        entity.setActionType(actionType);
-        entity.setTargetType(targetType);
-        entity.setTargetId(targetId);
-        entity.setPayloadJson(StringUtils.hasText(payloadJson) ? payloadJson : "{}");
+        entity.setApprovalType(command.approvalType());
+        entity.setActionType(command.actionType());
+        entity.setTargetType(command.targetType());
+        entity.setTargetId(command.targetId());
+        entity.setPayloadJson(StringUtils.hasText(command.payloadJson()) ? command.payloadJson() : "{}");
         entity.setApprovalStatus(ApprovalCommandStatus.PENDING.code());
-        entity.setRequesterId(requesterId);
-        entity.setSourceTraceId(sourceTraceId);
-        entity.setSourceIdempotencyKey(sourceIdempotencyKey);
-        entity.setApprovalReason(approvalReason);
+        entity.setRequesterId(command.requesterId());
+        entity.setSourceTraceId(command.sourceTraceId());
+        entity.setSourceIdempotencyKey(command.sourceIdempotencyKey());
+        entity.setApprovalReason(command.approvalReason());
         approvalCommandMapper.insert(entity);
         return approvalNo;
     }
@@ -97,21 +88,30 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     }
 
     private ApprovalRecord toRecord(ApprovalCommandEntity entity) {
-        return new ApprovalRecord(
-                entity.getTenantId(),
-                entity.getApprovalNo(),
-                entity.getApprovalType(),
-                entity.getActionType(),
-                entity.getTargetType(),
-                entity.getTargetId(),
-                entity.getPayloadJson(),
-                entity.getApprovalStatus(),
-                entity.getRequesterId(),
-                entity.getApproverId(),
-                entity.getRejectionReason(),
-                entity.getApprovalReason(),
-                entity.getSourceTraceId(),
-                entity.getSourceIdempotencyKey()
+        return ApprovalRecord.of(
+                new ApprovalIdentity(
+                        new ApprovalContext(entity.getTenantId()),
+                        entity.getApprovalNo()
+                ),
+                new ApprovalTarget(
+                        entity.getApprovalType(),
+                        entity.getActionType(),
+                        entity.getTargetType(),
+                        entity.getTargetId(),
+                        entity.getPayloadJson()
+                ),
+                new ApprovalOutcome(
+                        entity.getApprovalStatus(),
+                        entity.getApproverId(),
+                        entity.getRejectionReason(),
+                        entity.getApprovalReason()
+                ),
+                new ApprovalSource(
+                        entity.getRequesterId(),
+                        entity.getSourceTraceId(),
+                        entity.getSourceIdempotencyKey(),
+                        entity.getApprovalReason()
+                )
         );
     }
 }

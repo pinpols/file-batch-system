@@ -123,9 +123,15 @@ public class DefaultLaunchService implements LaunchService {
         }
 
         // T2：构建分片/任务/outbox，并推进运行态；该事务可在失败后独立重试。
-        partitionDispatchService.dispatch(request, effectiveParams, traceId,
-                prepared.jobInstance(), prepared.workflowRun(),
-                prepared.initialNodes(), prepared.startedAt());
+        partitionDispatchService.dispatch(PartitionDispatchService.DispatchContext.of(
+                request,
+                effectiveParams,
+                traceId,
+                prepared.jobInstance(),
+                prepared.workflowRun(),
+                prepared.initialNodes(),
+                prepared.startedAt()
+        ));
 
         triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
                 BatchStatusConstants.LAUNCHED, prepared.jobInstance().getId());

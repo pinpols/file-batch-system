@@ -26,9 +26,50 @@ public interface WorkflowExcelImportStore {
     }
 
     record WorkflowDefinitionRow(
+            WorkflowIdentity identity,
+            WorkflowDefinitionPayload payload
+    ) {
+        public int rowNo() {
+            return identity.rowNo();
+        }
+
+        public String tenantId() {
+            return identity.tenantId();
+        }
+
+        public String workflowCode() {
+            return identity.workflowCode();
+        }
+
+        public String workflowName() {
+            return payload.workflowName();
+        }
+
+        public String workflowType() {
+            return payload.workflowType();
+        }
+
+        public Integer version() {
+            return payload.version();
+        }
+
+        public Boolean enabled() {
+            return payload.enabled();
+        }
+
+        public String description() {
+            return payload.description();
+        }
+    }
+
+    record WorkflowIdentity(
             int rowNo,
             String tenantId,
-            String workflowCode,
+            String workflowCode
+    ) {
+    }
+
+    record WorkflowDefinitionPayload(
             String workflowName,
             String workflowType,
             Integer version,
@@ -38,18 +79,105 @@ public interface WorkflowExcelImportStore {
     }
 
     record WorkflowNodeRow(
+            WorkflowNodeIdentity identity,
+            WorkflowNodeRelation relation,
+            WorkflowNodeExecution execution,
+            WorkflowNodeRuntime runtime
+    ) {
+        public int rowNo() {
+            return identity.rowNo();
+        }
+
+        public String tenantId() {
+            return identity.tenantId();
+        }
+
+        public String workflowCode() {
+            return identity.workflowCode();
+        }
+
+        public Integer workflowVersion() {
+            return identity.workflowVersion();
+        }
+
+        public String nodeCode() {
+            return identity.nodeCode();
+        }
+
+        public String nodeName() {
+            return relation.nodeName();
+        }
+
+        public String nodeType() {
+            return relation.nodeType();
+        }
+
+        public String relatedJobCode() {
+            return relation.relatedJobCode();
+        }
+
+        public String relatedPipelineCode() {
+            return relation.relatedPipelineCode();
+        }
+
+        public String workerGroup() {
+            return execution.workerGroup();
+        }
+
+        public String windowCode() {
+            return execution.windowCode();
+        }
+
+        public Integer nodeOrder() {
+            return execution.nodeOrder();
+        }
+
+        public String retryPolicy() {
+            return runtime.retryPolicy();
+        }
+
+        public Integer retryMaxCount() {
+            return runtime.retryMaxCount();
+        }
+
+        public Integer timeoutSeconds() {
+            return runtime.timeoutSeconds();
+        }
+
+        public String nodeParams() {
+            return runtime.nodeParams();
+        }
+
+        public Boolean enabled() {
+            return runtime.enabled();
+        }
+    }
+
+    record WorkflowNodeIdentity(
             int rowNo,
             String tenantId,
             String workflowCode,
             Integer workflowVersion,
-            String nodeCode,
+            String nodeCode
+    ) {
+    }
+
+    record WorkflowNodeRelation(
             String nodeName,
             String nodeType,
             String relatedJobCode,
-            String relatedPipelineCode,
+            String relatedPipelineCode
+    ) {
+    }
+
+    record WorkflowNodeExecution(
             String workerGroup,
             String windowCode,
-            Integer nodeOrder,
+            Integer nodeOrder
+    ) {
+    }
+
+    record WorkflowNodeRuntime(
             String retryPolicy,
             Integer retryMaxCount,
             Integer timeoutSeconds,
@@ -59,12 +187,57 @@ public interface WorkflowExcelImportStore {
     }
 
     record WorkflowEdgeRow(
+            WorkflowEdgeIdentity identity,
+            WorkflowEdgePayload payload
+    ) {
+        public int rowNo() {
+            return identity.rowNo();
+        }
+
+        public String tenantId() {
+            return identity.tenantId();
+        }
+
+        public String workflowCode() {
+            return identity.workflowCode();
+        }
+
+        public Integer workflowVersion() {
+            return identity.workflowVersion();
+        }
+
+        public String fromNodeCode() {
+            return identity.fromNodeCode();
+        }
+
+        public String toNodeCode() {
+            return identity.toNodeCode();
+        }
+
+        public String edgeType() {
+            return payload.edgeType();
+        }
+
+        public String conditionExpr() {
+            return payload.conditionExpr();
+        }
+
+        public Boolean enabled() {
+            return payload.enabled();
+        }
+    }
+
+    record WorkflowEdgeIdentity(
             int rowNo,
             String tenantId,
             String workflowCode,
             Integer workflowVersion,
             String fromNodeCode,
-            String toNodeCode,
+            String toNodeCode
+    ) {
+    }
+
+    record WorkflowEdgePayload(
             String edgeType,
             String conditionExpr,
             Boolean enabled

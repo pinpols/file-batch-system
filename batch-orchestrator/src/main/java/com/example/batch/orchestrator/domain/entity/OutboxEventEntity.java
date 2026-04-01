@@ -15,9 +15,9 @@ public class OutboxEventEntity {
     private String payloadJson;
     private String publishStatus;
     /**
-     * Outbox publish attempt sequence.
+     * outbox 投递尝试序号。
      *
-     * <p>This is distinct from business retry counters stored on runtime entities.
+     * <p>它与运行时实体上保存的业务重试计数是不同的概念。
      */
     private Integer publishAttempt;
     private Instant nextPublishAt;

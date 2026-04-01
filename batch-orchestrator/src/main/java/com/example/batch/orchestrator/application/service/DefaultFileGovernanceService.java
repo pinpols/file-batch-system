@@ -77,16 +77,18 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             auditDetail.put("approvalId", command.approvalId());
             auditDetail.put("contentEncryptionEnabled", true);
             auditDetail.put("encryptionKeyRef", security.get("encryption_key_ref"));
-            fileGovernanceRepository.appendAudit(
+            fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
                     command.tenantId(),
                     command.fileId(),
                     "PRESIGN_DOWNLOAD",
                     "SUCCESS",
-                    resolveOperatorType(command.operatorId()),
-                    command.operatorId(),
+                    new FileGovernanceRepository.FileAuditActor(
+                            resolveOperatorType(command.operatorId()),
+                            command.operatorId()
+                    ),
                     command.traceId(),
                     auditDetail
-            );
+            ));
             return consolePath;
         }
         String storagePath = stringValue(fileRecord.get("storage_path"));
@@ -108,16 +110,18 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         if (truthy(security.get("preview_masking_enabled"))) {
             auditDetail.put("previewMaskingNote", "template enables preview masking; avoid exposing raw object bytes in UI");
         }
-        fileGovernanceRepository.appendAudit(
+        fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
                 command.tenantId(),
                 command.fileId(),
                 "PRESIGN_DOWNLOAD",
                 "SUCCESS",
-                resolveOperatorType(command.operatorId()),
-                command.operatorId(),
+                new FileGovernanceRepository.FileAuditActor(
+                        resolveOperatorType(command.operatorId()),
+                        command.operatorId()
+                ),
                 command.traceId(),
                 auditDetail
-        );
+        ));
         return presignedUrl;
     }
 
@@ -163,16 +167,18 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 command.tenantId() + ":manual-redispatch:" + task.getId(),
                 RunMode.COMPENSATE
         );
-        fileGovernanceRepository.appendAudit(
+        fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
                 command.tenantId(),
                 command.fileId(),
                 "REDISPATCH",
                 "SUCCESS",
-                resolveOperatorType(command.operatorId()),
-                command.operatorId(),
+                new FileGovernanceRepository.FileAuditActor(
+                        resolveOperatorType(command.operatorId()),
+                        command.operatorId()
+                ),
                 command.traceId(),
                 buildRedispatchDetail(dispatchRecord, task, partition, command)
-        );
+        ));
         return "REDISPATCH_ACCEPTED";
     }
 
@@ -227,16 +233,18 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                 metadata.put("arrivalTimedOutAt", now.toString());
             }
             fileGovernanceRepository.updateFileMetadata(command.tenantId(), fileId, metadata);
-            fileGovernanceRepository.appendAudit(
+            fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
                     command.tenantId(),
                     fileId,
                     "ARRIVAL_MANUAL_" + action,
                     "SUCCESS",
-                    resolveOperatorType(command.operatorId()),
-                    command.operatorId(),
+                    new FileGovernanceRepository.FileAuditActor(
+                            resolveOperatorType(command.operatorId()),
+                            command.operatorId()
+                    ),
                     command.traceId(),
                     metadata
-            );
+            ));
         }
         return nextState;
     }
@@ -287,25 +295,29 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                             "operatorId", command.operatorId()
                     )
             );
-            fileGovernanceRepository.appendAudit(
+            fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
                     command.tenantId(),
                     command.fileId(),
                     operationType,
                     "SUCCESS",
-                    resolveOperatorType(command.operatorId()),
-                    command.operatorId(),
+                    new FileGovernanceRepository.FileAuditActor(
+                            resolveOperatorType(command.operatorId()),
+                            command.operatorId()
+                    ),
                     command.traceId(),
                     fileGovernanceRepository.operationDetail(currentStatus, nextStatus, command.operatorId(), command.reason())
-            );
+            ));
             return nextStatus;
         } catch (RuntimeException exception) {
-            fileGovernanceRepository.appendAudit(
+            fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
                     command.tenantId(),
                     command.fileId(),
                     operationType,
                     "FAILED",
-                    resolveOperatorType(command.operatorId()),
-                    command.operatorId(),
+                    new FileGovernanceRepository.FileAuditActor(
+                            resolveOperatorType(command.operatorId()),
+                            command.operatorId()
+                    ),
                     command.traceId(),
                     Map.of(
                             "currentStatus", currentStatus,
@@ -313,7 +325,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                             "reason", command.reason(),
                             "errorMessage", exception.getMessage()
                     )
-            );
+            ));
             throw exception;
         }
     }

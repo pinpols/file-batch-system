@@ -63,7 +63,7 @@ class LaunchT2FailureIntegrationTest extends AbstractIntegrationTest {
 
         doThrow(new RuntimeException("simulated T2 failure"))
                 .when(partitionDispatchService)
-                .dispatch(any(), any(), any(), any(), any(), any(), any());
+                .dispatch(any());
 
         LaunchRequest request = new LaunchRequest(
                 TENANT, seed.jobCode(), BIZ_DATE, TriggerType.MANUAL,
