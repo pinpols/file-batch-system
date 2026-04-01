@@ -35,6 +35,34 @@ tags:
     description: Read-only list and detail views.
   - name: AI
     description: Console AI assistant.
+  - name: JobDefinitions
+    description: Job definition CRUD and lifecycle management.
+  - name: WorkflowDefinitions
+    description: Workflow definition CRUD, DAG validation, and lifecycle management.
+  - name: Triggers
+    description: Quartz trigger registration, pause, resume, and unregister.
+  - name: Meta
+    description: Enum metadata, queue list, calendar list, window list, and worker group list.
+  - name: Queues
+    description: Resource queue CRUD and toggle.
+  - name: BatchWindows
+    description: Batch window CRUD and toggle.
+  - name: Calendars
+    description: Calendar CRUD, toggle, and holiday management.
+  - name: QuotaPolicies
+    description: Quota policy CRUD and toggle.
+  - name: PipelineDefinitions
+    description: Pipeline definition CRUD, detail with steps, and toggle.
+  - name: Dashboard
+    description: Dashboard statistics and trend views.
+  - name: FileChannels
+    description: File channel CRUD and toggle.
+  - name: FileTemplates
+    description: File template CRUD and toggle.
+  - name: Instances
+    description: Job instance and partition cancel/terminate/retry operations.
+  - name: WorkflowRuns
+    description: Workflow run cancel, terminate, and node-skip operations.
 security:
   - bearerAuth: []
   - consoleToken: []
@@ -2006,6 +2034,2251 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkerRegistryList'
+
+  # ─── P0: Job Definitions CRUD ────────────────────────────────────────────────
+  /api/console/job-definitions:
+    get:
+      tags: [JobDefinitions]
+      summary: List job definitions
+      operationId: listJobDefinitions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: jobCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: jobType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Job definition list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseJobDefinitionList'
+    post:
+      tags: [JobDefinitions]
+      summary: Create job definition
+      operationId: createJobDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created job definition id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/job-definitions/{id}:
+    get:
+      tags: [JobDefinitions]
+      summary: Get job definition detail
+      operationId: getJobDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job definition detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [JobDefinitions]
+      summary: Update job definition
+      operationId: updateJobDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+    delete:
+      tags: [JobDefinitions]
+      summary: Delete job definition
+      operationId: deleteJobDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/job-definitions/{id}/toggle:
+    post:
+      tags: [JobDefinitions]
+      summary: Enable or disable job definition
+      operationId: toggleJobDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/job-definitions/{id}/copy:
+    post:
+      tags: [JobDefinitions]
+      summary: Clone job definition
+      operationId: copyJobDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: newJobCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: New job definition id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+
+  # ─── P0: Workflow Definitions CRUD ───────────────────────────────────────────
+  /api/console/workflow-definitions:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: List workflow definitions
+      operationId: listWorkflowDefinitions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: workflowCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Workflow definition list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionList'
+    post:
+      tags: [WorkflowDefinitions]
+      summary: Create workflow definition (with nodes and edges)
+      operationId: createWorkflowDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created workflow definition id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/workflow-definitions/{id}:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: Get workflow definition detail with DAG
+      operationId: getWorkflowDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow definition detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [WorkflowDefinitions]
+      summary: Update workflow definition
+      operationId: updateWorkflowDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+    delete:
+      tags: [WorkflowDefinitions]
+      summary: Delete workflow definition
+      operationId: deleteWorkflowDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-definitions/{id}/toggle:
+    post:
+      tags: [WorkflowDefinitions]
+      summary: Enable or disable workflow definition
+      operationId: toggleWorkflowDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-definitions/{id}/validate:
+    post:
+      tags: [WorkflowDefinitions]
+      summary: Validate workflow DAG
+      operationId: validateWorkflowDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  # ─── P0: Instance operations ──────────────────────────────────────────────────
+  /api/console/instances/{id}/cancel:
+    post:
+      tags: [Instances]
+      summary: Cancel a job instance
+      operationId: cancelJobInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/instances/{id}/terminate:
+    post:
+      tags: [Instances]
+      summary: Terminate a job instance
+      operationId: terminateJobInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P0: Trigger management ───────────────────────────────────────────────────
+  /api/console/triggers:
+    get:
+      tags: [Triggers]
+      summary: List registered Quartz triggers
+      operationId: listTriggers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trigger list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/triggers/{jobCode}/register:
+    post:
+      tags: [Triggers]
+      summary: Register a Quartz trigger for a job
+      operationId: registerTrigger
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: jobCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/triggers/{jobCode}/unregister:
+    post:
+      tags: [Triggers]
+      summary: Unregister a Quartz trigger for a job
+      operationId: unregisterTrigger
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: jobCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/triggers/{jobCode}/pause:
+    post:
+      tags: [Triggers]
+      summary: Pause a Quartz trigger for a job
+      operationId: pauseTrigger
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: jobCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/triggers/{jobCode}/resume:
+    post:
+      tags: [Triggers]
+      summary: Resume a paused Quartz trigger for a job
+      operationId: resumeTrigger
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: jobCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P0: Enum metadata ────────────────────────────────────────────────────────
+  /api/console/meta/enums:
+    get:
+      tags: [Meta]
+      summary: Get all system enum values
+      operationId: getMetaEnums
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Enum map
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/meta/queues:
+    get:
+      tags: [Meta]
+      summary: List resource queues for metadata selection
+      operationId: getMetaQueues
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Queue list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/meta/calendars:
+    get:
+      tags: [Meta]
+      summary: List calendars for metadata selection
+      operationId: getMetaCalendars
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Calendar list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/meta/windows:
+    get:
+      tags: [Meta]
+      summary: List batch windows for metadata selection
+      operationId: getMetaWindows
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Window list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/meta/worker-groups:
+    get:
+      tags: [Meta]
+      summary: List worker groups for metadata selection
+      operationId: getMetaWorkerGroups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Worker group list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  # ─── P1: Resource Queues CRUD ─────────────────────────────────────────────────
+  /api/console/queues:
+    get:
+      tags: [Queues]
+      summary: List resource queues
+      operationId: listResourceQueues
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: queueCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: queueType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Resource queue list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Queues]
+      summary: Create resource queue
+      operationId: createResourceQueue
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created resource queue id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/queues/{id}:
+    put:
+      tags: [Queues]
+      summary: Update resource queue
+      operationId: updateResourceQueue
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/queues/{id}/toggle:
+    post:
+      tags: [Queues]
+      summary: Enable or disable resource queue
+      operationId: toggleResourceQueue
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P1: Batch Windows CRUD ───────────────────────────────────────────────────
+  /api/console/batch-windows:
+    get:
+      tags: [BatchWindows]
+      summary: List batch windows
+      operationId: listBatchWindows
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: windowCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Batch window list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [BatchWindows]
+      summary: Create batch window
+      operationId: createBatchWindow
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created batch window id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/batch-windows/{id}:
+    put:
+      tags: [BatchWindows]
+      summary: Update batch window
+      operationId: updateBatchWindow
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/batch-windows/{id}/toggle:
+    post:
+      tags: [BatchWindows]
+      summary: Enable or disable batch window
+      operationId: toggleBatchWindow
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P1: Calendars + Holidays ─────────────────────────────────────────────────
+  /api/console/calendars:
+    get:
+      tags: [Calendars]
+      summary: List calendars
+      operationId: listCalendars
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: calendarCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Calendar list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Calendars]
+      summary: Create calendar
+      operationId: createCalendar
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created calendar id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/calendars/{id}:
+    put:
+      tags: [Calendars]
+      summary: Update calendar
+      operationId: updateCalendar
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/calendars/{id}/toggle:
+    post:
+      tags: [Calendars]
+      summary: Enable or disable calendar
+      operationId: toggleCalendar
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/calendars/{id}/holidays:
+    get:
+      tags: [Calendars]
+      summary: Get holidays for a calendar
+      operationId: listCalendarHolidays
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Holiday list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Calendars]
+      summary: Batch import holidays for a calendar
+      operationId: importCalendarHolidays
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/calendars/{id}/holidays/{holidayId}:
+    put:
+      tags: [Calendars]
+      summary: Update a single holiday
+      operationId: updateCalendarHoliday
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: holidayId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+    delete:
+      tags: [Calendars]
+      summary: Delete a single holiday
+      operationId: deleteCalendarHoliday
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: holidayId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P1: Scheduler control ────────────────────────────────────────────────────
+  /api/console/scheduler/status:
+    get:
+      tags: [Scheduler]
+      summary: Get scheduler status
+      operationId: getSchedulerStatus
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Scheduler status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/scheduler/pause-all:
+    post:
+      tags: [Scheduler]
+      summary: Pause all Quartz triggers
+      operationId: pauseAllTriggers
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/scheduler/resume-all:
+    post:
+      tags: [Scheduler]
+      summary: Resume all paused Quartz triggers
+      operationId: resumeAllTriggers
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P1: Detail queries ───────────────────────────────────────────────────────
+  /api/console/query/file-channels/{channelCode}:
+    get:
+      tags: [Queries]
+      summary: Get file channel detail by code
+      operationId: queryFileChannelDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channelCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File channel detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/query/file-templates/{templateCode}:
+    get:
+      tags: [Queries]
+      summary: Get file template detail by code
+      operationId: queryFileTemplateDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+      responses:
+        '200':
+          description: File template detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/query/files/{id}:
+    get:
+      tags: [Queries]
+      summary: Get file record detail by id
+      operationId: queryFileDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File record detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/releases/{releaseId}:
+    get:
+      tags: [Config]
+      summary: Get config release detail
+      operationId: getConfigRelease
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: releaseId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Config release detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/secrets/{secretVersionId}:
+    get:
+      tags: [Config]
+      summary: Get secret version detail
+      operationId: getSecretVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: secretVersionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Secret version detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  # ─── P2: Quota Policies CRUD ──────────────────────────────────────────────────
+  /api/console/quota-policies:
+    get:
+      tags: [QuotaPolicies]
+      summary: List quota policies
+      operationId: listQuotaPolicies
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: policyCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Quota policy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [QuotaPolicies]
+      summary: Create quota policy
+      operationId: createQuotaPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created quota policy id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/quota-policies/{id}:
+    put:
+      tags: [QuotaPolicies]
+      summary: Update quota policy
+      operationId: updateQuotaPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/quota-policies/{id}/toggle:
+    post:
+      tags: [QuotaPolicies]
+      summary: Enable or disable quota policy
+      operationId: toggleQuotaPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P2: Pipeline Definitions CRUD ───────────────────────────────────────────
+  /api/console/pipeline-definitions:
+    get:
+      tags: [PipelineDefinitions]
+      summary: List pipeline definitions
+      operationId: listPipelineDefinitions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: jobCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: pipelineType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Pipeline definition list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [PipelineDefinitions]
+      summary: Create pipeline definition
+      operationId: createPipelineDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created pipeline definition id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/pipeline-definitions/{id}:
+    get:
+      tags: [PipelineDefinitions]
+      summary: Get pipeline definition detail with steps
+      operationId: getPipelineDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pipeline definition detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [PipelineDefinitions]
+      summary: Update pipeline definition
+      operationId: updatePipelineDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/pipeline-definitions/{id}/toggle:
+    post:
+      tags: [PipelineDefinitions]
+      summary: Enable or disable pipeline definition
+      operationId: togglePipelineDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P2: Partition operations ─────────────────────────────────────────────────
+  /api/console/instances/partitions/{id}/cancel:
+    post:
+      tags: [Instances]
+      summary: Cancel a job instance partition
+      operationId: cancelJobInstancePartition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/instances/partitions/{id}/retry:
+    post:
+      tags: [Instances]
+      summary: Retry a failed job instance partition
+      operationId: retryJobInstancePartition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P2: Workflow run operations ──────────────────────────────────────────────
+  /api/console/workflow-runs/{id}/cancel:
+    post:
+      tags: [WorkflowRuns]
+      summary: Cancel a workflow run
+      operationId: cancelWorkflowRun
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-runs/{id}/terminate:
+    post:
+      tags: [WorkflowRuns]
+      summary: Terminate a workflow run
+      operationId: terminateWorkflowRun
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-runs/{id}/skip-node:
+    post:
+      tags: [WorkflowRuns]
+      summary: Skip a node in a workflow run
+      operationId: skipWorkflowRunNode
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: nodeCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P2: Dashboard ────────────────────────────────────────────────────────────
+  /api/console/dashboard/job-stats:
+    get:
+      tags: [Dashboard]
+      summary: Get job execution statistics
+      operationId: getDashboardJobStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 7
+      responses:
+        '200':
+          description: Job stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/dashboard/trigger-stats:
+    get:
+      tags: [Dashboard]
+      summary: Get trigger statistics
+      operationId: getDashboardTriggerStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 7
+      responses:
+        '200':
+          description: Trigger stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/dashboard/worker-load:
+    get:
+      tags: [Dashboard]
+      summary: Get worker load statistics
+      operationId: getDashboardWorkerLoad
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Worker load stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/dashboard/alert-trend:
+    get:
+      tags: [Dashboard]
+      summary: Get alert trend statistics
+      operationId: getDashboardAlertTrend
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 7
+      responses:
+        '200':
+          description: Alert trend stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/dashboard/sla-compliance:
+    get:
+      tags: [Dashboard]
+      summary: Get SLA compliance statistics
+      operationId: getDashboardSlaCompliance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 7
+      responses:
+        '200':
+          description: SLA compliance stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  # ─── P3: File Channels CRUD ───────────────────────────────────────────────────
+  /api/console/file-channels:
+    get:
+      tags: [FileChannels]
+      summary: List file channels
+      operationId: listFileChannels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channelCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: channelType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: File channel list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [FileChannels]
+      summary: Create file channel
+      operationId: createFileChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created file channel id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/file-channels/{id}:
+    get:
+      tags: [FileChannels]
+      summary: Get file channel detail
+      operationId: getFileChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File channel detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [FileChannels]
+      summary: Update file channel
+      operationId: updateFileChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+    delete:
+      tags: [FileChannels]
+      summary: Delete file channel
+      operationId: deleteFileChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/file-channels/{id}/toggle:
+    post:
+      tags: [FileChannels]
+      summary: Enable or disable file channel
+      operationId: toggleFileChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P3: File Templates CRUD ──────────────────────────────────────────────────
+  /api/console/file-templates:
+    get:
+      tags: [FileTemplates]
+      summary: List file templates
+      operationId: listFileTemplates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: templateCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: fileType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: File template list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [FileTemplates]
+      summary: Create file template
+      operationId: createFileTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Created file template id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/file-templates/{id}:
+    get:
+      tags: [FileTemplates]
+      summary: Get file template detail
+      operationId: getFileTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File template detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [FileTemplates]
+      summary: Update file template
+      operationId: updateFileTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+    delete:
+      tags: [FileTemplates]
+      summary: Delete file template
+      operationId: deleteFileTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/file-templates/{id}/toggle:
+    post:
+      tags: [FileTemplates]
+      summary: Enable or disable file template
+      operationId: toggleFileTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
+  # ─── P4: Jobs — task/partition replay ────────────────────────────────────────
+  /api/console/jobs/tasks/replay:
+    post:
+      tags: [Jobs]
+      summary: Task-level replay
+      operationId: replayTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Replay result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/jobs/partitions/replay:
+    post:
+      tags: [Jobs]
+      summary: Partition-level replay
+      operationId: replayPartition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Replay result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+
 components:
   securitySchemes:
     basicAuth:

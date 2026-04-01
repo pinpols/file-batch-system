@@ -9,6 +9,8 @@ public interface WorkflowRunMapper {
 
     int insert(WorkflowRunEntity entity);
 
+    WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
     WorkflowRunEntity selectByRelatedJobInstanceId(@Param("tenantId") String tenantId,
                                                    @Param("relatedJobInstanceId") Long relatedJobInstanceId);
 

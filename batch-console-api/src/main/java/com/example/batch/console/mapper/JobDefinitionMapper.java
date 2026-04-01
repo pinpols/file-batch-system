@@ -2,6 +2,7 @@ package com.example.batch.console.mapper;
 
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
+import com.example.batch.console.mapper.param.JobDefinitionMaintenanceUpdateParam;
 import java.util.List;
 
 public interface JobDefinitionMapper {
@@ -12,19 +13,15 @@ public interface JobDefinitionMapper {
 
     JobDefinitionEntity selectByUniqueKey(String tenantId, String jobCode);
 
-    int updateJobDefinitionMaintenance(String tenantId,
-                                       String jobCode,
-                                       String jobName,
-                                       String queueCode,
-                                       String workerGroup,
-                                       String scheduleExpr,
-                                       String calendarCode,
-                                       String windowCode,
-                                       String retryPolicy,
-                                       Integer retryMaxCount,
-                                       Integer timeoutSeconds,
-                                       String shardStrategy,
-                                       Boolean enabled,
-                                       String description,
-                                       String updatedBy);
+    JobDefinitionEntity selectById(String tenantId, Long id);
+
+    int insert(JobDefinitionEntity entity);
+
+    int updateJobDefinitionMaintenance(JobDefinitionMaintenanceUpdateParam param);
+
+    int deleteByTenantAndId(String tenantId, Long id);
+
+    int toggleEnabled(String tenantId, Long id, Boolean enabled, String updatedBy);
+
+    int copyJobDefinition(String tenantId, Long sourceId, String newJobCode, String createdBy);
 }

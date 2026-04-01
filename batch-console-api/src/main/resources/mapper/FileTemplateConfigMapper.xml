@@ -106,6 +106,23 @@
         limit 1
     </select>
 
+    <select id="selectById" resultType="map">
+        select * from batch.file_template_config
+        where tenant_id = #{tenantId} and id = #{id}
+        limit 1
+    </select>
+
+    <update id="toggleEnabled">
+        update batch.file_template_config
+        set enabled = #{enabled}, updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from batch.file_template_config
+        where tenant_id = #{tenantId} and id = #{id}
+    </delete>
+
     <insert id="upsertFileTemplateConfig">
         insert into batch.file_template_config (
             tenant_id, template_code, template_name, template_type, biz_type, file_format_type,
@@ -118,16 +135,16 @@
             download_requires_approval, masking_rule_set, enabled, version, description,
             created_by, updated_by, created_at, updated_at
         ) values (
-            #{tenantId}, #{templateCode}, #{templateName}, #{templateType}, #{bizType}, #{fileFormatType},
-            #{charset}, #{targetCharset}, #{withBom}, #{lineSeparator}, #{delimiter}, #{quoteChar}, #{escapeChar},
-            #{recordLength}, #{headerRows}, #{footerRows}, #{headerTemplateJson,jdbcType=VARCHAR}::jsonb,
-            #{trailerTemplateJson,jdbcType=VARCHAR}::jsonb, #{checksumType}, #{compressType}, #{encryptType},
-            #{namingRule}, #{fieldMappingsJson,jdbcType=VARCHAR}::jsonb, #{validationRuleSetJson,jdbcType=VARCHAR}::jsonb,
-            #{defaultQueryCode}, #{defaultQuerySql}, #{queryParamSchemaJson,jdbcType=VARCHAR}::jsonb,
-            #{streamingEnabled}, #{pageSize}, #{fetchSize}, #{chunkSize}, #{previewMaskingEnabled},
-            #{errorLineMaskingEnabled}, #{logMaskingEnabled}, #{contentEncryptionEnabled}, #{encryptionKeyRef},
-            #{downloadRequiresApproval}, #{maskingRuleSet}, #{enabled}, #{version}, #{description},
-            #{createdBy}, #{updatedBy}, current_timestamp, current_timestamp
+            #{p.tenantId}, #{p.templateCode}, #{p.basicInfo.templateName}, #{p.basicInfo.templateType}, #{p.basicInfo.bizType}, #{p.format.fileFormatType},
+            #{p.format.charset}, #{p.format.targetCharset}, #{p.format.withBom}, #{p.format.lineSeparator}, #{p.format.delimiter}, #{p.format.quoteChar}, #{p.format.escapeChar},
+            #{p.format.recordLength}, #{p.format.headerRows}, #{p.format.footerRows}, #{p.format.headerTemplateJson,jdbcType=VARCHAR}::jsonb,
+            #{p.format.trailerTemplateJson,jdbcType=VARCHAR}::jsonb, #{p.format.checksumType}, #{p.format.compressType}, #{p.format.encryptType},
+            #{p.format.namingRule}, #{p.format.fieldMappingsJson,jdbcType=VARCHAR}::jsonb, #{p.format.validationRuleSetJson,jdbcType=VARCHAR}::jsonb,
+            #{p.query.defaultQueryCode}, #{p.query.defaultQuerySql}, #{p.query.queryParamSchemaJson,jdbcType=VARCHAR}::jsonb,
+            #{p.runtime.streamingEnabled}, #{p.runtime.pageSize}, #{p.runtime.fetchSize}, #{p.runtime.chunkSize}, #{p.security.previewMaskingEnabled},
+            #{p.security.errorLineMaskingEnabled}, #{p.security.logMaskingEnabled}, #{p.security.contentEncryptionEnabled}, #{p.security.encryptionKeyRef},
+            #{p.security.downloadRequiresApproval}, #{p.security.maskingRuleSet}, #{p.basicInfo.enabled}, #{p.basicInfo.version}, #{p.basicInfo.description},
+            #{p.audit.createdBy}, #{p.audit.updatedBy}, current_timestamp, current_timestamp
         )
         on conflict (tenant_id, template_code, version) do update set
             template_name = excluded.template_name,

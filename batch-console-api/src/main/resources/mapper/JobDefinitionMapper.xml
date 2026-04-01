@@ -7,12 +7,16 @@
         <result column="job_code" property="jobCode"/>
         <result column="job_name" property="jobName"/>
         <result column="job_type" property="jobType"/>
+        <result column="biz_type" property="bizType"/>
         <result column="queue_code" property="queueCode"/>
         <result column="worker_group" property="workerGroup"/>
         <result column="schedule_type" property="scheduleType"/>
         <result column="schedule_expr" property="scheduleExpr"/>
+        <result column="timezone" property="timezone"/>
         <result column="calendar_code" property="calendarCode"/>
         <result column="window_code" property="windowCode"/>
+        <result column="trigger_mode" property="triggerMode"/>
+        <result column="dag_enabled" property="dagEnabled"/>
         <result column="retry_policy" property="retryPolicy"/>
         <result column="retry_max_count" property="retryMaxCount"/>
         <result column="timeout_seconds" property="timeoutSeconds"/>
@@ -20,8 +24,12 @@
         <result column="execution_handler" property="executionHandler"/>
         <result column="param_schema" property="paramSchema"/>
         <result column="default_params" property="defaultParams"/>
+        <result column="priority" property="priority"/>
+        <result column="version" property="version"/>
         <result column="description" property="description"/>
         <result column="enabled" property="enabled"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -69,6 +77,26 @@
           and job_code = #{jobCode}
     </select>
 
+    <select id="selectById" resultMap="JobDefinitionResultMap">
+        select * from batch.job_definition where tenant_id = #{tenantId} and id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.example.batch.console.domain.entity.JobDefinitionEntity" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.job_definition (
+            tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
+            timezone, worker_group, queue_code, calendar_code, window_code, trigger_mode,
+            dag_enabled, shard_strategy, retry_policy, retry_max_count, timeout_seconds,
+            execution_handler, param_schema, default_params, priority, enabled, description,
+            created_by, updated_by
+        ) values (
+            #{tenantId}, #{jobCode}, #{jobName}, #{jobType}, #{bizType}, #{scheduleType}, #{scheduleExpr},
+            #{timezone}, #{workerGroup}, #{queueCode}, #{calendarCode}, #{windowCode}, #{triggerMode},
+            #{dagEnabled}, #{shardStrategy}, #{retryPolicy}, #{retryMaxCount}, #{timeoutSeconds},
+            #{executionHandler}, #{paramSchema}::jsonb, #{defaultParams}::jsonb, #{priority}, #{enabled}, #{description},
+            #{createdBy}, #{updatedBy}
+        )
+    </insert>
+
     <update id="updateJobDefinitionMaintenance">
         update batch.job_definition
         set job_name = #{jobName},
@@ -88,4 +116,31 @@
         where tenant_id = #{tenantId}
           and job_code = #{jobCode}
     </update>
+
+    <delete id="deleteByTenantAndId">
+        delete from batch.job_definition where tenant_id = #{tenantId} and id = #{id}
+    </delete>
+
+    <update id="toggleEnabled">
+        update batch.job_definition
+        set enabled = #{enabled}, updated_by = #{updatedBy}, updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
+
+    <insert id="copyJobDefinition">
+        insert into batch.job_definition (
+            tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,
+            timezone, worker_group, queue_code, calendar_code, window_code, trigger_mode,
+            dag_enabled, shard_strategy, retry_policy, retry_max_count, timeout_seconds,
+            execution_handler, param_schema, default_params, priority, enabled, description,
+            created_by, updated_by
+        )
+        select tenant_id, #{newJobCode}, concat(job_name, ' (copy)'), job_type, biz_type, schedule_type, schedule_expr,
+               timezone, worker_group, queue_code, calendar_code, window_code, trigger_mode,
+               dag_enabled, shard_strategy, retry_policy, retry_max_count, timeout_seconds,
+               execution_handler, param_schema, default_params, priority, false, description,
+               #{createdBy}, #{createdBy}
+        from batch.job_definition
+        where tenant_id = #{tenantId} and id = #{sourceId}
+    </insert>
 </mapper>

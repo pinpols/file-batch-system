@@ -16,7 +16,10 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -33,31 +36,23 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
     @Override
     public ConsoleFileOperationResponse archive(ArchiveFileRequest request, String idempotencyKey) {
-        return executeFileOperation(request.getTenantId(), request.getFileId(), null, request.getReason(), idempotencyKey, "archive", null);
+        return executeFileOperation(new FileExecContext(request.getTenantId(), request.getFileId(), null, request.getReason(), idempotencyKey, "archive", null));
     }
 
     @Override
     public ConsoleFileOperationResponse delete(DeleteFileRequest request, String idempotencyKey) {
-        return executeFileOperation(request.getTenantId(), request.getFileId(), null, request.getReason(), idempotencyKey, "delete", null);
+        return executeFileOperation(new FileExecContext(request.getTenantId(), request.getFileId(), null, request.getReason(), idempotencyKey, "delete", null));
     }
 
     @Override
     public ConsoleFileOperationResponse redispatch(RedispatchFileRequest request, String idempotencyKey) {
-        return executeFileOperation(
-                request.getTenantId(),
-                request.getFileId(),
-                request.getChannelCode(),
-                request.getReason(),
-                idempotencyKey,
-                "redispatch",
-                null
-        );
+        return executeFileOperation(new FileExecContext(request.getTenantId(), request.getFileId(), request.getChannelCode(), request.getReason(), idempotencyKey, "redispatch", null));
     }
 
     @Override
     public ConsolePresignDownloadResponse presignDownload(PresignDownloadFileRequest request, String idempotencyKey) {
         if (request.getApprovalId() == null || request.getApprovalId().isBlank()) {
-            return submitApproval("DOWNLOAD", "DOWNLOAD", "FILE", String.valueOf(request.getFileId()), request, request.getReason(), idempotencyKey);
+            return submitApproval(new ApprovalSubmitContext("DOWNLOAD", "DOWNLOAD", "FILE", String.valueOf(request.getFileId()), request, request.getReason(), idempotencyKey));
         }
         requireApprovedApproval(request.getTenantId(), request.getApprovalId());
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
@@ -102,58 +97,53 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         return response == null ? null : new ConsoleFileOperationResponse(response.status());
     }
 
-    private ConsoleFileOperationResponse executeFileOperation(String tenantId,
-                                                              Long fileId,
-                                                              String channelCode,
-                                                              String reason,
-                                                              String idempotencyKey,
-                                                              String operation,
-                                                              String approvalId) {
+    private record FileExecContext(String tenantId, Long fileId, String channelCode, String reason,
+                                   String idempotencyKey, String operation, String approvalId) {}
+
+    private record ApprovalSubmitContext(String approvalType, String actionType, String targetType, String targetId,
+                                         Object payload, String approvalReason, String idempotencyKey) {}
+
+    private ConsoleFileOperationResponse executeFileOperation(FileExecContext ctx) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
         FileOperationResponse response = restClient.post()
-                .uri("/internal/files/{fileId}/" + operation, fileId)
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .uri("/internal/files/{fileId}/" + ctx.operation(), ctx.fileId())
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
                 .body(new FileOperationRequest(
-                        tenantId,
-                        ConsoleTextSanitizer.safeInput(channelCode, 128),
+                        ctx.tenantId(),
+                        ConsoleTextSanitizer.safeInput(ctx.channelCode(), 128),
                         ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
                         requestMetadata.traceId(),
-                        ConsoleTextSanitizer.safeInput(reason, 512),
-                        approvalId
+                        ConsoleTextSanitizer.safeInput(ctx.reason(), 512),
+                        ctx.approvalId()
                 ))
                 .retrieve()
                 .body(FileOperationResponse.class);
         return response == null ? null : new ConsoleFileOperationResponse(response.status());
     }
 
-    private ConsolePresignDownloadResponse submitApproval(String approvalType,
-                                                          String actionType,
-                                                          String targetType,
-                                                          String targetId,
-                                                          Object payload,
-                                                          String approvalReason,
-                                                          String idempotencyKey) {
+    private ConsolePresignDownloadResponse submitApproval(ApprovalSubmitContext ctx) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
         ApprovalResponse response = restClient.post()
                 .uri("/internal/approvals")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-                .body(new ApprovalRequest(
-                        extractTenantId(payload),
-                        approvalType,
-                        actionType,
-                        targetType,
-                        targetId,
-                        JsonUtils.toJson(payload),
-                        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-                        requestMetadata.traceId(),
-                        idempotencyKey,
-                        ConsoleTextSanitizer.safeInput(approvalReason, 512)
+                .body(ApprovalRequest.of(
+                        new ApprovalTarget(
+                                extractTenantId(ctx.payload()),
+                                ctx.approvalType(),
+                                ctx.actionType(),
+                                ctx.targetType(),
+                                ctx.targetId()
+                        ),
+                        ctx.payload(),
+                        requestMetadata,
+                        ctx.idempotencyKey(),
+                        ctx.approvalReason()
                 ))
                 .retrieve()
                 .body(ApprovalResponse.class);
@@ -169,10 +159,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                 .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
                 .retrieve()
                 .body(ApprovalRecordResponse.class);
-        if (response == null || response.record() == null) {
+        if (response == null || response.getRecord() == null) {
             throw new BizException(ResultCode.NOT_FOUND, "approval request not found");
         }
-        String status = response.record().approvalStatus();
+        String status = response.getRecord().getApprovalStatus();
         if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
             throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");
         }
@@ -197,37 +187,88 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         return null;
     }
 
-    private record ApprovalRequest(String tenantId,
-                                   String approvalType,
-                                   String actionType,
-                                   String targetType,
-                                   String targetId,
-                                   String payloadJson,
-                                   String requesterId,
-                                   String sourceTraceId,
-                                   String sourceIdempotencyKey,
-                                   String approvalReason) {
+    private record ApprovalTarget(String tenantId,
+                                  String approvalType,
+                                  String actionType,
+                                  String targetType,
+                                  String targetId) {
+    }
+
+    @Getter
+    private static final class ApprovalRequest {
+        private final String tenantId;
+        private final String approvalType;
+        private final String actionType;
+        private final String targetType;
+        private final String targetId;
+        private final String payloadJson;
+        private final String requesterId;
+        private final String sourceTraceId;
+        private final String sourceIdempotencyKey;
+        private final String approvalReason;
+
+        private ApprovalRequest(ApprovalTarget target,
+                                String payloadJson,
+                                String requesterId,
+                                String sourceTraceId,
+                                String sourceIdempotencyKey,
+                                String approvalReason) {
+            this.tenantId = target.tenantId();
+            this.approvalType = target.approvalType();
+            this.actionType = target.actionType();
+            this.targetType = target.targetType();
+            this.targetId = target.targetId();
+            this.payloadJson = payloadJson;
+            this.requesterId = requesterId;
+            this.sourceTraceId = sourceTraceId;
+            this.sourceIdempotencyKey = sourceIdempotencyKey;
+            this.approvalReason = approvalReason;
+        }
+
+        private static ApprovalRequest of(ApprovalTarget target,
+                                          Object payload,
+                                          ConsoleRequestMetadata metadata,
+                                          String idempotencyKey,
+                                          String approvalReason) {
+            return new ApprovalRequest(
+                    target,
+                    JsonUtils.toJson(payload),
+                    ConsoleTextSanitizer.safeInput(metadata.operatorId(), 64),
+                    metadata.traceId(),
+                    idempotencyKey,
+                    ConsoleTextSanitizer.safeInput(approvalReason, 512)
+            );
+        }
     }
 
     private record ApprovalResponse(String approvalNo) {
     }
 
-    private record ApprovalRecordResponse(ApprovalRecord record) {
-        private record ApprovalRecord(String tenantId,
-                                      String approvalNo,
-                                      String approvalType,
-                                      String actionType,
-                                      String targetType,
-                                      String targetId,
-                                      String payloadJson,
-                                      String approvalStatus,
-                                      String requesterId,
-                                      String approverId,
-                                      String rejectionReason,
-                                      String approvalReason,
-                                      String sourceTraceId,
-                                      String sourceIdempotencyKey) {
-        }
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    private static class ApprovalRecordResponse {
+        private ApprovalRecord record;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    private static class ApprovalRecord {
+        private String tenantId;
+        private String approvalNo;
+        private String approvalType;
+        private String actionType;
+        private String targetType;
+        private String targetId;
+        private String payloadJson;
+        private String approvalStatus;
+        private String requesterId;
+        private String approverId;
+        private String rejectionReason;
+        private String approvalReason;
+        private String sourceTraceId;
+        private String sourceIdempotencyKey;
     }
 
     private record FileOperationRequest(String tenantId,

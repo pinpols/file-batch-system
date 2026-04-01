@@ -27,14 +27,7 @@ public interface TaskExecutionService {
 
     WorkflowNodeRunEntity recordNodeRunStart(Long workflowRunId, String nodeCode, String nodeType, Instant startedAt);
 
-    WorkflowNodeRunEntity recordNodeRunFinish(Long workflowRunId,
-                                              String nodeCode,
-                                              String nodeType,
-                                              boolean success,
-                                              String errorCode,
-                                              String errorMessage,
-                                              Instant startedAt,
-                                              Instant finishedAt);
+    WorkflowNodeRunEntity recordNodeRunFinish(TaskOutcomeService.NodeRunFinishCommand command);
 
     JobTaskEntity applyTaskOutcome(TaskOutcomeCommand command);
 }

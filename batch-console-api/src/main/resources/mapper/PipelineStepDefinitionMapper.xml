@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.PipelineStepDefinitionMapper">
+    <select id="selectByPipelineDefinitionId" resultType="map">
+        select
+            id,
+            pipeline_definition_id,
+            step_code,
+            step_name,
+            stage_code,
+            step_order,
+            impl_code,
+            step_params,
+            timeout_seconds,
+            retry_policy,
+            retry_max_count,
+            enabled,
+            created_at,
+            updated_at
+        from batch.pipeline_step_definition
+        where pipeline_definition_id = #{pipelineDefinitionId}
+        order by step_order
+    </select>
+
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.pipeline_step_definition (
+            pipeline_definition_id, step_code, step_name, stage_code,
+            step_order, impl_code, step_params, timeout_seconds,
+            retry_policy, retry_max_count, enabled
+        ) values (
+            #{pipeline_definition_id}, #{step_code}, #{step_name}, #{stage_code},
+            #{step_order}, #{impl_code}, #{step_params}::jsonb, #{timeout_seconds},
+            #{retry_policy}, #{retry_max_count}, #{enabled}
+        )
+    </insert>
+
+    <delete id="deleteByPipelineDefinitionId">
+        delete from batch.pipeline_step_definition
+        where pipeline_definition_id = #{pipelineDefinitionId}
+    </delete>
+</mapper>

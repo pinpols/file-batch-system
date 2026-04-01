@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.BatchWindowMapper">
+    <select id="selectByQuery" resultType="map">
+        select
+            id,
+            tenant_id,
+            window_code,
+            window_name,
+            timezone,
+            start_time,
+            end_time,
+            end_strategy,
+            out_of_window_action,
+            allow_cross_day,
+            enabled,
+            description,
+            created_at,
+            updated_at
+        from batch.batch_window
+        where tenant_id = #{tenantId}
+        <if test="windowCode != null and windowCode != ''">
+            and window_code = #{windowCode}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+        order by id desc
+        <if test="pageRequest != null">
+            <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
+            limit #{pageRequest.pageSize}
+            offset #{offset}
+        </if>
+    </select>
+
+    <select id="countByQuery" resultType="long">
+        select count(1)
+        from batch.batch_window
+        where tenant_id = #{tenantId}
+        <if test="windowCode != null and windowCode != ''">
+            and window_code = #{windowCode}
+        </if>
+        <if test="enabled != null">
+            and enabled = #{enabled}
+        </if>
+    </select>
+
+    <select id="selectById" resultType="map">
+        select *
+        from batch.batch_window
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </select>
+
+    <select id="selectByUniqueKey" resultType="map">
+        select *
+        from batch.batch_window
+        where tenant_id = #{tenantId}
+          and window_code = #{windowCode}
+        limit 1
+    </select>
+
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        insert into batch.batch_window (
+            tenant_id, window_code, window_name, timezone,
+            start_time, end_time, end_strategy, out_of_window_action,
+            allow_cross_day, enabled, description
+        ) values (
+            #{tenant_id}, #{window_code}, #{window_name}, #{timezone},
+            #{start_time}::time, #{end_time}::time, #{end_strategy}, #{out_of_window_action},
+            #{allow_cross_day}, #{enabled}, #{description}
+        )
+    </insert>
+
+    <update id="update" parameterType="map">
+        update batch.batch_window
+        set window_name = #{window_name},
+            timezone = #{timezone},
+            start_time = #{start_time}::time,
+            end_time = #{end_time}::time,
+            end_strategy = #{end_strategy},
+            out_of_window_action = #{out_of_window_action},
+            allow_cross_day = #{allow_cross_day},
+            enabled = #{enabled},
+            description = #{description},
+            updated_at = current_timestamp
+        where tenant_id = #{tenant_id}
+          and id = #{id}
+    </update>
+
+    <update id="toggleEnabled">
+        update batch.batch_window
+        set enabled = #{enabled}, updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id = #{id}
+    </update>
+</mapper>

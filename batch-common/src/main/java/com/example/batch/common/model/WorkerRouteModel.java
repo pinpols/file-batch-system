@@ -1,15 +1,17 @@
 package com.example.batch.common.model;
 
 import java.util.Set;
+import lombok.Data;
 
-public class WorkerRouteModel {
+@Data
+public class
+WorkerRouteModel {
 
     /**
-     * Selected worker code for routing or assignment.
+     * 用于路由或分配的目标 worker 编码。
      *
-     * <p>Kept separate from the runtime worker instance id used in logs and
-     * heartbeats. Existing callers may still access it via {@code workerId}
-     * compatibility accessors.
+     * <p>该字段与运行时日志、心跳里使用的 worker 实例 id 分开保存。
+     * 现有调用方仍可通过兼容访问器 {@code workerId} 读取或设置。
      */
     private String workerCode;
     private String workerType;
@@ -24,53 +26,5 @@ public class WorkerRouteModel {
 
     public void setWorkerId(String workerId) {
         this.workerCode = workerId;
-    }
-
-    public String getWorkerCode() {
-        return workerCode;
-    }
-
-    public void setWorkerCode(String workerCode) {
-        this.workerCode = workerCode;
-    }
-
-    public String getWorkerType() {
-        return workerType;
-    }
-
-    public void setWorkerType(String workerType) {
-        this.workerType = workerType;
-    }
-
-    public Set<String> getCapabilityTags() {
-        return capabilityTags;
-    }
-
-    public void setCapabilityTags(Set<String> capabilityTags) {
-        this.capabilityTags = capabilityTags;
-    }
-
-    public String getResourceProfile() {
-        return resourceProfile;
-    }
-
-    public void setResourceProfile(String resourceProfile) {
-        this.resourceProfile = resourceProfile;
-    }
-
-    public Integer getPriority() {
-        return priority;
-    }
-
-    public void setPriority(Integer priority) {
-        this.priority = priority;
-    }
-
-    public Boolean getAvailable() {
-        return available;
-    }
-
-    public void setAvailable(Boolean available) {
-        this.available = available;
     }
 }

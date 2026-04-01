@@ -83,6 +83,11 @@
         limit 1
     </select>
 
+    <delete id="deleteByWorkflowDefinitionId">
+        delete from batch.workflow_node
+        where workflow_definition_id = #{workflowDefinitionId}
+    </delete>
+
     <insert id="upsertWorkflowNode">
         insert into batch.workflow_node (
             workflow_definition_id,

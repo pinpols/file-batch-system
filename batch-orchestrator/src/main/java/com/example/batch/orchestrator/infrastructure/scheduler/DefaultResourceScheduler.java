@@ -31,6 +31,28 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class DefaultResourceScheduler implements ResourceScheduler {
 
+    private record FairnessWeights(
+            Integer priority,
+            String priorityBand,
+            int tenantWeight,
+            int queueWeight
+    ) {
+    }
+
+    private record FairnessLoad(
+            int tenantActiveJobs,
+            int tenantActivePartitions,
+            int queueActiveJobs,
+            int queueActivePartitions
+    ) {
+    }
+
+    private record FairnessScoreContext(
+            FairnessWeights weights,
+            FairnessLoad load
+    ) {
+    }
+
     private final ResourceQueueManager resourceQueueManager;
     private final ConcurrencyLimiter concurrencyLimiter;
     private final PartitionThrottle partitionThrottle;
@@ -164,8 +186,15 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         int tenantActivePartitions = resolveTenantActivePartitions(request);
         int queueActiveJobs = resolveQueueActiveJobs(request, queue);
         int queueActivePartitions = resolveQueueActivePartitions(request, queue);
-        long fairnessScore = resolveFairnessScore(priority, priorityBand, tenantWeight, queueWeight,
-                tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions);
+        long fairnessScore = resolveFairnessScore(new FairnessScoreContext(
+                new FairnessWeights(priority, priorityBand, tenantWeight, queueWeight),
+                new FairnessLoad(
+                        tenantActiveJobs,
+                        tenantActivePartitions,
+                        queueActiveJobs,
+                        queueActivePartitions
+                )
+        ));
         decision.setTenantWeight(tenantWeight);
         decision.setQueueWeight(queueWeight);
         decision.setTenantActiveJobs(tenantActiveJobs);
@@ -222,25 +251,23 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), queue.workerGroup(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
     }
 
-    private long resolveFairnessScore(Integer priority,
-                                      String priorityBand,
-                                      int tenantWeight,
-                                      int queueWeight,
-                                      int tenantActiveJobs,
-                                      int tenantActivePartitions,
-                                      int queueActiveJobs,
-                                      int queueActivePartitions) {
-        long bandWeight = switch (priorityBand == null ? "" : priorityBand) {
+    private long resolveFairnessScore(FairnessScoreContext context) {
+        FairnessWeights weights = context.weights();
+        FairnessLoad load = context.load();
+        long bandWeight = switch (weights.priorityBand() == null ? "" : weights.priorityBand()) {
             case "HIGH" -> 300L;
             case "MEDIUM" -> 200L;
             default -> 100L;
         };
-        int normalizedPriority = priority == null ? 5 : Math.max(1, Math.min(priority, 9));
-        long loadPenalty = (long) tenantActiveJobs + tenantActivePartitions + queueActiveJobs + queueActivePartitions;
+        int normalizedPriority = weights.priority() == null ? 5 : Math.max(1, Math.min(weights.priority(), 9));
+        long loadPenalty = (long) load.tenantActiveJobs()
+                + load.tenantActivePartitions()
+                + load.queueActiveJobs()
+                + load.queueActivePartitions();
         return bandWeight * 10_000L
                 + (long) normalizedPriority * 1_000L
-                + (long) tenantWeight * 100L
-                + (long) queueWeight * 10L
+                + (long) weights.tenantWeight() * 100L
+                + (long) weights.queueWeight() * 10L
                 - loadPenalty;
     }
 }

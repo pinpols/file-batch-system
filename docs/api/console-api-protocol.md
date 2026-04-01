@@ -189,6 +189,175 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - worker online, draining, and offline/decommissioned distribution
 - outbox retry backlog and delivery failures
 
+### Job Definitions
+
+- `GET /api/console/job-definitions`
+- `POST /api/console/job-definitions`
+- `GET /api/console/job-definitions/{id}`
+- `PUT /api/console/job-definitions/{id}`
+- `DELETE /api/console/job-definitions/{id}`
+- `POST /api/console/job-definitions/{id}/toggle`
+- `POST /api/console/job-definitions/{id}/copy`
+- All write operations require `ROLE_ADMIN`. Read operations allow `ROLE_AUDITOR` and `ROLE_CONFIG_ADMIN`.
+- `toggle` uses query params `tenantId` (required) and `enabled` (required).
+- `copy` uses query params `tenantId` (required) and `newJobCode` (required); the cloned definition is created with `enabled=false`.
+
+### Workflow Definitions
+
+- `GET /api/console/workflow-definitions`
+- `POST /api/console/workflow-definitions`
+- `GET /api/console/workflow-definitions/{id}`
+- `PUT /api/console/workflow-definitions/{id}`
+- `DELETE /api/console/workflow-definitions/{id}`
+- `POST /api/console/workflow-definitions/{id}/toggle`
+- `POST /api/console/workflow-definitions/{id}/validate`
+- Create and update are transactional: definition, nodes, and edges are persisted or replaced atomically.
+- `validate` runs Kahn topological sort and checks for cycles, START/END node presence, and reachability. Returns a validation result payload, not a simple boolean.
+- Delete cascades to nodes and edges.
+
+### Instances
+
+- `POST /api/console/instances/{id}/cancel`
+- `POST /api/console/instances/{id}/terminate`
+- `POST /api/console/instances/partitions/{id}/cancel`
+- `POST /api/console/instances/partitions/{id}/retry`
+- `cancel` on an instance is allowed only for `CREATED`, `WAITING`, or `READY` states.
+- `terminate` on an instance is allowed only for `RUNNING` state.
+- `cancel` on a partition follows the same allowed states as instance cancel.
+- `retry` on a partition is allowed only for `FAILED` state; `retryCount` is incremented.
+- All operations use optimistic locking via `version`.
+
+### Triggers
+
+- `GET /api/console/triggers`
+- `POST /api/console/triggers/{jobCode}/register`
+- `POST /api/console/triggers/{jobCode}/unregister`
+- `POST /api/console/triggers/{jobCode}/pause`
+- `POST /api/console/triggers/{jobCode}/resume`
+- `register` loads the job definition from DB and registers it into Quartz; safe to call again to update an existing trigger.
+- `unregister` removes the Quartz job entry; does not affect the job definition record.
+- Trigger list response includes `status`, `previousFireTime`, and `nextFireTime` per job.
+
+### Meta
+
+- `GET /api/console/meta/enums`
+- `GET /api/console/meta/queues`
+- `GET /api/console/meta/calendars`
+- `GET /api/console/meta/windows`
+- `GET /api/console/meta/worker-groups`
+- `enums` returns all platform enum dictionaries: `triggerType`, `jobType`, `scheduleType`, `triggerMode`, `shardStrategy`, `retryPolicy`, `instanceStatus`, `workflowNodeType`, `channelType`.
+- `queues`, `calendars`, and `windows` return simplified lists (`code` + `name`) for use as dropdown options; all require `tenantId` query param.
+- `worker-groups` returns deduplicated group codes from active worker registrations.
+- All meta endpoints allow `ROLE_ADMIN`, `ROLE_AUDITOR`, and `ROLE_CONFIG_ADMIN`.
+
+### Queues
+
+- `GET /api/console/queues`
+- `POST /api/console/queues`
+- `PUT /api/console/queues/{id}`
+- `POST /api/console/queues/{id}/toggle`
+- All write operations require `ROLE_ADMIN`.
+- `queue_code` uniqueness is enforced on create.
+
+### Batch Windows
+
+- `GET /api/console/batch-windows`
+- `POST /api/console/batch-windows`
+- `PUT /api/console/batch-windows/{id}`
+- `POST /api/console/batch-windows/{id}/toggle`
+- All write operations require `ROLE_ADMIN`.
+- `window_code` uniqueness is enforced on create.
+- Window definition includes start/end time, cross-day policy, and out-of-window action.
+
+### Calendars
+
+- `GET /api/console/calendars`
+- `POST /api/console/calendars`
+- `PUT /api/console/calendars/{id}`
+- `POST /api/console/calendars/{id}/toggle`
+- `GET /api/console/calendars/{id}/holidays`
+- `POST /api/console/calendars/{id}/holidays`
+- `PUT /api/console/calendars/{id}/holidays/{holidayId}`
+- `DELETE /api/console/calendars/{id}/holidays/{holidayId}`
+- `calendar_code` uniqueness is enforced on create.
+- Holiday create supports batch import (multiple entries in one request body).
+- Holiday operations validate calendar tenant ownership before write.
+
+### Scheduler
+
+- `GET /api/console/scheduler/status`
+- `POST /api/console/scheduler/pause-all`
+- `POST /api/console/scheduler/resume-all`
+- `GET /api/console/scheduler/snapshot`
+- `GET /api/console/scheduler/snapshot/history`
+- `status` returns one of `STARTED`, `PAUSED`, `STANDBY`, or `SHUTDOWN`.
+- `pause-all` / `resume-all` apply globally to all Quartz triggers; use with caution in production.
+- Scheduler snapshot responses keep the stable display slices `policies / queues / workers`; the frontend should treat those lists as the primary render contract.
+
+### Quota Policies
+
+- `GET /api/console/quota-policies`
+- `POST /api/console/quota-policies`
+- `PUT /api/console/quota-policies/{id}`
+- `POST /api/console/quota-policies/{id}/toggle`
+- All write operations require `ROLE_ADMIN`.
+- `policy_code` uniqueness is enforced on create.
+- Policy definition includes concurrent cap, QPS, fair-share configuration, burst limit, and sliding window hours.
+
+### Pipeline Definitions
+
+- `GET /api/console/pipeline-definitions`
+- `POST /api/console/pipeline-definitions`
+- `GET /api/console/pipeline-definitions/{id}`
+- `PUT /api/console/pipeline-definitions/{id}`
+- `POST /api/console/pipeline-definitions/{id}/toggle`
+- Create and update are transactional: definition and step list are persisted or replaced atomically.
+- Detail response (`PipelineDefinitionDetailResponse`) includes the ordered step list.
+
+### Workflow Runs
+
+- `POST /api/console/workflow-runs/{id}/cancel`
+- `POST /api/console/workflow-runs/{id}/terminate`
+- `POST /api/console/workflow-runs/{id}/skip-node`
+- `cancel` is allowed for `CREATED` or `RUNNING` states → transitions to `TERMINATED`.
+- `terminate` is allowed for `RUNNING` state → transitions to `TERMINATED`.
+- `skip-node` requires `nodeCode` query param and is allowed only for `FAILED` nodes → transitions to `SKIPPED`.
+
+### Dashboard
+
+- `GET /api/console/dashboard/job-stats`
+- `GET /api/console/dashboard/trigger-stats`
+- `GET /api/console/dashboard/worker-load`
+- `GET /api/console/dashboard/alert-trend`
+- `GET /api/console/dashboard/sla-compliance`
+- All endpoints require `tenantId` query param. `days` defaults to `7` where applicable.
+- `job-stats`: instance status distribution + daily execution trend.
+- `trigger-stats`: trigger type distribution + daily trend.
+- `worker-load`: worker status/group distribution + active partition breakdown.
+- `alert-trend`: alert severity distribution + daily trend.
+- `sla-compliance`: violation/on-time counts + average duration + daily trend.
+- Allow `ROLE_ADMIN`, `ROLE_AUDITOR`, and `ROLE_CONFIG_ADMIN`.
+
+### File Channels
+
+- `GET /api/console/file-channels`
+- `POST /api/console/file-channels`
+- `GET /api/console/file-channels/{id}`
+- `PUT /api/console/file-channels/{id}`
+- `POST /api/console/file-channels/{id}/toggle`
+- `DELETE /api/console/file-channels/{id}`
+- Read requires `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`, or `ROLE_AUDITOR`. Write requires `ROLE_CONFIG_ADMIN` or above. Delete requires `ROLE_ADMIN`.
+
+### File Templates
+
+- `GET /api/console/file-templates`
+- `POST /api/console/file-templates`
+- `GET /api/console/file-templates/{id}`
+- `PUT /api/console/file-templates/{id}`
+- `POST /api/console/file-templates/{id}/toggle`
+- `DELETE /api/console/file-templates/{id}`
+- Same permission rules as File Channels.
+
 ### Jobs
 
 - `POST /api/console/jobs/trigger`
@@ -196,7 +365,10 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `POST /api/console/jobs/compensate`
 - `POST /api/console/jobs/rerun`
 - `POST /api/console/jobs/dead-letters/replay`
+- `POST /api/console/jobs/tasks/replay`
+- `POST /api/console/jobs/partitions/replay`
 - `POST /api/console/jobs/catch-up/approve`
+- `POST /api/console/jobs/batch-days/{bizDate}/catchup`
 
 ### Approvals
 
@@ -210,10 +382,12 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 - `GET /api/console/config/releases`
 - `POST /api/console/config/releases`
+- `GET /api/console/config/releases/{releaseId}`
 - `POST /api/console/config/releases/{releaseId}/publish`
 - `POST /api/console/config/releases/{releaseId}/gray`
 - `POST /api/console/config/releases/{releaseId}/rollback`
 - `GET /api/console/config/secrets`
+- `GET /api/console/config/secrets/{secretVersionId}`
 - `POST /api/console/config/secrets/rotate`
 - `GET /api/console/config/change-logs`
 - `GET /api/console/config/file-templates/excel/export`
@@ -303,18 +477,28 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/query/file-errors`
 - `GET /api/console/query/file-templates`
 - `GET /api/console/query/instances`
+- `GET /api/console/query/instances/{id}`
 - `GET /api/console/query/job-step-instances`
+- `GET /api/console/query/job-step-instances/{id}`
 - `GET /api/console/query/workflow-definitions`
 - `GET /api/console/query/workflow-nodes`
 - `GET /api/console/query/workflow-edges`
 - `GET /api/console/query/workflow-runs`
+- `GET /api/console/query/workflow-runs/{id}`
 - `GET /api/console/query/workflow-node-runs`
+- `GET /api/console/query/workflow-node-runs/{id}`
 - `GET /api/console/query/workflow-topology`
 - `GET /api/console/query/ai-audits`
 - `GET /api/console/query/dead-letters`
 - `GET /api/console/query/retries`
 - `GET /api/console/query/catch-up-approvals`
+- `GET /api/console/query/batch-days`
+- `GET /api/console/query/batch-days/{bizDate}/window`
 - `GET /api/console/query/workers`
+- `GET /api/console/query/file-channels/{channelCode}`
+- `GET /api/console/query/file-templates/{templateCode}`
+- `GET /api/console/query/files/{id}`
+- `GET /api/console/query/file-pipelines/{id}`
 - Query endpoints must return typed list DTOs or documented view objects. Avoid raw entity lists and anonymous maps in new query APIs.
 - `execution-logs` is a UI alias for `audits` and uses the same response shape.
 - `workflow-topology` returns `ConsoleWorkflowTopologyResponse` with `workflowDefinition`, `nodes`, `edges`, `workflowRuns`, and `nodeRuns`; the frontend should use those five fields directly instead of reconstructing a generic object map.

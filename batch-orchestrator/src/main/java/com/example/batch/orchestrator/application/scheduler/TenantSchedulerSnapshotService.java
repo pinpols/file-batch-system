@@ -51,14 +51,16 @@ public class TenantSchedulerSnapshotService {
             int baseParts = p.maxPartitionsPerTenant() == null ? 0 : p.maxPartitionsPerTenant();
             int pburst = p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit());
             int effParts = baseParts > 0 ? baseParts + pburst : 0;
-            var runtime = quotaRuntimeStateService.describe(
-                    tenantId,
-                    "TENANT_JOBS",
-                    tenantId,
+            var runtime = quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+                    new QuotaRuntimeStateService.QuotaReservationOwner(
+                            tenantId,
+                            "TENANT_JOBS",
+                            tenantId
+                    ),
                     p.quotaResetPolicy(),
                     burst,
                     resourceSchedulerProperties.getQuotaResetSlidingWindowHours()
-            );
+            ));
             policies.add(new SchedulerSnapshotResponse.PolicySnapshot(
                     p.policyCode(),
                     p.fairShareGroup(),
@@ -86,14 +88,16 @@ public class TenantSchedulerSnapshotService {
             int qmax = q.maxRunningJobs() == null ? 0 : q.maxRunningJobs();
             int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
             int qeff = qmax > 0 ? qmax + qburst : 0;
-            var runtime = quotaRuntimeStateService.describe(
-                    tenantId,
-                    "QUEUE_JOBS",
-                    q.queueCode(),
+            var runtime = quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
+                    new QuotaRuntimeStateService.QuotaReservationOwner(
+                            tenantId,
+                            "QUEUE_JOBS",
+                            q.queueCode()
+                    ),
                     q.quotaResetPolicy(),
                     qburst,
                     resourceSchedulerProperties.getQuotaResetSlidingWindowHours()
-            );
+            ));
             queues.add(new SchedulerSnapshotResponse.QueueSnapshot(
                     q.queueCode(),
                     q.fairShareGroup(),

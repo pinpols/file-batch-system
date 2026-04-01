@@ -1,13 +1,15 @@
 package com.example.batch.orchestrator.domain.pipeline;
 
 import java.util.List;
+import lombok.Data;
 
 /**
- * Orchestrator-side pipeline definition model.
+ * Orchestrator 侧的 pipeline 定义模型。
  *
- * <p>The canonical business key is {@code jobCode}. {@code pipelineCode} is
- * kept as a compatibility alias for older call sites and serialized payloads.
+ * <p>标准业务主键是 {@code jobCode}。
+ * {@code pipelineCode} 作为兼容别名保留，供旧调用方和序列化载荷继续使用。
  */
+@Data
 public class PipelineDefinition {
 
     private String jobCode;
@@ -23,53 +25,5 @@ public class PipelineDefinition {
 
     public void setPipelineCode(String pipelineCode) {
         this.jobCode = pipelineCode;
-    }
-
-    public void setJobCode(String jobCode) {
-        this.jobCode = jobCode;
-    }
-
-    public String getJobCode() {
-        return jobCode;
-    }
-
-    public String getPipelineName() {
-        return pipelineName;
-    }
-
-    public void setPipelineName(String pipelineName) {
-        this.pipelineName = pipelineName;
-    }
-
-    public String getPipelineType() {
-        return pipelineType;
-    }
-
-    public void setPipelineType(String pipelineType) {
-        this.pipelineType = pipelineType;
-    }
-
-    public String getDefaultWorkerType() {
-        return defaultWorkerType;
-    }
-
-    public void setDefaultWorkerType(String defaultWorkerType) {
-        this.defaultWorkerType = defaultWorkerType;
-    }
-
-    public Boolean getEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(Boolean enabled) {
-        this.enabled = enabled;
-    }
-
-    public List<StepDefinition> getSteps() {
-        return steps;
-    }
-
-    public void setSteps(List<StepDefinition> steps) {
-        this.steps = steps;
     }
 }

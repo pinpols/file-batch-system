@@ -107,28 +107,25 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
     @Override
     @Transactional
-    public WorkflowNodeRunEntity recordNodeRunFinish(Long workflowRunId,
-                                                     String nodeCode,
-                                                     String nodeType,
-                                                     boolean success,
-                                                     String errorCode,
-                                                     String errorMessage,
-                                                     Instant startedAt,
-                                                     Instant finishedAt) {
-        WorkflowNodeRunEntity current = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
+    public WorkflowNodeRunEntity recordNodeRunFinish(NodeRunFinishCommand command) {
+        WorkflowNodeRunEntity current = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+                command.workflowRunId(), command.nodeCode());
         if (current == null) {
-            current = recordNodeRunStart(workflowRunId, nodeCode, nodeType, startedAt);
+            current = recordNodeRunStart(
+                    command.workflowRunId(), command.nodeCode(), command.nodeType(), command.startedAt());
         }
-        long duration = startedAt == null || finishedAt == null ? 0L : Duration.between(startedAt, finishedAt).toMillis();
+        long duration = command.startedAt() == null || command.finishedAt() == null
+                ? 0L
+                : Duration.between(command.startedAt(), command.finishedAt()).toMillis();
         workflowNodeRunMapper.updateStatus(
                 current.getId(),
-                success ? WorkflowNodeRunStatus.SUCCESS.code() : WorkflowNodeRunStatus.FAILED.code(),
-                errorCode,
-                errorMessage,
+                command.success() ? WorkflowNodeRunStatus.SUCCESS.code() : WorkflowNodeRunStatus.FAILED.code(),
+                command.errorCode(),
+                command.errorMessage(),
                 duration,
-                finishedAt
+                command.finishedAt()
         );
-        return workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
+        return workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(command.workflowRunId(), command.nodeCode());
     }
 
     @Override
@@ -228,16 +225,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                     : List.of();
             if (nodeProgress.allFinished() && workflowRun != null) {
                 activeNodes.remove(currentNodeCode);
-                recordNodeRunFinish(
-                        workflowRun.getId(),
-                        currentNodeCode,
-                        resolveCurrentNodeType(task),
-                        nodeProgress.failedCount() == 0,
-                        command.errorCode(),
-                        command.errorMessage(),
-                        resolveNodeStartedAt(workflowRun.getId(), currentNodeCode, workflowRun.getStartedAt(), finishedAt),
-                        finishedAt
-                );
+                recordNodeRunFinish(NodeRunFinishCommand.of(
+                        new NodeRunKey(
+                                workflowRun.getId(),
+                                currentNodeCode,
+                                resolveCurrentNodeType(task)
+                        ),
+                        new NodeRunOutcome(
+                                nodeProgress.failedCount() == 0,
+                                command.errorCode(),
+                                command.errorMessage(),
+                                resolveNodeStartedAt(workflowRun.getId(), currentNodeCode, workflowRun.getStartedAt(), finishedAt),
+                                finishedAt
+                        )
+                ));
                 for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
                     if (nextNode == null) {
                         continue;
@@ -250,16 +251,20 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                                 task.getTaskPayload()
                         )) {
                             recordNodeRunStart(workflowRun.getId(), nextNode.nodeCode(), nextNode.nodeType(), finishedAt);
-                            recordNodeRunFinish(
-                                    workflowRun.getId(),
-                                    nextNode.nodeCode(),
-                                    nextNode.nodeType(),
-                                    nodeProgress.failedCount() == 0,
-                                    command.errorCode(),
-                                    command.errorMessage(),
-                                    finishedAt,
-                                    finishedAt
-                            );
+                            recordNodeRunFinish(NodeRunFinishCommand.of(
+                                    new NodeRunKey(
+                                            workflowRun.getId(),
+                                            nextNode.nodeCode(),
+                                            nextNode.nodeType()
+                                    ),
+                                    new NodeRunOutcome(
+                                            nodeProgress.failedCount() == 0,
+                                            command.errorCode(),
+                                            command.errorMessage(),
+                                            finishedAt,
+                                            finishedAt
+                                    )
+                            ));
                         }
                         continue;
                     }

@@ -4,14 +4,15 @@ import com.example.batch.common.model.WorkerRouteModel;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Data;
 
 /**
- * Orchestrator-side workflow execution context.
+ * Orchestrator 侧的工作流执行上下文。
  *
- * <p>This is the canonical orchestrator pipeline context. It carries
- * workflow-specific fields such as pipeline definition, biz date, trace id,
- * and collected step results.
+ * <p>这是 orchestrator 内部使用的标准 pipeline 上下文，承载
+ * pipeline 定义、业务日期、traceId 以及步骤执行结果等工作流相关字段。
  */
+@Data
 public class ExecutionContext {
 
     private String tenantId;
@@ -23,75 +24,11 @@ public class ExecutionContext {
     private List<StepResult> stepResults;
     private WorkerRouteModel defaultWorkerRoute;
 
-    public String getTenantId() {
-        return tenantId;
-    }
-
-    public void setTenantId(String tenantId) {
-        this.tenantId = tenantId;
-    }
-
     public String getPipelineCode() {
         return jobCode;
     }
 
     public void setPipelineCode(String pipelineCode) {
         this.jobCode = pipelineCode;
-    }
-
-    public String getJobCode() {
-        return jobCode;
-    }
-
-    public void setJobCode(String jobCode) {
-        this.jobCode = jobCode;
-    }
-
-    public String getBizDate() {
-        return bizDate;
-    }
-
-    public void setBizDate(String bizDate) {
-        this.bizDate = bizDate;
-    }
-
-    public String getTraceId() {
-        return traceId;
-    }
-
-    public void setTraceId(String traceId) {
-        this.traceId = traceId;
-    }
-
-    public PipelineDefinition getPipelineDefinition() {
-        return pipelineDefinition;
-    }
-
-    public void setPipelineDefinition(PipelineDefinition pipelineDefinition) {
-        this.pipelineDefinition = pipelineDefinition;
-    }
-
-    public Map<String, Object> getAttributes() {
-        return attributes;
-    }
-
-    public void setAttributes(Map<String, Object> attributes) {
-        this.attributes = attributes;
-    }
-
-    public List<StepResult> getStepResults() {
-        return stepResults;
-    }
-
-    public void setStepResults(List<StepResult> stepResults) {
-        this.stepResults = stepResults;
-    }
-
-    public WorkerRouteModel getDefaultWorkerRoute() {
-        return defaultWorkerRoute;
-    }
-
-    public void setDefaultWorkerRoute(WorkerRouteModel defaultWorkerRoute) {
-        this.defaultWorkerRoute = defaultWorkerRoute;
     }
 }

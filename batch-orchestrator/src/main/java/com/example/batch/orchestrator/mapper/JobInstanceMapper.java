@@ -70,4 +70,10 @@ public interface JobInstanceMapper {
     List<JobInstanceEntity> selectBatchDayCatchUpCandidates(@Param("tenantId") String tenantId,
                                                             @Param("calendarCode") String calendarCode,
                                                             @Param("bizDate") LocalDate bizDate);
+
+    int updateStatus(@Param("tenantId") String tenantId,
+                     @Param("id") Long id,
+                     @Param("instanceStatus") String instanceStatus,
+                     @Param("finishedAt") java.time.Instant finishedAt,
+                     @Param("expectedVersion") Long expectedVersion);
 }

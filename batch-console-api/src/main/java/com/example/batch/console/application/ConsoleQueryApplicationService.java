@@ -59,6 +59,7 @@ import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.common.model.PageResponse;
+import java.util.Map;
 
 /**
  * 控制台只读查询应用服务：将 Web 查询条件转换为领域查询并返回列表或视图数据。
@@ -166,4 +167,12 @@ public interface ConsoleQueryApplicationService {
 
     /** 查询批量日窗口状态。 */
     ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request);
+
+    Map<String, Object> fileChannelDetail(String tenantId, String channelCode);
+
+    Map<String, Object> fileTemplateDetail(String tenantId, String templateCode, Integer version);
+
+    Map<String, Object> fileRecordDetail(String tenantId, Long fileId);
+
+    ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id);
 }

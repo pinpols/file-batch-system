@@ -57,15 +57,46 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     private final JobInstanceMapper jobInstanceMapper;
     private final WorkflowRunMapper workflowRunMapper;
 
+    private record TaskExecutionContext(
+            LaunchRequest request,
+            Map<String, Object> effectiveParams,
+            String traceId,
+            JobInstanceEntity jobInstance
+    ) {
+    }
+
+    private record TaskSchedulingContext(
+            SchedulePlan plan,
+            List<JobPartitionEntity> partitions,
+            ResourceSchedulingDecision decision
+    ) {
+    }
+
+    private record TaskCreationContext(
+            TaskExecutionContext execution,
+            TaskSchedulingContext scheduling
+    ) {
+        private TaskBuildContext buildContext(JobPartitionEntity partition) {
+            return new TaskBuildContext(this, partition);
+        }
+    }
+
+    private record TaskBuildContext(
+            TaskCreationContext creation,
+            JobPartitionEntity partition
+    ) {
+    }
+
     @Override
     @Transactional
-    public void dispatch(LaunchRequest request,
-                         Map<String, Object> effectiveParams,
-                         String traceId,
-                         JobInstanceEntity jobInstance,
-                         WorkflowRunEntity workflowRun,
-                         List<WorkflowDagService.DagNodeResolution> initialNodes,
-                         Instant startedAt) {
+    public void dispatch(DispatchContext context) {
+        LaunchRequest request = context.request();
+        Map<String, Object> effectiveParams = context.effectiveParams();
+        String traceId = context.traceId();
+        JobInstanceEntity jobInstance = context.jobInstance();
+        WorkflowRunEntity workflowRun = context.workflowRun();
+        List<WorkflowDagService.DagNodeResolution> initialNodes = context.initialNodes();
+        Instant startedAt = context.startedAt();
         // 说明：如果有 DAG 初始节点（非 START），优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
         boolean dispatchable = true;
         int partitionCount;
@@ -89,7 +120,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             applySchedulingDecision(plan, decision);
             List<JobPartitionEntity> partitions = partitionLifecycleService.createPartitions(
                     plan, jobInstance.getId(), decision.getPartitionStatus());
-            createTasksAndMaybeOutboxEvents(request, effectiveParams, traceId, jobInstance, plan, partitions, decision);
+            createTasksAndMaybeOutboxEvents(new TaskCreationContext(
+                    new TaskExecutionContext(request, effectiveParams, traceId, jobInstance),
+                    new TaskSchedulingContext(plan, partitions, decision)));
             partitionCount = partitions.size();
             dispatchable = decision.isDispatchable();
         }
@@ -125,54 +158,44 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         }
     }
 
-    private void createTasksAndMaybeOutboxEvents(LaunchRequest request,
-                                                 Map<String, Object> effectiveParams,
-                                                 String traceId,
-                                                 JobInstanceEntity jobInstance,
-                                                 SchedulePlan plan,
-                                                 List<JobPartitionEntity> partitions,
-                                                 ResourceSchedulingDecision decision) {
-        if (partitions.isEmpty()) {
+    private void createTasksAndMaybeOutboxEvents(TaskCreationContext context) {
+        if (context.scheduling().partitions().isEmpty()) {
             return;
         }
-        for (JobPartitionEntity partition : partitions) {
-            JobTaskEntity task = buildTask(request, jobInstance, plan, partition, decision, effectiveParams);
+        for (JobPartitionEntity partition : context.scheduling().partitions()) {
+            JobTaskEntity task = buildTask(context.buildContext(partition));
             taskExecutionService.createTask(task);
-            if (decision.isDispatchable() && partitionLifecycleService.releaseForDispatch(
+            if (context.scheduling().decision().isDispatchable() && partitionLifecycleService.releaseForDispatch(
                     partition,
                     task,
                     PartitionStatus.CREATED.code(),
                     TaskStatus.CREATED.code()
             )) {
                 taskDispatchOutboxService.writeDispatchEvent(
-                        jobInstance,
+                        context.execution().jobInstance(),
                         task,
                         partition,
-                        traceId,
-                        request.tenantId() + ":" + task.getId()
+                        context.execution().traceId(),
+                        context.execution().request().tenantId() + ":" + task.getId()
                 );
             }
         }
     }
 
-    private JobTaskEntity buildTask(LaunchRequest request,
-                                    JobInstanceEntity jobInstance,
-                                    SchedulePlan plan,
-                                    JobPartitionEntity partition,
-                                    ResourceSchedulingDecision decision,
-                                    Map<String, Object> effectiveParams) {
+    private JobTaskEntity buildTask(TaskBuildContext context) {
         JobTaskEntity task = new JobTaskEntity();
-        task.setTenantId(request.tenantId());
-        task.setJobInstanceId(jobInstance.getId());
-        task.setJobPartitionId(partition.getId());
-        task.setTaskType(resolveTaskType(plan, partition));
+        task.setTenantId(context.creation().execution().request().tenantId());
+        task.setJobInstanceId(context.creation().execution().jobInstance().getId());
+        task.setJobPartitionId(context.partition().getId());
+        task.setTaskType(resolveTaskType(context.creation().scheduling().plan(), context.partition()));
         task.setTaskSeq(1);
-        task.setAssignedWorkerCode(resolveSelectedWorkerId(plan, partition));
+        task.setAssignedWorkerCode(resolveSelectedWorkerId(context.creation().scheduling().plan(), context.partition()));
+        ResourceSchedulingDecision decision = context.creation().scheduling().decision();
         task.setTaskStatus(decision == null || decision.getTaskStatus() == null
                 ? TaskStatus.READY.code()
                 : decision.getTaskStatus());
         task.setVersion(0L);
-        task.setTaskPayload(buildPayloadJson(effectiveParams));
+        task.setTaskPayload(buildPayloadJson(context.creation().execution().effectiveParams()));
         return task;
     }
 

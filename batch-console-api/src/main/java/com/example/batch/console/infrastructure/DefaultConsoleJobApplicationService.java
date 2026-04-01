@@ -36,7 +36,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -73,46 +77,44 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     @Override
     public String compensation(CompensationCommandRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {
-            return submitApproval("COMPENSATION", "COMPENSATION", "JOB", String.valueOf(request.getTargetId()), request, request.getReason(), idempotencyKey);
+            return submitApproval(new ApprovalSubmitContext("COMPENSATION", "COMPENSATION", "JOB", String.valueOf(request.getTargetId()), request, request.getReason(), idempotencyKey));
         }
         requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
-        return submitCompensation(new CompensationPayload(
-                resolveTenant(request.getTenantId()),
-                ConsoleTextSanitizer.safeInput(request.getCompensationType(), 64),
-                request.getTargetId(),
-                ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128),
-                ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
-                parseOptionalBizDate(request.getBizDate()),
-                ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128),
-                request.getRelatedFileId(),
-                ConsoleTextSanitizer.safeInput(request.getChannelCode(), 128),
-                ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-                ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64),
-                ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
-                null
-        ), idempotencyKey);
+        return submitCompensation(CompensationPayload.builder()
+                .tenantId(resolveTenant(request.getTenantId()))
+                .compensationType(ConsoleTextSanitizer.safeInput(request.getCompensationType(), 64))
+                .targetId(request.getTargetId())
+                .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
+                .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128))
+                .bizDate(parseOptionalBizDate(request.getBizDate()))
+                .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128))
+                .relatedFileId(request.getRelatedFileId())
+                .channelCode(ConsoleTextSanitizer.safeInput(request.getChannelCode(), 128))
+                .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
+                .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
+                .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
+                .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
+                .build(), idempotencyKey);
     }
 
     /** 执行补偿。 */
     @Override
     public String compensate(CompensateRequest request, String idempotencyKey) {
-        return submitCompensation(new CompensationPayload(
-                resolveTenant(request.getTenantId()),
-                request.getCompensationType() == null || request.getCompensationType().isBlank() ? "JOB" : request.getCompensationType(),
-                request.getTargetId(),
-                ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128),
-                ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
-                parseOptionalBizDate(request.getBizDate()),
-                ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128),
-                request.getRelatedFileId(),
-                ConsoleTextSanitizer.safeInput(request.getChannelCode(), 128),
-                ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-                ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64),
-                ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
-                null
-        ), idempotencyKey);
+        return submitCompensation(CompensationPayload.builder()
+                .tenantId(resolveTenant(request.getTenantId()))
+                .compensationType(request.getCompensationType() == null || request.getCompensationType().isBlank() ? "JOB" : request.getCompensationType())
+                .targetId(request.getTargetId())
+                .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
+                .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128))
+                .bizDate(parseOptionalBizDate(request.getBizDate()))
+                .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128))
+                .relatedFileId(request.getRelatedFileId())
+                .channelCode(ConsoleTextSanitizer.safeInput(request.getChannelCode(), 128))
+                .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
+                .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
+                .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
+                .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
+                .build(), idempotencyKey);
     }
 
     /** 重跑实例或分区。 */
@@ -122,47 +124,38 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 || (request.getTargetInstanceNo() != null && !request.getTargetInstanceNo().isBlank()))
                 ? "JOB"
                 : "BATCH";
-        return submitCompensation(new CompensationPayload(
-                resolveTenant(request.getTenantId()),
-                compensationType,
-                request.getTargetId(),
-                ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128),
-                ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
-                parseOptionalBizDate(request.getBizDate()),
-                ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128),
-                request.getRelatedFileId(),
-                null,
-                ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-                ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64),
-                ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
-                null
-        ), idempotencyKey);
+        return submitCompensation(CompensationPayload.builder()
+                .tenantId(resolveTenant(request.getTenantId()))
+                .compensationType(compensationType)
+                .targetId(request.getTargetId())
+                .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
+                .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128))
+                .bizDate(parseOptionalBizDate(request.getBizDate()))
+                .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128))
+                .relatedFileId(request.getRelatedFileId())
+                .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
+                .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
+                .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
+                .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
+                .build(), idempotencyKey);
     }
 
     /** 死信重放。 */
     @Override
     public String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {
-            return submitApproval("DLQ_REPLAY", "DLQ_REPLAY", "DLQ", String.valueOf(request.getDeadLetterId()), request, request.getReason(), idempotencyKey);
+            return submitApproval(new ApprovalSubmitContext("DLQ_REPLAY", "DLQ_REPLAY", "DLQ", String.valueOf(request.getDeadLetterId()), request, request.getReason(), idempotencyKey));
         }
         requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
-        return submitCompensation(new CompensationPayload(
-                resolveTenant(request.getTenantId()),
-                "DLQ",
-                request.getDeadLetterId(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-                ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-                ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64),
-                ConsoleTextSanitizer.safeInput(request.getStrategy(), 32),
-                null
-        ), idempotencyKey);
+        return submitCompensation(CompensationPayload.builder()
+                .tenantId(resolveTenant(request.getTenantId()))
+                .compensationType("DLQ")
+                .targetId(request.getDeadLetterId())
+                .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
+                .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
+                .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
+                .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
+                .build(), idempotencyKey);
     }
 
     /** 任务重放（job_task 粒度）。 */
@@ -170,15 +163,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     public String replayTask(TaskReplayRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {
             // approvalType 受数据库约束，这里复用 COMPENSATION + RETRY。
-            return submitApproval(
-                    "COMPENSATION",
-                    "RETRY",
-                    "JOB_TASK",
-                    String.valueOf(request.getTaskId()),
-                    request,
-                    request.getReason(),
-                    idempotencyKey
-            );
+            return submitApproval(new ApprovalSubmitContext("COMPENSATION", "RETRY", "JOB_TASK", String.valueOf(request.getTaskId()), request, request.getReason(), idempotencyKey));
         }
         requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
         return triggerRecovery(
@@ -193,15 +178,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     @Override
     public String replayPartition(PartitionReplayRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {
-            return submitApproval(
-                    "COMPENSATION",
-                    "RETRY",
-                    "JOB_PARTITION",
-                    String.valueOf(request.getPartitionId()),
-                    request,
-                    request.getReason(),
-                    idempotencyKey
-            );
+            return submitApproval(new ApprovalSubmitContext("COMPENSATION", "RETRY", "JOB_PARTITION", String.valueOf(request.getPartitionId()), request, request.getReason(), idempotencyKey));
         }
         requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
         return triggerRecovery(
@@ -216,7 +193,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     @Override
     public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
         if (!hasText(request.getApprovalId())) {
-            return submitApproval("CATCH_UP", "CATCH_UP", "CATCH_UP", request.getRequestId(), request, request.getReason(), idempotencyKey);
+            return submitApproval(new ApprovalSubmitContext("CATCH_UP", "CATCH_UP", "CATCH_UP", request.getRequestId(), request, request.getReason(), idempotencyKey));
         }
         requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
         if (request.getRequestId() != null && !request.getRequestId().isBlank()) {
@@ -419,31 +396,29 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         return response.data().operationNo();
     }
 
-    private String submitApproval(String approvalType,
-                                  String actionType,
-                                  String targetType,
-                                  String targetId,
-                                  Object payload,
-                                  String approvalReason,
-                                  String idempotencyKey) {
+    private record ApprovalSubmitContext(String approvalType, String actionType, String targetType, String targetId,
+                                         Object payload, String approvalReason, String idempotencyKey) {}
+
+    private String submitApproval(ApprovalSubmitContext ctx) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
         ApprovalResponse response = restClient.post()
                 .uri("/internal/approvals")
-                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-                .body(new ApprovalRequest(
-                        resolveTenant(extractTenantId(payload)),
-                        approvalType,
-                        actionType,
-                        targetType,
-                        targetId,
-                        JsonUtils.toJson(payload),
-                        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64),
-                        requestMetadata.traceId(),
-                        idempotencyKey,
-                        ConsoleTextSanitizer.safeInput(approvalReason, 512)
+                .body(ApprovalRequest.of(
+                        new ApprovalTarget(
+                                resolveTenant(extractTenantId(ctx.payload())),
+                                ctx.approvalType(),
+                                ctx.actionType(),
+                                ctx.targetType(),
+                                ctx.targetId()
+                        ),
+                        ctx.payload(),
+                        requestMetadata,
+                        ctx.idempotencyKey(),
+                        ctx.approvalReason()
                 ))
                 .retrieve()
                 .body(ApprovalResponse.class);
@@ -459,10 +434,10 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
                 .retrieve()
                 .body(ApprovalRecordResponse.class);
-        if (response == null || response.record() == null) {
+        if (response == null || response.getRecord() == null) {
             throw new BizException(ResultCode.NOT_FOUND, "approval request not found");
         }
-        String status = response.record().approvalStatus();
+        String status = response.getRecord().getApprovalStatus();
         if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
             throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");
         }
@@ -556,72 +531,110 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     ) {
     }
 
-    private record ApprovalRequest(String tenantId,
-                                   String approvalType,
-                                   String actionType,
-                                   String targetType,
-                                   String targetId,
-                                   String payloadJson,
-                                   String requesterId,
-                                   String sourceTraceId,
-                                   String sourceIdempotencyKey,
-                                   String approvalReason) {
+    private record ApprovalTarget(String tenantId,
+                                  String approvalType,
+                                  String actionType,
+                                  String targetType,
+                                  String targetId) {
+    }
+
+    @Getter
+    private static final class ApprovalRequest {
+        private final String tenantId;
+        private final String approvalType;
+        private final String actionType;
+        private final String targetType;
+        private final String targetId;
+        private final String payloadJson;
+        private final String requesterId;
+        private final String sourceTraceId;
+        private final String sourceIdempotencyKey;
+        private final String approvalReason;
+
+        private ApprovalRequest(ApprovalTarget target,
+                                String payloadJson,
+                                String requesterId,
+                                String sourceTraceId,
+                                String sourceIdempotencyKey,
+                                String approvalReason) {
+            this.tenantId = target.tenantId();
+            this.approvalType = target.approvalType();
+            this.actionType = target.actionType();
+            this.targetType = target.targetType();
+            this.targetId = target.targetId();
+            this.payloadJson = payloadJson;
+            this.requesterId = requesterId;
+            this.sourceTraceId = sourceTraceId;
+            this.sourceIdempotencyKey = sourceIdempotencyKey;
+            this.approvalReason = approvalReason;
+        }
+
+        private static ApprovalRequest of(ApprovalTarget target,
+                                          Object payload,
+                                          ConsoleRequestMetadata metadata,
+                                          String idempotencyKey,
+                                          String approvalReason) {
+            return new ApprovalRequest(
+                    target,
+                    JsonUtils.toJson(payload),
+                    ConsoleTextSanitizer.safeInput(metadata.operatorId(), 64),
+                    metadata.traceId(),
+                    idempotencyKey,
+                    ConsoleTextSanitizer.safeInput(approvalReason, 512)
+            );
+        }
     }
 
     private record ApprovalResponse(String approvalNo) {
     }
 
-    private record ApprovalRecordResponse(ApprovalRecord record) {
-        private record ApprovalRecord(String tenantId,
-                                      String approvalNo,
-                                      String approvalType,
-                                      String actionType,
-                                      String targetType,
-                                      String targetId,
-                                      String payloadJson,
-                                      String approvalStatus,
-                                      String requesterId,
-                                      String approverId,
-                                      String rejectionReason,
-                                      String approvalReason,
-                                      String sourceTraceId,
-                                      String sourceIdempotencyKey) {
-        }
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    private static class ApprovalRecordResponse {
+        private ApprovalRecord record;
     }
 
-    private record CompensationPayload(
-            String tenantId,
-            String compensationType,
-            Long targetId,
-            String targetInstanceNo,
-            String jobCode,
-            LocalDate bizDate,
-            String batchNo,
-            Long relatedFileId,
-            String channelCode,
-            String reason,
-            String operatorId,
-            String approvalId,
-            String strategy,
-            String traceId
-    ) {
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    private static class ApprovalRecord {
+        private String tenantId;
+        private String approvalNo;
+        private String approvalType;
+        private String actionType;
+        private String targetType;
+        private String targetId;
+        private String payloadJson;
+        private String approvalStatus;
+        private String requesterId;
+        private String approverId;
+        private String rejectionReason;
+        private String approvalReason;
+        private String sourceTraceId;
+        private String sourceIdempotencyKey;
+    }
+
+    @Getter
+    @Builder(toBuilder = true)
+    private static class CompensationPayload {
+        private final String tenantId;
+        private final String compensationType;
+        private final Long targetId;
+        private final String targetInstanceNo;
+        private final String jobCode;
+        private final LocalDate bizDate;
+        private final String batchNo;
+        private final Long relatedFileId;
+        private final String channelCode;
+        private final String reason;
+        private final String operatorId;
+        private final String approvalId;
+        private final String strategy;
+        private final String traceId;
+
         private CompensationPayload withTraceId(String currentTraceId) {
-            return new CompensationPayload(
-                    tenantId,
-                    compensationType,
-                    targetId,
-                    targetInstanceNo,
-                    jobCode,
-                    bizDate,
-                    batchNo,
-                    relatedFileId,
-                    channelCode,
-                    reason,
-                    operatorId,
-                    approvalId,
-                    strategy,
-                    currentTraceId
-            );
+            return toBuilder().traceId(currentTraceId).build();
         }
     }
 

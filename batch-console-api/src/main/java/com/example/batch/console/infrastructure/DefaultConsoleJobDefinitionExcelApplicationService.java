@@ -9,6 +9,7 @@ import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
+import com.example.batch.console.mapper.param.JobDefinitionMaintenanceUpdateParam;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
@@ -170,23 +171,23 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
             if (existing == null) {
                 throw new BizException(ResultCode.NOT_FOUND, "job definition not found: " + row.jobCode());
             }
-            jobDefinitionMapper.updateJobDefinitionMaintenance(
-                    row.tenantId(),
-                    row.jobCode(),
-                    effective(row.jobName(), existing.getJobName()),
-                    effective(row.queueCode(), existing.getQueueCode()),
-                    effective(row.workerGroup(), existing.getWorkerGroup()),
-                    effective(row.scheduleExpr(), existing.getScheduleExpr()),
-                    effective(row.calendarCode(), existing.getCalendarCode()),
-                    effective(row.windowCode(), existing.getWindowCode()),
-                    effective(row.retryPolicy(), existing.getRetryPolicy()),
-                    effective(row.retryMaxCount(), existing.getRetryMaxCount()),
-                    effective(row.timeoutSeconds(), existing.getTimeoutSeconds()),
-                    effective(row.shardStrategy(), existing.getShardStrategy()),
-                    effective(row.enabled(), existing.getEnabled()),
-                    effective(row.description(), existing.getDescription()),
-                    ConsoleTextSanitizer.safeInput(updatedBy, 64)
-            );
+            JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
+            param.setTenantId(row.tenantId());
+            param.setJobCode(row.jobCode());
+            param.setJobName(effective(row.jobName(), existing.getJobName()));
+            param.setQueueCode(effective(row.queueCode(), existing.getQueueCode()));
+            param.setWorkerGroup(effective(row.workerGroup(), existing.getWorkerGroup()));
+            param.setScheduleExpr(effective(row.scheduleExpr(), existing.getScheduleExpr()));
+            param.setCalendarCode(effective(row.calendarCode(), existing.getCalendarCode()));
+            param.setWindowCode(effective(row.windowCode(), existing.getWindowCode()));
+            param.setRetryPolicy(effective(row.retryPolicy(), existing.getRetryPolicy()));
+            param.setRetryMaxCount(effective(row.retryMaxCount(), existing.getRetryMaxCount()));
+            param.setTimeoutSeconds(effective(row.timeoutSeconds(), existing.getTimeoutSeconds()));
+            param.setShardStrategy(effective(row.shardStrategy(), existing.getShardStrategy()));
+            param.setEnabled(effective(row.enabled(), existing.getEnabled()));
+            param.setDescription(effective(row.description(), existing.getDescription()));
+            param.setUpdatedBy(ConsoleTextSanitizer.safeInput(updatedBy, 64));
+            jobDefinitionMapper.updateJobDefinitionMaintenance(param);
             logJobChange(row, request.getReason(), updatedBy, metadata.traceId(), existing);
             updatedRows++;
         }

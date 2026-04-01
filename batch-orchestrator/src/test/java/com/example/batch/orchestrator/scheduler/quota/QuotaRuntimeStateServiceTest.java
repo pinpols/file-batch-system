@@ -33,22 +33,22 @@ class QuotaRuntimeStateServiceTest {
 
     @Test
     void shouldAllowWhenTenantIdIsBlank() {
-        ResourceCheck result = service.evaluateAndReserve(
-                "", "JOB", "job-001", "NONE", 10, 2, 0, 1, 24, "OVER", "over limit");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "", "JOB", "job-001", "NONE", 10, 2, 0, 1, 24, "OVER", "over limit"));
         assertThat(result.allowed()).isTrue();
     }
 
     @Test
     void shouldAllowWhenBaseCapIsZero() {
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-001", "NONE", 0, 2, 0, 1, 24, "OVER", "over limit");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-001", "NONE", 0, 2, 0, 1, 24, "OVER", "over limit"));
         assertThat(result.allowed()).isTrue();
     }
 
     @Test
     void shouldAllowWhenBaseCapIsNegative() {
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-001", "NONE", -5, 2, 0, 1, 24, "OVER", "over limit");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-001", "NONE", -5, 2, 0, 1, 24, "OVER", "over limit"));
         assertThat(result.allowed()).isTrue();
     }
 
@@ -57,32 +57,32 @@ class QuotaRuntimeStateServiceTest {
     @Test
     void shouldAllowWhenNonePolicyAndWithinCap() {
         // baseCap=10, burst=0, active=5, requested=1 → 5+1=6 ≤ 10
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-001", "NONE", 10, 0, 5, 1, 24, "OVER", "over");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-001", "NONE", 10, 0, 5, 1, 24, "OVER", "over"));
         assertThat(result.allowed()).isTrue();
     }
 
     @Test
     void shouldBlockWhenNonePolicyAndOverCap() {
         // baseCap=10, burst=0, active=10, requested=1 → 11 > 10
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-001", "NONE", 10, 0, 10, 1, 24, "OVER_CAP", "over cap");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-001", "NONE", 10, 0, 10, 1, 24, "OVER_CAP", "over cap"));
         assertThat(result.allowed()).isFalse();
     }
 
     @Test
     void shouldAllowWhenNonePolicyWithBurstAndWithinCombinedCap() {
         // baseCap=10, burst=5, combined=15, active=12, requested=1 → 13 ≤ 15
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-001", "NONE", 10, 5, 12, 1, 24, "OVER", "over");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-001", "NONE", 10, 5, 12, 1, 24, "OVER", "over"));
         assertThat(result.allowed()).isTrue();
     }
 
     @Test
     void shouldBlockWhenNonePolicyWithBurstAndOverCombinedCap() {
         // baseCap=10, burst=5, combined=15, active=15, requested=1 → 16 > 15
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-001", "NONE", 10, 5, 15, 1, 24, "OVER", "over");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-001", "NONE", 10, 5, 15, 1, 24, "OVER", "over"));
         assertThat(result.allowed()).isFalse();
     }
 
@@ -96,8 +96,8 @@ class QuotaRuntimeStateServiceTest {
         when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // baseCap=5, burst=10, active=7, requested=1 → borrowed=7+1-5=3, burst=10 → ok
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-sw", "SLIDING_WINDOW", 5, 10, 7, 1, 2, "OVER", "over");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-sw", "SLIDING_WINDOW", 5, 10, 7, 1, 2, "OVER", "over"));
 
         assertThat(result.allowed()).isTrue();
         verify(quotaRuntimeStateRepository).save(any());
@@ -111,8 +111,8 @@ class QuotaRuntimeStateServiceTest {
         when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // baseCap=5, burst=3, active=8, requested=2 → borrowed=8+2-5=5 > burst=3
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-sw", "SLIDING_WINDOW", 5, 3, 8, 2, 2, "OVER", "over");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-sw", "SLIDING_WINDOW", 5, 3, 8, 2, 2, "OVER", "over"));
 
         assertThat(result.allowed()).isFalse();
     }
@@ -124,8 +124,8 @@ class QuotaRuntimeStateServiceTest {
         when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // baseCap=10, burst=5, active=3, requested=2 → borrowed=0, no burst needed
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-sw", "SLIDING_WINDOW", 10, 5, 3, 2, 2, "OVER", "over");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-sw", "SLIDING_WINDOW", 10, 5, 3, 2, 2, "OVER", "over"));
 
         assertThat(result.allowed()).isTrue();
     }
@@ -140,8 +140,8 @@ class QuotaRuntimeStateServiceTest {
         when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // baseCap=5, burst=10, active=7, requested=1 → borrowed=3 ≤ burst=10
-        ResourceCheck result = service.evaluateAndReserve(
-                "t1", "JOB", "job-cal", "CALENDAR_DAY", 5, 10, 7, 1, 24, "OVER", "over");
+        ResourceCheck result = service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-cal", "CALENDAR_DAY", 5, 10, 7, 1, 24, "OVER", "over"));
 
         assertThat(result.allowed()).isTrue();
     }
@@ -160,8 +160,8 @@ class QuotaRuntimeStateServiceTest {
         when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // active=8, baseCap=5, requested=1 → borrowed=4 > current peak=1
-        service.evaluateAndReserve(
-                "t1", "JOB", "job-cal", "CALENDAR_DAY", 5, 10, 8, 1, 24, "OVER", "over");
+        service.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", "job-cal", "CALENDAR_DAY", 5, 10, 8, 1, 24, "OVER", "over"));
 
         verify(quotaRuntimeStateRepository, times(2)).save(any(QuotaRuntimeStateRecord.class));
     }
@@ -171,7 +171,9 @@ class QuotaRuntimeStateServiceTest {
     @Test
     void shouldReturnDefaultSnapshotWhenTenantIdIsBlank() {
         QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = service.describe(
-                "", "JOB", "job-001", "CALENDAR_DAY", 5, 24);
+                new QuotaRuntimeStateService.QuotaDescribeRequest(
+                        new QuotaRuntimeStateService.QuotaReservationOwner("", "JOB", "job-001"),
+                        "CALENDAR_DAY", 5, 24));
 
         assertThat(snap.burstLimit()).isEqualTo(5);
         assertThat(snap.peakBorrowedCount()).isZero();
@@ -181,7 +183,9 @@ class QuotaRuntimeStateServiceTest {
     @Test
     void shouldReturnDefaultSnapshotWhenBurstLimitZeroOrNone() {
         QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = service.describe(
-                "t1", "JOB", "job-001", "NONE", 5, 0);
+                new QuotaRuntimeStateService.QuotaDescribeRequest(
+                        new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "job-001"),
+                        "NONE", 5, 0));
 
         assertThat(snap.quotaResetPolicy()).isEqualTo("NONE");
         assertThat(snap.peakBorrowedCount()).isZero();
@@ -194,7 +198,9 @@ class QuotaRuntimeStateServiceTest {
                 .thenReturn(null);
 
         QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = service.describe(
-                "t1", "JOB", "job-001", "CALENDAR_DAY", 5, 24);
+                new QuotaRuntimeStateService.QuotaDescribeRequest(
+                        new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", "job-001"),
+                        "CALENDAR_DAY", 5, 24));
 
         assertThat(snap.peakBorrowedCount()).isZero();
         assertThat(snap.remainingBurst()).isEqualTo(5);
@@ -225,5 +231,30 @@ class QuotaRuntimeStateServiceTest {
         service.reconcileExpiredStates(2);
 
         verify(quotaRuntimeStateRepository).save(any());
+    }
+
+    private static QuotaRuntimeStateService.QuotaReservationRequest reservationRequest(String tenantId,
+                                                                                       String quotaScope,
+                                                                                       String ownerCode,
+                                                                                       String quotaResetPolicy,
+                                                                                       int baseCap,
+                                                                                       int burstLimit,
+                                                                                       long currentActiveCount,
+                                                                                       int requestedCount,
+                                                                                       int slidingWindowHours,
+                                                                                       String reasonCode,
+                                                                                       String reasonMessage) {
+        return new QuotaRuntimeStateService.QuotaReservationRequest(
+                new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, quotaScope, ownerCode),
+                new QuotaRuntimeStateService.QuotaReservationPolicy(
+                        quotaResetPolicy,
+                        baseCap,
+                        burstLimit,
+                        slidingWindowHours
+                ),
+                currentActiveCount,
+                requestedCount,
+                new QuotaRuntimeStateService.QuotaReservationReason(reasonCode, reasonMessage)
+        );
     }
 }

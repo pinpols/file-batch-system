@@ -8,6 +8,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.ConsoleFileTemplateExcelApplicationService;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
+import com.example.batch.console.mapper.param.FileTemplateConfigUpsertParam;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
@@ -31,7 +32,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataValidation;
@@ -115,6 +119,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
     private static final Set<String> CHECKSUM_TYPES = Set.of("NONE", "MD5", "SHA-256");
     private static final Set<String> COMPRESS_TYPES = Set.of("NONE", "ZIP", "GZIP");
     private static final Set<String> ENCRYPT_TYPES = Set.of("NONE", "AES", "PGP", "CUSTOM");
+    private static final int[] BOOLEAN_VALIDATION_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
 
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -182,51 +187,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         int updated = 0;
         for (TemplateRow row : validationResult.rows()) {
             Map<String, Object> existing = fileTemplateConfigMapper.selectByUniqueKey(session.tenantId(), row.templateCode(), row.version());
-            fileTemplateConfigMapper.upsertFileTemplateConfig(
-                    session.tenantId(),
-                    row.templateCode(),
-                    row.templateName(),
-                    row.templateType(),
-                    row.bizType(),
-                    row.fileFormatType(),
-                    row.charset(),
-                    row.targetCharset(),
-                    row.withBom(),
-                    row.lineSeparator(),
-                    row.delimiter(),
-                    row.quoteChar(),
-                    row.escapeChar(),
-                    row.recordLength(),
-                    row.headerRows(),
-                    row.footerRows(),
-                    row.headerTemplateJson(),
-                    row.trailerTemplateJson(),
-                    row.checksumType(),
-                    row.compressType(),
-                    row.encryptType(),
-                    row.namingRule(),
-                    row.fieldMappingsJson(),
-                    row.validationRuleSetJson(),
-                    row.defaultQueryCode(),
-                    row.defaultQuerySql(),
-                    row.queryParamSchemaJson(),
-                    row.streamingEnabled(),
-                    row.pageSize(),
-                    row.fetchSize(),
-                    row.chunkSize(),
-                    row.previewMaskingEnabled(),
-                    row.errorLineMaskingEnabled(),
-                    row.logMaskingEnabled(),
-                    row.contentEncryptionEnabled(),
-                    row.encryptionKeyRef(),
-                    row.downloadRequiresApproval(),
-                    row.maskingRuleSet(),
-                    row.enabled(),
-                    row.version(),
-                    row.description(),
-                    ConsoleTextSanitizer.safeInput(operatorId, 64),
-                    ConsoleTextSanitizer.safeInput(operatorId, 64)
-            );
+            fileTemplateConfigMapper.upsertFileTemplateConfig(toUpsertParam(session.tenantId(), row, operatorId));
             if (existing == null || existing.isEmpty()) {
                 inserted++;
             } else {
@@ -356,22 +317,50 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         Boolean enabled = optionalBoolean(values, "enabled", true, issues);
         Integer version = optionalInteger(values, "version", 1, issues);
         String description = optionalText(values, "description", 1024, issues);
-        if (issues.isEmpty()) {
-            return new TemplateRow(rowNo, effectiveTenant, templateCode, templateName, templateType, bizType, fileFormatType,
-                    charset, targetCharset, withBom, lineSeparator, delimiter, quoteChar, escapeChar, recordLength,
-                    headerRows, footerRows, headerTemplateJson, trailerTemplateJson, checksumType, compressType,
-                    encryptType, namingRule, fieldMappingsJson, validationRuleSetJson, defaultQueryCode,
-                    defaultQuerySql, queryParamSchemaJson, streamingEnabled, pageSize, fetchSize, chunkSize,
-                    previewMaskingEnabled, errorLineMaskingEnabled, logMaskingEnabled, contentEncryptionEnabled,
-                    encryptionKeyRef, downloadRequiresApproval, maskingRuleSet, enabled, version, description);
-        }
-        return new TemplateRow(rowNo, effectiveTenant, templateCode, templateName, templateType, bizType, fileFormatType,
-                charset, targetCharset, withBom, lineSeparator, delimiter, quoteChar, escapeChar, recordLength,
-                headerRows, footerRows, headerTemplateJson, trailerTemplateJson, checksumType, compressType,
-                encryptType, namingRule, fieldMappingsJson, validationRuleSetJson, defaultQueryCode,
-                defaultQuerySql, queryParamSchemaJson, streamingEnabled, pageSize, fetchSize, chunkSize,
-                previewMaskingEnabled, errorLineMaskingEnabled, logMaskingEnabled, contentEncryptionEnabled,
-                encryptionKeyRef, downloadRequiresApproval, maskingRuleSet, enabled, version, description);
+        return TemplateRow.builder()
+                .rowNo(rowNo)
+                .tenantId(effectiveTenant)
+                .templateCode(templateCode)
+                .templateName(templateName)
+                .templateType(templateType)
+                .bizType(bizType)
+                .fileFormatType(fileFormatType)
+                .charset(charset)
+                .targetCharset(targetCharset)
+                .withBom(withBom)
+                .lineSeparator(lineSeparator)
+                .delimiter(delimiter)
+                .quoteChar(quoteChar)
+                .escapeChar(escapeChar)
+                .recordLength(recordLength)
+                .headerRows(headerRows)
+                .footerRows(footerRows)
+                .headerTemplateJson(headerTemplateJson)
+                .trailerTemplateJson(trailerTemplateJson)
+                .checksumType(checksumType)
+                .compressType(compressType)
+                .encryptType(encryptType)
+                .namingRule(namingRule)
+                .fieldMappingsJson(fieldMappingsJson)
+                .validationRuleSetJson(validationRuleSetJson)
+                .defaultQueryCode(defaultQueryCode)
+                .defaultQuerySql(defaultQuerySql)
+                .queryParamSchemaJson(queryParamSchemaJson)
+                .streamingEnabled(streamingEnabled)
+                .pageSize(pageSize)
+                .fetchSize(fetchSize)
+                .chunkSize(chunkSize)
+                .previewMaskingEnabled(previewMaskingEnabled)
+                .errorLineMaskingEnabled(errorLineMaskingEnabled)
+                .logMaskingEnabled(logMaskingEnabled)
+                .contentEncryptionEnabled(contentEncryptionEnabled)
+                .encryptionKeyRef(encryptionKeyRef)
+                .downloadRequiresApproval(downloadRequiresApproval)
+                .maskingRuleSet(maskingRuleSet)
+                .enabled(enabled)
+                .version(version)
+                .description(description)
+                .build();
     }
 
     private String requireText(Map<String, String> values, String key, int maxLength, List<String> issues) {
@@ -542,7 +531,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         addListValidation(sheet, 18, CHECKSUM_TYPES.toArray(String[]::new));
         addListValidation(sheet, 19, COMPRESS_TYPES.toArray(String[]::new));
         addListValidation(sheet, 20, ENCRYPT_TYPES.toArray(String[]::new));
-        addBooleanValidation(sheet, 8, 27, 31, 32, 33, 34, 36, 38);
+        addBooleanValidation(sheet, BOOLEAN_VALIDATION_COLUMNS);
     }
 
     private void addListValidation(Sheet sheet, int columnIndex, String[] values) {
@@ -744,6 +733,72 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         );
     }
 
+    private FileTemplateConfigUpsertParam toUpsertParam(String tenantId, TemplateRow row, String operatorId) {
+        FileTemplateConfigUpsertParam param = new FileTemplateConfigUpsertParam();
+        param.setTenantId(tenantId);
+        param.setTemplateCode(row.templateCode());
+
+        FileTemplateConfigUpsertParam.BasicInfo basicInfo = new FileTemplateConfigUpsertParam.BasicInfo();
+        basicInfo.setTemplateName(row.templateName());
+        basicInfo.setTemplateType(row.templateType());
+        basicInfo.setBizType(row.bizType());
+        basicInfo.setEnabled(row.enabled());
+        basicInfo.setVersion(row.version());
+        basicInfo.setDescription(row.description());
+        param.setBasicInfo(basicInfo);
+
+        FileTemplateConfigUpsertParam.FormatOptions format = new FileTemplateConfigUpsertParam.FormatOptions();
+        format.setFileFormatType(row.fileFormatType());
+        format.setCharset(row.charset());
+        format.setTargetCharset(row.targetCharset());
+        format.setWithBom(row.withBom());
+        format.setLineSeparator(row.lineSeparator());
+        format.setDelimiter(row.delimiter());
+        format.setQuoteChar(row.quoteChar());
+        format.setEscapeChar(row.escapeChar());
+        format.setRecordLength(row.recordLength());
+        format.setHeaderRows(row.headerRows());
+        format.setFooterRows(row.footerRows());
+        format.setHeaderTemplateJson(row.headerTemplateJson());
+        format.setTrailerTemplateJson(row.trailerTemplateJson());
+        format.setChecksumType(row.checksumType());
+        format.setCompressType(row.compressType());
+        format.setEncryptType(row.encryptType());
+        format.setNamingRule(row.namingRule());
+        format.setFieldMappingsJson(row.fieldMappingsJson());
+        format.setValidationRuleSetJson(row.validationRuleSetJson());
+        param.setFormat(format);
+
+        FileTemplateConfigUpsertParam.QueryOptions query = new FileTemplateConfigUpsertParam.QueryOptions();
+        query.setDefaultQueryCode(row.defaultQueryCode());
+        query.setDefaultQuerySql(row.defaultQuerySql());
+        query.setQueryParamSchemaJson(row.queryParamSchemaJson());
+        param.setQuery(query);
+
+        FileTemplateConfigUpsertParam.RuntimeOptions runtime = new FileTemplateConfigUpsertParam.RuntimeOptions();
+        runtime.setStreamingEnabled(row.streamingEnabled());
+        runtime.setPageSize(row.pageSize());
+        runtime.setFetchSize(row.fetchSize());
+        runtime.setChunkSize(row.chunkSize());
+        param.setRuntime(runtime);
+
+        FileTemplateConfigUpsertParam.SecurityOptions security = new FileTemplateConfigUpsertParam.SecurityOptions();
+        security.setPreviewMaskingEnabled(row.previewMaskingEnabled());
+        security.setErrorLineMaskingEnabled(row.errorLineMaskingEnabled());
+        security.setLogMaskingEnabled(row.logMaskingEnabled());
+        security.setContentEncryptionEnabled(row.contentEncryptionEnabled());
+        security.setEncryptionKeyRef(row.encryptionKeyRef());
+        security.setDownloadRequiresApproval(row.downloadRequiresApproval());
+        security.setMaskingRuleSet(row.maskingRuleSet());
+        param.setSecurity(security);
+
+        FileTemplateConfigUpsertParam.AuditOptions audit = new FileTemplateConfigUpsertParam.AuditOptions();
+        audit.setCreatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
+        audit.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
+        param.setAudit(audit);
+        return param;
+    }
+
     private record ParsedWorkbook(String fileName, String tenantId, String sheetName, List<Map<String, String>> rows) {
     }
 
@@ -757,47 +812,51 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
                                     List<ConsoleExcelRowIssueResponse> issues) {
     }
 
-    private record TemplateRow(Integer rowNo,
-                               String tenantId,
-                               String templateCode,
-                               String templateName,
-                               String templateType,
-                               String bizType,
-                               String fileFormatType,
-                               String charset,
-                               String targetCharset,
-                               Boolean withBom,
-                               String lineSeparator,
-                               String delimiter,
-                               String quoteChar,
-                               String escapeChar,
-                               Integer recordLength,
-                               Integer headerRows,
-                               Integer footerRows,
-                               String headerTemplateJson,
-                               String trailerTemplateJson,
-                               String checksumType,
-                               String compressType,
-                               String encryptType,
-                               String namingRule,
-                               String fieldMappingsJson,
-                               String validationRuleSetJson,
-                               String defaultQueryCode,
-                               String defaultQuerySql,
-                               String queryParamSchemaJson,
-                               Boolean streamingEnabled,
-                               Integer pageSize,
-                               Integer fetchSize,
-                               Integer chunkSize,
-                               Boolean previewMaskingEnabled,
-                               Boolean errorLineMaskingEnabled,
-                               Boolean logMaskingEnabled,
-                               Boolean contentEncryptionEnabled,
-                               String encryptionKeyRef,
-                               Boolean downloadRequiresApproval,
-                               String maskingRuleSet,
-                               Boolean enabled,
-                               Integer version,
-                               String description) {
+    @Getter
+    @Builder
+    @Accessors(fluent = true)
+    private static class TemplateRow {
+        private final Integer rowNo;
+        private final String tenantId;
+        private final String templateCode;
+        private final String templateName;
+        private final String templateType;
+        private final String bizType;
+        private final String fileFormatType;
+        private final String charset;
+        private final String targetCharset;
+        private final Boolean withBom;
+        private final String lineSeparator;
+        private final String delimiter;
+        private final String quoteChar;
+        private final String escapeChar;
+        private final Integer recordLength;
+        private final Integer headerRows;
+        private final Integer footerRows;
+        private final String headerTemplateJson;
+        private final String trailerTemplateJson;
+        private final String checksumType;
+        private final String compressType;
+        private final String encryptType;
+        private final String namingRule;
+        private final String fieldMappingsJson;
+        private final String validationRuleSetJson;
+        private final String defaultQueryCode;
+        private final String defaultQuerySql;
+        private final String queryParamSchemaJson;
+        private final Boolean streamingEnabled;
+        private final Integer pageSize;
+        private final Integer fetchSize;
+        private final Integer chunkSize;
+        private final Boolean previewMaskingEnabled;
+        private final Boolean errorLineMaskingEnabled;
+        private final Boolean logMaskingEnabled;
+        private final Boolean contentEncryptionEnabled;
+        private final String encryptionKeyRef;
+        private final Boolean downloadRequiresApproval;
+        private final String maskingRuleSet;
+        private final Boolean enabled;
+        private final Integer version;
+        private final String description;
     }
 }

@@ -31,18 +31,18 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldAllowWhenWithinBaseCapNoBurstNeeded() {
-        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(
+        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(reservationRequest(
                 "t1", "JOB", "quota-test-basic-" + System.currentTimeMillis(),
-                "NONE", 10, 0, 5, 1, 24, "OVER_CAP", "over");
+                "NONE", 10, 0, 5, 1, 24, "OVER_CAP", "over"));
 
         assertThat(result.allowed()).isTrue();
     }
 
     @Test
     void shouldBlockWhenOverBaseCapNoBurst() {
-        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(
+        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(reservationRequest(
                 "t1", "JOB", "quota-test-block-" + System.currentTimeMillis(),
-                "NONE", 5, 0, 5, 1, 24, "OVER_CAP", "over cap");
+                "NONE", 5, 0, 5, 1, 24, "OVER_CAP", "over cap"));
 
         assertThat(result.allowed()).isFalse();
     }
@@ -51,8 +51,8 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     void shouldCreateNewStateRecordForSlidingWindow() {
         String ownerCode = "sw-test-" + System.currentTimeMillis();
 
-        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(
-                "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 10, 7, 1, 2, "OVER", "over");
+        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 10, 7, 1, 2, "OVER", "over"));
 
         assertThat(result.allowed()).isTrue();
 
@@ -69,8 +69,8 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         String ownerCode = "sw-peak-" + System.currentTimeMillis();
 
         // First reservation: active=8, base=5, requested=2 → borrowed=5
-        quotaRuntimeStateService.evaluateAndReserve(
-                "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 10, 8, 2, 2, "OVER", "over");
+        quotaRuntimeStateService.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 10, 8, 2, 2, "OVER", "over"));
 
         QuotaRuntimeStateRecord state = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
@@ -83,8 +83,8 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         String ownerCode = "sw-burst-" + System.currentTimeMillis();
 
         // burst=3, active=10, base=5, requested=1 → borrowed=6 > burst=3
-        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(
-                "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 3, 10, 1, 2, "OVER_BURST", "over burst");
+        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 3, 10, 1, 2, "OVER_BURST", "over burst"));
 
         assertThat(result.allowed()).isFalse();
     }
@@ -93,8 +93,8 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     void shouldCreateNewStateRecordForCalendarDay() {
         String ownerCode = "cd-test-" + System.currentTimeMillis();
 
-        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(
-                "t1", "JOB", ownerCode, "CALENDAR_DAY", 5, 10, 7, 1, 24, "OVER", "over");
+        ResourceCheck result = quotaRuntimeStateService.evaluateAndReserve(reservationRequest(
+                "t1", "JOB", ownerCode, "CALENDAR_DAY", 5, 10, 7, 1, 24, "OVER", "over"));
 
         assertThat(result.allowed()).isTrue();
 
@@ -109,11 +109,16 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
         String ownerCode = "describe-test-" + System.currentTimeMillis();
 
         // Create state first
-        quotaRuntimeStateService.evaluateAndReserve(
-                "t1", "JOB", ownerCode, "SLIDING_WINDOW", 5, 10, 7, 2, 2, "OVER", "over");
+        quotaRuntimeStateService.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
+                new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
+                new QuotaRuntimeStateService.QuotaReservationPolicy("SLIDING_WINDOW", 5, 10, 7),
+                2L, 2,
+                new QuotaRuntimeStateService.QuotaReservationReason("OVER", "over")));
 
         QuotaRuntimeStateService.QuotaRuntimeSnapshot snapshot = quotaRuntimeStateService.describe(
-                "t1", "JOB", ownerCode, "SLIDING_WINDOW", 10, 2);
+                new QuotaRuntimeStateService.QuotaDescribeRequest(
+                        new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
+                        "SLIDING_WINDOW", 10, 2));
 
         assertThat(snapshot).isNotNull();
         assertThat(snapshot.quotaResetPolicy()).isEqualTo("SLIDING_WINDOW");
@@ -156,5 +161,30 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
         boolean found = expired.stream().anyMatch(r -> ownerCode.equals(r.ownerCode()));
         assertThat(found).isTrue();
+    }
+
+    private static QuotaRuntimeStateService.QuotaReservationRequest reservationRequest(String tenantId,
+                                                                                       String quotaScope,
+                                                                                       String ownerCode,
+                                                                                       String quotaResetPolicy,
+                                                                                       int baseCap,
+                                                                                       int burstLimit,
+                                                                                       long currentActiveCount,
+                                                                                       int requestedCount,
+                                                                                       int slidingWindowHours,
+                                                                                       String reasonCode,
+                                                                                       String reasonMessage) {
+        return new QuotaRuntimeStateService.QuotaReservationRequest(
+                new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, quotaScope, ownerCode),
+                new QuotaRuntimeStateService.QuotaReservationPolicy(
+                        quotaResetPolicy,
+                        baseCap,
+                        burstLimit,
+                        slidingWindowHours
+                ),
+                currentActiveCount,
+                requestedCount,
+                new QuotaRuntimeStateService.QuotaReservationReason(reasonCode, reasonMessage)
+        );
     }
 }

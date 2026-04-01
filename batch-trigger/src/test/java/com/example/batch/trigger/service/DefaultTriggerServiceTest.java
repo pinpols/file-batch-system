@@ -32,6 +32,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultTriggerServiceTest {
@@ -44,16 +46,22 @@ class DefaultTriggerServiceTest {
     private TriggerRequestMapper triggerRequestMapper;
     @Mock
     private BusinessCalendarMapper businessCalendarMapper;
+    @Mock
+    private PlatformTransactionManager transactionManager;
+    @Mock
+    private TransactionStatus transactionStatus;
 
     private DefaultTriggerService service;
 
     @BeforeEach
     void setUp() {
+        when(transactionManager.getTransaction(any())).thenReturn(transactionStatus);
         service = new DefaultTriggerService(
                 launchAdapterService,
                 orchestratorTriggerAdapter,
                 triggerRequestMapper,
-                businessCalendarMapper
+                businessCalendarMapper,
+                transactionManager
         );
     }
 

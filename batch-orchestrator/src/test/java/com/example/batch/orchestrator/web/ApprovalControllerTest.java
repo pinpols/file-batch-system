@@ -1,7 +1,6 @@
 package com.example.batch.orchestrator.web;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -27,18 +26,7 @@ class ApprovalControllerTest {
 
     @Test
     void shouldSubmitAndReturnApprovalNo() throws Exception {
-        when(approvalWorkflowService.submit(
-                eq("t1"),
-                eq("CATCH_UP"),
-                eq("APPROVE"),
-                eq("TRIGGER_REQUEST"),
-                eq("req-001"),
-                any(),
-                eq("u1"),
-                eq("trace-001"),
-                eq("idem-001"),
-                eq("ok")
-        )).thenReturn("appr-001");
+        when(approvalWorkflowService.submit(any())).thenReturn("appr-001");
 
         mockMvc.perform(post("/internal/approvals")
                         .contentType(APPLICATION_JSON)

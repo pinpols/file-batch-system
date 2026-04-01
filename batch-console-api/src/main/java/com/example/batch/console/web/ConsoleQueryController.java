@@ -62,6 +62,7 @@ import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
+import java.util.Map;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -293,5 +294,30 @@ public class ConsoleQueryController {
     @GetMapping("/workers")
     public CommonResponse<PageResponse<ConsoleWorkerRegistryResponse>> workers(@Valid @ModelAttribute WorkerRegistryQueryRequest request) {
         return responseFactory.success(applicationService.workers(request));
+    }
+
+    @GetMapping("/file-channels/{channelCode}")
+    public CommonResponse<Map<String, Object>> fileChannelDetail(@PathVariable String channelCode,
+                                                                  @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.fileChannelDetail(tenantId, channelCode));
+    }
+
+    @GetMapping("/file-templates/{templateCode}")
+    public CommonResponse<Map<String, Object>> fileTemplateDetail(@PathVariable String templateCode,
+                                                                   @RequestParam("tenantId") String tenantId,
+                                                                   @RequestParam(value = "version", required = false) Integer version) {
+        return responseFactory.success(applicationService.fileTemplateDetail(tenantId, templateCode, version));
+    }
+
+    @GetMapping("/files/{id}")
+    public CommonResponse<Map<String, Object>> fileRecordDetail(@PathVariable Long id,
+                                                                 @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.fileRecordDetail(tenantId, id));
+    }
+
+    @GetMapping("/file-pipelines/{id}")
+    public CommonResponse<ConsoleFilePipelineResponse> filePipelineDetail(@PathVariable Long id,
+                                                                           @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
     }
 }

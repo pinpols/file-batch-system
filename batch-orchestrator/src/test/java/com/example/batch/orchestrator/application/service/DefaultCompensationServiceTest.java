@@ -16,6 +16,7 @@ import com.example.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。
@@ -56,9 +57,9 @@ class DefaultCompensationServiceTest {
                 triggerRequestMapper,
                 retryGovernanceService,
                 fileGovernanceService,
-                launchService,
                 taskExecutionService
         );
+        ReflectionTestUtils.setField(service, "launchService", launchService);
     }
 
     // ── validate() ────────────────────────────────────────────────────────────

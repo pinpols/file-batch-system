@@ -275,4 +275,14 @@
           and ji.instance_status in ('FAILED', 'PARTIAL_FAILED')
         order by ji.job_code, ji.id desc
     </select>
+    <update id="updateStatus">
+        update batch.job_instance
+        set instance_status = #{instanceStatus},
+            finished_at = coalesce(#{finishedAt}, finished_at),
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+    </update>
 </mapper>

@@ -36,19 +36,25 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
                 && quotaPolicy.maxPartitionsPerTenant() != null
                 && quotaPolicy.maxPartitionsPerTenant() > 0) {
             int pburst = quotaPolicy.partitionBurstLimit() == null ? 0 : Math.max(0, quotaPolicy.partitionBurstLimit());
-            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
-                    request.getTenantId(),
-                    "TENANT_PARTITIONS",
-                    request.getTenantId(),
-                    quotaPolicy.quotaResetPolicy(),
-                    quotaPolicy.maxPartitionsPerTenant(),
-                    pburst,
+            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
+                    new QuotaRuntimeStateService.QuotaReservationOwner(
+                            request.getTenantId(),
+                            "TENANT_PARTITIONS",
+                            request.getTenantId()
+                    ),
+                    new QuotaRuntimeStateService.QuotaReservationPolicy(
+                            quotaPolicy.quotaResetPolicy(),
+                            quotaPolicy.maxPartitionsPerTenant(),
+                            pburst,
+                            governance.resourceScheduler().getQuotaResetSlidingWindowHours()
+                    ),
                     tenantActivePartitions,
                     requestedPartitions,
-                    governance.resourceScheduler().getQuotaResetSlidingWindowHours(),
-                    "TENANT_PARTITION_LIMIT",
-                    "tenant running partitions exceed quota (including partition burst)"
-            );
+                    new QuotaRuntimeStateService.QuotaReservationReason(
+                            "TENANT_PARTITION_LIMIT",
+                            "tenant running partitions exceed quota (including partition burst)"
+                    )
+            ));
             if (!burstCheck.allowed()) {
                 return burstCheck;
             }
@@ -58,19 +64,25 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
                 && queue.maxRunningPartitions() > 0) {
             long queueActivePartitions = countQueueActivePartitions(request, queue, tenantActivePartitions);
             int burst = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
-            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(
-                    request.getTenantId(),
-                    "QUEUE_PARTITIONS",
-                    queue.queueCode(),
-                    queue.quotaResetPolicy(),
-                    queue.maxRunningPartitions(),
-                    burst,
+            ResourceCheck burstCheck = quotaRuntimeStateService.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
+                    new QuotaRuntimeStateService.QuotaReservationOwner(
+                            request.getTenantId(),
+                            "QUEUE_PARTITIONS",
+                            queue.queueCode()
+                    ),
+                    new QuotaRuntimeStateService.QuotaReservationPolicy(
+                            queue.quotaResetPolicy(),
+                            queue.maxRunningPartitions(),
+                            burst,
+                            governance.resourceScheduler().getQuotaResetSlidingWindowHours()
+                    ),
                     queueActivePartitions,
                     requestedPartitions,
-                    governance.resourceScheduler().getQuotaResetSlidingWindowHours(),
-                    "QUEUE_PARTITION_LIMIT",
-                    "resource queue running partitions exceed limit"
-            );
+                    new QuotaRuntimeStateService.QuotaReservationReason(
+                            "QUEUE_PARTITION_LIMIT",
+                            "resource queue running partitions exceed limit"
+                    )
+            ));
             if (!burstCheck.allowed()) {
                 return burstCheck;
             }
