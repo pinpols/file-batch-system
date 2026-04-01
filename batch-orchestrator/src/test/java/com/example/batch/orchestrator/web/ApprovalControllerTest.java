@@ -57,7 +57,7 @@ class ApprovalControllerTest {
 
     @Test
     void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
-        when(approvalWorkflowService.get(eq("t1"), eq("appr-404")))
+        when(approvalWorkflowService.get("t1", "appr-404"))
                 .thenThrow(new BizException(ResultCode.NOT_FOUND, "not found"));
 
         mockMvc.perform(get("/internal/approvals/appr-404").param("tenantId", "t1"))
