@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
+import com.example.batch.orchestrator.mapper.FinishTaskParam;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.util.ArrayList;
@@ -58,12 +59,12 @@ class ConcurrentTaskFinishIntegrationTest extends AbstractIntegrationTest {
             futures.add(pool.submit(() -> {
                 startGate.await();
                 return transactionTemplate.execute(status ->
-                        jobTaskMapper.finishTask(
-                                "t1", taskId,
-                                TaskStatus.SUCCESS.code(),
-                                TaskStatus.RUNNING.code(),
-                                null, null, null,
-                                0L));
+                        jobTaskMapper.finishTask(FinishTaskParam.builder()
+                                .tenantId("t1").id(taskId)
+                                .taskStatus(TaskStatus.SUCCESS.code())
+                                .expectedStatus(TaskStatus.RUNNING.code())
+                                .resultSummary(null).errorCode(null).errorMessage(null)
+                                .expectedVersion(0L).build()));
             }));
         }
 

@@ -6,6 +6,8 @@ import com.example.batch.common.enums.SkipThresholdMode;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.utils.ContentMaskingUtils;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.worker.core.infrastructure.FileAuditParam;
+import com.example.batch.worker.core.infrastructure.FileErrorRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportSkipProperties;
@@ -60,7 +62,7 @@ public class ImportRecordGovernanceService {
                                    String errorCode,
                                    String errorMessage,
                                    Object rawRecord) {
-        recordBadRecord(context, stage, recordNo, errorCode, errorMessage, rawRecord, true);
+        recordBadRecord(new BadRecordContext(context, stage, recordNo, errorCode, errorMessage, rawRecord, true));
     }
 
     public void recordFailedRecord(ImportJobContext context,
@@ -69,11 +71,11 @@ public class ImportRecordGovernanceService {
                                    String errorCode,
                                    String errorMessage,
                                    Object rawRecord) {
-        recordBadRecord(context, stage, recordNo, errorCode, errorMessage, rawRecord, false);
+        recordBadRecord(new BadRecordContext(context, stage, recordNo, errorCode, errorMessage, rawRecord, false));
     }
 
     public void recordThresholdViolation(ImportJobContext context, ImportStage stage, String errorCode, String message) {
-        recordBadRecord(context, stage, null, errorCode, message, null, false);
+        recordBadRecord(new BadRecordContext(context, stage, null, errorCode, message, null, false));
         context.getAttributes().put("skipThresholdExceeded", true);
     }
 
@@ -117,26 +119,26 @@ public class ImportRecordGovernanceService {
             metadata.put("errorOutputPath", errorOutputPath);
         }
         runtimeRepository.updateFileMetadata(fileId, metadata);
-        runtimeRepository.appendAudit(
-                fileId,
-                context.getTenantId(),
-                "BAD_RECORD_GOVERNANCE",
-                "SUCCESS",
-                "SYSTEM",
-                context.getWorkerId(),
-                stringValue(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
-                "import-error-output",
-                metadata
-        );
+        runtimeRepository.appendAudit(FileAuditParam.builder()
+                .fileId(fileId).tenantId(context.getTenantId())
+                .operationType("BAD_RECORD_GOVERNANCE").operationResult("SUCCESS")
+                .operatorType("SYSTEM").operatorId(context.getWorkerId())
+                .traceId(stringValue(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+                .evidenceRef("import-error-output").detailSummary(metadata).build());
     }
 
-    private void recordBadRecord(ImportJobContext context,
-                                 ImportStage stage,
-                                 Long recordNo,
-                                 String errorCode,
-                                 String errorMessage,
-                                 Object rawRecord,
-                                 boolean skipped) {
+    private record BadRecordContext(ImportJobContext context, ImportStage stage, Long recordNo,
+                                    String errorCode, String errorMessage, Object rawRecord,
+                                    boolean skipped) {}
+
+    private void recordBadRecord(BadRecordContext brc) {
+        ImportJobContext context = brc.context();
+        ImportStage stage = brc.stage();
+        Long recordNo = brc.recordNo();
+        String errorCode = brc.errorCode();
+        String errorMessage = brc.errorMessage();
+        Object rawRecord = brc.rawRecord();
+        boolean skipped = brc.skipped();
         ImportBadRecord badRecord = new ImportBadRecord(
                 recordNo,
                 stage == null ? null : stage.name(),
@@ -173,19 +175,13 @@ public class ImportRecordGovernanceService {
         String safeMessage = errorLineMask ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet) : errorMessage;
         Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
         Object safePayload = errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
-        runtimeRepository.insertFileErrorRecord(
-                context.getTenantId(),
-                fileId,
-                pipelineInstanceId,
-                pipelineStepRunId,
-                recordNo,
-                errorCode,
-                safeMessage,
-                stage == null ? null : stage.name(),
-                skipped,
-                resolveSkipAction().getCode(),
-                safePayload
-        );
+        runtimeRepository.insertFileErrorRecord(FileErrorRecordParam.builder()
+                .tenantId(context.getTenantId()).fileId(fileId)
+                .pipelineInstanceId(pipelineInstanceId).pipelineStepRunId(pipelineStepRunId)
+                .recordNo(recordNo).errorCode(errorCode).errorMessage(safeMessage)
+                .errorStage(stage == null ? null : stage.name())
+                .skipped(skipped).skipAction(resolveSkipAction().getCode())
+                .rawRecord(safePayload).build());
 
         if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
             context.getAttributes().put("manualReviewRequired", true);

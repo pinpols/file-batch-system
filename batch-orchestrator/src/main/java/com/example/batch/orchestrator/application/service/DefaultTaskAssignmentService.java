@@ -5,6 +5,8 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.orchestrator.mapper.MarkRunningParam;
+import com.example.batch.orchestrator.mapper.UpdateTaskStatusParam;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
@@ -72,7 +74,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
             // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
             JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
             if (partition == null) {
-                // 这里回滚而不是抛异常：语义上属于并发/状态漂移（可重试），不应该把 worker 侧认领请求打成“系统故障”。
+                // 这里回滚而不是抛异常：语义上属于并发/状态漂移（可重试），不应该把 worker 侧认领请求打成”系统故障”。
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
                 return jobTaskMapper.selectById(tenantId, taskId);
             }
@@ -93,8 +95,13 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         }
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
         if (stepInstance != null
-                && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), Instant.now(), stepInstance.getVersion(), StepInstanceStatus.RUNNING.code(), StepInstanceStatus.CREATED.code(), StepInstanceStatus.WAITING.code(), StepInstanceStatus.READY.code(), StepInstanceStatus.RETRYING.code()) <= 0) {
-            throw new BizException(ResultCode.STATE_CONFLICT, "job step instance claim conflict");
+                && jobStepInstanceMapper.markRunning(MarkRunningParam.builder()
+                        .tenantId(tenantId).id(stepInstance.getId()).startedAt(Instant.now())
+                        .expectedVersion(stepInstance.getVersion()).runningStatus(StepInstanceStatus.RUNNING.code())
+                        .createdStatus(StepInstanceStatus.CREATED.code()).waitingStatus(StepInstanceStatus.WAITING.code())
+                        .readyStatus(StepInstanceStatus.READY.code()).retryingStatus(StepInstanceStatus.RETRYING.code())
+                        .build()) <= 0) {
+            throw new BizException(ResultCode.STATE_CONFLICT, “job step instance claim conflict”);
         }
         return jobTaskMapper.selectById(tenantId, taskId);
     }
@@ -128,9 +135,12 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         if (current == null) {
             return null;
         }
-        jobTaskMapper.updateStatus(tenantId, taskId, taskStatus, null, errorCode, errorMessage,
-                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code(),
-                current.getVersion());
+        jobTaskMapper.updateStatus(UpdateTaskStatusParam.builder()
+                .tenantId(tenantId).id(taskId).taskStatus(taskStatus).resultSummary(null)
+                .errorCode(errorCode).errorMessage(errorMessage)
+                .terminalStatus1(TaskStatus.SUCCESS.code()).terminalStatus2(TaskStatus.FAILED.code())
+                .terminalStatus3(TaskStatus.CANCELLED.code()).terminalStatus4(TaskStatus.TERMINATED.code())
+                .expectedVersion(current.getVersion()).build());
         return jobTaskMapper.selectById(tenantId, taskId);
     }
 
@@ -155,12 +165,20 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         }
         current.setStartedAt(startedAt);
         current.setTaskStatus(TaskStatus.RUNNING.code());
-        jobTaskMapper.updateStatus(tenantId, taskId, TaskStatus.RUNNING.code(), null, null, null,
-                TaskStatus.SUCCESS.code(), TaskStatus.FAILED.code(), TaskStatus.CANCELLED.code(), TaskStatus.TERMINATED.code(),
-                current.getVersion());
+        jobTaskMapper.updateStatus(UpdateTaskStatusParam.builder()
+                .tenantId(tenantId).id(taskId).taskStatus(TaskStatus.RUNNING.code()).resultSummary(null)
+                .errorCode(null).errorMessage(null)
+                .terminalStatus1(TaskStatus.SUCCESS.code()).terminalStatus2(TaskStatus.FAILED.code())
+                .terminalStatus3(TaskStatus.CANCELLED.code()).terminalStatus4(TaskStatus.TERMINATED.code())
+                .expectedVersion(current.getVersion()).build());
         JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
         if (stepInstance != null
-                && jobStepInstanceMapper.markRunning(tenantId, stepInstance.getId(), startedAt, stepInstance.getVersion(), StepInstanceStatus.RUNNING.code(), StepInstanceStatus.CREATED.code(), StepInstanceStatus.WAITING.code(), StepInstanceStatus.READY.code(), StepInstanceStatus.RETRYING.code()) <= 0) {
+                && jobStepInstanceMapper.markRunning(MarkRunningParam.builder()
+                        .tenantId(tenantId).id(stepInstance.getId()).startedAt(startedAt)
+                        .expectedVersion(stepInstance.getVersion()).runningStatus(StepInstanceStatus.RUNNING.code())
+                        .createdStatus(StepInstanceStatus.CREATED.code()).waitingStatus(StepInstanceStatus.WAITING.code())
+                        .readyStatus(StepInstanceStatus.READY.code()).retryingStatus(StepInstanceStatus.RETRYING.code())
+                        .build()) <= 0) {
             throw new BizException(ResultCode.STATE_CONFLICT, "job step instance running conflict");
         }
         return jobTaskMapper.selectById(tenantId, taskId);

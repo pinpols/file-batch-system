@@ -44,15 +44,7 @@ public interface JobPartitionMapper {
                             @Param("id") Long id,
                             @Param("inputSnapshot") String inputSnapshot);
 
-    int markStatus(@Param("tenantId") String tenantId,
-                   @Param("id") Long id,
-                   @Param("partitionStatus") String partitionStatus,
-                   @Param("runningStatus") String runningStatus,
-                   @Param("terminalStatus1") String terminalStatus1,
-                   @Param("terminalStatus2") String terminalStatus2,
-                   @Param("terminalStatus3") String terminalStatus3,
-                   @Param("terminalStatus4") String terminalStatus4,
-                   @Param("expectedVersion") Long expectedVersion);
+    int markStatus(MarkPartitionStatusParam param);
 
     List<JobPartitionEntity> selectExpiredLeases(@Param("tenantId") String tenantId,
                                                  @Param("readyStatus") String readyStatus,

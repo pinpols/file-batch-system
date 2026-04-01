@@ -19,6 +19,7 @@ import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
+import com.example.batch.orchestrator.mapper.UpdateCompensationStatusParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -109,31 +110,25 @@ public class DefaultCompensationService implements CompensationService {
             Map<String, Object> result = execute(command, commandNo, traceId, entity);
             result.put("hitCount", 1);
             result.put("conflictCount", 0);
-            compensationCommandMapper.updateStatus(
-                    command.tenantId(),
-                    entity.getId(),
-                    CompensationCommandStatus.SUCCESS.code(),
-                    entity.getRelatedJobInstanceId(),
-                    entity.getRelatedFileId(),
-                    JsonUtils.toJson(result),
-                    null,
-                    null,
-                    Instant.now()
-            );
+            compensationCommandMapper.updateStatus(UpdateCompensationStatusParam.builder()
+                    .tenantId(command.tenantId()).id(entity.getId())
+                    .commandStatus(CompensationCommandStatus.SUCCESS.code())
+                    .relatedJobInstanceId(entity.getRelatedJobInstanceId())
+                    .relatedFileId(entity.getRelatedFileId())
+                    .resultSummary(JsonUtils.toJson(result))
+                    .errorCode(null).errorMessage(null)
+                    .finishedAt(Instant.now()).build());
             appendCompensationLog(new CompensationLogContext(command, traceId, entity, CompensationCommandStatus.SUCCESS.code(), result, null));
             return commandNo;
         } catch (Exception exception) {
-            compensationCommandMapper.updateStatus(
-                    command.tenantId(),
-                    entity.getId(),
-                    CompensationCommandStatus.FAILED.code(),
-                    entity.getRelatedJobInstanceId(),
-                    entity.getRelatedFileId(),
-                    null,
-                    resolveErrorCode(exception),
-                    exception.getMessage(),
-                    Instant.now()
-            );
+            compensationCommandMapper.updateStatus(UpdateCompensationStatusParam.builder()
+                    .tenantId(command.tenantId()).id(entity.getId())
+                    .commandStatus(CompensationCommandStatus.FAILED.code())
+                    .relatedJobInstanceId(entity.getRelatedJobInstanceId())
+                    .relatedFileId(entity.getRelatedFileId())
+                    .resultSummary(null)
+                    .errorCode(resolveErrorCode(exception)).errorMessage(exception.getMessage())
+                    .finishedAt(Instant.now()).build());
             appendCompensationLog(new CompensationLogContext(command, traceId, entity, CompensationCommandStatus.FAILED.code(), null, exception));
             throw exception;
         }

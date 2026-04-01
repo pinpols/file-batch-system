@@ -1,7 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
-import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -18,26 +17,9 @@ public interface JobStepInstanceMapper {
     List<JobStepInstanceEntity> selectByJobInstanceId(@Param("tenantId") String tenantId,
                                                       @Param("jobInstanceId") Long jobInstanceId);
 
-    int markRunning(@Param("tenantId") String tenantId,
-                    @Param("id") Long id,
-                    @Param("startedAt") Instant startedAt,
-                    @Param("expectedVersion") Long expectedVersion,
-                    @Param("runningStatus") String runningStatus,
-                    @Param("createdStatus") String createdStatus,
-                    @Param("waitingStatus") String waitingStatus,
-                    @Param("readyStatus") String readyStatus,
-                    @Param("retryingStatus") String retryingStatus);
+    int markRunning(MarkRunningParam param);
 
-    int updateProgress(@Param("tenantId") String tenantId,
-                       @Param("id") Long id,
-                       @Param("stepStatus") String stepStatus,
-                       @Param("retryCount") Integer retryCount,
-                       @Param("relatedFileId") Long relatedFileId,
-                       @Param("resultSummary") String resultSummary,
-                       @Param("errorCode") String errorCode,
-                       @Param("errorMessage") String errorMessage,
-                       @Param("finishedAt") Instant finishedAt,
-                       @Param("expectedVersion") Long expectedVersion);
+    int updateProgress(UpdateStepProgressParam param);
 
     int resetForRetryByJobTaskId(@Param("tenantId") String tenantId,
                                  @Param("jobTaskId") Long jobTaskId,

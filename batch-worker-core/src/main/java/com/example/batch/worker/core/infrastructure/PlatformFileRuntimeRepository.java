@@ -223,27 +223,28 @@ public class PlatformFileRuntimeRepository {
     }
 
     @Transactional
-    public Long createFileRecord(String tenantId,
-                                 String fileCode,
-                                 String bizType,
-                                 String fileCategory,
-                                 String fileName,
-                                 String originalFileName,
-                                 String fileFormatType,
-                                 String charset,
-                                 long fileSizeBytes,
-                                 String checksumType,
-                                 String checksumValue,
-                                 String storageType,
-                                 String storagePath,
-                                 String storageBucket,
-                                 String fileVersion,
-                                 LocalDate bizDate,
-                                 String sourceType,
-                                 String sourceRef,
-                                 String fileStatus,
-                                 String traceId,
-                                 Object metadata) {
+    public Long createFileRecord(FileRecordParam p) {
+        String tenantId = p.getTenantId();
+        String fileCode = p.getFileCode();
+        String bizType = p.getBizType();
+        String fileCategory = p.getFileCategory();
+        String fileName = p.getFileName();
+        String originalFileName = p.getOriginalFileName();
+        String fileFormatType = p.getFileFormatType();
+        String charset = p.getCharset();
+        long fileSizeBytes = p.getFileSizeBytes();
+        String checksumType = p.getChecksumType();
+        String checksumValue = p.getChecksumValue();
+        String storageType = p.getStorageType();
+        String storagePath = p.getStoragePath();
+        String storageBucket = p.getStorageBucket();
+        String fileVersion = p.getFileVersion();
+        LocalDate bizDate = p.getBizDate();
+        String sourceType = p.getSourceType();
+        String sourceRef = p.getSourceRef();
+        String fileStatus = p.getFileStatus();
+        String traceId = p.getTraceId();
+        Object metadata = p.getMetadata();
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileCategory) || !StringUtils.hasText(fileName)
                 || !StringUtils.hasText(fileFormatType) || !StringUtils.hasText(storageType)
                 || !StringUtils.hasText(storagePath) || !StringUtils.hasText(sourceType) || !StringUtils.hasText(fileStatus)) {
@@ -313,29 +314,19 @@ public class PlatformFileRuntimeRepository {
         );
     }
 
-    public Long insertFileErrorRecord(String tenantId,
-                                      Long fileId,
-                                      Long pipelineInstanceId,
-                                      Long pipelineStepRunId,
-                                      Long recordNo,
-                                      String errorCode,
-                                      String errorMessage,
-                                      String errorStage,
-                                      boolean skipped,
-                                      String skipAction,
-                                      Object rawRecord) {
+    public Long insertFileErrorRecord(FileErrorRecordParam p) {
         Map<String, Object> paramMap = params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "pipelineInstanceId", pipelineInstanceId,
-                "pipelineStepRunId", pipelineStepRunId,
-                "recordNo", recordNo,
-                "errorCode", errorCode,
-                "errorMessage", truncate(errorMessage, 1024),
-                "errorStage", errorStage,
-                "isSkipped", skipped,
-                "skipAction", skipAction,
-                "rawRecordJson", toJson(rawRecord)
+                "tenantId", p.getTenantId(),
+                "fileId", p.getFileId(),
+                "pipelineInstanceId", p.getPipelineInstanceId(),
+                "pipelineStepRunId", p.getPipelineStepRunId(),
+                "recordNo", p.getRecordNo(),
+                "errorCode", p.getErrorCode(),
+                "errorMessage", truncate(p.getErrorMessage(), 1024),
+                "errorStage", p.getErrorStage(),
+                "isSkipped", p.isSkipped(),
+                "skipAction", p.getSkipAction(),
+                "rawRecordJson", toJson(p.getRawRecord())
         );
         platformFileRuntimeMapper.insertFileErrorRecord(paramMap);
         return toLong(paramMap.get("id"));
@@ -358,28 +349,21 @@ public class PlatformFileRuntimeRepository {
         ));
     }
 
-    public void appendAudit(Long fileId,
-                            String tenantId,
-                            String operationType,
-                            String operationResult,
-                            String operatorType,
-                            String operatorId,
-                            String traceId,
-                            String evidenceRef,
-                            Object detailSummary) {
-        if (fileId == null || !StringUtils.hasText(tenantId) || !StringUtils.hasText(operationType) || !StringUtils.hasText(operationResult)) {
+    public void appendAudit(FileAuditParam p) {
+        if (p.getFileId() == null || !StringUtils.hasText(p.getTenantId())
+                || !StringUtils.hasText(p.getOperationType()) || !StringUtils.hasText(p.getOperationResult())) {
             return;
         }
         platformFileRuntimeMapper.insertFileAuditLog(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "operationType", operationType,
-                "operationResult", operationResult,
-                "operatorType", defaultText(operatorType, "SYSTEM"),
-                "operatorId", operatorId,
-                "traceId", traceId,
-                "evidenceRef", evidenceRef,
-                "detailSummaryJson", toJson(detailSummary)
+                "tenantId", p.getTenantId(),
+                "fileId", p.getFileId(),
+                "operationType", p.getOperationType(),
+                "operationResult", p.getOperationResult(),
+                "operatorType", defaultText(p.getOperatorType(), "SYSTEM"),
+                "operatorId", p.getOperatorId(),
+                "traceId", p.getTraceId(),
+                "evidenceRef", p.getEvidenceRef(),
+                "detailSummaryJson", toJson(p.getDetailSummary())
         ));
     }
 

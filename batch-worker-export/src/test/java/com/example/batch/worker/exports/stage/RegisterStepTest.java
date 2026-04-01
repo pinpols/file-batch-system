@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+
+import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -48,11 +50,7 @@ class RegisterStepTest {
 
         assertThat(result.success()).isFalse();
         assertThat(result.code()).isEqualTo("EXPORT_REGISTER_INVALID");
-        verify(runtimeRepository, never()).createFileRecord(
-                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
-                anyLong(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
-                any(), anyString(), anyString(), anyString(), anyString(), any()
-        );
+        verify(runtimeRepository, never()).createFileRecord(any(FileRecordParam.class));
     }
 
     @Test
@@ -69,11 +67,7 @@ class RegisterStepTest {
 
         assertThat(result.success()).isFalse();
         assertThat(result.code()).isEqualTo("EXPORT_REGISTER_CHECKSUM_CONFLICT");
-        verify(runtimeRepository, never()).createFileRecord(
-                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
-                anyLong(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
-                any(), anyString(), anyString(), anyString(), anyString(), any()
-        );
+        verify(runtimeRepository, never()).createFileRecord(any(FileRecordParam.class));
     }
 
     @Test
