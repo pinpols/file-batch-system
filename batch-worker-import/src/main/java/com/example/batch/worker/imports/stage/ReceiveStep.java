@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage;
 
+import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.common.config.BatchSecurityProperties;
@@ -66,29 +67,23 @@ public class ReceiveStep implements ImportStageStep {
             metadata.put("withHeader", importPayload.withHeader());
             mergeSecurityMetadata(metadata, resolveTemplateSecurity(context.getTenantId(), importPayload.templateCode()));
             mergeUserMetadata(metadata, importPayload.metadata());
-            Long fileId = runtimeRepository.createFileRecord(
-                    context.getTenantId(),
-                    importPayload.fileCode(),
-                    defaultText(importPayload.bizType(), context.getJobCode()),
-                    "INPUT",
-                    fileName,
-                    defaultText(importPayload.originalFileName(), fileName),
-                    fileFormatType,
-                    defaultText(importPayload.charset(), "UTF-8"),
-                    context.getRawPayload().getBytes().length,
-                    defaultText(importPayload.checksumType(), "NONE"),
-                    importPayload.checksumValue(),
-                    defaultText(importPayload.storageType(), "LOCAL"),
-                    defaultText(importPayload.storagePath(), "ingress/" + context.getTenantId() + "/" + traceId + "/" + fileName),
-                    importPayload.storageBucket(),
-                    null,
-                    parseBizDate(context.getBizDate()),
-                    defaultText(importPayload.sourceType(), "UPLOAD"),
-                    importPayload.sourceRef(),
-                    "RECEIVED",
-                    traceId,
-                    metadata
-            );
+            Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
+                    .tenantId(context.getTenantId())
+                    .fileCode(importPayload.fileCode())
+                    .bizType(defaultText(importPayload.bizType(), context.getJobCode()))
+                    .fileCategory("INPUT")
+                    .fileName(fileName).originalFileName(defaultText(importPayload.originalFileName(), fileName))
+                    .fileFormatType(fileFormatType).charset(defaultText(importPayload.charset(), "UTF-8"))
+                    .fileSizeBytes(context.getRawPayload().getBytes().length)
+                    .checksumType(defaultText(importPayload.checksumType(), "NONE"))
+                    .checksumValue(importPayload.checksumValue())
+                    .storageType(defaultText(importPayload.storageType(), "LOCAL"))
+                    .storagePath(defaultText(importPayload.storagePath(), "ingress/" + context.getTenantId() + "/" + traceId + "/" + fileName))
+                    .storageBucket(importPayload.storageBucket()).fileVersion(null)
+                    .bizDate(parseBizDate(context.getBizDate()))
+                    .sourceType(defaultText(importPayload.sourceType(), "UPLOAD"))
+                    .sourceRef(importPayload.sourceRef())
+                    .fileStatus("RECEIVED").traceId(traceId).metadata(metadata).build());
             context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
             context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, runtimeRepository.loadFileRecord(context.getTenantId(), fileId));
             runtimeRepository.bindFileToPipelineInstance(

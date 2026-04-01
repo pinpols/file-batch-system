@@ -1,5 +1,6 @@
 package com.example.batch.worker.exports.stage;
 
+import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.exports.domain.ExportJobContext;
@@ -43,17 +44,13 @@ public class CompleteStep implements ExportStageStep {
         detailSummary.put("recordCount", context.getAttributes().get("recordCount"));
         detailSummary.put("fileSizeBytes", context.getAttributes().get("fileSizeBytes"));
         detailSummary.put("objectName", context.getAttributes().get("objectName"));
-        runtimeRepository.appendAudit(
-                fileId,
-                context.getTenantId(),
-                "EXPORT_COMPLETE",
-                "SUCCESS",
-                "SYSTEM",
-                context.getWorkerId(),
-                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
-                String.valueOf(context.getAttributes().get("objectName")),
-                detailSummary
-        );
+        runtimeRepository.appendAudit(FileAuditParam.builder()
+                .fileId(fileId).tenantId(context.getTenantId())
+                .operationType("EXPORT_COMPLETE").operationResult("SUCCESS")
+                .operatorType("SYSTEM").operatorId(context.getWorkerId())
+                .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+                .evidenceRef(String.valueOf(context.getAttributes().get("objectName")))
+                .detailSummary(detailSummary).build());
         return ExportStageResult.success(stage());
     }
 }

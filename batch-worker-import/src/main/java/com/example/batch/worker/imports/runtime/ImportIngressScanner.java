@@ -1,5 +1,7 @@
 package com.example.batch.worker.imports.runtime;
 
+import com.example.batch.worker.core.infrastructure.FileAuditParam;
+import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
 import com.example.batch.common.config.MinioStorageProperties;
@@ -106,58 +108,37 @@ public class ImportIngressScanner {
             metadata.put("notifyManual", scannerProperties.getArrival().isNotifyManual());
             metadata.put("notifyChannels", scannerProperties.getArrival().getNotifyChannels());
         }
-        Long fileId = runtimeRepository.createFileRecord(
-                workerConfiguration.tenantId(),
-                null,
-                scannerProperties.getDefaultBizType(),
-                "INPUT",
-                fileName,
-                fileName,
-                resolveFileFormatType(fileName),
-                "UTF-8",
-                snapshot.size(),
-                "NONE",
-                null,
-                "S3",
-                snapshot.objectName(),
-                minioStorageProperties.getBucket(),
-                null,
-                LocalDate.now(),
-                scannerProperties.getSourceType(),
-                snapshot.objectName(),
-                "RECEIVED",
-                "import-scan-" + sanitizeTrace(fileName),
-                metadata
-        );
+        Long fileId = runtimeRepository.createFileRecord(FileRecordParam.builder()
+                .tenantId(workerConfiguration.tenantId()).fileCode(null)
+                .bizType(scannerProperties.getDefaultBizType()).fileCategory("INPUT")
+                .fileName(fileName).originalFileName(fileName)
+                .fileFormatType(resolveFileFormatType(fileName)).charset("UTF-8")
+                .fileSizeBytes(snapshot.size()).checksumType("NONE").checksumValue(null)
+                .storageType("S3").storagePath(snapshot.objectName())
+                .storageBucket(minioStorageProperties.getBucket()).fileVersion(null)
+                .bizDate(LocalDate.now())
+                .sourceType(scannerProperties.getSourceType()).sourceRef(snapshot.objectName())
+                .fileStatus("RECEIVED").traceId("import-scan-" + sanitizeTrace(fileName))
+                .metadata(metadata).build());
         if (scannerProperties.getArrival().isEnabled() && StringUtils.hasText(scannerProperties.getArrival().getFileGroupCode())
                 && StringUtils.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
-            runtimeRepository.appendAudit(
-                    fileId,
-                    workerConfiguration.tenantId(),
-                    "ARRIVAL_REGISTER",
-                    "SUCCESS",
-                    "SYSTEM",
-                    "import-ingress-scanner",
-                    "arrival-" + sanitizeTrace(fileName),
-                    snapshot.objectName(),
-                    Map.of(
+            runtimeRepository.appendAudit(FileAuditParam.builder()
+                    .fileId(fileId).tenantId(workerConfiguration.tenantId())
+                    .operationType("ARRIVAL_REGISTER").operationResult("SUCCESS")
+                    .operatorType("SYSTEM").operatorId("import-ingress-scanner")
+                    .traceId("arrival-" + sanitizeTrace(fileName)).evidenceRef(snapshot.objectName())
+                    .detailSummary(Map.of(
                             "fileGroupCode", scannerProperties.getArrival().getFileGroupCode(),
                             "requiredFileSet", scannerProperties.getArrival().getRequiredFileSet(),
                             "arrivalState", "WAITING_ARRIVAL"
-                    )
-            );
+                    )).build());
         }
-        runtimeRepository.appendAudit(
-                fileId,
-                workerConfiguration.tenantId(),
-                "RECEIVE_SCAN",
-                "SUCCESS",
-                "SYSTEM",
-                "import-ingress-scanner",
-                "import-scan-" + sanitizeTrace(fileName),
-                snapshot.objectName(),
-                metadata
-        );
+        runtimeRepository.appendAudit(FileAuditParam.builder()
+                .fileId(fileId).tenantId(workerConfiguration.tenantId())
+                .operationType("RECEIVE_SCAN").operationResult("SUCCESS")
+                .operatorType("SYSTEM").operatorId("import-ingress-scanner")
+                .traceId("import-scan-" + sanitizeTrace(fileName)).evidenceRef(snapshot.objectName())
+                .detailSummary(metadata).build());
         log.info("import file registered by scanner: tenantId={}, fileId={}, objectName={}",
                 workerConfiguration.tenantId(), fileId, snapshot.objectName());
     }

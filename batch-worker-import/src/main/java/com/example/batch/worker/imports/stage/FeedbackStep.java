@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage;
 
+import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import java.util.LinkedHashMap;
@@ -31,17 +32,12 @@ public class FeedbackStep implements ImportStageStep {
         detailSummary.put("validatedCount", context.getAttributes().get("validatedCount"));
         detailSummary.put("loadedCount", context.getAttributes().get("loadedCount"));
         detailSummary.put("pipelineInstanceId", context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-        runtimeRepository.appendAudit(
-                fileId,
-                context.getTenantId(),
-                "IMPORT_FEEDBACK",
-                "SUCCESS",
-                "SYSTEM",
-                context.getWorkerId(),
-                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
-                null,
-                detailSummary
-        );
+        runtimeRepository.appendAudit(FileAuditParam.builder()
+                .fileId(fileId).tenantId(context.getTenantId())
+                .operationType("IMPORT_FEEDBACK").operationResult("SUCCESS")
+                .operatorType("SYSTEM").operatorId(context.getWorkerId())
+                .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+                .evidenceRef(null).detailSummary(detailSummary).build());
         return ImportStageResult.success(stage());
     }
 }

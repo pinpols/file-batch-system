@@ -20,10 +20,13 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
+import com.example.batch.orchestrator.mapper.FinishTaskParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.orchestrator.mapper.MarkPartitionStatusParam;
+import com.example.batch.orchestrator.mapper.UpdateStepProgressParam;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Duration;
@@ -151,13 +154,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 && partition != null
                 && jobInstance != null
                 && retryGovernanceService.scheduleRetryIfNecessary(task, partition, jobInstance, command.errorCode(), command.errorMessage());
-        int updated = jobTaskMapper.finishTask(
-                command.tenantId(), command.taskId(),
-                command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code(),
-                TaskStatus.RUNNING.code(),
-                command.resultSummary(),
-                command.errorCode(), command.errorMessage(),
-                task.getVersion());
+        int updated = jobTaskMapper.finishTask(FinishTaskParam.builder()
+                .tenantId(command.tenantId()).id(command.taskId())
+                .taskStatus(command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code())
+                .expectedStatus(TaskStatus.RUNNING.code())
+                .resultSummary(command.resultSummary())
+                .errorCode(command.errorCode()).errorMessage(command.errorMessage())
+                .expectedVersion(task.getVersion()).build());
         if (updated <= 0) {
             throw new BizException(ResultCode.STATE_CONFLICT,
                     "task already finished by concurrent update: taskId=" + command.taskId());
@@ -165,9 +168,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         // partition 是 job_instance 的“并行执行单元”，task outcome 会汇聚到 partition 状态上。
         if (partition != null) {
             if (command.success()) {
-                jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.SUCCESS.code(),
-                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code(),
-                    partition.getVersion());
+                jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
+                        .tenantId(command.tenantId()).id(partition.getId())
+                        .partitionStatus(PartitionStatus.SUCCESS.code()).runningStatus(PartitionStatus.RUNNING.code())
+                        .terminalStatus1(PartitionStatus.SUCCESS.code()).terminalStatus2(PartitionStatus.FAILED.code())
+                        .terminalStatus3(PartitionStatus.CANCELLED.code()).terminalStatus4(PartitionStatus.TERMINATED.code())
+                        .expectedVersion(partition.getVersion()).build());
             } else if (retryScheduled) {
                 // 进入 RETRYING：partition 先标记为 RETRYING，实际重排队由 retry scheduler → outbox 完成。
                 jobPartitionMapper.markRetrying(
@@ -178,9 +184,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                         partition.getVersion()
                 );
             } else {
-                jobPartitionMapper.markStatus(command.tenantId(), partition.getId(), PartitionStatus.FAILED.code(),
-                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code(),
-                    partition.getVersion());
+                jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
+                        .tenantId(command.tenantId()).id(partition.getId())
+                        .partitionStatus(PartitionStatus.FAILED.code()).runningStatus(PartitionStatus.RUNNING.code())
+                        .terminalStatus1(PartitionStatus.SUCCESS.code()).terminalStatus2(PartitionStatus.FAILED.code())
+                        .terminalStatus3(PartitionStatus.CANCELLED.code()).terminalStatus4(PartitionStatus.TERMINATED.code())
+                        .expectedVersion(partition.getVersion()).build());
             }
             jobPartitionMapper.updateOutputSummary(
                     command.tenantId(),
@@ -332,18 +341,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 : command.success() ? TaskStatus.SUCCESS.code() : TaskStatus.FAILED.code();
         int currentRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0);
         int nextRetryCount = retryScheduled ? currentRetryCount + 1 : currentRetryCount;
-        int updated = jobStepInstanceMapper.updateProgress(
-                command.tenantId(),
-                stepInstance.getId(),
-                nextStatus,
-                nextRetryCount,
-                resolveRelatedFileId(task, command),
-                buildOutputSummary(command, task),
-                command.errorCode(),
-                command.errorMessage(),
-                retryScheduled ? null : finishedAt,
-                stepInstance.getVersion()
-        );
+        int updated = jobStepInstanceMapper.updateProgress(UpdateStepProgressParam.builder()
+                .tenantId(command.tenantId()).id(stepInstance.getId())
+                .stepStatus(nextStatus).retryCount(nextRetryCount)
+                .relatedFileId(resolveRelatedFileId(task, command))
+                .resultSummary(buildOutputSummary(command, task))
+                .errorCode(command.errorCode()).errorMessage(command.errorMessage())
+                .finishedAt(retryScheduled ? null : finishedAt)
+                .expectedVersion(stepInstance.getVersion()).build());
         if (updated <= 0) {
             throw new BizException(ResultCode.STATE_CONFLICT, "job step instance progress conflict");
         }

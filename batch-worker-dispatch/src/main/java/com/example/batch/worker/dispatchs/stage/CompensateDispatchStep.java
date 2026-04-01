@@ -4,6 +4,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchPayload;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
+import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
@@ -50,17 +51,12 @@ public class CompensateDispatchStep implements DispatchStageStep {
         detailSummary.put("channelCode", dispatchPayload.channelCode());
         detailSummary.put("dispatchTarget", dispatchPayload.dispatchTarget());
         detailSummary.put("externalRequestId", context.getAttributes().get("externalRequestId"));
-        runtimeRepository.appendAudit(
-                fileId,
-                context.getTenantId(),
-                "DISPATCH_COMPENSATE",
-                "FAILED",
-                "SYSTEM",
-                context.getWorkerId(),
-                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
-                null,
-                detailSummary
-        );
+        runtimeRepository.appendAudit(FileAuditParam.builder()
+                .fileId(fileId).tenantId(context.getTenantId())
+                .operationType("DISPATCH_COMPENSATE").operationResult("FAILED")
+                .operatorType("SYSTEM").operatorId(context.getWorkerId())
+                .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+                .evidenceRef(null).detailSummary(detailSummary).build());
         return DispatchStageResult.success(stage());
     }
 }

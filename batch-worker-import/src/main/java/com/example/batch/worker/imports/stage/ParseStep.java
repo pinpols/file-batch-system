@@ -199,7 +199,7 @@ public class ParseStep implements ImportStageStep {
                 try {
                     Map<String, String> rowMap = buildExcelRowMap(row, headers, bindings, formatter);
                     collectSchemaFields(context, rowMap);
-                    writeParsedRecord(context, writer, rowMap, preserveLogicalRow, recordNo, "IMPORT_PARSE_EXCEL_INVALID", rowMap);
+                    writeParsedRecord(new WriteParsedRecordContext(context, writer, rowMap, preserveLogicalRow, recordNo, "IMPORT_PARSE_EXCEL_INVALID", rowMap));
                 } catch (Exception exception) {
                     recordParseError(context, recordNo, "IMPORT_PARSE_EXCEL_INVALID", exception.getMessage(), row);
                 }
@@ -322,7 +322,7 @@ public class ParseStep implements ImportStageStep {
                         }
                     }
                     collectSchemaFields(context, row);
-                    writeParsedRecord(context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_XML_INVALID", row);
+                    writeParsedRecord(new WriteParsedRecordContext(context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_XML_INVALID", row));
                 } catch (Exception exception) {
                     recordParseError(context, recordNo, "IMPORT_PARSE_XML_INVALID", exception.getMessage(), element);
                 }
@@ -408,7 +408,7 @@ public class ParseStep implements ImportStageStep {
                         row.put(field.target(), value);
                     }
                     collectSchemaFields(context, row);
-                    writeParsedRecord(context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_FIXED_INVALID", row);
+                    writeParsedRecord(new WriteParsedRecordContext(context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_FIXED_INVALID", row));
                 } catch (Exception exception) {
                     recordParseError(context, recordNo, "IMPORT_PARSE_FIXED_INVALID", exception.getMessage(), line);
                 }
@@ -606,7 +606,7 @@ public class ParseStep implements ImportStageStep {
                                  boolean preserveLogicalRow) throws Exception {
         try {
             Map<String, Object> row = objectMapper.convertValue(node, MAP_TYPE);
-            writeParsedRecord(context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_JSON_INVALID", node);
+            writeParsedRecord(new WriteParsedRecordContext(context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_JSON_INVALID", node));
         } catch (Exception exception) {
             recordParseError(context, recordNo, "IMPORT_PARSE_JSON_INVALID", exception.getMessage(), node);
         }
@@ -666,7 +666,7 @@ public class ParseStep implements ImportStageStep {
                         row.put(headers.get(i), i < columns.size() ? columns.get(i) : null);
                     }
                     collectSchemaFields(context, row);
-                    writeParsedRecord(context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_LINE_INVALID", row);
+                    writeParsedRecord(new WriteParsedRecordContext(context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_LINE_INVALID", row));
                     parsedCount = numberValue(context.getAttributes().get("parsedCount"));
                 } catch (Exception exception) {
                     recordParseError(context, recordNo, "IMPORT_PARSE_LINE_INVALID", exception.getMessage(), line);
@@ -826,13 +826,18 @@ public class ParseStep implements ImportStageStep {
         context.getAttributes().put("schemaFields", new ArrayList<>(fields));
     }
 
-    private void writeParsedRecord(ImportJobContext context,
-                                   BufferedWriter writer,
-                                   Map<String, ?> row,
-                                   boolean preserveLogicalRow,
-                                   long recordNo,
-                                   String errorCode,
-                                   Object rawRecord) throws Exception {
+    private record WriteParsedRecordContext(ImportJobContext context, BufferedWriter writer,
+                                            Map<String, ?> row, boolean preserveLogicalRow,
+                                            long recordNo, String errorCode, Object rawRecord) {}
+
+    private void writeParsedRecord(WriteParsedRecordContext ctx) throws Exception {
+        ImportJobContext context = ctx.context();
+        BufferedWriter writer = ctx.writer();
+        Map<String, ?> row = ctx.row();
+        boolean preserveLogicalRow = ctx.preserveLogicalRow();
+        long recordNo = ctx.recordNo();
+        String errorCode = ctx.errorCode();
+        Object rawRecord = ctx.rawRecord();
         if (row == null || row.isEmpty()) {
             recordParseError(context, recordNo, errorCode, "parsed row is empty", rawRecord);
             return;

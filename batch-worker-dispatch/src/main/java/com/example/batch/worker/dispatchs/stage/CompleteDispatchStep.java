@@ -4,6 +4,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchPayload;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
+import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import java.util.LinkedHashMap;
@@ -46,17 +47,13 @@ public class CompleteDispatchStep implements DispatchStageStep {
         detailSummary.put("externalRequestId", context.getAttributes().get("externalRequestId"));
         detailSummary.put("receiptCode", context.getAttributes().get("receiptCode"));
         detailSummary.put("receiptStatus", receiptStatus);
-        runtimeRepository.appendAudit(
-                fileId,
-                context.getTenantId(),
-                "DISPATCH_COMPLETE",
-                "SUCCESS",
-                "SYSTEM",
-                context.getWorkerId(),
-                String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)),
-                String.valueOf(context.getAttributes().getOrDefault("externalRequestId", "")),
-                detailSummary
-        );
+        runtimeRepository.appendAudit(FileAuditParam.builder()
+                .fileId(fileId).tenantId(context.getTenantId())
+                .operationType("DISPATCH_COMPLETE").operationResult("SUCCESS")
+                .operatorType("SYSTEM").operatorId(context.getWorkerId())
+                .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
+                .evidenceRef(String.valueOf(context.getAttributes().getOrDefault("externalRequestId", "")))
+                .detailSummary(detailSummary).build());
         return DispatchStageResult.success(stage());
     }
 }

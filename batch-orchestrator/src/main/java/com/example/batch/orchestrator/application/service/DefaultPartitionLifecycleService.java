@@ -8,6 +8,7 @@ import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
+import com.example.batch.orchestrator.mapper.MarkPartitionStatusParam;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -88,9 +89,12 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
         int reclaimed = 0;
         List<JobPartitionEntity> expired = jobPartitionMapper.selectExpiredLeases(tenantId, PartitionStatus.READY.code(), PartitionStatus.RUNNING.code());
         for (JobPartitionEntity partition : expired) {
-            reclaimed += jobPartitionMapper.markStatus(tenantId, partition.getId(), PartitionStatus.WAITING.code(),
-                    PartitionStatus.RUNNING.code(), PartitionStatus.SUCCESS.code(), PartitionStatus.FAILED.code(), PartitionStatus.CANCELLED.code(), PartitionStatus.TERMINATED.code(),
-                    partition.getVersion());
+            reclaimed += jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
+                    .tenantId(tenantId).id(partition.getId())
+                    .partitionStatus(PartitionStatus.WAITING.code()).runningStatus(PartitionStatus.RUNNING.code())
+                    .terminalStatus1(PartitionStatus.SUCCESS.code()).terminalStatus2(PartitionStatus.FAILED.code())
+                    .terminalStatus3(PartitionStatus.CANCELLED.code()).terminalStatus4(PartitionStatus.TERMINATED.code())
+                    .expectedVersion(partition.getVersion()).build());
         }
         return reclaimed;
     }
