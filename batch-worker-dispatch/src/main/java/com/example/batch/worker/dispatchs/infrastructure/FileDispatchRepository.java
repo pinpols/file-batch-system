@@ -53,24 +53,27 @@ public class FileDispatchRepository {
         return dispatchRecord == null ? Map.of() : dispatchRecord;
     }
 
-    public int insertDispatchRecord(String tenantId,
-                                    Long fileId,
-                                    Long pipelineInstanceId,
-                                    String channelCode,
-                                    String dispatchTarget,
-                                    String receiptCode,
-                                    String receiptStatus,
-                                    String externalRequestId) {
+    public record InsertDispatchParam(String tenantId,
+                                      Long fileId,
+                                      Long pipelineInstanceId,
+                                      String channelCode,
+                                      String dispatchTarget,
+                                      String receiptCode,
+                                      String receiptStatus,
+                                      String externalRequestId) {
+    }
+
+    public int insertDispatchRecord(InsertDispatchParam p) {
         return fileDispatchMapper.insertDispatchRecord(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "pipelineInstanceId", pipelineInstanceId,
-                "channelCode", channelCode,
-                "dispatchTarget", dispatchTarget,
+                "tenantId", p.tenantId(),
+                "fileId", p.fileId(),
+                "pipelineInstanceId", p.pipelineInstanceId(),
+                "channelCode", p.channelCode(),
+                "dispatchTarget", p.dispatchTarget(),
                 "dispatchStatus", FileDispatchStatus.CREATED.name(),
-                "receiptCode", receiptCode,
-                "receiptStatus", receiptStatus,
-                "externalRequestId", externalRequestId
+                "receiptCode", p.receiptCode(),
+                "receiptStatus", p.receiptStatus(),
+                "externalRequestId", p.externalRequestId()
         ));
     }
 

@@ -20,6 +20,78 @@ import org.junit.jupiter.api.Test;
  */
 class DefaultApprovalWorkflowServiceTest {
 
+    private static final class ApprovalSubmissionSpec {
+        private String tenantId = "t1";
+        private String approvalType = "COMPENSATION";
+        private String actionType;
+        private String targetType;
+        private String targetId;
+        private String payloadJson;
+        private String requesterId = "op-001";
+        private String sourceTraceId;
+        private String sourceIdempotencyKey;
+        private String approvalReason;
+
+        private ApprovalSubmissionSpec actionType(String actionType) {
+            this.actionType = actionType;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec targetType(String targetType) {
+            this.targetType = targetType;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec targetId(String targetId) {
+            this.targetId = targetId;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec payloadJson(String payloadJson) {
+            this.payloadJson = payloadJson;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec requesterId(String requesterId) {
+            this.requesterId = requesterId;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec sourceTraceId(String sourceTraceId) {
+            this.sourceTraceId = sourceTraceId;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec sourceIdempotencyKey(String sourceIdempotencyKey) {
+            this.sourceIdempotencyKey = sourceIdempotencyKey;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec approvalReason(String approvalReason) {
+            this.approvalReason = approvalReason;
+            return this;
+        }
+
+        private ApprovalWorkflowService.ApprovalSubmitCommand build() {
+            return ApprovalWorkflowService.ApprovalSubmitCommand.of(
+                    tenantId,
+                    new ApprovalWorkflowService.ApprovalTarget(
+                            approvalType,
+                            actionType,
+                            targetType,
+                            targetId,
+                            payloadJson
+                    ),
+                    new ApprovalWorkflowService.ApprovalSource(
+                            requesterId,
+                            sourceTraceId,
+                            sourceIdempotencyKey,
+                            approvalReason
+                    )
+            );
+        }
+    }
+
     private ApprovalCommandMapper approvalCommandMapper;
     private DefaultApprovalWorkflowService service;
 
@@ -35,9 +107,16 @@ class DefaultApprovalWorkflowServiceTest {
     void shouldInsertApprovalWithPendingStatusOnSubmit() {
         when(approvalCommandMapper.insert(any())).thenReturn(1);
 
-        String approvalNo = service.submit(submitCommand(
-                "t1", "COMPENSATION", "DLQ_REPLAY", "DEAD_LETTER", "500",
-                "{\"reason\":\"test\"}", "op-001", "trace-001", "idem-001", "test approval"));
+        String approvalNo = service.submit(new ApprovalSubmissionSpec()
+                .actionType("DLQ_REPLAY")
+                .targetType("DEAD_LETTER")
+                .targetId("500")
+                .payloadJson("{\"reason\":\"test\"}")
+                .requesterId("op-001")
+                .sourceTraceId("trace-001")
+                .sourceIdempotencyKey("idem-001")
+                .approvalReason("test approval")
+                .build());
 
         assertThat(approvalNo).isNotBlank();
         assertThat(approvalNo).startsWith("apr");
@@ -48,8 +127,15 @@ class DefaultApprovalWorkflowServiceTest {
     void shouldUseEmptyJsonWhenPayloadIsNull() {
         when(approvalCommandMapper.insert(any())).thenReturn(1);
 
-        service.submit(submitCommand(
-                "t1", "COMPENSATION", "RETRY", "JOB", "1", null, "op", "trace", "idem", "reason"));
+        service.submit(new ApprovalSubmissionSpec()
+                .actionType("RETRY")
+                .targetType("JOB")
+                .targetId("1")
+                .requesterId("op")
+                .sourceTraceId("trace")
+                .sourceIdempotencyKey("idem")
+                .approvalReason("reason")
+                .build());
 
         verify(approvalCommandMapper).insert(any());
     }
@@ -188,31 +274,4 @@ class DefaultApprovalWorkflowServiceTest {
         return e;
     }
 
-    private static ApprovalWorkflowService.ApprovalSubmitCommand submitCommand(String tenantId,
-                                                                               String approvalType,
-                                                                               String actionType,
-                                                                               String targetType,
-                                                                               String targetId,
-                                                                               String payloadJson,
-                                                                               String requesterId,
-                                                                               String sourceTraceId,
-                                                                               String sourceIdempotencyKey,
-                                                                               String approvalReason) {
-        return ApprovalWorkflowService.ApprovalSubmitCommand.of(
-                tenantId,
-                new ApprovalWorkflowService.ApprovalTarget(
-                        approvalType,
-                        actionType,
-                        targetType,
-                        targetId,
-                        payloadJson
-                ),
-                new ApprovalWorkflowService.ApprovalSource(
-                        requesterId,
-                        sourceTraceId,
-                        sourceIdempotencyKey,
-                        approvalReason
-                )
-        );
-    }
 }

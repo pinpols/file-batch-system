@@ -46,19 +46,6 @@ public class FileGovernanceScheduler {
             ArrivalGroupUpdateState state,
             ArrivalGroupUpdateFiles files
     ) {
-        private static ArrivalGroupUpdateContext of(ArrivalGroupKey key,
-                                                    String arrivalState,
-                                                    String reason,
-                                                    Instant now,
-                                                    List<Map<String, Object>> groupFiles,
-                                                    Set<String> requiredFiles,
-                                                    Set<String> missingFiles) {
-            return new ArrivalGroupUpdateContext(
-                    key,
-                    new ArrivalGroupUpdateState(arrivalState, reason, now),
-                    new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)
-            );
-        }
     }
 
     private final FileGovernanceRepository fileGovernanceRepository;
@@ -304,67 +291,43 @@ public class FileGovernanceScheduler {
         boolean timedOut = latestTolerableTime != null && now.isAfter(latestTolerableTime);
         if (timedOut) {
             if ("MANUAL_CONFIRM".equalsIgnoreCase(timeoutAction)) {
-                updateGroupState(ArrivalGroupUpdateContext.of(
+                updateGroupState(new ArrivalGroupUpdateContext(
                         key,
-                        "WAITING_MANUAL_CONFIRM",
-                        "TIMEOUT_WAITING_MANUAL_CONFIRM",
-                        now,
-                        groupFiles,
-                        requiredFiles,
-                        missingFiles));
+                        new ArrivalGroupUpdateState("WAITING_MANUAL_CONFIRM", "TIMEOUT_WAITING_MANUAL_CONFIRM", now),
+                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
                 return new ArrivalGroupDecision("WAITING_MANUAL_CONFIRM");
             }
             if ("BLOCK_DOWNSTREAM".equalsIgnoreCase(timeoutAction) || "BLOCK".equalsIgnoreCase(timeoutAction)) {
-                updateGroupState(ArrivalGroupUpdateContext.of(
+                updateGroupState(new ArrivalGroupUpdateContext(
                         key,
-                        "TIMEOUT",
-                        "LATEST_TOLERABLE_TIME_EXCEEDED",
-                        now,
-                        groupFiles,
-                        requiredFiles,
-                        missingFiles));
+                        new ArrivalGroupUpdateState("TIMEOUT", "LATEST_TOLERABLE_TIME_EXCEEDED", now),
+                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
                 return new ArrivalGroupDecision("TIMEOUT");
             }
-            updateGroupState(ArrivalGroupUpdateContext.of(
+            updateGroupState(new ArrivalGroupUpdateContext(
                     key,
-                    "TRIGGERED",
-                    "TIMEOUT_OVERRIDE_" + timeoutAction,
-                    now,
-                    groupFiles,
-                    requiredFiles,
-                    missingFiles));
+                    new ArrivalGroupUpdateState("TRIGGERED", "TIMEOUT_OVERRIDE_" + timeoutAction, now),
+                    new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
             return new ArrivalGroupDecision("TRIGGERED");
         }
         if (!requiredFiles.isEmpty() && missingFiles.isEmpty()) {
             if (triggerOnComplete) {
-                updateGroupState(ArrivalGroupUpdateContext.of(
+                updateGroupState(new ArrivalGroupUpdateContext(
                         key,
-                        "TRIGGERED",
-                        "ALL_FILES_ARRIVED",
-                        now,
-                        groupFiles,
-                        requiredFiles,
-                        missingFiles));
+                        new ArrivalGroupUpdateState("TRIGGERED", "ALL_FILES_ARRIVED", now),
+                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
                 return new ArrivalGroupDecision("TRIGGERED");
             }
-            updateGroupState(ArrivalGroupUpdateContext.of(
+            updateGroupState(new ArrivalGroupUpdateContext(
                     key,
-                    "WAITING_MANUAL_CONFIRM",
-                    "COMPLETE_WAITING_MANUAL_CONFIRM",
-                    now,
-                    groupFiles,
-                    requiredFiles,
-                    missingFiles));
+                    new ArrivalGroupUpdateState("WAITING_MANUAL_CONFIRM", "COMPLETE_WAITING_MANUAL_CONFIRM", now),
+                    new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
             return new ArrivalGroupDecision("WAITING_MANUAL_CONFIRM");
         }
-        updateGroupState(ArrivalGroupUpdateContext.of(
+        updateGroupState(new ArrivalGroupUpdateContext(
                 key,
-                "WAITING_ARRIVAL",
-                "WAITING_REQUIRED_FILES",
-                now,
-                groupFiles,
-                requiredFiles,
-                missingFiles));
+                new ArrivalGroupUpdateState("WAITING_ARRIVAL", "WAITING_REQUIRED_FILES", now),
+                new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
         return new ArrivalGroupDecision("WAITING_ARRIVAL");
     }
 

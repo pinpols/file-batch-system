@@ -80,37 +80,24 @@ public class DispatchChannelHealthService {
         }
         DispatchChannelHealthSnapshot snapshot = repository.findHealth(tenantId, channelCode);
         if (success) {
-            repository.upsertHealth(
-                    tenantId,
-                    channelCode,
-                    channelType,
-                    "HEALTHY",
-                    0,
-                    java.time.Instant.now(),
-                    java.time.Instant.now(),
+            repository.upsertHealth(new DispatchChannelHealthSnapshot(
+                    tenantId, channelCode, channelType, "HEALTHY", 0,
+                    java.time.Instant.now(), java.time.Instant.now(),
                     snapshot == null ? null : snapshot.lastFailureAt(),
                     java.time.Instant.now().plusMillis(properties.getProbeIntervalMillis()),
-                    message,
-                    evidence
-            );
+                    message, evidence
+            ));
             return;
         }
         int failures = snapshot == null ? 1 : snapshot.consecutiveFailures() + 1;
         long backoff = computeBackoffMillis(failures);
         String status = failures >= Math.max(1, circuitBreakerProperties.getFailureThreshold()) ? "UNHEALTHY" : "DEGRADED";
-        repository.upsertHealth(
-                tenantId,
-                channelCode,
-                channelType,
-                status,
-                failures,
-                java.time.Instant.now(),
-                snapshot == null ? null : snapshot.lastSuccessAt(),
-                java.time.Instant.now(),
-                java.time.Instant.now().plusMillis(backoff),
-                message,
-                evidence
-        );
+        repository.upsertHealth(new DispatchChannelHealthSnapshot(
+                tenantId, channelCode, channelType, status, failures,
+                java.time.Instant.now(), snapshot == null ? null : snapshot.lastSuccessAt(),
+                java.time.Instant.now(), java.time.Instant.now().plusMillis(backoff),
+                message, evidence
+        ));
     }
 
     public void probeConfiguredChannels() {

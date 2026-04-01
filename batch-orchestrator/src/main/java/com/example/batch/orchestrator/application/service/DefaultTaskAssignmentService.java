@@ -101,7 +101,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                         .createdStatus(StepInstanceStatus.CREATED.code()).waitingStatus(StepInstanceStatus.WAITING.code())
                         .readyStatus(StepInstanceStatus.READY.code()).retryingStatus(StepInstanceStatus.RETRYING.code())
                         .build()) <= 0) {
-            throw new BizException(ResultCode.STATE_CONFLICT, “job step instance claim conflict”);
+            throw new BizException(ResultCode.STATE_CONFLICT,"job step instance claim conflict");
         }
         return jobTaskMapper.selectById(tenantId, taskId);
     }

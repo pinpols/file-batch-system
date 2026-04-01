@@ -72,15 +72,11 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
             return new StepExecutionResponse(false, "PIPELINE_STEP_DEFINITION_MISSING", "pipeline step definition missing");
         }
         Long pipelineInstanceId = runtimeRepository.createPipelineInstance(
-                request.tenantId(),
-                pipelineDefinitionId,
-                jobCode,
-                pipelineType(),
-                fileId,
-                runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
-                resolveInitialStage(pipelineSteps),
-                traceId
-        );
+                new PlatformFileRuntimeRepository.CreatePipelineInstanceParam(
+                        request.tenantId(), pipelineDefinitionId, jobCode, pipelineType(),
+                        fileId, runtimeRepository.toLong(attributes.get(PipelineRuntimeKeys.JOB_INSTANCE_ID)),
+                        resolveInitialStage(pipelineSteps), traceId
+                ));
         attributes.put(PipelineRuntimeKeys.TRACE_ID, traceId);
         attributes.put(PipelineRuntimeKeys.JOB_CODE, jobCode);
         attributes.put(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID, pipelineDefinitionId);

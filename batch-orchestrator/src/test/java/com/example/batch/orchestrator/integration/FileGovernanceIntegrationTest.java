@@ -50,6 +50,50 @@ import org.mybatis.spring.annotation.MapperScan;
         })
 class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
+    private static final class FileRecordSpec {
+        private final String tenantId;
+        private final String fileName;
+        private final String fileCategory;
+        private final String fileStatus;
+        private final String storageType;
+        private String storageBucket;
+        private final String storagePath;
+        private final String metadataJson;
+        private Instant createdAt = Instant.now();
+        private Instant updatedAt = Instant.now();
+
+        private FileRecordSpec(String tenantId,
+                               String fileName,
+                               String fileCategory,
+                               String fileStatus,
+                               String storageType,
+                               String storagePath,
+                               String metadataJson) {
+            this.tenantId = tenantId;
+            this.fileName = fileName;
+            this.fileCategory = fileCategory;
+            this.fileStatus = fileStatus;
+            this.storageType = storageType;
+            this.storagePath = storagePath;
+            this.metadataJson = metadataJson;
+        }
+
+        private FileRecordSpec storageBucket(String storageBucket) {
+            this.storageBucket = storageBucket;
+            return this;
+        }
+
+        private FileRecordSpec createdAt(Instant createdAt) {
+            this.createdAt = createdAt;
+            return this;
+        }
+
+        private FileRecordSpec updatedAt(Instant updatedAt) {
+            this.updatedAt = updatedAt;
+            return this;
+        }
+    }
+
     @SpringBootConfiguration
     @EnableAutoConfiguration
     @ImportAutoConfiguration(RestClientAutoConfiguration.class)
@@ -191,28 +235,24 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
                 }
                 """.formatted(groupCode, requiredSet, Instant.now().plusSeconds(3600));
 
-        insertFileRecord(
+        insertFileRecord(new FileRecordSpec(
                 TENANT_ID,
                 "file-a.csv",
                 "INPUT",
                 "RECEIVED",
                 "LOCAL",
-                null,
                 "incoming/" + groupCode + "/file-a.csv",
-                metadata,
-                Instant.now(),
-                Instant.now());
-        insertFileRecord(
+                metadata
+        ).createdAt(Instant.now()).updatedAt(Instant.now()));
+        insertFileRecord(new FileRecordSpec(
                 TENANT_ID,
                 "file-b.csv",
                 "INPUT",
                 "RECEIVED",
                 "LOCAL",
-                null,
                 "incoming/" + groupCode + "/file-b.csv",
-                metadata,
-                Instant.now(),
-                Instant.now());
+                metadata
+        ).createdAt(Instant.now()).updatedAt(Instant.now()));
 
         fileGovernanceScheduler.manageFileArrivalGroups();
 
@@ -238,16 +278,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         assertThat(((Number) summaries.get(0).get("triggered_count")).longValue()).isEqualTo(2L);
     }
 
-    private Long insertFileRecord(String tenantId,
-                                  String fileName,
-                                  String fileCategory,
-                                  String fileStatus,
-                                  String storageType,
-                                  String storageBucket,
-                                  String storagePath,
-                                  String metadataJson,
-                                  Instant createdAt,
-                                  Instant updatedAt) {
+    private Long insertFileRecord(FileRecordSpec spec) {
         return jdbcTemplate.queryForObject(
                 """
                         insert into batch.file_record (
@@ -265,19 +296,19 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
                         ) returning id
                         """,
                 Long.class,
-                tenantId,
-                fileCategory,
-                fileName,
-                fileName,
-                storageType,
-                storagePath,
-                storageBucket,
-                fileStatus,
+                spec.tenantId,
+                spec.fileCategory,
+                spec.fileName,
+                spec.fileName,
+                spec.storageType,
+                spec.storagePath,
+                spec.storageBucket,
+                spec.fileStatus,
                 java.sql.Date.valueOf(LocalDate.of(2026, 3, 27)),
                 "trace-" + suffix(),
-                metadataJson,
-                Timestamp.from(createdAt),
-                Timestamp.from(updatedAt));
+                spec.metadataJson,
+                Timestamp.from(spec.createdAt),
+                Timestamp.from(spec.updatedAt));
     }
 
     private void putObject(String objectName, String content) throws Exception {

@@ -50,15 +50,12 @@ public class DeliverDispatchStep implements DispatchStageStep {
         Map<String, Object> latestRecord = fileDispatchRepository.loadLatestDispatchRecord(context.getTenantId(), fileId, dispatchPayload.channelCode());
         if (latestRecord.isEmpty()) {
             int inserted = fileDispatchRepository.insertDispatchRecord(
-                    context.getTenantId(),
-                    fileId,
-                    runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-                    dispatchPayload.channelCode(),
-                    dispatchPayload.dispatchTarget(),
-                    dispatchPayload.receiptCode(),
-                    "NONE",
-                    dispatchPayload.externalRequestId()
-            );
+                    new FileDispatchRepository.InsertDispatchParam(
+                            context.getTenantId(), fileId,
+                            runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
+                            dispatchPayload.channelCode(), dispatchPayload.dispatchTarget(),
+                            dispatchPayload.receiptCode(), "NONE", dispatchPayload.externalRequestId()
+                    ));
             if (inserted <= 0) {
                 return DispatchStageResult.failure(stage(), "DISPATCH_INSERT_FAILED", "failed to create dispatch record");
             }

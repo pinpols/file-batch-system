@@ -85,22 +85,13 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
                 "createdBy", ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
                 "updatedBy", ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)
         ));
-        logChange(ChangeLogCommand.of(
-                new ChangeLogContext(
-                        tenantId,
-                        request.getOperatorId(),
-                        request.getTraceId(),
-                        request.getReason()
-                ),
-                request.getConfigType(),
-                request.getConfigKey(),
-                nextVersionNo,
-                "CREATE",
-                "SUCCESS",
-                Map.of(
+        logChange(new ChangeLogCommand(
+                new ChangeLogContext(tenantId, request.getOperatorId(), request.getTraceId(), request.getReason()),
+                new ChangeLogTarget(request.getConfigType(), request.getConfigKey(), nextVersionNo),
+                new ChangeLogChange("CREATE", "SUCCESS", Map.of(
                         "configName", ConsoleTextSanitizer.safeInput(request.getConfigName(), 256),
                         "configStatus", ConfigLifecycleStatus.DRAFT.code()
-                )));
+                ))));
         return Long.valueOf(nextVersionNo);
     }
 
@@ -173,22 +164,13 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
                 "createdBy", ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
                 "updatedBy", ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)
         ));
-        logChange(ChangeLogCommand.of(
-                new ChangeLogContext(
-                        tenantId,
-                        request.getOperatorId(),
-                        request.getTraceId(),
-                        request.getReason()
-                ),
-                "SECRET",
-                request.getSecretRef(),
-                nextVersionNo,
-                "ROTATE",
-                "SUCCESS",
-                Map.of(
+        logChange(new ChangeLogCommand(
+                new ChangeLogContext(tenantId, request.getOperatorId(), request.getTraceId(), request.getReason()),
+                new ChangeLogTarget("SECRET", request.getSecretRef(), nextVersionNo),
+                new ChangeLogChange("ROTATE", "SUCCESS", Map.of(
                         "secretName", ConsoleTextSanitizer.safeInput(request.getSecretName(), 256),
                         "secretStatus", nextStatus
-                )));
+                ))));
         return Long.valueOf(nextVersionNo);
     }
 
@@ -225,19 +207,10 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
                     "grayScopeJson", request.getGrayScopeJson()
             ));
         }
-        logChange(ChangeLogCommand.of(
-                new ChangeLogContext(
-                        tenantId,
-                        request.getOperatorId(),
-                        request.getTraceId(),
-                        request.getReason()
-                ),
-                release.getConfigType(),
-                release.getConfigKey(),
-                release.getVersionNo(),
-                changeAction,
-                "SUCCESS",
-                Map.of("nextStatus", nextStatus)
+        logChange(new ChangeLogCommand(
+                new ChangeLogContext(tenantId, request.getOperatorId(), request.getTraceId(), request.getReason()),
+                new ChangeLogTarget(release.getConfigType(), release.getConfigKey(), release.getVersionNo()),
+                new ChangeLogChange(changeAction, "SUCCESS", Map.of("nextStatus", nextStatus))
         ));
         return nextStatus;
     }
@@ -320,19 +293,6 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     private record ChangeLogCommand(ChangeLogContext context,
                                     ChangeLogTarget target,
                                     ChangeLogChange change) {
-        private static ChangeLogCommand of(ChangeLogContext context,
-                                           String configType,
-                                           String configKey,
-                                           Integer versionNo,
-                                           String action,
-                                           String result,
-                                           Object detail) {
-            return new ChangeLogCommand(
-                    context,
-                    new ChangeLogTarget(configType, configKey, versionNo),
-                    new ChangeLogChange(action, result, detail)
-            );
-        }
     }
 
     private record ChangeLogTarget(String configType,
