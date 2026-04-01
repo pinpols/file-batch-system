@@ -152,23 +152,7 @@ class DefaultConsoleJobDefinitionExcelApplicationServiceTest {
         assertThat(apply.updatedRows()).isEqualTo(1);
 
         verify(jobDefinitionMapper, times(3)).selectByUniqueKey("t1", "JOB1");
-        verify(jobDefinitionMapper).updateJobDefinitionMaintenance(
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString(),
-                anyString(),
-                anyInt(),
-                anyInt(),
-                anyString(),
-                anyBoolean(),
-                anyString(),
-                anyString()
-        );
+        verify(jobDefinitionMapper).updateJobDefinitionMaintenance(any());
         verify(configChangeLogMapper).insertConfigChangeLog(any());
     }
 
