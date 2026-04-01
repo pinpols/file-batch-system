@@ -20,6 +20,73 @@ import org.springframework.boot.test.context.SpringBootTest;
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
+    private static final class ApprovalSubmissionSpec {
+        private String tenantId = "t1";
+        private String approvalType = "COMPENSATION";
+        private String actionType;
+        private String targetType;
+        private String targetId;
+        private String payloadJson;
+        private String requesterId = "op-001";
+        private String sourceTraceId;
+        private String sourceIdempotencyKey;
+        private String approvalReason;
+
+        private ApprovalSubmissionSpec actionType(String actionType) {
+            this.actionType = actionType;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec targetType(String targetType) {
+            this.targetType = targetType;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec targetId(String targetId) {
+            this.targetId = targetId;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec payloadJson(String payloadJson) {
+            this.payloadJson = payloadJson;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec sourceTraceId(String sourceTraceId) {
+            this.sourceTraceId = sourceTraceId;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec sourceIdempotencyKey(String sourceIdempotencyKey) {
+            this.sourceIdempotencyKey = sourceIdempotencyKey;
+            return this;
+        }
+
+        private ApprovalSubmissionSpec approvalReason(String approvalReason) {
+            this.approvalReason = approvalReason;
+            return this;
+        }
+
+        private ApprovalWorkflowService.ApprovalSubmitCommand build() {
+            return ApprovalWorkflowService.ApprovalSubmitCommand.of(
+                    tenantId,
+                    new ApprovalWorkflowService.ApprovalTarget(
+                            approvalType,
+                            actionType,
+                            targetType,
+                            targetId,
+                            payloadJson
+                    ),
+                    new ApprovalWorkflowService.ApprovalSource(
+                            requesterId,
+                            sourceTraceId,
+                            sourceIdempotencyKey,
+                            approvalReason
+                    )
+            );
+        }
+    }
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     @Autowired
@@ -27,9 +94,15 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldSubmitApprovalAndReturnApprovalNo() {
-        String approvalNo = approvalWorkflowService.submit(submitCommand(
-                "t1", "COMPENSATION", "DLQ_REPLAY", "DEAD_LETTER", "100",
-                "{\"reason\":\"data error\"}", "op-001", "trace-001", "idem-001", "need approval"));
+        String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+                .actionType("DLQ_REPLAY")
+                .targetType("DEAD_LETTER")
+                .targetId("100")
+                .payloadJson("{\"reason\":\"data error\"}")
+                .sourceTraceId("trace-001")
+                .sourceIdempotencyKey("idem-001")
+                .approvalReason("need approval")
+                .build());
 
         assertThat(approvalNo).isNotBlank();
 
@@ -41,9 +114,14 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldTransitionFromPendingToApproved() {
-        String approvalNo = approvalWorkflowService.submit(submitCommand(
-                "t1", "COMPENSATION", "RETRY", "JOB_PARTITION", "200",
-                null, "op-001", "trace-approve", "idem-approve", "retry needed"));
+        String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+                .actionType("RETRY")
+                .targetType("JOB_PARTITION")
+                .targetId("200")
+                .sourceTraceId("trace-approve")
+                .sourceIdempotencyKey("idem-approve")
+                .approvalReason("retry needed")
+                .build());
 
         ApprovalWorkflowService.ApprovalRecord approved = approvalWorkflowService.approve(
                 "t1", approvalNo, "approver-001", "looks good");
@@ -54,9 +132,14 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldTransitionFromPendingToRejected() {
-        String approvalNo = approvalWorkflowService.submit(submitCommand(
-                "t1", "COMPENSATION", "DLQ_REPLAY", "DEAD_LETTER", "300",
-                null, "op-001", "trace-reject", "idem-reject", "suspicious operation"));
+        String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+                .actionType("DLQ_REPLAY")
+                .targetType("DEAD_LETTER")
+                .targetId("300")
+                .sourceTraceId("trace-reject")
+                .sourceIdempotencyKey("idem-reject")
+                .approvalReason("suspicious operation")
+                .build());
 
         ApprovalWorkflowService.ApprovalRecord rejected = approvalWorkflowService.reject(
                 "t1", approvalNo, "approver-002", "data looks wrong");
@@ -66,9 +149,14 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldTransitionFromApprovedToExecuted() {
-        String approvalNo = approvalWorkflowService.submit(submitCommand(
-                "t1", "COMPENSATION", "RETRY", "JOB", "400",
-                null, "op-001", "trace-exec", "idem-exec", "retry"));
+        String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+                .actionType("RETRY")
+                .targetType("JOB")
+                .targetId("400")
+                .sourceTraceId("trace-exec")
+                .sourceIdempotencyKey("idem-exec")
+                .approvalReason("retry")
+                .build());
 
         approvalWorkflowService.approve("t1", approvalNo, "approver-001", "ok");
 
@@ -79,9 +167,14 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldReturnCurrentStateWhenAlreadyApproved() {
-        String approvalNo = approvalWorkflowService.submit(submitCommand(
-                "t1", "COMPENSATION", "RETRY", "JOB", "500",
-                null, "op-001", "trace-double-approve", "idem-double", "retry"));
+        String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+                .actionType("RETRY")
+                .targetType("JOB")
+                .targetId("500")
+                .sourceTraceId("trace-double-approve")
+                .sourceIdempotencyKey("idem-double")
+                .approvalReason("retry")
+                .build());
 
         approvalWorkflowService.approve("t1", approvalNo, "approver-001", "first approval");
         // Second approve should be idempotent — returns current APPROVED state
@@ -100,39 +193,18 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
     @Test
     void shouldPreservePayloadJsonThroughApprovalLifecycle() throws Exception {
         String payload = "{\"deadLetterId\":999,\"reason\":\"retry needed\"}";
-        String approvalNo = approvalWorkflowService.submit(submitCommand(
-                "t1", "COMPENSATION", "DLQ_REPLAY", "DEAD_LETTER", "999",
-                payload, "op-001", "trace-payload", "idem-payload", "verify payload"));
+        String approvalNo = approvalWorkflowService.submit(new ApprovalSubmissionSpec()
+                .actionType("DLQ_REPLAY")
+                .targetType("DEAD_LETTER")
+                .targetId("999")
+                .payloadJson(payload)
+                .sourceTraceId("trace-payload")
+                .sourceIdempotencyKey("idem-payload")
+                .approvalReason("verify payload")
+                .build());
 
         ApprovalWorkflowService.ApprovalRecord record = approvalWorkflowService.get("t1", approvalNo);
         assertThat(JSON.readTree(record.payloadJson())).isEqualTo(JSON.readTree(payload));
     }
 
-    private static ApprovalWorkflowService.ApprovalSubmitCommand submitCommand(String tenantId,
-                                                                               String approvalType,
-                                                                               String actionType,
-                                                                               String targetType,
-                                                                               String targetId,
-                                                                               String payloadJson,
-                                                                               String requesterId,
-                                                                               String sourceTraceId,
-                                                                               String sourceIdempotencyKey,
-                                                                               String approvalReason) {
-        return ApprovalWorkflowService.ApprovalSubmitCommand.of(
-                tenantId,
-                new ApprovalWorkflowService.ApprovalTarget(
-                        approvalType,
-                        actionType,
-                        targetType,
-                        targetId,
-                        payloadJson
-                ),
-                new ApprovalWorkflowService.ApprovalSource(
-                        requesterId,
-                        sourceTraceId,
-                        sourceIdempotencyKey,
-                        approvalReason
-                )
-        );
-    }
 }

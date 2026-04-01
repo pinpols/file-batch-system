@@ -49,19 +49,6 @@ public interface PartitionDispatchService {
             );
         }
 
-        public static DispatchContext of(LaunchRequest request,
-                                         Map<String, Object> effectiveParams,
-                                         String traceId,
-                                         JobInstanceEntity jobInstance,
-                                         WorkflowRunEntity workflowRun,
-                                         List<WorkflowDagService.DagNodeResolution> initialNodes,
-                                         Instant startedAt) {
-            return of(
-                    new DispatchRequest(request, effectiveParams, traceId),
-                    new DispatchRuntime(jobInstance, workflowRun, initialNodes, startedAt)
-            );
-        }
-
         public LaunchRequest request() {
             return requestContext.request();
         }

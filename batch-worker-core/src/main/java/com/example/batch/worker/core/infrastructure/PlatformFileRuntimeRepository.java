@@ -113,26 +113,29 @@ public class PlatformFileRuntimeRepository {
         return mapPipelineStepDefinitions(rows);
     }
 
-    public Long createPipelineInstance(String tenantId,
-                                       Long pipelineDefinitionId,
-                                       String jobCode,
-                                       String pipelineType,
-                                       Long fileId,
-                                       Long relatedJobInstanceId,
-                                       String currentStage,
-                                       String traceId) {
-        if (!StringUtils.hasText(tenantId) || pipelineDefinitionId == null) {
+    public record CreatePipelineInstanceParam(String tenantId,
+                                              Long pipelineDefinitionId,
+                                              String jobCode,
+                                              String pipelineType,
+                                              Long fileId,
+                                              Long relatedJobInstanceId,
+                                              String currentStage,
+                                              String traceId) {
+    }
+
+    public Long createPipelineInstance(CreatePipelineInstanceParam p) {
+        if (!StringUtils.hasText(p.tenantId()) || p.pipelineDefinitionId() == null) {
             return null;
         }
         Map<String, Object> paramMap = params(
-                "tenantId", tenantId,
-                "pipelineDefinitionId", pipelineDefinitionId,
-                "jobCode", jobCode,
-                "pipelineType", pipelineType,
-                "fileId", fileId,
-                "relatedJobInstanceId", relatedJobInstanceId,
-                "currentStage", currentStage,
-                "traceId", traceId,
+                "tenantId", p.tenantId(),
+                "pipelineDefinitionId", p.pipelineDefinitionId(),
+                "jobCode", p.jobCode(),
+                "pipelineType", p.pipelineType(),
+                "fileId", p.fileId(),
+                "relatedJobInstanceId", p.relatedJobInstanceId(),
+                "currentStage", p.currentStage(),
+                "traceId", p.traceId(),
                 "runStatus", com.example.batch.common.enums.PipelineRunStatus.RUNNING.name()
         );
         platformFileRuntimeMapper.insertPipelineInstance(paramMap);

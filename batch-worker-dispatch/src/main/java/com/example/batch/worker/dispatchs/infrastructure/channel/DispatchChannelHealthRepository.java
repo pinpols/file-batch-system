@@ -52,17 +52,7 @@ public class DispatchChannelHealthRepository {
         return toSnapshot(rows.get(0));
     }
 
-    public void upsertHealth(String tenantId,
-                             String channelCode,
-                             String channelType,
-                             String healthStatus,
-                             int consecutiveFailures,
-                             Instant lastProbeAt,
-                             Instant lastSuccessAt,
-                             Instant lastFailureAt,
-                             Instant nextProbeAt,
-                             String probeMessage,
-                             String probeEvidence) {
+    public void upsertHealth(DispatchChannelHealthSnapshot s) {
         jdbcTemplate.update("""
                         insert into batch.file_channel_health (
                             tenant_id, channel_code, channel_type, health_status, consecutive_failures,
@@ -81,9 +71,9 @@ public class DispatchChannelHealthRepository {
                             probe_evidence = excluded.probe_evidence,
                             updated_at = current_timestamp
                         """,
-                tenantId, channelCode, channelType, healthStatus, consecutiveFailures,
-                toTimestamp(lastProbeAt), toTimestamp(lastSuccessAt), toTimestamp(lastFailureAt),
-                toTimestamp(nextProbeAt), probeMessage, probeEvidence
+                s.tenantId(), s.channelCode(), s.channelType(), s.healthStatus(), s.consecutiveFailures(),
+                toTimestamp(s.lastProbeAt()), toTimestamp(s.lastSuccessAt()), toTimestamp(s.lastFailureAt()),
+                toTimestamp(s.nextProbeAt()), s.probeMessage(), s.probeEvidence()
         );
     }
 

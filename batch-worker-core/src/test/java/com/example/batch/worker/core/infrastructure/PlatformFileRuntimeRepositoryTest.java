@@ -61,15 +61,10 @@ class PlatformFileRuntimeRepositoryTest {
         });
 
         Long pipelineInstanceId = repository.createPipelineInstance(
-                "tenant-a",
-                4601L,
-                "job-a",
-                "IMPORT",
-                5201L,
-                4001L,
-                "VALIDATE",
-                "trace-a"
-        );
+                new PlatformFileRuntimeRepository.CreatePipelineInstanceParam(
+                        "tenant-a", 4601L, "job-a", "IMPORT",
+                        5201L, 4001L, "VALIDATE", "trace-a"
+                ));
 
         assertThat(pipelineInstanceId).isEqualTo(5301L);
         verify(mapper).insertPipelineInstance(argThat(params ->

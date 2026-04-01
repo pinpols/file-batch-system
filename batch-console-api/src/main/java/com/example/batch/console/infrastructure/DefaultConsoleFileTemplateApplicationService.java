@@ -132,11 +132,11 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
         param.setFormat(format);
         param.setQuery(queryOptions(request.getDefaultQueryCode(), request.getDefaultQuerySql(), request.getQueryParamSchemaJson()));
         param.setRuntime(runtimeOptions(request.getStreamingEnabled(), request.getPageSize(), request.getFetchSize(), request.getChunkSize()));
-        param.setSecurity(securityOptions(
+        param.setSecurity(securityOptions(new SecurityOptionsInput(
                 request.getPreviewMaskingEnabled(), request.getErrorLineMaskingEnabled(), request.getLogMaskingEnabled(),
                 request.getContentEncryptionEnabled(), request.getEncryptionKeyRef(),
                 request.getDownloadRequiresApproval(), request.getMaskingRuleSet()
-        ));
+        )));
         param.setAudit(auditOptions(operator, operator));
         return param;
     }
@@ -190,7 +190,7 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
                 request.getFetchSize() != null ? request.getFetchSize() : intValue(existing.get("fetch_size")),
                 request.getChunkSize() != null ? request.getChunkSize() : intValue(existing.get("chunk_size"))
         ));
-        param.setSecurity(securityOptions(
+        param.setSecurity(securityOptions(new SecurityOptionsInput(
                 request.getPreviewMaskingEnabled() != null ? request.getPreviewMaskingEnabled() : (Boolean) existing.get("preview_masking_enabled"),
                 request.getErrorLineMaskingEnabled() != null ? request.getErrorLineMaskingEnabled() : (Boolean) existing.get("error_line_masking_enabled"),
                 request.getLogMaskingEnabled() != null ? request.getLogMaskingEnabled() : (Boolean) existing.get("log_masking_enabled"),
@@ -198,7 +198,7 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
                 request.getEncryptionKeyRef() != null ? request.getEncryptionKeyRef() : (String) existing.get("encryption_key_ref"),
                 request.getDownloadRequiresApproval() != null ? request.getDownloadRequiresApproval() : (Boolean) existing.get("download_requires_approval"),
                 request.getMaskingRuleSet() != null ? request.getMaskingRuleSet() : (String) existing.get("masking_rule_set")
-        ));
+        )));
         param.setAudit(auditOptions(operator, operator));
         return param;
     }
@@ -241,21 +241,24 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
         return runtime;
     }
 
-    private FileTemplateConfigUpsertParam.SecurityOptions securityOptions(Boolean previewMaskingEnabled,
-                                                                          Boolean errorLineMaskingEnabled,
-                                                                          Boolean logMaskingEnabled,
-                                                                          Boolean contentEncryptionEnabled,
-                                                                          String encryptionKeyRef,
-                                                                          Boolean downloadRequiresApproval,
-                                                                          String maskingRuleSet) {
+    private record SecurityOptionsInput(Boolean previewMaskingEnabled,
+                                        Boolean errorLineMaskingEnabled,
+                                        Boolean logMaskingEnabled,
+                                        Boolean contentEncryptionEnabled,
+                                        String encryptionKeyRef,
+                                        Boolean downloadRequiresApproval,
+                                        String maskingRuleSet) {
+    }
+
+    private FileTemplateConfigUpsertParam.SecurityOptions securityOptions(SecurityOptionsInput input) {
         FileTemplateConfigUpsertParam.SecurityOptions security = new FileTemplateConfigUpsertParam.SecurityOptions();
-        security.setPreviewMaskingEnabled(previewMaskingEnabled);
-        security.setErrorLineMaskingEnabled(errorLineMaskingEnabled);
-        security.setLogMaskingEnabled(logMaskingEnabled);
-        security.setContentEncryptionEnabled(contentEncryptionEnabled);
-        security.setEncryptionKeyRef(encryptionKeyRef);
-        security.setDownloadRequiresApproval(downloadRequiresApproval);
-        security.setMaskingRuleSet(maskingRuleSet);
+        security.setPreviewMaskingEnabled(input.previewMaskingEnabled());
+        security.setErrorLineMaskingEnabled(input.errorLineMaskingEnabled());
+        security.setLogMaskingEnabled(input.logMaskingEnabled());
+        security.setContentEncryptionEnabled(input.contentEncryptionEnabled());
+        security.setEncryptionKeyRef(input.encryptionKeyRef());
+        security.setDownloadRequiresApproval(input.downloadRequiresApproval());
+        security.setMaskingRuleSet(input.maskingRuleSet());
         return security;
     }
 

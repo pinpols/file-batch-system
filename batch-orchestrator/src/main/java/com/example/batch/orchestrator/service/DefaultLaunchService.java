@@ -124,13 +124,8 @@ public class DefaultLaunchService implements LaunchService {
 
         // T2：构建分片/任务/outbox，并推进运行态；该事务可在失败后独立重试。
         partitionDispatchService.dispatch(PartitionDispatchService.DispatchContext.of(
-                request,
-                effectiveParams,
-                traceId,
-                prepared.jobInstance(),
-                prepared.workflowRun(),
-                prepared.initialNodes(),
-                prepared.startedAt()
+                new PartitionDispatchService.DispatchRequest(request, effectiveParams, traceId),
+                new PartitionDispatchService.DispatchRuntime(prepared.jobInstance(), prepared.workflowRun(), prepared.initialNodes(), prepared.startedAt())
         ));
 
         triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
@@ -422,20 +417,13 @@ public class DefaultLaunchService implements LaunchService {
                     now,
                     now
             ));
-            appendBatchDayAuditLog(
-                    request.tenantId(),
-                    request.traceId(),
-                    null,
-                    dayStatus,
-                    calendarCode,
-                    request.bizDate(),
-                    reasonCode,
-                    auditOperatorId,
-                    auditOperatorType,
-                    lateAccepted ? 1 : 0,
-                    catchUpLaunch ? 1 : 0,
-                    cutoffAt
-            );
+            appendBatchDayAuditLog(new BatchDayAuditLogParam(
+                    request.tenantId(), request.traceId(),
+                    null, dayStatus,
+                    calendarCode, request.bizDate(),
+                    reasonCode, auditOperatorId, auditOperatorType,
+                    lateAccepted ? 1 : 0, catchUpLaunch ? 1 : 0, cutoffAt
+            ));
             return;
         }
         boolean lateAccepted = isLateAccepted(effectiveParams);
@@ -481,20 +469,14 @@ public class DefaultLaunchService implements LaunchService {
         }
         toDayStatus = updated.dayStatus();
         batchDayInstanceRepository.save(updated);
-        appendBatchDayAuditLog(
-                request.tenantId(),
-                request.traceId(),
-                fromDayStatus,
-                toDayStatus,
-                calendarCode,
-                request.bizDate(),
+        appendBatchDayAuditLog(new BatchDayAuditLogParam(
+                request.tenantId(), request.traceId(),
+                fromDayStatus, toDayStatus,
+                calendarCode, request.bizDate(),
                 reasonCode == null ? "BATCH_DAY_UPDATED" : reasonCode,
-                auditOperatorId,
-                auditOperatorType,
-                updated.lateCount(),
-                updated.catchupCount(),
-                cutoffAt
-        );
+                auditOperatorId, auditOperatorType,
+                updated.lateCount(), updated.catchupCount(), cutoffAt
+        ));
     }
 
     private Instant resolveBatchDayCutoffAt(String tenantId, String calendarCode, LocalDate bizDate) {
@@ -510,7 +492,7 @@ public class DefaultLaunchService implements LaunchService {
         return bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
     }
 
-    private void appendBatchDayAuditLog(String tenantId,
+    private record BatchDayAuditLogParam(String tenantId,
                                          String traceId,
                                          String fromDayStatus,
                                          String toDayStatus,
@@ -522,26 +504,29 @@ public class DefaultLaunchService implements LaunchService {
                                          Integer lateCount,
                                          Integer catchupCount,
                                          Instant cutoffAt) {
+    }
+
+    private void appendBatchDayAuditLog(BatchDayAuditLogParam p) {
         JobExecutionLogEntity logEntity = new JobExecutionLogEntity();
-        logEntity.setTenantId(tenantId);
+        logEntity.setTenantId(p.tenantId());
         logEntity.setJobInstanceId(null);
         logEntity.setJobPartitionId(null);
         logEntity.setLogLevel("INFO");
         logEntity.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
-        logEntity.setTraceId(traceId);
+        logEntity.setTraceId(p.traceId());
         logEntity.setMessage("BATCH_DAY_INSTANCE_STATE_CHANGED");
         logEntity.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
         logEntity.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {{
-            put("calendarCode", calendarCode);
-            put("bizDate", bizDate == null ? null : bizDate.toString());
-            put("fromDayStatus", fromDayStatus);
-            put("toDayStatus", toDayStatus);
-            put("reasonCode", reasonCode);
-            put("operatorId", operatorId);
-            put("operatorType", operatorType);
-            put("lateCount", lateCount);
-            put("catchupCount", catchupCount);
-            put("cutoffAt", cutoffAt == null ? null : cutoffAt.toString());
+            put("calendarCode", p.calendarCode());
+            put("bizDate", p.bizDate() == null ? null : p.bizDate().toString());
+            put("fromDayStatus", p.fromDayStatus());
+            put("toDayStatus", p.toDayStatus());
+            put("reasonCode", p.reasonCode());
+            put("operatorId", p.operatorId());
+            put("operatorType", p.operatorType());
+            put("lateCount", p.lateCount());
+            put("catchupCount", p.catchupCount());
+            put("cutoffAt", p.cutoffAt() == null ? null : p.cutoffAt().toString());
         }}));
         jobExecutionLogMapper.insert(logEntity);
     }
