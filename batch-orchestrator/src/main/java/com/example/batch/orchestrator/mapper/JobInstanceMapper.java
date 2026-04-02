@@ -22,21 +22,9 @@ public interface JobInstanceMapper {
 
     List<JobInstanceEntity> selectByQuery(JobInstanceQuery query);
 
-    int updateProgress(@Param("tenantId") String tenantId,
-                       @Param("id") Long id,
-                       @Param("instanceStatus") String instanceStatus,
-                       @Param("successPartitionCount") Integer successPartitionCount,
-                       @Param("failedPartitionCount") Integer failedPartitionCount,
-                       @Param("resultSummary") String resultSummary,
-                       @Param("finishedAt") java.time.Instant finishedAt,
-                       @Param("expectedVersion") Long expectedVersion);
+    int updateProgress(UpdateInstanceProgressParam param);
 
-    int markRunning(@Param("tenantId") String tenantId,
-                    @Param("id") Long id,
-                    @Param("instanceStatus") String instanceStatus,
-                    @Param("expectedPartitionCount") Integer expectedPartitionCount,
-                    @Param("startedAt") java.time.Instant startedAt,
-                    @Param("expectedVersion") Long expectedVersion);
+    int markRunning(MarkInstanceRunningParam param);
 
     int updateExpectedPartitionCount(@Param("tenantId") String tenantId,
                                      @Param("id") Long id,

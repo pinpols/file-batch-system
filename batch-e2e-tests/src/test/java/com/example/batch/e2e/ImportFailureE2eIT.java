@@ -265,7 +265,13 @@ class ImportFailureE2eIT extends AbstractIntegrationTest {
     @Test
     void scenarioC_retryBudgetExhaustedCreatesDeadLetter() {
         LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-                jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, "FIXED", 2);
+                new E2eScenarioFixture.LaunchPreparationSpec(
+                        jdbcTemplate,
+                        TENANT,
+                        "IMPORT",
+                        "import",
+                        TriggerType.API
+                ).retryPolicy("FIXED").retryMaxCount(2));
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("fileFormatType", "JSON");

@@ -11,12 +11,7 @@ public interface WorkflowNodeRunMapper {
     WorkflowNodeRunEntity selectLatestByWorkflowRunIdAndNodeCode(@Param("workflowRunId") Long workflowRunId,
                                                                  @Param("nodeCode") String nodeCode);
 
-    int updateStatus(@Param("id") Long id,
-                     @Param("nodeStatus") String nodeStatus,
-                     @Param("errorCode") String errorCode,
-                     @Param("errorMessage") String errorMessage,
-                     @Param("durationMs") Long durationMs,
-                     @Param("finishedAt") java.time.Instant finishedAt);
+    int updateStatus(UpdateNodeRunStatusParam param);
 
     List<WorkflowNodeRunEntity> selectByWorkflowRunId(@Param("workflowRunId") Long workflowRunId);
 }

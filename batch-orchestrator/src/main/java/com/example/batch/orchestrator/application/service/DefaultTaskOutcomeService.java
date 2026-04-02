@@ -22,6 +22,8 @@ import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.mapper.FinishTaskParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.UpdateInstanceProgressParam;
+import com.example.batch.orchestrator.mapper.UpdateNodeRunStatusParam;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
@@ -120,14 +122,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         long duration = command.startedAt() == null || command.finishedAt() == null
                 ? 0L
                 : Duration.between(command.startedAt(), command.finishedAt()).toMillis();
-        workflowNodeRunMapper.updateStatus(
-                current.getId(),
-                command.success() ? WorkflowNodeRunStatus.SUCCESS.code() : WorkflowNodeRunStatus.FAILED.code(),
-                command.errorCode(),
-                command.errorMessage(),
-                duration,
-                command.finishedAt()
-        );
+        workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+                .id(current.getId())
+                .nodeStatus(command.success() ? WorkflowNodeRunStatus.SUCCESS.code() : WorkflowNodeRunStatus.FAILED.code())
+                .errorCode(command.errorCode()).errorMessage(command.errorMessage())
+                .durationMs(duration).finishedAt(command.finishedAt()).build());
         return workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(command.workflowRunId(), command.nodeCode());
     }
 
@@ -292,16 +291,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
             String instanceEvent = resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
             String instanceStatus = stateMachine.transition(jobInstance, instanceEvent).toState();
-            int progressUpdated = jobInstanceMapper.updateProgress(
-                    command.tenantId(),
-                    jobInstance.getId(),
-                    instanceStatus,
-                    (int) successCount,
-                    (int) failedCount,
-                    buildJobInstanceResultSummary(jobInstance, partitions, command),
-                    allPartitionsFinished && !dagContinues ? finishedAt : null,
-                    jobInstance.getVersion()
-            );
+            int progressUpdated = jobInstanceMapper.updateProgress(UpdateInstanceProgressParam.builder()
+                    .tenantId(command.tenantId()).id(jobInstance.getId())
+                    .instanceStatus(instanceStatus)
+                    .successPartitionCount((int) successCount).failedPartitionCount((int) failedCount)
+                    .resultSummary(buildJobInstanceResultSummary(jobInstance, partitions, command))
+                    .finishedAt(allPartitionsFinished && !dagContinues ? finishedAt : null)
+                    .expectedVersion(jobInstance.getVersion()).build());
             if (progressUpdated <= 0) {
                 throw new BizException(ResultCode.STATE_CONFLICT, "job instance progress conflict");
             }

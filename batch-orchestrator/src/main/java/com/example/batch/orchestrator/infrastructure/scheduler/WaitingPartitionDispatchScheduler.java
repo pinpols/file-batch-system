@@ -20,6 +20,7 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecisio
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -130,14 +131,11 @@ public class WaitingPartitionDispatchScheduler {
                         task.getTenantId() + ":" + task.getId()
                 );
                 if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
-                    int updated = jobInstanceMapper.markRunning(
-                            jobInstance.getTenantId(),
-                            jobInstance.getId(),
-                            JobInstanceStatus.RUNNING.code(),
-                            jobInstance.getExpectedPartitionCount(),
-                            Instant.now(),
-                            jobInstance.getVersion()
-                    );
+                    int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
+                            .tenantId(jobInstance.getTenantId()).id(jobInstance.getId())
+                            .instanceStatus(JobInstanceStatus.RUNNING.code())
+                            .expectedPartitionCount(jobInstance.getExpectedPartitionCount())
+                            .startedAt(Instant.now()).expectedVersion(jobInstance.getVersion()).build());
                     if (updated > 0) {
                         jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
                     }

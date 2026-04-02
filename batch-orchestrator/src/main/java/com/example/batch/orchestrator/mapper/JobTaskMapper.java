@@ -29,12 +29,7 @@ public interface JobTaskMapper {
 
     int updateStatus(UpdateTaskStatusParam param);
 
-    int assignWorker(@Param("tenantId") String tenantId,
-                     @Param("id") Long id,
-                     @Param("assignedWorkerCode") String assignedWorkerCode,
-                     @Param("taskStatus") String taskStatus,
-                     @Param("readyStatus") String readyStatus,
-                     @Param("expectedVersion") Long expectedVersion);
+    int assignWorker(AssignWorkerParam param);
 
     int resetForRetry(@Param("tenantId") String tenantId,
                       @Param("id") Long id,

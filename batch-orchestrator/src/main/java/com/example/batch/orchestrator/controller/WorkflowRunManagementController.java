@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import com.example.batch.orchestrator.mapper.UpdateNodeRunStatusParam;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
@@ -63,8 +64,10 @@ public class WorkflowRunManagementController {
             throw new BizException(ResultCode.STATE_CONFLICT,
                     "can only skip FAILED nodes, current: " + nodeRun.getNodeStatus());
         }
-        workflowNodeRunMapper.updateStatus(
-                nodeRun.getId(), "SKIPPED", null, null, nodeRun.getDurationMs(), Instant.now());
+        workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+                .id(nodeRun.getId()).nodeStatus("SKIPPED")
+                .errorCode(null).errorMessage(null)
+                .durationMs(nodeRun.getDurationMs()).finishedAt(Instant.now()).build());
         return Map.of("id", id, "nodeCode", nodeCode, "nodeStatus", "SKIPPED");
     }
 

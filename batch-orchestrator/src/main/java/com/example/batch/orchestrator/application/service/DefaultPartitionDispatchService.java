@@ -22,6 +22,7 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecisio
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
+import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
 import java.util.List;
@@ -129,10 +130,11 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
         // 内联调用 markLaunchRuntime
         if (dispatchable) {
             // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
-            int updated = jobInstanceMapper.markRunning(
-                    jobInstance.getTenantId(), jobInstance.getId(),
-                    stateMachine.transition(jobInstance, "START").toState(),
-                    partitionCount, startedAt, jobInstance.getVersion());
+            int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
+                    .tenantId(jobInstance.getTenantId()).id(jobInstance.getId())
+                    .instanceStatus(stateMachine.transition(jobInstance, "START").toState())
+                    .expectedPartitionCount(partitionCount).startedAt(startedAt)
+                    .expectedVersion(jobInstance.getVersion()).build());
             if (updated <= 0) {
                 throw new BizException(ResultCode.STATE_CONFLICT, "job instance launch transition conflict");
             }
@@ -143,10 +145,11 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                     workflowRun.getCurrentNodeCode(), startedAt);
         } else {
             // 不可派发（资源不足/窗口限制等）：instance 进入 WAITING，由等待派发调度器后续推进。
-            int updated = jobInstanceMapper.markRunning(
-                    jobInstance.getTenantId(), jobInstance.getId(),
-                    JobInstanceStatus.WAITING.code(),
-                    partitionCount, null, jobInstance.getVersion());
+            int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
+                    .tenantId(jobInstance.getTenantId()).id(jobInstance.getId())
+                    .instanceStatus(JobInstanceStatus.WAITING.code())
+                    .expectedPartitionCount(partitionCount).startedAt(null)
+                    .expectedVersion(jobInstance.getVersion()).build());
             if (updated <= 0) {
                 throw new BizException(ResultCode.STATE_CONFLICT, "job instance waiting transition conflict");
             }

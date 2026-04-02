@@ -27,6 +27,7 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
+import com.example.batch.orchestrator.mapper.UpdateNodeRunStatusParam;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import java.time.Instant;
@@ -191,14 +192,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         runningNode.setStartedAt(now);
         runningNode.setDurationMs(0L);
         workflowNodeRunMapper.insert(runningNode);
-        workflowNodeRunMapper.updateStatus(
-                runningNode.getId(),
-                com.example.batch.common.enums.WorkflowNodeRunStatus.SUCCESS.code(),
-                null,
-                null,
-                0L,
-                now
-        );
+        workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+                .id(runningNode.getId())
+                .nodeStatus(com.example.batch.common.enums.WorkflowNodeRunStatus.SUCCESS.code())
+                .errorCode(null).errorMessage(null)
+                .durationMs(0L).finishedAt(now).build());
         List<WorkflowDagService.DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
                 workflowRun.getWorkflowDefinitionId(),
                 node.nodeCode(),

@@ -126,17 +126,15 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     void shouldCollectLatencyMetricsForDelayedArrivalFiles() {
         Instant now = Instant.now();
         String suffix = suffix();
-        insertFileRecord(
+        insertFileRecord(new FileRecordSpec(
                 TENANT_ID,
                 "delay-file-" + suffix + ".csv",
                 "INPUT",
                 "RECEIVED",
                 "S3",
-                minioBucket(),
                 "incoming/delay-file-" + suffix + ".csv",
-                "{\"expectedArrivalTime\":\"" + now.minusSeconds(7200) + "\"}",
-                now,
-                now);
+                "{\"expectedArrivalTime\":\"" + now.minusSeconds(7200) + "\"}"
+        ).storageBucket(minioBucket()).createdAt(now).updatedAt(now));
 
         fileGovernanceScheduler.collectLatencyMetrics();
 
@@ -150,17 +148,17 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
         String objectName = "archive/cleanup/" + suffix() + ".csv";
         putObject(objectName, "one,two,three\n");
 
-        Long fileId = insertFileRecord(
+        Long fileId = insertFileRecord(new FileRecordSpec(
                 TENANT_ID,
                 "archive-file-" + suffix() + ".csv",
                 "INPUT",
                 "ARCHIVED",
                 "S3",
-                minioBucket(),
                 objectName,
-                "{}",
-                Instant.now().minusSeconds(9L * 24L * 3600L),
-                Instant.now().minusSeconds(9L * 24L * 3600L));
+                "{}"
+        ).storageBucket(minioBucket())
+                .createdAt(Instant.now().minusSeconds(9L * 24L * 3600L))
+                .updatedAt(Instant.now().minusSeconds(9L * 24L * 3600L)));
 
         fileGovernanceScheduler.cleanupArchivedFiles();
 
