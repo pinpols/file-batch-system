@@ -8,6 +8,7 @@ import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import java.util.List;
@@ -99,7 +100,10 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
         if (!StringUtils.hasText(workerGroup)) {
             return tenantActivePartitions;
         }
-        return jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), workerGroup, PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
+        return jobPartitionMapper.countActiveByTenantAndWorkerGroup(CountActiveByGroupParam.builder()
+                .tenantId(request.getTenantId()).workerGroup(workerGroup)
+                .waitingStatus(PartitionStatus.WAITING.code()).readyStatus(PartitionStatus.READY.code())
+                .runningStatus(PartitionStatus.RUNNING.code()).retryingStatus(PartitionStatus.RETRYING.code()).build());
     }
 
     private TenantQuotaPolicyRecord resolveQuotaPolicy(String tenantId) {

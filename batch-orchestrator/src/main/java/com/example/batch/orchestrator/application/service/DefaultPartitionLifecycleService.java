@@ -6,6 +6,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.example.batch.orchestrator.mapper.ClaimPartitionParam;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.MarkPartitionStatusParam;
@@ -60,15 +61,11 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
         if (existingPartition == null) {
             return null;
         }
-        int updated = jobPartitionMapper.claimPartition(
-                tenantId,
-                partitionId,
-                workerCode,
-                leaseExpireAt,
-                PartitionStatus.READY.code(),
-                PartitionStatus.RUNNING.code(),
-                existingPartition.getVersion()
-        );
+        int updated = jobPartitionMapper.claimPartition(ClaimPartitionParam.builder()
+                .tenantId(tenantId).id(partitionId).workerCode(workerCode)
+                .leaseExpireAt(leaseExpireAt)
+                .fromStatus(PartitionStatus.READY.code()).toStatus(PartitionStatus.RUNNING.code())
+                .expectedVersion(existingPartition.getVersion()).build());
         return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
     }
 

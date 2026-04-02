@@ -15,6 +15,7 @@ import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.repository.BatchWindowRepository;
@@ -248,7 +249,10 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.workerGroup())) {
             return 0;
         }
-        return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(request.getTenantId(), queue.workerGroup(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
+        return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(CountActiveByGroupParam.builder()
+                .tenantId(request.getTenantId()).workerGroup(queue.workerGroup())
+                .waitingStatus(PartitionStatus.WAITING.code()).readyStatus(PartitionStatus.READY.code())
+                .runningStatus(PartitionStatus.RUNNING.code()).retryingStatus(PartitionStatus.RETRYING.code()).build());
     }
 
     private long resolveFairnessScore(FairnessScoreContext context) {

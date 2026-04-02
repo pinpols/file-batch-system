@@ -104,7 +104,13 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
                 "C-MF-1");
 
         LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-                jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, "FIXED", 2);
+                new E2eScenarioFixture.LaunchPreparationSpec(
+                        jdbcTemplate,
+                        TENANT,
+                        "EXPORT",
+                        "export",
+                        TriggerType.API
+                ).retryPolicy("FIXED").retryMaxCount(2));
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("batchNo", BATCH_NO);

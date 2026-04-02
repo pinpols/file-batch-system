@@ -17,13 +17,7 @@ public interface JobPartitionMapper {
 
     JobPartitionEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-    int claimPartition(@Param("tenantId") String tenantId,
-                       @Param("id") Long id,
-                       @Param("workerCode") String workerCode,
-                       @Param("leaseExpireAt") java.time.Instant leaseExpireAt,
-                       @Param("fromStatus") String fromStatus,
-                       @Param("toStatus") String toStatus,
-                       @Param("expectedVersion") Long expectedVersion);
+    int claimPartition(ClaimPartitionParam param);
 
     int renewLease(@Param("tenantId") String tenantId,
                    @Param("id") Long id,
@@ -73,10 +67,5 @@ public interface JobPartitionMapper {
                               @Param("runningStatus") String runningStatus,
                               @Param("retryingStatus") String retryingStatus);
 
-    long countActiveByTenantAndWorkerGroup(@Param("tenantId") String tenantId,
-                                           @Param("workerGroup") String workerGroup,
-                                           @Param("waitingStatus") String waitingStatus,
-                                           @Param("readyStatus") String readyStatus,
-                                           @Param("runningStatus") String runningStatus,
-                                           @Param("retryingStatus") String retryingStatus);
+    long countActiveByTenantAndWorkerGroup(CountActiveByGroupParam param);
 }

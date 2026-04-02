@@ -5,6 +5,8 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.orchestrator.mapper.AssignWorkerParam;
+import com.example.batch.orchestrator.mapper.ClaimPartitionParam;
 import com.example.batch.orchestrator.mapper.MarkRunningParam;
 import com.example.batch.orchestrator.mapper.UpdateTaskStatusParam;
 import com.example.batch.common.exception.BizException;
@@ -66,7 +68,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         if (!isWorkerClaimable(tenantId, workerCode, current)) {
             return current;
         }
-        int updated = jobTaskMapper.assignWorker(tenantId, taskId, workerCode, TaskStatus.RUNNING.code(), TaskStatus.READY.code(), current.getVersion());
+        int updated = jobTaskMapper.assignWorker(AssignWorkerParam.builder()
+                .tenantId(tenantId).id(taskId).assignedWorkerCode(workerCode)
+                .taskStatus(TaskStatus.RUNNING.code()).readyStatus(TaskStatus.READY.code())
+                .expectedVersion(current.getVersion()).build());
         if (updated <= 0) {
             return jobTaskMapper.selectById(tenantId, taskId);
         }
@@ -78,15 +83,11 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
                 return jobTaskMapper.selectById(tenantId, taskId);
             }
-            int claimed = jobPartitionMapper.claimPartition(
-                    tenantId,
-                    current.getJobPartitionId(),
-                    workerCode,
-                    Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()),
-                    PartitionStatus.READY.code(),
-                    PartitionStatus.RUNNING.code(),
-                    partition.getVersion()
-            );
+            int claimed = jobPartitionMapper.claimPartition(ClaimPartitionParam.builder()
+                    .tenantId(tenantId).id(current.getJobPartitionId()).workerCode(workerCode)
+                    .leaseExpireAt(Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+                    .fromStatus(PartitionStatus.READY.code()).toStatus(PartitionStatus.RUNNING.code())
+                    .expectedVersion(partition.getVersion()).build());
             if (claimed <= 0) {
                 // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
