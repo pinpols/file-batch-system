@@ -136,6 +136,66 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
         assertThat(finalPartition.getWorkerCode()).isEqualTo(finalTask.getAssignedWorkerCode());
     }
 
+    @Test
+    void assignWorker_onlyOneWorkerWins_acrossRepeatedLaunches() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            assertOneClaimWinnerForFreshLaunch();
+        }
+    }
+
+    private void assertOneClaimWinnerForFreshLaunch() throws Exception {
+        LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+                jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
+        String winnerWorker = seed.workerCode();
+        String loserWorker = "worker-race-b-" + System.nanoTime();
+
+        workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
+
+        LaunchResponse response = launchService.launch(new LaunchRequest(
+                TENANT,
+                seed.jobCode(),
+                BIZ_DATE,
+                TriggerType.MANUAL,
+                seed.requestId(),
+                "trace-concurrent-claim-loop-" + seed.requestId(),
+                Map.of()));
+        assertThat(response.instanceNo()).isNotBlank();
+
+        JobInstanceEntity jobInstance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+        List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
+                new com.example.batch.orchestrator.domain.query.JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+        assertThat(tasks).hasSize(1);
+        JobTaskEntity task = tasks.get(0);
+
+        CountDownLatch startGate = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<JobTaskEntity> winnerFuture = pool.submit(() -> {
+                startGate.await();
+                return taskExecutionService.assignWorker(TENANT, task.getId(), winnerWorker);
+            });
+            Future<JobTaskEntity> loserFuture = pool.submit(() -> {
+                startGate.await();
+                return taskExecutionService.assignWorker(TENANT, task.getId(), loserWorker);
+            });
+
+            startGate.countDown();
+
+            JobTaskEntity winnerResult = winnerFuture.get();
+            JobTaskEntity loserResult = loserFuture.get();
+
+            assertThat(winnerResult).isNotNull();
+            assertThat(loserResult).isNotNull();
+            assertThat(
+                    (winnerWorker.equals(winnerResult.getAssignedWorkerCode()) ? 1 : 0)
+                            + (loserWorker.equals(loserResult.getAssignedWorkerCode()) ? 1 : 0))
+                    .as("exactly one caller should see itself as the claim winner")
+                    .isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     private static WorkerRegistryRecord onlineWorker(String tenantId, String workerCode, String workerGroup) {
         return new WorkerRegistryRecord(
                 null, tenantId, workerCode, workerGroup,

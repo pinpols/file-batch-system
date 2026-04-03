@@ -18,6 +18,7 @@ import com.example.batch.console.web.response.ConsoleAlertEventResponse;
 import com.example.batch.console.web.response.ConsoleApprovalCommandResponse;
 import com.example.batch.console.web.response.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
+import com.example.batch.console.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
@@ -143,6 +144,15 @@ class ConsoleQueryControllerTest {
     }
 
     @Test
+    void shouldReturnLegacyPipelineDefinitionsPage() throws Exception {
+        when(queryApplicationService.filePipelines(any())).thenReturn(emptyPage());
+
+        mockMvc.perform(get("/api/console/query/pipeline-definitions").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
     void shouldReturnFilePipelineStepsPage() throws Exception {
         when(queryApplicationService.filePipelineSteps(any())).thenReturn(emptyPage());
 
@@ -233,6 +243,32 @@ class ConsoleQueryControllerTest {
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.nodes").isArray())
                 .andExpect(jsonPath("$.data.edges").isArray());
+    }
+
+    @Test
+    void shouldReturnLegacyPipelineDefinitionsDetail() throws Exception {
+        when(queryApplicationService.filePipelineDetail(anyString(), anyLong())).thenReturn(new ConsoleFilePipelineResponse(
+                1L,
+                "t1",
+                1001L,
+                "file-001",
+                "IMPORT",
+                2001L,
+                3001L,
+                "RECEIVE",
+                "PARSE",
+                "SUCCESS",
+                "trace-1",
+                Instant.EPOCH,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                Instant.EPOCH
+        ));
+
+        mockMvc.perform(get("/api/console/query/pipeline-definitions/1").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.jobCode").value("file-001"))
+                .andExpect(jsonPath("$.data.runStatus").value("SUCCESS"));
     }
 
     @Test

@@ -154,6 +154,12 @@ public class ConsoleQueryController {
         return responseFactory.success(applicationService.filePipelines(request));
     }
 
+    /** GET /pipeline-definitions — 兼容旧前端路由，实际返回文件流水线列表。 */
+    @GetMapping("/pipeline-definitions")
+    public CommonResponse<PageResponse<ConsoleFilePipelineResponse>> pipelineDefinitions(@Valid @ModelAttribute FilePipelineQueryRequest request) {
+        return responseFactory.success(applicationService.filePipelines(request));
+    }
+
     /** GET /file-pipeline-steps — 流水线步骤运行记录。 */
     @GetMapping("/file-pipeline-steps")
     public CommonResponse<PageResponse<ConsoleFilePipelineStepResponse>> filePipelineSteps(@Valid @ModelAttribute FilePipelineStepQueryRequest request) {
@@ -317,7 +323,14 @@ public class ConsoleQueryController {
 
     @GetMapping("/file-pipelines/{id}")
     public CommonResponse<ConsoleFilePipelineResponse> filePipelineDetail(@PathVariable Long id,
-                                                                           @RequestParam("tenantId") String tenantId) {
+                                                                          @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
+    }
+
+    /** GET /pipeline-definitions/{id} — 兼容旧前端路由，实际返回文件流水线详情。 */
+    @GetMapping("/pipeline-definitions/{id}")
+    public CommonResponse<ConsoleFilePipelineResponse> pipelineDefinitionDetail(@PathVariable Long id,
+                                                                                @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
     }
 }

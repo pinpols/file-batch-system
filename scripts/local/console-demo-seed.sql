@@ -428,7 +428,7 @@ INSERT INTO batch.file_channel_config (
 (51001,'default-tenant','api_dispatch',     'API Dispatch',    'API',     'http://partner.example.com/api/receive','TOKEN',    '{"headers":{"X-Tenant-Id":"default-tenant"},"maxRetry":3}'::jsonb,                                    'SYNC',   30,TRUE),
 (51002,'default-tenant','api_push_dispatch','API Push',        'API_PUSH','http://partner.example.com/api/push',   'TOKEN',    '{"apiKey":"demo-key","receiptPollUrl":"http://partner.example.com/api/receipt","pollIntervalSec":10}'::jsonb,'ASYNC',  30,TRUE),
 (51003,'default-tenant','sftp_bank',        'Bank SFTP',       'SFTP',    'sftp.bank.example.com',                 'PASSWORD', '{"port":22,"user":"batch","remoteDir":"/inbox","knownHostsRef":"bank_known_hosts"}'::jsonb,              'NONE',   45,TRUE),
-(51004,'default-tenant','nas_archive',      'NAS Archive',     'NAS',     '/mnt/nas/batch/archive',                'NONE',     '{"remoteDir":"/mnt/nas/batch/archive","mkdirs":true}'::jsonb,                                         'SYNC',   30,TRUE),
+(51004,'default-tenant','nas_archive',      'NAS Archive',     'NAS',     '/tmp/batch/nas/archive',                'NONE',     '{"remoteDir":"/tmp/batch/nas/archive","mkdirs":true}'::jsonb,                                         'SYNC',   30,TRUE),
 (51005,'default-tenant','oss_backup',       'OSS Backup',      'OSS',     'https://oss.example.com',               'TOKEN',    '{"bucket":"batch-backup","prefix":"dispatch/","region":"cn-shanghai"}'::jsonb,                         'POLLING',30,TRUE),
 (51006,'default-tenant','email_ops',        'Email Ops',       'EMAIL',   'ops@example.com',                       'PASSWORD', '{"smtpHost":"smtp.example.com","smtpPort":587,"from":"batch@example.com","tls":true}'::jsonb,            'SYNC',   45,TRUE),
 (51007,'default-tenant','local_test',       'Local Test',      'LOCAL',   '/tmp/batch/dispatch',                   'NONE',     '{"targetDir":"/tmp/batch/dispatch","mkdirs":true}'::jsonb,                                            'NONE',   10,TRUE)
@@ -803,7 +803,7 @@ SELECT
         WHEN 0 THEN 'http://partner.example.com/api/receive'
         WHEN 1 THEN 'http://partner.example.com/api/push'
         WHEN 2 THEN 'sftp.bank.example.com:/inbox/demo-file-'||n||'.csv'
-        WHEN 3 THEN '/mnt/nas/batch/archive/demo-file-'||n||'.csv'
+        WHEN 3 THEN '/tmp/batch/nas/archive/demo-file-'||n||'.csv'
         WHEN 4 THEN 'oss://batch-backup/dispatch/demo-file-'||n||'.csv'
         WHEN 5 THEN 'ops@example.com'
         ELSE '/tmp/batch/dispatch/demo-file-'||n||'.csv' END,
@@ -1262,7 +1262,7 @@ INSERT INTO batch.file_channel_health (
 (63501,'default-tenant','api_dispatch',     'API',    'HEALTHY',   0,now()-interval '1m', now()-interval '1m', NULL,               now()+interval '1m', 'HTTP 200 OK',               'http://partner.example.com/health',  now()-interval '1h',now()),
 (63502,'default-tenant','api_push_dispatch','API_PUSH','HEALTHY',  0,now()-interval '2m', now()-interval '2m', NULL,               now()+interval '1m', 'HTTP 200 OK (push health)', 'http://partner.example.com/push/health',now()-interval '1h',now()),
 (63503,'default-tenant','sftp_bank',        'SFTP',   'DEGRADED',  2,now()-interval '5m', now()-interval '30m',now()-interval '5m',now()+interval '5m', 'Connection timeout 30s',    'sftp.bank.example.com:22',           now()-interval '1h',now()),
-(63504,'default-tenant','nas_archive',      'NAS',    'HEALTHY',   0,now()-interval '3m', now()-interval '3m', NULL,               now()+interval '2m', 'Path accessible',           '/mnt/nas/batch/archive',             now()-interval '1h',now()),
+(63504,'default-tenant','nas_archive',      'NAS',    'HEALTHY',   0,now()-interval '3m', now()-interval '3m', NULL,               now()+interval '2m', 'Path accessible',           '/tmp/batch/nas/archive',             now()-interval '1h',now()),
 (63505,'default-tenant','oss_backup',       'OSS',    'HEALTHY',   0,now()-interval '4m', now()-interval '4m', NULL,               now()+interval '2m', 'Bucket reachable',          'oss://batch-backup',                 now()-interval '1h',now()),
 (63506,'default-tenant','email_ops',        'EMAIL',  'UNHEALTHY', 5,now()-interval '10m',now()-interval '2h', now()-interval '10m',now()+interval '15m','SMTP auth failed: 535',    'smtp.example.com:587',               now()-interval '1h',now()),
 (63507,'default-tenant','local_test',       'LOCAL',  'HEALTHY',   0,now()-interval '1m', now()-interval '1m', NULL,               now()+interval '1m', 'Directory writable',        '/tmp/batch/dispatch',                now()-interval '1h',now())

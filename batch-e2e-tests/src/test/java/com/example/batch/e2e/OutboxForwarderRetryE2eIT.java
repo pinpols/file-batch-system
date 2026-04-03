@@ -16,6 +16,7 @@ import com.example.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import com.example.batch.testing.OrchestratorWireMockSupport;
+import com.example.batch.e2e.support.E2eStatusLogger;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
@@ -83,7 +84,8 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
 
         OutboxEventEntity event = seedOutboxEvent("t1", "e2e-exhausted-001");
 
-        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(300)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(5)).untilAsserted(() -> {
+            E2eStatusLogger.logOutboxSnapshot(jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
             String status = jdbcTemplate.queryForObject(
                     "select publish_status from batch.outbox_event where id = ?",
                     String.class, event.getId());
@@ -112,7 +114,8 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
 
         OutboxEventEntity event = seedOutboxEvent("t1", "e2e-recovery-001");
 
-        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(300)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(5)).untilAsserted(() -> {
+            E2eStatusLogger.logOutboxSnapshot(jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
             String status = jdbcTemplate.queryForObject(
                     "select publish_status from batch.outbox_event where id = ?",
                     String.class, event.getId());
@@ -141,5 +144,9 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
         entity.setTraceId("e2e-tr-" + eventKey);
         outboxEventMapper.insert(entity);
         return entity;
+    }
+
+    private String eventKey(OutboxEventEntity event) {
+        return event.getEventKey();
     }
 }

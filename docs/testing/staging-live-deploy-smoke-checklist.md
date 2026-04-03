@@ -10,6 +10,7 @@
 
 - `scripts/ci/run-full-regression.sh --with-deploy-smoke`
 - `scripts/ci/run-full-regression.sh --with-deployment-verification`
+- `scripts/ci/run-staging-live-smoke.sh`
 
 说明：
 
@@ -76,6 +77,14 @@ bash scripts/ci/run-full-regression.sh \
   --skip-default-tests \
   --skip-it-suite \
   --with-deploy-smoke | tee "$LOG_FILE"
+```
+
+或者直接使用组合入口：
+
+```bash
+LOG_FILE="/tmp/staging-live-smoke-$(date +%Y%m%d-%H%M%S).log"
+
+bash scripts/ci/run-staging-live-smoke.sh | tee "$LOG_FILE"
 ```
 
 脚本会自动执行：

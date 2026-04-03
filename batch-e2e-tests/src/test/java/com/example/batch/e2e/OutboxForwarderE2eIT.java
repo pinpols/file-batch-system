@@ -9,6 +9,7 @@ import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.e2e.support.E2eStatusLogger;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
@@ -82,7 +83,8 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
                 params));
 
         // OutboxPollScheduler fires every 500 ms and publishes the pending outbox event automatically.
-        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(500)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofSeconds(5)).untilAsserted(() -> {
+            E2eStatusLogger.logJobFlowSnapshot(jdbcTemplate, TENANT, seed.dedupKey(), "OutboxForwarderE2eIT");
             String status = jdbcTemplate.queryForObject(
                     """
                             select t.task_status from batch.job_task t

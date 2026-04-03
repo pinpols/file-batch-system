@@ -10,6 +10,14 @@
 bash scripts/ci/run-full-regression.sh --help
 ```
 
+## `run-staging-live-smoke.sh`
+
+staging live rollout / rollback smoke 的薄封装：默认开启 live deploy smoke 和 deployment verification，直接复用 `run-full-regression.sh`。
+
+```bash
+bash scripts/ci/run-staging-live-smoke.sh
+```
+
 ## `security-scan.sh`
 
 本地 / CI 安全扫描一键入口：先打包 `security-scan` 独立 Java 模块，再按参数执行 secret、依赖、SAST、文件系统、镜像和 ZAP 扫描。默认执行全量扫描，可通过 `--mode` 收窄范围。

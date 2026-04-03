@@ -9,6 +9,7 @@ import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eOutboxPublishSupport;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.e2e.support.E2eStatusLogger;
 import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -155,7 +156,9 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
         // ── Wait for both tasks to complete ────────────────────────────────────
 
-        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(300)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofSeconds(5)).untilAsserted(() -> {
+            E2eStatusLogger.logJobFlowSnapshot(jdbcTemplate, T1, t1Seed.dedupKey(), "MultiTenantConcurrentE2eIT/t1");
+            E2eStatusLogger.logJobFlowSnapshot(jdbcTemplate, T2, t2Seed.dedupKey(), "MultiTenantConcurrentE2eIT/t2");
             String t1Status = taskStatus(T1, t1Seed.dedupKey());
             String t2Status = taskStatus(T2, t2Seed.dedupKey());
             assertThat(t1Status).isEqualTo("SUCCESS");
