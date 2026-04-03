@@ -3,6 +3,14 @@
 <mapper namespace="com.example.batch.console.mapper.FileRecordMapper">
     <resultMap id="FileRecordResultMap" type="com.example.batch.console.domain.entity.FileRecordEntity">
         <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="file_name" property="fileName"/>
+        <result column="file_status" property="fileStatus"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="FileRecordResultMap">

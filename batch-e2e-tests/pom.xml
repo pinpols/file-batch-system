@@ -23,6 +23,11 @@
         </dependency>
         <dependency>
             <groupId>com.example.batch</groupId>
+            <artifactId>batch-console-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.example.batch</groupId>
             <artifactId>batch-worker-import</artifactId>
             <version>${project.version}</version>
         </dependency>

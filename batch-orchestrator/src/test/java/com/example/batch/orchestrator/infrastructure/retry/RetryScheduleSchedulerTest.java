@@ -1,0 +1,64 @@
+package com.example.batch.orchestrator.infrastructure.retry;
+
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
+
+import com.example.batch.orchestrator.application.service.RetryGovernanceService;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class RetryScheduleSchedulerTest {
+
+    @Mock
+    private RetryGovernanceService retryGovernanceService;
+
+    private RetryScheduleScheduler scheduler;
+
+    @BeforeEach
+    void setUp() {
+        scheduler = new RetryScheduleScheduler(retryGovernanceService);
+    }
+
+    @Test
+    void shouldDispatchDueRetries() {
+        scheduler.poll();
+
+        verify(retryGovernanceService).dispatchDueRetries();
+    }
+
+    @Test
+    void shouldDispatchOnlyOnceWhenPollIsCalledConcurrently() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            entered.countDown();
+            release.await();
+            return null;
+        }).when(retryGovernanceService).dispatchDueRetries();
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> first = pool.submit(scheduler::poll);
+            entered.await();
+
+            Future<?> second = pool.submit(scheduler::poll);
+            release.countDown();
+
+            first.get();
+            second.get();
+        } finally {
+            pool.shutdownNow();
+        }
+
+        verify(retryGovernanceService, times(1)).dispatchDueRetries();
+    }
+}

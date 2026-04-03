@@ -9,6 +9,7 @@ import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eOutboxPublishSupport;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.e2e.support.E2eStatusLogger;
 import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -93,7 +94,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
 
         e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofSeconds(5)).untilAsserted(() -> {
+            E2eStatusLogger.logJobFlowSnapshot(jdbcTemplate, TENANT, seed.dedupKey(), "ImportPipelineE2eIT");
             String status = jdbcTemplate.queryForObject(
                     """
                             select t.task_status from batch.job_task t

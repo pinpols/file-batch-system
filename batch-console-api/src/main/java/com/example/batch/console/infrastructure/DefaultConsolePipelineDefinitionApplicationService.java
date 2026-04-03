@@ -12,7 +12,11 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -183,6 +187,28 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
         if (v == null) return null;
         if (v instanceof Instant i) return i;
         if (v instanceof OffsetDateTime odt) return odt.toInstant();
-        return Instant.parse(v.toString());
+        String text = v.toString().trim();
+        if (text.isEmpty()) return null;
+        try {
+            return Instant.parse(text);
+        } catch (DateTimeParseException ignored) {
+            try {
+                return OffsetDateTime.parse(text).toInstant();
+            } catch (DateTimeParseException ignoredToo) {
+                DateTimeFormatter[] formatters = new DateTimeFormatter[] {
+                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"),
+                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"),
+                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                };
+                for (DateTimeFormatter formatter : formatters) {
+                    try {
+                        return LocalDateTime.parse(text, formatter).toInstant(ZoneOffset.UTC);
+                    } catch (DateTimeParseException ignoredPattern) {
+                        // try next pattern
+                    }
+                }
+                throw ignoredToo;
+            }
+        }
     }
 }

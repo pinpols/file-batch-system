@@ -129,7 +129,9 @@ wait_container_exited_zero batch-kafka-init "Kafka topic init"
 wait_container_exited_zero batch-minio-init "MinIO bucket init"
 
 echo "==> Maven 打包全部模块（-DskipTests）..."
-mvn -q -DskipTests package -T 1C
+mvn -q -DskipTests \
+  -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
+  -am package -T 1C
 
 echo "==> 启动 Spring Boot 进程（profile=local）..."
 echo "  顺序：orchestrator -> 短暂等待 -> trigger / console / 三个 worker"
