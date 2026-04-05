@@ -120,6 +120,30 @@ COMPOSE_ENV_FILE=.env.test ./scripts/docker/up-apps.sh
 COMPOSE_ENV_FILE=.env.prod ./scripts/docker/up-apps.sh
 ```
 
+### 本地联调启动
+
+首次启动或代码有变更时，先构建本地应用模块：
+
+```bash
+bash scripts/local/build-apps.sh
+```
+
+再启动本地联调环境：
+
+```bash
+bash scripts/local/start-all.sh
+```
+
+停止本地 Java 进程：
+
+```bash
+bash scripts/local/stop-all.sh
+```
+
+说明：
+- `start-all.sh` 默认只启动基础依赖和本地 Java 进程，不自动 Maven 打包
+- 如需“构建 + 启动”，可使用 `BUILD=1 bash scripts/local/start-all.sh`
+
 ### 控制台默认登录
 
 - 登录页：`/console-login.html`
@@ -230,5 +254,5 @@ DB (job_task: READY)
 
 1. 遵守 `AGENT.md` 中的工程基线约束
 2. 新功能必须附带对应的集成测试
-3. 修改持久层时同步更新 `platform-init.sql` 和相应 Flyway 迁移
+3. 修改持久层时只维护 Flyway 迁移（`batch-orchestrator/src/main/resources/db/migration/`）；`platform-init.sql` 仅含与 V1 等价的 schema，勿再复制表 DDL
 4. 不得引入 JPA/Hibernate 依赖

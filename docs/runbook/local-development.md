@@ -25,6 +25,7 @@
 - `docker/postgres/init/001-create-schemas.sql`：数据库 schema 初始化
 - `scripts/local/init-kafka-topics.sh`：Kafka Topic 初始化
 - `scripts/local/init-minio.sh`：MinIO bucket 初始化
+- `scripts/local/build-apps.sh`：单独打包本地 Java 应用模块
 - `scripts/local/start-all.sh`：一键启动本地依赖 + Java 模块
 - `scripts/local/stop-all.sh`：停止本地 Java 模块，可选停止 Docker 依赖（只 stop，不 down）
 - `scripts/docker/down-apps.sh`：停止本地应用容器栈（只 stop，不 down）
@@ -40,11 +41,19 @@ docker compose --env-file .env.local -f docker-compose.yml up -d
 
 ### 一键启动本地联调全栈
 
+首次启动或代码有变更时，先构建：
+
+```bash
+bash scripts/local/build-apps.sh
+```
+
+再启动：
+
 ```bash
 bash scripts/local/start-all.sh
 ```
 
-说明：首次使用时先将 `.env.example` 复制为 `.env.local`。启动脚本默认使用 `.env.local`，如需切换环境可先设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。脚本会等待 PostgreSQL、MinIO、Redis 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。
+说明：首次使用时先将 `.env.example` 复制为 `.env.local`。启动脚本默认使用 `.env.local`，如需切换环境可先设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。脚本会等待 PostgreSQL、MinIO、Redis 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。默认情况下 `start-all.sh` 不会自动执行 Maven 打包；如需“构建 + 启动”，可使用 `BUILD=1 bash scripts/local/start-all.sh`。
 如果某些 Java 模块已经在运行，脚本会跳过它们，只补启动未运行或已退出的模块。
 
 查看状态：

@@ -85,13 +85,13 @@ java.lang.IllegalStateException: failed to register quartz trigger: export_settl
 
 ## 改成完整迁移一次
 
-本地联调之前之所以没有从 `V1` 一次性完整迁移，是因为 `batch-orchestrator/src/main/resources/application-local.yml` 把 Flyway 设成了 `baseline-on-migrate: true`，并把基线版本放在 `V30`，目的是接管已存在的数据卷。
+历史上曾用 `baseline-on-migrate`（例如基线到 `V30`）接管旧数据卷，容易导致「缺早期迁移表」的半残库。
 
-现在已经改成：
+当前约定：
 
-- 本地联调默认从 `V1` 到最新版本完整执行
-- 不再自动 baseline 到 `V30`
-- 如果旧数据卷里已经有残留的 `flyway_schema_history`，需要先清卷再启动
+- `application-local.yml` 保留 `baseline-on-migrate: true` 与 **`baseline-version: 1`（固定不变）**：只表示「V1 建 schema 已由 Docker init 预置」，**不要**把该数字改成当前最新迁移号（如 V34）
+- Docker init 与 Flyway `V1` / `V30` 等 `IF NOT EXISTS` 兼容；Testcontainers 新库仍走完整迁移，与本地 baseline 语义独立
+- 若旧数据卷状态混乱，仍建议 `docker compose down -v` 后重建
 
 这样做的好处是：
 
@@ -155,8 +155,8 @@ java.lang.IllegalStateException: failed to register quartz trigger: export_settl
 - `console-api` 的 REST 异常处理补齐了 `log.error` / `log.warn`，系统异常会打印堆栈。
 - `batch-console-api` 的 `file arrival group` 查询从 `metadata_json ? 'fileGroupCode'` 改为 `jsonb_exists(...)`，避免 MyBatis 把 JSONB `?` 运算符误判成参数占位符。
 - `batch-orchestrator` 的启动自检扩展为检查 `quartz.QRTZ_*` 关键表，不再只看 schema。
-- Quartz 官方 JDBC JobStore 建表脚本已纳入 `docs/sql/flyway/V33__create_quartz_tables_postgres_2_5_2.sql`，本地空库启动会走全量迁移。
-- 本地 `batch-orchestrator` 联调配置已切换为不再 baseline 到 `V30`，避免空库接管成半残状态。
+- Quartz 官方 JDBC JobStore 建表脚本已纳入 `batch-orchestrator/src/main/resources/db/migration/V2__create_quartz_tables_postgres_2_5_2.sql`，本地空库启动会走全量迁移。
+- 本地 `batch-orchestrator` / `batch-trigger` 的 `application-local.yml` 保留 `baseline-on-migrate`，`baseline-version` 固定为 `1`（勿随新迁移递增）。
 
 仍需继续保持的事项：
 

@@ -184,8 +184,8 @@
 - 现状：`core-model.md` 已将其定义为上下文意图，而不是状态；当前代码已在运行时 payload / worker context 中统一写入 `run_mode`。
 - 当前判断：现在不做是低风险且合理的；本轮统一口径已经达到目标，不需要把数据库拉进来。
 - 查询面现状：当前真正已有查询面是命令侧，而不是主运行态；控制台已有 [`ApprovalCommandQuery.java`](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/com/example/batch/console/domain/query/ApprovalCommandQuery.java) 和 [`ApprovalCommandMapper.xml`](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/resources/mapper/ApprovalCommandMapper.xml)。
-- 现有承载：[`V26__approval_command.sql`](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V26__approval_command.sql) 已有 `payload_json` 可承载上下文；[`V12__create_compensation_and_step_runtime.sql`](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V12__create_compensation_and_step_runtime.sql) 的 `compensation_command` 没有统一上下文 JSON，如果未来真要查，更适合新增显式列。
-- 审计边界：[`V6__create_ops_tables.sql`](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V6__create_ops_tables.sql) 的 `job_execution_log` 和 [`V5__create_file_tables.sql`](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V5__create_file_tables.sql) 的 `file_audit_log` 可以承载审计信息，但不建议作为主查询面。
+- 现有承载：[`V27__approval_command.sql`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V27__approval_command.sql) 已有 `payload_json` 可承载上下文；[`V13__create_compensation_and_step_runtime.sql`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V13__create_compensation_and_step_runtime.sql) 的 `compensation_command` 没有统一上下文 JSON，如果未来真要查，更适合新增显式列。
+- 审计边界：[`V7__create_ops_tables.sql`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V7__create_ops_tables.sql) 的 `job_execution_log` 和 [`V6__create_file_tables.sql`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V6__create_file_tables.sql) 的 `file_audit_log` 可以承载审计信息，但不建议作为主查询面。
 - 何时改表：只有当产品要求按 `run_mode` 做筛选、统计、报表或审计检索时，才进入正式落库评估。
 
 建议落点：
@@ -197,15 +197,15 @@
 
 以下字段已经存在于数据库中，且被多个 mapper 直接引用：
 
-- `publish_attempt`：见 [V6__create_ops_tables.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V6__create_ops_tables.sql#L63) 和 [OutboxEventMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)
-- `run_seq`：见 [V4__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V4__create_runtime_tables.sql#L124) 和 [V5__create_file_tables.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V5__create_file_tables.sql#L106)
-- `retry_count`：见 [V4__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V4__create_runtime_tables.sql#L59) 、[V6__create_ops_tables.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V6__create_ops_tables.sql#L21) 和 [V12__create_compensation_and_step_runtime.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V12__create_compensation_and_step_runtime.sql#L25)
-- `job_code` / `workflow_code` / `worker_code` / `worker_group`：分别分布在 [V3__create_definition_tables.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V3__create_definition_tables.sql#L5) 、[V2__create_config_tables.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V2__create_config_tables.sql#L99) 和 [V4__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V4__create_runtime_tables.sql#L25)
+- `publish_attempt`：见 [V7__create_ops_tables.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V7__create_ops_tables.sql#L63) 和 [OutboxEventMapper.xml](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml)
+- `run_seq`：见 [V5__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V5__create_runtime_tables.sql#L124) 和 [V6__create_file_tables.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V6__create_file_tables.sql#L106)
+- `retry_count`：见 [V5__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V5__create_runtime_tables.sql#L59) 、[V7__create_ops_tables.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V7__create_ops_tables.sql#L21) 和 [V13__create_compensation_and_step_runtime.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V13__create_compensation_and_step_runtime.sql#L25)
+- `job_code` / `workflow_code` / `worker_code` / `worker_group`：分别分布在 [V4__create_definition_tables.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V4__create_definition_tables.sql#L5) 、[V3__create_config_tables.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V3__create_config_tables.sql#L99) 和 [V5__create_runtime_tables.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V5__create_runtime_tables.sql#L25)
 
 当前判断：
 - 这项现在不建议做，而且风险明显高于收益；本轮明确 freeze，不进入执行范围。
 - 风险不只在“改几张表”，而在于这些列同时散在 schema、MyBatis XML、测试种子 SQL、系统测试数据和文档 SQL 里。
-- 迁移治理源本身也存在分叉：[`architecture-truth.md`](./architecture-truth.md) 以 `batch-orchestrator/src/main/resources/db/migration/` 为当前基线，[`sql-script-usage-scenarios.md`](../sql/sql-script-usage-scenarios.md) 又把 [`docs/sql/flyway/`](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway) 描述成主迁移线，运行侧还存在 [`schema.sql`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/schema.sql)。
+- 迁移治理：平台 DDL 以 `batch-orchestrator/src/main/resources/db/migration/` 为唯一源；[`sql-script-usage-scenarios.md`](../sql/sql-script-usage-scenarios.md) 与 [`docs/sql/flyway/README.md`](../sql/flyway/README.md) 为说明；运行侧另有 [`schema.sql`](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/schema.sql)（勿与 Flyway 重复演进同一结构）。
 - 在这种前提下硬做 rename，最容易出现“文档改了、测试改了、真实迁移没改全”的分叉。
 
 如果要做真正的物理列重命名，需要同时处理：

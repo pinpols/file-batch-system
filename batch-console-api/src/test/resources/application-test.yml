@@ -1,10 +1,7 @@
 spring:
   flyway:
     locations: classpath:db/migration
-    # 测试容器/初始化脚本可能先创建了非空 schema，但尚未建立 flyway_schema_history。
-    # baseline-on-migrate 可以避免直接失败并让 Flyway 接管。
-    baseline-on-migrate: true
-    baseline-version: 32
+    # platform-init.sql 仅建 schema；迁移完整执行，无需 baseline。
   # Spring AI（OpenAI）自动装配在测试环境需要一个非空 api-key，
   # 即使测试本身不调用 AI 功能，也要避免 Bean 初始化直接失败。
   ai:

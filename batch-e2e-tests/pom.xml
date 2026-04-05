@@ -81,15 +81,18 @@
                 <directory>src/test/resources</directory>
             </testResource>
             <testResource>
-                <directory>${project.basedir}/../docs/sql/flyway</directory>
+                <directory>${project.basedir}/../batch-orchestrator/src/main/resources/db/migration</directory>
                 <targetPath>db/migration</targetPath>
+                <includes>
+                    <include>V*.sql</include>
+                </includes>
             </testResource>
-            <!-- 业务库示例 DDL：单源 docs/sql/business/V1__create_biz_example_tables.sql -->
+            <!-- 业务库 DDL：单源 docs/sql/business/create_biz_tables.sql（非 Flyway） -->
             <testResource>
                 <directory>${project.basedir}/../docs/sql/business</directory>
                 <targetPath>sql</targetPath>
                 <includes>
-                    <include>V1__create_biz_example_tables.sql</include>
+                    <include>create_biz_tables.sql</include>
                 </includes>
             </testResource>
         </testResources>

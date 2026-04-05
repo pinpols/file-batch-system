@@ -1,10 +1,8 @@
-# 与 orchestrator 集成测试对齐：Flyway 使用 docs/sql/flyway；后台任务尽量静默。
+# 与 orchestrator 集成测试对齐：Flyway 使用与 orchestrator 相同的 db/migration（经 testResource 复制）；后台任务尽量静默。
 spring:
   flyway:
     locations: classpath:db/migration
-    # Testcontainers 先跑 platform-init.sql 再启 Spring：batch 已非空且无 flyway_schema_history，需 baseline
-    baseline-on-migrate: true
-    baseline-version: 32
+    # platform-init.sql 仅建 schema；迁移由 classpath:db/migration 完整执行。
 
 batch:
   sla:

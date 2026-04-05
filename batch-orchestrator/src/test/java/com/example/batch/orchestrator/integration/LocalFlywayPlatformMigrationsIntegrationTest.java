@@ -13,7 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * 校验与 {@code application-local.yml} 相同的 Flyway 路径（{@code classpath:db/migration}，源为 {@code docs/sql/flyway}）。
+ * 校验与 {@code application-local.yml} 相同的 Flyway 路径（{@code classpath:db/migration}，源为 orchestrator {@code src/main/resources/db/migration}）。
  */
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)

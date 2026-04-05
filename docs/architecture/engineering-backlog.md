@@ -2,7 +2,7 @@
 
 ## 优先级 P0：先解决生产风险
 
-- 统一启动与迁移链路，消除 `schema.sql`、`Flyway`、`docs/sql/flyway` 三套基线并存的问题。
+- 统一启动与迁移链路，消除 `schema.sql` 与 Flyway（`batch-orchestrator/db/migration`）职责重叠问题。
 - 移除仓库里的硬编码敏感信息，尤其是 API key、密码、密钥等，统一改为环境变量或密钥注入。
 - 增加启动自检与健康检查，启动时能明确告诉你缺哪张表、哪条 migration 没跑、哪个 schema 不一致。
 - 强化关键链路幂等性，重点是 `launch`、`outbox`、`partition claim`、`retry`、`late event`，避免重复投递和重复执行。

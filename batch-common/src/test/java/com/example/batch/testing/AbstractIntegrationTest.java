@@ -9,6 +9,9 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * 集成测试基类：需要真实 PostgreSQL、Kafka、MinIO 的模块继承本类。
  *
+ * <p>平台库 Testcontainers 仅执行 {@code db/platform-init.sql}（与 Flyway V1 等价的 schema 边界）；
+ * 表结构由各模块测试中的 Flyway 从 {@code classpath:db/migration} 完整迁移。
+ *
  * <p>子类只声明 Spring 测试配置与用例方法；不要在子类中重复容器启动逻辑。
  */
 @BatchIntegrationTest

@@ -39,7 +39,7 @@
   - [TenantSchedulerSnapshotService.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/scheduler/snapshot/TenantSchedulerSnapshotService.java)
   - [SchedulerSnapshotController.java](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/controller/SchedulerSnapshotController.java)
   - [ConsoleSchedulerSnapshotController.java](/Users/dengchao/Downloads/file-batch-system/batch-console-api/src/main/java/com/example/batch/console/web/ConsoleSchedulerSnapshotController.java)
-  - Flyway [V15__scheduler_fair_share_snapshot_load.sql](/Users/dengchao/Downloads/file-batch-system/docs/sql/flyway/V15__scheduler_fair_share_snapshot_load.sql)
+  - Flyway [V16__scheduler_fair_share_snapshot_load.sql](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/V16__scheduler_fair_share_snapshot_load.sql)
   - Worker 排空：[WorkerDrainGovernanceService](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceService.java)、[WorkerDrainTimeoutScheduler](/Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/java/com/example/batch/orchestrator/scheduler/WorkerDrainTimeoutScheduler.java)、[docs/runbook/rolling-upgrade-workers.md](/Users/dengchao/Downloads/file-batch-system/docs/runbook/rolling-upgrade-workers.md)
 
 ### 9. 文件处理链路

@@ -1,8 +1,7 @@
 spring:
   flyway:
     locations: classpath:db/migration
-    baseline-on-migrate: true
-    baseline-version: 32
+    # platform-init.sql 仅建 schema；迁移完整执行，无需 baseline。
   quartz:
     jdbc:
       schema: classpath:db/quartz/tables_postgres_quartz_schema.sql

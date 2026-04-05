@@ -63,5 +63,5 @@
 ```bash
 docker exec -i batch-postgres \
   psql -U batch_user -d batch_business -v ON_ERROR_STOP=1 \
-  < docs/sql/business/V1__create_biz_example_tables.sql
+  < docs/sql/business/create_biz_tables.sql
 ```

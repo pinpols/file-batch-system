@@ -15,14 +15,17 @@
 
 ## 1) 平台库 Flyway 迁移脚本
 
-- **目录**：`docs/sql/flyway/`
-- **典型文件**：`V1__create_schema.sql` 到当前最新平台迁移（例如 `V31__add_batch_day_support.sql`）
+- **目录（唯一 SQL 源）**：`batch-orchestrator/src/main/resources/db/migration/`
+- **文档入口**：`docs/sql/flyway/README.md`（仅说明，不再存放 `V*.sql` 副本）
+- **典型文件**：`V1__create_schema.sql` 起至当前最新版本（例如 `V32__add_batch_day_support.sql`、`V34__create_console_user_account.sql`）
 - **作用**：
   - 演进平台库 `batch_platform` 结构（`batch`/`quartz` schema 下平台相关表）
+  - Quartz JDBC JobStore（`QRTZ_*`）由 `V2__create_quartz_tables_postgres_2_5_2.sql` 创建
   - 作为平台数据库结构的主干变更渠道
 - **执行方**：
-  - 应用启动时由 Flyway 执行（`spring.flyway.enabled=true`）
-  - 集成测试/E2E 也会通过测试资源方式加载同一套迁移脚本
+  - 应用启动时由 Flyway 执行（`spring.flyway.enabled=true`）；**生产迁库以 `batch-orchestrator` 为准**
+  - 其它模块若需 `classpath:db/migration`，在各自 `pom.xml` 中 **复制 orchestrator 上述目录**（见各模块 `build` 配置）
+  - 集成测试/E2E 通过 `testResource` 引入同一套脚本
 - **适用场景**：
   - 新增表/列/索引、约束
   - 生产级 schema 变更
@@ -32,22 +35,7 @@
 
 ---
 
-## 2) Quartz 脚本
-
-- **目录**：`docs/sql/quartz/`
-- **典型文件**：`Q1__create_quartz_tables_postgres_2_5_2.sql`
-- **作用**：
-  - 初始化 Quartz 调度元数据表（`QRTZ_*`）
-- **执行方**：
-  - 通常在环境初始化阶段手工或脚本执行
-- **适用场景**：
-  - 新环境首次启用 Quartz JDBC JobStore
-- **注意事项**：
-  - Quartz 表只放在 `quartz` schema，不承载平台业务数据
-
----
-
-## 3) 系统测试数据脚本
+## 2) 系统测试数据脚本
 
 - **目录**：`docs/sql/system-test/`
 - **典型文件**：
@@ -68,14 +56,14 @@
 
 ---
 
-## 4) E2E 业务库 schema 脚本（与 business 单源）
+## 3) E2E 业务库 schema 脚本（与 business 单源）
 
-- **权威文件**：`docs/sql/business/V1__create_biz_example_tables.sql`
+- **权威文件**：`docs/sql/business/create_biz_tables.sql`（**非 Flyway**，文件名不带 `V__` 前缀）
 - **测试 classpath**：`batch-e2e-tests` 的 `pom.xml` 将该文件复制到 `target/test-classes/sql/`，供 `@Sql` 使用（不再维护 `e2e-biz-schema.sql` 副本）
 - **作用**：
   - 为 E2E 测试创建 `batch_business.biz` 示例业务表（如导入/导出相关表）
 - **执行方**：
-  - E2E 测试类通过 `E2eTestSql.BIZ_SCHEMA`（即 `classpath:sql/V1__create_biz_example_tables.sql`）执行
+  - E2E 测试类通过 `E2eTestSql.BIZ_SCHEMA`（即 `classpath:sql/create_biz_tables.sql`）执行
 - **适用场景**：
   - 端到端测试需要业务侧真实表结构
 - **注意事项**：
@@ -83,7 +71,7 @@
 
 ---
 
-## 5) 测试数据 seed 脚本（模块内）
+## 4) 测试数据 seed 脚本（模块内）
 
 - **目录**：`batch-e2e-tests/src/test/resources/db/testdata/`（平台种子集中维护；`batch-orchestrator` 集成测试经 POM `testResource` 引入 `multi-tenant-seed.sql`）
 - **典型文件**：
@@ -101,22 +89,23 @@
 
 ---
 
-## 6) 通用测试初始化脚本
+## 5) 通用测试初始化脚本
 
 - **目录**：`batch-common/src/test/resources/db/`
 - **文件**：
   - `platform-init.sql`
   - `business-init.sql`
 - **作用**：
-  - 作为测试基础设施可复用初始化脚本，快速拉起平台/业务基础表结构
+  - `platform-init.sql`：仅创建 `batch` / `quartz` schema（与 Flyway `V1__create_schema.sql` 一致），供 Testcontainers 在 Flyway 运行前具备 schema 边界
+  - `business-init.sql`：业务库测试初始化（与业务 Flyway/种子策略一致）
 - **适用场景**：
   - 公共测试基建、通用集成测试
 - **注意事项**：
-  - 不替代 Flyway 迁移主线，避免与正式迁移职责混淆
+  - 平台表结构以 Flyway 为唯一权威，勿在 `platform-init.sql` 中维护完整 DDL，避免与迁移分叉
 
 ---
 
-## 7) Docker 初始化脚本
+## 6) Docker 初始化脚本
 
 - **目录**：`docker/postgres/init/`
 - **文件**：
@@ -133,26 +122,15 @@
 
 ---
 
-## 8) 模块内迁移补丁（Orchestrator）
+## 7) 与 §1 的关系（原「双源」说明）
 
-- **目录**：`batch-orchestrator/src/main/resources/db/migration/`
-- **典型文件**：
-  - `V2__create_worker_registry.sql`
-  - `V19__worker_registry_drain.sql`
-  - `V24__quota_runtime_state.sql`
-  - `V25__worker_registry_current_load.sql`
-- **作用**：
-  - 模块内部的历史迁移/兼容补丁
-- **适用场景**：
-  - 维护模块级演进兼容
-- **注意事项**：
-  - 与 `docs/sql/flyway/` 的主迁移线并存时，需统一治理来源，避免重复定义同一结构
+平台迁移 **只维护一份**：`batch-orchestrator/src/main/resources/db/migration/`。不再在 `docs/sql/flyway/` 下保留 SQL 副本，避免与运行时代码漂移。
 
 ---
 
 ## 选型建议（实践规则）
 
-1. **生产结构变更**：优先放 `docs/sql/flyway/`
+1. **生产结构变更**：只改 `batch-orchestrator/.../db/migration/`，并遵循 Flyway 版本号规则
 2. **单个测试场景数据**：放 `src/test/resources/db/testdata/`，由 `@Sql` 加载
 3. **E2E 业务表示例**：维护在 `docs/sql/business/`，由 `batch-e2e-tests` 的 `testResource` 打进测试 classpath
 4. **本地容器起库**：仅改 `docker/postgres/init/`
