@@ -6,7 +6,9 @@
 # 2) 默认不自动 Maven 打包；如需先构建，请显式传 BUILD=1 或先执行 build-apps.sh。
 # 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。
 # 4) PID 写入 logs/start-all.pids（TAB 分隔：name<TAB>pid<TAB>绝对路径 jar），日志写入 logs/<module>.log。
-# 4) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
+# 5) 启动 Java 进程前默认删除六个模块的 logs/*.log（避免无限追加）；需保留则设 START_ALL_KEEP_LOGS=1。
+#    可选 START_ALL_DELETE_LOGS_OLDER_THAN_DAYS=7 删除 logs 根目录下超过 N 天未改的 *.log。
+# 6) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
 #    本脚本会尝试常见安装路径（Homebrew、Docker.app 等）。
 # =========================================================
 set -euo pipefail
@@ -194,6 +196,24 @@ wait_orchestrator_healthy() {
   exit 1
 }
 
+# 启动前清理本脚本写入的模块日志，避免单次联调日志无限变大。
+clean_local_runtime_logs() {
+  if [[ "${START_ALL_KEEP_LOGS:-0}" == "1" ]]; then
+    echo "==> 保留现有模块日志（已设 START_ALL_KEEP_LOGS=1）"
+    return 0
+  fi
+  echo "==> 删除将重启写入的模块日志（logs/<模块>.log）；保留请设 START_ALL_KEEP_LOGS=1"
+  local name
+  for name in orchestrator trigger console worker-import worker-export worker-dispatch; do
+    [[ -f "$LOG_DIR/${name}.log" ]] && rm -f "$LOG_DIR/${name}.log"
+  done
+  local days_raw="${START_ALL_DELETE_LOGS_OLDER_THAN_DAYS:-}"
+  if [[ -n "$days_raw" ]] && [[ "$days_raw" =~ ^[0-9]+$ ]] && (( days_raw > 0 )); then
+    echo "==> 删除 logs 根目录下超过 ${days_raw} 天未修改的 *.log（不含子目录）"
+    find "$LOG_DIR" -maxdepth 1 -type f -name '*.log' -mtime +"$days_raw" -delete 2>/dev/null || true
+  fi
+}
+
 echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis）..."
 docker compose --env-file "$COMPOSE_ENV_FILE" up -d
 wait_postgres
@@ -212,6 +232,8 @@ else
   echo "  如需先构建，请执行 ./scripts/local/build-apps.sh"
   echo "  或使用 BUILD=1 ./scripts/local/start-all.sh"
 fi
+
+clean_local_runtime_logs
 
 echo "==> 启动 Spring Boot 进程（profile=local）..."
 echo "  顺序：orchestrator -> 健康检查 UP -> trigger / console -> 三个 worker"
