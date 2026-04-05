@@ -5,7 +5,7 @@
 # 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及六个 Java 模块。
 # 2) 默认不自动 Maven 打包；如需先构建，请显式传 BUILD=1 或先执行 build-apps.sh。
 # 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。
-# 4) PID 写入 logs/start-all.pids，日志写入 logs/<module>.log。
+# 4) PID 写入 logs/start-all.pids（TAB 分隔：name<TAB>pid<TAB>绝对路径 jar），日志写入 logs/<module>.log。
 # 4) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
 #    本脚本会尝试常见安装路径（Homebrew、Docker.app 等）。
 # =========================================================
@@ -37,7 +37,10 @@ existing_pid_for() {
   if [[ ! -f "$PID_FILE" ]]; then
     return 0
   fi
-  awk -v name="$name" '$1 == name { print $2; exit }' "$PID_FILE"
+  # 兼容旧版「空格分隔」与新版 TAB 分隔（字段 1=name，2=pid）
+  awk -v name="$name" '
+    $1 == name { print $2; exit }
+  ' "$PID_FILE"
 }
 
 POSTGRES_USER="${POSTGRES_USER:-batch_user}"
@@ -68,16 +71,17 @@ start_java() {
   existing_pid="$(existing_pid_for "$name")"
   if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
     echo "  跳过 ${name}（pid=${existing_pid} 仍在运行）"
-    echo "${name} ${existing_pid}" >>"$PID_FILE_NEW"
+    printf '%s\t%s\t%s\n' "$name" "$existing_pid" "$RUNTIME_JAR_DIR/${name}.jar" >>"$PID_FILE_NEW"
     return 0
   fi
 
   local runtime_jar="$RUNTIME_JAR_DIR/${name}.jar"
   cp -f "$jar" "$runtime_jar"
 
-  nohup java ${JAVA_OPTS:-} -jar "$runtime_jar" --spring.profiles.active=local >>"$LOG_DIR/${name}.log" 2>&1 &
+  # Java 25+：Netty 等会调用 System::loadLibrary；显式允许 unnamed 模块原生访问，避免启动期 WARNING
+  nohup java --enable-native-access=ALL-UNNAMED ${JAVA_OPTS:-} -jar "$runtime_jar" --spring.profiles.active=local >>"$LOG_DIR/${name}.log" 2>&1 &
   local pid=$!
-  echo "${name} ${pid}" >>"$PID_FILE_NEW"
+  printf '%s\t%s\t%s\n' "$name" "$pid" "$runtime_jar" >>"$PID_FILE_NEW"
   echo "  已启动 ${name} pid=${pid} 运行包 logs/runtime-jars/${name}.jar 日志 logs/${name}.log"
 }
 
@@ -166,6 +170,30 @@ wait_container_healthy() {
   exit 1
 }
 
+# Orchestrator 就绪后再启动三个 worker（与 stop-all 顺序对称）
+wait_orchestrator_healthy() {
+  local port="${BATCH_ORCHESTRATOR_PORT:-18082}"
+  local url="http://127.0.0.1:${port}/actuator/health"
+  local rounds="${ORCH_HEALTH_WAIT_ROUNDS:-90}"
+  local interval="${ORCH_HEALTH_INTERVAL_SEC:-2}"
+  echo "==> 等待 Orchestrator 健康检查通过（${url}），通过后再启动 worker..."
+  sleep "${START_ORCHESTRATOR_PAUSE_SEC:-2}"
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "ERROR: 需要 curl 以探测 Orchestrator 健康检查" >&2
+    exit 1
+  fi
+  local i
+  for i in $(seq 1 "$rounds"); do
+    if curl -sf --connect-timeout 2 --max-time 8 "$url" 2>/dev/null | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+      echo "  Orchestrator 已就绪（UP）"
+      return 0
+    fi
+    sleep "$interval"
+  done
+  echo "ERROR: Orchestrator 在超时时间内未就绪，请查看 logs/orchestrator.log" >&2
+  exit 1
+}
+
 echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis）..."
 docker compose --env-file "$COMPOSE_ENV_FILE" up -d
 wait_postgres
@@ -186,10 +214,10 @@ else
 fi
 
 echo "==> 启动 Spring Boot 进程（profile=local）..."
-echo "  顺序：orchestrator -> 短暂等待 -> trigger / console / 三个 worker"
+echo "  顺序：orchestrator -> 健康检查 UP -> trigger / console -> 三个 worker"
 
 start_java orchestrator "$(module_jar batch-orchestrator)"
-sleep "${START_ORCHESTRATOR_PAUSE_SEC:-8}"
+wait_orchestrator_healthy
 
 start_java trigger "$(module_jar batch-trigger)"
 start_java console "$(module_jar batch-console-api)"

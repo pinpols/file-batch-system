@@ -6,6 +6,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -19,7 +20,9 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
-@SpringBootApplication(scanBasePackages = "com.example.batch")
+@SpringBootApplication(
+        scanBasePackages = "com.example.batch",
+        exclude = {DataRedisRepositoriesAutoConfiguration.class})
 @ImportAutoConfiguration({
         BatchJsonAutoConfiguration.class,
         BatchObjectCryptoAutoConfiguration.class,

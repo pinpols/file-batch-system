@@ -13,6 +13,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -20,6 +21,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication(
         scanBasePackages = {"com.example.batch.console", "com.example.batch.common"},
         exclude = {
+                DataRedisRepositoriesAutoConfiguration.class,
                 HttpRequestMdcAutoConfiguration.class,
                 OpenAiAudioSpeechAutoConfiguration.class,
                 OpenAiAudioTranscriptionAutoConfiguration.class,

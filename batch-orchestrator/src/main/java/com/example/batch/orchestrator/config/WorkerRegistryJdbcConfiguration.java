@@ -10,14 +10,20 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.ReadingConverter;
 import org.springframework.data.convert.WritingConverter;
 import org.springframework.data.jdbc.core.convert.JdbcCustomConversions;
+import org.springframework.data.jdbc.core.dialect.DialectResolver;
+import org.springframework.data.jdbc.core.dialect.JdbcDialect;
 import org.springframework.data.jdbc.core.mapping.JdbcValue;
+import org.springframework.data.jdbc.repository.config.JdbcConfiguration;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
 
 @Configuration
 public class WorkerRegistryJdbcConfiguration {
 
     @Bean
-    public JdbcCustomConversions jdbcCustomConversions() {
-        return new JdbcCustomConversions(List.of(
+    public JdbcCustomConversions jdbcCustomConversions(NamedParameterJdbcOperations operations) {
+        // 与 AbstractJdbcConfiguration 相同工厂路径：按 DataSource 解析 JdbcDialect（含 PGobject 等 JDBC 简单类型），消除 PGobject 读转换 WARN。
+        JdbcDialect dialect = DialectResolver.getDialect(operations.getJdbcOperations());
+        return JdbcConfiguration.createCustomConversions(dialect, List.of(
                 new JsonbStringToJdbcValueConverter(),
                 new JsonbToStringConverter()
         ));

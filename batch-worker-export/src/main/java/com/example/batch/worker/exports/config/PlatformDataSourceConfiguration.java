@@ -13,6 +13,7 @@ import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 @Configuration
@@ -44,9 +45,11 @@ public class PlatformDataSourceConfiguration {
             @Qualifier("exportPlatformDataSource") DataSource dataSource) throws Exception {
         SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
         factoryBean.setDataSource(dataSource);
-        factoryBean.setMapperLocations(
-                new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/*.xml")
-        );
+        Resource[] platformMappers = new PathMatchingResourcePatternResolver()
+                .getResources("classpath*:mapper/*.xml");
+        if (platformMappers.length > 0) {
+            factoryBean.setMapperLocations(platformMappers);
+        }
         org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
         configuration.setMapUnderscoreToCamelCase(true);
         factoryBean.setConfiguration(configuration);

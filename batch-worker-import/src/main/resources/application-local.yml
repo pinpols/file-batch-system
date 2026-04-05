@@ -10,10 +10,6 @@ spring:
   kafka:
     bootstrap-servers: localhost:19092
 
-mybatis:
-  mapper-locations: classpath*:mapper/*.xml
-  type-aliases-package: com.example.batch.worker.imports.domain
-
 management:
   endpoints:
     web:

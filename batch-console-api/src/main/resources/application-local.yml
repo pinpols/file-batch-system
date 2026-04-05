@@ -4,6 +4,7 @@ server:
 spring:
   autoconfigure:
     exclude:
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
@@ -19,6 +20,9 @@ spring:
     redis:
       host: localhost
       port: 16379
+      # 勿删：本段会覆盖基线里整个 spring.data.redis；缺少时 repositories.enabled 会回到默认 true，触发 Redis Repository 扫描 INFO
+      repositories:
+        enabled: false
   ai:
     openai:
       base-url: https://api.openai.com
@@ -45,6 +49,7 @@ batch:
       keys:
         DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   console:
+    instance-id: ${BATCH_CONSOLE_INSTANCE_ID:batch-console-api-local}
     security:
       enabled: true
       shared-secret: console-secret

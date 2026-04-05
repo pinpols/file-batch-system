@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+@SuppressWarnings("unchecked")
 class ConsoleSessionRegistryTest {
 
     private StringRedisTemplate redisTemplate;

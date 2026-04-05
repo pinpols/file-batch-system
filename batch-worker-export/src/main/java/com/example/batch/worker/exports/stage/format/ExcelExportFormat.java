@@ -63,7 +63,6 @@ public class ExcelExportFormat extends AbstractExportFormat {
                 page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
             }
             workbook.write(outputStream);
-            workbook.dispose();
             return recordCount;
         }
     }

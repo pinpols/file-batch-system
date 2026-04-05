@@ -139,6 +139,44 @@
         </dependency>
     </dependencies>
 
+    <!-- macOS：Lettuce/Netty DNS 原生解析，消除 DnsServerAddressStreamProviders 的 WARN -->
+    <profiles>
+        <profile>
+            <id>netty-dns-macos-aarch64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-resolver-dns-native-macos</artifactId>
+                    <classifier>osx-aarch_64</classifier>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>netty-dns-macos-x86_64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>x86_64</arch>
+                </os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-resolver-dns-native-macos</artifactId>
+                    <classifier>osx-x86_64</classifier>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
     <build>
         <testResources>
             <testResource>
