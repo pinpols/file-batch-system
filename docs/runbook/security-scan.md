@@ -21,14 +21,14 @@ bash scripts/ci/security-scan.sh --mode=deps
 bash scripts/ci/security-scan.sh --mode=sast
 bash scripts/ci/security-scan.sh --mode=filesystem
 bash scripts/ci/security-scan.sh --mode=image
-bash scripts/ci/security-scan.sh --mode=dast --target-url=http://localhost:8080
+bash scripts/ci/security-scan.sh --mode=dast --target-url=http://localhost:18080
 ```
 
 如果你必须跳过打包，也可以直接调用 Java 模块：
 
 ```bash
 mvn -f security-scan/pom.xml package
-java -jar security-scan/target/security-scan-1.0.0-SNAPSHOT.jar --mode=all --root=. --target-url=http://localhost:8080
+java -jar security-scan/target/security-scan-1.0.0-SNAPSHOT.jar --mode=all --root=. --target-url=http://localhost:18080
 ```
 
 ## 报告位置
@@ -179,7 +179,7 @@ docker pull ghcr.io/zaproxy/zaproxy:stable
 
 ```bash
 docker run --rm -t ghcr.io/zaproxy/zaproxy:stable \
-  zap-baseline.py -t http://localhost:8080 -r zap-report.html
+  zap-baseline.py -t http://localhost:18080 -r zap-report.html
 ```
 
 如果要扫更完整的控制台路径，建议先登录或配置上下文，再做 authenticated scan。

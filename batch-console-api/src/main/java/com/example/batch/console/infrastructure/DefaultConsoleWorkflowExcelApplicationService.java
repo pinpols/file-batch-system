@@ -157,6 +157,7 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         List<WorkflowDefinitionEntity> definitions = workflowDefinitionMapper.selectByQuery(new WorkflowDefinitionQuery(
                 tenantId,
                 request.getWorkflowCode(),
+                request.getWorkflowName(),
                 request.getWorkflowType(),
                 request.getVersion(),
                 request.getEnabled(),

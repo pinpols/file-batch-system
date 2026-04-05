@@ -73,4 +73,3 @@ class ConsoleJobControllerTest {
                 .andExpect(jsonPath("$.data").value("OK"));
     }
 }
-

@@ -99,19 +99,44 @@ mvn verify -pl batch-e2e-tests -Dgroups=e2e
 ### 启动应用容器栈
 
 ```bash
-docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.app.yml --profile apps up -d
+./scripts/docker/up-apps.sh
+```
+
+停止应用容器栈：
+
+```bash
+./scripts/docker/down-apps.sh
 ```
 
 测试环境可切换为：
 
 ```bash
-docker compose --env-file .env.test -f docker-compose.yml -f docker-compose.app.yml --profile apps up -d
+COMPOSE_ENV_FILE=.env.test ./scripts/docker/up-apps.sh
 ```
 
 生产环境模板可切换为：
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.app.yml --profile apps up -d
+COMPOSE_ENV_FILE=.env.prod ./scripts/docker/up-apps.sh
+```
+
+### 启动观测栈
+
+```bash
+./scripts/docker/up-observability.sh
+```
+
+停止观测栈：
+
+```bash
+./scripts/docker/down-observability.sh
+```
+
+也可以用更短的入口：
+
+```bash
+make observability-up
+make observability-down
 ```
 
 ### 系统测试种子数据
@@ -183,6 +208,7 @@ DB (job_task: READY)
 | [本地开发](docs/runbook/local-development.md) | 环境搭建、调试、常见问题 |
 | [安全扫描](docs/runbook/security-scan.md) | 本地漏洞自测组合：secret、依赖、SAST、镜像、ZAP |
 | [Docker 部署](docs/deployment/docker-deployment.md) | 容器化部署指南 |
+| [观测栈 Docker 环境](docs/deployment/observability-docker/README.md) | Prometheus / Exporter / OTel Collector / Jaeger / Loki / Grafana 的独立启动与管理 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
 | [设计差距审计](docs/architecture/design-gap-audit.md) | 当前实现与设计文档的差距分析 |
 | [默认运行参数](docs/architecture/runtime-default-parameters.md) | 调度器、Worker、Outbox 等默认参数说明 |

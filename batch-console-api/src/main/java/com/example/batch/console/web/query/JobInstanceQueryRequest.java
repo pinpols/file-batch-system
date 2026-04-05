@@ -11,4 +11,6 @@ public class JobInstanceQueryRequest extends PageQueryRequest {
     private String instanceStatus;
     private String bizDate;
     private String traceId;
+    private String startDate;
+    private String endDate;
 }

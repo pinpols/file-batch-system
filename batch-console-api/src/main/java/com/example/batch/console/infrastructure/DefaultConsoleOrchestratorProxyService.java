@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure;
 
 import com.example.batch.console.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ConsoleSchedulerSnapshotHistoryResponse;
 import com.example.batch.console.web.response.ConsoleSchedulerSnapshotResponse;
@@ -22,6 +23,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
     private final RestClient.Builder restClientBuilder;
     private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
 
     @Override
     public Map<String, Object> instanceAction(Long id, String tenantId, String action) {
@@ -47,21 +49,25 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     public Map<String, Object> workflowRunAction(Long id, String tenantId, String action) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
-        return client.post()
+        Map<String, Object> response = client.post()
                 .uri("/internal/workflow-runs/{id}/{action}?tenantId={tenantId}", id, action, resolved)
                 .retrieve()
                 .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        publishRefresh(resolved);
+        return response;
     }
 
     @Override
     public Map<String, Object> workflowRunSkipNode(Long id, String tenantId, String nodeCode) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
-        return client.post()
+        Map<String, Object> response = client.post()
                 .uri("/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}",
                         id, resolved, nodeCode)
                 .retrieve()
                 .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        publishRefresh(resolved);
+        return response;
     }
 
     @Override
@@ -87,5 +93,11 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                         .build())
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {});
+    }
+
+    private void publishRefresh(String tenantId) {
+        domainEventPublisher.publishChanged(tenantId, "workflow-runs", "workflow-run-updated");
+        domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
     }
 }

@@ -1,5 +1,6 @@
 package com.example.batch.console.domain.query;
 
+import java.time.Instant;
 import com.example.batch.common.model.PageRequest;
 
 public record JobInstanceQuery(
@@ -9,6 +10,8 @@ public record JobInstanceQuery(
         String instanceNo,
         String bizDate,
         String traceId,
+        Instant startedFrom,
+        Instant startedTo,
         PageRequest pageRequest
 ) {
 }

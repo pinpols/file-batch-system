@@ -8,7 +8,7 @@ info:
     code generation, and mock server stubs.
     Whenever the API surface changes, update this file and console-api-protocol.md together.
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:18080
     description: Local console-api
 tags:
   - name: Jobs
@@ -20,7 +20,7 @@ tags:
   - name: Reports
     description: Export-only Excel reports for config and runtime records.
   - name: Workers
-    description: Worker drain, force-offline, and claimed tasks.
+    description: Worker drain, takeover, force-offline, and claimed tasks.
   - name: Files
     description: File governance and presigned download.
   - name: Alerts
@@ -63,6 +63,8 @@ tags:
     description: Job instance and partition cancel/terminate/retry operations.
   - name: WorkflowRuns
     description: Workflow run cancel, terminate, and node-skip operations.
+  - name: Streams
+    description: SSE streams for execution logs, trace snapshots, and event-driven realtime updates.
 security:
   - bearerAuth: []
   - consoleToken: []
@@ -95,6 +97,142 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuthProfileResponse'
+  /api/console/pipeline-definitions/events:
+    get:
+      tags: [PipelineDefinitions]
+      summary: Subscribe to pipeline definition realtime events
+      operationId: streamPipelineDefinitionEvents
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE event stream of pipeline definition realtime changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/workflow-definitions/events:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: Subscribe to workflow definition realtime events
+      operationId: streamWorkflowDefinitionEvents
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE event stream of workflow definition realtime changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/workers/events:
+    get:
+      tags: [Workers]
+      summary: Subscribe to worker realtime events
+      operationId: streamWorkerEvents
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE event stream of worker realtime changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/alerts/events:
+    get:
+      tags: [Alerts]
+      summary: Subscribe to alert realtime events
+      operationId: streamAlertEvents
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE event stream of alert realtime changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
   /api/console/ops/summary:
     get:
       tags: [Ops]
@@ -114,6 +252,152 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleOpsSummaryResponse'
+  /api/console/ops/summary/events:
+    get:
+      tags: [Ops]
+      summary: Subscribe to console summary realtime updates
+      operationId: streamConsoleOpsSummary
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: initialSnapshot
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: SSE event stream of ops summary refreshes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/stream/job-instances/events:
+    get:
+      tags: [Streams]
+      summary: Subscribe to job instance realtime events
+      operationId: streamJobInstanceEvents
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE event stream of job instance realtime changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/workflow-runs/events:
+    get:
+      tags: [WorkflowRuns]
+      summary: Subscribe to workflow run realtime events
+      operationId: streamWorkflowRunEvents
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE event stream of workflow run realtime changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/stream/outbox-retries/events:
+    get:
+      tags: [Streams]
+      summary: Subscribe to outbox retry realtime events
+      operationId: streamOutboxRetryEvents
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE event stream of outbox retry realtime changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/stream/outbox-deliveries/events:
+    get:
+      tags: [Streams]
+      summary: Subscribe to outbox delivery realtime events
+      operationId: streamOutboxDeliveryEvents
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: heartbeatMillis
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: SSE event stream of outbox delivery realtime changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ConsoleSseEventResponse'
   /api/console/jobs/trigger:
     post:
       tags: [Jobs]
@@ -1122,6 +1406,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleWorkerRegistryResponse'
+  /api/console/workers/{workerCode}/takeover:
+    post:
+      tags: [Workers]
+      summary: Immediately take over in-flight tasks from a worker
+      operationId: takeoverWorker
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: workerCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForceOfflineWorkerRequest'
+      responses:
+        '200':
+          description: Takeover result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkerRegistryResponse'
   /api/console/workers/{workerCode}/claimed-tasks:
     get:
       tags: [Workers]
@@ -1598,6 +1907,23 @@ paths:
       responses:
         '200':
           description: File dispatch list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileDispatchRecordList'
+  /api/console/query/channel-receipts:
+    get:
+      tags: [Queries]
+      summary: Query channel receipt records
+      description: Receipt-focused alias of file dispatch records. Use the same filter set and response shape as `/api/console/query/file-dispatches`.
+      operationId: queryChannelReceipts
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Channel receipt list
           content:
             application/json:
               schema:
@@ -2283,14 +2609,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/WorkflowDefinitionSaveRequest'
       responses:
         '200':
-          description: Created workflow definition id
+          description: Created workflow definition detail
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
   /api/console/workflow-definitions/{id}:
     get:
       tags: [WorkflowDefinitions]
@@ -2316,7 +2642,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
     put:
       tags: [WorkflowDefinitions]
       summary: Update workflow definition
@@ -2336,14 +2662,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: '#/components/schemas/WorkflowDefinitionSaveRequest'
       responses:
         '200':
-          description: Success
+          description: Updated workflow definition detail
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
     delete:
       tags: [WorkflowDefinitions]
       summary: Delete workflow definition
@@ -4422,6 +4748,13 @@ components:
             data:
               type: integer
               format: int64
+    CommonResponseWorkflowDefinitionDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WorkflowDefinitionDetailResponse'
     CommonResponseConsoleAuthTokenResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -4562,6 +4895,77 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    WorkflowDefinitionSaveRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        workflowCode:
+          type: string
+        workflowName:
+          type: string
+        workflowType:
+          type: string
+        enabled:
+          type: boolean
+        description:
+          type: string
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowDefinitionSaveNodeItem'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowDefinitionSaveEdgeItem'
+      required: [tenantId, workflowCode]
+    WorkflowDefinitionSaveNodeItem:
+      type: object
+      properties:
+        nodeCode:
+          type: string
+        nodeName:
+          type: string
+        nodeType:
+          type: string
+        relatedJobCode:
+          type: string
+        relatedPipelineCode:
+          type: string
+        workerGroup:
+          type: string
+        windowCode:
+          type: string
+        nodeOrder:
+          type: integer
+          format: int32
+        retryPolicy:
+          type: string
+        retryMaxCount:
+          type: integer
+          format: int32
+        timeoutSeconds:
+          type: integer
+          format: int32
+        nodeParams:
+          type: string
+        enabled:
+          type: boolean
+      required: [nodeCode, nodeType]
+    WorkflowDefinitionSaveEdgeItem:
+      type: object
+      properties:
+        fromNodeCode:
+          type: string
+        toNodeCode:
+          type: string
+        edgeType:
+          type: string
+        conditionExpr:
+          type: string
+        enabled:
+          type: boolean
+      required: [fromNodeCode, toNodeCode]
     CommonResponseWorkflowNodeList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -5686,6 +6090,32 @@ components:
           type: integer
           format: int64
       required: [id, workflowRunId, nodeCode, nodeType, runSeq, nodeStatus, retryCount, errorCode, errorMessage, startedAt, finishedAt, durationMs]
+    ConsoleTraceSnapshotResponse:
+      type: object
+      properties:
+        traceId:
+          type: string
+        jobInstances:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleJobInstanceResponse'
+        workflowRuns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowRunResponse'
+        workflowNodeRuns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
+        filePipelines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleFilePipelineResponse'
+        auditLogs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleAuditLogResponse'
+      required: [traceId, jobInstances, workflowRuns, workflowNodeRuns, filePipelines, auditLogs]
     ConsoleWorkflowTopologyResponse:
       type: object
       properties:
@@ -5708,6 +6138,42 @@ components:
           items:
             $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
       required: [nodes, edges, workflowRuns, nodeRuns]
+    WorkflowDefinitionDetailResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        workflowCode:
+          type: string
+        workflowName:
+          type: string
+        workflowType:
+          type: string
+        version:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowNodeResponse'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowEdgeResponse'
+      required: [id, tenantId, workflowCode, workflowName, workflowType, version, enabled, nodes, edges]
     ConsoleDeadLetterTaskResponse:
       type: object
       properties:
@@ -6642,6 +7108,24 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, fileId, operationType, operationResult, operatorType, operatorId, traceId, evidenceRef, detailSummary, createdAt]
+    ConsoleSseEventResponse:
+      type: object
+      properties:
+        stream:
+          type: string
+        eventType:
+          type: string
+        cursor:
+          type: string
+          nullable: true
+        data:
+          type: object
+          description: Stream-specific event payload. Depending on `stream` and `eventType`, this may be a console response DTO such as alert, worker, job instance, workflow run, file pipeline, dispatch, outbox log, audit log, or trace snapshot.
+          nullable: true
+        emittedAt:
+          type: string
+          format: date-time
+      required: [stream, eventType, emittedAt]
     ConsoleFilePipelineResponse:
       type: object
       properties:

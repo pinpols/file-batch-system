@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure;
 
 import com.example.batch.console.application.ConsolePipelineDefinitionApplicationService;
+import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
@@ -34,6 +35,7 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
     private final PipelineDefinitionMapper pipelineDefinitionMapper;
     private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
     private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleRealtimeDomainEventPublisher realtimeEventPublisher;
 
     @Override
     public PageResponse<Map<String, Object>> list(String tenantId, String jobCode, String pipelineType,
@@ -48,12 +50,7 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
     @Override
     public PipelineDefinitionDetailResponse detail(Long id, String tenantId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        Map<String, Object> row = pipelineDefinitionMapper.selectById(resolved, id);
-        if (row == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "pipeline definition not found");
-        }
-        List<Map<String, Object>> stepRows = pipelineStepDefinitionMapper.selectByPipelineDefinitionId(id);
-        return toDetailResponse(row, stepRows);
+        return loadDetailResponse(resolved, id);
     }
 
     @Override
@@ -75,9 +72,9 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
 
         insertSteps(defId, request.getSteps());
 
-        Map<String, Object> row = pipelineDefinitionMapper.selectById(tenantId, defId);
-        List<Map<String, Object>> stepRows = pipelineStepDefinitionMapper.selectByPipelineDefinitionId(defId);
-        return toDetailResponse(row, stepRows);
+        PipelineDefinitionDetailResponse response = loadDetailResponse(tenantId, defId);
+        publishRealtimeEvent(tenantId, "pipeline-definition-created", response);
+        return response;
     }
 
     @Override
@@ -102,18 +99,21 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
         pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);
         insertSteps(id, request.getSteps());
 
-        Map<String, Object> row = pipelineDefinitionMapper.selectById(tenantId, id);
-        List<Map<String, Object>> stepRows = pipelineStepDefinitionMapper.selectByPipelineDefinitionId(id);
-        return toDetailResponse(row, stepRows);
+        PipelineDefinitionDetailResponse response = loadDetailResponse(tenantId, id);
+        publishRealtimeEvent(tenantId, "pipeline-definition-updated", response);
+        return response;
     }
 
     @Override
+    @Transactional
     public void toggle(Long id, String tenantId, Boolean enabled) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         int rows = pipelineDefinitionMapper.toggleEnabled(resolved, id, enabled);
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "pipeline definition not found");
         }
+        PipelineDefinitionDetailResponse response = loadDetailResponse(resolved, id);
+        publishRealtimeEvent(resolved, "pipeline-definition-toggled", response);
     }
 
     private void insertSteps(Long pipelineDefinitionId, List<PipelineDefinitionSaveRequest.StepItem> steps) {
@@ -173,6 +173,19 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
                 toInstant(row.get("created_at")),
                 toInstant(row.get("updated_at"))
         );
+    }
+
+    private PipelineDefinitionDetailResponse loadDetailResponse(String tenantId, Long id) {
+        Map<String, Object> row = pipelineDefinitionMapper.selectById(tenantId, id);
+        if (row == null) {
+            throw new BizException(ResultCode.NOT_FOUND, "pipeline definition not found");
+        }
+        List<Map<String, Object>> stepRows = pipelineStepDefinitionMapper.selectByPipelineDefinitionId(id);
+        return toDetailResponse(row, stepRows);
+    }
+
+    private void publishRealtimeEvent(String tenantId, String eventType, PipelineDefinitionDetailResponse response) {
+        realtimeEventPublisher.publishChanged(tenantId, "pipeline-definitions", eventType, response);
     }
 
     private static Long toLong(Object v) {

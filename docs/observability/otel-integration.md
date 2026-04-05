@@ -33,15 +33,11 @@ OTel Collector  ──► Jaeger   :16686  (Trace UI)
 ## 本地快速启动
 
 ```bash
-# 1. 启动基础设施 + 可观测性栈
-docker compose -f docker-compose.yml \
-               -f docker-compose.observability.yml \
-               --profile observability up -d
+# 1. 启动业务基础栈 + 应用容器
+./scripts/docker/up-apps.sh
 
-# 2. 启动应用（默认已配置 OTEL，指向 otel-collector:4318）
-docker compose -f docker-compose.yml \
-               -f docker-compose.app.yml \
-               --profile apps up -d
+# 2. 启动可观测性栈
+./scripts/docker/observability/up.sh
 
 # 访问
 # Jaeger UI : http://localhost:16686

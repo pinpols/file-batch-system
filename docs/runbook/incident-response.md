@@ -15,8 +15,8 @@
 
 ## 常用命令
 
-- **健康**：`curl -sSf http://localhost:8082/actuator/health`（orchestrator）
-- **Prometheus**：`curl -sSf http://localhost:8082/actuator/prometheus | head`
+- **健康**：`curl -sSf http://localhost:18082/actuator/health`（orchestrator）
+- **Prometheus**：`curl -sSf http://localhost:18082/actuator/prometheus | head`
 - **控制台告警列表**：`GET /api/console/query/alerts?tenantId=default-tenant&limit=100`
 
 ## 数据库

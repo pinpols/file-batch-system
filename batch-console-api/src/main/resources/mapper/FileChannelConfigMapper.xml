@@ -19,7 +19,7 @@
         from batch.file_channel_config
         where tenant_id = #{tenantId}
         <if test="channelCode != null and channelCode != ''">
-            and channel_code = #{channelCode}
+            and channel_code like concat('%', #{channelCode}, '%')
         </if>
         <if test="channelType != null and channelType != ''">
             and channel_type = #{channelType}
@@ -38,7 +38,7 @@
         from batch.file_channel_config
         where tenant_id = #{tenantId}
         <if test="channelCode != null and channelCode != ''">
-            and channel_code = #{channelCode}
+            and channel_code like concat('%', #{channelCode}, '%')
         </if>
         <if test="channelType != null and channelType != ''">
             and channel_type = #{channelType}

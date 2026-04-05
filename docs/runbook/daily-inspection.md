@@ -21,7 +21,7 @@ BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=<kafka>:9092 \
 
 | 脚本 | 检查内容 | 跳过环境变量 |
 |---|---|---|
-| `scripts/local/inspect-observability.sh` | 服务 health、Prometheus 指标、Kafka consumer lag | `BATCH_INSPECT_SKIP_OBSERVABILITY=true` |
+| `scripts/local/inspect-observability.sh` | 服务 health、Prometheus 指标、Kafka consumer lag、Redis/Postgres/Kafka/MinIO exporter 指标 | `BATCH_INSPECT_SKIP_OBSERVABILITY=true` |
 | `scripts/local/inspect-db.sh` | Flyway 历史、告警事件、卡死作业、Outbox 积压、死信积压、重试积压 | `BATCH_INSPECT_SKIP_DB=true` |
 | `scripts/local/inspect-workers.sh` | DRAINING 超时、心跳失联、孤儿任务 | `BATCH_INSPECT_SKIP_WORKERS=true` |
 
@@ -39,7 +39,7 @@ BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=<kafka>:9092 \
    `inspect-all.sh` 已覆盖。对 `batch-console-api`、`batch-trigger`、`batch-orchestrator` 调用 `GET /actuator/health`，期望 `status` 为 `UP`。
 
 2. **Prometheus 指标**
-   确认进程存活；Grafana 查看 `batch_job_sla_violation_count` / `batch_alert_events_total` / `BatchKafkaConsumerLagHigh` 告警。
+   确认进程存活；Grafana 查看 `batch_job_sla_violation_count` / `batch_alert_events_total` / `BatchKafkaConsumerLagHigh` 告警；并查看 Redis / Kafka / PostgreSQL / MinIO / node_exporter / cAdvisor / QPS 面板是否正常刷新。
 
 3. **告警表（控制台）**
    `GET /api/console/query/alerts?tenantId=<tenant>&limit=50`，查看 `occurrence_count` 是否正常收敛。

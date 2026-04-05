@@ -60,6 +60,12 @@ public class WorkerController {
         return workerDrainGovernanceService.forceOffline(request.tenantId(), workerCode);
     }
 
+    @PostMapping("/{workerCode}/takeover")
+    public WorkerRegistryRecord takeover(@PathVariable String workerCode,
+                                         @RequestBody WorkerTenantRequest request) {
+        return workerDrainGovernanceService.takeover(request.tenantId(), workerCode);
+    }
+
     @GetMapping("/{workerCode}/claimed-tasks")
     public List<JobTaskEntity> claimedTasks(@PathVariable String workerCode,
                                             @RequestParam String tenantId) {

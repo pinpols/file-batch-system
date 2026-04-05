@@ -22,6 +22,11 @@ spring:
   kafka:
     # Kafka 集群地址（逗号分隔）
     bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  data:
+    redis:
+      # Redis 连接地址：本地默认走宿主机映射端口；容器内由 compose 覆盖为 redis:6379
+      host: ${BATCH_REDIS_HOST:localhost}
+      port: ${BATCH_REDIS_PORT:6379}
 
 # ------------------------------------------------------------------
 # MyBatis（mapper 扫描路径各模块相同；type-aliases-package 在模块内覆盖）

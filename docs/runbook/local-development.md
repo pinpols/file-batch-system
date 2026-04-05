@@ -5,6 +5,7 @@
 - PostgreSQL 16
 - Kafka 4.1.2（KRaft 单节点）
 - MinIO
+- Redis
 
 ## 设计对齐点
 
@@ -25,7 +26,8 @@
 - `scripts/local/init-kafka-topics.sh`：Kafka Topic 初始化
 - `scripts/local/init-minio.sh`：MinIO bucket 初始化
 - `scripts/local/start-all.sh`：一键启动本地依赖 + Java 模块
-- `scripts/local/stop-all.sh`：停止本地 Java 模块，可选停止 Docker 依赖
+- `scripts/local/stop-all.sh`：停止本地 Java 模块，可选停止 Docker 依赖（只 stop，不 down）
+- `scripts/docker/down-apps.sh`：停止本地应用容器栈（只 stop，不 down）
 - `docs/deployment/docker-deployment.md`：Docker 部署基线说明
 
 ## 启动
@@ -42,7 +44,7 @@ docker compose --env-file .env.local -f docker-compose.yml up -d
 bash scripts/local/start-all.sh
 ```
 
-说明：首次使用时先将 `.env.example` 复制为 `.env.local`。启动脚本默认使用 `.env.local`，如需切换环境可先设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。脚本会等待 PostgreSQL、MinIO 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。
+说明：首次使用时先将 `.env.example` 复制为 `.env.local`。启动脚本默认使用 `.env.local`，如需切换环境可先设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。脚本会等待 PostgreSQL、MinIO、Redis 健康检查通过，并确认 Kafka topic / MinIO bucket 初始化完成后，再启动 Java 模块。
 如果某些 Java 模块已经在运行，脚本会跳过它们，只补启动未运行或已退出的模块。
 
 查看状态：
@@ -57,6 +59,7 @@ docker compose ps
 docker compose logs -f postgres
 docker compose logs -f kafka
 docker compose logs -f minio
+docker compose logs -f redis
 ```
 
 ## 连接信息
@@ -88,7 +91,7 @@ jdbc:postgresql://localhost:15432/batch_business
 
 ### Kafka
 
-- Bootstrap Servers：`localhost:9092`
+- Bootstrap Servers：`localhost:19092`
 - Docker 内部网络地址：`kafka:29092`
 
 默认 Topic：
@@ -102,8 +105,8 @@ jdbc:postgresql://localhost:15432/batch_business
 
 ### MinIO
 
-- API：`http://localhost:9000`
-- Console：`http://localhost:9001`
+- API：`http://localhost:19000`
+- Console：`http://localhost:19001`
 - Access Key：`minioadmin`
 - Secret Key：`minioadmin123`
 - Bucket：`batch-dev`
@@ -120,7 +123,7 @@ docker exec -it batch-postgres psql -U batch_user -d batch_platform
 
 ```bash
 docker exec -it batch-kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
+  --bootstrap-server localhost:19092 \
   --list
 ```
 
@@ -128,6 +131,9 @@ docker exec -it batch-kafka /opt/kafka/bin/kafka-topics.sh \
 
 ```bash
 bash scripts/local/stop-all.sh
+
+# 停止应用容器栈，但保留容器与网络
+bash scripts/docker/down-apps.sh
 ```
 
 如果需要连数据卷一起清理：

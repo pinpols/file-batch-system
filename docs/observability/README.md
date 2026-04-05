@@ -6,12 +6,15 @@
 
 - `otel-integration.md`：OpenTelemetry 接入说明和本地启动方式
 - `otel-collector.yml`：Collector pipeline 示例配置
+- `prometheus.yml`：Prometheus 抓取配置
 - `prometheus-batch-rules.yml`：Prometheus 告警规则
 - `alertmanager-batch-template.yml`：Alertmanager 路由和接收器模板
 - `prometheus-grafana-baseline.md`：Prometheus / Grafana 基线说明
 - `structured-logging-pipeline.md`：结构化日志管道示例
 - `grafana-dashboard-batch.json`：Grafana 仪表盘模板
+- `prometheus.yml`：Prometheus 抓取与规则配置
 - `grafana-provisioning/`：Grafana 数据源自动注入配置
+- [../deployment/observability-docker/](../deployment/observability-docker/)：独立的观测栈 Docker 环境说明
 
 ## 推荐阅读顺序
 

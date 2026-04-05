@@ -1,0 +1,66 @@
+package com.example.batch.console.web.realtime;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
+
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.dto.ResponseMeta;
+import com.example.batch.console.infrastructure.realtime.ConsoleOpsSummaryRealtimeStream;
+import com.example.batch.console.support.ConsoleApiExceptionHandler;
+import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import java.time.Instant;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+class ConsoleOpsRealtimeControllerTest {
+
+    private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream = org.mockito.Mockito.mock(ConsoleOpsSummaryRealtimeStream.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(
+                new com.example.batch.console.service.ConsoleResponseFactory(requestMetadataResolver),
+                new BatchSecurityProperties());
+
+        when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+        when(summaryRealtimeStream.subscribe(anyString(), isNull(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(new SseEmitter());
+
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOpsRealtimeController(summaryRealtimeStream))
+                .setControllerAdvice(exceptionHandler)
+                .build();
+    }
+
+    @Test
+    void shouldExposeSummaryRealtimeStream() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/console/ops/summary/events").param("tenantId", "t1"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        assertThat(result.getAsyncResult()).isInstanceOf(SseEmitter.class);
+        verify(summaryRealtimeStream).subscribe("t1", null, true);
+    }
+
+    @Test
+    void shouldAllowSkippingInitialSnapshot() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/console/ops/summary/events")
+                        .param("tenantId", "t1")
+                        .param("initialSnapshot", "false"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        assertThat(result.getAsyncResult()).isInstanceOf(SseEmitter.class);
+        verify(summaryRealtimeStream).subscribe("t1", null, false);
+    }
+}

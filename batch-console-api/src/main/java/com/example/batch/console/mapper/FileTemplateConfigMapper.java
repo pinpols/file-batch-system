@@ -9,14 +9,20 @@ import org.apache.ibatis.annotations.Param;
 public interface FileTemplateConfigMapper {
 
     List<Map<String, Object>> selectByQuery(@Param("tenantId") String tenantId,
+                                            @Param("keyword") String keyword,
                                             @Param("templateCode") String templateCode,
+                                            @Param("templateName") String templateName,
                                             @Param("templateType") String templateType,
+                                            @Param("bizType") String bizType,
                                             @Param("enabled") Boolean enabled,
                                             @Param("pageRequest") PageRequest pageRequest);
 
     long countByQuery(@Param("tenantId") String tenantId,
+                      @Param("keyword") String keyword,
                       @Param("templateCode") String templateCode,
+                      @Param("templateName") String templateName,
                       @Param("templateType") String templateType,
+                      @Param("bizType") String bizType,
                       @Param("enabled") Boolean enabled);
 
     Map<String, Object> selectSecurityFlagsByTemplateCode(@Param("tenantId") String tenantId,

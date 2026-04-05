@@ -6,6 +6,7 @@ import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.query.WorkflowNodeQuery;
+import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.mapper.WorkflowNodeMapper;
@@ -40,6 +41,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
     private final WorkflowDefinitionMapper definitionMapper;
     private final WorkflowNodeMapper nodeMapper;
     private final WorkflowEdgeMapper edgeMapper;
+    private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
     private final ConsoleTenantGuard tenantGuard;
 
     @Override
@@ -78,6 +80,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         definitionMapper.insert(entity);
 
         upsertNodesAndEdges(entity.getId(), request);
+        publishRefresh(resolvedTenant, "workflow-definition-created");
 
         return loadDetail(resolvedTenant, entity.getId());
     }
@@ -101,6 +104,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         nodeMapper.deleteByWorkflowDefinitionId(id);
         edgeMapper.deleteByWorkflowDefinitionId(id);
         upsertNodesAndEdges(id, request);
+        publishRefresh(resolvedTenant, "workflow-definition-updated");
 
         return loadDetail(resolvedTenant, id);
     }
@@ -112,6 +116,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "Workflow definition not found: " + id);
         }
+        publishRefresh(resolvedTenant, "workflow-definition-toggled");
     }
 
     @Override
@@ -127,6 +132,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         nodeMapper.deleteByWorkflowDefinitionId(id);
         edgeMapper.deleteByWorkflowDefinitionId(id);
         definitionMapper.deleteByTenantAndId(resolvedTenant, id);
+        publishRefresh(resolvedTenant, "workflow-definition-deleted");
     }
 
     @Override
@@ -347,5 +353,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
             }
         }
         return null;
+    }
+
+    private void publishRefresh(String tenantId, String eventType) {
+        domainEventPublisher.publishChanged(tenantId, "workflow-definitions", eventType);
     }
 }

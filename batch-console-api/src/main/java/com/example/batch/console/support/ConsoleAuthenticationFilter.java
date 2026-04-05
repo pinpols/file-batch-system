@@ -134,10 +134,11 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
     private String resolveBearerToken(HttpServletRequest request) {
         String authorization = request.getHeader("Authorization");
-        if (!StringUtils.hasText(authorization) || !authorization.startsWith("Bearer ")) {
-            return null;
+        if (StringUtils.hasText(authorization) && authorization.startsWith("Bearer ")) {
+            return authorization.substring(7).trim();
         }
-        return authorization.substring(7).trim();
+        String queryToken = request.getParameter("token");
+        return StringUtils.hasText(queryToken) ? queryToken.trim() : null;
     }
 
     private String resolveUsername(HttpServletRequest request) {

@@ -47,6 +47,9 @@ security:
 consoleApi:
   replicaCount: 2
   port: 8080
+  realtime:
+    replayMaxEntries: 20000
+    replayTtl: "24h"
   resources:
     requests:
       cpu: "200m"

@@ -17,6 +17,9 @@ public interface ConsoleWorkerApplicationService {
     /** 强制 Worker 下线并更新注册状态。 */
     ConsoleWorkerRegistryResponse forceOffline(String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey);
 
+    /** 立即接管 Worker 的在途任务并将其置为退役状态。 */
+    ConsoleWorkerRegistryResponse takeover(String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey);
+
     /** 查询指定 Worker 当前已认领的任务列表。 */
     List<ConsoleWorkerClaimedTaskResponse> claimedTasks(String tenantId, String workerCode);
 }

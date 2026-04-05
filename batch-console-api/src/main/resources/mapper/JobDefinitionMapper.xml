@@ -39,10 +39,22 @@
         from batch.job_definition
         where tenant_id = #{tenantId}
         <if test="jobCode != null and jobCode != ''">
-            and job_code = #{jobCode}
+            and job_code like concat('%', #{jobCode}, '%')
+        </if>
+        <if test="jobName != null and jobName != ''">
+            and job_name like concat('%', #{jobName}, '%')
         </if>
         <if test="jobType != null and jobType != ''">
             and job_type = #{jobType}
+        </if>
+        <if test="workerGroup != null and workerGroup != ''">
+            and worker_group like concat('%', #{workerGroup}, '%')
+        </if>
+        <if test="queueCode != null and queueCode != ''">
+            and queue_code like concat('%', #{queueCode}, '%')
+        </if>
+        <if test="scheduleType != null and scheduleType != ''">
+            and schedule_type = #{scheduleType}
         </if>
         <if test="enabled != null">
             and enabled = #{enabled}
@@ -60,10 +72,22 @@
         from batch.job_definition
         where tenant_id = #{tenantId}
         <if test="jobCode != null and jobCode != ''">
-            and job_code = #{jobCode}
+            and job_code like concat('%', #{jobCode}, '%')
+        </if>
+        <if test="jobName != null and jobName != ''">
+            and job_name like concat('%', #{jobName}, '%')
         </if>
         <if test="jobType != null and jobType != ''">
             and job_type = #{jobType}
+        </if>
+        <if test="workerGroup != null and workerGroup != ''">
+            and worker_group like concat('%', #{workerGroup}, '%')
+        </if>
+        <if test="queueCode != null and queueCode != ''">
+            and queue_code like concat('%', #{queueCode}, '%')
+        </if>
+        <if test="scheduleType != null and scheduleType != ''">
+            and schedule_type = #{scheduleType}
         </if>
         <if test="enabled != null">
             and enabled = #{enabled}

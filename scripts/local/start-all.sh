@@ -2,7 +2,7 @@
 # =========================================================
 # start-all.sh - 一键启动本地联调环境
 # Notes:
-# 1) 启动 PostgreSQL / Kafka / MinIO 以及六个 Java 模块。
+# 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及六个 Java 模块。
 # 2) 运行前需要 Docker、Docker Compose、JDK 和 Maven。
 # 3) PID 写入 logs/start-all.pids，日志写入 logs/<module>.log。
 # 4) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
@@ -20,6 +20,8 @@ ensure_docker_on_path
 unset _LOCAL_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-local}"
+APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"
@@ -37,6 +39,10 @@ existing_pid_for() {
 
 POSTGRES_USER="${POSTGRES_USER:-batch_user}"
 POSTGRES_DB="${POSTGRES_DB:-batch_platform}"
+
+if ! docker network inspect "$APP_NETWORK_NAME" >/dev/null 2>&1; then
+  docker network create "$APP_NETWORK_NAME" >/dev/null
+fi
 
 module_jar() {
   local module="$1"
@@ -121,10 +127,11 @@ wait_container_healthy() {
   exit 1
 }
 
-echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio）..."
+echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis）..."
 docker compose --env-file "$COMPOSE_ENV_FILE" up -d
 wait_postgres
 wait_container_healthy batch-minio "MinIO"
+wait_container_healthy batch-redis "Redis"
 wait_container_exited_zero batch-kafka-init "Kafka topic init"
 wait_container_exited_zero batch-minio-init "MinIO bucket init"
 
@@ -152,4 +159,5 @@ trap - EXIT
 echo ""
 echo "全部进程已在后台运行。端口（默认）："
 echo "  console-api 8080 | trigger 8081 | orchestrator 8082 | import 8083 | export 8084 | dispatch 8085"
+echo "  Redis 16379（宿主机映射）"
 echo "停止请执行: ./scripts/local/stop-all.sh"

@@ -58,6 +58,18 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     }
 
     @Override
+    @Transactional
+    public WorkerRegistryRecord takeover(String tenantId, String workerCode) {
+        validateTenant(tenantId);
+        WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
+        if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "worker is decommissioned");
+        }
+        takeoverTasks(tenantId, workerCode);
+        return markDecommissioned(tenantId, workerCode);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode) {
         validateTenant(tenantId);

@@ -81,7 +81,7 @@ batch:
         - ROLE_AUDITOR
     trigger:
       # Trigger 服务地址（Console 调用 Trigger API）
-      base-url: ${BATCH_TRIGGER_BASE_URL:http://localhost:8081}
+      base-url: ${BATCH_TRIGGER_BASE_URL:http://localhost:18081}
     orchestrator:
       # Orchestrator 服务地址（Console 调用 Orchestrator API）
-      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
+      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}

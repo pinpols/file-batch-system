@@ -172,6 +172,12 @@ public class ConsoleQueryController {
         return responseFactory.success(applicationService.fileDispatchRecords(request));
     }
 
+    /** GET /channel-receipts — 通道回执视图（file-dispatches 的 receipt 语义别名）。 */
+    @GetMapping("/channel-receipts")
+    public CommonResponse<PageResponse<ConsoleFileDispatchRecordResponse>> channelReceipts(@Valid @ModelAttribute FileDispatchRecordQueryRequest request) {
+        return responseFactory.success(applicationService.fileDispatchRecords(request));
+    }
+
     /** GET /file-channels — 文件通道配置。 */
     @GetMapping("/file-channels")
     public CommonResponse<PageResponse<ConsoleFileChannelResponse>> fileChannels(@Valid @ModelAttribute FileChannelQueryRequest request) {

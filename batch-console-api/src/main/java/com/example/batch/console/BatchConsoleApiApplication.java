@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(
         scanBasePackages = {"com.example.batch.console", "com.example.batch.common"},
@@ -32,6 +33,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 })
 @MapperScan("com.example.batch.console.mapper")
 @ConfigurationPropertiesScan(basePackages = {"com.example.batch.console", "com.example.batch.common"})
+@EnableScheduling
 public class BatchConsoleApiApplication {
 
     public static void main(String[] args) {
