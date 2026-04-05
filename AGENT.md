@@ -218,9 +218,10 @@
 本地基础依赖默认通过 Docker Compose 运行，当前仓库真实口径为：
 
 - PostgreSQL：`localhost:15432`
-- Kafka：`localhost:9092`
-- MinIO API：`http://localhost:9000`
-- MinIO Console：`http://localhost:9001`
+- Kafka：`localhost:19092`
+- MinIO API：`http://localhost:19000`
+- MinIO Console：`http://localhost:19001`
+- Redis：`localhost:16379`
 
 ### 5.1 数据库连接口径
 
@@ -231,8 +232,8 @@
 
 ### 5.2 其他连接口径
 
-- Kafka Bootstrap Servers：`localhost:9092`
-- MinIO Endpoint：`http://localhost:9000`
+- Kafka Bootstrap Servers：`localhost:19092`
+- MinIO Endpoint：`http://localhost:19000`
 - MinIO Bucket：`batch-dev`
 
 ### 5.3 配置要求

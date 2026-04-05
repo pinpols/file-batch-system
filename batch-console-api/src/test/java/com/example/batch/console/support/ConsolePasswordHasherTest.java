@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class ConsolePasswordHasherTest {
 
-    /** 与 Flyway V35 中默认控制台种子一致；明文为 admin123。 */
+    /** 与 batch-orchestrator Flyway V34 控制台默认种子一致；明文为 admin123。 */
     static final String SEED_ARGON2_ADMIN123 =
             "$argon2id$v=19$m=16384,t=2,p=1$k18enAVVcHofGDMPXPxj5A$5TityFxKIX2z6bkuDXRHqmwuPcfr+G9MEA36Kr6fC4s";
 

@@ -73,9 +73,10 @@ docker compose --env-file .env.local -f docker-compose.yml up -d
 | 服务 | 地址 |
 |------|------|
 | PostgreSQL | `localhost:15432`（用户 `batch_user`，密码 `batch_pass_123`） |
-| Kafka | `localhost:9092` |
-| MinIO API | `http://localhost:9000`（Bucket: `batch-dev`） |
-| MinIO Console | `http://localhost:9001` |
+| Redis | `localhost:16379` |
+| Kafka | `localhost:19092` |
+| MinIO API | `http://localhost:19000`（Bucket: `batch-dev`） |
+| MinIO Console | `http://localhost:19001` |
 
 ### 编译
 

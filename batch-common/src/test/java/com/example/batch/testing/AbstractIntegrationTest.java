@@ -27,12 +27,14 @@ public abstract class AbstractIntegrationTest {
             .withDatabaseName("batch_platform")
             .withUsername(DEFAULT_DB_USER)
             .withPassword(DEFAULT_DB_PASSWORD)
+            .withUrlParam("sslmode", "disable")
             .withInitScript("db/platform-init.sql");
 
     private static final PostgreSQLContainer<?> BUSINESS_POSTGRES = new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
             .withDatabaseName("batch_business")
             .withUsername(DEFAULT_DB_USER)
             .withPassword(DEFAULT_DB_PASSWORD)
+            .withUrlParam("sslmode", "disable")
             .withInitScript("db/business-init.sql");
 
     private static final KafkaContainer KAFKA = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE));

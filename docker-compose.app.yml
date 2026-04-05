@@ -1,3 +1,6 @@
+# 与 docker-compose.yml 叠加以 `--profile apps` 启动 Java 服务。宿主机端口由 .env 中
+# CONSOLE_API_PORT / TRIGGER_PORT / ORCHESTRATOR_PORT 及 worker 端口变量映射；容器内仍为 8080–8085。
+# 库地址、Kafka、MinIO 使用 Docker 网络名（postgres:15432、kafka:29092、minio:9000），勿写 localhost。
 services:
   console-api:
     profiles: ["apps"]
@@ -18,13 +21,13 @@ services:
       BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: ${BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES:-20000}
       BATCH_CONSOLE_REALTIME_REPLAY_TTL: ${BATCH_CONSOLE_REALTIME_REPLAY_TTL:-24h}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dummy-openai-key}
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
       BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
       BATCH_REDIS_PORT: ${BATCH_REDIS_PORT:-6379}
       LOGGING_FILE_NAME: /app/logs/batch-console-api.log
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
       BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
@@ -33,11 +36,11 @@ services:
     volumes:
       - ./logs/docker:/app/logs
     ports:
-      - "${CONSOLE_API_PORT:-18080}:8080"
+      - "${CONSOLE_API_PORT:-18080}:18080"
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18080/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -66,19 +69,19 @@ services:
     environment:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       LOGGING_FILE_NAME: /app/logs/batch-trigger.log
     ports:
-      - "${TRIGGER_PORT:-18081}:8081"
+      - "${TRIGGER_PORT:-18081}:18081"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18081/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -100,10 +103,10 @@ services:
     restart: unless-stopped
     environment:
       JAVA_OPTS: ${BATCH_ORCHESTRATOR_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms256m -Xmx768m -XX:MaxMetaspaceSize=256m}
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
       BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
@@ -114,13 +117,13 @@ services:
       BATCH_REDIS_PORT: ${BATCH_REDIS_PORT:-6379}
       LOGGING_FILE_NAME: /app/logs/batch-orchestrator.log
     ports:
-      - "${ORCHESTRATOR_PORT:-18082}:8082"
+      - "${ORCHESTRATOR_PORT:-18082}:18082"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:18082/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -146,12 +149,12 @@ services:
     environment:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:15432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -189,12 +192,12 @@ services:
     environment:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:15432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -232,12 +235,12 @@ services:
     environment:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:15432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -259,3 +262,5 @@ services:
         condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
+      orchestrator:
+        condition: service_healthy

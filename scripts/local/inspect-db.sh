@@ -9,7 +9,7 @@
 #   6. 待重试调度积压（retry_status = WAITING 超 retry_warn_count 条）
 #
 # 使用方法：
-#   PGHOST=localhost PGPORT=5432 PGDATABASE=batch_db PGUSER=batch \
+#   PGHOST=localhost PGPORT=15432 PGDATABASE=batch_platform PGUSER=batch_user \
 #     PGPASSWORD=secret bash scripts/local/inspect-db.sh
 #
 # 全部可配置环境变量见下方 "configuration" 节。
@@ -18,7 +18,7 @@ set -euo pipefail
 
 # ── configuration ─────────────────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-5432}"
+PGPORT="${PGPORT:-15432}"
 PGDATABASE="${PGDATABASE:-batch_db}"
 PGUSER="${PGUSER:-batch}"
 export PGPASSWORD="${PGPASSWORD:-}"

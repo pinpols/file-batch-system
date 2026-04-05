@@ -45,7 +45,7 @@ services:
     container_name: batch-postgres-exporter
     profiles: [observability]
     environment:
-      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-batch_user}:${POSTGRES_PASSWORD:-batch_pass_123}@postgres:5432/${POSTGRES_DB:-batch_platform}?sslmode=disable
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-batch_user}:${POSTGRES_PASSWORD:-batch_pass_123}@postgres:15432/${POSTGRES_DB:-batch_platform}?sslmode=disable
     ports:
       - "${POSTGRES_EXPORTER_PORT:-19187}:9187"
     networks:
@@ -107,7 +107,7 @@ services:
     command:
       - --docker_only=true
     ports:
-      - "${CADVISOR_PORT:-19101}:8080"
+      - "${CADVISOR_PORT:-19101}:18080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro

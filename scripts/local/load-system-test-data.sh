@@ -9,7 +9,7 @@
 #   - PostgreSQL: localhost:15432
 #   - 平台库: batch_platform
 #   - 业务库: batch_business
-#   - MinIO: http://localhost:9000
+#   - MinIO: http://localhost:19000
 #
 # 使用方法：
 #   BATCH_PLATFORM_DB_PASSWORD=... \
@@ -28,7 +28,7 @@ PG_HOST="${BATCH_PLATFORM_DB_HOST:-localhost}"
 PG_PORT="${BATCH_PLATFORM_DB_PORT:-15432}"
 PG_PASSWORD="${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}"
 MINIO_ALIAS="${BATCH_MINIO_ALIAS:-local}"
-MINIO_ENDPOINT="${BATCH_MINIO_ENDPOINT:-http://localhost:9000}"
+MINIO_ENDPOINT="${BATCH_MINIO_ENDPOINT:-http://localhost:19000}"
 MINIO_ACCESS_KEY="${BATCH_MINIO_ACCESS_KEY:-minioadmin}"
 MINIO_SECRET_KEY="${BATCH_MINIO_SECRET_KEY:-minioadmin123}"
 MINIO_BUCKET="${BATCH_MINIO_BUCKET:-batch-dev}"
