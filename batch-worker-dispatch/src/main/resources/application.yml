@@ -1,6 +1,6 @@
 server:
   # Dispatch Worker 端口：优先读取环境变量 BATCH_WORKER_DISPATCH_PORT（通常仅用于健康检查/指标）
-  port: ${BATCH_WORKER_DISPATCH_PORT:8085}
+  port: ${BATCH_WORKER_DISPATCH_PORT:18085}
 
 spring:
   application:

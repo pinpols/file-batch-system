@@ -1,6 +1,6 @@
 server:
   # Trigger 服务端口：优先读取环境变量 BATCH_TRIGGER_PORT
-  port: ${BATCH_TRIGGER_PORT:8081}
+  port: ${BATCH_TRIGGER_PORT:18081}
 
 spring:
   application:

@@ -2,8 +2,8 @@
 # Orchestrator 服务基础配置
 # =========================
 server:
-  # 服务端口：优先读取环境变量 BATCH_ORCHESTRATOR_PORT，未设置则使用 8082
-  port: ${BATCH_ORCHESTRATOR_PORT:8082}
+  # 服务端口：优先读取环境变量 BATCH_ORCHESTRATOR_PORT，未设置则使用 18082（本地联调与 1 前缀端口族一致）
+  port: ${BATCH_ORCHESTRATOR_PORT:18082}
 
 spring:
   application:
@@ -12,6 +12,15 @@ spring:
   config:
     # 可选导入共享默认配置（不存在也不报错）
     import: "optional:classpath:batch-defaults.yml"
+  autoconfigure:
+    exclude:
+      # 仅使用 RedisTemplate/Lettuce，不使用 Spring Data Redis Repository；避免 JDBC 与 Redis 混扫产生大量 INFO
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+  data:
+    redis:
+      # 与 batch-defaults 双保险；主类 @SpringBootApplication(exclude) 再兜底，避免仍出现 Redis Repository 扫描 INFO
+      repositories:
+        enabled: false
   flyway:
     # 数据库版本管理（迁移脚本执行）
     enabled: true

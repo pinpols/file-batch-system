@@ -1,6 +1,6 @@
 server:
   # Console API 端口：优先读取环境变量 BATCH_CONSOLE_API_PORT
-  port: ${BATCH_CONSOLE_API_PORT:8080}
+  port: ${BATCH_CONSOLE_API_PORT:18080}
 
 spring:
   application:
@@ -9,6 +9,14 @@ spring:
   config:
     # 引入共享默认配置基线（来自 batch-common 的 resources）
     import: "classpath:batch-defaults.yml"
+  autoconfigure:
+    exclude:
+      # 仅使用 RedisTemplate/Lettuce，不使用 Spring Data Redis Repository；避免 JDBC 与 Redis 混扫产生大量 INFO
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+  data:
+    redis:
+      repositories:
+        enabled: false
   ai:
     openai:
       # OpenAI 接入地址（可按代理/私有化环境覆盖）
@@ -26,6 +34,8 @@ mybatis:
 
 batch:
   console:
+    # Redis Pub/Sub、SSE：实例标识。未设置环境变量时使用固定默认值，避免随机 UUID 与启动 WARN。
+    instance-id: ${BATCH_CONSOLE_INSTANCE_ID:batch-console-api}
     security:
       # Console 鉴权开关（开启后按 shared-secret + header 解析租户/用户/角色）
       enabled: ${BATCH_CONSOLE_SECURITY_ENABLED:true}

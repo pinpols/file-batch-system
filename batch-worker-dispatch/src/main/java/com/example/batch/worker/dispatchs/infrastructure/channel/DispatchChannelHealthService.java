@@ -136,8 +136,7 @@ public class DispatchChannelHealthService {
             probeSuccessCount.incrementAndGet();
         } else {
             probeFailureCount.incrementAndGet();
-            log.warn("dispatch channel probe failed: tenantId={}, channelCode={}, channelType={}, message={}, evidence={}",
-                    tenantId, channelCode, channelType, result.message(), result.evidenceRef());
+            logProbeFailure(tenantId, channelCode, channelType, result.message(), result.evidenceRef());
         }
         return result;
     }
@@ -172,5 +171,20 @@ public class DispatchChannelHealthService {
         }
         String text = String.valueOf(value);
         return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text.trim() : null;
+    }
+
+    /**
+     * 只读盘、权限不足等在本机联调常见，降级为 DEBUG；其余仍用 WARN 便于发现真实故障。
+     */
+    private void logProbeFailure(String tenantId, String channelCode, String channelType, String message, String evidence) {
+        String m = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        if (m.contains("read-only") || m.contains("not writable") || m.contains("permission denied")) {
+            log.debug(
+                    "dispatch channel probe failed (environment): tenantId={}, channelCode={}, channelType={}, message={}, evidence={}",
+                    tenantId, channelCode, channelType, message, evidence);
+            return;
+        }
+        log.warn("dispatch channel probe failed: tenantId={}, channelCode={}, channelType={}, message={}, evidence={}",
+                tenantId, channelCode, channelType, message, evidence);
     }
 }

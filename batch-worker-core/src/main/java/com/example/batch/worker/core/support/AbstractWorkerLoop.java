@@ -4,8 +4,10 @@ import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import jakarta.annotation.PreDestroy;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.channels.ClosedChannelException;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -62,8 +64,8 @@ public abstract class AbstractWorkerLoop {
             if (failFastOnStartup) {
                 throw ex;
             }
-            log.error("{} worker register-on-startup failed; will retry on heartbeat. cause={}",
-                    workerGroup(), ex.getMessage(), ex);
+            log.warn("{} worker register-on-startup failed; will retry on heartbeat. reason={}",
+                    workerGroup(), summarizeRegistrationFailure(ex));
         }
     }
 
@@ -147,5 +149,57 @@ public abstract class AbstractWorkerLoop {
         } catch (UnknownHostException ex) {
             return "localhost";
         }
+    }
+
+    /**
+     * 单行日志用：{@link Exception#getMessage()} 常为 null（如 RestClient I/O 失败），沿 cause 链拼可读摘要，不打堆栈。
+     */
+    private static String summarizeRegistrationFailure(Throwable ex) {
+        if (ex == null) {
+            return "unknown";
+        }
+        String top = ex.getMessage();
+        if (StringUtils.hasText(top)) {
+            Throwable root = ex;
+            while (root.getCause() != null) {
+                root = root.getCause();
+            }
+            if (root != ex) {
+                String rm = root.getMessage();
+                String rootPart = StringUtils.hasText(rm)
+                        ? root.getClass().getSimpleName() + ": " + rm
+                        : root.getClass().getSimpleName();
+                return top + " [" + rootPart + "]" + registrationFailureHint(ex);
+            }
+            return top + registrationFailureHint(ex);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Throwable t = ex; t != null && sb.length() < 500; t = t.getCause()) {
+            if (sb.length() > 0) {
+                sb.append(" <- ");
+            }
+            sb.append(t.getClass().getSimpleName());
+            String m = t.getMessage();
+            if (StringUtils.hasText(m)) {
+                sb.append(": ").append(m);
+            }
+        }
+        String core = sb.length() > 0 ? sb.toString() : ex.getClass().getSimpleName();
+        return core + registrationFailureHint(ex);
+    }
+
+    private static String registrationFailureHint(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof ConnectException) {
+                return "；原因：无法连上 Orchestrator（未启动、端口错误或未监听）";
+            }
+            if (t instanceof ClosedChannelException) {
+                return "；原因：连接在建立过程中被关闭";
+            }
+            if (t instanceof UnknownHostException) {
+                return "；原因：主机名无法解析";
+            }
+        }
+        return "";
     }
 }

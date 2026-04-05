@@ -67,6 +67,7 @@ import org.springframework.web.multipart.MultipartFile;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class DefaultConsoleFileTemplateExcelApplicationService implements ConsoleFileTemplateExcelApplicationService {
 
     private static final String SHEET_NAME = "file_template_config";

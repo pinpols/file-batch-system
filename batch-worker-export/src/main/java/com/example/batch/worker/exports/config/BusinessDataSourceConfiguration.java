@@ -7,20 +7,16 @@ import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
-import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 @Configuration("exportWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties(BusinessDataSourceProperties.class)
-@MapperScan(
-        basePackages = "com.example.batch.worker.exports.mapper.business",
-        sqlSessionFactoryRef = "exportBusinessSqlSessionFactory"
-)
 public class BusinessDataSourceConfiguration {
 
     @Bean(name = "exportBusinessHikariConfig")
@@ -46,9 +42,11 @@ public class BusinessDataSourceConfiguration {
             @Qualifier("exportBusinessDataSource") DataSource exportBusinessDataSource) throws Exception {
         SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
         factoryBean.setDataSource(exportBusinessDataSource);
-        factoryBean.setMapperLocations(
-                new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/business/*.xml")
-        );
+        Resource[] businessMappers = new PathMatchingResourcePatternResolver()
+                .getResources("classpath*:mapper/business/*.xml");
+        if (businessMappers.length > 0) {
+            factoryBean.setMapperLocations(businessMappers);
+        }
         org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
         configuration.setMapUnderscoreToCamelCase(true);
         factoryBean.setConfiguration(configuration);

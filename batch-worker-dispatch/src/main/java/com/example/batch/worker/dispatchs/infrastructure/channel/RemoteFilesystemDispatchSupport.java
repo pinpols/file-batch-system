@@ -105,8 +105,17 @@ final class RemoteFilesystemDispatchSupport {
             if (!StringUtils.hasText(remoteDir)) {
                 return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
             }
-            Path directory = Path.of(remoteDir);
-            Files.createDirectories(directory);
+            Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
+            if (!Files.exists(directory)) {
+                Files.createDirectories(directory);
+            }
+            if (!Files.isDirectory(directory)) {
+                return new DispatchChannelProbeResult(false, "nas path is not a directory: " + directory, null);
+            }
+            if (!Files.isWritable(directory)) {
+                return new DispatchChannelProbeResult(false,
+                        "nas path not writable (read-only mount or permission denied): " + directory, null);
+            }
             String probeName = BatchFileConstants.newHealthProbeName();
             Path probeFile = directory.resolve(probeName);
             Files.writeString(probeFile, "probe@" + Instant.now(), StandardCharsets.UTF_8);

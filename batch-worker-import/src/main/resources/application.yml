@@ -1,6 +1,6 @@
 server:
   # Import Worker 端口：优先读取环境变量 BATCH_WORKER_IMPORT_PORT（通常仅用于健康检查/指标）
-  port: ${BATCH_WORKER_IMPORT_PORT:8083}
+  port: ${BATCH_WORKER_IMPORT_PORT:18083}
 
 spring:
   application:
@@ -20,10 +20,6 @@ spring:
       max-poll-records: ${BATCH_WORKER_IMPORT_KAFKA_MAX_POLL_RECORDS:5}
       fetch-min-size: ${BATCH_WORKER_IMPORT_KAFKA_FETCH_MIN_SIZE:1}
       fetch-max-wait: ${BATCH_WORKER_IMPORT_KAFKA_FETCH_MAX_WAIT:500}
-
-mybatis:
-  # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
-  type-aliases-package: com.example.batch.worker.imports.domain
 
 batch:
   worker:
