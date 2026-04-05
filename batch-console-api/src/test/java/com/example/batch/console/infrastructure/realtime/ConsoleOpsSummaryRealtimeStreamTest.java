@@ -28,7 +28,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
         stream = new ConsoleOpsSummaryRealtimeStream(opsApplicationService, realtimeEventHub, redisPublisher, cursorFactory, tenantGuard);
         when(tenantGuard.resolveTenant(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
         when(cursorFactory.nextCursor()).thenReturn("cursor-1");
-        when(realtimeEventHub.subscribe(anyString(), anyString(), isNull(), anyString(), isNull())).thenReturn(new SseEmitter());
+        when(realtimeEventHub.subscribe(anyString(), anyString(), isNull(), isNull(), isNull())).thenReturn(new SseEmitter());
     }
 
     @Test
@@ -36,7 +36,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
         SseEmitter emitter = stream.subscribe("t1", null, false);
 
         assertThat(emitter).isNotNull();
-        verify(realtimeEventHub).subscribe("t1", "ops-summary", null, "t1", null);
+        verify(realtimeEventHub).subscribe("t1", "ops-summary", null, null, null);
         verify(realtimeEventHub, never()).publish(org.mockito.ArgumentMatchers.any());
         verify(opsApplicationService, never()).summary(anyString());
     }

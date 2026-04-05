@@ -23,8 +23,8 @@ spring:
     user:
       # 基础认证账号（用于开发/演示；生产建议接入统一身份认证）
       name: ${BATCH_CONSOLE_USERNAME:admin}
-      # 基础认证密码（生产请通过环境变量/密钥管理注入）
-      password: ${BATCH_CONSOLE_PASSWORD:admin123}
+      # 基础认证密码：不在仓库中提供默认明文，需通过环境变量注入
+      password: ${BATCH_CONSOLE_PASSWORD:}
 
 mybatis:
   # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
@@ -57,12 +57,16 @@ batch:
         - ROLE_CONFIG_ADMIN
       # 是否保留旧的 X-Console-Token 鉴权兼容路径
       legacy-header-auth-enabled: ${BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:true}
+      # 单账号单会话：新登录会顶掉旧 JWT
+      single-session-enabled: ${BATCH_CONSOLE_SINGLE_SESSION_ENABLED:true}
       # JWT 签发者
       jwt-issuer: ${BATCH_CONSOLE_JWT_ISSUER:batch-console-api}
       # JWT 对称签名密钥（生产环境务必使用环境变量或密钥管理注入）
       jwt-secret: ${BATCH_CONSOLE_JWT_SECRET:console-jwt-secret-change-me}
       # JWT 有效期
       jwt-ttl: ${BATCH_CONSOLE_JWT_TTL:PT8H}
+      # Redis 中会话状态保留时长
+      session-state-ttl: ${BATCH_CONSOLE_SESSION_STATE_TTL:P30D}
     ai:
       # Console AI 功能开关（仅在开启并满足白名单时生效）
       enabled: ${BATCH_CONSOLE_AI_ENABLED:false}

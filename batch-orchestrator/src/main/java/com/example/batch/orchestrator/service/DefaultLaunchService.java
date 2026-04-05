@@ -23,13 +23,13 @@ import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
-import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,11 +42,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.context.annotation.Lazy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,16 +74,15 @@ public class DefaultLaunchService implements LaunchService {
     private final WorkflowRunMapper workflowRunMapper;
     private final WorkflowNodeRunMapper workflowNodeRunMapper;
     private final WorkflowDagService workflowDagService;
-    private final BusinessCalendarRepository businessCalendarRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     private final BatchDayInstanceRepository batchDayInstanceRepository;
     private final JobExecutionLogMapper jobExecutionLogMapper;
 
     /**
-     * 通过延迟注入的 self 触发 AOP 拦截，确保 {@link #prepareJobInstance} 的 {@code @Transactional} 在同类调用中仍生效。
+     * 通过延迟获取 self proxy 触发 AOP 拦截，确保 {@link #prepareJobInstance} 的 {@code @Transactional}
+     * 在同类调用中仍生效。
      */
-    @Lazy
-    @Autowired
-    private DefaultLaunchService self;
+    private final ObjectProvider<DefaultLaunchService> selfProvider;
 
     @Override
     public LaunchResponse launch(LaunchRequest request) {
@@ -109,7 +106,7 @@ public class DefaultLaunchService implements LaunchService {
         // T1：先把 instance/workflow 落库并提交，避免 T2 执行期间持有更长时间锁。
         PreparedLaunch prepared;
         try {
-            prepared = self.prepareJobInstance(routedRequest, loaded, effectiveParams, traceId);
+            prepared = selfProvider.getObject().prepareJobInstance(routedRequest, loaded, effectiveParams, traceId);
         } catch (DuplicateKeyException exception) {
             return resolveConcurrentDuplicate(request, loaded, exception);
         } catch (DataIntegrityViolationException exception) {
@@ -480,8 +477,7 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private Instant resolveBatchDayCutoffAt(String tenantId, String calendarCode, LocalDate bizDate) {
-        BusinessCalendarRecord calendar = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
-                tenantId, calendarCode, true);
+        BusinessCalendarRecord calendar = configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
         if (calendar == null) {
             return null;
         }
@@ -532,8 +528,7 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
-        BusinessCalendarRecord calendar = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
-                tenantId, calendarCode, true);
+        BusinessCalendarRecord calendar = configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
         if (calendar == null || calendar.slaOffsetMin() == null || calendar.slaOffsetMin() <= 0) {
             return null;
         }
@@ -645,11 +640,7 @@ public class DefaultLaunchService implements LaunchService {
     }
 
     private Integer resolveLateArrivalToleranceMin(String tenantId, String calendarCode) {
-        BusinessCalendarRecord calendar = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
-                tenantId,
-                calendarCode,
-                true
-        );
+        BusinessCalendarRecord calendar = configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
         if (calendar == null || calendar.lateArrivalToleranceMin() == null || calendar.lateArrivalToleranceMin() < 0) {
             return 0;
         }

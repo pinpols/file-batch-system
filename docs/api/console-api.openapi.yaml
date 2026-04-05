@@ -69,6 +69,25 @@ security:
   - bearerAuth: []
   - consoleToken: []
 paths:
+  /api/console/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with a seeded console account and issue a JWT
+      operationId: loginConsoleAccount
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsoleLoginRequest'
+      responses:
+        '200':
+          description: JWT token payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAuthTokenResponse'
   /api/console/auth/token:
     post:
       tags: [Auth]
@@ -256,6 +275,10 @@ paths:
     get:
       tags: [Ops]
       summary: Subscribe to console summary realtime updates
+      description: |
+        Subscribe to the first-screen operational summary stream. A shared realtime envelope with `summaryRefresh=true`
+        causes the console consumer to reload the latest summary snapshot from the database and emit `ops-summary-updated`
+        to SSE clients.
       operationId: streamConsoleOpsSummary
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
@@ -1875,6 +1898,102 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFilePipelineList'
+  /api/console/query/file-pipelines/{id}:
+    get:
+      tags: [Queries]
+      summary: Query file pipeline detail
+      operationId: queryFilePipelineDetail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File pipeline detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/query/pipeline-definitions:
+    get:
+      tags: [Queries]
+      summary: Query pipeline definitions compatibility alias
+      description: Compatibility alias that returns the same file pipeline list as `/api/console/query/file-pipelines`.
+      operationId: queryPipelineDefinitionsCompatibility
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: File pipeline list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFilePipelineList'
+  /api/console/query/pipeline-definitions/{id}:
+    get:
+      tags: [Queries]
+      summary: Query pipeline definition compatibility alias detail
+      description: Compatibility alias that returns the same file pipeline detail as `/api/console/query/file-pipelines/{id}`.
+      operationId: queryPipelineDefinitionCompatibilityDetail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File pipeline detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/file-pipeline-observability:
+    get:
+      tags: [Queries]
+      summary: File pipeline observability compatibility alias
+      description: Compatibility alias that returns the same file pipeline list as `/api/console/query/file-pipelines`.
+      operationId: filePipelineObservability
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: File pipeline list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFilePipelineList'
+  /api/console/file-pipeline-observability/{id}:
+    get:
+      tags: [Queries]
+      summary: File pipeline observability compatibility alias detail
+      description: Compatibility alias that returns the same file pipeline detail as `/api/console/query/file-pipelines/{id}`.
+      operationId: filePipelineObservabilityDetail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: File pipeline detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/query/file-pipeline-steps:
     get:
       tags: [Queries]
@@ -2363,42 +2482,6 @@ paths:
 
   # ─── P0: Job Definitions CRUD ────────────────────────────────────────────────
   /api/console/job-definitions:
-    get:
-      tags: [JobDefinitions]
-      summary: List job definitions
-      operationId: listJobDefinitions
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: jobCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: jobType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
-      responses:
-        '200':
-          description: Job definition list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseJobDefinitionList'
     post:
       tags: [JobDefinitions]
       summary: Create job definition
@@ -2565,37 +2648,6 @@ paths:
 
   # ─── P0: Workflow Definitions CRUD ───────────────────────────────────────────
   /api/console/workflow-definitions:
-    get:
-      tags: [WorkflowDefinitions]
-      summary: List workflow definitions
-      operationId: listWorkflowDefinitions
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: workflowCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
-      responses:
-        '200':
-          description: Workflow definition list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionList'
     post:
       tags: [WorkflowDefinitions]
       summary: Create workflow definition (with nodes and edges)
@@ -6419,6 +6471,16 @@ components:
           items:
             type: string
       required: [username, tenantId, authorities]
+    ConsoleLoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        tenantId:
+          type: string
+      required: [username, password]
     ConsoleFileOperationResponse:
       type: object
       properties:

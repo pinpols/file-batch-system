@@ -17,6 +17,7 @@
 - `scalability-ha-assessment.md`：可扩展性与高可用评估
 - `scalability-fix-plan.md`：可扩展性与高可用改造计划
 - `system-multidimensional-improvement-analysis.md`：系统多维度改进分析
+- `console-sidebar-menu-tree.md`：控制台侧边栏菜单树与可见角色
 - `adr/`：架构决策记录
 
 ## 推荐阅读顺序

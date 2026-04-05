@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -51,6 +52,7 @@ public class FileGovernanceScheduler {
     private final FileGovernanceRepository fileGovernanceRepository;
     private final MinioGovernanceStorage minioGovernanceStorage;
     private final FileGovernanceProperties properties;
+    private final FileGovernanceMetricsCacheService metricsCacheService;
     private final MeterRegistry meterRegistry;
     private final AtomicLong arrivalDelayViolations = new AtomicLong();
     private final AtomicLong arrivalDelayMaxSeconds = new AtomicLong();
@@ -78,35 +80,54 @@ public class FileGovernanceScheduler {
         if (!properties.getLatency().isEnabled()) {
             return;
         }
-        long arrivalCount = fileGovernanceRepository.countArrivalDelayViolations(
-                properties.getLatency().getArrivalDelayThresholdSeconds()
+        String tenantId = properties.getReconcile().getDefaultTenantId();
+        Map<String, Object> metrics = metricsCacheService.compute(
+                tenantId,
+                properties.getLatency().getArrivalDelayThresholdSeconds(),
+                properties.getLatency().getProcessingDelayThresholdSeconds(),
+                properties.getLatency().getSampleSize()
         );
-        long arrivalMax = fileGovernanceRepository.maxArrivalDelaySeconds();
-        long processingCount = fileGovernanceRepository.countProcessingDelayViolations(
-                properties.getLatency().getProcessingDelayThresholdSeconds()
-        );
-        long processingMax = fileGovernanceRepository.maxProcessingDelaySeconds();
+        long arrivalCount = asLong(metrics.get("arrivalDelayViolations"));
+        long arrivalMax = asLong(metrics.get("maxArrivalDelaySeconds"));
+        long processingCount = asLong(metrics.get("processingDelayViolations"));
+        long processingMax = asLong(metrics.get("maxProcessingDelaySeconds"));
         arrivalDelayViolations.set(arrivalCount);
         arrivalDelayMaxSeconds.set(arrivalMax);
         processingDelayViolations.set(processingCount);
         processingDelayMaxSeconds.set(processingMax);
+        metricsCacheService.write(tenantId, metrics);
 
         if (arrivalCount > 0) {
-            List<Map<String, Object>> samples = fileGovernanceRepository.selectArrivalDelaySamples(
-                    properties.getLatency().getArrivalDelayThresholdSeconds(),
-                    properties.getLatency().getSampleSize()
-            );
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> samples = (List<Map<String, Object>>) metrics.getOrDefault("arrivalDelaySamples", List.of());
             log.warn("file arrival delay violations detected: count={}, maxDelaySeconds={}, samples={}",
                     arrivalCount, arrivalMax, samples);
         }
         if (processingCount > 0) {
-            List<Map<String, Object>> samples = fileGovernanceRepository.selectProcessingDelaySamples(
-                    properties.getLatency().getProcessingDelayThresholdSeconds(),
-                    properties.getLatency().getSampleSize()
-            );
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> samples = (List<Map<String, Object>>) metrics.getOrDefault("processingDelaySamples", List.of());
             log.warn("pipeline processing delay violations detected: count={}, maxDelaySeconds={}, samples={}",
                     processingCount, processingMax, samples);
         }
+    }
+
+    public Map<String, Object> loadLatencyMetrics(String tenantId) {
+        return metricsCacheService.load(
+                tenantId,
+                properties.getLatency().getArrivalDelayThresholdSeconds(),
+                properties.getLatency().getProcessingDelayThresholdSeconds(),
+                properties.getLatency().getSampleSize()
+        );
+    }
+
+    private long asLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return 0L;
+        }
+        return Long.parseLong(String.valueOf(value));
     }
 
     public void manageFileArrivalGroups() {

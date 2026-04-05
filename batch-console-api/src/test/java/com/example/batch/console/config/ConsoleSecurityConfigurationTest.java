@@ -6,6 +6,7 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.console.support.ConsoleAuthenticationFilter;
 import com.example.batch.console.support.ConsoleJwtService;
+import com.example.batch.console.support.ConsoleSessionRegistry;
 import com.example.batch.console.support.ConsolePrincipal;
 import com.example.batch.console.support.ConsoleSecurityResponseWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,6 +29,8 @@ class ConsoleSecurityConfigurationTest {
     private ConsoleSecurityProperties properties;
     private BatchSecurityProperties batchSecurityProperties;
     private ConsoleAuthenticationFilter filter;
+    private ConsoleSessionRegistry sessionRegistry;
+    private ConsoleJwtService jwtService;
 
     @BeforeEach
     void setUp() {
@@ -41,10 +45,12 @@ class ConsoleSecurityConfigurationTest {
 
         batchSecurityProperties = new BatchSecurityProperties();
         batchSecurityProperties.setTestingOpen(false);
+        sessionRegistry = Mockito.mock(ConsoleSessionRegistry.class);
+        jwtService = new ConsoleJwtService(properties, sessionRegistry);
         filter = new ConsoleAuthenticationFilter(
                 properties,
                 batchSecurityProperties,
-                new ConsoleJwtService(properties),
+                jwtService,
                 new ConsoleSecurityResponseWriter(new ObjectMapper())
         );
         SecurityContextHolder.clearContext();
@@ -131,8 +137,8 @@ class ConsoleSecurityConfigurationTest {
 
     @Test
     void shouldAuthenticateWithJwtBearerToken() throws Exception {
-        ConsoleJwtService jwtService = new ConsoleJwtService(properties);
-        String token = jwtService.issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN")).accessToken();
+        String token = jwtService.issueToken("bob", "tenant-a", Set.of("ROLE_ADMIN"), 9L).accessToken();
+        Mockito.when(sessionRegistry.isCurrentSession("bob", "tenant-a", 9L)).thenReturn(true);
 
         MockHttpServletRequest request = baseRequest();
         request.addHeader("Authorization", "Bearer " + token);

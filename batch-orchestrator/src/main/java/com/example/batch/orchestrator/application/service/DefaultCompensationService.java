@@ -32,8 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,9 +51,7 @@ public class DefaultCompensationService implements CompensationService {
     private final TriggerRequestMapper triggerRequestMapper;
     private final RetryGovernanceService retryGovernanceService;
     private final FileGovernanceService fileGovernanceService;
-    @Lazy
-    @Autowired
-    private LaunchService launchService;
+    private final ObjectProvider<LaunchService> launchServiceProvider;
     private final TaskExecutionService taskExecutionService;
 
     /** Routing table: compensationType → handler. Built once at construction; O(1) lookup. */
@@ -362,7 +359,7 @@ public class DefaultCompensationService implements CompensationService {
         triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
         triggerRequest.setTraceId(request.traceId());
         triggerRequestMapper.insert(triggerRequest);
-        return launchService.launch(new LaunchRequest(
+        return launchServiceProvider.getObject().launch(new LaunchRequest(
                 request.target().tenantId(),
                 request.target().jobCode(),
                 request.target().bizDate(),

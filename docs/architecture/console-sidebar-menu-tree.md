@@ -1,0 +1,125 @@
+# Console Sidebar 菜单树
+
+> 说明：
+> - 这里写的是前端侧边栏的“页面可见性”建议，不是安全边界的最终依据。
+> - 后端真实鉴权仍以接口上的 `@PreAuthorize`、租户校验和业务门禁为准。
+> - 同一页面里如果存在“只读可见”和“写操作可用”两种权限，本文件会拆开说明。
+
+## 角色约定
+
+- `ROLE_ADMIN`：全权限管理员
+- `ROLE_AUDITOR`：只读审计角色
+- `ROLE_CONFIG_ADMIN`：配置与运维角色
+
+## Sidebar 树
+
+### 1. 首页总览
+
+| 模块 | 页面 | 可见角色 | 备注 |
+|------|------|----------|------|
+| 首页总览 | 控制台首页 / 运营总览 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `GET /api/console/ops/summary`、`GET /api/console/ops/summary/events` |
+| 首页总览 | 仪表盘统计 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/dashboard/*` |
+| 首页总览 | 调度快照 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/scheduler/snapshot`、`/history` |
+| 首页总览 | 告警趋势 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/dashboard/alert-trend` |
+| 首页总览 | SLA 达标率 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/dashboard/sla-compliance` |
+
+### 2. 查询中心
+
+| 模块 | 页面 | 可见角色 | 备注 |
+|------|------|----------|------|
+| 查询中心 | 审计日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/audits` |
+| 查询中心 | 执行日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/execution-logs` |
+| 查询中心 | 告警事件 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/alerts` |
+| 查询中心 | 批量日 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/batch-days` |
+| 查询中心 | 审批单 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/approvals` |
+| 查询中心 | 待审批 Catch-Up | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/catch-up-approvals` |
+| 查询中心 | 文件记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/files` |
+| 查询中心 | 作业实例 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/instances` |
+| 查询中心 | 作业步骤实例 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/job-step-instances` |
+| 查询中心 | 工作流运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/workflow-runs` |
+| 查询中心 | 工作流节点运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/workflow-node-runs` |
+| 查询中心 | 文件派发记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-dispatches` |
+| 查询中心 | 文件到达组 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-arrival-groups` |
+| 查询中心 | 文件错误记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-errors` |
+| 查询中心 | Outbox 投递/重试 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/outbox-deliveries`、`/outbox-retries` |
+| 查询中心 | Dead Letter / Retry | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/dead-letters`、`/retries` |
+| 查询中心 | Worker 注册信息 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/workers` |
+| 查询中心 | 文件通道详情 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-channels/{channelCode}` |
+| 查询中心 | 文件模板详情 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-templates/{templateCode}` |
+| 查询中心 | 文件流水线 / 兼容路由 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-pipelines`、`/pipeline-definitions` |
+| 查询中心 | 文件流水线步骤运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-pipeline-steps` |
+| 查询中心 | 文件流水线观测页 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/file-pipeline-observability*` |
+
+### 3. 定义管理
+
+| 模块 | 页面 | 可见角色 | 备注 |
+|------|------|----------|------|
+| 定义管理 | 作业定义 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 详情可见三类角色；创建、编辑、删除、启停建议仅 `ROLE_ADMIN` |
+| 定义管理 | 工作流定义 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 详情可见三类角色；创建、编辑、删除、启停仅 `ROLE_ADMIN` |
+| 定义管理 | 流水线定义 | `ROLE_ADMIN` | 当前页面建议仅管理员展示 |
+| 定义管理 | 文件通道 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 列表与详情可见三类角色；新建/编辑建议 `ROLE_CONFIG_ADMIN` 及以上；删除仅 `ROLE_ADMIN` |
+| 定义管理 | 文件模板 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 同文件通道 |
+| 定义管理 | 作业定义 Excel | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 导出/预览对三类角色可见；应用动作建议仅 `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` |
+| 定义管理 | 工作流定义 Excel | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 同上 |
+| 定义管理 | 文件通道 Excel | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 同上 |
+| 定义管理 | 文件模板 Excel | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 同上 |
+
+### 4. 调度与编排
+
+| 模块 | 页面 | 可见角色 | 备注 |
+|------|------|----------|------|
+| 调度与编排 | 触发器管理 | `ROLE_ADMIN` | 注册、暂停、恢复、注销均建议仅管理员展示 |
+| 调度与编排 | 调度器控制 | `ROLE_ADMIN` | 暂停全部 / 恢复全部仅管理员 |
+| 调度与编排 | 作业实例 | `ROLE_ADMIN` | 取消 / 终止等强操作仅管理员 |
+| 调度与编排 | 工作流运行 | `ROLE_ADMIN` | 取消 / 终止 / 跳过节点仅管理员 |
+| 调度与编排 | 作业运维 | `ROLE_ADMIN` | 触发、补偿、重跑、死信回放、Catch-Up 审批都建议仅管理员 |
+| 调度与编排 | 资源队列 | `ROLE_ADMIN` | 新建 / 编辑 / 启停仅管理员 |
+| 调度与编排 | 批次窗口 | `ROLE_ADMIN` | 新建 / 编辑 / 启停仅管理员 |
+| 调度与编排 | 工作日历 | `ROLE_ADMIN` | 假日导入、编辑、删除仅管理员 |
+| 调度与编排 | 配额策略 | `ROLE_ADMIN` | 仅管理员 |
+
+### 5. 运维管理
+
+| 模块 | 页面 | 可见角色 | 备注 |
+|------|------|----------|------|
+| 运维管理 | Worker 列表 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` | Worker 运维入口 |
+| 运维管理 | Worker 排空 / 下线 / 接管 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` | 强操作页面 |
+| 运维管理 | 运行中的 Worker 任务 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/workers/{workerCode}/claimed-tasks` |
+| 运维管理 | 告警治理 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` | 确认、静默、关闭告警 |
+| 运维管理 | 配置发布单 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 查询可见；创建 / 发布 / 灰度 / 回滚建议仅 `ROLE_ADMIN` |
+| 运维管理 | 密钥版本 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 查询可见；轮换仅 `ROLE_ADMIN` |
+| 运维管理 | 配置变更日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 只读 |
+| 运维管理 | AI 助手 | `ROLE_ADMIN` / `ROLE_AUDITOR` | 当前配置只允许这两个角色 |
+
+### 6. 元数据与公共入口
+
+| 模块 | 页面 | 可见角色 | 备注 |
+|------|------|----------|------|
+| 元数据与公共入口 | 枚举元数据 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/meta/*` |
+| 元数据与公共入口 | 登录页 | 未登录可见 | `/console-login.html` |
+| 元数据与公共入口 | 当前用户信息 | 已登录可见 | `/api/console/auth/me` |
+| 元数据与公共入口 | 登录换取 Token | 未登录可见 | `/api/console/auth/login` |
+
+## 建议的前端侧边栏分组
+
+如果前端要做固定 sidebar，建议直接按下面的分组落：
+
+1. `首页总览`
+2. `查询中心`
+3. `定义管理`
+4. `调度与编排`
+5. `运维管理`
+6. `元数据`
+
+## 菜单展示规则建议
+
+- 前端只根据角色决定“是否展示菜单”，不要把角色当成最终安全判断。
+- 有些页面是“可见但部分按钮不可用”，例如：
+  - 作业定义、工作流定义、文件通道、文件模板
+  - 配置发布单、密钥版本
+  - 查询中心里的审计/日志/运行态详情
+- 高危动作建议继续在按钮级别做二次收口：
+  - `ROLE_ADMIN` 负责删除、发布、回滚、终止、重跑、审批执行等
+  - `ROLE_CONFIG_ADMIN` 负责配置和运维类常规写操作
+  - `ROLE_AUDITOR` 只读
+

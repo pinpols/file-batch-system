@@ -24,6 +24,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     private final JobDefinitionMapper jobDefinitionMapper;
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
     @Override
     public ConsoleJobDefinitionResponse detail(Long id, String tenantId) {
@@ -71,6 +72,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         entity.setCreatedBy(operator);
         entity.setUpdatedBy(operator);
         jobDefinitionMapper.insert(entity);
+        cacheInvalidationService.evictJobDefinition(tenantId, entity.getJobCode());
         return toResponse(jobDefinitionMapper.selectById(tenantId, entity.getId()));
     }
 
@@ -99,6 +101,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         param.setDescription(request.getDescription() != null ? request.getDescription() : existing.getDescription());
         param.setUpdatedBy(operator);
         jobDefinitionMapper.updateJobDefinitionMaintenance(param);
+        cacheInvalidationService.evictJobDefinition(tenantId, existing.getJobCode());
         return toResponse(jobDefinitionMapper.selectById(tenantId, id));
     }
 
@@ -110,15 +113,24 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
         }
+        JobDefinitionEntity entity = jobDefinitionMapper.selectById(resolved, id);
+        if (entity != null) {
+            cacheInvalidationService.evictJobDefinition(resolved, entity.getJobCode());
+        }
     }
 
     @Override
     public void delete(Long id, String tenantId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
+        JobDefinitionEntity existing = jobDefinitionMapper.selectById(resolved, id);
+        if (existing == null) {
+            throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
+        }
         int rows = jobDefinitionMapper.deleteByTenantAndId(resolved, id);
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
         }
+        cacheInvalidationService.evictJobDefinition(resolved, existing.getJobCode());
     }
 
     @Override
@@ -134,6 +146,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         if (copied == null) {
             throw new BizException(ResultCode.NOT_FOUND, "source job definition not found");
         }
+        cacheInvalidationService.evictJobDefinition(resolved, newJobCode);
         return toResponse(copied);
     }
 

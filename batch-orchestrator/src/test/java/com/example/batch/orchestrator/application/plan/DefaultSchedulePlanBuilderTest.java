@@ -2,15 +2,13 @@ package com.example.batch.orchestrator.application.plan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
-import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,15 +16,13 @@ import org.junit.jupiter.api.Test;
 
 class DefaultSchedulePlanBuilderTest {
 
-    private JobDefinitionRepository jobDefinitionRepository;
-    private WorkflowDefinitionRepository workflowDefinitionRepository;
+    private OrchestratorConfigCacheService configCacheService;
     private WorkerRegistryRepository workerRegistryRepository;
     private DefaultSchedulePlanBuilder builder;
 
     @BeforeEach
     void setUp() {
-        jobDefinitionRepository = mock(JobDefinitionRepository.class);
-        workflowDefinitionRepository = mock(WorkflowDefinitionRepository.class);
+        configCacheService = mock(OrchestratorConfigCacheService.class);
         workerRegistryRepository = mock(WorkerRegistryRepository.class);
         List<PartitionCountResolver> resolvers = List.of(
                 new ExplicitPartitionCountResolver(),
@@ -34,16 +30,16 @@ class DefaultSchedulePlanBuilderTest {
                 new RuntimeBasedPartitionCountResolver(),
                 new WorkerBasedPartitionCountResolver(workerRegistryRepository)
         );
-        builder = new DefaultSchedulePlanBuilder(jobDefinitionRepository, workflowDefinitionRepository, resolvers);
+        builder = new DefaultSchedulePlanBuilder(configCacheService, resolvers);
     }
 
     // --- null / missing job definition ---
 
     @Test
     void shouldBuildPlanWithSinglePartitionWhenJobDefinitionMissing() {
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(null);
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(anyString(), anyString()))
                 .thenReturn(null);
 
         SchedulePlanCommand command = new SchedulePlanCommand("t1", "JOB_001", "2026-01-01", Map.of());
@@ -60,9 +56,9 @@ class DefaultSchedulePlanBuilderTest {
 
     @Test
     void shouldProduceSinglePartitionForNoneStrategy() {
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(jobDef("NONE", 3, null));
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(any(), any(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(any(), any()))
                 .thenReturn(null);
 
         SchedulePlan plan = builder.build(command(Map.of()));
@@ -75,9 +71,9 @@ class DefaultSchedulePlanBuilderTest {
 
     @Test
     void shouldUseStaticPartitionCountFromParams() {
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(jobDef("STATIC", 5, null));
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(any(), any(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(any(), any()))
                 .thenReturn(null);
 
         SchedulePlan plan = builder.build(command(Map.of("partitionCount", 4)));
@@ -88,9 +84,9 @@ class DefaultSchedulePlanBuilderTest {
 
     @Test
     void shouldFallbackToOnePartitionWhenStaticParamsMissing() {
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(jobDef("STATIC", 5, null));
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(any(), any(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(any(), any()))
                 .thenReturn(null);
 
         SchedulePlan plan = builder.build(command(Map.of()));
@@ -102,9 +98,9 @@ class DefaultSchedulePlanBuilderTest {
 
     @Test
     void shouldUseSizeBasedPartitionCountForDynamicStrategy() {
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(jobDef("DYNAMIC", 5, null));
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(any(), any(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(any(), any()))
                 .thenReturn(null);
 
         // 1000 items / 100 per partition = 10 partitions
@@ -120,9 +116,9 @@ class DefaultSchedulePlanBuilderTest {
 
     @Test
     void shouldUseRuntimeBasedPartitionCountWhenSizeNotAvailable() {
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(jobDef("DYNAMIC", 5, null));
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(any(), any(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(any(), any()))
                 .thenReturn(null);
 
         // 300 seconds historical / 60 seconds target = 5 partitions (ceil)
@@ -137,9 +133,9 @@ class DefaultSchedulePlanBuilderTest {
 
     @Test
     void shouldCapPartitionCountAtMaxLimit() {
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(jobDef("STATIC", 5, null));
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(any(), any(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(any(), any()))
                 .thenReturn(null);
 
         // requested 300 but max is 256
@@ -153,9 +149,9 @@ class DefaultSchedulePlanBuilderTest {
 
     @Test
     void shouldGenerateCorrectPartitionKeyFormat() {
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(jobDef("STATIC", 5, null));
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(any(), any(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(any(), any()))
                 .thenReturn(null);
 
         SchedulePlanCommand cmd = new SchedulePlanCommand("t1", "JOB_001", "2026-01-01", Map.of("partitionCount", 2));
@@ -171,9 +167,9 @@ class DefaultSchedulePlanBuilderTest {
     @Test
     void shouldInheritPriorityFromJobDefinition() {
         JobDefinitionRecord jobDef = jobDef("NONE", 8, null);
-        when(jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(anyString(), anyString(), anyBoolean()))
+        when(configCacheService.findEnabledJobDefinition(anyString(), anyString()))
                 .thenReturn(jobDef);
-        when(workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(any(), any(), anyBoolean()))
+        when(configCacheService.findEnabledWorkflowDefinition(any(), any()))
                 .thenReturn(null);
 
         SchedulePlan plan = builder.build(command(Map.of()));

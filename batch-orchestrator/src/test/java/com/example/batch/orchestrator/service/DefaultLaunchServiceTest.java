@@ -20,13 +20,13 @@ import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
-import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -36,7 +36,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.beans.factory.ObjectProvider;
 
 class DefaultLaunchServiceTest {
 
@@ -47,9 +47,11 @@ class DefaultLaunchServiceTest {
     private WorkflowRunMapper workflowRunMapper;
     private WorkflowNodeRunMapper workflowNodeRunMapper;
     private WorkflowDagService workflowDagService;
-    private BusinessCalendarRepository businessCalendarRepository;
+    private OrchestratorConfigCacheService configCacheService;
     private BatchDayInstanceRepository batchDayInstanceRepository;
     private JobExecutionLogMapper jobExecutionLogMapper;
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<DefaultLaunchService> selfProvider;
     private DefaultLaunchService service;
 
     @BeforeEach
@@ -61,9 +63,10 @@ class DefaultLaunchServiceTest {
         workflowRunMapper = mock(WorkflowRunMapper.class);
         workflowNodeRunMapper = mock(WorkflowNodeRunMapper.class);
         workflowDagService = mock(WorkflowDagService.class);
-        businessCalendarRepository = mock(BusinessCalendarRepository.class);
+        configCacheService = mock(OrchestratorConfigCacheService.class);
         batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
         jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
+        selfProvider = mock(ObjectProvider.class);
         service = new DefaultLaunchService(
                 launchValidationService,
                 partitionDispatchService,
@@ -72,11 +75,12 @@ class DefaultLaunchServiceTest {
                 workflowRunMapper,
                 workflowNodeRunMapper,
                 workflowDagService,
-                businessCalendarRepository,
+                configCacheService,
                 batchDayInstanceRepository,
-                jobExecutionLogMapper
+                jobExecutionLogMapper,
+                selfProvider
         );
-        ReflectionTestUtils.setField(service, "self", service);
+        when(selfProvider.getObject()).thenReturn(service);
     }
 
     @Test
@@ -116,7 +120,7 @@ class DefaultLaunchServiceTest {
 
         when(launchValidationService.load(request)).thenReturn(loaded);
         when(workflowDagService.resolveInitialNodes(eq(200L), anyString())).thenReturn(List.of());
-        when(businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled("t1", "BIZ_CAL", true))
+        when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL"))
                 .thenReturn(calendar);
         when(batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate("t1", "BIZ_CAL", request.bizDate()))
                 .thenReturn(null);
@@ -199,7 +203,7 @@ class DefaultLaunchServiceTest {
 
         when(launchValidationService.load(request)).thenReturn(loaded);
         when(workflowDagService.resolveInitialNodes(eq(201L), anyString())).thenReturn(List.of());
-        when(businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled("t1", "BIZ_CAL", true))
+        when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL"))
                 .thenReturn(calendar);
         when(batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate("t1", "BIZ_CAL", request.bizDate()))
                 .thenReturn(existing);
@@ -272,7 +276,7 @@ class DefaultLaunchServiceTest {
 
         when(launchValidationService.load(request)).thenReturn(loaded);
         when(workflowDagService.resolveInitialNodes(eq(202L), anyString())).thenReturn(List.of());
-        when(businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled("t1", "BIZ_CAL", true))
+        when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL"))
                 .thenReturn(calendar);
         when(batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate("t1", "BIZ_CAL", request.bizDate()))
                 .thenReturn(existing);
@@ -346,7 +350,7 @@ class DefaultLaunchServiceTest {
 
         when(launchValidationService.load(request)).thenReturn(loaded);
         when(workflowDagService.resolveInitialNodes(eq(203L), anyString())).thenReturn(List.of());
-        when(businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled("t1", "BIZ_CAL", true))
+        when(configCacheService.findEnabledBusinessCalendar("t1", "BIZ_CAL"))
                 .thenReturn(calendar);
         when(batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate("t1", "BIZ_CAL", request.bizDate()))
                 .thenReturn(existing);

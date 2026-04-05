@@ -29,7 +29,7 @@ public interface FileGovernanceMapper {
 
     Long countArrivalDelayViolations(Map<String, Object> params);
 
-    Long selectMaxArrivalDelaySeconds();
+    Long selectMaxArrivalDelaySeconds(Map<String, Object> params);
 
     List<Map<String, Object>> selectArrivalDelaySamples(Map<String, Object> params);
 

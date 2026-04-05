@@ -4,8 +4,7 @@ import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
-import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,15 +16,14 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
-    private final JobDefinitionRepository jobDefinitionRepository;
-    private final WorkflowDefinitionRepository workflowDefinitionRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     /** Ordered chain of resolvers; first positive result wins. Injected by Spring via @Order. */
     private final List<PartitionCountResolver> dynamicResolvers;
 
     @Override
     public SchedulePlan build(SchedulePlanCommand command) {
-        JobDefinitionRecord jobDefinition = jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(command.tenantId(), command.jobCode(), true);
-        WorkflowDefinitionRecord workflowDefinition = workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(command.tenantId(), command.jobCode(), true);
+        JobDefinitionRecord jobDefinition = configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
+        WorkflowDefinitionRecord workflowDefinition = configCacheService.findEnabledWorkflowDefinition(command.tenantId(), command.jobCode());
         Map<String, Object> planParams = mergePlanParams(jobDefinition, command.params());
 
         SchedulePlan plan = new SchedulePlan();

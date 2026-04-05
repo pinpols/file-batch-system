@@ -167,37 +167,65 @@ public class FileGovernanceRepository {
         return fileGovernanceMapper.selectArrivalGroupFiles(params("tenantId", tenantId, "fileGroupCode", fileGroupCode));
     }
 
-    public long countArrivalDelayViolations(long thresholdSeconds) {
-        Long count = fileGovernanceMapper.countArrivalDelayViolations(params("thresholdSeconds", thresholdSeconds));
+    public long countArrivalDelayViolations(String tenantId, long thresholdSeconds) {
+        if (!StringUtils.hasText(tenantId)) {
+            return 0L;
+        }
+        Long count = fileGovernanceMapper.countArrivalDelayViolations(params(
+                "tenantId", tenantId,
+                "thresholdSeconds", thresholdSeconds
+        ));
         return count == null ? 0L : count;
     }
 
-    public long maxArrivalDelaySeconds() {
-        Long maxDelay = fileGovernanceMapper.selectMaxArrivalDelaySeconds();
+    public long maxArrivalDelaySeconds(String tenantId) {
+        if (!StringUtils.hasText(tenantId)) {
+            return 0L;
+        }
+        Long maxDelay = fileGovernanceMapper.selectMaxArrivalDelaySeconds(params("tenantId", tenantId));
         return maxDelay == null ? 0L : maxDelay;
     }
 
-    public List<Map<String, Object>> selectArrivalDelaySamples(long thresholdSeconds, int limit) {
-        return fileGovernanceMapper.selectArrivalDelaySamples(params("thresholdSeconds", thresholdSeconds, "limit", limit));
+    public List<Map<String, Object>> selectArrivalDelaySamples(String tenantId, long thresholdSeconds, int limit) {
+        if (!StringUtils.hasText(tenantId)) {
+            return List.of();
+        }
+        return fileGovernanceMapper.selectArrivalDelaySamples(params(
+                "tenantId", tenantId,
+                "thresholdSeconds", thresholdSeconds,
+                "limit", limit
+        ));
     }
 
-    public long countProcessingDelayViolations(long thresholdSeconds) {
+    public long countProcessingDelayViolations(String tenantId, long thresholdSeconds) {
+        if (!StringUtils.hasText(tenantId)) {
+            return 0L;
+        }
         Long count = fileGovernanceMapper.countProcessingDelayViolations(params(
+                "tenantId", tenantId,
                 "thresholdSeconds", thresholdSeconds,
                 "runningStatus", FileDispatchRunStatus.RUNNING.code()
         ));
         return count == null ? 0L : count;
     }
 
-    public long maxProcessingDelaySeconds() {
+    public long maxProcessingDelaySeconds(String tenantId) {
+        if (!StringUtils.hasText(tenantId)) {
+            return 0L;
+        }
         Long maxDelay = fileGovernanceMapper.selectMaxProcessingDelaySeconds(params(
+                "tenantId", tenantId,
                 "runningStatus", FileDispatchRunStatus.RUNNING.code()
         ));
         return maxDelay == null ? 0L : maxDelay;
     }
 
-    public List<Map<String, Object>> selectProcessingDelaySamples(long thresholdSeconds, int limit) {
+    public List<Map<String, Object>> selectProcessingDelaySamples(String tenantId, long thresholdSeconds, int limit) {
+        if (!StringUtils.hasText(tenantId)) {
+            return List.of();
+        }
         return fileGovernanceMapper.selectProcessingDelaySamples(params(
+                "tenantId", tenantId,
                 "thresholdSeconds", thresholdSeconds,
                 "limit", limit,
                 "runningStatus", FileDispatchRunStatus.RUNNING.code()

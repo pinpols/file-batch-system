@@ -5,11 +5,13 @@ import com.example.batch.orchestrator.controller.response.SchedulerSnapshotRespo
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
+import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.repository.ResourceQueueRepository;
+import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
@@ -23,7 +25,10 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class TenantSchedulerSnapshotService {
 
+    private static final int MAX_SNAPSHOT_LIMIT = 100;
+
     private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+    private final TenantSchedulerSnapshotRepository tenantSchedulerSnapshotRepository;
     private final ResourceQueueRepository resourceQueueRepository;
     private final JobInstanceMapper jobInstanceMapper;
     private final JobPartitionMapper jobPartitionMapper;
@@ -130,5 +135,10 @@ public class TenantSchedulerSnapshotService {
             ));
         }
         return new SchedulerSnapshotResponse(Instant.now(), tenantId, policies, queues, wl);
+    }
+
+    public List<TenantSchedulerSnapshotRecord> history(String tenantId, int limit) {
+        int boundedLimit = Math.min(Math.max(limit, 1), MAX_SNAPSHOT_LIMIT);
+        return tenantSchedulerSnapshotRepository.listRecent(tenantId, boundedLimit);
     }
 }

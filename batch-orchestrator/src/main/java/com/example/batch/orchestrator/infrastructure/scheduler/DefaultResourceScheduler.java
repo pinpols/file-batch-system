@@ -18,8 +18,7 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest
 import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.repository.BatchWindowRepository;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -59,8 +58,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     private final PartitionThrottle partitionThrottle;
     private final WorkerSelector workerSelector;
     private final PriorityScheduler priorityScheduler;
-    private final BatchWindowRepository batchWindowRepository;
-    private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     private final JobInstanceMapper jobInstanceMapper;
     private final JobPartitionMapper jobPartitionMapper;
 
@@ -132,11 +130,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         if (request == null || !StringUtils.hasText(request.getTenantId()) || !StringUtils.hasText(request.getWindowCode())) {
             return ResourceCheck.allow();
         }
-        List<BatchWindowRecord> windows = batchWindowRepository.findByTenantIdAndEnabled(request.getTenantId(), true);
-        BatchWindowRecord window = windows.stream()
-                .filter(candidate -> request.getWindowCode().equalsIgnoreCase(candidate.windowCode()))
-                .findFirst()
-                .orElse(null);
+        BatchWindowRecord window = configCacheService.findEnabledBatchWindow(request.getTenantId(), request.getWindowCode());
         if (window == null || isWithinWindow(window)) {
             return ResourceCheck.allow();
         }
@@ -209,8 +203,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         if (!StringUtils.hasText(tenantId)) {
             return 1;
         }
-        List<TenantQuotaPolicyRecord> policies = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
-        TenantQuotaPolicyRecord policy = policies == null || policies.isEmpty() ? null : policies.get(0);
+        TenantQuotaPolicyRecord policy = configCacheService.findEnabledQuotaPolicy(tenantId);
         if (policy == null || policy.fairShareWeight() == null || policy.fairShareWeight() <= 0) {
             return 1;
         }

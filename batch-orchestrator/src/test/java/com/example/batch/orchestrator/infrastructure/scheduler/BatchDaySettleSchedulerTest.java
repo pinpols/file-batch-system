@@ -13,11 +13,11 @@ import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
-import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
 import com.example.batch.orchestrator.service.LaunchService;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,7 +33,7 @@ class BatchDaySettleSchedulerTest {
     private JobInstanceMapper jobInstanceMapper;
     private JobExecutionLogMapper jobExecutionLogMapper;
     private TriggerRequestMapper triggerRequestMapper;
-    private BusinessCalendarRepository businessCalendarRepository;
+    private OrchestratorConfigCacheService configCacheService;
     private LaunchService launchService;
     private BatchDaySettleScheduler scheduler;
 
@@ -43,14 +43,14 @@ class BatchDaySettleSchedulerTest {
         jobInstanceMapper = mock(JobInstanceMapper.class);
         jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
         triggerRequestMapper = mock(TriggerRequestMapper.class);
-        businessCalendarRepository = mock(BusinessCalendarRepository.class);
+        configCacheService = mock(OrchestratorConfigCacheService.class);
         launchService = mock(LaunchService.class);
         scheduler = new BatchDaySettleScheduler(
                 batchDayInstanceRepository,
                 jobInstanceMapper,
                 jobExecutionLogMapper,
                 triggerRequestMapper,
-                businessCalendarRepository,
+                configCacheService,
                 launchService
         );
     }
@@ -126,7 +126,7 @@ class BatchDaySettleSchedulerTest {
         when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate())).thenReturn(metrics);
         when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
                 .thenReturn(List.of(failedJob));
-        when(businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled("t1", "CAL", true))
+        when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
                 .thenReturn(calendar);
         when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
         when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -156,7 +156,7 @@ class BatchDaySettleSchedulerTest {
         when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate())).thenReturn(metrics);
         when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
                 .thenReturn(List.of(failedJob));
-        when(businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled("t1", "CAL", true))
+        when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
                 .thenReturn(calendar);
         when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
         when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

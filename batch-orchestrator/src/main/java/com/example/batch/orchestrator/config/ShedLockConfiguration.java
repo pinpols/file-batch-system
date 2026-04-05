@@ -1,12 +1,12 @@
 package com.example.batch.orchestrator.config;
 
-import com.example.batch.common.config.ShedLockProviderFactory;
-import javax.sql.DataSource;
+import com.example.batch.orchestrator.infrastructure.redis.RedisShedLockProvider;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
  * ShedLock configuration for orchestrator cluster.
@@ -27,9 +27,9 @@ public class ShedLockConfiguration {
 
     @Bean
     public LockProvider lockProvider(
-            DataSource dataSource,
-            @Value("${batch.shedlock.auto-create:false}") boolean autoCreateTable
+            StringRedisTemplate redisTemplate,
+            @Value("${spring.application.name:batch-orchestrator}") String environment
     ) {
-        return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
+        return new RedisShedLockProvider(redisTemplate, environment);
     }
 }

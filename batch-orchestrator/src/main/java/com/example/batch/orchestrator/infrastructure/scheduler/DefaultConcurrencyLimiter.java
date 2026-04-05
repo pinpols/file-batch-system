@@ -6,10 +6,9 @@ import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -19,7 +18,7 @@ import org.springframework.util.StringUtils;
 public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
 
     private final JobInstanceMapper jobInstanceMapper;
-    private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     private final QuotaRuntimeStateService quotaRuntimeStateService;
     private final BatchOrchestratorGovernanceProperties governance;
 
@@ -117,7 +116,6 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     }
 
     private TenantQuotaPolicyRecord resolveQuotaPolicy(String tenantId) {
-        List<TenantQuotaPolicyRecord> policies = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
-        return policies == null || policies.isEmpty() ? null : policies.getFirst();
+        return configCacheService.findEnabledQuotaPolicy(tenantId);
     }
 }

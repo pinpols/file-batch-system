@@ -16,7 +16,7 @@ import com.example.batch.orchestrator.service.LaunchService;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。
@@ -32,6 +32,8 @@ class DefaultCompensationServiceTest {
     private RetryGovernanceService retryGovernanceService;
     private FileGovernanceService fileGovernanceService;
     private LaunchService launchService;
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<LaunchService> launchServiceProvider;
     private TaskExecutionService taskExecutionService;
     private DefaultCompensationService service;
 
@@ -46,6 +48,7 @@ class DefaultCompensationServiceTest {
         retryGovernanceService = mock(RetryGovernanceService.class);
         fileGovernanceService = mock(FileGovernanceService.class);
         launchService = mock(LaunchService.class);
+        launchServiceProvider = mock(ObjectProvider.class);
         taskExecutionService = mock(TaskExecutionService.class);
 
         service = new DefaultCompensationService(
@@ -57,9 +60,10 @@ class DefaultCompensationServiceTest {
                 triggerRequestMapper,
                 retryGovernanceService,
                 fileGovernanceService,
+                launchServiceProvider,
                 taskExecutionService
         );
-        ReflectionTestUtils.setField(service, "launchService", launchService);
+        org.mockito.Mockito.when(launchServiceProvider.getObject()).thenReturn(launchService);
     }
 
     // ── validate() ────────────────────────────────────────────────────────────
