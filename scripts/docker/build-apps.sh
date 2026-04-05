@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # =========================================================
-# up-apps.sh - 一键启动本地基础依赖 + 应用容器
+# build-apps.sh - 一键构建本地应用镜像（默认启用 BuildKit）
 # Notes:
 # 1) 默认使用 .env.local。
-# 2) 默认启动 docker-compose.yml + docker-compose.app.yml 的 apps profile。
-# 3) 可透传额外 docker compose 参数，例如：
-#    ./scripts/docker/up-apps.sh console-api
+# 2) 默认构建 docker-compose.yml + docker-compose.app.yml 的 apps profile。
+# 3) 默认启用 DOCKER_BUILDKIT=1 / COMPOSE_DOCKER_CLI_BUILD=1。
+# 4) 可透传额外 docker compose build 参数，例如：
+#    ./scripts/docker/build-apps.sh console-api
 # =========================================================
 set -euo pipefail
 
@@ -20,20 +21,13 @@ unset _DOCKER_SCRIPT_DIR
 
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-local}"
-APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
 export DOCKER_BUILDKIT="${DOCKER_BUILDKIT:-1}"
 export COMPOSE_DOCKER_CLI_BUILD="${COMPOSE_DOCKER_CLI_BUILD:-1}"
-
-if ! docker network inspect "$APP_NETWORK_NAME" >/dev/null 2>&1; then
-  docker network create "$APP_NETWORK_NAME" >/dev/null
-fi
-
-mkdir -p "$ROOT/logs/docker"
 
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \
   -f docker-compose.yml \
   -f docker-compose.app.yml \
   --profile apps \
-  up -d --force-recreate --remove-orphans "$@"
+  build "$@"

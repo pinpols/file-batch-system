@@ -15,9 +15,11 @@ public class ConsoleTenantGuard {
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
     public String resolveTenant(String requestTenantId) {
-        ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+        ConsoleRequestMetadata metadata = currentMetadataOrNull();
         String authenticatedTenantId = authenticatedTenantId();
-        String effectiveTenantId = authenticatedTenantId != null ? authenticatedTenantId : metadata.tenantId();
+        String effectiveTenantId = authenticatedTenantId != null
+                ? authenticatedTenantId
+                : metadata != null ? metadata.tenantId() : null;
         if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
             effectiveTenantId = requestTenantId;
         }
@@ -32,6 +34,16 @@ public class ConsoleTenantGuard {
 
     public void assertTenantAllowed(String requestedTenantId) {
         resolveTenant(requestedTenantId);
+    }
+
+    private ConsoleRequestMetadata currentMetadataOrNull() {
+        try {
+            return requestMetadataResolver.current();
+        } catch (IllegalStateException exception) {
+            return null;
+        } catch (org.springframework.beans.factory.support.ScopeNotActiveException exception) {
+            return null;
+        }
     }
 
     private String authenticatedTenantId() {

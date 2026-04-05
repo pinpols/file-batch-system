@@ -11,3 +11,10 @@ README.md
 AGENT.md
 start-all.sh
 stop-all.sh
+batch-e2e-tests
+load-tests
+security-scan
+.claude
+.local
+!batch-e2e-tests/
+!batch-e2e-tests/pom.xml

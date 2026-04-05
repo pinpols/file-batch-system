@@ -75,7 +75,7 @@ public class ConsoleOpsSummaryRealtimeStream {
                 resolvedTenantId,
                 STREAM,
                 null,
-                resolvedTenantId,
+                null,
                 heartbeatMillis
         );
         if (initialSnapshot) {
@@ -127,14 +127,7 @@ public class ConsoleOpsSummaryRealtimeStream {
     }
 
     void publishSnapshot(String tenantId) {
-        realtimeEventHub.publish(new ConsoleSseEvent(
-                tenantId,
-                STREAM,
-                EVENT_TYPE,
-                cursorFactory.nextCursor(),
-                loadSummary(tenantId, false),
-                Instant.now()
-        ));
+        publishSummarySnapshot(tenantId, true);
     }
 
     private ConsoleOpsSummaryResponse loadSummary(String tenantId, boolean forceRefresh) {

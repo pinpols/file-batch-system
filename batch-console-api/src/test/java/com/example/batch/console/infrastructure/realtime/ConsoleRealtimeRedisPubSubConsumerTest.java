@@ -7,8 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.application.ConsoleOpsApplicationService;
-import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,7 +17,7 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
 
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
     private final ConsoleRealtimeEventHub realtimeEventHub = mock(ConsoleRealtimeEventHub.class);
-    private final ConsoleOpsApplicationService opsApplicationService = mock(ConsoleOpsApplicationService.class);
+    private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream = mock(ConsoleOpsSummaryRealtimeStream.class);
     private final ConsoleRealtimeInstanceIdProvider instanceIdProvider = mock(ConsoleRealtimeInstanceIdProvider.class);
     private final ConsoleRealtimeMetrics realtimeMetrics = new ConsoleRealtimeMetrics(new SimpleMeterRegistry());
 
@@ -31,7 +29,7 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
         consumer = new ConsoleRealtimeRedisPubSubConsumer(
                 redisTemplate,
                 realtimeEventHub,
-                opsApplicationService,
+                summaryRealtimeStream,
                 instanceIdProvider,
                 realtimeMetrics
         );
@@ -82,14 +80,14 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
                 "ops-summary-updated",
                 "cursor-2",
                 true,
-                JsonUtils.toJson(new ConsoleOpsSummaryResponse("t1", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)),
+                "",
                 java.time.Instant.parse("2026-04-05T10:00:01Z")
         );
 
         consumer.onMessage(message(envelope), null);
 
-        verify(realtimeEventHub).publish(org.mockito.ArgumentMatchers.any());
-        verify(opsApplicationService, never()).summary("t1");
+        verify(summaryRealtimeStream).publishSnapshot("t1");
+        verify(realtimeEventHub, never()).publish(org.mockito.ArgumentMatchers.any());
     }
 
     private Message message(ConsoleRealtimeStreamEnvelope envelope) {
