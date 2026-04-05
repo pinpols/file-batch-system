@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 18080
 
 spring:
   autoconfigure:
@@ -26,10 +26,6 @@ spring:
       chat:
         options:
           model: gpt-4o-mini
-  security:
-    user:
-      name: admin
-      password: ${BATCH_CONSOLE_PASSWORD:}
 
 mybatis:
   mapper-locations: classpath*:mapper/*.xml

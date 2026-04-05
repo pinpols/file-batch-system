@@ -4,7 +4,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-@Table("console_user_account")
+@Table(schema = "batch", name = "console_user_account")
 public class ConsoleUserAccountEntity {
 
     @Id

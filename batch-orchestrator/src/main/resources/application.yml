@@ -37,6 +37,33 @@ mybatis:
 batch:
   startup-self-check:
     enabled: true
+    context-name: orchestrator
+    flyway-validate: true
+    required-flyway-versions:
+      - "32"
+    schemas:
+      - batch
+      - quartz
+    quartz-standard-tables: true
+    quartz-schema: quartz
+    tables:
+      - schema: batch
+        name: batch_day_instance
+      - schema: batch
+        name: business_calendar
+    columns:
+      - schema: batch
+        table: business_calendar
+        name: cutoff_time
+        hint: V32__add_batch_day_support.sql
+      - schema: batch
+        table: business_calendar
+        name: late_arrival_tolerance_min
+        hint: V32__add_batch_day_support.sql
+      - schema: batch
+        table: business_calendar
+        name: sla_offset_min
+        hint: V32__add_batch_day_support.sql
   scheduler:
     # 是否持久化调度器快照（用于恢复/审计；关闭可减少写库）
     snapshot-persist-enabled: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST:true}

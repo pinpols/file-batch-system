@@ -18,6 +18,7 @@ import org.springframework.web.client.RestClient;
 /**
  * Resilience for worker → orchestrator HTTP: bounded retries on 5xx / I/O; immediate failure on 429.
  */
+@SuppressWarnings("removal")
 class HttpTaskExecutionClientTest {
 
     @Test

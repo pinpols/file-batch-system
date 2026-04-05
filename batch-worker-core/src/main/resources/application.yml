@@ -2,7 +2,7 @@ spring:
   application:
     name: batch-worker-core
   kafka:
-    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
 
 management:
   endpoints:

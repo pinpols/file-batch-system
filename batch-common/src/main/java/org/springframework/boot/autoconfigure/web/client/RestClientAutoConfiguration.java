@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestClient;
 
 @AutoConfiguration
+@SuppressWarnings("removal")
 public class RestClientAutoConfiguration {
 
     @Bean

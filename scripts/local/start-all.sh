@@ -26,6 +26,8 @@ APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"
+RUNTIME_JAR_DIR="$LOG_DIR/runtime-jars"
+mkdir -p "$RUNTIME_JAR_DIR"
 PID_FILE="$LOG_DIR/start-all.pids"
 PID_FILE_NEW="$(mktemp "$LOG_DIR/start-all.pids.XXXXXX")"
 trap 'rm -f "$PID_FILE_NEW"' EXIT
@@ -48,7 +50,10 @@ fi
 module_jar() {
   local module="$1"
   local jar
-  jar="$(ls "$ROOT/$module/target/${module}"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc' | head -1 || true)"
+  jar="$(ls "$ROOT/$module/target/${module}"-*-exec.jar 2>/dev/null | grep -Ev 'sources|javadoc' | head -1 || true)"
+  if [[ -z "$jar" || ! -f "$jar" ]]; then
+    jar="$(ls "$ROOT/$module/target/${module}"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc|\\.original$|\\-exec\\.jar$' | head -1 || true)"
+  fi
   if [[ -z "$jar" || ! -f "$jar" ]]; then
     echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar（请先执行 ./scripts/local/build-apps.sh 或 BUILD=1 ./scripts/local/start-all.sh）" >&2
     exit 1
@@ -67,10 +72,13 @@ start_java() {
     return 0
   fi
 
-  nohup java ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >>"$LOG_DIR/${name}.log" 2>&1 &
+  local runtime_jar="$RUNTIME_JAR_DIR/${name}.jar"
+  cp -f "$jar" "$runtime_jar"
+
+  nohup java ${JAVA_OPTS:-} -jar "$runtime_jar" --spring.profiles.active=local >>"$LOG_DIR/${name}.log" 2>&1 &
   local pid=$!
   echo "${name} ${pid}" >>"$PID_FILE_NEW"
-  echo "  已启动 ${name} pid=${pid} 日志 logs/${name}.log"
+  echo "  已启动 ${name} pid=${pid} 运行包 logs/runtime-jars/${name}.jar 日志 logs/${name}.log"
 }
 
 wait_postgres() {
@@ -110,6 +118,36 @@ wait_container_exited_zero() {
   exit 1
 }
 
+wait_kafka_topics_ready() {
+  echo "==> 等待 Kafka topic 初始化完成..."
+  local expected_topics="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter}"
+  local i all_ready listed
+  for i in $(seq 1 60); do
+    listed="$(docker exec batch-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list 2>/dev/null || true)"
+    all_ready=true
+    local old_ifs="$IFS"
+    IFS=','
+    for raw_topic in $expected_topics; do
+      local topic
+      topic="$(echo "${raw_topic}" | tr -d '[:space:]')"
+      [[ -n "$topic" ]] || continue
+      if ! grep -Fxq "$topic" <<<"$listed"; then
+        all_ready=false
+        break
+      fi
+    done
+    IFS="$old_ifs"
+    if [[ "$all_ready" == "true" ]]; then
+      echo "  Kafka topics 已就绪"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: Kafka topics 在超时时间内未就绪" >&2
+  docker logs batch-kafka-init >&2 || true
+  exit 1
+}
+
 wait_container_healthy() {
   local container="$1"
   local label="$2"
@@ -133,7 +171,7 @@ docker compose --env-file "$COMPOSE_ENV_FILE" up -d
 wait_postgres
 wait_container_healthy batch-minio "MinIO"
 wait_container_healthy batch-redis "Redis"
-wait_container_exited_zero batch-kafka-init "Kafka topic init"
+wait_kafka_topics_ready
 wait_container_exited_zero batch-minio-init "MinIO bucket init"
 
 if [[ "${BUILD:-0}" == "1" ]]; then
@@ -165,6 +203,6 @@ trap - EXIT
 
 echo ""
 echo "全部进程已在后台运行。端口（默认）："
-echo "  console-api 8080 | trigger 8081 | orchestrator 8082 | import 8083 | export 8084 | dispatch 8085"
-echo "  Redis 16379（宿主机映射）"
+echo "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | dispatch 18085"
+echo "  Kafka 19092 | MinIO 19000 | Redis 16379（宿主机映射）"
 echo "停止请执行: ./scripts/local/stop-all.sh"

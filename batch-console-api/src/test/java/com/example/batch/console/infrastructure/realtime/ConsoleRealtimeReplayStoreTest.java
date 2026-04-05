@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+@SuppressWarnings("unchecked")
 class ConsoleRealtimeReplayStoreTest {
 
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);

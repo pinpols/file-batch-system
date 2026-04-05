@@ -40,6 +40,14 @@ spring:
       - quartz
 
 batch:
+  startup-self-check:
+    enabled: true
+    context-name: trigger
+    flyway-validate: false
+    schemas:
+      - quartz
+    quartz-standard-tables: true
+    quartz-schema: quartz
   trigger:
     runtime:
       # misfire 追赶阈值（秒）：当触发错过时间超过该阈值时进行 catch-up

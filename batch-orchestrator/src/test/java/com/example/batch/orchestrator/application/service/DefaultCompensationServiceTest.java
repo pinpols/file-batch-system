@@ -21,6 +21,7 @@ import org.springframework.beans.factory.ObjectProvider;
 /**
  * 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。
  */
+@SuppressWarnings("unchecked")
 class DefaultCompensationServiceTest {
 
     private CompensationCommandMapper compensationCommandMapper;
@@ -32,7 +33,6 @@ class DefaultCompensationServiceTest {
     private RetryGovernanceService retryGovernanceService;
     private FileGovernanceService fileGovernanceService;
     private LaunchService launchService;
-    @SuppressWarnings("unchecked")
     private ObjectProvider<LaunchService> launchServiceProvider;
     private TaskExecutionService taskExecutionService;
     private DefaultCompensationService service;

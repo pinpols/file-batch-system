@@ -21,7 +21,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   kafka:
     # Kafka 集群地址（逗号分隔）
-    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
   data:
     redis:
       # Redis 连接地址：本地默认走宿主机映射端口；容器内由 compose 覆盖为 redis:6379
@@ -97,7 +97,7 @@ batch:
   storage:
     minio:
       # MinIO 访问地址（http/https）
-      endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:9000}
+      endpoint: ${BATCH_MINIO_ENDPOINT:http://localhost:19000}
       # MinIO 访问密钥 ID
       access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
       # MinIO 秘密访问密钥
@@ -108,7 +108,7 @@ batch:
   # Orchestrator API 地址（trigger + 所有 worker 模块使用）
   orchestrator:
     # Orchestrator 基础地址（trigger/worker 客户端调用）
-    base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
+    base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}
 
   # 业务数据库（import / export / dispatch worker 使用）
   datasource:
@@ -145,4 +145,4 @@ batch:
       renew-interval-millis: ${BATCH_WORKER_LEASE_RENEW_INTERVAL_MILLIS:10000}
     task-client:
       # worker 调用 orchestrator 的 base-url（默认同 orchestrator.base-url）
-      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:8082}
+      base-url: ${BATCH_ORCHESTRATOR_BASE_URL:http://localhost:18082}

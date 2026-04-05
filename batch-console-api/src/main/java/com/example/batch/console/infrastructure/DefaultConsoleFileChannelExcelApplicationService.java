@@ -64,6 +64,7 @@ import org.springframework.web.multipart.MultipartFile;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class DefaultConsoleFileChannelExcelApplicationService implements ConsoleFileChannelExcelApplicationService {
 
     private static final String SHEET_NAME = "file_channel_config";

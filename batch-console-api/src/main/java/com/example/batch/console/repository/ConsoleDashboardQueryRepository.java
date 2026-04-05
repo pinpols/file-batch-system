@@ -1,14 +1,14 @@
 package com.example.batch.console.repository;
 
+import com.example.batch.console.domain.ConsoleJdbcQueryAnchor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-public interface ConsoleDashboardQueryRepository extends Repository<Object, Long> {
+public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQueryAnchor, Long> {
 
     @Query("""
             SELECT instance_status AS status, count(1) AS count

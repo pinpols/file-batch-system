@@ -33,7 +33,7 @@ kill_pid() {
     echo "  kill $label (pid=$pid)"
     kill "$pid" 2>/dev/null || true
     already_killed+=("$pid")
-    ((killed++))
+    ((killed+=1))
   fi
 }
 

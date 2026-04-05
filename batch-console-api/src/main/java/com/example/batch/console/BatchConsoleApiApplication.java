@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(
@@ -25,13 +26,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
                 OpenAiEmbeddingAutoConfiguration.class,
                 OpenAiImageAutoConfiguration.class,
                 OpenAiModerationAutoConfiguration.class
-        })
+        },
+        excludeName = "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration")
 @ImportAutoConfiguration({
         BatchJsonAutoConfiguration.class,
         BatchObjectCryptoAutoConfiguration.class,
         RestClientAutoConfiguration.class
 })
 @MapperScan("com.example.batch.console.mapper")
+@EnableJdbcRepositories(basePackages = "com.example.batch.console.repository")
 @ConfigurationPropertiesScan(basePackages = {"com.example.batch.console", "com.example.batch.common"})
 @EnableScheduling
 public class BatchConsoleApiApplication {
