@@ -42,5 +42,5 @@ for raw_topic in $topics_csv; do
 done
 IFS=$old_ifs
 
-echo "Kafka topics ready:"
-/opt/kafka/bin/kafka-topics.sh --bootstrap-server "${bootstrap_server}" --list
+echo "Kafka topics ready."
+exit 0

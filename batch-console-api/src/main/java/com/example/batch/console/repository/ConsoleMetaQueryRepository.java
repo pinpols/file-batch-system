@@ -1,11 +1,12 @@
 package com.example.batch.console.repository;
 
+import com.example.batch.console.domain.ConsoleJdbcQueryAnchor;
 import java.util.List;
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-public interface ConsoleMetaQueryRepository extends Repository<Object, Long> {
+public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryAnchor, Long> {
 
     @Query("""
             SELECT queue_code AS code, queue_code AS label

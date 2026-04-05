@@ -2,8 +2,8 @@ package com.example.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.health.BatchStartupSelfCheck;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.orchestrator.health.StartupSelfCheck;
 import com.example.batch.testing.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *   <li>{@code batch.batch_day_instance} table exists (V31)</li>
  *   <li>{@code batch.business_calendar} columns added by V31 are present</li>
  *   <li>All Quartz tables exist in the {@code quartz} schema</li>
- *   <li>{@link StartupSelfCheck} bean is present in the context (i.e. self-check is wired)</li>
+ *   <li>{@link BatchStartupSelfCheck} bean is present in the context (i.e. self-check is wired)</li>
  * </ul>
  */
 @SpringBootTest(
@@ -29,7 +29,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
-    private StartupSelfCheck startupSelfCheck;
+    private BatchStartupSelfCheck startupSelfCheck;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;

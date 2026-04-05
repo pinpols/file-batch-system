@@ -1,5 +1,5 @@
 server:
-  port: 8085
+  port: 18085
 
 spring:
   datasource:
@@ -8,7 +8,7 @@ spring:
     password: batch_pass_123
     driver-class-name: org.postgresql.Driver
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: localhost:19092
 
 mybatis:
   mapper-locations: classpath*:mapper/*.xml
@@ -34,7 +34,7 @@ batch:
       keys:
         DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
   orchestrator:
-    base-url: http://localhost:8082
+    base-url: http://localhost:18082
   worker:
     registry:
       # 本地联调：orchestrator 可能比 worker 晚启动，不 fail-fast 改为心跳重试注册
@@ -43,7 +43,7 @@ batch:
     lease:
       renew-interval-millis: 10000
     task-client:
-      base-url: http://localhost:8082
+      base-url: http://localhost:18082
     dispatch:
       worker-code: dispatch-node-1
       worker-type: DISPATCH
@@ -59,7 +59,7 @@ batch:
       schema: biz
   storage:
     minio:
-      endpoint: http://localhost:9000
+      endpoint: http://localhost:19000
       access-key: minioadmin
       secret-key: minioadmin123
       bucket: batch-dev
