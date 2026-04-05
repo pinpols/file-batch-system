@@ -179,6 +179,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `POST /api/console/auth/token`
 - `GET /api/console/auth/me`
 - `GET /api/console/ops/summary`
+- `GET /api/console/ops/summary/events`
 
 `GET /api/console/ops/summary` is the first-screen operational snapshot. The server requires **`tenantId` as a query parameter** (not only `X-Tenant-Id`). The response is a typed summary payload inside `CommonResponse` and should be treated as the control plane entry for the console home page. It includes:
 
@@ -188,6 +189,29 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - SLA breach count
 - worker online, draining, and offline/decommissioned distribution
 - outbox retry backlog and delivery failures
+
+`GET /api/console/ops/summary/events` is the first-screen realtime stream. It emits `ops-summary-updated` payloads with the full `ConsoleOpsSummaryResponse` snapshot after key write actions succeed. The frontend should use it to invalidate or replace the cached summary on the home page.
+
+Query parameters:
+
+- `heartbeatMillis` is optional and controls the SSE keepalive interval.
+- `initialSnapshot` is optional and defaults to `true`. When set to `false`, the stream only listens for later updates and does not emit an immediate snapshot after subscription.
+
+Frontend integration rule:
+
+1. Load `GET /api/console/ops/summary?tenantId=...` first and render the initial homepage state from that response.
+2. Open `GET /api/console/ops/summary/events?tenantId=...` only after the first snapshot has been rendered.
+3. On `ops-summary-updated`, replace the cached summary with the event payload directly when possible.
+4. If the UI uses a query/cache layer, `setQueryData` or an equivalent cache replacement is preferred over an unconditional refetch, because the event already carries the full snapshot.
+5. Use `heartbeat` only as a keepalive signal. Do not treat it as a data update.
+6. If the SSE connection closes or errors out, reconnect automatically and fall back to a summary refetch if the client cannot guarantee event continuity.
+
+Deployment note:
+
+- The console SSE layer uses Redis Pub/Sub as the shared event source. Each `console-api` instance subscribes to the same channel, so every instance sees the same realtime events without sticky session.
+- The local SSE hub is still in-process, but it is fed from Redis rather than from a single instance's write path.
+- The realtime payload includes `originInstanceId` so the instance that already handled the local write path can ignore its own broadcast echo.
+- `BATCH_CONSOLE_INSTANCE_ID` should be set per replica when possible so origin filtering remains stable across restarts.
 
 ### Job Definitions
 
@@ -211,9 +235,64 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `DELETE /api/console/workflow-definitions/{id}`
 - `POST /api/console/workflow-definitions/{id}/toggle`
 - `POST /api/console/workflow-definitions/{id}/validate`
+- `GET /api/console/workflow-definitions/events`
 - Create and update are transactional: definition, nodes, and edges are persisted or replaced atomically.
 - `validate` runs Kahn topological sort and checks for cycles, START/END node presence, and reachability. Returns a validation result payload, not a simple boolean.
 - Delete cascades to nodes and edges.
+- `GET /api/console/workflow-definitions/events` subscribes to the workflow-definition realtime stream. It emits change signals for create, update, toggle, and delete operations using event types such as `workflow-definition-created`, `workflow-definition-updated`, `workflow-definition-toggled`, and `workflow-definition-deleted`.
+
+### Pipeline Definitions
+
+- `GET /api/console/pipeline-definitions`
+- `POST /api/console/pipeline-definitions`
+- `GET /api/console/pipeline-definitions/{id}`
+- `PUT /api/console/pipeline-definitions/{id}`
+- `POST /api/console/pipeline-definitions/{id}/toggle`
+- `GET /api/console/pipeline-definitions/events`
+- `GET /api/console/pipeline-definitions/events` is the domain-level realtime entry for pipeline editing screens. It subscribes to the same event hub used by the other realtime console streams, but keeps the route close to the pipeline-definition UX.
+
+### Workers
+
+- `GET /api/console/workers`
+- `POST /api/console/workers/{workerCode}/drain`
+- `POST /api/console/workers/{workerCode}/force-offline`
+- `POST /api/console/workers/{workerCode}/takeover`
+- `GET /api/console/workers/{workerCode}/claimed-tasks`
+- `GET /api/console/workers/events`
+- `GET /api/console/workers/events` subscribes to worker registry realtime changes. It emits `worker-updated` signals after drain, force-offline, or takeover actions succeed.
+
+### Alerts
+
+- `GET /api/console/alerts`
+- `POST /api/console/alerts/{alertId}/ack`
+- `POST /api/console/alerts/{alertId}/silence`
+- `POST /api/console/alerts/{alertId}/close`
+- `GET /api/console/alerts/events`
+- `GET /api/console/alerts/events` subscribes to alert governance realtime changes. It emits `alert-updated` signals after ack, silence, or close actions succeed.
+
+### Job Instances and Workflow Runs
+
+- `GET /api/console/stream/job-instances/events`
+- `GET /api/console/stream/workflow-runs/events`
+- `GET /api/console/workflow-runs/events`
+- `POST /api/console/jobs/trigger`
+- `POST /api/console/jobs/compensations`
+- `POST /api/console/jobs/compensate`
+- `POST /api/console/jobs/rerun`
+- `POST /api/console/jobs/dead-letters/replay`
+- `POST /api/console/jobs/tasks/replay`
+- `POST /api/console/jobs/partitions/replay`
+- `POST /api/console/jobs/catch-up/approve`
+- `POST /api/console/jobs/batch-days/{bizDate}/catchup`
+- `GET /api/console/stream/job-instances/events` and `GET /api/console/stream/workflow-runs/events` expose the shared realtime hub for run-state pages. `GET /api/console/workflow-runs/events` is the domain-specific shortcut for the workflow-run screen.
+- `job-instances` emits `job-instance-updated` signals and `workflow-runs` emits `workflow-run-updated` signals after job and workflow-run write actions succeed.
+
+### Outbox
+
+- `GET /api/console/stream/outbox-retries/events`
+- `GET /api/console/stream/outbox-deliveries/events`
+- `GET /api/console/stream/outbox-retries/events` subscribes to outbox retry activity and emits `outbox-retry-updated` signals.
+- `GET /api/console/stream/outbox-deliveries/events` subscribes to outbox delivery activity and emits `outbox-delivery-updated` signals.
 
 ### Instances
 
@@ -425,8 +504,11 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 ### Workers
 
 - `POST /api/console/workers/{workerCode}/drain`
+- `POST /api/console/workers/{workerCode}/takeover`
 - `POST /api/console/workers/{workerCode}/force-offline`
 - `GET /api/console/workers/{workerCode}/claimed-tasks`
+- `takeover` is the explicit manual handoff path: it requeues in-flight tasks and marks the worker decommissioned immediately.
+- `force-offline` keeps the stronger ops semantics and should be treated as an emergency offlining command.
 
 ### Files
 
@@ -472,6 +554,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/query/file-pipelines`
 - `GET /api/console/query/file-pipeline-steps`
 - `GET /api/console/query/file-dispatches`
+- `GET /api/console/query/channel-receipts`
 - `GET /api/console/query/file-channels`
 - `GET /api/console/query/file-arrival-groups`
 - `GET /api/console/query/file-errors`
@@ -501,7 +584,19 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/query/file-pipelines/{id}`
 - Query endpoints must return typed list DTOs or documented view objects. Avoid raw entity lists and anonymous maps in new query APIs.
 - `execution-logs` is a UI alias for `audits` and uses the same response shape.
+- `channel-receipts` is a receipt-focused alias of `file-dispatches`; it uses the same request fields and response DTO, but gives the frontend a stable semantic entrypoint for receipt tracking.
 - `workflow-topology` returns `ConsoleWorkflowTopologyResponse` with `workflowDefinition`, `nodes`, `edges`, `workflowRuns`, and `nodeRuns`; the frontend should use those five fields directly instead of reconstructing a generic object map.
+
+### Streaming
+
+- Streaming endpoints use `text/event-stream` and return raw SSE frames instead of the `CommonResponse` JSON envelope.
+- Browser `EventSource` clients may authenticate with `Authorization: Bearer <jwt>` or `?token=<jwt>` when custom headers are unavailable.
+- The realtime stream currently emits `ready`, `heartbeat`, and domain event names such as `pipeline-definition-created`, `pipeline-definition-updated`, and `pipeline-definition-toggled`.
+
+### Alert Routing / Notification Policy Status
+
+- No console OpenAPI is defined yet for alert routing or notification policy management.
+- Before adding frontend CRUD for alert routing / notification policy, the backend must first introduce persistent model, mapper/service layer, and explicit REST contract.
 
 ## Trigger API
 

@@ -20,8 +20,8 @@
 
 | 模拟类 | 目标接口 | 用途 |
 |---|---|---|
-| `JobLaunchSimulation` | `POST /api/triggers/launch`（trigger:8081） | 写入路径吞吐/延迟基线 |
-| `ConsoleQuerySimulation` | `GET /api/console/query/instances` 等（console:8080） | 查询路径吞吐/延迟基线 |
+| `JobLaunchSimulation` | `POST /api/triggers/launch`（trigger:18081） | 写入路径吞吐/延迟基线 |
+| `ConsoleQuerySimulation` | `GET /api/console/query/instances` 等（console:18080） | 查询路径吞吐/延迟基线 |
 | `CapacityBaselineSimulation` | 写入 30 % + 查询 70 % 混合 | **生产前容量基线**（分级爬坡找饱和点） |
 
 ---
@@ -90,8 +90,8 @@ open target/gatling-results/*/index.html
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
-| `trigger.baseUrl` | `http://localhost:8081` | batch-trigger 地址 |
-| `console.baseUrl` | `http://localhost:8080` | batch-console-api 地址 |
+| `trigger.baseUrl` | `http://localhost:18081` | batch-trigger 地址 |
+| `console.baseUrl` | `http://localhost:18080` | batch-console-api 地址 |
 | `tenantId` | `t1` | 压测租户 ID |
 | `jobCode` | `E2E_IMPORT_LOAD` | 压测作业 code |
 | `bizDate` | `2026-01-15` | 业务日期 |

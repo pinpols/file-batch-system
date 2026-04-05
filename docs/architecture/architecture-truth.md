@@ -76,7 +76,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | 基础设施 | 用途 | 默认地址 |
 |---------|------|---------|
 | PostgreSQL 16 | 平台 DB（`batch` + `quartz` schema） | localhost:15432 |
-| Apache Kafka 4.1+ | 任务分发 / 结果回传 | localhost:9092 |
+| Apache Kafka 4.1+ | 任务分发 / 结果回传 | localhost:19092 |
 | MinIO | 导入/导出文件存储 | localhost:19000 |
 | Prometheus / Grafana | 指标采集与展示 | — |
 

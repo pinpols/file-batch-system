@@ -16,6 +16,8 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -82,6 +84,13 @@ public class ConsoleApiExceptionHandler {
         log.warn("console method not supported", exception);
         return ResponseEntity.status(405)
                 .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+    }
+
+    @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
+    public ResponseEntity<?> handleAccessDenied(Exception exception) {
+        log.warn("console access denied", exception);
+        return ResponseEntity.status(ResultCode.FORBIDDEN.httpStatus())
+                .body(responseFactory.failure(ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED));
     }
 
     /**

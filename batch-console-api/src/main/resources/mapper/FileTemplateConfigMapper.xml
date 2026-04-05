@@ -51,11 +51,24 @@
             updated_at
         from batch.file_template_config
         where tenant_id = #{tenantId}
+        <if test="keyword != null and keyword != ''">
+            and (
+                template_code like concat('%', #{keyword}, '%')
+                or template_name like concat('%', #{keyword}, '%')
+                or template_type like concat('%', #{keyword}, '%')
+            )
+        </if>
         <if test="templateCode != null and templateCode != ''">
-            and template_code = #{templateCode}
+            and template_code like concat('%', #{templateCode}, '%')
+        </if>
+        <if test="templateName != null and templateName != ''">
+            and template_name like concat('%', #{templateName}, '%')
         </if>
         <if test="templateType != null and templateType != ''">
             and template_type = #{templateType}
+        </if>
+        <if test="bizType != null and bizType != ''">
+            and biz_type = #{bizType}
         </if>
         <if test="enabled != null">
             and enabled = #{enabled}
@@ -70,11 +83,24 @@
         select count(1)
         from batch.file_template_config
         where tenant_id = #{tenantId}
+        <if test="keyword != null and keyword != ''">
+            and (
+                template_code like concat('%', #{keyword}, '%')
+                or template_name like concat('%', #{keyword}, '%')
+                or template_type like concat('%', #{keyword}, '%')
+            )
+        </if>
         <if test="templateCode != null and templateCode != ''">
-            and template_code = #{templateCode}
+            and template_code like concat('%', #{templateCode}, '%')
+        </if>
+        <if test="templateName != null and templateName != ''">
+            and template_name like concat('%', #{templateName}, '%')
         </if>
         <if test="templateType != null and templateType != ''">
             and template_type = #{templateType}
+        </if>
+        <if test="bizType != null and bizType != ''">
+            and biz_type = #{bizType}
         </if>
         <if test="enabled != null">
             and enabled = #{enabled}

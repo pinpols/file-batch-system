@@ -10,6 +10,8 @@ public interface WorkerDrainGovernanceService {
 
     WorkerRegistryRecord forceOffline(String tenantId, String workerCode);
 
+    WorkerRegistryRecord takeover(String tenantId, String workerCode);
+
     List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode);
 
     void takeoverAfterDrainTimeout(String tenantId, String workerCode);

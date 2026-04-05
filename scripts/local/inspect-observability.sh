@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =========================================================
-# inspect-observability.sh - 服务巡检：健康检查、指标和 Kafka lag
+# inspect-observability.sh - 服务巡检：健康检查、指标、Kafka lag 和基础设施 exporter 指标
 # Notes:
 # 1) 检查各服务的 /actuator/health。
-# 2) 检查关键 Prometheus 指标和 Kafka consumer lag。
+# 2) 检查关键 Prometheus 指标、Redis/Postgres/Kafka/MinIO exporter 指标和 Kafka consumer lag。
 # =========================================================
 # 使用方法：
 #   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:8080,http://localhost:8081,http://localhost:8082 \
@@ -13,11 +13,12 @@
 set -euo pipefail
 
 BASE_URLS="${BATCH_OBSERVABILITY_BASE_URLS:-http://localhost:8080,http://localhost:8081,http://localhost:8082}"
-REQUIRED_METRICS="${BATCH_OBSERVABILITY_REQUIRED_METRICS:-batch_alert_events_total,batch_job_sla_violation_count,batch_dispatch_deliveries_total,batch_dispatch_circuits_open}"
+REQUIRED_METRICS="${BATCH_OBSERVABILITY_REQUIRED_METRICS:-batch_alert_events_total,batch_job_sla_violation_count,batch_dispatch_deliveries_total,batch_dispatch_circuits_open,http_server_requests_seconds_count}"
 KAFKA_BOOTSTRAP_SERVERS="${BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS:-${BATCH_KAFKA_BOOTSTRAP_SERVERS:-}}"
 KAFKA_GROUPS="${BATCH_OBSERVABILITY_KAFKA_GROUPS:-batch-worker-import,batch-worker-export,batch-worker-dispatch}"
 KAFKA_BIN_DIR="${BATCH_OBSERVABILITY_KAFKA_BIN_DIR:-}"
 KAFKA_LAG_THRESHOLD="${BATCH_OBSERVABILITY_KAFKA_LAG_THRESHOLD:-1000}"
+EXTRA_ENDPOINTS="${BATCH_OBSERVABILITY_EXTRA_ENDPOINTS:-http://localhost:19121/metrics|redis_connected_clients,redis_memory_used_bytes;http://localhost:19187/metrics|pg_up,pg_stat_database_numbackends;http://localhost:19308/metrics|kafka_brokers;http://localhost:19100/metrics|node_load1,node_memory_MemAvailable_bytes,node_filesystem_size_bytes,node_network_receive_bytes_total;http://localhost:19101/metrics|container_cpu_usage_seconds_total,container_memory_working_set_bytes;http://localhost:19000/minio/v2/metrics/cluster|minio_cluster_nodes_offline_total}"
 
 failures=0
 
@@ -92,6 +93,32 @@ check_kafka_lag() {
   done
 }
 
+check_extra_endpoints() {
+  IFS=';' read -r -a targets <<<"${EXTRA_ENDPOINTS}"
+  for target in "${targets[@]}"; do
+    local url metrics body metric_list
+    url="${target%%|*}"
+    metric_list="${target#*|}"
+    if [[ "${url}" == "${metric_list}" ]]; then
+      fail "extra endpoint config missing metric list: ${url}"
+      continue
+    fi
+
+    if ! body="$(curl -fsS "${url}")"; then
+      fail "${url}: metrics endpoint unreachable"
+      continue
+    fi
+
+    IFS=';' read -r -a metric_groups <<<"${metric_list//,/;}"
+    for metric in "${metric_groups[@]}"; do
+      if ! grep -Eq "^${metric}([{[:space:]]|$)" <<<"${body}"; then
+        fail "${url}: missing metric ${metric}"
+      fi
+    done
+    log "OK: ${url}"
+  done
+}
+
 IFS=',' read -r -a urls <<<"${BASE_URLS}"
 for url in "${urls[@]}"; do
   check_health "${url}"
@@ -99,6 +126,7 @@ for url in "${urls[@]}"; do
 done
 
 check_kafka_lag
+check_extra_endpoints
 
 if [[ "${failures}" -gt 0 ]]; then
   log "Observability inspection failed with ${failures} issue(s)"

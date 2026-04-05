@@ -20,6 +20,7 @@ import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.stereotype.Service;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +32,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     private final Scheduler scheduler;
 
     @Override
+    @SchedulerLock(name = "trigger_register_all", lockAtMostFor = "PT5M", lockAtLeastFor = "PT10S")
     public void registerAll() {
         List<TriggerDescriptor> descriptors = triggerDefinitionLoader.loadAll();
         descriptors.stream()

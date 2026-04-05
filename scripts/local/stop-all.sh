@@ -4,7 +4,7 @@
 # Notes:
 # 1) 通过进程命令行匹配 jar 名来发现进程，不单纯依赖 PID 文件。
 # 2) PID 文件存在时也会参考，但即使缺失仍可正常工作。
-# 3) 可选使用 STOP_DOCKER=1 关闭 Docker Compose 依赖。
+# 3) 可选使用 STOP_DOCKER=1 停止 Docker Compose 依赖（仅 stop，不 down）。
 # =========================================================
 set -euo pipefail
 
@@ -74,14 +74,14 @@ fi
 [[ -f "$PID_FILE" ]] && rm -f "$PID_FILE"
 
 if [[ "${STOP_DOCKER:-}" == "1" ]]; then
-  echo "==> Docker Compose 停止（STOP_DOCKER=1）..."
+  echo "==> Docker Compose 停止（STOP_DOCKER=1，保持环境不删除）..."
   _LOCAL_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
   # shellcheck source=docker-path.sh
   source "${_LOCAL_SCRIPT_DIR}/docker-path.sh"
   ensure_docker_on_path
   unset _LOCAL_SCRIPT_DIR
-  cd "$ROOT" && docker compose --env-file "$COMPOSE_ENV_FILE" down
+  cd "$ROOT" && docker compose --env-file "$COMPOSE_ENV_FILE" stop
 else
-  echo "提示：仅停止 Java 进程；基础依赖仍在运行。停止容器请执行: docker compose down"
+  echo "提示：仅停止 Java 进程；基础依赖（含 Redis）仍在运行。停止容器请执行: ./scripts/docker/down-apps.sh"
   echo "     或: COMPOSE_ENV_FILE=.env.test STOP_DOCKER=1 ./scripts/local/stop-all.sh"
 fi

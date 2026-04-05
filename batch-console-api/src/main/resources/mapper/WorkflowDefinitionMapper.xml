@@ -22,7 +22,10 @@
             and tenant_id = #{tenantId}
         </if>
         <if test="workflowCode != null and workflowCode != ''">
-            and workflow_code = #{workflowCode}
+            and workflow_code like concat('%', #{workflowCode}, '%')
+        </if>
+        <if test="workflowName != null and workflowName != ''">
+            and workflow_name like concat('%', #{workflowName}, '%')
         </if>
         <if test="workflowType != null and workflowType != ''">
             and workflow_type = #{workflowType}
@@ -47,7 +50,10 @@
             and tenant_id = #{tenantId}
         </if>
         <if test="workflowCode != null and workflowCode != ''">
-            and workflow_code = #{workflowCode}
+            and workflow_code like concat('%', #{workflowCode}, '%')
+        </if>
+        <if test="workflowName != null and workflowName != ''">
+            and workflow_name like concat('%', #{workflowName}, '%')
         </if>
         <if test="workflowType != null and workflowType != ''">
             and workflow_type = #{workflowType}

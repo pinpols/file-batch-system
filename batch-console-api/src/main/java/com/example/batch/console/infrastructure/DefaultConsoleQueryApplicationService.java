@@ -137,6 +137,8 @@ import com.example.batch.common.utils.ContentMaskingUtils;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -195,9 +197,12 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         AuditLogQuery query = new AuditLogQuery();
         query.setTenantId(resolveTenant(request.getTenantId()));
         query.setOperationType(request.getOperationType());
+        query.setOperationResult(request.getOperationResult());
+        query.setOperatorId(request.getOperatorId());
+        query.setFileId(parseLong(request.getFileId(), "fileId"));
         query.setTraceId(request.getTraceId());
-        query.setFromTime(parseInstant(request.getFromTime(), "fromTime"));
-        query.setToTime(parseInstant(request.getToTime(), "toTime"));
+        query.setFromTime(parseFlexibleInstant(firstNonBlank(request.getFromTime(), request.getStartTime()), "fromTime"));
+        query.setToTime(parseFlexibleInstant(firstNonBlank(request.getToTime(), request.getEndTime()), "toTime"));
         query.setPageRequest(pageRequest);
         List<Map<String, Object>> rows = auditLogMapper.selectByQuery(query);
         long total = auditLogMapper.countByQuery(query);
@@ -323,15 +328,21 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
         List<Map<String, Object>> rows = fileTemplateConfigMapper.selectByQuery(
                 resolveTenant(request.getTenantId()),
+                request.getKeyword(),
                 request.getTemplateCode(),
+                request.getTemplateName(),
                 request.getTemplateType(),
+                request.getBizType(),
                 request.getEnabled(),
                 pageRequest
         );
         long total = fileTemplateConfigMapper.countByQuery(
                 resolveTenant(request.getTenantId()),
+                request.getKeyword(),
                 request.getTemplateCode(),
+                request.getTemplateName(),
                 request.getTemplateType(),
+                request.getBizType(),
                 request.getEnabled()
         );
         return page(pageRequest, total, rows, this::toFileTemplateResponse);
@@ -343,7 +354,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         JobDefinitionQuery query = new JobDefinitionQuery(
                 resolveTenant(request.getTenantId()),
                 request.getJobCode(),
+                request.getJobName(),
                 request.getJobType(),
+                request.getWorkerGroup(),
+                request.getQueueCode(),
+                request.getScheduleType(),
                 request.getEnabled(),
                 pageRequest
         );
@@ -478,6 +493,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getInstanceNo(),
                 request.getBizDate(),
                 request.getTraceId(),
+                parseFlexibleInstant(request.getStartDate(), "startDate"),
+                parseFlexibleInstantEndOfDay(request.getEndDate(), "endDate"),
                 pageRequest
         );
         List<JobInstanceEntity> rows = jobInstanceMapper.selectByQuery(query);
@@ -519,6 +536,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         List<WorkflowDefinitionEntity> rows = workflowDefinitionMapper.selectByQuery(new WorkflowDefinitionQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowCode(),
+                request.getWorkflowName(),
                 request.getWorkflowType(),
                 request.getVersion(),
                 request.getEnabled(),
@@ -527,6 +545,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         long total = workflowDefinitionMapper.countByQuery(new WorkflowDefinitionQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowCode(),
+                request.getWorkflowName(),
                 request.getWorkflowType(),
                 request.getVersion(),
                 request.getEnabled(),
@@ -633,6 +652,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         WorkflowDefinitionQuery definitionQuery = new WorkflowDefinitionQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowCode(),
+                null,
                 null,
                 request.getVersion(),
                 true,
@@ -1563,6 +1583,47 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         } catch (DateTimeParseException exception) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must be ISO-8601 datetime");
         }
+    }
+
+    private Instant parseFlexibleInstant(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return LocalDateTime.parse(value.replace(' ', 'T'))
+                    .atZone(ZoneId.systemDefault())
+                    .toInstant();
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        } catch (DateTimeParseException exception) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT,
+                    fieldName + " must be ISO-8601 datetime, yyyy-MM-dd HH:mm:ss, or yyyy-MM-dd");
+        }
+    }
+
+    private Instant parseFlexibleInstantEndOfDay(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            LocalDate date = LocalDate.parse(value);
+            return date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().minusMillis(1);
+        } catch (DateTimeParseException ignored) {
+        }
+        return parseFlexibleInstant(value, fieldName);
+    }
+
+    private String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second;
     }
 
     private LocalDate parseLocalDate(String value, String fieldName) {

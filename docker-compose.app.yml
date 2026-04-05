@@ -10,17 +10,28 @@ services:
     container_name: batch-console-api
     restart: unless-stopped
     environment:
+      BATCH_CONSOLE_INSTANCE_ID: ${BATCH_CONSOLE_INSTANCE_ID:-batch-console-api-local}
+      BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: ${BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES:-20000}
+      BATCH_CONSOLE_REALTIME_REPLAY_TTL: ${BATCH_CONSOLE_REALTIME_REPLAY_TTL:-24h}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dummy-openai-key}
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
+      BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
+      BATCH_REDIS_PORT: ${BATCH_REDIS_PORT:-6379}
+      LOGGING_FILE_NAME: /app/logs/batch-console-api.log
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
       BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
       BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+    volumes:
+      - ./logs/docker:/app/logs
     ports:
-      - "${CONSOLE_API_PORT:-8080}:8080"
+      - "${CONSOLE_API_PORT:-18080}:8080"
+    networks:
+      - batch-network
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q 'UP'"]
       interval: 10s
@@ -53,8 +64,13 @@ services:
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      LOGGING_FILE_NAME: /app/logs/batch-trigger.log
     ports:
-      - "${TRIGGER_PORT:-8081}:8081"
+      - "${TRIGGER_PORT:-18081}:8081"
+    volumes:
+      - ./logs/docker:/app/logs
+    networks:
+      - batch-network
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q 'UP'"]
       interval: 10s
@@ -87,8 +103,13 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+      LOGGING_FILE_NAME: /app/logs/batch-orchestrator.log
     ports:
-      - "${ORCHESTRATOR_PORT:-8082}:8082"
+      - "${ORCHESTRATOR_PORT:-18082}:8082"
+    volumes:
+      - ./logs/docker:/app/logs
+    networks:
+      - batch-network
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q 'UP'"]
       interval: 10s
@@ -127,6 +148,11 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+      LOGGING_FILE_NAME: /app/logs/batch-worker-import.log
+    volumes:
+      - ./logs/docker:/app/logs
+    networks:
+      - batch-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -162,6 +188,11 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+      LOGGING_FILE_NAME: /app/logs/batch-worker-export.log
+    volumes:
+      - ./logs/docker:/app/logs
+    networks:
+      - batch-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -196,6 +227,11 @@ services:
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+      LOGGING_FILE_NAME: /app/logs/batch-worker-dispatch.log
+    volumes:
+      - ./logs/docker:/app/logs
+    networks:
+      - batch-network
     depends_on:
       postgres:
         condition: service_healthy

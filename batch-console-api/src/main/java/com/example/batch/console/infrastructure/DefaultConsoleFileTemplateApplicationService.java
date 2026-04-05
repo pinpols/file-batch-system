@@ -32,8 +32,25 @@ public class DefaultConsoleFileTemplateApplicationService implements ConsoleFile
     public PageResponse<Map<String, Object>> list(FileTemplateQueryRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        long total = mapper.countByQuery(tenantId, request.getTemplateCode(), request.getTemplateType(), request.getEnabled());
-        List<Map<String, Object>> items = mapper.selectByQuery(tenantId, request.getTemplateCode(), request.getTemplateType(), request.getEnabled(), pageRequest);
+        long total = mapper.countByQuery(
+                tenantId,
+                request.getKeyword(),
+                request.getTemplateCode(),
+                request.getTemplateName(),
+                request.getTemplateType(),
+                request.getBizType(),
+                request.getEnabled()
+        );
+        List<Map<String, Object>> items = mapper.selectByQuery(
+                tenantId,
+                request.getKeyword(),
+                request.getTemplateCode(),
+                request.getTemplateName(),
+                request.getTemplateType(),
+                request.getBizType(),
+                request.getEnabled(),
+                pageRequest
+        );
         return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
     }
 

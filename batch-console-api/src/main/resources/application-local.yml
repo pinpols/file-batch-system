@@ -15,6 +15,10 @@ spring:
     username: batch_user
     password: batch_pass_123
     driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: localhost
+      port: 16379
   ai:
     openai:
       base-url: https://api.openai.com
@@ -74,12 +78,12 @@ batch:
         - ROLE_ADMIN
         - ROLE_AUDITOR
     trigger:
-      base-url: http://localhost:8081
+      base-url: http://localhost:18081
     orchestrator:
-      base-url: http://localhost:8082
+      base-url: http://localhost:18082
   storage:
     minio:
-      endpoint: http://localhost:9000
+      endpoint: http://localhost:19000
       access-key: minioadmin
       secret-key: minioadmin123
       bucket: batch-dev

@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.application.ConsoleAlertApplicationService;
+import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.AlertEventMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.request.AlertActionRequest;
@@ -28,6 +29,7 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
 
     private final ConsoleTenantGuard tenantGuard;
     private final AlertEventMapper alertEventMapper;
+    private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
 
     @Override
     @Transactional
@@ -67,6 +69,8 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
         if (updated == 0) {
             throw new BizException(ResultCode.STATE_CONFLICT, "failed to update alert status");
         }
+        domainEventPublisher.publishChanged(tenantId, "alerts", "alert-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
         return new ConsoleAlertActionResponse(alertId, tenantId, action, nextStatus);
     }
 

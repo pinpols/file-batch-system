@@ -116,7 +116,11 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
         List<JobDefinitionEntity> rows = jobDefinitionMapper.selectByQuery(new JobDefinitionQuery(
                 tenantId,
                 request.getJobCode(),
+                request.getJobName(),
                 request.getJobType(),
+                request.getWorkerGroup(),
+                request.getQueueCode(),
+                request.getScheduleType(),
                 request.getEnabled(),
                 null
         ));

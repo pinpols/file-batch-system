@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure;
 
 import com.example.batch.console.application.ConsoleWorkerApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
@@ -29,6 +30,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
     private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
 
     @Override
     public ConsoleWorkerRegistryResponse drain(String workerCode, DrainWorkerRequest request, String idempotencyKey) {
@@ -40,7 +42,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
         if (request.getTimeoutSeconds() != null) {
             body.put("timeoutSeconds", request.getTimeoutSeconds());
         }
-        return toResponse(client.post()
+        ConsoleWorkerRegistryResponse response = toResponse(client.post()
                 .uri("/internal/workers/{workerCode}/drain", workerCode)
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
@@ -48,6 +50,9 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 .body(body)
                 .retrieve()
                 .body(ConsoleWorkerRegistryResponse.class));
+        domainEventPublisher.publishChanged(tenantId, "workers", "worker-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
+        return response;
     }
 
     @Override
@@ -55,7 +60,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         ConsoleRequestMetadata meta = requestMetadataResolver.current();
         RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
-        return toResponse(client.post()
+        ConsoleWorkerRegistryResponse response = toResponse(client.post()
                 .uri("/internal/workers/{workerCode}/force-offline", workerCode)
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
@@ -63,6 +68,27 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 .body(Map.of("tenantId", tenantId))
                 .retrieve()
                 .body(ConsoleWorkerRegistryResponse.class));
+        domainEventPublisher.publishChanged(tenantId, "workers", "worker-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
+        return response;
+    }
+
+    @Override
+    public ConsoleWorkerRegistryResponse takeover(String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
+        String tenantId = tenantGuard.resolveTenant(request.getTenantId());
+        ConsoleRequestMetadata meta = requestMetadataResolver.current();
+        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        ConsoleWorkerRegistryResponse response = toResponse(client.post()
+                .uri("/internal/workers/{workerCode}/takeover", workerCode)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+                .body(Map.of("tenantId", tenantId))
+                .retrieve()
+                .body(ConsoleWorkerRegistryResponse.class));
+        domainEventPublisher.publishChanged(tenantId, "workers", "worker-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
+        return response;
     }
 
     @Override

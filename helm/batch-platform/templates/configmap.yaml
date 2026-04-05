@@ -26,6 +26,8 @@ data:
   BATCH_ORCHESTRATOR_BASE_URL: {{ .Values.orchestratorBaseUrl | quote }}
   BATCH_SECURITY_TESTING_OPEN: {{ .Values.security.testingOpen | quote }}
   BATCH_SECURITY_DEMO_OPEN: {{ .Values.security.demoOpen | quote }}
+  BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: {{ .Values.consoleApi.realtime.replayMaxEntries | quote }}
+  BATCH_CONSOLE_REALTIME_REPLAY_TTL: {{ .Values.consoleApi.realtime.replayTtl | quote }}
 
   # ── OpenTelemetry ──────────────────────────────────────────────────────────
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.otel.endpoint | quote }}

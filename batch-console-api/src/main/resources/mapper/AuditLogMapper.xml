@@ -19,8 +19,17 @@
         <if test="operationType != null and operationType != ''">
             and operation_type = #{operationType}
         </if>
+        <if test="operationResult != null and operationResult != ''">
+            and operation_result = #{operationResult}
+        </if>
+        <if test="operatorId != null and operatorId != ''">
+            and operator_id like concat('%', #{operatorId}, '%')
+        </if>
+        <if test="fileId != null">
+            and file_id = #{fileId}
+        </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id = #{traceId}
+            and trace_id like concat('%', #{traceId}, '%')
         </if>
         <if test="fromTime != null">
             and created_at &gt;= #{fromTime}
@@ -43,8 +52,17 @@
         <if test="operationType != null and operationType != ''">
             and operation_type = #{operationType}
         </if>
+        <if test="operationResult != null and operationResult != ''">
+            and operation_result = #{operationResult}
+        </if>
+        <if test="operatorId != null and operatorId != ''">
+            and operator_id like concat('%', #{operatorId}, '%')
+        </if>
+        <if test="fileId != null">
+            and file_id = #{fileId}
+        </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id = #{traceId}
+            and trace_id like concat('%', #{traceId}, '%')
         </if>
         <if test="fromTime != null">
             and created_at &gt;= #{fromTime}

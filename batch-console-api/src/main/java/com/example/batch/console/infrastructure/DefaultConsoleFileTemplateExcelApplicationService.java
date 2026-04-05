@@ -132,8 +132,11 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         List<Map<String, Object>> rows = fileTemplateConfigMapper.selectByQuery(
                 tenantId,
+                request.getKeyword(),
                 request.getTemplateCode(),
+                request.getTemplateName(),
                 request.getTemplateType(),
+                request.getBizType(),
                 request.getEnabled(),
                 null
         );

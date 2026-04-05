@@ -34,7 +34,7 @@
         from batch.job_instance
         where tenant_id = #{tenantId}
         <if test="jobCode != null and jobCode != ''">
-            and job_code = #{jobCode}
+            and job_code like concat('%', #{jobCode}, '%')
         </if>
         <if test="instanceStatus != null and instanceStatus != ''">
             and instance_status = #{instanceStatus}
@@ -46,7 +46,13 @@
             and cast(biz_date as varchar) = #{bizDate}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id = #{traceId}
+            and trace_id like concat('%', #{traceId}, '%')
+        </if>
+        <if test="startedFrom != null">
+            and started_at &gt;= #{startedFrom}
+        </if>
+        <if test="startedTo != null">
+            and started_at &lt;= #{startedTo}
         </if>
         order by id desc
         <if test="pageRequest != null">
@@ -68,7 +74,7 @@
         from batch.job_instance
         where tenant_id = #{tenantId}
         <if test="jobCode != null and jobCode != ''">
-            and job_code = #{jobCode}
+            and job_code like concat('%', #{jobCode}, '%')
         </if>
         <if test="instanceStatus != null and instanceStatus != ''">
             and instance_status = #{instanceStatus}
@@ -80,7 +86,13 @@
             and cast(biz_date as varchar) = #{bizDate}
         </if>
         <if test="traceId != null and traceId != ''">
-            and trace_id = #{traceId}
+            and trace_id like concat('%', #{traceId}, '%')
+        </if>
+        <if test="startedFrom != null">
+            and started_at &gt;= #{startedFrom}
+        </if>
+        <if test="startedTo != null">
+            and started_at &lt;= #{startedTo}
         </if>
     </select>
 

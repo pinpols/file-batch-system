@@ -4,6 +4,14 @@
 
 各 Spring Boot 服务在 `management.endpoints.web.exposure.include` 中已包含 `prometheus`，并依赖 `micrometer-registry-prometheus` 后，`GET /actuator/prometheus` 暴露 Micrometer 指标。
 
+当前控制台、调度器和全部 worker 模块都已补齐 `micrometer-registry-prometheus`，包括 `batch-console-api`、`batch-orchestrator`、`batch-trigger`、`batch-worker-import`、`batch-worker-export`、`batch-worker-dispatch`。
+
+基础设施监控已补齐 `Prometheus + Redis exporter + Kafka exporter + PostgreSQL exporter + MinIO metrics + node_exporter + cAdvisor`，对应配置见 `docker-compose.observability.yml` 和 `docs/observability/prometheus.yml`。
+
+Prometheus 本地 UI 默认可通过 `http://localhost:${PROMETHEUS_PORT:-19090}` 查看抓取目标和规则状态。
+
+系统级 CPU / 内存 / 磁盘 / 网络 / 负载指标由 `node_exporter` 和 `cAdvisor` 提供，Grafana 里对应为 `Host CPU / load`、`Host memory / disk`、`Host network`、`Container CPU / memory`、`Container network / fs` 面板。
+
 建议抓取目标（示例）：
 
 | 服务 | 默认端口 | 路径 |
@@ -11,26 +19,69 @@
 | batch-console-api | 8080 | `/actuator/prometheus` |
 | batch-trigger | 8081 | `/actuator/prometheus` |
 | batch-orchestrator | 8082 | `/actuator/prometheus` |
-| batch-worker-import | （无 HTTP 时多为进程内 actuator） | 按实际 `management.server.port` |
+| batch-worker-import | 8083 | `/actuator/prometheus` |
+| batch-worker-export | 8084 | `/actuator/prometheus` |
+| batch-worker-dispatch | 8085 | `/actuator/prometheus` |
+| node-exporter | 9100 | `/metrics` |
+| cadvisor | 8080 | `/metrics` |
+| redis-exporter | 9121 | `/metrics` |
+| postgres-exporter | 9187 | `/metrics` |
+| kafka-exporter | 9308 | `/metrics` |
+| minio | 9000 | `/minio/v2/metrics/cluster` |
 
 ## Prometheus 抓取配置片段
 
 ```yaml
 scrape_configs:
-  - job_name: batch-orchestrator
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ['host.docker.internal:8082']
   - job_name: batch-console-api
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['host.docker.internal:8080']
+      - targets: ['console-api:8080']
+  - job_name: batch-orchestrator
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['orchestrator:8082']
+  - job_name: batch-trigger
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['trigger:8081']
+  - job_name: batch-worker-import
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['worker-import:8083']
+  - job_name: batch-worker-export
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['worker-export:8084']
+  - job_name: batch-worker-dispatch
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['worker-dispatch:8085']
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ['redis-exporter:9121']
+  - job_name: postgres-exporter
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ['minio:9000']
+  - job_name: node-exporter
+    static_configs:
+      - targets: ['node-exporter:9100']
+  - job_name: cadvisor
+    static_configs:
+      - targets: ['cadvisor:8080']
 ```
 
 ## Grafana
 
-- 导入 `docs/observability/grafana-dashboard-batch.json`（JVM + 平台计数器）。
-- 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`、`export_file_rows_total`（导出文件行数，按 tenant 分标签）、`dispatch_receipt_total`（分发回执计数，按 tenant 分标签）、JVM 内存/线程。
+- 导入 `docs/observability/grafana-dashboard-batch.json`（JVM + 平台计数器 + Redis/Kafka/PostgreSQL/MinIO）。
+- 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`、`export_file_rows_total`（导出文件行数，按 tenant 分标签）、`dispatch_receipt_total`（分发回执计数，按 tenant 分标签）、`hikaricp_connections_*`、`redis_connected_clients`、`redis_memory_used_bytes`、`kafka_consumergroup_lag`、`pg_up`、`pg_stat_database_numbackends`、MinIO cluster metrics、JVM 内存/线程。
 - 告警与路由模板见 `docs/observability/prometheus-batch-rules.yml` 和 `docs/observability/alertmanager-batch-template.yml`。
 
 ## 结构化日志

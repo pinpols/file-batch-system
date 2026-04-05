@@ -5,6 +5,7 @@
 ## 目录分工
 
 - `scripts/ci/`：CI / staging 统一回归入口和门禁脚本（说明见 [scripts/ci/README.md](ci/README.md)）
+- `scripts/docker/`：Docker / Docker Compose 容器入口脚本
 - `scripts/local/`：本地开发、联调、巡检、自愈脚本
 
 ## 主要入口
@@ -20,6 +21,7 @@
 
 - 先看每个脚本文件头部的注释，通常会说明前置条件、环境变量和示例命令
 - `scripts/ci/run-full-regression.sh` 自带 `usage()`，直接执行 `bash scripts/ci/run-full-regression.sh --help` 可以查看参数
+- 容器启动/停止类入口优先看 `scripts/docker/`
 - `scripts/local/` 下的脚本更偏操作型，适合在本地或 staging 前做验证
 
 ## 相关文档

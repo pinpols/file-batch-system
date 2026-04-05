@@ -1,25 +1,122 @@
 # ============================================================
 # 可观测性基础设施叠加层
 #
-# 用法（与基础设施层叠加启动）：
-#   docker compose -f docker-compose.yml \
+# 说明：
+# - 这份 compose 只负责观测组件，不再和业务容器混在一起。
+# - 业务容器请通过 scripts/docker/up-apps.sh 或 scripts/local/start-all.sh 单独启动。
+# - 观测组件通过共享的 batch-network 直接抓取业务容器和 exporter。
+#
+# 启动方式：
+#   docker compose --env-file .env.local \
 #                  -f docker-compose.observability.yml \
 #                  --profile observability up -d
 #
-# 单独启动可观测性栈（不启动 batch 应用）：
-#   docker compose -f docker-compose.yml \
-#                  -f docker-compose.observability.yml \
-#                  --profile observability up -d \
-#                  otel-collector jaeger loki grafana
-#
 # 访问地址：
-#   Jaeger 界面：http://localhost:16686
+#   Prometheus：http://localhost:19090
 #   Grafana：http://localhost:3000（默认 admin / admin）
+#   Jaeger：http://localhost:16686
 #   Loki：http://localhost:3100
-#   Collector：gRPC 4317，HTTP 4318
 # ============================================================
 
 services:
+  # ── Prometheus（指标抓取与规则评估）──────────────────────────────
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_IMAGE_TAG:-v2.55.1}
+    container_name: batch-prometheus
+    profiles: [observability]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT:-19090}:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./docs/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docs/observability/prometheus-batch-rules.yml:/etc/prometheus/rules/batch.yml:ro
+    networks:
+      - batch-network
+    restart: unless-stopped
+
+  # ── PostgreSQL exporter ────────────────────────────────────────
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:${POSTGRES_EXPORTER_IMAGE_TAG:-v0.15.0}
+    container_name: batch-postgres-exporter
+    profiles: [observability]
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-batch_user}:${POSTGRES_PASSWORD:-batch_pass_123}@postgres:5432/${POSTGRES_DB:-batch_platform}?sslmode=disable
+    ports:
+      - "${POSTGRES_EXPORTER_PORT:-19187}:9187"
+    networks:
+      - batch-network
+    restart: unless-stopped
+
+  # ── Redis exporter ─────────────────────────────────────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:${REDIS_EXPORTER_IMAGE_TAG:-v1.67.0}
+    container_name: batch-redis-exporter
+    profiles: [observability]
+    command:
+      - --redis.addr=redis://redis:6379
+    ports:
+      - "${REDIS_EXPORTER_PORT:-19121}:9121"
+    networks:
+      - batch-network
+    restart: unless-stopped
+
+  # ── Kafka exporter ─────────────────────────────────────────────
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:${KAFKA_EXPORTER_IMAGE_TAG:-v1.8.0}
+    container_name: batch-kafka-exporter
+    profiles: [observability]
+    command:
+      - --kafka.server=kafka:29092
+      - --web.listen-address=:9308
+    ports:
+      - "${KAFKA_EXPORTER_PORT:-19308}:9308"
+    networks:
+      - batch-network
+    restart: unless-stopped
+
+  # ── Node Exporter（主机 CPU / 内存 / 磁盘 / 网络）─────────────────
+  node-exporter:
+    image: prom/node-exporter:${NODE_EXPORTER_IMAGE_TAG:-v1.8.1}
+    container_name: batch-node-exporter
+    profiles: [observability]
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/containers/.+|host|etc)($|/)
+    ports:
+      - "${NODE_EXPORTER_PORT:-19100}:9100"
+    volumes:
+      - /:/host:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    networks:
+      - batch-network
+    restart: unless-stopped
+
+  # ── cAdvisor（容器 CPU / 内存 / 网络 / 文件系统）────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:${CADVISOR_IMAGE_TAG:-v0.49.1}
+    container_name: batch-cadvisor
+    profiles: [observability]
+    command:
+      - --docker_only=true
+    ports:
+      - "${CADVISOR_PORT:-19101}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
+    networks:
+      - batch-network
+    restart: unless-stopped
 
   # ── OpenTelemetry 采集器（Collector）────────────────────────────
   otel-collector:
@@ -30,10 +127,10 @@ services:
     volumes:
       - ./docs/observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
     ports:
-      - "${OTEL_GRPC_PORT:-4317}:4317"    # OTLP gRPC 端口
-      - "${OTEL_HTTP_PORT:-4318}:4318"    # OTLP HTTP 端口
-      - "8888:8888"                        # Collector 自身指标
-      - "13133:13133"                      # 健康检查
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "8888:8888"
+      - "13133:13133"
     environment:
       - DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT:-local}
     depends_on:
@@ -41,9 +138,9 @@ services:
         condition: service_healthy
       loki:
         condition: service_healthy
-    restart: unless-stopped
     networks:
       - batch-network
+    restart: unless-stopped
 
   # ── Jaeger（分布式追踪 UI）─────────────────────────────────────
   jaeger:
@@ -52,20 +149,20 @@ services:
     profiles: [observability]
     environment:
       - COLLECTOR_OTLP_ENABLED=true
-      - SPAN_STORAGE_TYPE=memory    # 生产环境可改为 elasticsearch 或 cassandra
+      - SPAN_STORAGE_TYPE=memory
       - TZ=${TZ:-Asia/Shanghai}
     ports:
-      - "${JAEGER_UI_PORT:-16686}:16686"   # Jaeger 可视化界面
-      - "4317:4317"                         # OTLP gRPC（collector → jaeger）
-      - "14250:14250"                       # Jaeger gRPC 端口
+      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "4317:4317"
+      - "14250:14250"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:14269/"]
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
     networks:
       - batch-network
+    restart: unless-stopped
 
   # ── Loki（日志存储）────────────────────────────────────────────
   loki:
@@ -82,9 +179,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    restart: unless-stopped
     networks:
       - batch-network
+    restart: unless-stopped
 
   # ── Grafana（统一可视化：指标 + 链路 + 日志）────────────────────
   grafana:
@@ -102,13 +199,16 @@ services:
       - grafana-data:/var/lib/grafana
       - ./docs/observability/grafana-provisioning:/etc/grafana/provisioning:ro
     depends_on:
+      - prometheus
       - loki
       - jaeger
-    restart: unless-stopped
     networks:
       - batch-network
+    restart: unless-stopped
 
 volumes:
+  prometheus-data:
+    driver: local
   loki-data:
     driver: local
   grafana-data:
@@ -116,5 +216,4 @@ volumes:
 
 networks:
   batch-network:
-    external: true
     name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network

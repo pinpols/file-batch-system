@@ -53,6 +53,15 @@ public class ConsoleWorkerController {
         return responseFactory.success(applicationService.forceOffline(workerCode, request, idempotencyKey));
     }
 
+    /** 立即接管 Worker 在途任务并退役。 */
+    @PostMapping("/{workerCode}/takeover")
+    public CommonResponse<ConsoleWorkerRegistryResponse> takeover(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String workerCode,
+            @Valid @RequestBody ForceOfflineWorkerRequest request) {
+        return responseFactory.success(applicationService.takeover(workerCode, request, idempotencyKey));
+    }
+
     /** 查询 Worker 当前已认领任务。 */
     @GetMapping("/{workerCode}/claimed-tasks")
     public CommonResponse<List<ConsoleWorkerClaimedTaskResponse>> claimedTasks(@PathVariable String workerCode,

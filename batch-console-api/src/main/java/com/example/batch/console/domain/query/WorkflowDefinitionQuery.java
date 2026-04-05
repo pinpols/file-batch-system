@@ -5,6 +5,7 @@ import com.example.batch.common.model.PageRequest;
 public record WorkflowDefinitionQuery(
         String tenantId,
         String workflowCode,
+        String workflowName,
         String workflowType,
         Integer version,
         Boolean enabled,

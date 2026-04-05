@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure;
 import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
+import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.BatchDayMapper;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.support.ConsoleRequestMetadata;
@@ -59,29 +60,36 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     private final ConsoleTenantGuard tenantGuard;
     private final BatchDayMapper batchDayMapper;
     private final BusinessCalendarMapper businessCalendarMapper;
+    private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
 
     /** 手工/API 触发作业运行。 */
     @Override
     public String trigger(TriggerRequest request, String idempotencyKey) {
-        return delegateLaunch(
-                resolveTenant(request.getTenantId()),
+        String tenantId = resolveTenant(request.getTenantId());
+        String result = delegateLaunch(
+                tenantId,
                 ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
                 request.getBizDate(),
                 resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL),
                 parsePayload(request.getPayload()),
                 idempotencyKey
         );
+        publishRefresh(tenantId);
+        return result;
     }
 
     /** 登记补偿命令。 */
     @Override
     public String compensation(CompensationCommandRequest request, String idempotencyKey) {
+        String tenantId = resolveTenant(request.getTenantId());
         if (!hasText(request.getApprovalId())) {
-            return submitApproval(new ApprovalSubmitContext("COMPENSATION", "COMPENSATION", "JOB", String.valueOf(request.getTargetId()), request, request.getReason(), idempotencyKey));
+            String result = submitApproval(new ApprovalSubmitContext("COMPENSATION", "COMPENSATION", "JOB", String.valueOf(request.getTargetId()), request, request.getReason(), idempotencyKey));
+            publishRefresh(tenantId);
+            return result;
         }
-        requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
-        return submitCompensation(CompensationPayload.builder()
-                .tenantId(resolveTenant(request.getTenantId()))
+        requireApprovedApproval(tenantId, request.getApprovalId());
+        String result = submitCompensation(CompensationPayload.builder()
+                .tenantId(tenantId)
                 .compensationType(ConsoleTextSanitizer.safeInput(request.getCompensationType(), 64))
                 .targetId(request.getTargetId())
                 .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
@@ -95,13 +103,16 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
                 .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
                 .build(), idempotencyKey);
+        publishRefresh(tenantId);
+        return result;
     }
 
     /** 执行补偿。 */
     @Override
     public String compensate(CompensateRequest request, String idempotencyKey) {
-        return submitCompensation(CompensationPayload.builder()
-                .tenantId(resolveTenant(request.getTenantId()))
+        String tenantId = resolveTenant(request.getTenantId());
+        String result = submitCompensation(CompensationPayload.builder()
+                .tenantId(tenantId)
                 .compensationType(request.getCompensationType() == null || request.getCompensationType().isBlank() ? "JOB" : request.getCompensationType())
                 .targetId(request.getTargetId())
                 .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
@@ -115,6 +126,8 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
                 .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
                 .build(), idempotencyKey);
+        publishRefresh(tenantId);
+        return result;
     }
 
     /** 重跑实例或分区。 */
@@ -124,8 +137,9 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 || (request.getTargetInstanceNo() != null && !request.getTargetInstanceNo().isBlank()))
                 ? "JOB"
                 : "BATCH";
-        return submitCompensation(CompensationPayload.builder()
-                .tenantId(resolveTenant(request.getTenantId()))
+        String tenantId = resolveTenant(request.getTenantId());
+        String result = submitCompensation(CompensationPayload.builder()
+                .tenantId(tenantId)
                 .compensationType(compensationType)
                 .targetId(request.getTargetId())
                 .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
@@ -138,17 +152,22 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
                 .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
                 .build(), idempotencyKey);
+        publishRefresh(tenantId);
+        return result;
     }
 
     /** 死信重放。 */
     @Override
     public String replayDeadLetter(DeadLetterReplayRequest request, String idempotencyKey) {
+        String tenantId = resolveTenant(request.getTenantId());
         if (!hasText(request.getApprovalId())) {
-            return submitApproval(new ApprovalSubmitContext("DLQ_REPLAY", "DLQ_REPLAY", "DLQ", String.valueOf(request.getDeadLetterId()), request, request.getReason(), idempotencyKey));
+            String result = submitApproval(new ApprovalSubmitContext("DLQ_REPLAY", "DLQ_REPLAY", "DLQ", String.valueOf(request.getDeadLetterId()), request, request.getReason(), idempotencyKey));
+            publishRefresh(tenantId);
+            return result;
         }
-        requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
-        return submitCompensation(CompensationPayload.builder()
-                .tenantId(resolveTenant(request.getTenantId()))
+        requireApprovedApproval(tenantId, request.getApprovalId());
+        String result = submitCompensation(CompensationPayload.builder()
+                .tenantId(tenantId)
                 .compensationType("DLQ")
                 .targetId(request.getDeadLetterId())
                 .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
@@ -156,48 +175,65 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
                 .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
                 .build(), idempotencyKey);
+        publishRefresh(tenantId);
+        return result;
     }
 
     /** 任务重放（job_task 粒度）。 */
     @Override
     public String replayTask(TaskReplayRequest request, String idempotencyKey) {
+        String tenantId = resolveTenant(request.getTenantId());
         if (!hasText(request.getApprovalId())) {
             // approvalType 受数据库约束，这里复用 COMPENSATION + RETRY。
-            return submitApproval(new ApprovalSubmitContext("COMPENSATION", "RETRY", "JOB_TASK", String.valueOf(request.getTaskId()), request, request.getReason(), idempotencyKey));
+            String result = submitApproval(new ApprovalSubmitContext("COMPENSATION", "RETRY", "JOB_TASK", String.valueOf(request.getTaskId()), request, request.getReason(), idempotencyKey));
+            publishRefresh(tenantId);
+            return result;
         }
-        requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
-        return triggerRecovery(
-                resolveTenant(request.getTenantId()),
+        requireApprovedApproval(tenantId, request.getApprovalId());
+        String result = triggerRecovery(
+                tenantId,
                 "/internal/recoveries/tasks/{taskId}/replay",
                 request.getTaskId(),
                 idempotencyKey
         );
+        publishRefresh(tenantId);
+        return result;
     }
 
     /** 分区重放（job_partition 粒度）。 */
     @Override
     public String replayPartition(PartitionReplayRequest request, String idempotencyKey) {
+        String tenantId = resolveTenant(request.getTenantId());
         if (!hasText(request.getApprovalId())) {
-            return submitApproval(new ApprovalSubmitContext("COMPENSATION", "RETRY", "JOB_PARTITION", String.valueOf(request.getPartitionId()), request, request.getReason(), idempotencyKey));
+            String result = submitApproval(new ApprovalSubmitContext("COMPENSATION", "RETRY", "JOB_PARTITION", String.valueOf(request.getPartitionId()), request, request.getReason(), idempotencyKey));
+            publishRefresh(tenantId);
+            return result;
         }
-        requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
-        return triggerRecovery(
-                resolveTenant(request.getTenantId()),
+        requireApprovedApproval(tenantId, request.getApprovalId());
+        String result = triggerRecovery(
+                tenantId,
                 "/internal/recoveries/partitions/{partitionId}/replay",
                 request.getPartitionId(),
                 idempotencyKey
         );
+        publishRefresh(tenantId);
+        return result;
     }
 
     /** 审批通过 Catch-Up 请求。 */
     @Override
     public String approveCatchUp(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
+        String tenantId = resolveTenant(request.getTenantId());
         if (!hasText(request.getApprovalId())) {
-            return submitApproval(new ApprovalSubmitContext("CATCH_UP", "CATCH_UP", "CATCH_UP", request.getRequestId(), request, request.getReason(), idempotencyKey));
+            String result = submitApproval(new ApprovalSubmitContext("CATCH_UP", "CATCH_UP", "CATCH_UP", request.getRequestId(), request, request.getReason(), idempotencyKey));
+            publishRefresh(tenantId);
+            return result;
         }
-        requireApprovedApproval(resolveTenant(request.getTenantId()), request.getApprovalId());
+        requireApprovedApproval(tenantId, request.getApprovalId());
         if (request.getRequestId() != null && !request.getRequestId().isBlank()) {
-            return approvePendingCatchUpRequest(request, idempotencyKey);
+            String result = approvePendingCatchUpRequest(request, idempotencyKey);
+            publishRefresh(tenantId);
+            return result;
         }
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("operationType", "CATCH_UP_APPROVAL");
@@ -205,14 +241,16 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         params.put("catchUpApproved", true);
         params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
         params.put("scheduledAt", request.getScheduledAt());
-        return delegateLaunch(
-                resolveTenant(request.getTenantId()),
+        String result = delegateLaunch(
+                tenantId,
                 ConsoleTextSanitizer.safeInput(request.getJobCode(), 128),
                 request.getBizDate(),
                 TriggerType.CATCH_UP,
                 params,
                 idempotencyKey
         );
+        publishRefresh(tenantId);
+        return result;
     }
 
     @Override
@@ -275,13 +313,15 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 ));
             }
         }
-        return new ConsoleBatchDayCatchUpResponse(
+        ConsoleBatchDayCatchUpResponse response = new ConsoleBatchDayCatchUpResponse(
                 tenantId,
                 calendarCode,
                 bizDate,
                 catchUpPolicy,
                 items
         );
+        publishRefresh(tenantId);
+        return response;
     }
 
     private String approvePendingCatchUpRequest(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
@@ -337,6 +377,14 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
             throw new BizException(ResultCode.SYSTEM_ERROR, "trigger service returned empty response");
         }
         return response.data().instanceNo();
+    }
+
+    private void publishRefresh(String tenantId) {
+        domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");
+        domainEventPublisher.publishChanged(tenantId, "workflow-runs", "workflow-run-updated");
+        domainEventPublisher.publishChanged(tenantId, "outbox-retries", "outbox-retry-updated");
+        domainEventPublisher.publishChanged(tenantId, "outbox-deliveries", "outbox-delivery-updated");
+        domainEventPublisher.publishSummaryRefresh(tenantId);
     }
 
     private List<String> resolveJobCodes(String tenantId,
