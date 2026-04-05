@@ -13,7 +13,7 @@
 # 环境变量（可覆盖）：
 #   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE  Docker socket 路径（macOS 默认已设置）
 #   DOCKER_API_VERSION                     Docker API 版本（默认 1.44）
-#   MAVEN_THREADS                          Maven 并发线程数（默认 1C）
+#   MAVEN_THREADS                          Maven Reactor 并发度；含 Testcontainers 时默认 1，避免多模块并行拉 Kafka 导致失败（可设 1C 自担风险）
 # =============================================================
 
 set -euo pipefail
@@ -24,7 +24,7 @@ cd "$ROOT_DIR"
 # ---------- Docker / Testcontainers 环境变量 ----------
 export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}"
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
-MAVEN_THREADS="${MAVEN_THREADS:-1C}"
+MAVEN_THREADS="${MAVEN_THREADS:-1}"
 
 # ---------- 参数解析 ----------
 MODE="default"   # default | unit | it | e2e | all

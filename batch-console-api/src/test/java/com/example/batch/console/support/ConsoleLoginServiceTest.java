@@ -40,11 +40,11 @@ class ConsoleLoginServiceTest {
                         "default-tenant",
                         "admin",
                         "Console Admin",
-                        "$argon2id$v=19$m=16384,t=2,p=1$k18enAVVcHofGDMPXPxj5A$5TityFxKIX2z6bkuDXRHqmwuPcfr+G9MEA36Kr6fC4s",
+                        ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123,
                         java.util.Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"),
                         true
                 )));
-        Mockito.when(passwordHasher.matches("admin123", "$argon2id$v=19$m=16384,t=2,p=1$k18enAVVcHofGDMPXPxj5A$5TityFxKIX2z6bkuDXRHqmwuPcfr+G9MEA36Kr6fC4s"))
+        Mockito.when(passwordHasher.matches("admin123", ConsolePasswordHasherTest.SEED_ARGON2_ADMIN123))
                 .thenReturn(true);
         Mockito.when(sessionRegistry.nextSessionVersion("admin", "default-tenant")).thenReturn(7L);
         Mockito.when(jwtService.issueToken("admin", "default-tenant", java.util.Set.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"), 7L))

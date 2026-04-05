@@ -23,8 +23,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@SpringBootTest(classes = {PlatformDataSourceConfiguration.class, ShedLockConfiguration.class},
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(
+        classes = {PlatformDataSourceConfiguration.class, ShedLockConfiguration.class},
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = "batch.shedlock.auto-create=true")
 class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired

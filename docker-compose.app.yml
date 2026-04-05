@@ -10,6 +10,8 @@ services:
     container_name: batch-console-api
     restart: unless-stopped
     environment:
+      # 限制堆大小，避免 Java 25 默认 ergonomics 在 Docker Desktop 小内存下占满宿主机导致 OOM / exit 137
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       # 平台库迁移仅由 orchestrator 执行；Docker 构建排除 docs 后本镜像不含 db/migration 脚本
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_CONSOLE_INSTANCE_ID: ${BATCH_CONSOLE_INSTANCE_ID:-batch-console-api-local}
@@ -62,6 +64,7 @@ services:
     container_name: batch-trigger
     restart: unless-stopped
     environment:
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -96,6 +99,7 @@ services:
     container_name: batch-orchestrator
     restart: unless-stopped
     environment:
+      JAVA_OPTS: ${BATCH_ORCHESTRATOR_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms256m -Xmx768m -XX:MaxMetaspaceSize=256m}
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
@@ -119,7 +123,8 @@ services:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
+      start_period: 120s
     depends_on:
       postgres:
         condition: service_healthy
@@ -139,6 +144,7 @@ services:
     container_name: batch-worker-import
     restart: unless-stopped
     environment:
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -181,6 +187,7 @@ services:
     container_name: batch-worker-export
     restart: unless-stopped
     environment:
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
@@ -223,6 +230,7 @@ services:
     container_name: batch-worker-dispatch
     restart: unless-stopped
     environment:
+      JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
