@@ -27,6 +27,24 @@
 | `job_definition` / `workflow_template` CRUD | Spring Data JDBC | 无复杂查询，Repository 接口够用，代码量少 |
 | `trigger_request` 插入与状态更新 | MyBatis XML | 需要 `INSERT ... ON CONFLICT DO NOTHING` 精确语义 |
 
+### 模块级使用边界
+
+为避免双 ORM 继续无序扩散，补充以下模块边界：
+
+| 模块 | 允许使用 | 约束 |
+|---|---|---|
+| `batch-console-api` | `MyBatis` + `Spring Data JDBC` + `JdbcTemplate` 基础设施支撑 | 控制台管理读写允许双 ORM；控制层不直接写 SQL 和业务编排 |
+| `batch-orchestrator` | `MyBatis` + `Spring Data JDBC` + `JdbcTemplate` 基础设施支撑 | 编排核心允许双 ORM；CAS / 热路径固定走 MyBatis |
+| `batch-trigger` | `MyBatis` + `JdbcTemplate` | 不新增 `Spring Data JDBC` |
+| `batch-worker-*` | `MyBatis` + `JdbcTemplate` | 不新增 `Spring Data JDBC`，避免执行链继续叠 ORM |
+| `batch-common` | 不承载 ORM 实现 | 只放轻量公共模型、配置和工具，不放运行时重依赖 |
+
+### 依赖治理补充
+
+- `batch-common` 禁止新增以下运行时依赖：对象存储 SDK、OTEL exporter、AI 模型 SDK、Excel 处理库。
+- `batch-console-api` 与 `batch-orchestrator` 是当前仅有的双 ORM 模块；其他模块如需新增 `Spring Data JDBC`，必须先修订本 ADR。
+- `JdbcTemplate` 仅用于配置支撑、锁表/基础设施或极薄查询支撑，不作为默认业务持久化手段。
+
 ## 后果
 
 **正面**：

@@ -80,3 +80,69 @@ groups:
         annotations:
           summary: "Kafka consumer lag is high for {{ $labels.consumergroup }}"
           description: "Consumer group {{ $labels.consumergroup }} topic {{ $labels.topic }} partition {{ $labels.partition }} lag exceeds 1000 messages for 10 minutes."
+
+      - alert: BatchRedisMemoryUsageHigh
+        expr: redis_memory_used_bytes / clamp_min(redis_memory_max_bytes, 1) > 0.80
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: redis
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage has exceeded 80% for 10 minutes. Check replay buffer retention, session keys, and cache TTL settings."
+
+      - alert: BatchRedisConnectedClientsHigh
+        expr: redis_connected_clients > 200
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: redis
+        annotations:
+          summary: "Redis connected clients are high"
+          description: "Redis connected clients stayed above 200 for 10 minutes. Check SSE fanout load, exporter connections, and leaked clients."
+
+      - alert: BatchConsoleRealtimeReplayCursorMissGrowing
+        expr: sum by (stream) (increase(batch_console_realtime_replay_cursor_miss_total[10m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: realtime
+        annotations:
+          summary: "Console realtime replay cursor misses are growing"
+          description: "Replay cursor misses for stream {{ $labels.stream }} exceeded 5 in the last 10 minutes. Replay TTL or buffer size may be insufficient."
+
+      - alert: BatchConsoleRealtimeReplayDecodeFailures
+        expr: sum by (stream) (increase(batch_console_realtime_replay_decode_failures_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: realtime
+        annotations:
+          summary: "Console realtime replay decode failures detected"
+          description: "Replay buffer decode failures were observed for stream {{ $labels.stream }} in the last 10 minutes."
+
+      - alert: BatchConsoleRealtimePubSubDecodeFailures
+        expr: increase(batch_console_realtime_pubsub_decode_failures_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: realtime
+        annotations:
+          summary: "Console realtime Pub/Sub decode failures detected"
+          description: "At least one Redis Pub/Sub payload failed to decode in the last 10 minutes."
+
+      - alert: BatchConsoleRealtimePubSubHandleFailures
+        expr: sum by (stream, eventType) (increase(batch_console_realtime_pubsub_handle_failures_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: realtime
+        annotations:
+          summary: "Console realtime Pub/Sub handling failures detected"
+          description: "Pub/Sub handling failures were observed for stream {{ $labels.stream }} eventType {{ $labels.eventType }} in the last 10 minutes."

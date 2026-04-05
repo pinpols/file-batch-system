@@ -90,6 +90,8 @@ on_error() {
 
 trap on_error ERR
 
+run_step "Dependency boundary checks" python3 scripts/ci/check-dependency-boundaries.py
+
 resolve_docker_bin() {
   if command -v docker >/dev/null 2>&1; then
     command -v docker
