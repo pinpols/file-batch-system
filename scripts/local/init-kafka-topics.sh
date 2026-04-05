@@ -11,7 +11,7 @@
 #   - replication factor: 1
 #
 # 使用方法：
-#   KAFKA_BOOTSTRAP_SERVER=localhost:9092 \
+#   KAFKA_BOOTSTRAP_SERVER=localhost:19092 \
 #   KAFKA_TOPICS=batch.task.dispatch.import,batch.task.result \
 #     bash scripts/local/init-kafka-topics.sh
 set -eu

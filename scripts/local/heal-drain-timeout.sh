@@ -24,7 +24,7 @@ set -euo pipefail
 
 # ── configuration ─────────────────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-5432}"
+PGPORT="${PGPORT:-15432}"
 PGDATABASE="${PGDATABASE:-batch_db}"
 PGUSER="${PGUSER:-batch}"
 export PGPASSWORD="${PGPASSWORD:-}"

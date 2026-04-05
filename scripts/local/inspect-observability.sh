@@ -7,7 +7,7 @@
 # =========================================================
 # 使用方法：
 #   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:18080,http://localhost:18081,http://localhost:18082 \
-#   BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+#   BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
 #     bash scripts/local/inspect-observability.sh
 
 set -euo pipefail

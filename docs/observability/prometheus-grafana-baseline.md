@@ -29,6 +29,8 @@ Prometheus 本地 UI 默认可通过 `http://localhost:${PROMETHEUS_PORT:-19090}
 | kafka-exporter | 9308 | `/metrics` |
 | minio | 9000 | `/minio/v2/metrics/cluster` |
 
+上表为 **Docker 网络内** 访问端口（如 `minio:9000`）。从宿主机浏览器访问 MinIO API 控制台映射见 `.env.local` 的 `MINIO_API_PORT`（默认 `19000`）；抓取 Java 服务若在本机进程上跑则用 `18080`–`18085` 等。
+
 ## Prometheus 抓取配置片段
 
 ```yaml

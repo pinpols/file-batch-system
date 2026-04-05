@@ -1,5 +1,5 @@
--- 控制台默认账号密码哈希统一为 Argon2id（开发种子明文均为 admin123，与 ConsolePasswordHasher 一致）。
--- 将 V34 写入的 PBKDF2 存量升级为 Argon2；已为本格式的行不修改（幂等）。
+-- 与 batch-orchestrator/db/migration 中 V34 控制台种子同属一套；本脚本仅升级「已执行旧版 V34（PBKDF2）」的库。
+-- 新库由 V34 直接写入 Argon2id，本脚本 WHERE 不匹配则跳过（幂等）。
 UPDATE batch.console_user_account
 SET password_hash = '$argon2id$v=19$m=16384,t=2,p=1$k18enAVVcHofGDMPXPxj5A$5TityFxKIX2z6bkuDXRHqmwuPcfr+G9MEA36Kr6fC4s',
     updated_at = CURRENT_TIMESTAMP

@@ -8,12 +8,14 @@
 ## 一键全量巡检（推荐）
 
 ```bash
-# 设置环境变量后运行主入口脚本（涵盖以下所有检查项）
-PGHOST=<db-host> PGPORT=5432 PGDATABASE=batch_db PGUSER=batch PGPASSWORD=<pwd> \
-BATCH_OBSERVABILITY_BASE_URLS=http://<console>:8080,http://<orchestrator>:8082 \
-BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=<kafka>:9092 \
+# 本地（与 .env.local / docker-compose 宿主机映射一致：PG 15432、Java 18080+、Kafka 19092）
+PGHOST=localhost PGPORT=15432 PGDATABASE=batch_platform PGUSER=batch_user PGPASSWORD=batch_pass_123 \
+BATCH_OBSERVABILITY_BASE_URLS=http://localhost:18080,http://localhost:18081,http://localhost:18082 \
+BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
   bash scripts/local/inspect-all.sh
 ```
+
+生产 / K8s 请改为实际主机与服务端口（集群内 Kafka 常为 `:9092`，与宿主机映射无关）。
 
 退出码 0 = 全部通过，1 = 存在 FAIL 项。
 

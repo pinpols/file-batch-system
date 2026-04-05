@@ -9,32 +9,32 @@ scrape_configs:
   - job_name: batch-console-api
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['console-api:8080']
+      - targets: ['console-api:18080']
 
   - job_name: batch-trigger
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['trigger:8081']
+      - targets: ['trigger:18081']
 
   - job_name: batch-orchestrator
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['orchestrator:8082']
+      - targets: ['orchestrator:18082']
 
   - job_name: batch-worker-import
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-import:8083']
+      - targets: ['worker-import:18083']
 
   - job_name: batch-worker-export
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-export:8084']
+      - targets: ['worker-export:18084']
 
   - job_name: batch-worker-dispatch
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-dispatch:8085']
+      - targets: ['worker-dispatch:18085']
 
   - job_name: redis-exporter
     static_configs:
@@ -51,11 +51,11 @@ scrape_configs:
   - job_name: minio
     metrics_path: /minio/v2/metrics/cluster
     static_configs:
-      - targets: ['minio:9000']
+      - targets: ['minio:19000']
 
   - job_name: node-exporter
     static_configs:
-      - targets: ['node-exporter:9100']
+      - targets: ['node-exporter:19100']
 
   - job_name: cadvisor
     static_configs:

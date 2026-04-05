@@ -131,7 +131,7 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
                     schedule_expr, timezone, priority, queue_code, worker_group,
                     calendar_code, trigger_mode, dag_enabled, shard_strategy, retry_policy,
                     retry_max_count, timeout_seconds, enabled, version
-                ) values (?, ?, ?, 'BATCH', 'IT', 'CRON', ?, 'UTC', 5, 'q-quartz', ?,
+                ) values (?, ?, ?, 'GENERAL', 'IT', 'CRON', ?, 'UTC', 5, 'q-quartz', ?,
                     ?, 'SCHEDULED', false, 'NONE', 'NONE', 0, 0, true, 1)
                 """,
                 tenantId,

@@ -7,7 +7,7 @@
 # =========================================================
 #
 # 使用方法：
-#   PGHOST=localhost PGPORT=5432 PGDATABASE=batch_db PGUSER=batch \
+#   PGHOST=localhost PGPORT=15432 PGDATABASE=batch_platform PGUSER=batch_user \
 #     PGPASSWORD=secret bash scripts/local/inspect-workers.sh
 #
 # 如发现 DRAINING 超时 worker，可运行 heal-drain-timeout.sh 自动处理。
@@ -16,7 +16,7 @@ set -euo pipefail
 
 # ── configuration ─────────────────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-5432}"
+PGPORT="${PGPORT:-15432}"
 PGDATABASE="${PGDATABASE:-batch_db}"
 PGUSER="${PGUSER:-batch}"
 export PGPASSWORD="${PGPASSWORD:-}"
