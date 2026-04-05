@@ -81,8 +81,37 @@ scrape_configs:
 ## Grafana
 
 - 导入 `docs/observability/grafana-dashboard-batch.json`（JVM + 平台计数器 + Redis/Kafka/PostgreSQL/MinIO）。
-- 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`、`export_file_rows_total`（导出文件行数，按 tenant 分标签）、`dispatch_receipt_total`（分发回执计数，按 tenant 分标签）、`hikaricp_connections_*`、`redis_connected_clients`、`redis_memory_used_bytes`、`kafka_consumergroup_lag`、`pg_up`、`pg_stat_database_numbackends`、MinIO cluster metrics、JVM 内存/线程。
+- 关键指标：`batch_alert_events_total`、`batch_job_sla_violation_count`、`batch_dispatch_circuits_open`、`batch_dispatch_deliveries_total`、`export_file_rows_total`（导出文件行数，按 tenant 分标签）、`dispatch_receipt_total`（分发回执计数，按 tenant 分标签）、`batch_console_realtime_subscriptions_active`、`batch_console_realtime_replay_events_total`、`batch_console_realtime_replay_cursor_miss_total`、`batch_console_realtime_replay_decode_failures_total`、`batch_console_realtime_pubsub_decode_failures_total`、`batch_console_realtime_pubsub_handle_failures_total`、`hikaricp_connections_*`、`redis_connected_clients`、`redis_memory_used_bytes`、`kafka_consumergroup_lag`、`pg_up`、`pg_stat_database_numbackends`、MinIO cluster metrics、JVM 内存/线程。
 - 告警与路由模板见 `docs/observability/prometheus-batch-rules.yml` 和 `docs/observability/alertmanager-batch-template.yml`。
+- Redis / realtime 已补的 Prometheus 规则包括：
+  - `BatchRedisMemoryUsageHigh`
+  - `BatchRedisConnectedClientsHigh`
+  - `BatchConsoleRealtimeReplayCursorMissGrowing`
+  - `BatchConsoleRealtimeReplayDecodeFailures`
+  - `BatchConsoleRealtimePubSubDecodeFailures`
+  - `BatchConsoleRealtimePubSubHandleFailures`
+
+### Redis / Realtime 补充关注项
+
+控制台 realtime 新增的 Redis 相关业务指标主要来自 `batch-console-api`：
+
+| 指标 | 含义 |
+|------|------|
+| `batch_console_realtime_subscriptions_active` | 当前活跃 SSE 订阅数 |
+| `batch_console_realtime_replay_events_total{stream}` | replay buffer 实际补发事件数 |
+| `batch_console_realtime_replay_cursor_miss_total{stream}` | 前端传入 cursor 不在缓冲区中的次数 |
+| `batch_console_realtime_replay_decode_failures_total{stream}` | replay buffer 解码失败次数 |
+| `batch_console_realtime_pubsub_decode_failures_total` | Pub/Sub 载荷解码失败次数 |
+| `batch_console_realtime_pubsub_handle_failures_total{stream,eventType}` | Pub/Sub 事件处理失败次数 |
+
+Redis exporter 侧继续关注：
+
+- `redis_connected_clients`
+- `redis_memory_used_bytes`
+- `redis_commands_processed_total`
+- `redis_keyspace_hits_total`
+- `redis_keyspace_misses_total`
+- `redis_expired_keys_total`
 
 ## 结构化日志
 

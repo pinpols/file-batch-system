@@ -5,136 +5,196 @@
 | 模块 | 用途 | 机制 |
 |------|------|------|
 | batch-console-api | 跨实例 SSE 事件广播 | Redis Pub/Sub |
+| batch-console-api | SSE 断线补偿回放缓冲 | Redis List + TTL |
+| batch-console-api | 控制台单会话版本控制 | Redis String + TTL |
+| batch-orchestrator | 集群级租户速率限制 | Redis String(`INCR` + `EXPIRE`) |
+| batch-orchestrator | Outbox 发布熔断共享状态 | Redis Hash + Lua |
+| batch-orchestrator | ShedLock 集群锁 | Redis String(`SET NX PX`) |
+| batch-orchestrator | 低频配置缓存 | Redis JSON String + TTL |
+| batch-orchestrator | 文件治理指标缓存 | Redis Hash + TTL |
+
+### 当前 Key 设计
+
+| Key Pattern | 用途 | 备注 |
+|-------------|------|------|
+| `batch:console:realtime` | 控制台 realtime Pub/Sub 频道 | 所有 `console-api` 实例都订阅 |
+| `batch:console:realtime:buffer:{tenantId}:{stream}` | tenant + stream 维度 replay buffer | 默认 `20_000` 条，TTL `24h` |
+| `batch:console:auth:session:{tenantId}:{username}` | 控制台登录单会话版本号 | 结合 JWT `sessionVersion` 校验 |
+| `ratelimit:{tenantId}:{action}:{windowStartEpochSecond}` | 固定窗口速率限制 | 60s 窗口 |
+| `circuit:outbox_publish` | Outbox 熔断状态 | fields: `failedPolls/openUntilMs` |
+| `shedlock:{environment}:{name}` | ShedLock 分布式锁 | value 为随机 token |
+| `config:{tenantId}:{type}:{code}` | 配置类缓存 | TTL `5m` |
+| `metrics:file_governance:{tenantId}` | 文件治理指标缓存 | TTL `60s` |
 
 ---
 
-## 待引入的场景
+## 已落地场景
 
-### 优先级一：正确性问题
+### 1. 集群级别速率限制
 
-#### 1. 集群级别速率限制
-
-**问题**
-
-`TokenBucketRateLimiter` 使用 `ConcurrentHashMap` 维护 per-instance 令牌桶。部署 N 个 orchestrator 实例时，租户实际可用配额变为配置值的 N 倍，速率限制失去意义。
-
-**涉及文件**
-
-- `batch-orchestrator/.../ratelimit/TokenBucketRateLimiter.java`
-- `batch-orchestrator/.../ratelimit/TenantActionRateLimiter.java`
-
-**方案**
-
-使用 Redis `INCR` + `EXPIRE` 实现固定窗口计数器：
+`TokenBucketRateLimiter` 已切换为 Redis 固定窗口计数器，`TenantActionRateLimiter` 不再使用单 JVM `ConcurrentHashMap`。
 
 ```
 key:   ratelimit:{tenantId}:{action}:{windowStartEpochSecond}
 value: 当前窗口已消耗次数
-TTL:   窗口大小（秒）
+TTL:   60s
 ```
 
-消费时执行 `INCR`，返回值超过阈值则拒绝，key 不存在时同时设置 TTL。原子性由 Redis 单线程保证，无需本地锁。
+实现文件：
 
----
+- `batch-orchestrator/.../ratelimit/TokenBucketRateLimiter.java`
+- `batch-orchestrator/.../ratelimit/TenantActionRateLimiter.java`
 
-#### 2. Outbox 发布熔断器共享状态
+### 2. Outbox 发布熔断器共享状态
 
-**问题**
-
-`OutboxPublishCircuitBreaker` 用 `volatile AtomicInteger` 存储连续失败次数和熔断截止时间，状态仅在当前实例内有效。Kafka 故障时，触发熔断的实例停止发布，其余实例仍继续压，无法起到保护作用。
-
-**涉及文件**
-
-- `batch-orchestrator/.../mq/OutboxPublishCircuitBreaker.java`
-
-**方案**
-
-使用 Redis Hash 存储共享熔断状态：
+`OutboxPublishCircuitBreaker` 已改为 Redis Hash + Lua 原子更新，多实例共享同一熔断状态。
 
 ```
 key:    circuit:outbox_publish
 fields: failedPolls, openUntilMs
-TTL:    熔断最大持续时间（防孤儿 key）
+TTL:    cooldown 和最小保底窗口中的较大值
 ```
 
-更新操作用 Lua 脚本保证原子性，避免并发写竞争。
+实现文件：
 
----
+- `batch-orchestrator/.../mq/OutboxPublishCircuitBreaker.java`
 
-### 优先级二：性能优化
+### 3. ShedLock 切换 Redis Provider
 
-#### 3. ShedLock 切换 Redis Provider
+orchestrator 的 `@SchedulerLock` 已切换到自定义 `RedisShedLockProvider`，不再依赖 JDBC `shedlock` 表。
 
-**问题**
-
-ShedLock 当前使用 JDBC Provider，所有带 `@SchedulerLock` 的定时任务（orchestrator 中 6 个以上）在每次执行时都需要对 `shedlock` 表加锁，产生额外 DB 写入。
-
-**方案**
-
-系统已依赖 Redis，直接切换 ShedLock provider：
-
-```java
-// ShedLockConfiguration.java
-// 将 JdbcLockProvider 替换为 RedisLockProvider
-@Bean
-public LockProvider lockProvider(RedisConnectionFactory connectionFactory) {
-    return new RedisLockProvider(connectionFactory, "batch-orchestrator");
-}
+```
+key:   shedlock:{environment}:{name}
+value: 随机 token
+TTL:   lockAtMostFor
 ```
 
-无需改动任何 `@SchedulerLock` 注解，改动范围仅 1 个配置类。
+实现文件：
 
----
+- `batch-orchestrator/.../config/ShedLockConfiguration.java`
+- `batch-orchestrator/.../redis/RedisShedLockProvider.java`
 
-#### 4. 配置类数据缓存
+### 4. 配置类数据缓存
 
-**问题**
+以下对象已通过 `OrchestratorConfigCacheService` 落地 Cache-Aside：
 
-以下表数据变更频率极低，但在每次分区调度时被反复查询：
-
-| 表 | 调用位置 |
-|----|---------|
-| `job_definition` | `WaitingPartitionDispatchScheduler` 每条候选分区 |
-| `business_calendar` | `BatchDayCutoffScheduler` |
-| `batch_window` | dispatch 路径 |
-| `tenant_quota_policy` | 速率限制判断 |
-| `workflow_definition` | 工作流触发路径 |
-
-**方案**
-
-Cache-Aside 模式：
+- `job_definition`
+- `workflow_definition`
+- `business_calendar`
+- `batch_window`
+- `tenant_quota_policy`
 
 ```
 key:   config:{tenantId}:{type}:{code}
-value: JSON 序列化的实体
-TTL:   5 分钟
+value: JSON
+TTL:   5m
 ```
 
-失效策略：控制台更新配置时，在同一事务 AFTER_COMMIT 后发布 Redis `DEL` 失效。不需要主动推送，TTL 兜底保证最终一致。
+失效策略也已落地：console 配置变更后，通过 `AFTER_COMMIT` 删除对应 key。
 
----
+实现文件：
 
-#### 5. 文件治理指标缓存
+- `batch-orchestrator/.../redis/OrchestratorConfigCacheService.java`
+- `batch-console-api/.../ConsoleConfigCacheInvalidationService.java`
 
-**问题**
+### 5. 文件治理指标缓存
 
-`FileGovernanceScheduler` 每 60 秒执行聚合查询（到达延迟违规数、最大延迟秒数、样本数据），结果用于监控看板，允许一定滞后。
-
-**涉及文件**
-
-- `batch-orchestrator/.../file/FileGovernanceScheduler.java`
-
-**方案**
-
-查询结果写入 Redis Hash，TTL 60 秒，看板接口优先读缓存，缓存不存在时降级查 DB 并回填。
+文件治理延迟指标已按租户缓存，并收敛到 `GET /internal/files/governance/latency-metrics` 读取链路。
 
 ```
 key:    metrics:file_governance:{tenantId}
-fields: arrivalDelayViolations, maxArrivalDelaySeconds, processingDelayViolations
+fields: tenantId, arrivalDelayViolations, maxArrivalDelaySeconds,
+        processingDelayViolations, maxProcessingDelaySeconds,
+        arrivalDelaySamples, processingDelaySamples
 TTL:    60s
 ```
 
----
+当前聚合查询已改为 tenant-aware，不再扫描全局表后再按缓存 key 分租户。
+
+实现文件：
+
+- `batch-orchestrator/.../file/FileGovernanceScheduler.java`
+- `batch-orchestrator/.../redis/FileGovernanceMetricsCacheService.java`
+- `batch-orchestrator/.../file/FileGovernanceRepository.java`
+- `batch-orchestrator/.../mapper/FileGovernanceMapper.xml`
+
+### 6. 控制台 realtime 回放缓冲
+
+Pub/Sub 本身不提供重放，因此控制台额外用 Redis List 维护最近事件缓冲，SSE 订阅时按 `cursor` 做补发。
+
+```
+key:   batch:console:realtime:buffer:{tenantId}:{stream}
+value: ConsoleRealtimeStreamEnvelope JSON 列表
+TTL:   batch.console.realtime.replay-ttl
+裁剪:   batch.console.realtime.replay-max-entries
+```
+
+默认配置：
+
+- `replay-max-entries = 20_000`
+- `replay-ttl = 24h`
+
+实现文件：
+
+- `batch-console-api/.../ConsoleRealtimeReplayStore.java`
+- `batch-console-api/.../ConsoleRealtimeProperties.java`
+
+### 7. 控制台单会话版本控制
+
+控制台登录签发 JWT 时，会把当前 `sessionVersion` 写入 token；Redis 中保存每个 `tenant + username` 的最新版本号，用于单会话校验和踢旧 token。
+
+```
+key:   batch:console:auth:session:{tenantId}:{username}
+value: 当前有效 session version
+TTL:   batch.console.security.session-state-ttl
+```
+
+实现文件：
+
+- `batch-console-api/.../ConsoleSessionRegistry.java`
+- `batch-console-api/.../ConsoleJwtService.java`
+
+## Redis 监控设计
+
+### 业务级指标
+
+控制台 realtime 已补充以下 Micrometer 指标：
+
+| 指标名 | 类型 | 含义 |
+|--------|------|------|
+| `batch.console.realtime.subscriptions.active` | Gauge | 当前活跃 SSE 订阅数 |
+| `batch.console.realtime.replay.events{stream}` | Counter | replay buffer 实际补发事件数 |
+| `batch.console.realtime.replay.cursor.miss{stream}` | Counter | 前端 cursor 在缓冲区中找不到的次数 |
+| `batch.console.realtime.replay.decode.failures{stream}` | Counter | replay buffer JSON 解码失败次数 |
+| `batch.console.realtime.pubsub.decode.failures` | Counter | Redis Pub/Sub 消息解码失败次数 |
+| `batch.console.realtime.pubsub.handle.failures{stream,eventType}` | Counter | Pub/Sub 消息进入业务处理后失败次数 |
+
+实现文件：
+
+- `batch-console-api/.../ConsoleRealtimeMetrics.java`
+- `batch-console-api/.../ConsoleRealtimeEventHub.java`
+- `batch-console-api/.../ConsoleRealtimeReplayStore.java`
+- `batch-console-api/.../ConsoleRealtimeRedisPubSubConsumer.java`
+
+### 基础设施级指标
+
+Redis 本身仍通过 `redis-exporter` 暴露基础指标，Prometheus 重点关注：
+
+- `redis_connected_clients`
+- `redis_memory_used_bytes`
+- `redis_commands_processed_total`
+- `redis_keyspace_hits_total`
+- `redis_keyspace_misses_total`
+- `redis_expired_keys_total`
+
+### 推荐告警 / 看板关注点
+
+- SSE 活跃连接数异常升高：看 `batch.console.realtime.subscriptions.active`
+- replay 命中率下降：结合 `replay.events` 与 `replay.cursor.miss`
+- Pub/Sub 载荷异常：看 `pubsub.decode.failures`
+- 业务处理异常：看 `pubsub.handle.failures`
+- Redis 内存接近上限：看 `redis_memory_used_bytes`
+- Redis 连接数异常：看 `redis_connected_clients`
 
 ## 暂不引入的场景
 
@@ -150,14 +210,16 @@ TTL:    60s
 ## 落地顺序
 
 ```
-第一批（改动小，修正正确性）
+已完成
   ├── TokenBucketRateLimiter 集群化
-  └── OutboxPublishCircuitBreaker 共享状态
-
-第二批（改动小，收益稳定）
-  └── ShedLock 切换 Redis Provider
-
-第三批（需要 Cache-Aside 基础设施）
+  ├── OutboxPublishCircuitBreaker 共享状态
+  ├── ShedLock 切换 Redis Provider
   ├── 配置类数据缓存
-  └── 文件治理指标缓存
+  ├── 文件治理指标缓存
+  ├── console realtime replay buffer
+  └── console 单会话 session registry
+
+持续演进
+  ├── Redis 业务指标告警规则
+  └── Redis key 容量 / TTL 巡检自动化
 ```

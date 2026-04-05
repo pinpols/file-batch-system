@@ -40,3 +40,17 @@ python3 scripts/ci/check-console-openapi-paths.py
 成功时打印路由数量并以退出码 `0` 结束；不一致时打印「仅 OpenAPI」与「仅代码」的差异并以 `1` 结束。
 
 **接入的 workflow**（均在 checkout 之后、Java 构建之前执行）：`.github/workflows/pr-gate.yml`、`.github/workflows/full-ci-gate.yml`、`.github/workflows/staging-gate.yml`。
+
+## `check-dependency-boundaries.py`
+
+校验依赖边界约束：
+
+- `batch-common` 不得新增对象存储、OTEL exporter、AI SDK、Excel 处理等运行时重依赖
+- 仅 `batch-console-api`、`batch-orchestrator` 允许保留 `Spring Data JDBC`
+- `batch-trigger`、`batch-worker-*` 不得额外引入 `spring-boot-starter-data-jdbc`
+
+```bash
+python3 scripts/ci/check-dependency-boundaries.py
+```
+
+成功时打印 `OK: dependency boundaries satisfied.` 并以退出码 `0` 结束；违反约束时打印错误并以 `1` 结束。
