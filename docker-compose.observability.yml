@@ -129,8 +129,8 @@ services:
     ports:
       - "${OTEL_GRPC_PORT:-4317}:4317"
       - "${OTEL_HTTP_PORT:-4318}:4318"
-      - "8888:8888"
-      - "13133:13133"
+      - "${OTEL_METRICS_PORT:-18888}:8888"
+      - "${OTEL_HEALTH_PORT:-13133}:13133"
     environment:
       - DEPLOYMENT_ENVIRONMENT=${DEPLOYMENT_ENVIRONMENT:-local}
     depends_on:
@@ -153,8 +153,8 @@ services:
       - TZ=${TZ:-Asia/Shanghai}
     ports:
       - "${JAEGER_UI_PORT:-16686}:16686"
-      - "4317:4317"
-      - "14250:14250"
+      - "${JAEGER_OTLP_GRPC_PORT:-14317}:4317"
+      - "${JAEGER_COLLECTOR_GRPC_PORT:-14250}:14250"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:14269/"]
       interval: 10s

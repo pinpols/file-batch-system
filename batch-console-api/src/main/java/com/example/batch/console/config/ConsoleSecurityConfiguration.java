@@ -40,7 +40,7 @@ public class ConsoleSecurityConfiguration {
                         .authenticationEntryPoint(authenticationEntryPoint(responseWriter))
                         .accessDeniedHandler(accessDeniedHandler(responseWriter)))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(consoleAuthenticationFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)

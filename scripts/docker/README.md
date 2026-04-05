@@ -4,6 +4,7 @@
 
 ## 常用脚本
 
+- `build-apps.sh`：构建本地应用镜像，默认启用 BuildKit
 - `up-apps.sh`：启动本地基础依赖 + 应用容器
 - `down-apps.sh`：停止本地基础依赖 + 应用容器（只 stop，不 down）
 - `up-observability.sh`：启动本地观测栈
@@ -20,4 +21,5 @@
 - 默认使用 `.env.local`
 - 如需切换环境，可设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`
 - 这类脚本不管理本地 Java 进程，只管理容器
+- 构建应用镜像时优先使用 `./scripts/docker/build-apps.sh`，这样会默认开启 BuildKit 和 Docker CLI build
 - 观测栈的快捷入口也可以直接用 `make observability-up` / `make observability-down`

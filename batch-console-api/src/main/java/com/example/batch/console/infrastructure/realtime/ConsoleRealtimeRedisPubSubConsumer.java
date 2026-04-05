@@ -1,7 +1,6 @@
 package com.example.batch.console.infrastructure.realtime;
 
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.console.application.ConsoleOpsApplicationService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
@@ -32,7 +31,7 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
 
     private final StringRedisTemplate redisTemplate;
     private final ConsoleRealtimeEventHub realtimeEventHub;
-    private final ConsoleOpsApplicationService opsApplicationService;
+    private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
     private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
     private final ConsoleRealtimeMetrics realtimeMetrics;
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -100,14 +99,7 @@ public class ConsoleRealtimeRedisPubSubConsumer implements MessageListener {
     private void publish(ConsoleRealtimeStreamEnvelope envelope) {
         try {
             if (envelope.summaryRefresh() && (envelope.dataJson() == null || envelope.dataJson().isBlank())) {
-                realtimeEventHub.publish(new ConsoleSseEvent(
-                        envelope.tenantId(),
-                        envelope.stream(),
-                        envelope.eventType(),
-                        envelope.cursor(),
-                        opsApplicationService.summary(envelope.tenantId()),
-                        envelope.emittedAt() == null ? Instant.now() : envelope.emittedAt()
-                ));
+                summaryRealtimeStream.publishSnapshot(envelope.tenantId());
                 return;
             }
             realtimeEventHub.publish(new ConsoleSseEvent(

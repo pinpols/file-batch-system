@@ -1,4 +1,7 @@
-.PHONY: observability-up observability-down observability-status observability-logs observability-inspect
+.PHONY: apps-build observability-up observability-down observability-status observability-logs observability-inspect
+
+apps-build:
+	./scripts/docker/build-apps.sh
 
 observability-up:
 	./scripts/docker/up-observability.sh
@@ -14,4 +17,3 @@ observability-logs:
 
 observability-inspect:
 	./scripts/docker/observability/inspect.sh
-

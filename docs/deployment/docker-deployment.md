@@ -15,8 +15,11 @@
 ## 构建应用镜像
 
 ```bash
-docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.app.yml --profile apps build
+./scripts/docker/build-apps.sh
 ```
+
+默认会启用 `DOCKER_BUILDKIT=1` 和 `COMPOSE_DOCKER_CLI_BUILD=1`。
+如需切换环境，可在执行前指定 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`。
 
 ## 启动完整容器栈
 
@@ -74,5 +77,5 @@ docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.app
 - 运行时通过 `depends_on` 等待数据库、Kafka topic 初始化和 MinIO bucket 初始化完成
 - 镜像内置 `curl`，用于容器健康检查
 - 只有 `console-api`、`trigger`、`orchestrator` 暴露 HTTP 健康检查；三个 worker 是非 Web 进程，靠容器重启策略和启动顺序保障
-- `console-api` 的普通 REST 接口可以直接做负载均衡；SSE 实时接口通过 Redis Streams 做共享事件源，允许多实例部署
-- `console-api` realtime 层会消费 Redis Stream 并转发到本机 SSE 连接，不再依赖 sticky session
+- `console-api` 的普通 REST 接口可以直接做负载均衡；SSE 实时接口通过 Redis Pub/Sub 广播并结合 replay buffer 回放，允许多实例部署
+- `console-api` realtime 层会消费 Redis Pub/Sub 并转发到本机 SSE 连接，不再依赖 sticky session
