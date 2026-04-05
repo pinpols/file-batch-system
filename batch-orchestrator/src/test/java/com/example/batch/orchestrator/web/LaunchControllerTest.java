@@ -10,10 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
+import com.example.batch.orchestrator.application.service.LaunchApplicationService;
 import com.example.batch.orchestrator.controller.LaunchController;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.service.LaunchService;
-import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -22,8 +23,9 @@ class LaunchControllerTest {
 
     private final LaunchService launchService = org.mockito.Mockito.mock(LaunchService.class);
     private final TenantActionRateLimiter tenantActionRateLimiter = org.mockito.Mockito.mock(TenantActionRateLimiter.class);
+    private final LaunchApplicationService launchApplicationService = new LaunchApplicationService(launchService, tenantActionRateLimiter);
 
-    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new LaunchController(launchService, tenantActionRateLimiter))
+    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new LaunchController(launchApplicationService))
             .setControllerAdvice(new OrchestratorApiExceptionHandler())
             .build();
 
@@ -63,4 +65,3 @@ class LaunchControllerTest {
                 .andExpect(jsonPath("$.message").value("bad request"));
     }
 }
-
