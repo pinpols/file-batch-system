@@ -10,20 +10,24 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.orchestrator.application.service.TaskControllerApplicationService;
 import com.example.batch.orchestrator.application.service.TaskExecutionService;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.controller.TaskController;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class TaskControllerTest {
 
     private final TaskExecutionService taskExecutionService = org.mockito.Mockito.mock(TaskExecutionService.class);
-    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TaskController(taskExecutionService))
+    private final TaskControllerApplicationService taskControllerApplicationService =
+            new TaskControllerApplicationService(taskExecutionService);
+
+    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
             .setControllerAdvice(new OrchestratorApiExceptionHandler())
             .build();
 
