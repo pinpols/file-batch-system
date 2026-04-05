@@ -1,0 +1,26 @@
+package com.example.batch.console.repository;
+
+import com.example.batch.console.domain.ConsoleUserAccountEntity;
+import java.util.Optional;
+import org.springframework.data.jdbc.repository.query.Query;
+import org.springframework.data.repository.Repository;
+import org.springframework.data.repository.query.Param;
+
+public interface ConsoleUserAccountRepository extends Repository<ConsoleUserAccountEntity, Long> {
+
+    @Query("""
+            SELECT id,
+                   tenant_id,
+                   username,
+                   display_name,
+                   password_hash,
+                   authorities_csv,
+                   enabled
+              FROM batch.console_user_account
+             WHERE tenant_id = :tenantId
+               AND lower(username) = lower(:username)
+             LIMIT 1
+            """)
+    Optional<ConsoleUserAccountEntity> findByTenantIdAndUsernameIgnoreCase(@Param("tenantId") String tenantId,
+                                                                           @Param("username") String username);
+}

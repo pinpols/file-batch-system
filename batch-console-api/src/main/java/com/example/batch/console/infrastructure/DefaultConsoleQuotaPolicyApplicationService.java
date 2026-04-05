@@ -23,6 +23,7 @@ public class DefaultConsoleQuotaPolicyApplicationService implements ConsoleQuota
 
     private final TenantQuotaPolicyMapper quotaPolicyMapper;
     private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
     @Override
     public PageResponse<Map<String, Object>> list(String tenantId, String policyCode, Boolean enabled,
@@ -51,6 +52,7 @@ public class DefaultConsoleQuotaPolicyApplicationService implements ConsoleQuota
         params.put("enabled", request.getEnabled() != null ? request.getEnabled() : true);
         params.put("description", request.getDescription());
         quotaPolicyMapper.insert(params);
+        cacheInvalidationService.evictQuotaPolicies(tenantId);
         Long id = ((Number) params.get("id")).longValue();
         return quotaPolicyMapper.selectById(tenantId, id);
     }
@@ -72,6 +74,7 @@ public class DefaultConsoleQuotaPolicyApplicationService implements ConsoleQuota
         params.put("enabled", request.getEnabled() != null ? request.getEnabled() : existing.get("enabled"));
         params.put("description", request.getDescription() != null ? request.getDescription() : existing.get("description"));
         quotaPolicyMapper.update(params);
+        cacheInvalidationService.evictQuotaPolicies(tenantId);
         return quotaPolicyMapper.selectById(tenantId, id);
     }
 
@@ -82,5 +85,6 @@ public class DefaultConsoleQuotaPolicyApplicationService implements ConsoleQuota
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "quota policy not found");
         }
+        cacheInvalidationService.evictQuotaPolicies(resolved);
     }
 }

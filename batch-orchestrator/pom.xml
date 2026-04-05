@@ -64,6 +64,10 @@
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
 
         <!-- Spring Boot 4：Flyway 自动配置在 starter 中，仅 flyway-core 不会执行迁移 -->
         <dependency>

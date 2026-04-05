@@ -43,6 +43,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
     private final WorkflowEdgeMapper edgeMapper;
     private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
     private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
     @Override
     public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
@@ -80,6 +81,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         definitionMapper.insert(entity);
 
         upsertNodesAndEdges(entity.getId(), request);
+        cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, request.getWorkflowCode());
         publishRefresh(resolvedTenant, "workflow-definition-created");
 
         return loadDetail(resolvedTenant, entity.getId());
@@ -104,6 +106,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         nodeMapper.deleteByWorkflowDefinitionId(id);
         edgeMapper.deleteByWorkflowDefinitionId(id);
         upsertNodesAndEdges(id, request);
+        cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
         publishRefresh(resolvedTenant, "workflow-definition-updated");
 
         return loadDetail(resolvedTenant, id);
@@ -115,6 +118,10 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         int rows = definitionMapper.toggleEnabled(resolvedTenant, id, enabled);
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "Workflow definition not found: " + id);
+        }
+        WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
+        if (def != null) {
+            cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
         }
         publishRefresh(resolvedTenant, "workflow-definition-toggled");
     }
@@ -132,6 +139,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         nodeMapper.deleteByWorkflowDefinitionId(id);
         edgeMapper.deleteByWorkflowDefinitionId(id);
         definitionMapper.deleteByTenantAndId(resolvedTenant, id);
+        cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
         publishRefresh(resolvedTenant, "workflow-definition-deleted");
     }
 

@@ -8,10 +8,9 @@ import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.common.enums.PartitionStatus;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -21,7 +20,7 @@ import org.springframework.util.StringUtils;
 public class DefaultPartitionThrottle implements PartitionThrottle {
 
     private final JobPartitionMapper jobPartitionMapper;
-    private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     private final QuotaRuntimeStateService quotaRuntimeStateService;
     private final BatchOrchestratorGovernanceProperties governance;
 
@@ -107,7 +106,6 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
     }
 
     private TenantQuotaPolicyRecord resolveQuotaPolicy(String tenantId) {
-        List<TenantQuotaPolicyRecord> policies = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
-        return policies == null || policies.isEmpty() ? null : policies.get(0);
+        return configCacheService.findEnabledQuotaPolicy(tenantId);
     }
 }

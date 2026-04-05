@@ -28,6 +28,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     private final BusinessCalendarMapper calendarMapper;
     private final CalendarHolidayMapper holidayMapper;
     private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
     @Override
     public PageResponse<Map<String, Object>> list(String tenantId, String calendarCode, Boolean enabled,
@@ -56,6 +57,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         params.put("catchUpMaxDays", request.getCatchUpMaxDays() == null ? 0 : request.getCatchUpMaxDays());
         params.put("enabled", request.getEnabled() != null && request.getEnabled());
         calendarMapper.insert(params);
+        cacheInvalidationService.evictBusinessCalendar(tenantId, request.getCalendarCode());
         return calendarMapper.selectById(tenantId, ((Number) params.get("id")).longValue());
     }
 
@@ -75,6 +77,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         params.put("catchUpPolicy", request.getCatchUpPolicy() == null ? "NONE" : request.getCatchUpPolicy());
         params.put("catchUpMaxDays", request.getCatchUpMaxDays() == null ? 0 : request.getCatchUpMaxDays());
         calendarMapper.update(params);
+        cacheInvalidationService.evictBusinessCalendar(tenantId, String.valueOf(existing.get("calendar_code")));
         return calendarMapper.selectById(tenantId, id);
     }
 
@@ -84,6 +87,10 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         int rows = calendarMapper.toggleEnabled(resolved, id, enabled);
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "calendar not found");
+        }
+        Map<String, Object> calendar = calendarMapper.selectById(resolved, id);
+        if (calendar != null) {
+            cacheInvalidationService.evictBusinessCalendar(resolved, String.valueOf(calendar.get("calendar_code")));
         }
     }
 
@@ -114,6 +121,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
             return m;
         }).collect(Collectors.toList());
         holidayMapper.batchInsert(list);
+        cacheInvalidationService.evictBusinessCalendar(tenantId, String.valueOf(calendar.get("calendar_code")));
     }
 
     @Override
@@ -134,6 +142,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         params.put("holidayName", request.getHolidayName());
         params.put("description", request.getDescription());
         holidayMapper.update(params);
+        cacheInvalidationService.evictBusinessCalendar(tenantId, String.valueOf(calendar.get("calendar_code")));
         return holidayMapper.selectById(holidayId);
     }
 
@@ -148,5 +157,6 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "holiday not found");
         }
+        cacheInvalidationService.evictBusinessCalendar(resolved, String.valueOf(calendar.get("calendar_code")));
     }
 }

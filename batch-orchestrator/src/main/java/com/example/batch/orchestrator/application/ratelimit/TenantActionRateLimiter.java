@@ -10,11 +10,10 @@ import org.springframework.stereotype.Component;
 public class TenantActionRateLimiter {
 
     private final BatchOrchestratorGovernanceProperties governance;
+    private final TokenBucketRateLimiter limiter;
 
     // 更方便测试；当前未注入自定义 clock，直接使用系统时间
     private final Clock clock = Clock.systemDefaultZone();
-
-    private final TokenBucketRateLimiter limiter = new TokenBucketRateLimiter();
 
     public boolean tryConsume(String tenantId, RateLimitAction action) {
         if (!governance.rateLimit().isEnabled()) {
@@ -31,8 +30,6 @@ public class TenantActionRateLimiter {
         } else {
             max = 0;
         }
-        String key = tenantId + ":" + action.name();
-        return limiter.tryConsume(key, max, clock.millis());
+        return limiter.tryConsume(tenantId, action.name(), max, clock.millis());
     }
 }
-

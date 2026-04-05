@@ -8,10 +8,9 @@ import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
-import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,8 +19,7 @@ import org.springframework.stereotype.Service;
 public class DefaultLaunchValidationService implements LaunchValidationService {
 
     private final TriggerRequestMapper triggerRequestMapper;
-    private final JobDefinitionRepository jobDefinitionRepository;
-    private final WorkflowDefinitionRepository workflowDefinitionRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     private final JobInstanceMapper jobInstanceMapper;
 
     @Override
@@ -34,16 +32,16 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
             throw new BizException(ResultCode.NOT_FOUND, "trigger request not found");
         }
 
-        JobDefinitionRecord jobDefinition = jobDefinitionRepository
-                .findFirstByTenantIdAndJobCodeAndEnabled(request.tenantId(), request.jobCode(), true);
+        JobDefinitionRecord jobDefinition = configCacheService
+                .findEnabledJobDefinition(request.tenantId(), request.jobCode());
         if (jobDefinition == null) {
             triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
                     BatchStatusConstants.REJECTED, null);
             throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
         }
 
-        WorkflowDefinitionRecord workflowDefinition = workflowDefinitionRepository
-                .findFirstByTenantIdAndWorkflowCodeAndEnabled(request.tenantId(), request.jobCode(), true);
+        WorkflowDefinitionRecord workflowDefinition = configCacheService
+                .findEnabledWorkflowDefinition(request.tenantId(), request.jobCode());
         if (workflowDefinition == null) {
             triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
                     BatchStatusConstants.REJECTED, null);

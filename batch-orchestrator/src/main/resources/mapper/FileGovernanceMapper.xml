@@ -173,14 +173,16 @@
     <select id="countArrivalDelayViolations" resultType="java.lang.Long">
         select count(1)
         from batch.file_record
-        where jsonb_exists(metadata_json, 'expectedArrivalTime')
+        where tenant_id = #{tenantId}
+          and jsonb_exists(metadata_json, 'expectedArrivalTime')
           and created_at &gt; ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz + (#{thresholdSeconds} * interval '1 second'))
     </select>
 
     <select id="selectMaxArrivalDelaySeconds" resultType="java.lang.Long">
         select coalesce(max(extract(epoch from (created_at - ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz)))), 0)::bigint
         from batch.file_record
-        where jsonb_exists(metadata_json, 'expectedArrivalTime')
+        where tenant_id = #{tenantId}
+          and jsonb_exists(metadata_json, 'expectedArrivalTime')
     </select>
 
     <select id="selectArrivalDelaySamples" resultType="map">
@@ -191,7 +193,8 @@
                (metadata_json -&gt;&gt; 'expectedArrivalTime') as expected_arrival_time,
                extract(epoch from (created_at - ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz)))::bigint as arrival_delay_seconds
         from batch.file_record
-        where jsonb_exists(metadata_json, 'expectedArrivalTime')
+        where tenant_id = #{tenantId}
+          and jsonb_exists(metadata_json, 'expectedArrivalTime')
           and created_at &gt; ((metadata_json -&gt;&gt; 'expectedArrivalTime')::timestamptz + (#{thresholdSeconds} * interval '1 second'))
         order by arrival_delay_seconds desc
         limit #{limit}
@@ -200,7 +203,8 @@
     <select id="countProcessingDelayViolations" resultType="java.lang.Long">
         select count(1)
         from batch.pipeline_instance
-        where run_status = #{runningStatus}
+        where tenant_id = #{tenantId}
+          and run_status = #{runningStatus}
           and started_at is not null
           and started_at &lt; current_timestamp - (#{thresholdSeconds} * interval '1 second')
     </select>
@@ -208,7 +212,8 @@
     <select id="selectMaxProcessingDelaySeconds" resultType="java.lang.Long">
         select coalesce(max(extract(epoch from (current_timestamp - started_at))), 0)::bigint
         from batch.pipeline_instance
-        where run_status = #{runningStatus}
+        where tenant_id = #{tenantId}
+          and run_status = #{runningStatus}
           and started_at is not null
     </select>
 
@@ -221,7 +226,8 @@
                started_at,
                extract(epoch from (current_timestamp - started_at))::bigint as processing_delay_seconds
         from batch.pipeline_instance
-        where run_status = #{runningStatus}
+        where tenant_id = #{tenantId}
+          and run_status = #{runningStatus}
           and started_at is not null
           and started_at &lt; current_timestamp - (#{thresholdSeconds} * interval '1 second')
         order by processing_delay_seconds desc

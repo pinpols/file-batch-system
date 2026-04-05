@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Batch Console Login</title>
+  <style>
+    :root {
+      --bg: linear-gradient(135deg, #f3efe4 0%, #d9e3ef 100%);
+      --card: rgba(255, 255, 255, 0.92);
+      --text: #1d2939;
+      --muted: #667085;
+      --accent: #0f766e;
+      --accent-strong: #115e59;
+      --border: rgba(15, 118, 110, 0.14);
+      --shadow: 0 24px 64px rgba(15, 23, 42, 0.14);
+      --danger: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .shell {
+      width: min(980px, 100%);
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+    .hero {
+      padding: 48px;
+      background:
+        radial-gradient(circle at top left, rgba(15,118,110,0.18), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(36,94,173,0.18), transparent 38%);
+    }
+    .hero h1 {
+      margin: 0 0 16px;
+      font-size: clamp(36px, 5vw, 52px);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+    }
+    .hero p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(15,118,110,0.10);
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .accounts {
+      margin-top: 32px;
+      display: grid;
+      gap: 14px;
+    }
+    .account {
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.7);
+    }
+    .account strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+    .account span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .panel {
+      padding: 40px 36px;
+      border-left: 1px solid rgba(15,118,110,0.08);
+      background: rgba(255,255,255,0.88);
+    }
+    .panel h2 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    .panel p {
+      margin: 0 0 24px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    form { display: grid; gap: 14px; }
+    label {
+      display: grid;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    input {
+      width: 100%;
+      border: 1px solid rgba(16, 24, 40, 0.12);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font: inherit;
+      color: var(--text);
+      background: rgba(255,255,255,0.96);
+    }
+    input:focus {
+      outline: none;
+      border-color: rgba(15,118,110,0.5);
+      box-shadow: 0 0 0 4px rgba(15,118,110,0.12);
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 18px;
+      font: inherit;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, var(--accent) 0%, #1d4ed8 100%);
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.7; cursor: wait; }
+    .hint, .token, .error {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .hint { background: rgba(15,118,110,0.08); color: var(--accent-strong); }
+    .token {
+      background: rgba(15,23,42,0.06);
+      color: var(--text);
+      font-family: ui-monospace, "SFMono-Regular", monospace;
+    }
+    .error {
+      background: rgba(180,35,24,0.08);
+      color: var(--danger);
+      display: none;
+    }
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .panel { border-left: 0; border-top: 1px solid rgba(15,118,110,0.08); }
+      .hero, .panel { padding: 28px 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="badge">Internal Console Login</div>
+      <h1>固定账号登录</h1>
+      <p>控制台账号存放在平台库，密码仅保存为 PBKDF2 哈希值。系统启用了单账号单会话，新登录会立即顶掉旧 JWT。</p>
+      <div class="accounts">
+        <div class="account">
+          <strong>admin</strong>
+          <span>tenant: default-tenant | roles: ROLE_ADMIN, ROLE_AUDITOR, ROLE_CONFIG_ADMIN</span>
+        </div>
+        <div class="account">
+          <strong>auditor</strong>
+          <span>tenant: default-tenant | roles: ROLE_AUDITOR</span>
+        </div>
+        <div class="account">
+          <strong>config-admin</strong>
+          <span>tenant: default-tenant | roles: ROLE_CONFIG_ADMIN</span>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>登录控制台</h2>
+      <p>租户默认使用账号绑定租户。只有需要显式指定时才填写。密码不会在页面或仓库中明文展示。</p>
+      <form id="login-form">
+        <label>用户名<input id="username" autocomplete="username" value="admin" required></label>
+        <label>密码<input id="password" type="password" autocomplete="current-password" required></label>
+        <label>租户（可选）<input id="tenantId" placeholder="default-tenant"></label>
+        <button id="submit" type="submit">登录并获取 Token</button>
+      </form>
+      <div class="error" id="error"></div>
+      <div class="hint">Token 会保存到 localStorage 的 <code>batch.console.jwt</code>，也可以直接从下面复制。</div>
+      <div class="token" id="token">尚未登录</div>
+    </section>
+  </main>
+  <script>
+    const form = document.getElementById("login-form");
+    const errorBox = document.getElementById("error");
+    const tokenBox = document.getElementById("token");
+    const submit = document.getElementById("submit");
+    const saved = localStorage.getItem("batch.console.jwt");
+    if (saved) tokenBox.textContent = saved;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      errorBox.style.display = "none";
+      errorBox.textContent = "";
+      submit.disabled = true;
+      submit.textContent = "登录中...";
+      try {
+        const payload = {
+          username: document.getElementById("username").value.trim(),
+          password: document.getElementById("password").value,
+          tenantId: document.getElementById("tenantId").value.trim() || null
+        };
+        const response = await fetch("/api/console/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+        if (!response.ok || body.code !== "SUCCESS") {
+          throw new Error(body.message || "login failed");
+        }
+        const token = body.data.tokenType + " " + body.data.accessToken;
+        localStorage.setItem("batch.console.jwt", token);
+        tokenBox.textContent = token;
+      } catch (error) {
+        errorBox.textContent = error.message;
+        errorBox.style.display = "block";
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "登录并获取 Token";
+      }
+    });
+  </script>
+</body>
+</html>

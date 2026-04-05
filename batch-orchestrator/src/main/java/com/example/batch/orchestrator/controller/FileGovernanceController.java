@@ -3,7 +3,11 @@ package com.example.batch.orchestrator.controller;
 import com.example.batch.orchestrator.application.service.FileGovernanceService;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import com.example.batch.orchestrator.domain.command.FileGovernanceCommand;
+import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class FileGovernanceController {
 
     private final FileGovernanceService fileGovernanceService;
+    private final FileGovernanceScheduler fileGovernanceScheduler;
 
     @PostMapping("/{fileId}/archive")
     public FileOperationResponse archive(@PathVariable Long fileId, @RequestBody FileOperationRequest request) {
@@ -51,6 +56,11 @@ public class FileGovernanceController {
                         request.extendWaitSeconds()
                 )
         ));
+    }
+
+    @GetMapping("/governance/latency-metrics")
+    public Map<String, Object> latencyMetrics(@RequestParam String tenantId) {
+        return fileGovernanceScheduler.loadLatencyMetrics(tenantId);
     }
 
     private FileGovernanceCommand toCommand(Long fileId, FileOperationRequest request) {

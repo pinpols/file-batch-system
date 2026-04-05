@@ -29,7 +29,7 @@ spring:
   security:
     user:
       name: admin
-      password: admin123
+      password: ${BATCH_CONSOLE_PASSWORD:}
 
 mybatis:
   mapper-locations: classpath*:mapper/*.xml
@@ -64,9 +64,11 @@ batch:
         - ROLE_AUDITOR
         - ROLE_CONFIG_ADMIN
       legacy-header-auth-enabled: true
+      single-session-enabled: true
       jwt-issuer: batch-console-api
       jwt-secret: console-jwt-secret-change-me
       jwt-ttl: PT8H
+      session-state-ttl: P30D
     ai:
       enabled: false
       model: gpt-4o-mini

@@ -11,11 +11,11 @@ import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
-import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.common.logging.AuditLogConstants;
 import java.time.Instant;
@@ -43,7 +43,7 @@ public class BatchDaySettleScheduler {
     private final JobInstanceMapper jobInstanceMapper;
     private final JobExecutionLogMapper jobExecutionLogMapper;
     private final TriggerRequestMapper triggerRequestMapper;
-    private final BusinessCalendarRepository businessCalendarRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     private final LaunchService launchService;
 
     @Scheduled(fixedDelayString = "${batch.batch-day.settle-scan-interval-millis:60000}")
@@ -110,10 +110,9 @@ public class BatchDaySettleScheduler {
     }
 
     private void driveCatchUp(BatchDayInstanceRecord batchDay, Instant now) {
-        BusinessCalendarRecord calendar = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
+        BusinessCalendarRecord calendar = configCacheService.findEnabledBusinessCalendar(
                 batchDay.tenantId(),
-                batchDay.calendarCode(),
-                true
+                batchDay.calendarCode()
         );
         if (calendar == null || calendar.catchUpPolicy() == null || "NONE".equalsIgnoreCase(calendar.catchUpPolicy())) {
             return;

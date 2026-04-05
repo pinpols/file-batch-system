@@ -24,7 +24,7 @@ import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import com.example.batch.orchestrator.repository.JobDefinitionRepository;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -46,7 +46,7 @@ public class WaitingPartitionDispatchScheduler {
     private final JobTaskMapper jobTaskMapper;
     private final JobInstanceMapper jobInstanceMapper;
     private final WorkflowRunMapper workflowRunMapper;
-    private final JobDefinitionRepository jobDefinitionRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
     private final PartitionLifecycleService partitionLifecycleService;
     private final TenantActionRateLimiter tenantActionRateLimiter;
@@ -89,10 +89,9 @@ public class WaitingPartitionDispatchScheduler {
         if (jobInstance == null) {
             return null;
         }
-        JobDefinitionRecord jobDefinition = jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(
+        JobDefinitionRecord jobDefinition = configCacheService.findEnabledJobDefinition(
                 jobInstance.getTenantId(),
-                jobInstance.getJobCode(),
-                true
+                jobInstance.getJobCode()
         );
         ResourceSchedulingDecision decision = resourceScheduler.schedule(buildRequest(jobInstance, partition, task, jobDefinition));
         if (!decision.isDispatchable()) {

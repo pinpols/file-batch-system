@@ -4,9 +4,9 @@ import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.common.logging.AuditLogConstants;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
-import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -32,7 +32,7 @@ import com.example.batch.common.utils.JsonUtils;
 public class BatchDayCutoffScheduler {
 
     private final BatchDayInstanceRepository batchDayInstanceRepository;
-    private final BusinessCalendarRepository businessCalendarRepository;
+    private final OrchestratorConfigCacheService configCacheService;
     private final JobExecutionLogMapper jobExecutionLogMapper;
 
     @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
@@ -73,11 +73,7 @@ public class BatchDayCutoffScheduler {
     }
 
     private Instant resolveCutoffAt(String tenantId, String calendarCode, java.time.LocalDate bizDate) {
-        BusinessCalendarRecord calendar = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
-                tenantId,
-                calendarCode,
-                true
-        );
+        BusinessCalendarRecord calendar = configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
         if (calendar == null) {
             return null;
         }
@@ -115,4 +111,3 @@ public class BatchDayCutoffScheduler {
         jobExecutionLogMapper.insert(logEntity);
     }
 }
-

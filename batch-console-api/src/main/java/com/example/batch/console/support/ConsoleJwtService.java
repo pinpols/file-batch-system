@@ -37,11 +37,18 @@ public class ConsoleJwtService {
     private static final String CLAIM_TENANT_ID = "tenantId";
     private static final String CLAIM_AUTHORITIES = "authorities";
     private static final String CLAIM_TOKEN_TYPE = "tokenType";
+    private static final String CLAIM_SESSION_VERSION = "sessionVersion";
 
     private final ConsoleSecurityProperties properties;
+    private final ConsoleSessionRegistry sessionRegistry;
 
     /** 签发访问令牌及过期时间。 */
     public ConsoleAuthTokenResponse issueToken(String username, String tenantId, Set<String> authorities) {
+        return issueToken(username, tenantId, authorities, sessionRegistry.currentSessionVersion(username, tenantId));
+    }
+
+    /** 签发访问令牌及过期时间。 */
+    public ConsoleAuthTokenResponse issueToken(String username, String tenantId, Set<String> authorities, long sessionVersion) {
         if (!StringUtils.hasText(username)) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "username is required");
         }
@@ -57,6 +64,7 @@ public class ConsoleJwtService {
                 .expiresAt(expiresAt)
                 .claim(CLAIM_TENANT_ID, tenantId)
                 .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE)
+                .claim(CLAIM_SESSION_VERSION, sessionVersion)
                 .claim(CLAIM_AUTHORITIES, authorities == null ? List.of() : List.copyOf(authorities))
                 .build();
         String token = encoder().encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).type("JWT").build(), claims))
@@ -76,6 +84,12 @@ public class ConsoleJwtService {
         }
         String username = jwt.getSubject();
         String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
+        Long sessionVersion = jwt.getClaim(CLAIM_SESSION_VERSION);
+        if (properties.isSingleSessionEnabled()) {
+            if (sessionVersion == null || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion)) {
+                throw new BizException(ResultCode.UNAUTHORIZED, CommonErrorMessages.INVALID_CONSOLE_JWT);
+            }
+        }
         List<String> authorities = jwt.getClaimAsStringList(CLAIM_AUTHORITIES);
         return new ConsolePrincipal(username, tenantId, authorities == null ? Set.of() : new LinkedHashSet<>(authorities));
     }

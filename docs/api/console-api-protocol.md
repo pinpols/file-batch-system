@@ -70,6 +70,8 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 - Console endpoints are protected by Spring Security.
 - JWT bearer auth is the preferred login/session mechanism.
+- `POST /api/console/auth/login` validates one of the seeded console accounts stored in the platform database and issues a JWT.
+- Single-account login is single-session by default. A fresh login invalidates older JWTs for the same username and tenant.
 - Legacy `X-Console-Token` header auth is retained for compatibility and migration.
 - `POST /api/console/auth/token` exchanges an authenticated console session for a JWT access token.
 - `GET /api/console/auth/me` returns the current authenticated principal.
@@ -176,10 +178,33 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 ### Ops
 
+- `POST /api/console/auth/login`
 - `POST /api/console/auth/token`
 - `GET /api/console/auth/me`
 - `GET /api/console/ops/summary`
 - `GET /api/console/ops/summary/events`
+
+Default seeded account names for local/internal use:
+
+- `admin` -> `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`
+- `auditor` -> `ROLE_AUDITOR`
+- `config-admin` -> `ROLE_CONFIG_ADMIN`
+
+Minimal login page:
+
+- `GET /console-login.html`
+
+`POST /api/console/auth/login` accepts:
+
+- `username` required
+- `password` required
+- `tenantId` optional, defaults to `default-tenant`
+- Repository does not ship plaintext default passwords; only password hashes are stored in the platform database.
+
+Session rule:
+
+- The same seeded account keeps only one active JWT per tenant.
+- A newer `POST /api/console/auth/login` or `POST /api/console/auth/token` replaces the previous JWT for that account.
 
 `GET /api/console/ops/summary` is the first-screen operational snapshot. The server requires **`tenantId` as a query parameter** (not only `X-Tenant-Id`). The response is a typed summary payload inside `CommonResponse` and should be treated as the control plane entry for the console home page. It includes:
 
@@ -191,6 +216,8 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - outbox retry backlog and delivery failures
 
 `GET /api/console/ops/summary/events` is the first-screen realtime stream. It emits `ops-summary-updated` payloads with the full `ConsoleOpsSummaryResponse` snapshot after key write actions succeed. The frontend should use it to invalidate or replace the cached summary on the home page.
+
+When the shared realtime channel receives a `summaryRefresh=true` envelope for `ops-summary`, the console consumer reloads the latest summary from the database and emits `ops-summary-updated` instead of forwarding the trigger event verbatim. In other words, the trigger signal is internal, and `ops-summary-updated` is the client-facing data update event.
 
 Query parameters:
 
@@ -215,7 +242,7 @@ Deployment note:
 
 ### Job Definitions
 
-- `GET /api/console/job-definitions`
+- `GET /api/console/query/job-definitions`
 - `POST /api/console/job-definitions`
 - `GET /api/console/job-definitions/{id}`
 - `PUT /api/console/job-definitions/{id}`
@@ -228,7 +255,7 @@ Deployment note:
 
 ### Workflow Definitions
 
-- `GET /api/console/workflow-definitions`
+- `GET /api/console/query/workflow-definitions`
 - `POST /api/console/workflow-definitions`
 - `GET /api/console/workflow-definitions/{id}`
 - `PUT /api/console/workflow-definitions/{id}`
@@ -238,6 +265,14 @@ Deployment note:
 - `GET /api/console/workflow-definitions/events`
 - Create and update are transactional: definition, nodes, and edges are persisted or replaced atomically.
 - `validate` runs Kahn topological sort and checks for cycles, START/END node presence, and reachability. Returns a validation result payload, not a simple boolean.
+
+### Compatibility Aliases
+
+- `GET /api/console/query/pipeline-definitions`
+- `GET /api/console/query/pipeline-definitions/{id}`
+- `GET /api/console/file-pipeline-observability`
+- `GET /api/console/file-pipeline-observability/{id}`
+- These are compatibility aliases for older callers. They return the same file pipeline list/detail payloads as `/api/console/query/file-pipelines` and `/api/console/query/file-pipelines/{id}`.
 - Delete cascades to nodes and edges.
 - `GET /api/console/workflow-definitions/events` subscribes to the workflow-definition realtime stream. It emits change signals for create, update, toggle, and delete operations using event types such as `workflow-definition-created`, `workflow-definition-updated`, `workflow-definition-toggled`, and `workflow-definition-deleted`.
 

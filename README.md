@@ -120,6 +120,17 @@ COMPOSE_ENV_FILE=.env.test ./scripts/docker/up-apps.sh
 COMPOSE_ENV_FILE=.env.prod ./scripts/docker/up-apps.sh
 ```
 
+### 控制台默认登录
+
+- 登录页：`/console-login.html`
+- 默认 seed 账号：
+  - `admin`
+  - `auditor`
+  - `config-admin`
+- 登录接口：`POST /api/console/auth/login`
+- 仓库只保存密码哈希，不保存明文密码
+- 登录成功后返回 JWT，后续请求使用 `Authorization: Bearer <token>`
+
 ### 启动观测栈
 
 ```bash
@@ -208,6 +219,7 @@ DB (job_task: READY)
 | [本地开发](docs/runbook/local-development.md) | 环境搭建、调试、常见问题 |
 | [安全扫描](docs/runbook/security-scan.md) | 本地漏洞自测组合：secret、依赖、SAST、镜像、ZAP |
 | [Docker 部署](docs/deployment/docker-deployment.md) | 容器化部署指南 |
+| [控制台侧边栏菜单树](docs/architecture/console-sidebar-menu-tree.md) | 前端 sidebar 分组、页面可见角色与操作权限边界 |
 | [观测栈 Docker 环境](docs/deployment/observability-docker/README.md) | Prometheus / Exporter / OTel Collector / Jaeger / Loki / Grafana 的独立启动与管理 |
 | [运行时通信](docs/architecture/runtime-module-communication.md) | 模块间消息协议与接口规范 |
 | [设计差距审计](docs/architecture/design-gap-audit.md) | 当前实现与设计文档的差距分析 |

@@ -24,6 +24,7 @@ public class DefaultConsoleBatchWindowApplicationService implements ConsoleBatch
 
     private final BatchWindowMapper batchWindowMapper;
     private final ConsoleTenantGuard tenantGuard;
+    private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
     @Override
     public PageResponse<Map<String, Object>> list(String tenantId, String windowCode, Boolean enabled,
@@ -55,6 +56,7 @@ public class DefaultConsoleBatchWindowApplicationService implements ConsoleBatch
         params.put("enabled", request.getEnabled() != null ? request.getEnabled() : true);
         params.put("description", request.getDescription());
         batchWindowMapper.insert(params);
+        cacheInvalidationService.evictBatchWindow(tenantId, request.getWindowCode());
         Long id = ((Number) params.get("id")).longValue();
         return batchWindowMapper.selectById(tenantId, id);
     }
@@ -79,6 +81,7 @@ public class DefaultConsoleBatchWindowApplicationService implements ConsoleBatch
         params.put("enabled", request.getEnabled() != null ? request.getEnabled() : existing.get("enabled"));
         params.put("description", request.getDescription() != null ? request.getDescription() : existing.get("description"));
         batchWindowMapper.update(params);
+        cacheInvalidationService.evictBatchWindow(tenantId, String.valueOf(existing.get("window_code")));
         return batchWindowMapper.selectById(tenantId, id);
     }
 
@@ -88,6 +91,10 @@ public class DefaultConsoleBatchWindowApplicationService implements ConsoleBatch
         int rows = batchWindowMapper.toggleEnabled(resolved, id, enabled);
         if (rows == 0) {
             throw new BizException(ResultCode.NOT_FOUND, "batch window not found");
+        }
+        Map<String, Object> window = batchWindowMapper.selectById(resolved, id);
+        if (window != null) {
+            cacheInvalidationService.evictBatchWindow(resolved, String.valueOf(window.get("window_code")));
         }
     }
 }

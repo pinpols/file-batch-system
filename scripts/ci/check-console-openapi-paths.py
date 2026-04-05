@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Verify that docs/api/console-api.openapi.yaml documents exactly the same
-HTTP routes as batch-console-api Console*Controller classes.
+HTTP routes as batch-console-api controller classes under web/ and web/realtime/.
 
 Exit 1 on mismatch with a readable diff (openapi-only vs code-only).
 """
@@ -19,7 +19,7 @@ except ImportError as exc:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OPENAPI_PATH = REPO_ROOT / "docs" / "api" / "console-api.openapi.yaml"
-CONTROLLER_GLOB = (
+CONTROLLER_ROOT = (
     REPO_ROOT
     / "batch-console-api"
     / "src"
@@ -32,14 +32,22 @@ CONTROLLER_GLOB = (
     / "web"
 )
 
-CLASS_MAPPING = re.compile(
-    r"@RequestMapping\s*\(\s*(?:value\s*=\s*)?\"(/api/console[^\"]*)\"\s*\)"
-)
+CLASS_MAPPING = re.compile(r"@RequestMapping\s*(?:\((?P<args>.*?)\))?", re.DOTALL)
 METHOD_MAPPING = re.compile(
-    r"@(?P<ann>GetMapping|PostMapping)\s*\(\s*(?:value\s*=\s*)?\"(?P<path>/[^\"]*)\"",
-    re.MULTILINE,
+    r"@(?P<ann>RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\s*(?:\((?P<args>.*?)\))?",
+    re.DOTALL,
 )
-CLASS_DECL = re.compile(r"public\s+class\s+Console\w+Controller\b")
+CLASS_DECL = re.compile(r"public\s+class\s+Console\w+(?:Controller|RealtimeController)\b")
+REQUEST_METHOD_MAPPING = {
+    "GetMapping": {"GET"},
+    "PostMapping": {"POST"},
+    "PutMapping": {"PUT"},
+    "DeleteMapping": {"DELETE"},
+    "PatchMapping": {"PATCH"},
+}
+REQUEST_METHOD_RE = re.compile(r"RequestMethod\.(GET|POST|PUT|DELETE|PATCH)")
+PATH_ATTRIBUTE_RE = re.compile(r"(?:^|,)\s*(?:value|path)\s*=\s*\"([^\"]*)\"", re.DOTALL)
+DIRECT_PATH_RE = re.compile(r"^\s*\"([^\"]*)\"\s*$", re.DOTALL)
 
 
 def join_paths(base: str, sub: str) -> str:
@@ -49,6 +57,26 @@ def join_paths(base: str, sub: str) -> str:
     if not sub.startswith("/"):
         sub = "/" + sub
     return base + sub
+
+
+def extract_paths(args: str | None) -> list[str]:
+    if args is None:
+        return ["/"]
+    matches = [match.group(1) for match in PATH_ATTRIBUTE_RE.finditer(args)]
+    if matches:
+        return matches
+    direct = DIRECT_PATH_RE.search(args.strip())
+    if direct:
+        return [direct.group(1)]
+    return ["/"]
+
+
+def extract_methods(annotation: str, args: str | None) -> set[str]:
+    if annotation in REQUEST_METHOD_MAPPING:
+        return REQUEST_METHOD_MAPPING[annotation]
+    if not args:
+        return set()
+    return {match.group(1) for match in REQUEST_METHOD_RE.finditer(args)}
 
 
 def openapi_routes() -> set[tuple[str, str]]:
@@ -68,7 +96,7 @@ def openapi_routes() -> set[tuple[str, str]]:
 
 def controller_routes() -> set[tuple[str, str]]:
     out: set[tuple[str, str]] = set()
-    for java in sorted(CONTROLLER_GLOB.glob("Console*Controller.java")):
+    for java in sorted(CONTROLLER_ROOT.rglob("*.java")):
         text = java.read_text(encoding="utf-8")
         decl = CLASS_DECL.search(text)
         if not decl:
@@ -78,14 +106,19 @@ def controller_routes() -> set[tuple[str, str]]:
         if not m_class:
             print(f"WARN: no @RequestMapping on {java.relative_to(REPO_ROOT)}", file=sys.stderr)
             continue
-        base = m_class.group(1)
+        class_paths = extract_paths(m_class.group("args"))
         body = text[decl.start() :]
         for m in METHOD_MAPPING.finditer(body):
             ann = m.group("ann")
-            sub = m.group("path")
-            method = "GET" if ann == "GetMapping" else "POST"
-            full = join_paths(base, sub)
-            out.add((method, full))
+            methods = extract_methods(ann, m.group("args"))
+            if not methods:
+                continue
+            method_paths = extract_paths(m.group("args"))
+            for base in class_paths:
+                for sub in method_paths:
+                    full = join_paths(base, sub)
+                    for method in methods:
+                        out.add((method, full))
     return out
 
 
@@ -108,7 +141,7 @@ def main() -> int:
 
     print("Console OpenAPI vs Controller path mismatch.\n", file=sys.stderr)
     if only_openapi:
-        print("In OpenAPI but not in Console*Controller (GET/POST path):", file=sys.stderr)
+        print("In OpenAPI but not in controller code:", file=sys.stderr)
         for m, p in only_openapi:
             print(f"  {m} {p}", file=sys.stderr)
         print(file=sys.stderr)
