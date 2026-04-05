@@ -12,6 +12,7 @@
   - `--all`：单元 + 集成 + E2E 全量
   - `-- <mvn args>`：透传 Maven 参数，如 `-pl batch-orchestrator -am`
 - `run-e2e-tests.sh`：直接运行全部 E2E 测试（`batch-e2e-tests`）
+- `build-apps.sh`：单独打包本地联调应用模块
 - `start-all.sh`：启动本地相关服务
 - `stop-all.sh`：停止本地相关服务
 - `inspect-all.sh`：依次执行服务、数据库、Worker 巡检
@@ -36,16 +37,18 @@
 - 大部分脚本默认依赖 Docker / Docker Desktop、PostgreSQL、Kafka、MinIO、Redis 或对应的本地容器
 - 使用 Testcontainers 的脚本通常需要 `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` 和 `DOCKER_API_VERSION`
 - `start-all.sh` / `stop-all.sh` 默认使用 `.env.local`，如需切换环境可设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`
+- `start-all.sh` 默认只启动，不自动 Maven 打包；如需构建，先执行 `build-apps.sh`，或使用 `BUILD=1`
 - 如果脚本有额外环境变量要求，直接看脚本头部注释
 
 ## 常见顺序
 
-1. 先执行 `start-all.sh` 或准备好本地依赖
-2. 再执行 `init-kafka-topics.sh`、`init-minio.sh`、`load-system-test-data.sh`
-3. 日常开发：`bash scripts/local/run-tests.sh`（单元 + 集成，约 2~3 分钟）
-4. 提交前：`bash scripts/local/run-tests.sh --all`（含 E2E，约 10 分钟）
-5. 最后用 `inspect-all.sh` 做一次巡检
-6. 出现异常时再考虑对应的 `heal-*.sh`
+1. 先执行 `build-apps.sh`（首次或代码有变更时）
+2. 再执行 `start-all.sh` 或准备好本地依赖
+3. 再执行 `init-kafka-topics.sh`、`init-minio.sh`、`load-system-test-data.sh`
+4. 日常开发：`bash scripts/local/run-tests.sh`（单元 + 集成，约 2~3 分钟）
+5. 提交前：`bash scripts/local/run-tests.sh --all`（含 E2E，约 10 分钟）
+6. 最后用 `inspect-all.sh` 做一次巡检
+7. 出现异常时再考虑对应的 `heal-*.sh`
 
 ## 相关文档
 

@@ -1,11 +1,11 @@
 -- =========================================================
--- Quartz 2.5.2 PostgreSQL schema bootstrap
--- Based on official Quartz tables_postgres.sql
--- Adaptation:
+-- V2 - Quartz JDBC JobStore tables（PostgreSQL 2.5.2 官方脚本语义，IF NOT EXISTS）
+-- Notes:
 -- 1) Explicit quartz schema qualification
 -- 2) Non-destructive IF NOT EXISTS form
 -- 3) No DROP statements
 -- =========================================================
+
 
 CREATE SCHEMA IF NOT EXISTS quartz;
 

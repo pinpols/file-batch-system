@@ -12,8 +12,8 @@ fail-fast：关闭（`-Dsurefire.failFast=false`、`-Djunit.jupiter.execution.fa
 1. `DispatchPipelineE2eIT` 初次失败：`Unrecognized field "run_mode"`  
    - 修复：在 `batch-worker-dispatch` 的 `DispatchPayload` 增加 `run_mode` 字段兼容（`@JsonProperty("run_mode")` / `@JsonAlias("runMode")`）。
 2. `DispatchPipelineE2eIT` 后续失败：`ON CONFLICT (tenant_id, event_key)` 无匹配唯一约束  
-   - 根因：E2E Testcontainers 初始化脚本 `batch-common/src/test/resources/db/platform-init.sql` 创建了 `batch.outbox_event` 表，但缺少 `UNIQUE (tenant_id, event_key)` 约束。
-   - 修复：在 `platform-init.sql` 为 `batch.outbox_event` 增加 `CONSTRAINT uk_outbox_event_key UNIQUE (tenant_id, event_key)`。
+   - 根因（历史）：当时 `platform-init.sql` 手写了 `outbox_event` 表且与 Flyway 不一致。  
+   - 现状：`platform-init.sql` 仅建 schema；`outbox_event` 及唯一约束完全由 Flyway 迁移定义。
 3. `ExportPipelineE2eIT` 失败：`Unrecognized field "run_mode"`  
    - 修复：在 `batch-worker-export` 的 `ExportPayload` 增加 `runMode`（`@JsonProperty("run_mode")` / `@JsonAlias("runMode")`），并同步更新 `batch-worker-export` 内相关单测里 `new ExportPayload(...)` 的入参（在 `autoDispatch` 后补 `null`）。
 

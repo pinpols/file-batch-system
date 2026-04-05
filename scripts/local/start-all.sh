@@ -3,8 +3,9 @@
 # start-all.sh - 一键启动本地联调环境
 # Notes:
 # 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及六个 Java 模块。
-# 2) 运行前需要 Docker、Docker Compose、JDK 和 Maven。
-# 3) PID 写入 logs/start-all.pids，日志写入 logs/<module>.log。
+# 2) 默认不自动 Maven 打包；如需先构建，请显式传 BUILD=1 或先执行 build-apps.sh。
+# 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。
+# 4) PID 写入 logs/start-all.pids，日志写入 logs/<module>.log。
 # 4) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
 #    本脚本会尝试常见安装路径（Homebrew、Docker.app 等）。
 # =========================================================
@@ -49,7 +50,7 @@ module_jar() {
   local jar
   jar="$(ls "$ROOT/$module/target/${module}"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc' | head -1 || true)"
   if [[ -z "$jar" || ! -f "$jar" ]]; then
-    echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar（请先成功执行 mvn package）" >&2
+    echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar（请先执行 ./scripts/local/build-apps.sh 或 BUILD=1 ./scripts/local/start-all.sh）" >&2
     exit 1
   fi
   printf '%s' "$jar"
@@ -135,10 +136,16 @@ wait_container_healthy batch-redis "Redis"
 wait_container_exited_zero batch-kafka-init "Kafka topic init"
 wait_container_exited_zero batch-minio-init "MinIO bucket init"
 
-echo "==> Maven 打包全部模块（-DskipTests）..."
-mvn -q -DskipTests \
-  -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-  -am package -T 1C
+if [[ "${BUILD:-0}" == "1" ]]; then
+  echo "==> BUILD=1，执行 Maven 打包全部模块（-DskipTests）..."
+  mvn -q -DskipTests \
+    -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
+    -am package -T 1C
+else
+  echo "==> 跳过 Maven 打包（默认行为）"
+  echo "  如需先构建，请执行 ./scripts/local/build-apps.sh"
+  echo "  或使用 BUILD=1 ./scripts/local/start-all.sh"
+fi
 
 echo "==> 启动 Spring Boot 进程（profile=local）..."
 echo "  顺序：orchestrator -> 短暂等待 -> trigger / console / 三个 worker"

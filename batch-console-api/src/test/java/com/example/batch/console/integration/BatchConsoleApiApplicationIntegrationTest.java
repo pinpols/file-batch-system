@@ -10,7 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 
 /**
- * Console API with real Postgres, Kafka, MinIO; Flyway applies {@code docs/sql/flyway} on the platform DB.
+ * Console API with real Postgres, Kafka, MinIO; Flyway applies orchestrator {@code db/migration} on the platform DB.
  */
 @SpringBootTest(classes = BatchConsoleApiApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class BatchConsoleApiApplicationIntegrationTest extends AbstractIntegrationTest {

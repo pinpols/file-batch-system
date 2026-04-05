@@ -9,8 +9,8 @@ public final class E2eTestSql {
 
     private E2eTestSql() {}
 
-    /** 业务库示例表结构（单源：{@code docs/sql/business/V1__create_biz_example_tables.sql}，Maven 打进 {@code classpath:sql/}）。 */
-    public static final String BIZ_SCHEMA = "classpath:sql/V1__create_biz_example_tables.sql";
+    /** 业务库表结构（单源：{@code docs/sql/business/create_biz_tables.sql}，Maven 打进 {@code classpath:sql/}；非 Flyway）。 */
+    public static final String BIZ_SCHEMA = "classpath:sql/create_biz_tables.sql";
 
     public static final String IMPORT_TEMPLATE_SEED = "classpath:db/testdata/import-template-config-seed.sql";
 

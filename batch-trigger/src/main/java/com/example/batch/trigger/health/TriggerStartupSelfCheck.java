@@ -89,7 +89,7 @@ public class TriggerStartupSelfCheck {
                     table
             );
             if (cnt == null || cnt == 0) {
-                problems.add("缺少表：`quartz." + table + "`（请确认 `V33__create_quartz_tables_postgres_2_5_2.sql` 已执行）。");
+                problems.add("缺少表：`quartz." + table + "`（请确认 `V2__create_quartz_tables_postgres_2_5_2.sql` 已执行）。");
             }
         }
     }

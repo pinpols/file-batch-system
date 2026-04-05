@@ -124,17 +124,10 @@
     </dependencies>
 
     <build>
-        <!-- 平台 Flyway：唯一脚本源 docs/sql/flyway，打包为 Spring Boot 默认路径 db/migration -->
+        <!-- 平台 Flyway：仅 src/main/resources/db/migration（无 docs 第二副本） -->
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
-            </resource>
-            <resource>
-                <directory>${project.basedir}/../docs/sql/flyway</directory>
-                <targetPath>db/migration</targetPath>
-                <includes>
-                    <include>V*.sql</include>
-                </includes>
             </resource>
         </resources>
         <testResources>

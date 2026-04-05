@@ -123,7 +123,7 @@
                 <directory>src/main/resources</directory>
             </resource>
             <resource>
-                <directory>${project.basedir}/../docs/sql/flyway</directory>
+                <directory>${project.basedir}/../batch-orchestrator/src/main/resources/db/migration</directory>
                 <targetPath>db/migration</targetPath>
                 <includes>
                     <include>V*.sql</include>
