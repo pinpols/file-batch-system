@@ -4,7 +4,6 @@ import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.enums.OutboxPublishStatus;
-import com.example.batch.common.model.PageRequest;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
@@ -48,9 +47,9 @@ public class E2eOutboxPublishSupport {
 
     public void publishAllPending(String tenantId) {
         List<OutboxEventEntity> pending = outboxEventMapper.selectPending(
-                new OutboxEventQuery(tenantId, OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code(),
-                        new PageRequest(1, 500), OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code(),
-                        null, null, null));
+                new OutboxEventQuery(tenantId, null, null, null,
+                        OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code(),
+                        500, 1, 0));
         ensureTopicsExist(pending);
         for (OutboxEventEntity event : pending) {
             outboxPublisher.publish(event);

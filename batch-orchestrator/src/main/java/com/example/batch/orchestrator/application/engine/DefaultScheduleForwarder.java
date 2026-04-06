@@ -51,7 +51,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                     OutboxPublishStatus.PUBLISHING.code(),
                     OutboxPublishStatus.NEW.code(),
                     OutboxPublishStatus.FAILED.code()) > 0) {
-                inFlight.add(new InFlight(event, outboxPublisher.publish(event)));
+                CompletableFuture<Boolean> future = outboxPublisher.publish(event);
+                inFlight.add(new InFlight(event, future != null ? future : CompletableFuture.completedFuture(false)));
             }
         }
 
