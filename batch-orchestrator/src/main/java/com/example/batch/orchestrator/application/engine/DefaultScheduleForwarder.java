@@ -11,7 +11,9 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,52 +36,64 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
                 null,
                 null,
                 OutboxPublishStatus.NEW.code(),
-                OutboxPublishStatus.FAILED.code()
+                OutboxPublishStatus.FAILED.code(),
+                governance.outbox().getBatchSize(),
+                plan == null ? 1 : plan.getShardTotal(),
+                plan == null ? 0 : plan.getShardIndex()
         ));
-        int attemptedEvents = 0;
-        int publishSucceeded = 0;
-        int publishFailed = 0;
-
-        for (OutboxEventEntity event : pendingEvents.stream()
-                .limit(governance.outbox().getBatchSize())
-                .toList()) {
-            // Ensure outbox forwarding logs can be correlated by traceId.
-            BatchMdc.put(StructuredLogField.TENANT_ID, event.getTenantId());
-            BatchMdc.put(StructuredLogField.TRACE_ID, event.getTraceId());
+        // ── 阶段一：批量 markPublishing + 并行触发 Kafka 发送 ──────────────────────
+        record InFlight(OutboxEventEntity event, CompletableFuture<Boolean> future) {}
+        List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
+        for (OutboxEventEntity event : pendingEvents) {
             if (outboxEventMapper.markPublishing(
                     event.getTenantId(),
                     event.getId(),
                     OutboxPublishStatus.PUBLISHING.code(),
                     OutboxPublishStatus.NEW.code(),
                     OutboxPublishStatus.FAILED.code()) > 0) {
-                try {
-                    attemptedEvents++;
-                    boolean published = outboxPublisher.publish(event);
-                    if (published) {
-                        publishSucceeded++;
-                        outboxEventMapper.markPublished(event.getTenantId(), event.getId(), OutboxPublishStatus.PUBLISHED.code());
+                inFlight.add(new InFlight(event, outboxPublisher.publish(event)));
+            }
+        }
+
+        // ── 阶段二：等待本批所有 Kafka ACK（并行等待，耗时 ≈ 单条最长 RTT）────────
+        if (!inFlight.isEmpty()) {
+            CompletableFuture.allOf(inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new)).join();
+        }
+
+        // ── 阶段三：根据发送结果统一更新 DB 状态 ───────────────────────────────────
+        int attemptedEvents = 0;
+        int publishSucceeded = 0;
+        int publishFailed = 0;
+        for (InFlight item : inFlight) {
+            OutboxEventEntity event = item.event();
+            BatchMdc.put(StructuredLogField.TENANT_ID, event.getTenantId());
+            BatchMdc.put(StructuredLogField.TRACE_ID, event.getTraceId());
+            try {
+                attemptedEvents++;
+                boolean published = Boolean.TRUE.equals(item.future().getNow(false));
+                if (published) {
+                    publishSucceeded++;
+                    outboxEventMapper.markPublished(event.getTenantId(), event.getId(), OutboxPublishStatus.PUBLISHED.code());
+                } else {
+                    publishFailed++;
+                    Instant nextRetryAt = Instant.now().plusSeconds(governance.outbox().getRetryDelaySeconds());
+                    int publishAttemptNo = event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
+                    if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
+                        outboxEventMapper.markGiveUp(event.getTenantId(), event.getId(), OutboxPublishStatus.GIVE_UP.code());
+                        recordRetry(event, publishAttemptNo, null, "retry attempts exhausted");
                     } else {
-                        publishFailed++;
-                        Instant nextRetryAt = Instant.now().plusSeconds(governance.outbox().getRetryDelaySeconds());
-                        int publishAttemptNo = event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1;
-                        if (publishAttemptNo >= governance.outbox().getMaxRetryAttempts()) {
-                            outboxEventMapper.markGiveUp(event.getTenantId(), event.getId(), OutboxPublishStatus.GIVE_UP.code());
-                            recordRetry(event, publishAttemptNo, null, "retry attempts exhausted");
-                        } else {
-                            outboxEventMapper.markFailed(
-                                    event.getTenantId(),
-                                    event.getId(),
-                                    OutboxPublishStatus.FAILED.code(),
-                                    nextRetryAt
-                            );
-                            recordRetry(event, publishAttemptNo, nextRetryAt, "publish failed");
-                        }
+                        outboxEventMapper.markFailed(
+                                event.getTenantId(),
+                                event.getId(),
+                                OutboxPublishStatus.FAILED.code(),
+                                nextRetryAt
+                        );
+                        recordRetry(event, publishAttemptNo, nextRetryAt, "publish failed");
                     }
-                } finally {
-                    // Clear MDC so later events won't accidentally reuse fields.
-                    BatchMdc.remove(StructuredLogField.TENANT_ID);
-                    BatchMdc.remove(StructuredLogField.TRACE_ID);
                 }
+            } finally {
+                BatchMdc.remove(StructuredLogField.TENANT_ID);
+                BatchMdc.remove(StructuredLogField.TRACE_ID);
             }
         }
         return ScheduleForwarderResult.of(attemptedEvents, publishSucceeded, publishFailed);

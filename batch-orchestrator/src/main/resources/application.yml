@@ -35,9 +35,10 @@ spring:
   datasource:
     hikari:
       # 调度侧平台库 Hikari 连接池（调度 / 状态推进 / 查询为主）
-      maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:10}
-      minimum-idle: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MIN_IDLE:3}
-      connection-timeout: ${BATCH_ORCHESTRATOR_PLATFORM_DB_CONNECTION_TIMEOUT_MS:3000}
+      # Outbox 轮询 + 任务状态写入 + ShedLock + Console API 共用，生产建议前置 PgBouncer（transaction mode）
+      maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:30}
+      minimum-idle: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MIN_IDLE:5}
+      connection-timeout: ${BATCH_ORCHESTRATOR_PLATFORM_DB_CONNECTION_TIMEOUT_MS:5000}
 
 mybatis:
   # MyBatis domain 的别名包路径（用于 mapper XML 简化类型引用）
@@ -91,6 +92,10 @@ batch:
     circuit-breaker-enabled: ${BATCH_OUTBOX_CIRCUIT_BREAKER_ENABLED:true}
     circuit-breaker-failure-threshold-consecutive-polls: ${BATCH_OUTBOX_CIRCUIT_BREAKER_FAILURE_THRESHOLD_CONSECUTIVE_POLLS:3}
     circuit-breaker-cooldown-millis: ${BATCH_OUTBOX_CIRCUIT_BREAKER_COOLDOWN_MILLIS:60000}
+    # 分片轮询：shardTotal=1 为单实例模式（默认），>1 时多副本各持一个分片并行推进
+    # 多副本部署时，每个 Pod 须设置不同的 BATCH_OUTBOX_SHARD_INDEX（0 到 shardTotal-1）
+    shard-total: ${BATCH_OUTBOX_SHARD_TOTAL:1}
+    shard-index: ${BATCH_OUTBOX_SHARD_INDEX:0}
   worker:
     drain:
       # Worker drain 默认超时（秒）

@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
+import com.example.batch.worker.core.domain.PipelineStepTemplateParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractStageExecutor;
@@ -208,7 +209,8 @@ public class DefaultDispatchStageExecutor
                 case RETRY -> Map.of("onFailureNextStageCode", DispatchStage.COMPENSATE.name());
                 default -> Map.of();
             };
-            templates.add(new PipelineStepTemplate(
+            // 使用参数对象封装构造参数（遵循编码规范：参数 ≥ 7 必须封装）
+            PipelineStepTemplateParam param = PipelineStepTemplateParam.of(
                     step.stepCode(),
                     step.stepName(),
                     stage.name(),
@@ -219,7 +221,8 @@ public class DefaultDispatchStageExecutor
                     "NONE",
                     0,
                     true
-            ));
+            );
+            templates.add(param.toTemplate());
         }
         return List.copyOf(templates);
     }

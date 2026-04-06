@@ -54,6 +54,9 @@
         </if>
           and publish_status in (#{pendingStatus1}, #{pendingStatus2})
           and (next_publish_at is null or next_publish_at &lt;= current_timestamp)
+        <if test="shardTotal != null and shardTotal > 1">
+            and (hashtext(tenant_id) &amp; 2147483647) % #{shardTotal} = #{shardIndex}
+        </if>
         <if test="aggregateType != null and aggregateType != ''">
             and aggregate_type = #{aggregateType}
         </if>
@@ -61,6 +64,9 @@
             and publish_status = #{publishStatus}
         </if>
         order by id asc
+        <if test="batchSize != null and batchSize > 0">
+            limit #{batchSize}
+        </if>
     </select>
 
     <update id="markPublishing">

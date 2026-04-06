@@ -2,6 +2,8 @@ package com.example.batch.orchestrator.config;
 
 import com.example.batch.orchestrator.infrastructure.redis.RedisShedLockProvider;
 import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -31,5 +33,10 @@ public class ShedLockConfiguration {
             @Value("${spring.application.name:batch-orchestrator}") String environment
     ) {
         return new RedisShedLockProvider(redisTemplate, environment);
+    }
+
+    @Bean
+    public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
+        return new DefaultLockingTaskExecutor(lockProvider);
     }
 }

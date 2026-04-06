@@ -271,7 +271,10 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
                         null,
                         new PageRequest(1, 500),
                         OutboxPublishStatus.NEW.code(),
-                        OutboxPublishStatus.FAILED.code()));
+                        OutboxPublishStatus.FAILED.code(),
+                        null,
+                        null,
+                        null));
         ensureTopicsExist(pending);
         for (OutboxEventEntity event : pending) {
             outboxPublisher.publish(event);

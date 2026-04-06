@@ -8,6 +8,9 @@ public record OutboxEventQuery(
         String aggregateType,
         PageRequest pageRequest,
         String pendingStatus1,
-        String pendingStatus2
+        String pendingStatus2,
+        Integer batchSize,
+        Integer shardTotal,
+        Integer shardIndex
 ) {
 }

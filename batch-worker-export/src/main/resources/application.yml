@@ -18,10 +18,13 @@ spring:
       # 手动确认：业务处理成功后显式 ack，避免“处理失败但已提交 offset”
       ack-mode: manual_immediate
     consumer:
-      # export 任务通常较重：每次 poll 拉取条数建议偏小，降低单批处理时延
-      max-poll-records: ${BATCH_WORKER_EXPORT_KAFKA_MAX_POLL_RECORDS:5}
-      fetch-min-size: ${BATCH_WORKER_EXPORT_KAFKA_FETCH_MIN_SIZE:1}
+      # 每次 poll 拉取上限；Semaphore 背压保证并发不超过 max-concurrent-tasks
+      max-poll-records: ${BATCH_WORKER_EXPORT_KAFKA_MAX_POLL_RECORDS:20}
+      # Broker 至少积累此字节数才响应 fetch，减少空轮询网络往返
+      fetch-min-size: ${BATCH_WORKER_EXPORT_KAFKA_FETCH_MIN_SIZE:1024}
       fetch-max-wait: ${BATCH_WORKER_EXPORT_KAFKA_FETCH_MAX_WAIT:500}
+      # 两次 poll 之间允许的最大处理时长；需大于单批 max-poll-records 条任务的最长执行时间
+      max-poll-interval-ms: ${BATCH_WORKER_EXPORT_KAFKA_MAX_POLL_INTERVAL_MS:600000}
 
 batch:
   worker:
@@ -59,8 +62,8 @@ batch:
   datasource:
     hikari:
       # export worker platform pool（写任务状态/审计/file_record，负载低于 business pool）
-      maximum-pool-size: ${BATCH_WORKER_EXPORT_PLATFORM_DB_MAX_POOL_SIZE:5}
-      minimum-idle: ${BATCH_WORKER_EXPORT_PLATFORM_DB_MIN_IDLE:2}
+      maximum-pool-size: ${BATCH_WORKER_EXPORT_PLATFORM_DB_MAX_POOL_SIZE:10}
+      minimum-idle: ${BATCH_WORKER_EXPORT_PLATFORM_DB_MIN_IDLE:3}
       connection-timeout: ${BATCH_WORKER_EXPORT_PLATFORM_DB_CONNECTION_TIMEOUT_MS:3000}
     business:
       hikari:
