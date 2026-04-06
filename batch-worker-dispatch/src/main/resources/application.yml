@@ -6,6 +6,8 @@ spring:
   application:
     # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-worker-dispatch
+  flyway:
+    enabled: false
   config:
     # 引入共享默认配置基线（DB/Kafka/日志/通用 batch.* 等）
     import: "classpath:batch-defaults.yml"

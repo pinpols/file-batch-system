@@ -16,12 +16,12 @@ Prometheus 本地 UI 默认可通过 `http://localhost:${PROMETHEUS_PORT:-19090}
 
 | 服务 | 默认端口 | 路径 |
 |------|----------|------|
-| batch-console-api | 8080 | `/actuator/prometheus` |
-| batch-trigger | 8081 | `/actuator/prometheus` |
-| batch-orchestrator | 8082 | `/actuator/prometheus` |
-| batch-worker-import | 8083 | `/actuator/prometheus` |
-| batch-worker-export | 8084 | `/actuator/prometheus` |
-| batch-worker-dispatch | 8085 | `/actuator/prometheus` |
+| batch-console-api | 18080 | `/actuator/prometheus` |
+| batch-trigger | 18081 | `/actuator/prometheus` |
+| batch-orchestrator | 18082 | `/actuator/prometheus` |
+| batch-worker-import | 18083 | `/actuator/prometheus` |
+| batch-worker-export | 18084 | `/actuator/prometheus` |
+| batch-worker-dispatch | 18085 | `/actuator/prometheus` |
 | node-exporter | 9100 | `/metrics` |
 | cadvisor | 8080 | `/metrics` |
 | redis-exporter | 9121 | `/metrics` |
@@ -29,7 +29,7 @@ Prometheus 本地 UI 默认可通过 `http://localhost:${PROMETHEUS_PORT:-19090}
 | kafka-exporter | 9308 | `/metrics` |
 | minio | 9000 | `/minio/v2/metrics/cluster` |
 
-上表为 **Docker 网络内** 访问端口（如 `minio:9000`）。从宿主机浏览器访问 MinIO API 控制台映射见 `.env.local` 的 `MINIO_API_PORT`（默认 `19000`）；抓取 Java 服务若在本机进程上跑则用 `18080`–`18085` 等。
+上表为 **本仓库 Docker 网络内** Java 监听端口（`server.port` 默认 18080–18085）。MinIO 在网内为 `9000`；宿主机映射见 `.env.local`（如 `MINIO_API_PORT=19000`）。
 
 ## Prometheus 抓取配置片段
 
@@ -38,27 +38,27 @@ scrape_configs:
   - job_name: batch-console-api
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['console-api:8080']
+      - targets: ['console-api:18080']
   - job_name: batch-orchestrator
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['orchestrator:8082']
+      - targets: ['orchestrator:18082']
   - job_name: batch-trigger
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['trigger:8081']
+      - targets: ['trigger:18081']
   - job_name: batch-worker-import
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-import:8083']
+      - targets: ['worker-import:18083']
   - job_name: batch-worker-export
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-export:8084']
+      - targets: ['worker-export:18084']
   - job_name: batch-worker-dispatch
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-dispatch:8085']
+      - targets: ['worker-dispatch:18085']
   - job_name: redis-exporter
     static_configs:
       - targets: ['redis-exporter:9121']

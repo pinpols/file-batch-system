@@ -6,6 +6,9 @@ spring:
   application:
     # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-worker-import
+  flyway:
+    # 平台库迁移由 orchestrator 执行；继承 AbstractIntegrationTest 的用例由 DynamicPropertySource 开启
+    enabled: false
   config:
     # 引入共享默认配置基线（DB/Kafka/日志/通用 batch.* 等）
     import: "classpath:batch-defaults.yml"

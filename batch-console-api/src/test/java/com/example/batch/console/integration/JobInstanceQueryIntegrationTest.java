@@ -105,14 +105,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
     private void insertJobInstance(String tenantId, String jobCode, String status,
                                    String instanceNo, String traceId) {
-        Long jobDefinitionId = jdbcTemplate.queryForObject("""
-                INSERT INTO batch.job_definition
-                  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
-                VALUES (?, ?, ?, 'FILE', 'MANUAL', 'Asia/Shanghai', now(), now())
-                RETURNING id
-                """,
-                Long.class,
-                tenantId, jobCode, jobCode + "-name");
+        long jobDefinitionId = ensureJobDefinitionId(tenantId, jobCode);
 
         jdbcTemplate.update("""
                 INSERT INTO batch.job_instance
@@ -125,5 +118,24 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
                 """,
                 tenantId, jobDefinitionId, jobCode, instanceNo, Date.valueOf(LocalDate.now()),
                 status, tenantId + ":" + instanceNo, traceId);
+    }
+
+    private long ensureJobDefinitionId(String tenantId, String jobCode) {
+        Long existing = jdbcTemplate.query(
+                "select id from batch.job_definition where tenant_id = ? and job_code = ? limit 1",
+                rs -> rs.next() ? rs.getLong(1) : null,
+                tenantId,
+                jobCode);
+        if (existing != null) {
+            return existing;
+        }
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO batch.job_definition
+                  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
+                VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
+                RETURNING id
+                """,
+                Long.class,
+                tenantId, jobCode, jobCode + "-name");
     }
 }

@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure.realtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,7 @@ import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 @SuppressWarnings("unchecked")
@@ -55,8 +57,8 @@ class ConsoleRealtimeReplayStoreTest {
         store.append(new ConsoleRealtimeStreamEnvelope(
                 "console-a", "t1", "alerts", "alert-updated", "cursor-1", false, JsonUtils.toJson("a"), Instant.now()));
 
-        verify(listOperations).trim("batch:console:realtime:buffer:t1:alerts", -20_000L, -1);
-        verify(redisTemplate).expire("batch:console:realtime:buffer:t1:alerts", Duration.ofHours(24));
+        // append() uses a single pipelined low-level callback (rPush + lTrim + expire), not opsForList()/expire()
+        verify(redisTemplate).executePipelined(any(RedisCallback.class));
     }
 
     private ConsoleRealtimeProperties properties() {

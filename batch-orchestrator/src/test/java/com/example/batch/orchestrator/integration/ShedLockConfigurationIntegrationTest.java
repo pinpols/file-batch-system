@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
+import com.example.batch.orchestrator.infrastructure.redis.RedisShedLockProvider;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,14 +17,13 @@ import javax.sql.DataSource;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
-import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * 集成冒烟：确认 ShedLock 在 Flyway 与测试初始化脚本之后仍可正常装配。
+ * 集成冒烟：确认 ShedLock 在 Flyway 与测试基础设施之后仍可正常装配（orchestrator 使用 Redis 锁实现）。
  */
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
@@ -38,7 +38,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
     DataSource dataSource;
 
     @Test
-    void shouldCreateShedLockTableAndConfigureJdbcTemplateLockProvider() {
+    void shouldCreateShedLockTableFromFlywayAndConfigureRedisLockProvider() {
         Integer tableCount = jdbcTemplate.queryForObject(
                 """
                 select count(*)
@@ -50,7 +50,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
         );
 
         assertThat(tableCount).isEqualTo(1);
-        assertThat(lockProvider).isInstanceOf(JdbcTemplateLockProvider.class);
+        assertThat(lockProvider).isInstanceOf(RedisShedLockProvider.class);
         assertThat(dataSource).isNotNull();
     }
 
