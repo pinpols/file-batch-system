@@ -48,8 +48,9 @@ public class E2eOutboxPublishSupport {
 
     public void publishAllPending(String tenantId) {
         List<OutboxEventEntity> pending = outboxEventMapper.selectPending(
-                new OutboxEventQuery(tenantId, null, null, new PageRequest(1, 500),
-                        OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code()));
+                new OutboxEventQuery(tenantId, OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code(),
+                        new PageRequest(1, 500), OutboxPublishStatus.NEW.code(), OutboxPublishStatus.FAILED.code(),
+                        null, null, null));
         ensureTopicsExist(pending);
         for (OutboxEventEntity event : pending) {
             outboxPublisher.publish(event);

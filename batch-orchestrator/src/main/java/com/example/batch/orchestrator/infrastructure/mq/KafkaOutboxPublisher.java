@@ -14,6 +14,7 @@ import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -61,7 +62,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
                             return true;
                         }
                         recordDelivery(event, targetTopic, workerId, OutboxPublishStatus.FAILED.code(), ex.getMessage());
-                        return false;
+                        throw new CompletionException(ex);
                     });
         }
 
@@ -95,7 +96,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
                         return true;
                     }
                     recordDelivery(event, fallbackTopic, null, OutboxPublishStatus.FAILED.code(), ex.getMessage());
-                    return false;
+                    throw new CompletionException(ex);
                 });
     }
 

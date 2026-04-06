@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.kafka.BatchTopics;
-import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -29,7 +28,6 @@ class KafkaOutboxPublisherTest {
     private KafkaTemplate<String, String> kafkaTemplate;
     private BatchMqTopicsProperties batchMqTopicsProperties;
     private OutboxProperties outboxProperties;
-    private BatchOrchestratorGovernanceProperties governance;
     private EventDeliveryLogMapper eventDeliveryLogMapper;
     private KafkaOutboxPublisher publisher;
 
@@ -39,7 +37,7 @@ class KafkaOutboxPublisherTest {
         batchMqTopicsProperties = new BatchMqTopicsProperties();
         outboxProperties = new OutboxProperties();
         eventDeliveryLogMapper = mock(EventDeliveryLogMapper.class);
-        governance = mock(BatchOrchestratorGovernanceProperties.class);
+        BatchOrchestratorGovernanceProperties governance = mock(BatchOrchestratorGovernanceProperties.class);
         when(governance.mqTopics()).thenReturn(batchMqTopicsProperties);
         when(governance.outbox()).thenReturn(outboxProperties);
         publisher = new KafkaOutboxPublisher(kafkaTemplate, governance, eventDeliveryLogMapper);
@@ -52,9 +50,14 @@ class KafkaOutboxPublisherTest {
         when(kafkaTemplate.send(anyString(), anyString(), anyString()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka down")));
 
-        boolean published = publisher.publish(event);
+        CompletableFuture<Boolean> publishFuture = publisher.publish(event);
 
-        assertThat(published).isFalse();
+        assertThat(publishFuture).isCompletedExceptionally();
+        try {
+            publishFuture.get();
+        } catch (Exception e) {
+            assertThat(e).hasCauseInstanceOf(RuntimeException.class);
+        }
         ArgumentCaptor<EventDeliveryLogEntity> captor = ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
         verify(eventDeliveryLogMapper).insert(captor.capture());
         EventDeliveryLogEntity log = captor.getValue();
@@ -72,9 +75,14 @@ class KafkaOutboxPublisherTest {
         when(kafkaTemplate.send(eq(BatchTopics.OUTBOX_EVENT), eq("fallback-key-001"), anyString()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker unavailable")));
 
-        boolean published = publisher.publish(event);
+        CompletableFuture<Boolean> publishFuture = publisher.publish(event);
 
-        assertThat(published).isFalse();
+        assertThat(publishFuture).isCompletedExceptionally();
+        try {
+            publishFuture.get();
+        } catch (Exception e) {
+            assertThat(e).hasCauseInstanceOf(RuntimeException.class);
+        }
         ArgumentCaptor<EventDeliveryLogEntity> captor = ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
         verify(eventDeliveryLogMapper).insert(captor.capture());
         EventDeliveryLogEntity log = captor.getValue();
@@ -119,13 +127,13 @@ class KafkaOutboxPublisherTest {
         return event;
     }
 
-    private static OutboxEventEntity fallbackEvent(String eventType, String eventKey) {
+    private static OutboxEventEntity fallbackEvent(@SuppressWarnings("unused") String eventType, String eventKey) {
         OutboxEventEntity event = new OutboxEventEntity();
         event.setId(101L);
         event.setTenantId("t1");
         event.setAggregateType("AGG_TYPE");
         event.setAggregateId(2L);
-        event.setEventType(eventType);
+        event.setEventType("CUSTOM_EVENT");
         event.setEventKey(eventKey);
         event.setPayloadJson("{\"hello\":\"world\"}");
         event.setPublishAttempt(0);

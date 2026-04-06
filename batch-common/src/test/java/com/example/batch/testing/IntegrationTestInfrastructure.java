@@ -1,6 +1,7 @@
 package com.example.batch.testing;
 
 import org.springframework.test.context.DynamicPropertyRegistry;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.kafka.KafkaContainer;
 
@@ -22,12 +23,14 @@ final class IntegrationTestInfrastructure {
             PostgreSQLContainer<?> platformPostgres,
             PostgreSQLContainer<?> businessPostgres,
             KafkaContainer kafka,
-            MinIOContainer minio
+            MinIOContainer minio,
+            GenericContainer<?> redis
     ) {
         registerPlatformDatabaseProperties(registry, platformPostgres);
         registerKafkaProperties(registry, kafka);
         registerBusinessDatabaseProperties(registry, businessPostgres);
         registerMinioProperties(registry, minio);
+        registerRedisProperties(registry, redis);
         registerSecurityProperties(registry);
     }
 
@@ -57,6 +60,11 @@ final class IntegrationTestInfrastructure {
         registry.add("batch.storage.minio.access-key", minio::getAccessKey);
         registry.add("batch.storage.minio.secret-key", minio::getSecretKey);
         registry.add("batch.storage.minio.bucket", minio::getDefaultBucket);
+    }
+
+    static void registerRedisProperties(DynamicPropertyRegistry registry, GenericContainer<?> redis) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
     }
 
     static void registerSecurityProperties(DynamicPropertyRegistry registry) {

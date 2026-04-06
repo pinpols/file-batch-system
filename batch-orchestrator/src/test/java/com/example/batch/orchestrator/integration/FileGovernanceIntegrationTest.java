@@ -11,6 +11,7 @@ import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetrics
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import io.minio.MinioClient;
+import org.springframework.context.annotation.Bean;
 import io.minio.PutObjectArgs;
 import io.minio.StatObjectArgs;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -110,6 +111,14 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
             FileGovernanceMetricsCacheService.class
     })
     static class TestApplication {
+
+        @Bean
+        MinioClient minioClient(MinioStorageProperties props) {
+            return MinioClient.builder()
+                    .endpoint(props.getEndpoint())
+                    .credentials(props.getAccessKey(), props.getSecretKey())
+                    .build();
+        }
     }
 
     private static final String TENANT_ID = "t1";
