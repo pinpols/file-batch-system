@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -19,8 +21,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class BatchStartupSelfCheck {
 
     private static final Logger log = LoggerFactory.getLogger(BatchStartupSelfCheck.class);
-    private static final String FLYWAY_CLASS_NAME = "org.flywaydb.core.Flyway";
-
     private static final List<String> QUARTZ_STANDARD_TABLES = List.of(
             "qrtz_job_details",
             "qrtz_triggers",
@@ -36,12 +36,12 @@ public class BatchStartupSelfCheck {
 
     private final DataSource dataSource;
     private final BatchStartupSelfCheckProperties properties;
-    private final ObjectProvider<Object> flyway;
+    private final ObjectProvider<Flyway> flyway;
 
     public BatchStartupSelfCheck(
             DataSource dataSource,
             BatchStartupSelfCheckProperties properties,
-            ObjectProvider<Object> flyway) {
+            ObjectProvider<Flyway> flyway) {
         this.dataSource = dataSource;
         this.properties = properties;
         this.flyway = flyway;
@@ -55,14 +55,14 @@ public class BatchStartupSelfCheck {
 
         List<String> problems = new ArrayList<>();
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        Object fw = flywayBean();
+        Flyway fw = flyway.getIfAvailable();
 
         if (properties.isFlywayValidate()) {
             if (fw == null) {
                 problems.add("已开启 flyway-validate，但当前上下文不存在 Flyway bean，无法执行校验。");
             } else {
                 try {
-                    invokeFlywayValidate(fw);
+                    fw.validate();
                 } catch (Exception ex) {
                     problems.add("Flyway 脚本校验失败：" + ex.getMessage());
                 }
@@ -74,7 +74,7 @@ public class BatchStartupSelfCheck {
                 problems.add("配置了 required-flyway-versions，但当前上下文不存在 Flyway bean，无法读取已应用迁移。");
             } else {
                 try {
-                    Set<String> applied = Arrays.stream(appliedFlywayVersions(fw))
+                    Set<String> applied = Arrays.stream(appliedFlywayVersionsFrom(fw))
                             .collect(Collectors.toSet());
                     for (String version : properties.getRequiredFlywayVersions()) {
                         if (!applied.contains(version)) {
@@ -127,28 +127,12 @@ public class BatchStartupSelfCheck {
         }
     }
 
-    private Object flywayBean() {
-        Object candidate = flyway.getIfAvailable();
-        if (candidate == null) {
-            return null;
-        }
-        if (!FLYWAY_CLASS_NAME.equals(candidate.getClass().getName())) {
-            return null;
-        }
-        return candidate;
-    }
-
-    private static void invokeFlywayValidate(Object flywayBean) throws ReflectiveOperationException {
-        flywayBean.getClass().getMethod("validate").invoke(flywayBean);
-    }
-
-    private static String[] appliedFlywayVersions(Object flywayBean) throws ReflectiveOperationException {
-        Object info = flywayBean.getClass().getMethod("info").invoke(flywayBean);
-        Object[] applied = (Object[]) info.getClass().getMethod("applied").invoke(info);
+    private static String[] appliedFlywayVersionsFrom(Flyway fw) {
+        MigrationInfo[] applied = fw.info().applied();
         String[] versions = new String[applied.length];
         for (int i = 0; i < applied.length; i++) {
-            Object version = applied[i].getClass().getMethod("getVersion").invoke(applied[i]);
-            versions[i] = version == null ? "" : version.toString();
+            var version = applied[i].getVersion();
+            versions[i] = version == null ? "" : version.getVersion();
         }
         return versions;
     }

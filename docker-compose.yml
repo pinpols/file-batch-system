@@ -12,7 +12,7 @@ services:
       TZ: ${TZ}
       PGTZ: ${TZ}
     ports:
-      - "${POSTGRES_PORT}:15432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -29,7 +29,7 @@ services:
     container_name: batch-kafka
     restart: unless-stopped
     ports:
-      - "${KAFKA_HOST_PORT}:19092"
+      - "${KAFKA_HOST_PORT}:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -90,7 +90,7 @@ services:
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:19000/minio/health/ready >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/ready >/dev/null"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -102,7 +102,7 @@ services:
       minio:
         condition: service_healthy
     environment:
-      MINIO_ENDPOINT: http://minio:19000
+      MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
@@ -139,3 +139,4 @@ volumes:
 networks:
   batch-network:
     name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network
+    external: true

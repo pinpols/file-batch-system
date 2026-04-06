@@ -6,11 +6,11 @@
 batch-platform 各服务
   │  (OTLP HTTP :4318)
   ▼
-OTel Collector  ──► Jaeger   :16686  (Trace UI)
-                ──► Loki     :3100   (Log 存储)
+OTel Collector  ──► Jaeger   :16686（UI；宿主机映射默认同端口）
+                ──► Loki     :3100（容器内 API；宿主机映射默认 :13100）
                         │
                         ▼
-                    Grafana  :3000   (统一可视化：Metrics + Traces + Logs)
+                    Grafana  :3000（容器内；宿主机映射默认 :13000）
                         │
                     Prometheus (已有，保持 /actuator/prometheus 抓取不变)
 ```
@@ -41,8 +41,8 @@ OTel Collector  ──► Jaeger   :16686  (Trace UI)
 
 # 访问
 # Jaeger UI : http://localhost:16686
-# Grafana   : http://localhost:3000  (admin/admin)
-# Loki API  : http://localhost:3100
+# Grafana   : http://localhost:13000  (admin/admin)
+# Loki API  : http://localhost:13100
 ```
 
 ---

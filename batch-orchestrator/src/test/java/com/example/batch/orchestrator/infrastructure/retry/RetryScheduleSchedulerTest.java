@@ -9,6 +9,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,10 +52,13 @@ class RetryScheduleSchedulerTest {
             entered.await();
 
             Future<?> second = pool.submit(scheduler::poll);
+            // Ensure the second poll() runs (and returns early on CAS) while the first is still
+            // blocked inside dispatch; otherwise the first may finish and clear `running` before
+            // the second poll, allowing a second dispatch.
+            second.get(5, TimeUnit.SECONDS);
             release.countDown();
 
-            first.get();
-            second.get();
+            first.get(5, TimeUnit.SECONDS);
         } finally {
             pool.shutdownNow();
         }

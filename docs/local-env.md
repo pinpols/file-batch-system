@@ -40,10 +40,10 @@ PostgreSQL 数据库名：`batch_platform`，业务库 schema：`biz`（`batch_b
 
 | 服务 | 地址 | 账号 | 密码 |
 |------|------|------|------|
-| Grafana | http://localhost:3000 | `admin` | `admin` |
+| Grafana | http://localhost:13000 | `admin` | `admin` |
 | Prometheus | http://localhost:19090 | — | — |
 | Jaeger UI | http://localhost:16686 | — | — |
-| Loki | http://localhost:3100 | — | — （API only，通过 Grafana 查询）|
+| Loki | http://localhost:13100 | — | — （API only，通过 Grafana 查询）|
 
 ### Exporter 端口（Prometheus scrape，一般不需要直接访问）
 

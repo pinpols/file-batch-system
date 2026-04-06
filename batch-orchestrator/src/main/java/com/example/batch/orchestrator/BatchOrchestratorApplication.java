@@ -2,6 +2,7 @@ package com.example.batch.orchestrator;
 
 import com.example.batch.common.config.BatchJsonAutoConfiguration;
 import com.example.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import com.example.batch.common.config.BatchStartupSelfCheckAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.SpringApplication;
@@ -26,6 +27,7 @@ import org.springframework.kafka.core.ProducerFactory;
 @ImportAutoConfiguration({
         BatchJsonAutoConfiguration.class,
         BatchObjectCryptoAutoConfiguration.class,
+        BatchStartupSelfCheckAutoConfiguration.class,
         RestClientAutoConfiguration.class
 })
 @MapperScan("com.example.batch.orchestrator.mapper")

@@ -7,6 +7,8 @@ import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
+import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -103,7 +105,9 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     @Import({
             FileGovernanceScheduler.class,
             FileGovernanceRepository.class,
-            com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.class
+            com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.class,
+            OrchestratorRedisSupport.class,
+            FileGovernanceMetricsCacheService.class
     })
     static class TestApplication {
     }
@@ -124,10 +128,12 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldCollectLatencyMetricsForDelayedArrivalFiles() {
+        // collectLatencyMetrics() scopes queries to reconcile.default-tenant-id (see FileGovernanceScheduler).
+        String latencyTenantId = "default-tenant";
         Instant now = Instant.now();
         String suffix = suffix();
         insertFileRecord(new FileRecordSpec(
-                TENANT_ID,
+                latencyTenantId,
                 "delay-file-" + suffix + ".csv",
                 "INPUT",
                 "RECEIVED",

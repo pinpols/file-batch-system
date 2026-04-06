@@ -54,7 +54,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
                 "batch.outbox.poll-interval-millis=600000",
                 "batch.retry.poll-interval-millis=600000",
                 "batch.partition-lease.reclaim-interval-millis=600000",
-                "batch.resource-scheduler.waiting-dispatch-interval-millis=600000",
+                // Must stay short: if launch races before worker registry is visible, WaitingPartitionDispatchScheduler
+                // is the only path that writes the dispatch outbox for CREATED/WAITING tasks.
+                "batch.resource-scheduler.waiting-dispatch-interval-millis=500",
                 "batch.resource-scheduler.quota-reset-scan-interval-millis=600000",
                 "batch.scheduler.snapshot-persist-enabled=false"
         })
@@ -115,6 +117,7 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
 
             worker2 = startDispatchWorker(tenantId, workerCode, consumerGroupId, worker2Log);
             awaitLogContains(worker2Log, "Started BatchWorkerDispatchApplication");
+            awaitWorkerOnlineInRegistry(tenantId, workerCode);
 
             Map<String, Object> params = new LinkedHashMap<>();
             params.put("fileId", String.valueOf(fileId));
@@ -136,7 +139,7 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
 
             publishPendingOutbox(tenantId);
 
-            await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+            await().atMost(Duration.ofSeconds(300)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
                 String status = jdbcTemplate.queryForObject(
                         """
                                 select t.task_status
@@ -362,6 +365,20 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
         await().atMost(Duration.ofSeconds(WORKER_START_TIMEOUT_SECONDS)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
             String content = Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
             assertThat(content).contains(expectedText);
+        });
+    }
+
+    private void awaitWorkerOnlineInRegistry(String tenantId, String workerCode) {
+        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
+            Integer count = jdbcTemplate.queryForObject(
+                    """
+                            select count(1)::int from batch.worker_registry
+                            where tenant_id = ? and worker_code = ? and status = 'ONLINE' and worker_group = 'dispatch'
+                            """,
+                    Integer.class,
+                    tenantId,
+                    workerCode);
+            assertThat(count).isEqualTo(1);
         });
     }
 

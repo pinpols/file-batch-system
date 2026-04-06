@@ -1,6 +1,7 @@
-# 与 docker-compose.yml 叠加以 `--profile apps` 启动 Java 服务。宿主机端口由 .env 中
+# 与 docker-compose.yml 叠加以 `--profile apps` 启动 Java 服务。
+# 宿主机端口由 .env 中
 # CONSOLE_API_PORT / TRIGGER_PORT / ORCHESTRATOR_PORT 及 worker 端口变量映射；容器内仍为 8080–8085。
-# 库地址、Kafka、MinIO 使用 Docker 网络名（postgres:15432、kafka:29092、minio:9000），勿写 localhost。
+# 库地址、Kafka、MinIO 使用 Docker 网络名（postgres:5432、kafka:29092、minio:9000）；15432 仅宿主机映射。
 services:
   console-api:
     profiles: ["apps"]
@@ -13,39 +14,42 @@ services:
     container_name: batch-console-api
     restart: unless-stopped
     environment:
-      # 限制堆大小，避免 Java 25 默认 ergonomics 在 Docker Desktop 小内存下占满宿主机导致 OOM / exit 137
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
-      # 平台库迁移仅由 orchestrator 执行；Docker 构建排除 docs 后本镜像不含 db/migration 脚本
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_CONSOLE_INSTANCE_ID: ${BATCH_CONSOLE_INSTANCE_ID:-batch-console-api-local}
       BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES: ${BATCH_CONSOLE_REALTIME_REPLAY_MAX_ENTRIES:-20000}
       BATCH_CONSOLE_REALTIME_REPLAY_TTL: ${BATCH_CONSOLE_REALTIME_REPLAY_TTL:-24h}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dummy-openai-key}
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
       BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
-      BATCH_REDIS_PORT: ${BATCH_REDIS_PORT:-6379}
+      BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-console-api.log
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
       BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
       BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
       BATCH_MINIO_SECRET_KEY: ${BATCH_MINIO_SECRET_KEY:-minioadmin123}
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
     volumes:
       - ./logs/docker:/app/logs
     ports:
-      - "${CONSOLE_API_PORT:-18080}:18080"
+      - "${CONSOLE_API_PORT:-18080}:8080"
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:18080/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 40s
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -69,22 +73,25 @@ services:
     environment:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
       LOGGING_FILE_NAME: /app/logs/batch-trigger.log
+      SERVER_PORT: 8081
+      MANAGEMENT_SERVER_PORT: 8081
     ports:
-      - "${TRIGGER_PORT:-18081}:18081"
+      - "${TRIGGER_PORT:-18081}:8081"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:18081/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,10 +110,10 @@ services:
     restart: unless-stopped
     environment:
       JAVA_OPTS: ${BATCH_ORCHESTRATOR_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms256m -Xmx768m -XX:MaxMetaspaceSize=256m}
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
       BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       BATCH_MINIO_ENDPOINT: ${BATCH_MINIO_ENDPOINT:-http://minio:9000}
       BATCH_MINIO_ACCESS_KEY: ${BATCH_MINIO_ACCESS_KEY:-minioadmin}
@@ -114,22 +121,26 @@ services:
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
       BATCH_REDIS_HOST: ${BATCH_REDIS_HOST:-redis}
-      BATCH_REDIS_PORT: ${BATCH_REDIS_PORT:-6379}
+      BATCH_REDIS_PORT: 6379
       LOGGING_FILE_NAME: /app/logs/batch-orchestrator.log
+      SERVER_PORT: 8082
+      MANAGEMENT_SERVER_PORT: 8082
     ports:
-      - "${ORCHESTRATOR_PORT:-18082}:18082"
+      - "${ORCHESTRATOR_PORT:-18082}:8082"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:18082/actuator/health | grep -q 'UP'"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health | grep -q 'UP'"]
       interval: 10s
       timeout: 5s
       retries: 18
       start_period: 120s
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -149,12 +160,12 @@ services:
     environment:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:15432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -165,12 +176,24 @@ services:
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
       LOGGING_FILE_NAME: /app/logs/batch-worker-import.log
+      SERVER_PORT: 8083
+      MANAGEMENT_SERVER_PORT: 8083
+    ports:
+      - "${WORKER_IMPORT_PORT:-18083}:8083"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -192,12 +215,12 @@ services:
     environment:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:15432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -208,12 +231,24 @@ services:
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
       LOGGING_FILE_NAME: /app/logs/batch-worker-export.log
+      SERVER_PORT: 8084
+      MANAGEMENT_SERVER_PORT: 8084
+    ports:
+      - "${WORKER_EXPORT_PORT:-18084}:8084"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -235,12 +270,12 @@ services:
     environment:
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -Xms128m -Xmx512m -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"
-      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:15432/batch_platform}
+      BATCH_PLATFORM_DB_URL: ${BATCH_PLATFORM_DB_URL:-jdbc:postgresql://postgres:5432/batch_platform}
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:-batch_pass_123}
-      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
+      BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
-      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:15432/batch_business}
+      BATCH_BUSINESS_DB_URL: ${BATCH_BUSINESS_DB_URL:-jdbc:postgresql://postgres:5432/batch_business}
       BATCH_BUSINESS_DB_USERNAME: ${BATCH_BUSINESS_DB_USERNAME:-batch_user}
       BATCH_BUSINESS_DB_PASSWORD: ${BATCH_BUSINESS_DB_PASSWORD:-batch_pass_123}
       BATCH_BUSINESS_DB_SCHEMA: ${BATCH_BUSINESS_DB_SCHEMA:-biz}
@@ -251,12 +286,24 @@ services:
       BATCH_MINIO_BUCKET: ${BATCH_MINIO_BUCKET:-batch-dev}
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
       LOGGING_FILE_NAME: /app/logs/batch-worker-dispatch.log
+      SERVER_PORT: 8085
+      MANAGEMENT_SERVER_PORT: 8085
+    ports:
+      - "${WORKER_DISPATCH_PORT:-18085}:8085"
     volumes:
       - ./logs/docker:/app/logs
     networks:
       - batch-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8085/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -264,3 +311,8 @@ services:
         condition: service_completed_successfully
       orchestrator:
         condition: service_healthy
+
+networks:
+  batch-network:
+    name: ${COMPOSE_PROJECT_NAME:-batch-local}_batch-network
+    external: true
