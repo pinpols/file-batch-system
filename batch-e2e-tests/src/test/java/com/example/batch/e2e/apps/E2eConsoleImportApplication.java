@@ -41,7 +41,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration.class
 })
 @EnableKafka
-@EnableJdbcRepositories(basePackages = "com.example.batch.orchestrator.repository")
+@EnableJdbcRepositories(basePackages = {
+        "com.example.batch.orchestrator.repository",
+        "com.example.batch.console.repository"
+})
 @Import({
         E2ePlatformDataSourceConfiguration.class,
         E2eKafkaProducerConfiguration.class,
