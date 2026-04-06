@@ -130,12 +130,13 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
                 idempotencyKey("dead-letter-approve")));
         assertThat(replayCommandNo).isNotBlank();
 
-        e2eOutboxPublishSupport.publishAllPending(TENANT);
-
-        JsonNode completedDeadLetter = firstItem(getConsoleJson(
-                "/api/console/query/dead-letters?tenantId=t1&traceId=" + encode(deadLetterTraceId) + "&pageNo=1&pageSize=10"));
-        assertThat(completedDeadLetter.path("replayStatus").asText()).isEqualTo("SUCCESS");
-        assertThat(completedDeadLetter.path("replayCount").asInt()).isEqualTo(1);
+        await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(2)).untilAsserted(() -> {
+            e2eOutboxPublishSupport.publishAllPending(TENANT);
+            JsonNode completedDeadLetter = firstItem(getConsoleJson(
+                    "/api/console/query/dead-letters?tenantId=t1&traceId=" + encode(deadLetterTraceId) + "&pageNo=1&pageSize=10"));
+            assertThat(completedDeadLetter.path("replayStatus").asText()).isEqualTo("SUCCESS");
+            assertThat(completedDeadLetter.path("replayCount").asInt()).isEqualTo(1);
+        });
 
         JsonNode executedApproval = firstItem(getConsoleJson(
                 "/api/console/query/approvals?tenantId=t1&approvalNo=" + encode(replayApprovalNo) + "&pageNo=1&pageSize=10"));
