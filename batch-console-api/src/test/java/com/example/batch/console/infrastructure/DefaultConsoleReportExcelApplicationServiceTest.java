@@ -36,11 +36,13 @@ class DefaultConsoleReportExcelApplicationServiceTest {
         ConsoleQueryApplicationService queryService = mock(ConsoleQueryApplicationService.class);
         ConsoleOrchestratorClientProperties properties = mock(ConsoleOrchestratorClientProperties.class);
         RestClient.Builder builder = mock(RestClient.Builder.class);
+        org.springframework.core.env.Environment environment = mock(org.springframework.core.env.Environment.class);
         DefaultConsoleReportExcelApplicationService service = new DefaultConsoleReportExcelApplicationService(
                 configService,
                 queryService,
                 properties,
-                builder
+                builder,
+                environment
         );
         when(configService.configReleases(any())).thenReturn(List.of(new ConsoleConfigReleaseResponse(
                 1L, "t1", "FILE", "cfg1", "Config 1", "DRAFT", 1, "{}", "{}", Instant.now(), Instant.now(), null, null, "u1", "u1", Instant.now(), Instant.now()

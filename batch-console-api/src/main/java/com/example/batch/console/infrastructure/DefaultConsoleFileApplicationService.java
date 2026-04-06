@@ -19,6 +19,7 @@ import com.example.batch.common.utils.JsonUtils;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import lombok.Setter;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -33,6 +34,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     private final RestClient.Builder restClientBuilder;
     private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
+    private final Environment environment;
 
     @Override
     public ConsoleFileOperationResponse archive(ArchiveFileRequest request, String idempotencyKey) {
@@ -56,7 +58,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         }
         requireApprovedApproval(request.getTenantId(), request.getApprovalId());
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         FileDownloadResponse response = restClient.post()
                 .uri("/internal/files/{fileId}/presign", request.getFileId())
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -78,7 +80,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     @Override
     public ConsoleFileOperationResponse operateArrivalGroup(FileArrivalGroupActionRequest request, String idempotencyKey) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         FileOperationResponse response = restClient.post()
                 .uri("/internal/files/arrival-groups/{fileGroupCode}/actions", request.getFileGroupCode())
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -105,7 +107,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
     private ConsoleFileOperationResponse executeFileOperation(FileExecContext ctx) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         FileOperationResponse response = restClient.post()
                 .uri("/internal/files/{fileId}/" + ctx.operation(), ctx.fileId())
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
@@ -126,7 +128,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
 
     private ConsolePresignDownloadResponse submitApproval(ApprovalSubmitContext ctx) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         ApprovalResponse response = restClient.post()
                 .uri("/internal/approvals")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
@@ -154,7 +156,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     }
 
     private void requireApprovedApproval(String tenantId, String approvalNo) {
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         ApprovalRecordResponse response = restClient.get()
                 .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
                 .retrieve()
@@ -291,5 +293,9 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                                                 String traceId,
                                                 String reason,
                                                 Long extendWaitSeconds) {
+    }
+
+    private String resolveUrl(String url) {
+        return environment.resolvePlaceholders(url);
     }
 }

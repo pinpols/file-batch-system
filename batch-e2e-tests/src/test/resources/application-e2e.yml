@@ -13,6 +13,11 @@ batch:
     poll-interval-millis: 400
   orchestrator:
     base-url: http://127.0.0.1:${local.server.port}
+  console:
+    orchestrator:
+      base-url: http://127.0.0.1:${local.server.port}
+    trigger:
+      base-url: http://127.0.0.1:${local.server.port}
   worker:
     task-client:
       base-url: http://127.0.0.1:${local.server.port}

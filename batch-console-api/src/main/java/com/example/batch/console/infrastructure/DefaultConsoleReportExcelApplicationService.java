@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -63,6 +64,7 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
     private final ConsoleQueryApplicationService queryApplicationService;
     private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
     private final RestClient.Builder restClientBuilder;
+    private final Environment environment;
 
     @Override
     public ResponseEntity<InputStreamResource> exportConfigReleases(ConfigReleaseQueryRequest request) {
@@ -113,7 +115,7 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
     }
 
     private ConsoleSchedulerSnapshotResponse fetchSnapshot(String tenantId) {
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         return client.get()
                 .uri(uriBuilder -> uriBuilder.path("/internal/scheduler/snapshot").queryParam("tenantId", tenantId).build())
                 .retrieve()
@@ -121,7 +123,7 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
     }
 
     private List<ConsoleSchedulerSnapshotHistoryResponse> fetchSnapshotHistory(String tenantId, int limit) {
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         List<ConsoleSchedulerSnapshotHistoryResponse> body = client.get()
                 .uri(uriBuilder -> uriBuilder.path("/internal/scheduler/snapshot/history").queryParam("tenantId", tenantId).queryParam("limit", limit).build())
                 .retrieve()
@@ -283,5 +285,9 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
         } else {
             cell.setCellValue(String.valueOf(value));
         }
+    }
+
+    private String resolveUrl(String url) {
+        return environment.resolvePlaceholders(url);
     }
 }

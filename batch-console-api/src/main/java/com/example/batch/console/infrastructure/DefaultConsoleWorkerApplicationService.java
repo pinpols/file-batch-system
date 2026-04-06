@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -31,12 +32,13 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+    private final Environment environment;
 
     @Override
     public ConsoleWorkerRegistryResponse drain(String workerCode, DrainWorkerRequest request, String idempotencyKey) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         ConsoleRequestMetadata meta = requestMetadataResolver.current();
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("tenantId", tenantId);
         if (request.getTimeoutSeconds() != null) {
@@ -59,7 +61,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     public ConsoleWorkerRegistryResponse forceOffline(String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         ConsoleRequestMetadata meta = requestMetadataResolver.current();
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         ConsoleWorkerRegistryResponse response = toResponse(client.post()
                 .uri("/internal/workers/{workerCode}/force-offline", workerCode)
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -77,7 +79,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     public ConsoleWorkerRegistryResponse takeover(String workerCode, ForceOfflineWorkerRequest request, String idempotencyKey) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
         ConsoleRequestMetadata meta = requestMetadataResolver.current();
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         ConsoleWorkerRegistryResponse response = toResponse(client.post()
                 .uri("/internal/workers/{workerCode}/takeover", workerCode)
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -95,7 +97,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     public List<ConsoleWorkerClaimedTaskResponse> claimedTasks(String tenantId, String workerCode) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         ConsoleRequestMetadata meta = requestMetadataResolver.current();
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         List<com.example.batch.orchestrator.domain.entity.JobTaskEntity> tasks = client.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/workers/{workerCode}/claimed-tasks")
@@ -135,5 +137,9 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 task.getCreatedAt(),
                 task.getUpdatedAt()
         );
+    }
+
+    private String resolveUrl(String url) {
+        return environment.resolvePlaceholders(url);
     }
 }

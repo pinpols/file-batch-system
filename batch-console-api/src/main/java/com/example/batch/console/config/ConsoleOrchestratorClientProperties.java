@@ -7,5 +7,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console.orchestrator")
 public class ConsoleOrchestratorClientProperties {
 
-    private String baseUrl = "http://localhost:8082";
+    private String baseUrl = "http://127.0.0.1:8082";
 }

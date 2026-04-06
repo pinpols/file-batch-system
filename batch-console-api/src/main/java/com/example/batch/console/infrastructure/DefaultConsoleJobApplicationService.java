@@ -42,6 +42,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -61,6 +62,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     private final BatchDayMapper batchDayMapper;
     private final BusinessCalendarMapper businessCalendarMapper;
     private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+    private final Environment environment;
 
     /** 手工/API 触发作业运行。 */
     @Override
@@ -327,7 +329,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     private String approvePendingCatchUpRequest(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
         String tenantId = resolveTenant(request.getTenantId());
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(triggerClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
         CommonResponse<LaunchResponse> response = restClient.post()
                 .uri("/api/triggers/catch-up/approve")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -357,7 +359,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                                   Map<String, Object> params,
                                   String idempotencyKey) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(triggerClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
         CommonResponse<LaunchResponse> response = restClient.post()
                 .uri("/api/triggers/launch")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -404,7 +406,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
 
     private String submitCompensation(CompensationPayload payload, String idempotencyKey) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         CommonResponse<CompensationResponse> response = restClient.post()
                 .uri("/internal/compensations")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -428,7 +430,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                                     Long targetId,
                                     String idempotencyKey) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         CommonResponse<RecoveryOperationResponse> response = restClient.post()
                 .uri(uriTemplate, targetId)
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -449,7 +451,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
 
     private String submitApproval(ApprovalSubmitContext ctx) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         ApprovalResponse response = restClient.post()
                 .uri("/internal/approvals")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, ctx.idempotencyKey())
@@ -477,7 +479,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     }
 
     private void requireApprovedApproval(String tenantId, String approvalNo) {
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         ApprovalRecordResponse response = restClient.get()
                 .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
                 .retrieve()
@@ -687,5 +689,9 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     }
 
     private record CompensationResponse(String commandNo) {
+    }
+
+    private String resolveUrl(String url) {
+        return environment.resolvePlaceholders(url);
     }
 }
