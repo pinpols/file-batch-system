@@ -15,6 +15,7 @@ import io.minio.MinioClient;
 import java.io.InputStream;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -40,6 +41,7 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
     private final BatchSecurityProperties batchSecurityProperties;
     private final RestClient.Builder restClientBuilder;
     private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
+    private final Environment environment;
 
     @Override
     public ResponseEntity<InputStreamResource> download(String tenantId, Long fileId, String approvalId) {
@@ -112,7 +114,7 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
     }
 
     private void requireApprovedApproval(String tenantId, String approvalNo) {
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         ApprovalRecordResponse response = restClient.get()
                 .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
                 .retrieve()
@@ -140,5 +142,9 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
     private record ApprovalRecordResponse(ApprovalRecord record) {
         private record ApprovalRecord(String approvalStatus) {
         }
+    }
+
+    private String resolveUrl(String url) {
+        return environment.resolvePlaceholders(url);
     }
 }

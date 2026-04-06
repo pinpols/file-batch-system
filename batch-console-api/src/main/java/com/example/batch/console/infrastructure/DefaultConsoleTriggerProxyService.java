@@ -7,6 +7,7 @@ import com.example.batch.common.dto.CommonResponse;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -21,6 +22,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
     private final ConsoleTriggerClientProperties triggerClientProperties;
     private final RestClient.Builder restClientBuilder;
     private final ConsoleTenantGuard tenantGuard;
+    private final Environment environment;
 
     @Override
     public Map<String, String> schedulerStatus() {
@@ -39,7 +41,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
 
     @Override
     public List<Object> triggerList() {
-        RestClient client = restClientBuilder.baseUrl(triggerClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
         CommonResponse<List<Object>> resp = client.get()
                 .uri("/api/triggers/management/list")
                 .retrieve()
@@ -50,7 +52,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
     @Override
     public Map<String, String> triggerAction(String tenantId, String jobCode, String action) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(triggerClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
         CommonResponse<Map<String, String>> resp = client.post()
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/triggers/management/{action}")
@@ -63,7 +65,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
     }
 
     private Map<String, String> proxyScheduler(String method, String path) {
-        RestClient client = restClientBuilder.baseUrl(triggerClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
         CommonResponse<Map<String, String>> resp;
         if ("GET".equals(method)) {
             resp = client.get().uri(path).retrieve()
@@ -73,5 +75,9 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
                     .body(new ParameterizedTypeReference<CommonResponse<Map<String, String>>>() {});
         }
         return resp != null ? resp.data() : Map.of();
+    }
+
+    private String resolveUrl(String url) {
+        return environment.resolvePlaceholders(url);
     }
 }

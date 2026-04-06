@@ -9,6 +9,7 @@ import com.example.batch.console.web.response.ConsoleSchedulerSnapshotResponse;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -24,11 +25,12 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     private final RestClient.Builder restClientBuilder;
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
+    private final Environment environment;
 
     @Override
     public Map<String, Object> instanceAction(Long id, String tenantId, String action) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         return client.post()
                 .uri("/internal/instances/{id}/{action}?tenantId={tenantId}", id, action, resolved)
                 .retrieve()
@@ -38,7 +40,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     @Override
     public Map<String, Object> partitionAction(Long id, String tenantId, String action) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         return client.post()
                 .uri("/internal/instances/partitions/{id}/{action}?tenantId={tenantId}", id, action, resolved)
                 .retrieve()
@@ -48,7 +50,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     @Override
     public Map<String, Object> workflowRunAction(Long id, String tenantId, String action) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         Map<String, Object> response = client.post()
                 .uri("/internal/workflow-runs/{id}/{action}?tenantId={tenantId}", id, action, resolved)
                 .retrieve()
@@ -60,7 +62,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     @Override
     public Map<String, Object> workflowRunSkipNode(Long id, String tenantId, String nodeCode) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         Map<String, Object> response = client.post()
                 .uri("/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}",
                         id, resolved, nodeCode)
@@ -72,7 +74,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
 
     @Override
     public ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId) {
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         return client.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/scheduler/snapshot")
@@ -82,9 +84,13 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
                 .body(ConsoleSchedulerSnapshotResponse.class);
     }
 
+    private String resolveUrl(String url) {
+        return environment.resolvePlaceholders(url);
+    }
+
     @Override
     public List<ConsoleSchedulerSnapshotHistoryResponse> schedulerSnapshotHistory(String tenantId, int limit) {
-        RestClient client = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         return client.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/scheduler/snapshot/history")

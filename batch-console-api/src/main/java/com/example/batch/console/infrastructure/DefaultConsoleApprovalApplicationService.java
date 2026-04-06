@@ -21,6 +21,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -37,6 +38,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
     private final ConsoleJobApplicationService consoleJobApplicationService;
     private final ConsoleFileApplicationService consoleFileApplicationService;
+    private final Environment environment;
 
     @Override
     public String approve(String tenantId, String approvalNo, String operatorId, String reason) {
@@ -122,7 +124,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     }
 
     private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         ApprovalRecordResponse response = restClient.get()
                 .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
                 .retrieve()
@@ -135,7 +137,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
     private void approveRemote(String tenantId, String approvalNo, String operatorId, String reason) {
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         restClient.post()
                 .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
@@ -149,7 +151,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
 
     private void rejectRemote(String tenantId, String approvalNo, String operatorId, String reason) {
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         restClient.post()
                 .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
@@ -162,7 +164,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     }
 
     private void markExecutedRemote(String tenantId, String approvalNo) {
-        RestClient restClient = restClientBuilder.baseUrl(orchestratorClientProperties.getBaseUrl()).build();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         restClient.post()
                 .uri("/internal/approvals/{approvalNo}/executed", approvalNo)
                 .body(new ApprovalTenantRequest(tenantId))
@@ -201,5 +203,9 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         private String approvalReason;
         private String sourceTraceId;
         private String sourceIdempotencyKey;
+    }
+
+    private String resolveUrl(String url) {
+        return environment.resolvePlaceholders(url);
     }
 }
