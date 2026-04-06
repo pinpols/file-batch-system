@@ -10,7 +10,6 @@ import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import com.example.batch.common.utils.MinioBucketSupport;
-import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -28,22 +27,22 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MinioExportStorage {
 
-    private final MinioStorageProperties properties;
-    private MinioClient minioClient;
+    // byte[] 上传的最大允许尺寸（10 MB）；超过此阈值应使用 writeObject(Path, ...) 流式上传
+    private static final int MAX_BYTE_UPLOAD_SIZE = 10 * 1024 * 1024;
 
-    @PostConstruct
-    void initialize() {
-        this.minioClient = MinioClient.builder()
-                .endpoint(properties.getEndpoint())
-                .credentials(properties.getAccessKey(), properties.getSecretKey())
-                .build();
-    }
+    private final MinioStorageProperties properties;
+    private final MinioClient minioClient;
 
     public String writeJson(String objectName, String jsonContent) {
         return writeObject(objectName, jsonContent.getBytes(StandardCharsets.UTF_8), BatchFileConstants.CONTENT_TYPE_JSON);
     }
 
     public String writeObject(String objectName, byte[] content, String contentType) {
+        if (content.length > MAX_BYTE_UPLOAD_SIZE) {
+            throw new IllegalArgumentException(
+                    "content too large for byte[] upload (%d bytes); use writeObject(Path, ...) instead"
+                            .formatted(content.length));
+        }
         ensureBucketOrThrow();
         String targetObjectName = objectName;
         if (targetObjectName == null || targetObjectName.isBlank()) {

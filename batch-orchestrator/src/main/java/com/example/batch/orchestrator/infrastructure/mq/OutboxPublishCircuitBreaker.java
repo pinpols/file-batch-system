@@ -4,8 +4,6 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.common.redis.BatchRedisKeys;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
-import java.time.Duration;
-import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,12 +15,9 @@ public class OutboxPublishCircuitBreaker {
 
     private static final String FIELD_FAILED_POLLS = "failedPolls";
     private static final String FIELD_OPEN_UNTIL_MS = "openUntilMs";
+    // 返回 openUntilMs 原始值：<= now 表示熔断关闭，> now 表示熔断开启中
     private static final String ALLOW_SCRIPT = """
-            local openUntil = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0')
-            if openUntil <= tonumber(ARGV[2]) then
-              return 1
-            end
-            return 0
+            return tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0')
             """;
     private static final String ADVANCE_SCRIPT = """
             local failedField = ARGV[1]
@@ -51,6 +46,11 @@ public class OutboxPublishCircuitBreaker {
     private final OutboxProperties outboxProperties;
     private final OrchestratorRedisSupport redis;
 
+    // 本地缓存的熔断开启截止时间（毫秒时间戳）；0 表示熔断关闭
+    private volatile long cachedOpenUntilMs = 0;
+    // 关闭状态缓存的到期时间；到期后需重新查询 Redis 确认状态
+    private volatile long closedCacheExpiresAt = 0;
+
     public OutboxPublishCircuitBreaker(BatchOrchestratorGovernanceProperties governance,
                                        OrchestratorRedisSupport redis) {
         this.outboxProperties = governance.outbox();
@@ -59,30 +59,40 @@ public class OutboxPublishCircuitBreaker {
 
     /**
      * 当前轮是否允许推进投递。
+     * <p>
+     * 快速路径：本地缓存命中时不访问 Redis。
+     * 慢速路径：缓存未命中时查询 Redis 并刷新本地缓存。
      */
     public boolean allowNow() {
         if (!outboxProperties.isCircuitBreakerEnabled()) {
             return true;
         }
         long now = System.currentTimeMillis();
-        Long allowed = redis.evalLong(
-                ALLOW_SCRIPT,
-                BatchRedisKeys.outboxCircuit(),
-                FIELD_OPEN_UNTIL_MS,
-                String.valueOf(now)
-        );
-        return allowed == null || allowed > 0;
+        // 快速路径 1：本地已知熔断开启，且冷却期未结束
+        if (cachedOpenUntilMs > now) {
+            return false;
+        }
+        // 快速路径 2：本地已知熔断关闭，且关闭缓存仍有效
+        if (now < closedCacheExpiresAt) {
+            return true;
+        }
+        // 慢速路径：查询 Redis，刷新本地缓存
+        Long openUntilMs = redis.evalLong(ALLOW_SCRIPT, BatchRedisKeys.outboxCircuit(), FIELD_OPEN_UNTIL_MS);
+        cachedOpenUntilMs = openUntilMs != null ? openUntilMs : 0;
+        closedCacheExpiresAt = now + outboxProperties.getPollIntervalMillis();
+        return cachedOpenUntilMs <= now;
     }
 
     /**
-     * 根据本轮推进结果更新熔断状态。
+     * 根据本轮推进结果更新熔断状态，并同步刷新本地缓存。
      */
     public void onAdvanceResult(int publishFailed) {
         if (!outboxProperties.isCircuitBreakerEnabled()) {
             return;
         }
+        long now = System.currentTimeMillis();
         long ttlMillis = Math.max(outboxProperties.getCircuitBreakerCooldownMillis(), 60_000L);
-        redis.evalLong(
+        Long openUntilMs = redis.evalLong(
                 ADVANCE_SCRIPT,
                 BatchRedisKeys.outboxCircuit(),
                 FIELD_FAILED_POLLS,
@@ -90,8 +100,11 @@ public class OutboxPublishCircuitBreaker {
                 String.valueOf(Math.max(publishFailed, 0)),
                 String.valueOf(outboxProperties.getCircuitBreakerFailureThresholdConsecutivePolls()),
                 String.valueOf(outboxProperties.getCircuitBreakerCooldownMillis()),
-                String.valueOf(System.currentTimeMillis()),
+                String.valueOf(now),
                 String.valueOf(ttlMillis)
         );
+        // 用 Redis 返回的最新值刷新本地缓存
+        cachedOpenUntilMs = openUntilMs != null ? openUntilMs : 0;
+        closedCacheExpiresAt = now + outboxProperties.getPollIntervalMillis();
     }
 }

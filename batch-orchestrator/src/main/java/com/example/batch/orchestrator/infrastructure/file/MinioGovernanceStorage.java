@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 public class MinioGovernanceStorage {
 
     private final MinioStorageProperties properties;
+    private final MinioClient minioClient;
 
     /**
      * 治理任务只做对象清点和清理，不在这里承载业务编排。
@@ -32,11 +33,12 @@ public class MinioGovernanceStorage {
         }
         List<StorageObjectView> objects = new ArrayList<>();
         try {
-            Iterable<Result<Item>> results = client().listObjects(
+            Iterable<Result<Item>> results = minioClient.listObjects(
                     ListObjectsArgs.builder()
                             .bucket(properties.getBucket())
                             .prefix(prefix == null ? "" : prefix)
                             .recursive(true)
+                            .maxKeys(limit)
                             .build()
             );
             for (Result<Item> result : results) {
@@ -67,7 +69,7 @@ public class MinioGovernanceStorage {
             throw new IllegalStateException("minio bucket unavailable: " + properties.getBucket());
         }
         try {
-            client().removeObject(
+            minioClient.removeObject(
                     RemoveObjectArgs.builder()
                             .bucket(properties.getBucket())
                             .object(objectName)
@@ -84,7 +86,7 @@ public class MinioGovernanceStorage {
             if (!ensureBucket(targetBucket)) {
                 throw new IllegalStateException("minio bucket unavailable: " + targetBucket);
             }
-            return client().getPresignedObjectUrl(
+            return minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(targetBucket)
@@ -102,14 +104,7 @@ public class MinioGovernanceStorage {
     }
 
     private boolean ensureBucket(String bucket) {
-        return MinioBucketSupport.ensureBucket(client(), bucket, log, "orchestrator governance");
-    }
-
-    private MinioClient client() {
-        return MinioClient.builder()
-                .endpoint(properties.getEndpoint())
-                .credentials(properties.getAccessKey(), properties.getSecretKey())
-                .build();
+        return MinioBucketSupport.ensureBucket(minioClient, bucket, log, "orchestrator governance");
     }
 
     public record StorageObjectView(

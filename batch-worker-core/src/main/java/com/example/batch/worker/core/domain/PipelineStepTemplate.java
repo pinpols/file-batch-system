@@ -14,4 +14,21 @@ public record PipelineStepTemplate(
         Integer retryMaxCount,
         boolean enabled
 ) {
+    /**
+     * 从参数对象创建 PipelineStepTemplate。
+     */
+    public static PipelineStepTemplate from(PipelineStepTemplateParam param) {
+        return new PipelineStepTemplate(
+                param.stepCode(),
+                param.stepName(),
+                param.stageCode(),
+                param.stepOrder(),
+                param.implCode(),
+                param.stepParams(),
+                param.timeoutSeconds(),
+                param.retryPolicy(),
+                param.retryMaxCount(),
+                param.enabled()
+        );
+    }
 }

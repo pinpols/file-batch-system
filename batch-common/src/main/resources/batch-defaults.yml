@@ -30,6 +30,20 @@ spring:
       # 仅用 Redis 作缓存/消息，不使用 Spring Data Redis Repository；避免与 JDBC Repository 混扫产生 INFO
       repositories:
         enabled: false
+      # 命令执行超时（含网络往返），防止慢操作无限阻塞调用方
+      timeout: ${BATCH_REDIS_TIMEOUT:2000ms}
+      lettuce:
+        # 关闭连接后等待挂起命令完成的超时
+        shutdown-timeout: ${BATCH_REDIS_SHUTDOWN_TIMEOUT:200ms}
+        pool:
+          # 最大活跃连接数；建议 = 并发调用方线程数上限（Outbox 轮询 + 限流 + 配置缓存）
+          max-active: ${BATCH_REDIS_POOL_MAX_ACTIVE:32}
+          # 最大空闲连接数
+          max-idle: ${BATCH_REDIS_POOL_MAX_IDLE:16}
+          # 最小空闲连接数（预热，避免冷启动延迟）
+          min-idle: ${BATCH_REDIS_POOL_MIN_IDLE:4}
+          # 获取连接的最长等待时间；超时后抛出异常而非无限挂起
+          max-wait: ${BATCH_REDIS_POOL_MAX_WAIT:1000ms}
 
 # ------------------------------------------------------------------
 # MyBatis（mapper 扫描路径各模块相同；type-aliases-package 在模块内覆盖）

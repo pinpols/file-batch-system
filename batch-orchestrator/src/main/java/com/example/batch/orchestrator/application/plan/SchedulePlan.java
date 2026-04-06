@@ -21,6 +21,9 @@ public class SchedulePlan {
     private Integer partitionCount;
     private List<PartitionPlan> partitions = new ArrayList<>();
     private WorkerRouteModel defaultWorkerRoute;
+    // Outbox 分片参数：由 OutboxPollScheduler 注入，其余调用方无需设置
+    private int shardTotal = 1;
+    private int shardIndex = 0;
     @Data
     public static class PartitionPlan {
 

@@ -13,6 +13,7 @@ import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -43,7 +44,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     private final EventDeliveryLogMapper eventDeliveryLogMapper;
 
     @Override
-    public boolean publish(OutboxEventEntity event) {
+    public CompletableFuture<Boolean> publish(OutboxEventEntity event) {
         String topic = governance.mqTopics().resolveDispatchTopic(event.getEventType());
         if (topic != null) {
             // 任务派发：payloadJson 是 TaskDispatchMessage 的 JSON，直接按 eventKey 作为 Kafka key 投递。
@@ -51,16 +52,17 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             String targetTopic = dispatchMessage != null && dispatchMessage.selectedWorkerId() != null
                     ? BatchTopics.directDispatchTopic(topic, dispatchMessage.selectedWorkerId())
                     : topic;
-            try {
-                kafkaTemplate.send(targetTopic, event.getEventKey(), event.getPayloadJson()).toCompletableFuture().join();
-                recordDelivery(event, targetTopic, dispatchMessage == null ? null : dispatchMessage.selectedWorkerId(),
-                        OutboxPublishStatus.PUBLISHED.code(), null);
-                return true;
-            } catch (RuntimeException exception) {
-                recordDelivery(event, targetTopic, dispatchMessage == null ? null : dispatchMessage.selectedWorkerId(),
-                        OutboxPublishStatus.FAILED.code(), exception.getMessage());
-                return false;
-            }
+            String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
+            return kafkaTemplate.send(targetTopic, event.getEventKey(), event.getPayloadJson())
+                    .toCompletableFuture()
+                    .handle((result, ex) -> {
+                        if (ex == null) {
+                            recordDelivery(event, targetTopic, workerId, OutboxPublishStatus.PUBLISHED.code(), null);
+                            return true;
+                        }
+                        recordDelivery(event, targetTopic, workerId, OutboxPublishStatus.FAILED.code(), ex.getMessage());
+                        return false;
+                    });
         }
 
         // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
@@ -85,14 +87,16 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
                 Map.of("payload", JsonUtils.fromJson(event.getPayloadJson(), Object.class)),
                 Map.of("aggregateId", event.getAggregateId())
         );
-        try {
-            kafkaTemplate.send(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message)).toCompletableFuture().join();
-            recordDelivery(event, fallbackTopic, null, OutboxPublishStatus.PUBLISHED.code(), null);
-            return true;
-        } catch (RuntimeException exception) {
-            recordDelivery(event, fallbackTopic, null, OutboxPublishStatus.FAILED.code(), exception.getMessage());
-            return false;
-        }
+        return kafkaTemplate.send(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message))
+                .toCompletableFuture()
+                .handle((result, ex) -> {
+                    if (ex == null) {
+                        recordDelivery(event, fallbackTopic, null, OutboxPublishStatus.PUBLISHED.code(), null);
+                        return true;
+                    }
+                    recordDelivery(event, fallbackTopic, null, OutboxPublishStatus.FAILED.code(), ex.getMessage());
+                    return false;
+                });
     }
 
     private void recordDelivery(OutboxEventEntity event,

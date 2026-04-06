@@ -12,8 +12,6 @@ import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import java.time.Duration;
-import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -90,10 +88,8 @@ public class OrchestratorConfigCacheService {
         if (cached != null) {
             return cached;
         }
-        List<BatchWindowRecord> windows = batchWindowRepository.findByTenantIdAndEnabled(tenantId, true);
-        BatchWindowRecord loaded = windows.stream()
-                .filter(candidate -> windowCode.equalsIgnoreCase(candidate.windowCode()))
-                .findFirst()
+        BatchWindowRecord loaded = batchWindowRepository
+                .findFirstByTenantIdAndWindowCodeAndEnabled(tenantId, windowCode, true)
                 .orElse(null);
         if (loaded != null) {
             redis.setJson(key, loaded, CONFIG_CACHE_TTL);
@@ -110,8 +106,9 @@ public class OrchestratorConfigCacheService {
         if (cached != null) {
             return cached;
         }
-        List<TenantQuotaPolicyRecord> policies = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
-        TenantQuotaPolicyRecord loaded = policies == null || policies.isEmpty() ? null : policies.getFirst();
+        TenantQuotaPolicyRecord loaded = tenantQuotaPolicyRepository
+                .findFirstEnabledByTenantId(tenantId, true)
+                .orElse(null);
         if (loaded != null) {
             redis.setJson(key, loaded, CONFIG_CACHE_TTL);
         }
