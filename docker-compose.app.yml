@@ -34,6 +34,7 @@ services:
       BATCH_SECURITY_TESTING_OPEN: ${BATCH_SECURITY_TESTING_OPEN:-false}
       SERVER_PORT: 8080
       MANAGEMENT_SERVER_PORT: 8080
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     volumes:
       - ./logs/docker:/app/logs
     ports:
@@ -80,6 +81,7 @@ services:
       LOGGING_FILE_NAME: /app/logs/batch-trigger.log
       SERVER_PORT: 8081
       MANAGEMENT_SERVER_PORT: 8081
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     ports:
       - "${TRIGGER_PORT:-18081}:8081"
     volumes:
@@ -94,6 +96,8 @@ services:
       start_period: 40s
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       orchestrator:
         condition: service_healthy
@@ -125,6 +129,7 @@ services:
       LOGGING_FILE_NAME: /app/logs/batch-orchestrator.log
       SERVER_PORT: 8082
       MANAGEMENT_SERVER_PORT: 8082
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
     ports:
       - "${ORCHESTRATOR_PORT:-18082}:8082"
     volumes:
