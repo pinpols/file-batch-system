@@ -298,7 +298,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
                             'API', 'READY', null, 'e2e-ops', false, false,
                             null, null, null, 'e2e-q', 'import', 5,
                             ?, 0, 1, 0, 0,
-                            ?, ?::jsonb, ?::jsonb, null, null, null
+                            ?, ?::jsonb, ?::jsonb, null, 300, null
                         )
                         returning id
                         """,

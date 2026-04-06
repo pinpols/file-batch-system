@@ -31,7 +31,15 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration
-@EnableAutoConfiguration
+@EnableAutoConfiguration(exclude = {
+        com.example.batch.common.logging.HttpRequestMdcAutoConfiguration.class,
+        org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration.class,
+        org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration.class,
+        org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration.class,
+        org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration.class,
+        org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration.class,
+        org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration.class
+})
 @EnableKafka
 @EnableJdbcRepositories(basePackages = "com.example.batch.orchestrator.repository")
 @Import({

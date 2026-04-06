@@ -240,9 +240,8 @@ case "$MODE" in
   unit)
     banner "单元测试"
     {
-      run_mvn test \
+      run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -am \
         -Dtest='!*IntegrationTest,!*IT' \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_UNIT"
@@ -257,9 +256,8 @@ case "$MODE" in
   it)
     banner "集成测试（*IntegrationTest）"
     {
-      run_mvn test \
+      run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -am \
         -Dtest='*IntegrationTest,*IT' \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_IT"
@@ -274,9 +272,11 @@ case "$MODE" in
   e2e)
     banner "E2E 测试（*E2eIT）"
     {
-      # 先编译依赖（跳过测试），再单独只跑 batch-e2e-tests 避免依赖模块测试混入
-      run_mvn install -pl batch-e2e-tests -am -DskipTests --no-transfer-progress && \
-      run_mvn test    -pl batch-e2e-tests \
+      # 先把各依赖模块编译并安装到本地仓库（batch-e2e-tests 本身无 main sources，不纳入 install）
+      run_mvn clean install \
+        -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
+        -DskipTests --no-transfer-progress && \
+      run_mvn test -pl batch-e2e-tests \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_E2E"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
@@ -290,9 +290,8 @@ case "$MODE" in
   default)
     banner "单元 + 集成测试（跳过 E2E）"
     {
-      run_mvn test \
+      run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -am \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_DEFAULT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
@@ -305,11 +304,13 @@ case "$MODE" in
 
   all)
     banner "全量测试：单元 + 集成 + E2E"
-    # Step 1：单元 + 集成（排除 E2E 模块）
+    # Step 1：先 install 依赖（供 E2E Step 2 使用），再跑单元 + 集成测试
     {
+      run_mvn clean install \
+        -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
+        -DskipTests --no-transfer-progress && \
       run_mvn test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -am \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_ALL_UNIT_IT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
