@@ -53,9 +53,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
     void shouldPublishFallbackEventToDefaultTopicAndPersistDeliveryLog() throws Exception {
         OutboxEventEntity event = pendingEvent("CUSTOM_EVENT_TYPE", "AGG_TYPE", "key-fallback-001");
         outboxEventMapper.insert(event);
-
-        boolean published = outboxPublisher.publish(event);
-
+        boolean published = outboxPublisher.publish(event).get();
         assertThat(published).isTrue();
 
         List<EventDeliveryLogEntity> logs = eventDeliveryLogMapper.selectByQuery(
@@ -86,7 +84,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
         OutboxEventEntity event = pendingEvent("IMPORT", "JOB_PARTITION", "key-import-001");
         outboxEventMapper.insert(event);
 
-        boolean published = outboxPublisher.publish(event);
+        boolean published = outboxPublisher.publish(event).get();
 
         assertThat(published).isTrue();
 
@@ -118,7 +116,7 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
         OutboxEventEntity event = pendingEvent("EXPORT", "JOB_PARTITION", "key-export-001");
         outboxEventMapper.insert(event);
 
-        boolean published = outboxPublisher.publish(event);
+        boolean published = outboxPublisher.publish(event).get();
 
         assertThat(published).isTrue();
 

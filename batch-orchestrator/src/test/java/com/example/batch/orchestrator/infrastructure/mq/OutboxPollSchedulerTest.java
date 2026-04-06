@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.mq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,6 +11,9 @@ import static org.mockito.Mockito.when;
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
+import com.example.batch.orchestrator.config.OutboxProperties;
+import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,11 +30,22 @@ class OutboxPollSchedulerTest {
     @Mock
     private OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
 
+    @Mock
+    private BatchOrchestratorGovernanceProperties governance;
+
+    @Mock
+    private LockingTaskExecutor lockingTaskExecutor;
+
     private OutboxPollScheduler scheduler;
 
     @BeforeEach
-    void setUp() {
-        scheduler = new OutboxPollScheduler(scheduleForwarder, outboxPublishCircuitBreaker);
+    void setUp() throws Throwable {
+        when(governance.outbox()).thenReturn(new OutboxProperties());
+        doAnswer(inv -> {
+            inv.getArgument(0, LockingTaskExecutor.Task.class).call();
+            return null;
+        }).when(lockingTaskExecutor).executeWithLock(any(LockingTaskExecutor.Task.class), any());
+        scheduler = new OutboxPollScheduler(scheduleForwarder, outboxPublishCircuitBreaker, governance, lockingTaskExecutor);
     }
 
     @Test

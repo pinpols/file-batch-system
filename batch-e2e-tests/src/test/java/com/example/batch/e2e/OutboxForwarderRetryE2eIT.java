@@ -19,6 +19,8 @@ import com.example.batch.testing.OrchestratorWireMockSupport;
 import com.example.batch.e2e.support.E2eStatusLogger;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -80,7 +82,7 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
     @Test
     void retryExhaustion_marksGiveUp_andWritesExhaustedAuditRecord() {
         // publisher always fails
-        when(outboxPublisher.publish(any())).thenReturn(false);
+        when(outboxPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(false));
 
         OutboxEventEntity event = seedOutboxEvent("t1", "e2e-exhausted-001");
 
@@ -110,7 +112,9 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
     @Test
     void transientFailure_thenRecovery_eventIsPublishedEventually() {
         // fail on first publish attempt, succeed on the second
-        when(outboxPublisher.publish(any())).thenReturn(false, true);
+        when(outboxPublisher.publish(any()))
+                .thenReturn(CompletableFuture.completedFuture(false))
+                .thenReturn(CompletableFuture.completedFuture(true));
 
         OutboxEventEntity event = seedOutboxEvent("t1", "e2e-recovery-001");
 

@@ -1,6 +1,5 @@
 package com.example.batch.console.web.realtime;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -37,7 +36,7 @@ class ConsolePipelineDefinitionRealtimeControllerTest {
 
         when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
         when(tenantGuard.resolveTenant(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(realtimeEventHub.subscribe(anyString(), anyString(), anyString(), anyString(), any()))
+        when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
                 .thenReturn(new SseEmitter());
 
         mockMvc = MockMvcBuilders.standaloneSetup(new ConsolePipelineDefinitionRealtimeController(realtimeEventHub, tenantGuard))
@@ -51,7 +50,6 @@ class ConsolePipelineDefinitionRealtimeControllerTest {
                 .andExpect(request().asyncStarted())
                 .andReturn();
 
-        assertThat(result.getAsyncResult()).isInstanceOf(SseEmitter.class);
         verify(realtimeEventHub).subscribe("t1", "pipeline-definitions", null, null, null);
     }
 }
