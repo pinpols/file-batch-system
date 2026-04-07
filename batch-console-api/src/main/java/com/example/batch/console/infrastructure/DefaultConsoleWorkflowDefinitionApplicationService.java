@@ -271,7 +271,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
             }
         }
 
-        // Build adjacency for cycle detection and reachability
+        // 构建邻接表用于环路检测与可达性分析
         Map<String, List<String>> adj = new HashMap<>();
         Map<String, List<String>> reverseAdj = new HashMap<>();
         Map<String, Integer> inDegree = new HashMap<>();
@@ -288,7 +288,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
             }
         }
 
-        // Kahn's algorithm for cycle detection
+        // Kahn 算法检测环路
         Deque<String> queue = new ArrayDeque<>();
         for (Map.Entry<String, Integer> entry : inDegree.entrySet()) {
             if (entry.getValue() == 0) {
@@ -312,7 +312,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
             errors.add("Cycle detected in workflow DAG");
         }
 
-        // Reachability from START
+        // 从 START 出发的可达性检查
         if (startNodes.size() == 1) {
             String startCode = startNodes.get(0);
             bfs(startCode, adj, reachableFromStart);
@@ -324,7 +324,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
             }
         }
 
-        // END node should have incoming edges
+        // END 节点应有入边（反向可达性检查）
         if (endNodes.size() == 1) {
             String endCode = endNodes.get(0);
             Set<String> reachableToEnd = new HashSet<>();

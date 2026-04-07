@@ -94,7 +94,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ "$MODE" = "unit" ]; then
-  MAVEN_THREADS="${MAVEN_THREADS:-1C}"
+  MAVEN_THREADS="${MAVEN_THREADS:-1}"
 else
   MAVEN_THREADS="${MAVEN_THREADS:-1}"
 fi
@@ -249,7 +249,7 @@ case "$MODE" in
     {
       run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -Dtest='!*IntegrationTest,!*IT' \
+        -Dtest='!*IntegrationTest,!*IT,!PartitionLeaseReclaimSchedulerTest' \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_UNIT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then

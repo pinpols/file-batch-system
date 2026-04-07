@@ -13,6 +13,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
+import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -92,6 +93,11 @@ class AbstractTaskConsumerBackpressureTest {
             @Override
             protected String listenerId() {
                 return "test-listener";
+            }
+
+            @Override
+            protected DeadLetterPublisher deadLetterPublisher() {
+                return null;
             }
         };
 
@@ -182,6 +188,11 @@ class AbstractTaskConsumerBackpressureTest {
             @Override
             protected String listenerId() {
                 return "test-listener";
+            }
+
+            @Override
+            protected DeadLetterPublisher deadLetterPublisher() {
+                return null;
             }
         };
 

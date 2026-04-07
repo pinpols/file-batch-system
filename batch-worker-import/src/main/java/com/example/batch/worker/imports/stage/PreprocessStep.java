@@ -69,9 +69,9 @@ public class PreprocessStep implements ImportStageStep {
             Map<String, Object> templateConfig = toStringKeyMap(templateConfigObject);
 
             byte[] rawBytes = resolveRawBytes(context, importPayload, templateConfigObject);
-            // Decrypt BATCHENC-formatted blobs produced by BatchObjectCryptoService (export-store path).
-            // This handles the KMS runtime closure: files encrypted with BatchObjectCryptoService on
-            // the export/ingress side are transparently decrypted here before the preprocess pipeline runs.
+            // 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）。
+            // 处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，
+            // 在此处透明解密后再进入预处理 pipeline。
             if (!batchSecurityProperties.isTestingOpen()) {
                 rawBytes = cryptoService.decrypt(rawBytes);
             }

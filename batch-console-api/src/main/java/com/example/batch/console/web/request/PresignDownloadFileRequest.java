@@ -13,7 +13,7 @@ public class PresignDownloadFileRequest {
     private String tenantId;
     @NotNull
     private Long fileId;
-    /** Required when file template sets download_requires_approval or content_encryption_enabled. */
+    /** 当文件模板设置了 download_requires_approval 或 content_encryption_enabled 时必填。 */
     @Size(max = 64, message = "approvalId too long (max 64)")
     private String approvalId;
     @Size(max = 512, message = "reason too long (max 512)")

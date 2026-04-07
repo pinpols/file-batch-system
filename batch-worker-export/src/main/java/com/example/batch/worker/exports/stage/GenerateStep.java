@@ -24,11 +24,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Pipeline stage that generates the export file.
+ * 生成导出文件的 Pipeline 阶段。
  *
- * <p>Format selection is delegated to {@link ExportFormatStrategyRegistry}: adding a new
- * export format only requires a new {@link ExportFormatStrategy} bean — this class is
- * not modified.
+ * <p>格式选择委托给 {@link ExportFormatStrategyRegistry}：新增导出格式只需添加新的
+ * {@link ExportFormatStrategy} bean，无需修改本类。
  */
 @Slf4j
 @Component
@@ -61,7 +60,7 @@ public class GenerateStep implements ExportStageStep {
                 return ExportStageResult.failure(stage(), "EXPORT_BATCH_NOT_FOUND", "export batch not found");
             }
             Object batchId = batch.get("id");
-            // H-8: enforce max-rows limit before starting generation to prevent OOM
+            // H-8: 生成前强制检查最大行数限制，防止 OOM
             long maxRows = workerConfiguration != null ? workerConfiguration.effectiveMaxExportRows() : 500_000L;
             Object totalCountObj = batch.get("total_count");
             if (totalCountObj instanceof Number totalCount && maxRows > 0 && totalCount.longValue() > maxRows) {

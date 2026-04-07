@@ -24,6 +24,6 @@ public class WorkerRegistration {
     private Boolean active;
     private OffsetDateTime registeredAt;
     private OffsetDateTime lastHeartbeatAt;
-    /** In-flight tasks / claimed work; used for orchestrator worker selection (lower preferred). */
+    /** 进行中的任务数 / 已认领工作量；用于 Orchestrator worker 选择（值越低越优先）。 */
     private Integer currentLoad;
 }

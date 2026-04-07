@@ -1,28 +1,27 @@
 package com.example.batch.worker.core.config;
 
 /**
- * Common configuration contract for all worker types (import / export / dispatch).
- * Each worker module's {@code @ConfigurationProperties} record implements this interface
- * so the shared lifecycle and consumer templates in {@code batch-worker-core} can operate
- * without depending on module-specific configuration classes.
+ * 所有 worker 类型（import / export / dispatch）的通用配置契约。
+ * 各 worker 模块的 {@code @ConfigurationProperties} record 实现此接口，
+ * 使 {@code batch-worker-core} 中的共享生命周期与消费模板无需依赖特定模块的配置类。
  */
 public interface WorkerConfiguration {
 
-    /** Stable worker identifier; when set, used directly as workerId. */
+    /** 固定 worker 标识符；设置后直接用作 workerId。 */
     String workerCode();
 
-    /** Worker type discriminator (e.g. "IMPORT", "EXPORT", "DISPATCH"). */
+    /** Worker 类型判别符（如 "IMPORT"、"EXPORT"、"DISPATCH"）。 */
     String workerType();
 
-    /** Tenant this worker instance belongs to. */
+    /** 该 worker 实例所属租户。 */
     String tenantId();
 
-    /** Heartbeat interval in milliseconds (nullable – callers must apply a default). */
+    /** 心跳间隔毫秒数（可为 null，调用方须应用默认值）。 */
     Long heartbeatIntervalMillis();
 
-    /** Kafka topic this worker consumes from. */
+    /** worker 消费的 Kafka topic。 */
     String topic();
 
-    /** Kafka consumer group id. */
+    /** Kafka 消费者组 ID。 */
     String consumerGroupId();
 }

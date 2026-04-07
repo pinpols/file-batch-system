@@ -48,8 +48,7 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
                 return status;
             }
         }
-        // M-1: returning the class name as a state would silently corrupt workflow state.
-        // Fail fast so the bug surface is visible rather than masked.
+        // M-1: 返回类名作为状态会静默损坏工作流状态，快速失败以暴露问题而非掩盖。
         throw new IllegalStateException(
                 "Cannot resolve status from " + target.getClass().getName()
                         + ": implement Stateful or expose a getStatus() / getXxxStatus() method");

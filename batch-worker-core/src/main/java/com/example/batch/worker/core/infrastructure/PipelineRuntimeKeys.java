@@ -37,9 +37,9 @@ public final class PipelineRuntimeKeys {
     public static final String PARSED_RECORDS_PATH = "parsedRecordsPath";
     public static final String VALIDATED_RECORDS_PATH = "validatedRecordsPath";
     public static final String GENERATED_FILE_PATH = "generatedFilePath";
-    /** Raw file bytes after PREPROCESS (e.g. Excel .xlsx), when text conversion would corrupt binary */
+    /** PREPROCESS 后的原始文件字节（如 Excel .xlsx），文本转换会破坏二进制内容时使用 */
     public static final String IMPORT_BINARY_PAYLOAD = "importBinaryPayload";
-    /** Export snapshot: snapshotMode, snapshotTs, sourcePartitions (JSON-serializable map) */
+    /** 导出快照：snapshotMode、snapshotTs、sourcePartitions（可 JSON 序列化的 Map） */
     public static final String EXPORT_SNAPSHOT = "exportSnapshot";
 
     private PipelineRuntimeKeys() {

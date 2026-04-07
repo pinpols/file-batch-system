@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Resolves file bytes for dispatch: local path or object storage (MinIO/S3-compatible).
+ * 解析分发文件字节：支持本地路径或对象存储（MinIO/S3 兼容）。
  */
 @Component
 @RequiredArgsConstructor
@@ -39,7 +39,7 @@ public class DispatchFileContentResolver {
     }
 
     /**
-     * Opens stream for file content (caller must close). Prefer {@link #streamToConsumer} for large files.
+     * 打开文件内容流（调用方负责关闭）；大文件建议使用 {@link #streamToConsumer}。
      */
     public InputStream openInputStream(Map<String, Object> fileRecord) throws Exception {
         String storageType = String.valueOf(fileRecord.getOrDefault("storage_type", "")).toUpperCase(Locale.ROOT);
@@ -47,7 +47,7 @@ public class DispatchFileContentResolver {
         if (!StringUtils.hasText(storagePath)) {
             throw new IllegalStateException("storage_path missing");
         }
-        // C-4: reject path traversal sequences before normalization
+        // C-4: 规范化前拒绝路径遍历序列
         if (storagePath.contains("..")) {
             throw new SecurityException("storage_path contains path traversal sequence: " + storagePath);
         }
@@ -62,7 +62,7 @@ public class DispatchFileContentResolver {
         if (!StringUtils.hasText(bucket)) {
             bucket = minioProperties.getBucket();
         }
-        // M-7: ensure MinIO stream is closed if decryptIfNeeded throws
+        // M-7: 若 decryptIfNeeded 抛异常，确保 MinIO 流被关闭
         InputStream inputStream = minioClient.getObject(
                 GetObjectArgs.builder().bucket(bucket).object(storagePath).build()
         );

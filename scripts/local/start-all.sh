@@ -224,7 +224,7 @@ wait_container_exited_zero batch-minio-init "MinIO bucket init"
 
 if [[ "${BUILD:-0}" == "1" ]]; then
   echo "==> BUILD=1，执行 Maven 打包全部模块（-DskipTests）..."
-  mvn -q -DskipTests \
+  mvn -q -Dmaven.test.skip=true \
     -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
     -am package -T 1C
 else

@@ -51,17 +51,17 @@ public final class ContentMaskingUtils {
         }
         String code = ruleSetCode.toUpperCase(java.util.Locale.ROOT);
 
-        // STRICT / PCI / GDPR all mask named fields
+        // STRICT / PCI / GDPR 均对命名字段脱敏
         if (code.contains("STRICT") || code.contains("PCI") || code.contains("GDPR")) {
             masked = NAMED_FIELDS.matcher(masked).replaceAll("$1=***");
         }
 
-        // PCI: additionally mask card expiry patterns (digit runs already handle card numbers)
+        // PCI：额外脱敏卡有效期（卡号已由数字串规则覆盖）
         if (code.contains("PCI")) {
             masked = CARD_EXPIRY.matcher(masked).replaceAll("**/**");
         }
 
-        // GDPR: additionally mask IP addresses and postal codes
+        // GDPR：额外脱敏 IP 地址和邮政编码
         if (code.contains("GDPR")) {
             masked = IPV4.matcher(masked).replaceAll("*.*.*.*");
             masked = UK_POSTCODE.matcher(masked).replaceAll("*** ***");

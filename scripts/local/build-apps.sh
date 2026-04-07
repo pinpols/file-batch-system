@@ -10,8 +10,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-echo "==> Maven 打包应用模块（-DskipTests）..."
-mvn -q -DskipTests \
+echo "==> Maven 打包应用模块（-Dmaven.test.skip=true）..."
+mvn -q -Dmaven.test.skip=true \
   -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
   -am package -T 1C
 
