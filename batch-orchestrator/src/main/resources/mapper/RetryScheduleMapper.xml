@@ -96,4 +96,11 @@
             updated_at = current_timestamp
         where id = #{id}
     </update>
+
+    <update id="resetToWaiting">
+        update batch.retry_schedule
+        set retry_status = #{waitingStatus},
+            updated_at = current_timestamp
+        where id = #{id}
+    </update>
 </mapper>

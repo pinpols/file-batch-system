@@ -57,6 +57,7 @@ import org.springframework.test.context.jdbc.Sql;
 @ActiveProfiles({"test", "e2e"})
 @Sql(scripts = {
         E2eTestSql.BIZ_SCHEMA,
+
         E2eTestSql.IMPORT_TEMPLATE_SEED,
 })
 @Tag("e2e")
@@ -122,18 +123,23 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         assertThat(pendingApproval.path("approvalStatus").asText()).isEqualTo("PENDING");
         assertThat(pendingApproval.path("actionType").asText()).isEqualTo("DLQ_REPLAY");
 
-        String replayCommandNo = extractDataText(postConsoleJson(
+        JsonNode approveResponse = postConsoleJson(
                 "/api/console/approvals/" + encode(replayApprovalNo) + "/approve",
                 """
                         {"tenantId":"t1","operatorId":"%s","reason":"approved for replay"}
                         """.formatted(APPROVAL_OPERATOR),
-                idempotencyKey("dead-letter-approve")));
+                idempotencyKey("dead-letter-approve"));
+        String replayCommandNo = extractDataText(approveResponse);
         assertThat(replayCommandNo).isNotBlank();
 
+        // approve() 已同步触发补偿并将 dead letter 置为 SUCCESS；
+        // publishAllPending 驱动 outbox 投递，findItemById 精确定位原始记录，
+        // 避免 import worker 失败后新生成的同 traceId dead letter 干扰断言。
         await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(2)).untilAsserted(() -> {
             e2eOutboxPublishSupport.publishAllPending(TENANT);
-            JsonNode completedDeadLetter = firstItem(getConsoleJson(
-                    "/api/console/query/dead-letters?tenantId=t1&traceId=" + encode(deadLetterTraceId) + "&pageNo=1&pageSize=10"));
+            JsonNode completedDeadLetter = findItemById(
+                    getConsoleJson("/api/console/query/dead-letters?tenantId=t1&traceId=" + encode(deadLetterTraceId) + "&pageNo=1&pageSize=10"),
+                    deadLetterId);
             assertThat(completedDeadLetter.path("replayStatus").asText()).isEqualTo("SUCCESS");
             assertThat(completedDeadLetter.path("replayCount").asInt()).isEqualTo(1);
         });
@@ -234,6 +240,17 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         assertThat(items.isArray()).isTrue();
         assertThat(items.size()).isGreaterThan(0);
         return items.get(0);
+    }
+
+    private JsonNode findItemById(JsonNode response, long id) {
+        JsonNode items = response.path("data").path("items");
+        assertThat(items.isArray()).isTrue();
+        for (JsonNode item : items) {
+            if (item.path("id").asLong() == id) {
+                return item;
+            }
+        }
+        throw new AssertionError("dead letter id=" + id + " not found in response");
     }
 
     private String extractDataText(JsonNode response) {

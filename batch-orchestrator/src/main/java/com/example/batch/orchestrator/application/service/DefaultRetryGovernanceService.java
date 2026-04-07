@@ -143,6 +143,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             try {
                 requeuePartition(retrySchedule);
                 retryScheduleMapper.markSuccess(retrySchedule.getId(), RetryScheduleStatus.SUCCESS.code());
+            } catch (TransientConflictException conflict) {
+                log.warn("retry dispatch version conflict, will retry later: retryId={}, error={}", retrySchedule.getId(), conflict.getMessage());
+                retryScheduleMapper.resetToWaiting(retrySchedule.getId(), RetryScheduleStatus.WAITING.code());
             } catch (Exception exception) {
                 log.warn("retry dispatch failed: retryId={}, error={}", retrySchedule.getId(), exception.getMessage(), exception);
                 retryScheduleMapper.markFailed(
@@ -282,8 +285,12 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
                 int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
                 jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
             }
-            jobPartitionMapper.resetForDispatch(tenantId, partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
-            jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion());
+            if (jobPartitionMapper.resetForDispatch(tenantId, partition.getId(), PartitionStatus.READY.code(), partition.getVersion()) <= 0) {
+                throw new TransientConflictException("partition version conflict, requeue aborted: partitionId=" + partition.getId());
+            }
+            if (jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion()) <= 0) {
+                throw new TransientConflictException("task version conflict, requeue aborted: taskId=" + task.getId());
+            }
             taskDispatchOutboxService.writeDispatchEvent(
                     jobInstance,
                     task,
@@ -311,7 +318,9 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
             int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
             jobStepInstanceMapper.resetForRetryByJobTaskId(tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
         }
-        jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion());
+        if (jobTaskMapper.resetForRetry(tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion()) <= 0) {
+            throw new TransientConflictException("task version conflict, requeue aborted: taskId=" + task.getId());
+        }
         taskDispatchOutboxService.writeDispatchEvent(
                 jobInstance,
                 task,
@@ -387,5 +396,15 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     }
 
     private record RetryPolicyPlan(String retryPolicy, int maxRetryCount) {
+    }
+
+    /**
+     * 乐观锁 CAS 失败时抛出，表示瞬态版本冲突，可在下次调度周期重试。
+     * 与 {@link IllegalStateException}（资源不存在等永久性错误）区分，避免 retry_schedule 被错误地置为 FAILED。
+     */
+    private static final class TransientConflictException extends RuntimeException {
+        TransientConflictException(String message) {
+            super(message);
+        }
     }
 }
