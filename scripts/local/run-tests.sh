@@ -13,21 +13,20 @@
 # 环境变量（可覆盖）：
 #   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE  Docker socket 路径（macOS 默认已设置）
 #   DOCKER_API_VERSION                     Docker API 版本（默认 1.44）
-#   MAVEN_THREADS                          Maven Reactor 并发度；含 Testcontainers 时默认 1，避免多模块并行拉 Kafka 导致失败（可设 1C 自担风险）
+#   MAVEN_THREADS                          Maven Reactor 并发度；含 Testcontainers 时默认 1
 # =============================================================
 
-set -uo pipefail  # 移除 'e' 标志：允许测试失败，但继续执行后续步骤
+set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-# ---------- Docker / Testcontainers 环境变量 ----------
 export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}"
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
 
-# ---------- 日志路径固化（6类测试） ----------
 LOG_DIR="$ROOT_DIR/logs"
 mkdir -p "$LOG_DIR"
+
 LOG_UNIT="$LOG_DIR/test-unit.log"
 LOG_IT="$LOG_DIR/test-integration.log"
 LOG_E2E="$LOG_DIR/test-e2e.log"
@@ -48,13 +47,11 @@ LOG_ALL_UNIT_IT_FAILED="$LOG_DIR/test-all-unit-integration-failed.log"
 LOG_ALL_E2E_PASSED="$LOG_DIR/test-all-e2e-passed.log"
 LOG_ALL_E2E_FAILED="$LOG_DIR/test-all-e2e-failed.log"
 
-# ---------- 测试结果追踪（bash 3.x 兼容，不用 declare -A） ----------
 TEST_RESULT_LINES=()
 TEST_FAILED=0
 TEST_PASSED=0
 
-# ---------- 参数解析 ----------
-MODE="default"   # default | unit | it | e2e | all
+MODE="default"
 declare -a EXTRA_MVN_ARGS=()
 
 usage() {
@@ -62,12 +59,12 @@ usage() {
 用法：
   bash scripts/local/run-tests.sh [mode] [-- <extra maven args>]
 
-模式（四选一，默认 --default）：
-  --default   单元测试 + 集成测试（跳过 E2E，速度快，日常开发首选）
-  --unit      仅单元测试（无需 Docker，秒级反馈）
-  --it        仅集成测试（*IntegrationTest，需要 Docker）
-  --e2e       仅 E2E 测试（*E2eIT，需要 Docker，最耗时）
-  --all       单元 + 集成 + E2E 全量
+模式：
+  --default   单元测试 + 集成测试（跳过 E2E）
+  --unit      仅单元测试
+  --it        仅集成测试
+  --e2e       仅 E2E 测试
+  --all       单元 + 集成 + E2E
 
 示例：
   bash scripts/local/run-tests.sh
@@ -82,10 +79,10 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --default) MODE="default"; shift ;;
-    --unit)    MODE="unit";    shift ;;
-    --it)      MODE="it";      shift ;;
-    --e2e)     MODE="e2e";     shift ;;
-    --all)     MODE="all";     shift ;;
+    --unit)    MODE="unit"; shift ;;
+    --it)      MODE="it"; shift ;;
+    --e2e)     MODE="e2e"; shift ;;
+    --all)     MODE="all"; shift ;;
     --help|-h) usage; exit 0 ;;
     --)        shift; EXTRA_MVN_ARGS=("$@"); break ;;
     *)
@@ -96,14 +93,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ---------- MAVEN_THREADS：单元测试无容器，可并行；其余默认串行避免端口冲突 ----------
 if [ "$MODE" = "unit" ]; then
   MAVEN_THREADS="${MAVEN_THREADS:-1C}"
 else
   MAVEN_THREADS="${MAVEN_THREADS:-1}"
 fi
 
-# ---------- 工具函数 ----------
 banner() {
   printf '\n%s\n' "$(printf '=%.0s' {1..64})"
   printf '== %s\n' "$1"
@@ -151,35 +146,45 @@ print_log_paths() {
   printf '%s\n' "$(printf '=%.0s' {1..80})"
   case "$MODE" in
     unit)
-      printf '%-40s %s\n' "原始日志"       "$LOG_UNIT"
-      printf '%-40s %s\n' "✅ 通过"         "$LOG_UNIT_PASSED"
-      printf '%-40s %s\n' "❌ 失败"         "$LOG_UNIT_FAILED"
+      printf '%-40s %s\n' "原始日志" "$LOG_UNIT"
+      printf '%-40s %s\n' "✅ 通过" "$LOG_UNIT_PASSED"
+      printf '%-40s %s\n' "❌ 失败" "$LOG_UNIT_FAILED"
       ;;
     it)
-      printf '%-40s %s\n' "原始日志"       "$LOG_IT"
-      printf '%-40s %s\n' "✅ 通过"         "$LOG_IT_PASSED"
-      printf '%-40s %s\n' "❌ 失败"         "$LOG_IT_FAILED"
+      printf '%-40s %s\n' "原始日志" "$LOG_IT"
+      printf '%-40s %s\n' "✅ 通过" "$LOG_IT_PASSED"
+      printf '%-40s %s\n' "❌ 失败" "$LOG_IT_FAILED"
       ;;
     e2e)
-      printf '%-40s %s\n' "原始日志"       "$LOG_E2E"
-      printf '%-40s %s\n' "✅ 通过"         "$LOG_E2E_PASSED"
-      printf '%-40s %s\n' "❌ 失败"         "$LOG_E2E_FAILED"
+      printf '%-40s %s\n' "原始日志" "$LOG_E2E"
+      printf '%-40s %s\n' "✅ 通过" "$LOG_E2E_PASSED"
+      printf '%-40s %s\n' "❌ 失败" "$LOG_E2E_FAILED"
       ;;
     default)
-      printf '%-40s %s\n' "原始日志"       "$LOG_DEFAULT"
-      printf '%-40s %s\n' "✅ 通过"         "$LOG_DEFAULT_PASSED"
-      printf '%-40s %s\n' "❌ 失败"         "$LOG_DEFAULT_FAILED"
+      printf '%-40s %s\n' "原始日志" "$LOG_DEFAULT"
+      printf '%-40s %s\n' "✅ 通过" "$LOG_DEFAULT_PASSED"
+      printf '%-40s %s\n' "❌ 失败" "$LOG_DEFAULT_FAILED"
       ;;
     all)
       printf '%-40s %s\n' "原始日志（单元+集成）" "$LOG_ALL_UNIT_IT"
-      printf '%-40s %s\n' "✅ 通过（单元+集成）"  "$LOG_ALL_UNIT_IT_PASSED"
-      printf '%-40s %s\n' "❌ 失败（单元+集成）"  "$LOG_ALL_UNIT_IT_FAILED"
-      printf '%-40s %s\n' "原始日志（E2E）"       "$LOG_ALL_E2E"
-      printf '%-40s %s\n' "✅ 通过（E2E）"         "$LOG_ALL_E2E_PASSED"
-      printf '%-40s %s\n' "❌ 失败（E2E）"         "$LOG_ALL_E2E_FAILED"
+      printf '%-40s %s\n' "✅ 通过（单元+集成）" "$LOG_ALL_UNIT_IT_PASSED"
+      printf '%-40s %s\n' "❌ 失败（单元+集成）" "$LOG_ALL_UNIT_IT_FAILED"
+      printf '%-40s %s\n' "原始日志（E2E）" "$LOG_ALL_E2E"
+      printf '%-40s %s\n' "✅ 通过（E2E）" "$LOG_ALL_E2E_PASSED"
+      printf '%-40s %s\n' "❌ 失败（E2E）" "$LOG_ALL_E2E_FAILED"
       ;;
   esac
   printf '%s\n' "$(printf '=%.0s' {1..80})"
+}
+
+truncate_logs() {
+  for f in "$@"; do
+    printf '' > "$f"
+  done
+}
+
+cleanup_test_reports() {
+  find "$ROOT_DIR" -type d \( -path "*/target/surefire-reports" -o -path "*/target/failsafe-reports" \) -prune -exec rm -rf {} + 2>/dev/null || true
 }
 
 extract_test_results() {
@@ -190,39 +195,41 @@ extract_test_results() {
   printf '' > "$passed_file"
   printf '' > "$failed_file"
 
-  # 提取成功的测试类：Failures: 0, Errors: 0
   echo "=== ✅ 通过的测试类 ===" >> "$passed_file"
-  grep "Running " "$log_file" 2>/dev/null | while IFS= read -r line; do
-    test_class=$(echo "$line" | awk '{print $NF}')
-    # 找到该测试类对应的测试结果行
-    result=$(grep -F -A 5 "Running $test_class" "$log_file" 2>/dev/null | grep "Tests run:" | head -1)
-    if echo "$result" | grep -q "Failures: 0.*Errors: 0"; then
-      echo "✅ $test_class" >> "$passed_file"
-    fi
-  done
-
-  # 提取失败的测试类：Failures > 0 或 Errors > 0
   echo "=== ❌ 失败的测试类 ===" >> "$failed_file"
-  grep "Running " "$log_file" 2>/dev/null | while IFS= read -r line; do
-    test_class=$(echo "$line" | awk '{print $NF}')
-    # 找到该测试类对应的测试结果行
-    result=$(grep -F -A 5 "Running $test_class" "$log_file" 2>/dev/null | grep "Tests run:" | head -1)
-    if echo "$result" | grep -qE "Failures: [1-9]|Errors: [1-9]"; then
-      echo "❌ $test_class" >> "$failed_file"
-    fi
-  done
 
-  # 附加错误堆栈信息
+  local found_any=0
+
+  while IFS= read -r xml; do
+    found_any=1
+
+    local class_name
+    local failures
+    local errors
+
+    class_name=$(basename "$xml" .xml)
+    class_name=${class_name#TEST-}
+
+    failures=$(grep -o 'failures="[0-9]*"' "$xml" | head -1 | sed 's/[^0-9]//g')
+    errors=$(grep -o 'errors="[0-9]*"' "$xml" | head -1 | sed 's/[^0-9]//g')
+
+    failures=${failures:-0}
+    errors=${errors:-0}
+
+    if [ "$failures" -eq 0 ] && [ "$errors" -eq 0 ]; then
+      echo "✅ $class_name" >> "$passed_file"
+    else
+      echo "❌ $class_name" >> "$failed_file"
+    fi
+  done < <(find "$ROOT_DIR" \( -path "*/target/surefire-reports/TEST-*.xml" -o -path "*/target/failsafe-reports/TEST-*.xml" \) | sort)
+
+  if [ "$found_any" -eq 0 ]; then
+    echo "未找到测试报告文件" >> "$failed_file"
+  fi
+
   echo "" >> "$failed_file"
   echo "=== 错误详情 ===" >> "$failed_file"
   grep -E -A 10 "\[ERROR\]|\[FAILURE\]" "$log_file" 2>/dev/null >> "$failed_file" || true
-}
-
-# ---------- 清空本次模式相关的所有日志（保证每次覆盖，不残留旧数据） ----------
-truncate_logs() {
-  for f in "$@"; do
-    printf '' > "$f"
-  done
 }
 
 case "$MODE" in
@@ -234,9 +241,9 @@ case "$MODE" in
                          "$LOG_ALL_E2E"      "$LOG_ALL_E2E_PASSED"      "$LOG_ALL_E2E_FAILED" ;;
 esac
 
-# ---------- 执行入口 ----------
-case "$MODE" in
+cleanup_test_reports
 
+case "$MODE" in
   unit)
     banner "单元测试"
     {
@@ -254,7 +261,7 @@ case "$MODE" in
     ;;
 
   it)
-    banner "集成测试（*IntegrationTest）"
+    banner "集成测试（*IntegrationTest / *IT）"
     {
       run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
@@ -272,10 +279,9 @@ case "$MODE" in
   e2e)
     banner "E2E 测试（*E2eIT）"
     {
-      # 先把各依赖模块编译并安装到本地仓库（batch-e2e-tests 本身无 main sources，不纳入 install）
       run_mvn clean install \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -DskipTests --no-transfer-progress && \
+        -DskipTests && \
       run_mvn test -pl batch-e2e-tests \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_E2E"
@@ -304,11 +310,11 @@ case "$MODE" in
 
   all)
     banner "全量测试：单元 + 集成 + E2E"
-    # Step 1：先 install 依赖（供 E2E Step 2 使用），再跑单元 + 集成测试
+
     {
       run_mvn clean install \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -DskipTests --no-transfer-progress && \
+        -DskipTests && \
       run_mvn test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
         -Dsurefire.failIfNoSpecifiedTests=false
@@ -320,7 +326,6 @@ case "$MODE" in
     fi
     extract_test_results "$LOG_ALL_UNIT_IT" "$LOG_ALL_UNIT_IT_PASSED" "$LOG_ALL_UNIT_IT_FAILED"
 
-    # Step 2：E2E（独立运行，依赖已在 Step 1 install，直接只测 batch-e2e-tests）
     banner "E2E 测试（*E2eIT）"
     {
       run_mvn test -pl batch-e2e-tests \
@@ -333,11 +338,9 @@ case "$MODE" in
     fi
     extract_test_results "$LOG_ALL_E2E" "$LOG_ALL_E2E_PASSED" "$LOG_ALL_E2E_FAILED"
     ;;
-
 esac
 
 print_test_summary
-
 print_log_paths
 
 printf '\n%s\n' "$(printf '=%.0s' {1..64})"
@@ -349,4 +352,3 @@ fi
 printf '%s\n' "$(printf '=%.0s' {1..64})"
 
 exit $([ $TEST_FAILED -eq 0 ] && echo 0 || echo 1)
-

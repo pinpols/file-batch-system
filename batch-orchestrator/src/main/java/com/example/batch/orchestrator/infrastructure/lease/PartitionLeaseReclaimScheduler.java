@@ -60,7 +60,11 @@ public class PartitionLeaseReclaimScheduler {
         ));
         JobTaskEntity task = tasks.stream().findFirst().orElse(null);
         if (task == null) {
-            jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
+            // 无 RUNNING task：partition 可能在 READY 状态等待被 claim，直接重置即可，版本冲突则跳过。
+            int reset = jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
+            if (reset <= 0) {
+                log.debug("reclaim skipped (no-task path), partition already updated: partitionId={}", partition.getId());
+            }
             return;
         }
         JobInstanceEntity jobInstance = jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
@@ -70,8 +74,17 @@ public class PartitionLeaseReclaimScheduler {
         BatchMdc.withTenantAndTrace(jobInstance.getTenantId(), jobInstance.getTraceId(), () -> {
             BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
             try {
-                jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion());
-                jobTaskMapper.resetForRetry(partition.getTenantId(), task.getId(), TaskStatus.READY.code(), task.getVersion());
+                // 两步 CAS 必须都成功才写 outbox，否则说明 worker 仍在执行（version 已变），跳过本次 reclaim。
+                if (jobPartitionMapper.resetForDispatch(partition.getTenantId(), partition.getId(), PartitionStatus.READY.code(), partition.getVersion()) <= 0) {
+                    log.warn("reclaim skipped, partition version conflict: partitionId={}", partition.getId());
+                    return;
+                }
+                if (jobTaskMapper.resetForRetry(partition.getTenantId(), task.getId(), TaskStatus.READY.code(), task.getVersion()) <= 0) {
+                    log.warn("reclaim skipped, task version conflict: taskId={}", task.getId());
+                    // partition 已被 resetForDispatch 重置为 READY；task 版本冲突说明状态仍有效，
+                    // 不写 outbox 以避免重复派发，下次 reclaim 周期重试。
+                    return;
+                }
                 taskDispatchOutboxService.writeDispatchEvent(
                         jobInstance,
                         task,

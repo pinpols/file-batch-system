@@ -103,6 +103,18 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
                         .toBodilessEntity();
                 return;
             } catch (HttpClientErrorException ex) {
+                if (ex.getStatusCode() == HttpStatus.CONFLICT) {
+                    // 409 STATE_CONFLICT：orchestrator 乐观锁失败，整个事务已回滚，task/partition 仍是 RUNNING，可以重试。
+                    recordReportFailure("STATE_CONFLICT");
+                    if (attempt >= max) {
+                        logStructuredReportFailure("STATE_CONFLICT", attempt, max, ex);
+                        throw ex;
+                    }
+                    log.warn("orchestrator report state conflict, will retry: attempt={}/{}", attempt, max);
+                    sleepBackoff(backoff);
+                    backoff = Math.min(cap, backoff * 2);
+                    continue;
+                }
                 if (ex.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
                     recordReportFailure("RATE_LIMITED");
                     logStructuredReportFailure("RATE_LIMITED", attempt, max, ex);
