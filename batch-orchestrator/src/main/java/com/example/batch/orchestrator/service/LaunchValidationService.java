@@ -7,19 +7,14 @@ import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 
 /**
- * Validates a launch request and loads the required definitions.
- * All operations are read-only; no transaction required.
- * Extracted from {@link DefaultLaunchService} to isolate validation concerns.
+ * 校验启动请求并加载所需定义，所有操作只读、无需事务。
+ * 从 {@link DefaultLaunchService} 中拆分以隔离校验关注点。
  */
 public interface LaunchValidationService {
 
     /**
-     * Validates the request fields (throws BizException on failure),
-     * loads the trigger request entity, loads job definition and workflow definition
-     * (updates trigger request to REJECTED and throws if not found),
-     * and checks for an existing dedup instance.
-     *
-     * @return a {@link LaunchLoadResult} holding the loaded data
+     * 校验请求字段，加载触发请求实体、Job 定义和工作流定义（未找到则置为 REJECTED 并抛异常），
+     * 并检查是否存在重复实例。
      */
     LaunchLoadResult load(LaunchRequest request);
 
@@ -27,6 +22,6 @@ public interface LaunchValidationService {
             TriggerRequestEntity triggerRequest,
             JobDefinitionRecord jobDefinition,
             WorkflowDefinitionRecord workflowDefinition,
-            JobInstanceEntity existingInstance  // non-null means duplicate
+            JobInstanceEntity existingInstance  // 非空表示重复请求
     ) {}
 }
