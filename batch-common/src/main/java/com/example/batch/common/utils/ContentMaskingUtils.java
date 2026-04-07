@@ -36,14 +36,13 @@ public final class ContentMaskingUtils {
     }
 
     /**
-     * Apply masking rules to {@code text} based on the given {@code ruleSetCode}.
-     * {@code null} ruleSetCode applies only the baseline digit-run and email redaction.
+     * 按指定 {@code ruleSetCode} 对 {@code text} 执行脱敏，{@code null} 时仅应用基线数字串和邮箱脱敏。
      */
     public static String maskPlainText(String text, String ruleSetCode) {
         if (text == null || text.isEmpty()) {
             return text;
         }
-        // Baseline: mask digit runs (card numbers, IDs, phone numbers) and emails
+        // 基线：脱敏连续数字串（卡号、证件号、电话）及邮箱
         String masked = DIGIT_RUNS.matcher(text).replaceAll("****");
         masked = EMAIL_LIKE.matcher(masked).replaceAll("***@***");
 

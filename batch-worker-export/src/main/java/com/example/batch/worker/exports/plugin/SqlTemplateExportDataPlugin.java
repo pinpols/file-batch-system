@@ -61,7 +61,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
         if (context == null || !StringUtils.hasText(context.tenantId()) || !StringUtils.hasText(context.batchNo())) {
             return Map.of();
         }
-        // Minimal header row: downstream pipeline requires a non-empty batch map and a batchId (can be synthetic).
+        // 最小头部行：下游 pipeline 要求非空 batch map 及 batchId（可以是合成值）。
         Map<String, Object> batch = new LinkedHashMap<>();
         batch.put("id", 0L);
         batch.put("batch_no", context.batchNo());
