@@ -19,17 +19,16 @@ import net.sf.jsqlparser.util.TablesNamesFinder;
 import org.springframework.util.StringUtils;
 
 /**
- * Validates template-provided SELECT SQL using JSqlParser AST analysis.
+ * 使用 JSqlParser AST 分析验证模板提供的 SELECT SQL。
  *
- * <p>Replaces the previous string-based keyword scanning, which was bypassable via
- * SQL comments, mixed case, or whitespace tricks.
+ * <p>取代了此前基于字符串关键字扫描的实现（后者可通过 SQL 注释、大小写混用或空白绕过）。
  *
- * <p>Checks performed:
+ * <p>检查项：
  * <ol>
- *   <li>SQL is parseable and is a SELECT/WITH statement (not DML/DDL)</li>
- *   <li>{@code SELECT *} / {@code SELECT table.*} is forbidden when {@code forbidSelectStar=true}</li>
- *   <li>All table schema references must be in {@code allowedSchemas} (if non-empty)</li>
- *   <li>Required named parameters ({@code :tenantId}, {@code :batchNo} by default) are present</li>
+ *   <li>SQL 可解析且为 SELECT/WITH 语句（非 DML/DDL）</li>
+ *   <li>{@code forbidSelectStar=true} 时禁止 {@code SELECT *} / {@code SELECT table.*}</li>
+ *   <li>所有表 schema 引用须在 {@code allowedSchemas} 白名单内（非空时生效）</li>
+ *   <li>必填具名参数（默认 {@code :tenantId}、{@code :batchNo}）必须存在</li>
  * </ol>
  */
 public class SqlTemplateExportSqlValidator {
@@ -41,9 +40,7 @@ public class SqlTemplateExportSqlValidator {
     }
 
     /**
-     * Validates and returns the normalized (trimmed) SQL.
-     *
-     * @throws IllegalArgumentException if any check fails
+     * 验证并返回规范化（trim）后的 SQL；任一检查失败则抛出 {@link IllegalArgumentException}。
      */
     public String validate(String raw) {
         String sql = raw == null ? "" : raw.trim();
@@ -80,11 +77,11 @@ public class SqlTemplateExportSqlValidator {
     }
 
     /**
-     * Walks all PlainSelect bodies in the statement and rejects any SELECT * or SELECT table.*.
+     * 遍历语句中所有 PlainSelect 主体，拒绝 SELECT * 或 SELECT table.*。
      */
     private void checkNoSelectStar(Select select) {
         Deque<SelectBody> queue = new ArrayDeque<>();
-        // Collect the main body and all WITH-item bodies
+        // 收集主体及所有 WITH 子句主体
         if (select.getSelectBody() != null) {
             queue.add(select.getSelectBody());
         }
@@ -108,11 +105,11 @@ public class SqlTemplateExportSqlValidator {
                         }
                     }
                 }
-                // Enqueue subqueries in FROM
+                // 将 FROM 中的子查询加入队列
                 if (ps.getFromItem() instanceof SubSelect sub && sub.getSelectBody() != null) {
                     queue.add(sub.getSelectBody());
                 }
-                // Enqueue subqueries in JOINs
+                // 将 JOIN 中的子查询加入队列
                 if (ps.getJoins() != null) {
                     ps.getJoins().stream()
                             .filter(j -> j.getRightItem() instanceof SubSelect)
@@ -129,8 +126,7 @@ public class SqlTemplateExportSqlValidator {
     }
 
     /**
-     * Uses TablesNamesFinder to collect all table names (possibly "schema.table") and
-     * verifies each referenced schema is in the allow-list.
+     * 通过 TablesNamesFinder 收集所有表名（可能含 "schema.table"），验证每个 schema 均在白名单内。
      */
     private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
         List<String> tableNames = new TablesNamesFinder().getTableList(statement);

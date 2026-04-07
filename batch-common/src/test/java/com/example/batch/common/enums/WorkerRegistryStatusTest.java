@@ -2,6 +2,7 @@ package com.example.batch.common.enums;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WorkerRegistryStatusTest {
@@ -31,19 +32,12 @@ class WorkerRegistryStatusTest {
     @Test
     void drainLifecycleOrderShouldBeLogical() {
         // Verifies the lifecycle: ONLINE → DRAINING → DECOMMISSIONED
-        WorkerRegistryStatus[] values = WorkerRegistryStatus.values();
-        int onlineIdx = indexOf(values, WorkerRegistryStatus.ONLINE);
-        int drainingIdx = indexOf(values, WorkerRegistryStatus.DRAINING);
-        int decommissionedIdx = indexOf(values, WorkerRegistryStatus.DECOMMISSIONED);
+        List<WorkerRegistryStatus> values = List.of(WorkerRegistryStatus.values());
+        int onlineIdx = values.indexOf(WorkerRegistryStatus.ONLINE);
+        int drainingIdx = values.indexOf(WorkerRegistryStatus.DRAINING);
+        int decommissionedIdx = values.indexOf(WorkerRegistryStatus.DECOMMISSIONED);
 
         assertThat(onlineIdx).isLessThan(drainingIdx);
         assertThat(drainingIdx).isLessThan(decommissionedIdx);
-    }
-
-    private int indexOf(WorkerRegistryStatus[] values, WorkerRegistryStatus target) {
-        for (int i = 0; i < values.length; i++) {
-            if (values[i] == target) return i;
-        }
-        return -1;
     }
 }

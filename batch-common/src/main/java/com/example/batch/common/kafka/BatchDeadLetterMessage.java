@@ -14,7 +14,7 @@ public record BatchDeadLetterMessage(
         String idempotencyKey,
         String traceId,
         /**
-         * Message delivery attempt sequence when the record is sent to DLQ.
+         * 记录进入死信队列时的消息投递尝试序号。
          */
         int attemptNo,
         String deadReason,

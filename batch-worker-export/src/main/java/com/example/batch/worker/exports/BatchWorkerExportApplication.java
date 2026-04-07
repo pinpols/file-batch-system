@@ -10,7 +10,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
+import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 
 @SpringBootApplication(
         scanBasePackages = "com.example.batch",

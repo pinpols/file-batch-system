@@ -12,7 +12,7 @@ import org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoCon
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
+import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;

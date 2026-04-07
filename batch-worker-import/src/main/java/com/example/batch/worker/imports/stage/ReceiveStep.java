@@ -63,7 +63,7 @@ public class ReceiveStep implements ImportStageStep {
         if (context == null || !StringUtils.hasText(context.getTenantId()) || !StringUtils.hasText(context.getRawPayload())) {
             return ImportStageResult.failure(stage(), "IMPORT_RECEIVE_INVALID", "tenantId or payload is blank");
         }
-        // C-5/D-4: reject oversized payloads before any heap allocation
+        // C-5/D-4: 在任何堆内存分配前拒绝超大 payload
         long payloadLength = context.getRawPayload().length();
         if (payloadLength > maxPayloadSizeBytes) {
             return ImportStageResult.failure(stage(), "IMPORT_RECEIVE_TOO_LARGE",
@@ -155,7 +155,7 @@ public class ReceiveStep implements ImportStageStep {
                 String extracted = findFirstText(root, "content");
                 if (StringUtils.hasText(extracted)) {
                     String trimmed = extracted.trim();
-                    // Only accept extracted payload that looks like JSON content (array or object).
+                    // 仅接受看起来像 JSON 内容（数组或对象）的提取值。
                     if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
                         return importPayload;
                     }

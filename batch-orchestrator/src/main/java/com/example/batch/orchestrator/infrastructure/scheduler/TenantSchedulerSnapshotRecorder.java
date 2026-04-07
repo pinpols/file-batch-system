@@ -16,7 +16,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Periodically persists a compact row per tenant for audit (fair-share / burst / group load).
+ * 定期为每个租户持久化一行紧凑的快照记录，用于审计（公平份额 / 突发限制 / 分组负载）。
  */
 @Component
 @RequiredArgsConstructor

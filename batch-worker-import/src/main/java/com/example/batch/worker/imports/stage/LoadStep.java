@@ -106,8 +106,8 @@ public class LoadStep implements ImportStageStep {
             deleteQuietly(resolvePath(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH)));
             return ImportStageResult.success(stage());
         } catch (Exception ex) {
-            // M-5: staging files (validatedRecordsPath / PARSED_RECORDS_PATH) are intentionally NOT deleted on
-            // failure so that ops can inspect or replay records without re-running earlier pipeline stages.
+            // M-5: 失败时故意不删除暂存文件（validatedRecordsPath / PARSED_RECORDS_PATH），
+            // 便于运维检查或重放记录，无需重跑之前的 pipeline 阶段。
             log.error("load stage (streaming) failed: tenantId={}, fileId={}, message={}",
                     context.getTenantId(),
                     context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),

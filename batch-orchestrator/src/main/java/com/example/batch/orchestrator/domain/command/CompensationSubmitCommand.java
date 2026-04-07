@@ -8,7 +8,7 @@ public record CompensationSubmitCommand(
         Long targetId,
         String targetInstanceNo,
         /**
-         * Business job identifier for the compensation scope.
+         * 补偿范围对应的业务 Job 标识。
          */
         String jobCode,
         LocalDate bizDate,

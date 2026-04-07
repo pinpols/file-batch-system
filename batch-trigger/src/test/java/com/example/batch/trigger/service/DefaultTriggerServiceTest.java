@@ -125,7 +125,7 @@ class DefaultTriggerServiceTest {
 
         ArgumentCaptor<TriggerRequestEntity> captor = ArgumentCaptor.forClass(TriggerRequestEntity.class);
         verify(triggerRequestMapper).insert(captor.capture());
-        assertThat(captor.getValue().getRequestStatus()).isEqualTo("ACCEPTED");
+        assertThat(captor.getValue().getRequestStatus()).isEqualTo("PENDING");
         assertThat(captor.getValue().getDedupKey()).isEqualTo("idem-002");
         verify(triggerRequestMapper).updateRequestStatus("t1", "req-002", "REJECTED");
     }
@@ -148,6 +148,7 @@ class DefaultTriggerServiceTest {
 
         LaunchResponse response = new LaunchResponse("inst-001", "trace-pending");
         when(triggerRequestMapper.selectByTenantAndRequestId("t1", "req-pending")).thenReturn(pending);
+        when(triggerRequestMapper.updateRequestStatusConditional("t1", "req-pending", "PROCESSING", "ACCEPTED")).thenReturn(1);
         when(orchestratorTriggerAdapter.sendTrigger(any())).thenReturn(response);
 
         LaunchResponse approved = service.approvePendingCatchUp(command);

@@ -77,7 +77,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
         ChannelSftp sftp = null;
         try {
             JSch jsch = new JSch();
-            // H-6: enable host key checking by default; allow explicit opt-out via channel config
+            // H-6: 默认启用主机密钥检查；允许通过 channel 配置显式关闭
             String strictHostKeyChecking = stringProp(channelConfig, "sftp_strict_host_key_checking");
             boolean strictMode = !"no".equalsIgnoreCase(strictHostKeyChecking);
             if (!strictMode) {

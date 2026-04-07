@@ -1,16 +1,11 @@
 package com.example.batch.orchestrator.domain.statemachine;
 
 /**
- * Marker interface for entities that carry an explicit status field.
- *
- * <p>Implementing this interface replaces the reflection-based status resolution in
- * {@link com.example.batch.orchestrator.infrastructure.statemachine.DefaultStateMachine}.
- * Any entity that is passed to {@code StateMachine.transition()} should implement this
- * interface so status lookup is compile-time safe — renaming the field will cause a
- * compile error rather than a silent runtime fallback.
+ * 携带显式状态字段的实体标记接口，替代 {@link com.example.batch.orchestrator.infrastructure.statemachine.DefaultStateMachine}
+ * 中基于反射的状态解析。实现此接口可保证状态查找在编译期安全，字段重命名将触发编译错误而非静默回退。
  */
 public interface Stateful {
 
-    /** Returns the current status string of this entity. */
+    /** 返回当前实体的状态字符串。 */
     String getStatus();
 }

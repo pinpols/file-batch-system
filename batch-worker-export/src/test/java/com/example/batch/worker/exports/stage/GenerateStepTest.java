@@ -54,6 +54,7 @@ class GenerateStepTest {
         ExportWorkerConfiguration config = new ExportWorkerConfiguration(
                 "worker-test", "EXPORT", "tenant-test", 5000L,
                 "batch-export", "group-export",
+                500_000L,
                 new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50)
         );
 

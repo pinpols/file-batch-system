@@ -87,7 +87,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
         baseParams.put("tenantId", context.tenantId());
         baseParams.put("batchNo", context.batchNo());
 
-        // EXPLAIN pre-check on the first page (cursor == null)
+        // 首页（cursor == null）时执行 EXPLAIN 预检
         if (cursor == null && security != null && security.isExplainCheckEnabled()) {
             runExplainCheck(baseSql, baseParams, context);
         }
