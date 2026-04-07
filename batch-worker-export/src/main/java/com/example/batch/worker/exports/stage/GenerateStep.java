@@ -61,6 +61,13 @@ public class GenerateStep implements ExportStageStep {
                 return ExportStageResult.failure(stage(), "EXPORT_BATCH_NOT_FOUND", "export batch not found");
             }
             Object batchId = batch.get("id");
+            // H-8: enforce max-rows limit before starting generation to prevent OOM
+            long maxRows = workerConfiguration != null ? workerConfiguration.effectiveMaxExportRows() : 500_000L;
+            Object totalCountObj = batch.get("total_count");
+            if (totalCountObj instanceof Number totalCount && maxRows > 0 && totalCount.longValue() > maxRows) {
+                return ExportStageResult.failure(stage(), "EXPORT_EXCEEDS_MAX_ROWS",
+                        "export row count " + totalCount + " exceeds limit " + maxRows);
+            }
             int pageSize = resolvePageSize(context);
             int chunkSize = resolveChunkSize(context);
             String fileFormatType = String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));

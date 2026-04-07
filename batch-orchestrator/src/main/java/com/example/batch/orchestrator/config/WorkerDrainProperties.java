@@ -8,12 +8,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class WorkerDrainProperties {
 
     /**
-     * Default drain window before orchestrator takes over in-flight tasks.
+     * Orchestrator 接管飞行中任务前的默认排空等待窗口。
      */
     private int defaultTimeoutSeconds = 600;
 
     /**
-     * How often to poll workers in DRAINING for deadline expiry.
+     * 轮询处于 DRAINING 状态的 Worker 是否超期的间隔。
      */
     private long checkIntervalMillis = 15000L;
 

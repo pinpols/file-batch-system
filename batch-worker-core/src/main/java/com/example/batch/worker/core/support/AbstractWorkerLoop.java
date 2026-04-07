@@ -91,8 +91,7 @@ public abstract class AbstractWorkerLoop {
     }
 
     /**
-     * Idempotent start: registers the worker on first call, returns the registration on
-     * subsequent calls.  Thread-safe via double-checked locking.
+     * 幂等启动：首次调用注册 worker，后续调用直接返回注册信息；双重检查加锁保证线程安全。
      */
     public WorkerRegistration ensureStarted() {
         if (started.get()) {

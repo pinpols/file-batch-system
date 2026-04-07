@@ -72,35 +72,11 @@ import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
-import com.example.batch.console.mapper.AlertEventMapper;
-import com.example.batch.console.mapper.AuditLogMapper;
-import com.example.batch.console.mapper.BatchDayMapper;
-import com.example.batch.console.mapper.BusinessCalendarMapper;
-import com.example.batch.console.mapper.ApprovalCommandMapper;
-import com.example.batch.console.mapper.DeadLetterTaskMapper;
-import com.example.batch.console.mapper.FileErrorRecordMapper;
-import com.example.batch.console.mapper.FileArrivalGroupMapper;
-import com.example.batch.console.mapper.FileChannelConfigMapper;
-import com.example.batch.console.mapper.FileDispatchRecordMapper;
-import com.example.batch.console.mapper.FilePipelineMapper;
-import com.example.batch.console.mapper.FilePipelineStepRunMapper;
-import com.example.batch.console.mapper.FileRecordMapper;
-import com.example.batch.console.mapper.FileTemplateConfigMapper;
-import com.example.batch.console.mapper.JobInstanceMapper;
-import com.example.batch.console.mapper.JobStepInstanceMapper;
-import com.example.batch.console.mapper.JobDefinitionMapper;
-import com.example.batch.console.mapper.OutboxRetryLogMapper;
-import com.example.batch.console.mapper.OutboxDeliveryLogMapper;
-import com.example.batch.console.mapper.PendingCatchUpMapper;
-import com.example.batch.console.mapper.RetryScheduleMapper;
-import com.example.batch.console.mapper.WorkerRegistryMapper;
-import com.example.batch.console.mapper.WorkflowDefinitionMapper;
-import com.example.batch.console.mapper.WorkflowNodeMapper;
-import com.example.batch.console.mapper.WorkflowEdgeMapper;
-import com.example.batch.console.mapper.WorkflowRunMapper;
-import com.example.batch.console.mapper.WorkflowNodeRunMapper;
-import com.example.batch.console.mapper.ConsoleAiAuditLogMapper;
+import com.example.batch.console.support.ConsoleFileQueryMappers;
+import com.example.batch.console.support.ConsoleJobQueryMappers;
+import com.example.batch.console.support.ConsoleOpsQueryMappers;
 import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.ConsoleWorkflowQueryMappers;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
@@ -161,34 +137,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     private static final int DEFAULT_QUERY_LIMIT = 100;
 
     private final ConsoleTenantGuard tenantGuard;
-    private final AuditLogMapper auditLogMapper;
-    private final AlertEventMapper alertEventMapper;
-    private final BatchDayMapper batchDayMapper;
-    private final BusinessCalendarMapper businessCalendarMapper;
-    private final ApprovalCommandMapper approvalCommandMapper;
-    private final JobDefinitionMapper jobDefinitionMapper;
-    private final JobInstanceMapper jobInstanceMapper;
-    private final JobStepInstanceMapper jobStepInstanceMapper;
-    private final OutboxRetryLogMapper outboxRetryLogMapper;
-    private final OutboxDeliveryLogMapper outboxDeliveryLogMapper;
-    private final FileRecordMapper fileRecordMapper;
-    private final FileArrivalGroupMapper fileArrivalGroupMapper;
-    private final FileErrorRecordMapper fileErrorRecordMapper;
-    private final FilePipelineMapper filePipelineMapper;
-    private final FilePipelineStepRunMapper filePipelineStepRunMapper;
-    private final FileDispatchRecordMapper fileDispatchRecordMapper;
-    private final FileChannelConfigMapper fileChannelConfigMapper;
-    private final FileTemplateConfigMapper fileTemplateConfigMapper;
-    private final DeadLetterTaskMapper deadLetterTaskMapper;
-    private final RetryScheduleMapper retryScheduleMapper;
-    private final PendingCatchUpMapper pendingCatchUpMapper;
-    private final WorkerRegistryMapper workerRegistryMapper;
-    private final WorkflowDefinitionMapper workflowDefinitionMapper;
-    private final WorkflowNodeMapper workflowNodeMapper;
-    private final WorkflowEdgeMapper workflowEdgeMapper;
-    private final WorkflowRunMapper workflowRunMapper;
-    private final WorkflowNodeRunMapper workflowNodeRunMapper;
-    private final ConsoleAiAuditLogMapper consoleAiAuditLogMapper;
+    private final ConsoleJobQueryMappers jobMappers;
+    private final ConsoleWorkflowQueryMappers workflowMappers;
+    private final ConsoleFileQueryMappers fileMappers;
+    private final ConsoleOpsQueryMappers opsMappers;
     private final BatchSecurityProperties batchSecurityProperties;
 
     @Override
@@ -204,8 +156,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         query.setFromTime(parseFlexibleInstant(firstNonBlank(request.getFromTime(), request.getStartTime()), "fromTime"));
         query.setToTime(parseFlexibleInstant(firstNonBlank(request.getToTime(), request.getEndTime()), "toTime"));
         query.setPageRequest(pageRequest);
-        List<Map<String, Object>> rows = auditLogMapper.selectByQuery(query);
-        long total = auditLogMapper.countByQuery(query);
+        List<Map<String, Object>> rows = opsMappers.auditLogMapper.selectByQuery(query);
+        long total = opsMappers.auditLogMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toAuditLogResponse);
     }
 
@@ -228,15 +180,15 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 parseInstant(request.getToTime(), "toTime"),
                 pageRequest
         );
-        List<FileRecordEntity> rows = fileRecordMapper.selectByQuery(query);
-        long total = fileRecordMapper.countByQuery(query);
+        List<FileRecordEntity> rows = fileMappers.fileRecordMapper.selectByQuery(query);
+        long total = fileMappers.fileRecordMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toFileRecordResponse);
     }
 
     @Override
     public PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = filePipelineMapper.selectByQuery(
+        List<Map<String, Object>> rows = fileMappers.filePipelineMapper.selectByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getFileId(),
                 request.getPipelineInstanceId(),
@@ -247,7 +199,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 parseInstant(request.getToTime(), "toTime"),
                 pageRequest
         );
-        long total = filePipelineMapper.countByQuery(
+        long total = fileMappers.filePipelineMapper.countByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getFileId(),
                 request.getPipelineInstanceId(),
@@ -263,14 +215,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(FilePipelineStepQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = filePipelineStepRunMapper.selectByQuery(
+        List<Map<String, Object>> rows = fileMappers.filePipelineStepRunMapper.selectByQuery(
                 request.getPipelineInstanceId(),
                 request.getStepCode(),
                 request.getStageCode(),
                 request.getStepStatus(),
                 pageRequest
         );
-        long total = filePipelineStepRunMapper.countByQuery(
+        long total = fileMappers.filePipelineStepRunMapper.countByQuery(
                 request.getPipelineInstanceId(),
                 request.getStepCode(),
                 request.getStageCode(),
@@ -282,7 +234,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(FileDispatchRecordQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = fileDispatchRecordMapper.selectByQuery(
+        List<Map<String, Object>> rows = fileMappers.fileDispatchRecordMapper.selectByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getFileId(),
                 request.getChannelCode(),
@@ -292,7 +244,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 parseInstant(request.getToTime(), "toTime"),
                 pageRequest
         );
-        long total = fileDispatchRecordMapper.countByQuery(
+        long total = fileMappers.fileDispatchRecordMapper.countByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getFileId(),
                 request.getChannelCode(),
@@ -307,14 +259,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleFileChannelResponse> fileChannels(FileChannelQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = fileChannelConfigMapper.selectByQuery(
+        List<Map<String, Object>> rows = fileMappers.fileChannelConfigMapper.selectByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getChannelCode(),
                 request.getChannelType(),
                 request.getEnabled(),
                 pageRequest
         );
-        long total = fileChannelConfigMapper.countByQuery(
+        long total = fileMappers.fileChannelConfigMapper.countByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getChannelCode(),
                 request.getChannelType(),
@@ -326,7 +278,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = fileTemplateConfigMapper.selectByQuery(
+        List<Map<String, Object>> rows = fileMappers.fileTemplateConfigMapper.selectByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getKeyword(),
                 request.getTemplateCode(),
@@ -336,7 +288,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getEnabled(),
                 pageRequest
         );
-        long total = fileTemplateConfigMapper.countByQuery(
+        long total = fileMappers.fileTemplateConfigMapper.countByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getKeyword(),
                 request.getTemplateCode(),
@@ -362,21 +314,21 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getEnabled(),
                 pageRequest
         );
-        List<JobDefinitionEntity> rows = jobDefinitionMapper.selectByQuery(query);
-        long total = jobDefinitionMapper.countByQuery(query);
+        List<JobDefinitionEntity> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
+        long total = jobMappers.jobDefinitionMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toJobDefinitionResponse);
     }
 
     @Override
     public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = outboxRetryLogMapper.selectByQuery(new OutboxRetryLogQuery(
+        List<Map<String, Object>> rows = opsMappers.outboxRetryLogMapper.selectByQuery(new OutboxRetryLogQuery(
                 resolveTenant(request.getTenantId()),
                 request.getRetryStatus(),
                 request.getEventKey(),
                 pageRequest
         ));
-        long total = outboxRetryLogMapper.countByQuery(
+        long total = opsMappers.outboxRetryLogMapper.countByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getRetryStatus(),
                 request.getEventKey(),
@@ -388,14 +340,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(OutboxDeliveryLogQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = outboxDeliveryLogMapper.selectByQuery(new OutboxDeliveryLogQuery(
+        List<Map<String, Object>> rows = opsMappers.outboxDeliveryLogMapper.selectByQuery(new OutboxDeliveryLogQuery(
                 resolveTenant(request.getTenantId()),
                 request.getDeliveryStatus(),
                 request.getEventType(),
                 request.getEventKey(),
                 pageRequest
         ));
-        long total = outboxDeliveryLogMapper.countByQuery(
+        long total = opsMappers.outboxDeliveryLogMapper.countByQuery(
                 resolveTenant(request.getTenantId()),
                 request.getDeliveryStatus(),
                 request.getEventType(),
@@ -408,7 +360,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(FileArrivalGroupQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<FileArrivalGroupEntity> rows = fileArrivalGroupMapper.selectByQuery(new FileArrivalGroupQuery(
+        List<FileArrivalGroupEntity> rows = fileMappers.fileArrivalGroupMapper.selectByQuery(new FileArrivalGroupQuery(
                 resolveTenant(request.getTenantId()),
                 request.getFileGroupCode(),
                 request.getArrivalState(),
@@ -416,7 +368,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 null,
                 pageRequest
         ));
-        long total = fileArrivalGroupMapper.countByQuery(new FileArrivalGroupQuery(
+        long total = fileMappers.fileArrivalGroupMapper.countByQuery(new FileArrivalGroupQuery(
                 resolveTenant(request.getTenantId()),
                 request.getFileGroupCode(),
                 request.getArrivalState(),
@@ -430,7 +382,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(FileErrorRecordQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<FileErrorRecordEntity> rows = fileErrorRecordMapper.selectByQuery(new FileErrorRecordQuery(
+        List<FileErrorRecordEntity> rows = fileMappers.fileErrorRecordMapper.selectByQuery(new FileErrorRecordQuery(
                 resolveTenant(request.getTenantId()),
                 request.getFileId(),
                 request.getErrorStage(),
@@ -439,7 +391,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 pageRequest
         ));
         applyErrorLineMasking(resolveTenant(request.getTenantId()), request.getFileId(), rows);
-        long total = fileErrorRecordMapper.countByQuery(new FileErrorRecordQuery(
+        long total = fileMappers.fileErrorRecordMapper.countByQuery(new FileErrorRecordQuery(
                 resolveTenant(request.getTenantId()),
                 request.getFileId(),
                 request.getErrorStage(),
@@ -464,11 +416,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         if (batchSecurityProperties.isTestingOpen() || rows == null || rows.isEmpty() || fileId == null || !StringUtils.hasText(tenantId)) {
             return;
         }
-        String templateCode = fileRecordMapper.selectTemplateCodeByFileId(tenantId, fileId);
+        String templateCode = fileMappers.fileRecordMapper.selectTemplateCodeByFileId(tenantId, fileId);
         if (!StringUtils.hasText(templateCode)) {
             return;
         }
-        Map<String, Object> sec = fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, templateCode);
+        Map<String, Object> sec = fileMappers.fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, templateCode);
         if (sec == null || !truthy(sec.get("error_line_masking_enabled"))) {
             return;
         }
@@ -497,14 +449,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 parseFlexibleInstantEndOfDay(request.getEndDate(), "endDate"),
                 pageRequest
         );
-        List<JobInstanceEntity> rows = jobInstanceMapper.selectByQuery(query);
-        long total = jobInstanceMapper.countByQuery(query);
+        List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
+        long total = jobMappers.jobInstanceMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toJobInstanceResponse);
     }
 
     @Override
     public ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
-        JobInstanceEntity entity = jobInstanceMapper.selectById(resolveTenant(tenantId), id);
+        JobInstanceEntity entity = jobMappers.jobInstanceMapper.selectById(resolveTenant(tenantId), id);
         return toJobInstanceResponse(requireNotNull(entity, "job instance not found"));
     }
 
@@ -519,21 +471,21 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getStepStatus(),
                 pageRequest
         );
-        List<JobStepInstanceEntity> rows = jobStepInstanceMapper.selectByQuery(query);
-        long total = jobStepInstanceMapper.countByQuery(query);
+        List<JobStepInstanceEntity> rows = jobMappers.jobStepInstanceMapper.selectByQuery(query);
+        long total = jobMappers.jobStepInstanceMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toJobStepInstanceResponse);
     }
 
     @Override
     public ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id) {
-        JobStepInstanceEntity entity = jobStepInstanceMapper.selectById(resolveTenant(tenantId), id);
+        JobStepInstanceEntity entity = jobMappers.jobStepInstanceMapper.selectById(resolveTenant(tenantId), id);
         return toJobStepInstanceResponse(requireNotNull(entity, "job step instance not found"));
     }
 
     @Override
     public PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(WorkflowDefinitionQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<WorkflowDefinitionEntity> rows = workflowDefinitionMapper.selectByQuery(new WorkflowDefinitionQuery(
+        List<WorkflowDefinitionEntity> rows = workflowMappers.workflowDefinitionMapper.selectByQuery(new WorkflowDefinitionQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowCode(),
                 request.getWorkflowName(),
@@ -542,7 +494,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getEnabled(),
                 pageRequest
         ));
-        long total = workflowDefinitionMapper.countByQuery(new WorkflowDefinitionQuery(
+        long total = workflowMappers.workflowDefinitionMapper.countByQuery(new WorkflowDefinitionQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowCode(),
                 request.getWorkflowName(),
@@ -557,7 +509,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<WorkflowNodeEntity> rows = workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
+        List<WorkflowNodeEntity> rows = workflowMappers.workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowDefinitionId(),
                 request.getWorkflowCode(),
@@ -566,7 +518,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getEnabled(),
                 pageRequest
         ));
-        long total = workflowNodeMapper.countByQuery(new WorkflowNodeQuery(
+        long total = workflowMappers.workflowNodeMapper.countByQuery(new WorkflowNodeQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowDefinitionId(),
                 request.getWorkflowCode(),
@@ -581,7 +533,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<ConsoleWorkflowEdgeResponse> workflowEdges(WorkflowEdgeQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<WorkflowEdgeEntity> rows = workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
+        List<WorkflowEdgeEntity> rows = workflowMappers.workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowDefinitionId(),
                 request.getWorkflowCode(),
@@ -591,7 +543,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getEnabled(),
                 pageRequest
         ));
-        long total = workflowEdgeMapper.countByQuery(new WorkflowEdgeQuery(
+        long total = workflowMappers.workflowEdgeMapper.countByQuery(new WorkflowEdgeQuery(
                 resolveTenant(request.getTenantId()),
                 request.getWorkflowDefinitionId(),
                 request.getWorkflowCode(),
@@ -616,14 +568,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getTraceId(),
                 pageRequest
         );
-        List<WorkflowRunEntity> rows = workflowRunMapper.selectByQuery(query);
-        long total = workflowRunMapper.countByQuery(query);
+        List<WorkflowRunEntity> rows = workflowMappers.workflowRunMapper.selectByQuery(query);
+        long total = workflowMappers.workflowRunMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toWorkflowRunResponse);
     }
 
     @Override
     public ConsoleWorkflowRunResponse workflowRun(String tenantId, Long id) {
-        WorkflowRunEntity entity = workflowRunMapper.selectById(resolveTenant(tenantId), id);
+        WorkflowRunEntity entity = workflowMappers.workflowRunMapper.selectById(resolveTenant(tenantId), id);
         return toWorkflowRunResponse(requireNotNull(entity, "workflow run not found"));
     }
 
@@ -636,14 +588,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getNodeStatus(),
                 pageRequest
         );
-        List<WorkflowNodeRunEntity> rows = workflowNodeRunMapper.selectByQuery(query);
-        long total = workflowNodeRunMapper.countByQuery(query);
+        List<WorkflowNodeRunEntity> rows = workflowMappers.workflowNodeRunMapper.selectByQuery(query);
+        long total = workflowMappers.workflowNodeRunMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toWorkflowNodeRunResponse);
     }
 
     @Override
     public ConsoleWorkflowNodeRunResponse workflowNodeRun(String tenantId, Long id) {
-        WorkflowNodeRunEntity entity = workflowNodeRunMapper.selectById(resolveTenant(tenantId), id);
+        WorkflowNodeRunEntity entity = workflowMappers.workflowNodeRunMapper.selectById(resolveTenant(tenantId), id);
         return toWorkflowNodeRunResponse(requireNotNull(entity, "workflow node run not found"));
     }
 
@@ -658,12 +610,12 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 true,
                 null
         );
-        List<WorkflowDefinitionEntity> definitions = workflowDefinitionMapper.selectByQuery(definitionQuery);
+        List<WorkflowDefinitionEntity> definitions = workflowMappers.workflowDefinitionMapper.selectByQuery(definitionQuery);
         WorkflowDefinitionEntity selectedDefinition = definitions.isEmpty() ? null : definitions.get(0);
         if (selectedDefinition == null) {
             return new ConsoleWorkflowTopologyResponse(null, List.of(), List.of(), List.of(), List.of());
         }
-        List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
+        List<WorkflowNodeEntity> nodes = workflowMappers.workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
                 resolveTenant(request.getTenantId()),
                 selectedDefinition.getId(),
                 null,
@@ -672,7 +624,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 true,
                 null
         ));
-        List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
+        List<WorkflowEdgeEntity> edges = workflowMappers.workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
                 resolveTenant(request.getTenantId()),
                 selectedDefinition.getId(),
                 null,
@@ -685,7 +637,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         List<WorkflowRunEntity> workflowRuns = List.of();
         List<WorkflowNodeRunEntity> nodeRuns = List.of();
         if (request.getWorkflowRunId() != null) {
-            WorkflowRunEntity run = workflowRunMapper.selectByQuery(new WorkflowRunQuery(
+            WorkflowRunEntity run = workflowMappers.workflowRunMapper.selectByQuery(new WorkflowRunQuery(
                     resolveTenant(request.getTenantId()),
                     selectedDefinition.getId(),
                     null,
@@ -699,7 +651,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                     .orElse(null);
             if (run != null) {
                 workflowRuns = List.of(run);
-                nodeRuns = workflowNodeRunMapper.selectByQuery(new WorkflowNodeRunQuery(
+                nodeRuns = workflowMappers.workflowNodeRunMapper.selectByQuery(new WorkflowNodeRunQuery(
                         request.getWorkflowRunId(),
                         null,
                         null,
@@ -719,7 +671,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public PageResponse<AiAuditLogResponse> aiAuditLogs(ConsoleAiAuditLogQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<ConsoleAiAuditLogEntity> rows = consoleAiAuditLogMapper.selectByQuery(new ConsoleAiAuditLogQuery(
+        List<ConsoleAiAuditLogEntity> rows = opsMappers.consoleAiAuditLogMapper.selectByQuery(new ConsoleAiAuditLogQuery(
                 resolveTenant(request.getTenantId()),
                 request.getSessionId(),
                 request.getOperatorId(),
@@ -729,7 +681,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 parseInstant(request.getToTime(), "toTime"),
                 pageRequest
         ));
-        long total = consoleAiAuditLogMapper.countByQuery(new ConsoleAiAuditLogQuery(
+        long total = opsMappers.consoleAiAuditLogMapper.countByQuery(new ConsoleAiAuditLogQuery(
                 resolveTenant(request.getTenantId()),
                 request.getSessionId(),
                 request.getOperatorId(),
@@ -768,8 +720,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getTraceId(),
                 pageRequest
         );
-        List<DeadLetterTaskEntity> rows = deadLetterTaskMapper.selectByQuery(query);
-        long total = deadLetterTaskMapper.countByQuery(query);
+        List<DeadLetterTaskEntity> rows = opsMappers.deadLetterTaskMapper.selectByQuery(query);
+        long total = opsMappers.deadLetterTaskMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toDeadLetterTaskResponse);
     }
 
@@ -783,8 +735,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getRetryStatus(),
                 pageRequest
         );
-        List<RetryScheduleEntity> rows = retryScheduleMapper.selectByQuery(query);
-        long total = retryScheduleMapper.countByQuery(query);
+        List<RetryScheduleEntity> rows = opsMappers.retryScheduleMapper.selectByQuery(query);
+        long total = opsMappers.retryScheduleMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toRetryScheduleResponse);
     }
 
@@ -797,8 +749,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getRequestId(),
                 pageRequest
         );
-        List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
-        long total = pendingCatchUpMapper.countByQuery(query);
+        List<PendingCatchUpEntity> rows = opsMappers.pendingCatchUpMapper.selectByQuery(query);
+        long total = opsMappers.pendingCatchUpMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toPendingCatchUpResponse);
     }
 
@@ -811,8 +763,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getStatus(),
                 pageRequest
         );
-        List<WorkerRegistryEntity> rows = workerRegistryMapper.selectByQuery(query);
-        long total = workerRegistryMapper.countByQuery(query);
+        List<WorkerRegistryEntity> rows = opsMappers.workerRegistryMapper.selectByQuery(query);
+        long total = opsMappers.workerRegistryMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toWorkerRegistryResponse);
     }
 
@@ -826,8 +778,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 request.getAlertType(),
                 pageRequest
         );
-        List<AlertEventEntity> rows = alertEventMapper.selectByQuery(query);
-        long total = alertEventMapper.countByQuery(query);
+        List<AlertEventEntity> rows = opsMappers.alertEventMapper.selectByQuery(query);
+        long total = opsMappers.alertEventMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toAlertEventResponse);
     }
 
@@ -837,14 +789,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         String tenantId = resolveTenant(request.getTenantId());
         LocalDate fromBizDate = parseLocalDate(request.getFrom(), "from");
         LocalDate toBizDate = parseLocalDate(request.getTo(), "to");
-        List<Map<String, Object>> rows = batchDayMapper.selectByQuery(
+        List<Map<String, Object>> rows = opsMappers.batchDayMapper.selectByQuery(
                 tenantId,
                 request.getCalendarCode(),
                 fromBizDate,
                 toBizDate,
                 pageRequest
         );
-        long total = batchDayMapper.countByQuery(tenantId, request.getCalendarCode(), fromBizDate, toBizDate);
+        long total = opsMappers.batchDayMapper.countByQuery(tenantId, request.getCalendarCode(), fromBizDate, toBizDate);
         List<ConsoleBatchDayResponse> responses = rows.stream()
                 .map(row -> toBatchDayResponse(tenantId, request.getCalendarCode(), row))
                 .toList();
@@ -859,7 +811,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
                 tenantId,
                 request.getCalendarCode(),
                 parsedBizDate,
-                batchDayMapper.selectWindow(tenantId, request.getCalendarCode(), parsedBizDate)
+                opsMappers.batchDayMapper.selectWindow(tenantId, request.getCalendarCode(), parsedBizDate)
         );
     }
 
@@ -873,8 +825,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         query.setActionType(request.getActionType());
         query.setApprovalStatus(request.getApprovalStatus());
         query.setPageRequest(pageRequest);
-        List<ApprovalCommandEntity> rows = approvalCommandMapper.selectByQuery(query);
-        long total = approvalCommandMapper.countByQuery(query);
+        List<ApprovalCommandEntity> rows = opsMappers.approvalCommandMapper.selectByQuery(query);
+        long total = opsMappers.approvalCommandMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toApprovalResponse);
     }
 
@@ -1148,7 +1100,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         if (bizDate == null) {
             return List.of();
         }
-        List<Map<String, Object>> rows = batchDayMapper.selectJobSummaries(tenantId, calendarCode, bizDate);
+        List<Map<String, Object>> rows = opsMappers.batchDayMapper.selectJobSummaries(tenantId, calendarCode, bizDate);
         if (rows == null || rows.isEmpty()) {
             return List.of();
         }
@@ -1174,7 +1126,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
         if (cutoffAt == null) {
             return null;
         }
-        Map<String, Object> calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
+        Map<String, Object> calendar = opsMappers.businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
         Integer tolerance = intValue(calendar, "lateArrivalToleranceMin");
         if (tolerance == null || tolerance <= 0) {
             return cutoffAt;
@@ -1651,7 +1603,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public Map<String, Object> fileChannelDetail(String tenantId, String channelCode) {
         String resolved = resolveTenant(tenantId);
-        Map<String, Object> row = fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode);
+        Map<String, Object> row = fileMappers.fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode);
         if (row == null || row.isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "file channel not found: " + channelCode);
         }
@@ -1662,7 +1614,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     public Map<String, Object> fileTemplateDetail(String tenantId, String templateCode, Integer version) {
         String resolved = resolveTenant(tenantId);
         Integer ver = version != null ? version : 1;
-        Map<String, Object> row = fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver);
+        Map<String, Object> row = fileMappers.fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver);
         if (row == null || row.isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "file template not found: " + templateCode);
         }
@@ -1672,7 +1624,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     @Override
     public Map<String, Object> fileRecordDetail(String tenantId, Long fileId) {
         String resolved = resolveTenant(tenantId);
-        Map<String, Object> row = fileRecordMapper.selectFileRecordById(resolved, fileId);
+        Map<String, Object> row = fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
         if (row == null || row.isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "file record not found: " + fileId);
         }
@@ -1683,7 +1635,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     public ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {
         String resolved = resolveTenant(tenantId);
         PageRequest page = new PageRequest(1, 1);
-        List<Map<String, Object>> rows = filePipelineMapper.selectByQuery(
+        List<Map<String, Object>> rows = fileMappers.filePipelineMapper.selectByQuery(
                 resolved, null, id, null, null, null, null, null, page);
         if (rows.isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "pipeline instance not found: " + id);

@@ -69,7 +69,14 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     public ApprovalRecord markExecuted(String tenantId, String approvalNo) {
         if (approvalCommandMapper.markExecuted(tenantId, approvalNo,
                 ApprovalCommandStatus.EXECUTED.code(), ApprovalCommandStatus.APPROVED.code()) <= 0) {
-            return toRecord(require(tenantId, approvalNo));
+            // M-3: 区分幂等重复执行（已是 EXECUTED）与非法状态转换
+            ApprovalCommandEntity current = require(tenantId, approvalNo);
+            if (!ApprovalCommandStatus.EXECUTED.code().equals(current.getApprovalStatus())) {
+                throw new IllegalStateException(
+                        "markExecuted failed: approvalNo=" + approvalNo
+                                + " is not in APPROVED state, current status=" + current.getApprovalStatus());
+            }
+            return toRecord(current);
         }
         return toRecord(require(tenantId, approvalNo));
     }

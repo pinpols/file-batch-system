@@ -8,12 +8,20 @@ import java.io.InputStream;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
  * SFTP upload of the file referenced by {@code file_record} to {@code sftp_remote_directory}.
+ *
+ * <p>Channel config keys:
+ * <ul>
+ *   <li>{@code sftp_strict_host_key_checking} — "yes" (default, secure) or "no" (insecure, MITM risk)</li>
+ *   <li>{@code sftp_known_hosts_path} — path to known_hosts file when strict checking is enabled</li>
+ * </ul>
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
@@ -69,9 +77,21 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
         ChannelSftp sftp = null;
         try {
             JSch jsch = new JSch();
+            // H-6: enable host key checking by default; allow explicit opt-out via channel config
+            String strictHostKeyChecking = stringProp(channelConfig, "sftp_strict_host_key_checking");
+            boolean strictMode = !"no".equalsIgnoreCase(strictHostKeyChecking);
+            if (!strictMode) {
+                log.warn("SFTP StrictHostKeyChecking disabled for host {} — susceptible to MITM attacks", host);
+            } else {
+                String knownHostsPath = stringProp(channelConfig, "sftp_known_hosts_path");
+                if (StringUtils.hasText(knownHostsPath)) {
+                    jsch.setKnownHosts(knownHostsPath);
+                }
+            }
             session = jsch.getSession(user, host, port);
+            // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
             session.setPassword(password);
-            session.setConfig("StrictHostKeyChecking", "no");
+            session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");
             session.connect(30_000);
             sftp = (ChannelSftp) session.openChannel("sftp");
             sftp.connect(30_000);

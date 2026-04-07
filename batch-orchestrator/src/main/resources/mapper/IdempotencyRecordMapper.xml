@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.orchestrator.mapper.IdempotencyRecordMapper">
+
+    <!--
+      D-1: idempotency_record table — ensures "exactly once" semantics for critical operations.
+      DDL (to be applied via Flyway migration):
+
+      CREATE TABLE IF NOT EXISTS batch.idempotency_record (
+          id            BIGSERIAL PRIMARY KEY,
+          tenant_id     VARCHAR(64)  NOT NULL,
+          idempotency_key VARCHAR(512) NOT NULL,
+          result_payload TEXT,
+          created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT uq_idempotency_key UNIQUE (tenant_id, idempotency_key)
+      );
+    -->
+
+    <insert id="insertIfAbsent">
+        insert into batch.idempotency_record (tenant_id, idempotency_key, result_payload)
+        values (#{tenantId}, #{idempotencyKey}, #{resultPayload})
+        on conflict (tenant_id, idempotency_key) do nothing
+    </insert>
+
+    <select id="selectResultByKey" resultType="string">
+        select result_payload
+        from batch.idempotency_record
+        where tenant_id = #{tenantId}
+          and idempotency_key = #{idempotencyKey}
+    </select>
+</mapper>

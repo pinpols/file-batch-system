@@ -5,12 +5,8 @@ import com.example.batch.orchestrator.domain.entity.CompensationCommandEntity;
 import java.util.Map;
 
 /**
- * Strategy interface for a single compensation type.
- *
- * <p>Each implementation handles one {@code compensationType} value (JOB / STEP / PARTITION /
- * FILE / BATCH / DLQ). {@link DefaultCompensationService} routes to the correct handler via a
- * Map&lt;String, CompensationHandler&gt; built at construction time, eliminating the original
- * 6-way switch.
+ * 单一补偿类型的策略接口，每个实现处理一种 {@code compensationType}（JOB / STEP / PARTITION / FILE / BATCH / DLQ）。
+ * {@link DefaultCompensationService} 通过构造期建立的 Map 路由至对应处理器，替代原始的 6 路 switch。
  */
 @FunctionalInterface
 public interface CompensationHandler {

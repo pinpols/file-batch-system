@@ -24,11 +24,9 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
-import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
-import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import com.example.batch.orchestrator.application.service.OrchestratorJobMappers;
+import com.example.batch.orchestrator.application.service.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import com.example.batch.orchestrator.service.LaunchValidationService.LaunchLoadResult;
 import java.time.Instant;
@@ -69,26 +67,19 @@ public class DefaultLaunchService implements LaunchService {
 
     private final LaunchValidationService launchValidationService;
     private final PartitionDispatchService partitionDispatchService;
-    private final TriggerRequestMapper triggerRequestMapper;
-    private final JobInstanceMapper jobInstanceMapper;
-    private final WorkflowRunMapper workflowRunMapper;
-    private final WorkflowNodeRunMapper workflowNodeRunMapper;
+    private final OrchestratorJobMappers jobMappers;
+    private final OrchestratorWorkflowMappers workflowMappers;
     private final WorkflowDagService workflowDagService;
     private final OrchestratorConfigCacheService configCacheService;
     private final BatchDayInstanceRepository batchDayInstanceRepository;
     private final JobExecutionLogMapper jobExecutionLogMapper;
-
-    /**
-     * 通过延迟获取 self proxy 触发 AOP 拦截，确保 {@link #prepareJobInstance} 的 {@code @Transactional}
-     * 在同类调用中仍生效。
-     */
     private final ObjectProvider<DefaultLaunchService> selfProvider;
 
     @Override
     public LaunchResponse launch(LaunchRequest request) {
         LaunchLoadResult loaded = launchValidationService.load(request);
         if (loaded.existingInstance() != null) {
-            triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
+            jobMappers.triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
                     BatchStatusConstants.DUPLICATE, loaded.existingInstance().getId());
             return new LaunchResponse(loaded.existingInstance().getInstanceNo(),
                     loaded.existingInstance().getTraceId());
@@ -125,7 +116,7 @@ public class DefaultLaunchService implements LaunchService {
                 new PartitionDispatchService.DispatchRuntime(prepared.jobInstance(), prepared.workflowRun(), prepared.initialNodes(), prepared.startedAt())
         ));
 
-        triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
+        jobMappers.triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
                 BatchStatusConstants.LAUNCHED, prepared.jobInstance().getId());
         return new LaunchResponse(prepared.jobInstance().getInstanceNo(), traceId);
     }
@@ -182,7 +173,7 @@ public class DefaultLaunchService implements LaunchService {
         ));
         jobInstance.setExpectedDurationSeconds(resolveExpectedDurationSeconds(loaded.jobDefinition(), effectiveParams));
         jobInstance.setSlaAlertedAt(null);
-        jobInstanceMapper.insert(jobInstance);
+        jobMappers.jobInstanceMapper.insert(jobInstance);
         upsertBatchDayInstance(request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
 
         List<WorkflowDagService.DagNodeResolution> initialNodes = workflowDagService.resolveInitialNodes(
@@ -196,7 +187,7 @@ public class DefaultLaunchService implements LaunchService {
         workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
         workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
         workflowRun.setTraceId(traceId);
-        workflowRunMapper.insert(workflowRun);
+        workflowMappers.workflowRunMapper.insert(workflowRun);
 
         Instant startedAt = Instant.now();
         WorkflowNodeRunEntity startNodeRun = new WorkflowNodeRunEntity();
@@ -209,7 +200,7 @@ public class DefaultLaunchService implements LaunchService {
         startNodeRun.setDurationMs(0L);
         startNodeRun.setStartedAt(startedAt);
         startNodeRun.setFinishedAt(startedAt);
-        workflowNodeRunMapper.insert(startNodeRun);
+        workflowMappers.workflowNodeRunMapper.insert(startNodeRun);
 
         return new PreparedLaunch(jobInstance, workflowRun, initialNodes, startedAt);
     }
@@ -261,12 +252,12 @@ public class DefaultLaunchService implements LaunchService {
     private LaunchResponse resolveConcurrentDuplicate(LaunchRequest request,
                                                       LaunchLoadResult loaded,
                                                       RuntimeException exception) {
-        JobInstanceEntity existingInstance = jobInstanceMapper.selectByTenantAndDedupKey(
+        JobInstanceEntity existingInstance = jobMappers.jobInstanceMapper.selectByTenantAndDedupKey(
                 request.tenantId(), loaded.triggerRequest().getDedupKey());
         if (existingInstance == null) {
             throw exception;
         }
-        triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
+        jobMappers.triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
                 BatchStatusConstants.DUPLICATE, existingInstance.getId());
         return new LaunchResponse(existingInstance.getInstanceNo(), existingInstance.getTraceId());
     }
@@ -598,7 +589,7 @@ public class DefaultLaunchService implements LaunchService {
         } else {
             routedParams.put("catchUpReason", "LATE_ARRIVAL_OR_CLOSED_BATCH_DAY");
             loaded.triggerRequest().setTriggerType(TriggerType.CATCH_UP.code());
-            triggerRequestMapper.updateTriggerType(request.tenantId(), request.requestId(), TriggerType.CATCH_UP.code());
+            jobMappers.triggerRequestMapper.updateTriggerType(request.tenantId(), request.requestId(), TriggerType.CATCH_UP.code());
         }
         return new LaunchRequest(
                 request.tenantId(),

@@ -86,6 +86,21 @@ public class DefaultTriggerService implements TriggerService {
         if ("REJECTED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
             throw new BizException(ResultCode.BUSINESS_ERROR, "request is already rejected");
         }
+        if ("LAUNCHED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+            return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
+        }
+        // H-5: atomic CAS — only one instance can move ACCEPTED → PROCESSING;
+        // concurrent approvals will see 0 affected rows and skip double-dispatch.
+        int claimed = triggerRequestMapper.updateRequestStatusConditional(
+                command.getTenantId(), command.getRequestId(), "PROCESSING", "ACCEPTED");
+        if (claimed <= 0) {
+            // Another instance is already processing or status has changed
+            TriggerRequestEntity current = triggerRequestMapper.selectByTenantAndRequestId(
+                    command.getTenantId(), command.getRequestId());
+            return new LaunchResponse(
+                    current != null ? current.getRequestId() : pendingRequest.getRequestId(),
+                    current != null ? current.getTraceId() : pendingRequest.getTraceId());
+        }
         LaunchRequest launchRequest = new LaunchRequest(
                 pendingRequest.getTenantId(),
                 pendingRequest.getJobCode(),
@@ -106,14 +121,21 @@ public class DefaultTriggerService implements TriggerService {
     }
 
     private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
-        TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
-        if (existing != null) {
-            return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
-        }
-
+        // C-6: dedup check is inside the REQUIRES_NEW transaction to narrow the race window.
+        // Full elimination of the race requires a DB UNIQUE constraint on (tenant_id, dedup_key).
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        final TriggerRequestEntity[] existingHolder = new TriggerRequestEntity[1];
         tx.execute(_ -> {
+            TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndDedupKey(
+                    launchRequest.tenantId(), dedupKey);
+            if (existing != null) {
+                existingHolder[0] = existing;
+                return null;
+            }
+            // H-4: insert with PENDING so that a crash between INSERT and sendTrigger
+            //      leaves the record in PENDING (detectable for reconciliation), not ACCEPTED.
             TriggerRequestEntity entity = new TriggerRequestEntity();
             entity.setTenantId(launchRequest.tenantId());
             entity.setRequestId(launchRequest.requestId());
@@ -121,14 +143,21 @@ public class DefaultTriggerService implements TriggerService {
             entity.setJobCode(launchRequest.jobCode());
             entity.setBizDate(launchRequest.bizDate());
             entity.setDedupKey(dedupKey);
-            entity.setRequestStatus("ACCEPTED");
+            entity.setRequestStatus("PENDING");
             entity.setTraceId(launchRequest.traceId());
             triggerRequestMapper.insert(entity);
             return null;
         });
 
+        if (existingHolder[0] != null) {
+            return new LaunchResponse(existingHolder[0].getRequestId(), existingHolder[0].getTraceId());
+        }
+
         try {
-            return orchestratorTriggerAdapter.sendTrigger(launchRequest);
+            LaunchResponse response = orchestratorTriggerAdapter.sendTrigger(launchRequest);
+            // H-4: only mark ACCEPTED after the orchestrator confirms receipt
+            triggerRequestMapper.updateRequestStatus(launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
+            return response;
         } catch (Exception exception) {
             triggerRequestMapper.updateRequestStatus(launchRequest.tenantId(), launchRequest.requestId(), "REJECTED");
             throw new SystemException(ResultCode.SYSTEM_ERROR, "failed to forward trigger request", exception);
@@ -184,6 +213,9 @@ public class DefaultTriggerService implements TriggerService {
                 calendarCode
         );
         if (calendar == null || calendar.getId() == null) {
+            // M-14: calendar code configured but not found in DB — warn so misconfiguration surfaces in logs
+            log.warn("calendar definition not found: tenantId={}, calendarCode={} — scheduled trigger will proceed without calendar filtering",
+                    command.descriptor().getTenantId(), calendarCode);
             return null;
         }
         List<CalendarHolidayRule> rules = businessCalendarMapper.selectHolidayRulesByCalendarId(calendar.getId());

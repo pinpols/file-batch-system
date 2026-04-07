@@ -54,6 +54,17 @@
         limit 1
     </select>
 
+    <!-- C-1/C-3: row-level lock to prevent TOCTOU in recordNodeRunFinish / isNodeAlreadyActivated -->
+    <select id="selectLatestForUpdate" resultMap="WorkflowNodeRunResultMap">
+        select *
+        from batch.workflow_node_run
+        where workflow_run_id = #{workflowRunId}
+          and node_code = #{nodeCode}
+        order by run_seq desc
+        limit 1
+        for update
+    </select>
+
     <update id="updateStatus">
         update batch.workflow_node_run
         set node_status = #{nodeStatus},

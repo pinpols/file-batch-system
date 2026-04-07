@@ -11,27 +11,18 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
- * ShedLock configuration for orchestrator cluster.
- *
- * <p>Ensures that each {@code @Scheduled} task runs on exactly one orchestrator instance
- * at a time, regardless of how many replicas are deployed.
- *
- * <p>Locks are stored in {@code batch.shedlock}. In normal runtime the table comes from the
- * shared batch-common Flyway migration; in local profile we allow a small auto-create fallback so
- * a fresh developer database can still boot.
- *
- * <p>{@code defaultLockAtMostFor} is a safety net: if a JVM crashes while holding a lock, the
- * lock auto-expires after this duration so another instance can take over.
+ * Orchestrator 集群的 ShedLock 配置，确保每个 {@code @Scheduled} 任务在任意时刻仅在一个实例上执行。
+ * 锁存储于 Redis；{@code defaultLockAtMostFor} 为安全兜底，JVM 崩溃后锁自动过期，允许其他实例接管。
  */
 @Configuration
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
 public class ShedLockConfiguration {
 
+    @Value("${spring.application.name:batch-orchestrator}")
+    private String environment;
+
     @Bean
-    public LockProvider lockProvider(
-            StringRedisTemplate redisTemplate,
-            @Value("${spring.application.name:batch-orchestrator}") String environment
-    ) {
+    public LockProvider lockProvider(StringRedisTemplate redisTemplate) {
         return new RedisShedLockProvider(redisTemplate, environment);
     }
 

@@ -18,12 +18,10 @@ import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
-import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
-import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import com.example.batch.orchestrator.application.service.OrchestratorJobMappers;
+import com.example.batch.orchestrator.application.service.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,10 +40,8 @@ public class WaitingPartitionDispatchScheduler {
 
     private final ResourceScheduler resourceScheduler;
     private final BatchOrchestratorGovernanceProperties governance;
-    private final JobPartitionMapper jobPartitionMapper;
-    private final JobTaskMapper jobTaskMapper;
-    private final JobInstanceMapper jobInstanceMapper;
-    private final WorkflowRunMapper workflowRunMapper;
+    private final OrchestratorJobMappers jobMappers;
+    private final OrchestratorWorkflowMappers workflowMappers;
     private final OrchestratorConfigCacheService configCacheService;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
     private final PartitionLifecycleService partitionLifecycleService;
@@ -57,7 +53,7 @@ public class WaitingPartitionDispatchScheduler {
     @Scheduled(fixedDelayString = "${batch.resource-scheduler.waiting-dispatch-interval-millis:10000}")
     @SchedulerLock(name = "waiting_partition_dispatch", lockAtMostFor = "PT1M", lockAtLeastFor = "PT5S")
     public void dispatchWaitingPartitions() {
-        List<JobPartitionEntity> waitingPartitions = jobPartitionMapper.selectWaitingPartitionsGlobal(
+        List<JobPartitionEntity> waitingPartitions = jobMappers.jobPartitionMapper.selectWaitingPartitionsGlobal(
                 governance.resourceScheduler().getWaitingDispatchBatchSize(),
                 PartitionStatus.WAITING.code()
         );
@@ -81,11 +77,11 @@ public class WaitingPartitionDispatchScheduler {
         if (partition == null) {
             return null;
         }
-        JobTaskEntity task = jobTaskMapper.selectByPartitionAndSeq(partition.getTenantId(), partition.getId(), 1);
+        JobTaskEntity task = jobMappers.jobTaskMapper.selectByPartitionAndSeq(partition.getTenantId(), partition.getId(), 1);
         if (task == null || !TaskStatus.CREATED.code().equals(task.getTaskStatus())) {
             return null;
         }
-        JobInstanceEntity jobInstance = jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
+        JobInstanceEntity jobInstance = jobMappers.jobInstanceMapper.selectById(partition.getTenantId(), partition.getJobInstanceId());
         if (jobInstance == null) {
             return null;
         }
@@ -130,7 +126,7 @@ public class WaitingPartitionDispatchScheduler {
                         task.getTenantId() + ":" + task.getId()
                 );
                 if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
-                    int updated = jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
+                    int updated = jobMappers.jobInstanceMapper.markRunning(MarkInstanceRunningParam.builder()
                             .tenantId(jobInstance.getTenantId()).id(jobInstance.getId())
                             .instanceStatus(JobInstanceStatus.RUNNING.code())
                             .expectedPartitionCount(jobInstance.getExpectedPartitionCount())
@@ -139,9 +135,9 @@ public class WaitingPartitionDispatchScheduler {
                         jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
                     }
                 }
-                WorkflowRunEntity workflowRun = workflowRunMapper.selectByRelatedJobInstanceId(jobInstance.getTenantId(), jobInstance.getId());
+                WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(jobInstance.getTenantId(), jobInstance.getId());
                 if (workflowRun != null && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
-                    workflowRunMapper.markRunning(
+                    workflowMappers.workflowRunMapper.markRunning(
                             workflowRun.getTenantId(),
                             workflowRun.getId(),
                             WorkflowRunStatus.RUNNING.code(),

@@ -21,6 +21,12 @@ public interface TriggerRequestMapper {
                             @Param("requestId") String requestId,
                             @Param("requestStatus") String requestStatus);
 
+    /** CAS-style conditional update: only changes status when current status matches {@code expectedStatus}. */
+    int updateRequestStatusConditional(@Param("tenantId") String tenantId,
+                                       @Param("requestId") String requestId,
+                                       @Param("requestStatus") String requestStatus,
+                                       @Param("expectedStatus") String expectedStatus);
+
     int updateRelatedJobInstanceId(@Param("tenantId") String tenantId,
                                    @Param("requestId") String requestId,
                                    @Param("relatedJobInstanceId") Long relatedJobInstanceId);

@@ -48,7 +48,11 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
                 return status;
             }
         }
-        return target.getClass().getSimpleName().toUpperCase();
+        // M-1: returning the class name as a state would silently corrupt workflow state.
+        // Fail fast so the bug surface is visible rather than masked.
+        throw new IllegalStateException(
+                "Cannot resolve status from " + target.getClass().getName()
+                        + ": implement Stateful or expose a getStatus() / getXxxStatus() method");
     }
 
     private String invokeStringGetter(T target, String methodName) {

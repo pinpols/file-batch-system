@@ -15,6 +15,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Outbox 写入：把“要派发的任务消息”以统一协议落库到 {@code batch.outbox_event}。
@@ -42,6 +44,8 @@ public class TaskDispatchOutboxService {
      *   <li>当无 partition（极少数场景）时，退化使用 {@code tenantId:taskId} 作为幂等键。</li>
      * </ul>
      */
+    // D-2: MANDATORY 传播级别强制 outbox 写入必须在调用方事务内执行，无事务时直接抛异常
+    @Transactional(propagation = Propagation.MANDATORY)
     public void writeDispatchEvent(JobInstanceEntity jobInstance,
                                    JobTaskEntity task,
                                    JobPartitionEntity partition,
@@ -50,6 +54,7 @@ public class TaskDispatchOutboxService {
         writeDispatchEvent(jobInstance, task, partition, traceId, eventKey, null);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
     public void writeDispatchEvent(JobInstanceEntity jobInstance,
                                    JobTaskEntity task,
                                    JobPartitionEntity partition,

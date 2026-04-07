@@ -10,6 +10,7 @@ import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
+import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +56,9 @@ public abstract class AbstractTaskConsumer {
      */
     protected abstract String listenerId();
 
+    /** D-3: 子类可提供 DLQ 发布器，用于转发无法处理的"毒丸"消息。 */
+    protected abstract DeadLetterPublisher deadLetterPublisher();
+
     @Value("${batch.worker.max-concurrent-tasks:8}")
     private int maxConcurrentTasks;
 
@@ -94,6 +98,15 @@ public abstract class AbstractTaskConsumer {
             }
             log.info("{} task processed: taskId={}, success={}, message={}",
                     workerConfiguration().workerType(), result.taskId(), result.success(), result.message());
+            return true;
+        } catch (Exception ex) {
+            // D-3: 发送至 DLQ 并确认偏移量，防止毒丸消息阻塞队列；运维可从 DLQ 查看并重放
+            log.error("{} task execution failed — publishing to DLQ: taskId={}, error={}",
+                    workerConfiguration().workerType(), message.taskId(), ex.getMessage(), ex);
+            DeadLetterPublisher dlq = deadLetterPublisher();
+            if (dlq != null) {
+                dlq.publish(payload, workerConfiguration().topic(), workerConfiguration().workerType(), ex.getMessage());
+            }
             return true;
         } finally {
             // 无论处理成功/失败/抛异常，都必须释放 permit；
@@ -173,15 +186,14 @@ public abstract class AbstractTaskConsumer {
                 return RunModeSupport.resolveCode((Map<String, Object>) payloadMap);
             }
         } catch (RuntimeException ignored) {
-            // Ignore malformed payload and keep logs flowing without run_mode.
+            // payload 格式异常时忽略，保持日志正常输出（不含 run_mode）。
         }
         return null;
     }
 
     /**
-     * Returns the Kafka topics this consumer listens on.
-     * Exposed as a public method so that subclass {@code @KafkaListener} SpEL expressions can
-     * reference it via {@code #{__listener.topics()}}.
+     * 返回该消费者监听的 Kafka topic 列表；公开为 public 方法，供子类 {@code @KafkaListener} SpEL 表达式
+     * 通过 {@code #{__listener.topics()}} 引用。
      */
     public String[] topics() {
         WorkerConfiguration cfg = workerConfiguration();
@@ -221,18 +233,25 @@ public abstract class AbstractTaskConsumer {
     }
 
     /**
-     * Returns the Kafka consumer group id.
-     * Exposed as a public method so that subclass {@code @KafkaListener} SpEL expressions can
-     * reference it via {@code #{__listener.consumerGroupId()}}.
+     * 返回 Kafka 消费者组 ID；公开为 public 方法，供子类 {@code @KafkaListener} SpEL 表达式
+     * 通过 {@code #{__listener.consumerGroupId()}} 引用。
      */
     public String consumerGroupId() {
         return workerConfiguration().consumerGroupId();
     }
 
     private boolean accepts(TaskDispatchMessage message, WorkerRegistration registration) {
+        if (message == null) {
+            return false;
+        }
+        // M-12: 分发前校验必填字段，防止下游 NPE
+        if (message.taskId() == null || message.tenantId() == null || message.workerType() == null) {
+            log.warn("malformed dispatch message dropped — missing required fields: taskId={}, tenantId={}, workerType={}",
+                    message.taskId(), message.tenantId(), message.workerType());
+            return false;
+        }
         WorkerConfiguration cfg = workerConfiguration();
-        return message != null
-                && cfg.workerType() != null
+        return cfg.workerType() != null
                 && cfg.workerType().equalsIgnoreCase(message.workerType())
                 && (message.selectedWorkerId() == null
                 || (registration != null && message.selectedWorkerId().equals(registration.getWorkerId())));

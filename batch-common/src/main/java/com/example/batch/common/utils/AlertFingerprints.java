@@ -5,7 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Stable 128-char max fingerprint for alert deduplication (tenant + type + resource scope).
+ * 用于告警去重的稳定指纹（租户 + 类型 + 资源范围），最长 128 字符。
  */
 public final class AlertFingerprints {
 

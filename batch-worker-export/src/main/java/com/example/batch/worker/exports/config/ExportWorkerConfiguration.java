@@ -11,11 +11,17 @@ public record ExportWorkerConfiguration(
         Long heartbeatIntervalMillis,
         String topic,
         String consumerGroupId,
+        long maxExportRows,
         FileProcessing fileProcessing
 ) implements WorkerConfiguration {
     private static final int DEFAULT_PAGE_SIZE = 1000;
     private static final int DEFAULT_FETCH_SIZE = 1000;
     private static final int DEFAULT_CHUNK_SIZE = 500;
+    private static final long DEFAULT_MAX_EXPORT_ROWS = 500_000L;
+
+    public long effectiveMaxExportRows() {
+        return maxExportRows <= 0 ? DEFAULT_MAX_EXPORT_ROWS : maxExportRows;
+    }
 
     public boolean streamingEnabled() {
         return fileProcessing != null && fileProcessing.streamingEnabled();

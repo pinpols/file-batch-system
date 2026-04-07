@@ -1,11 +1,11 @@
 package com.example.batch.common.logging;
 
 /**
- * Canonical constants for orchestrator audit/alarm logs.
+ * Orchestrator 审计/告警日志的规范常量。
  *
- * <p>1) {@code logType}: e.g. ALARM / AUDIT / COMPENSATION<br>
- * 2) {@code detailRef}: persistent “detail key” used by log consumers<br>
- * 3) {@code operatorId/operatorType}: canonical operator identity for system-generated logs</p>
+ * <p>1) {@code logType}：如 ALARM / AUDIT / COMPENSATION<br>
+ * 2) {@code detailRef}：日志消费方使用的持久化明细键<br>
+ * 3) {@code operatorId/operatorType}：系统生成日志的规范操作者标识</p>
  */
 public final class AuditLogConstants {
 

@@ -10,24 +10,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Template-method base class for pipeline stage executors.
+ * Pipeline 阶段执行器的模板方法基类，三条链路（import / export / dispatch）共用的 while 循环骨架封装于此。
  *
- * <p>Encapsulates the common while-loop skeleton shared by
- * {@code DefaultImportStageExecutor}, {@code DefaultExportStageExecutor}, and
- * {@code DefaultDispatchStageExecutor}:
- * <ol>
- *   <li>Guard against infinite cycles</li>
- *   <li>Update the pipeline stage in the runtime store</li>
- *   <li>Start a step-run record</li>
- *   <li>Delegate execution to the subclass</li>
- *   <li>Persist success / failure outcome</li>
- *   <li>Resolve the next step in the flow</li>
- * </ol>
- *
- * <p>Subclasses provide domain-specific implementations via the abstract template methods.
- *
- * @param <C> pipeline context type (must implement {@link ExecutionContext})
- * @param <R> stage result type (must implement {@link StageExecutionResult})
+ * @param <C> pipeline 上下文类型（须实现 {@link ExecutionContext}）
+ * @param <R> 阶段结果类型（须实现 {@link StageExecutionResult}）
  */
 public abstract class AbstractStageExecutor<C extends ExecutionContext, R extends StageExecutionResult> {
 
@@ -38,10 +24,7 @@ public abstract class AbstractStageExecutor<C extends ExecutionContext, R extend
     }
 
     /**
-     * Runs the stage loop and returns the accumulated results.
-     *
-     * <p>Called from the concrete {@code execute()} method.  When no steps are configured,
-     * {@link #stepMissingFailure()} is returned immediately.
+     * 执行阶段循环并返回累积结果；未配置步骤时直接返回 {@link #stepMissingFailure()}。
      */
     protected final List<R> runStageLoop(C context) {
         List<PipelineStepDefinition> configuredSteps = loadConfiguredSteps(context);
@@ -85,38 +68,25 @@ public abstract class AbstractStageExecutor<C extends ExecutionContext, R extend
         return results;
     }
 
-    // ─── Template methods ────────────────────────────────────────────────────
+    // ─── 模板方法 ────────────────────────────────────────────────────────────
 
-    /**
-     * Loads the ordered list of step definitions for this pipeline run.
-     * Either from {@code context.getAttributes()} or from the runtime repository.
-     */
+    /** 加载本次 pipeline 运行的有序步骤定义列表。 */
     protected abstract List<PipelineStepDefinition> loadConfiguredSteps(C context);
 
-    /**
-     * Returns the failure result to emit when no step definitions are configured.
-     */
+    /** 返回无步骤定义时的失败结果。 */
     protected abstract R stepMissingFailure();
 
     /**
-     * Executes a single step, handling all domain-specific exceptions and returning an
-     * appropriate result.  Must never throw — exceptions should be caught and translated
-     * to a failure result.
+     * 执行单个步骤；必须捕获所有异常并转换为失败结果，不得向外抛出。
      */
     protected abstract R executeOneStep(C context, PipelineStepDefinition step);
 
-    /**
-     * Builds the input summary map recorded at step-run start.
-     */
+    /** 构建步骤运行开始时记录的输入摘要。 */
     protected abstract Map<String, Object> buildInputSummary(C context, PipelineStepDefinition step);
 
-    /**
-     * Builds the output summary map recorded at step-run finish.
-     */
+    /** 构建步骤运行完成时记录的输出摘要。 */
     protected abstract Map<String, Object> buildOutputSummary(C context, R result);
 
-    /**
-     * Error message used when the pipeline step flow contains a cycle.
-     */
+    /** 检测到 pipeline 步骤流存在环路时使用的错误消息。 */
     protected abstract String cycleDetectedMessage();
 }

@@ -23,12 +23,7 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
-import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
-import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.UpdateNodeRunStatusParam;
-import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -43,16 +38,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchService {
 
-    private final WorkflowNodeMapper workflowNodeMapper;
+    private final OrchestratorJobMappers jobMappers;
+    private final OrchestratorWorkflowMappers workflowMappers;
     private final SchedulePlanBuilder schedulePlanBuilder;
     private final PartitionLifecycleService partitionLifecycleService;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
-    private final JobInstanceMapper jobInstanceMapper;
-    private final JobPartitionMapper jobPartitionMapper;
-    private final WorkflowNodeRunMapper workflowNodeRunMapper;
     private final WorkflowDagService workflowDagService;
     private final ResourceScheduler resourceScheduler;
-    private final TriggerRequestMapper triggerRequestMapper;
     private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
     private final ObjectProvider<LaunchService> launchServiceProvider;
 
@@ -74,7 +66,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         )) {
             return 0;
         }
-        WorkflowNodeEntity workflowNode = workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
+        WorkflowNodeEntity workflowNode = workflowMappers.workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
                 workflowRun.getWorkflowDefinitionId(),
                 node.nodeCode()
         );
@@ -111,7 +103,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         }
         ResourceSchedulingDecision decision = resourceScheduler.schedule(buildSchedulingRequest(plan));
         applySchedulingDecision(plan, decision);
-        List<JobPartitionEntity> existingPartitions = jobPartitionMapper.selectByQuery(new JobPartitionQuery(
+        List<JobPartitionEntity> existingPartitions = jobMappers.jobPartitionMapper.selectByQuery(new JobPartitionQuery(
                 jobInstance.getTenantId(),
                 jobInstance.getId(),
                 null,
@@ -163,7 +155,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             }
         }
         int currentExpectedPartitionCount = jobInstance.getExpectedPartitionCount() == null ? 0 : jobInstance.getExpectedPartitionCount();
-        int updated = jobInstanceMapper.updateExpectedPartitionCount(
+        int updated = jobMappers.jobInstanceMapper.updateExpectedPartitionCount(
                 jobInstance.getTenantId(),
                 jobInstance.getId(),
                 currentExpectedPartitionCount + newPartitions.size(),
@@ -191,8 +183,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         runningNode.setRetryCount(0);
         runningNode.setStartedAt(now);
         runningNode.setDurationMs(0L);
-        workflowNodeRunMapper.insert(runningNode);
-        workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+        workflowMappers.workflowNodeRunMapper.insert(runningNode);
+        workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
                 .id(runningNode.getId())
                 .nodeStatus(com.example.batch.common.enums.WorkflowNodeRunStatus.SUCCESS.code())
                 .errorCode(null).errorMessage(null)
@@ -215,12 +207,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     }
 
     /**
-     * Dispatches a JOB node by launching the referenced child job as a sub-instance.
-     * <p>
-     * A "virtual" partition + task (status=RUNNING) is created in the parent job so that
-     * the standard partition-based DAG advancement logic in {@code DefaultTaskOutcomeService}
-     * can handle child-job completion uniformly.  When the child job reaches a terminal
-     * state it signals back via {@code _parentVirtualTaskId} stored in its params snapshot.
+     * 通过启动子实例来分发 JOB 节点。在父 Job 中创建"虚拟"分区和任务（状态=RUNNING），
+     * 使 {@code DefaultTaskOutcomeService} 中基于分区的 DAG 推进逻辑能统一处理子 Job 完成信号。
+     * 子 Job 到达终态后通过 params snapshot 中的 {@code _parentVirtualTaskId} 回调。
      */
     private int dispatchJobNode(JobInstanceEntity jobInstance,
                                 WorkflowRunEntity workflowRun,
@@ -237,7 +226,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
 
         // 计算虚拟分区的 partition_no
-        List<JobPartitionEntity> existingPartitions = jobPartitionMapper.selectByQuery(new JobPartitionQuery(
+        List<JobPartitionEntity> existingPartitions = jobMappers.jobPartitionMapper.selectByQuery(new JobPartitionQuery(
                 jobInstance.getTenantId(), jobInstance.getId(), null, null));
         int virtualPartitionNo = existingPartitions.stream()
                 .map(JobPartitionEntity::getPartitionNo)
@@ -257,7 +246,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         virtualPartition.setRetryCount(0);
         virtualPartition.setBusinessKey(refJobCode + ":" + node.nodeCode());
         virtualPartition.setIdempotencyKey(idempotencyKey);
-        jobPartitionMapper.insert(virtualPartition);
+        jobMappers.jobPartitionMapper.insert(virtualPartition);
 
         // 构造虚拟 task 载荷，与 TASK 节点对齐，便于 outcome 服务解析 workflowNodeCode / workflowNodeType
         Map<String, Object> payloadMap = new LinkedHashMap<>(parsePayloadMap(sourcePayload));
@@ -281,7 +270,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         // 更新父作业期望分区数（乐观锁）
         int currentExpected = jobInstance.getExpectedPartitionCount() == null
                 ? 0 : jobInstance.getExpectedPartitionCount();
-        int updated = jobInstanceMapper.updateExpectedPartitionCount(
+        int updated = jobMappers.jobInstanceMapper.updateExpectedPartitionCount(
                 jobInstance.getTenantId(),
                 jobInstance.getId(),
                 currentExpected + 1,
@@ -305,7 +294,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         triggerRequest.setDedupKey(childDedupKey);
         triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
         triggerRequest.setTraceId(traceId);
-        triggerRequestMapper.insert(triggerRequest);
+        jobMappers.triggerRequestMapper.insert(triggerRequest);
 
         // 子作业启动参数含回指字段，便于子作业完成后回写本虚拟 task
         Map<String, Object> childParams = new LinkedHashMap<>(parsePayloadMap(sourcePayload));
@@ -341,7 +330,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         terminalNode.setStartedAt(finishedAt);
         terminalNode.setFinishedAt(finishedAt);
         terminalNode.setDurationMs(0L);
-        workflowNodeRunMapper.insert(terminalNode);
+        workflowMappers.workflowNodeRunMapper.insert(terminalNode);
     }
 
     private boolean isGatewayNode(String nodeType) {
@@ -354,7 +343,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     }
 
     private boolean isNodeAlreadyActivated(Long workflowRunId, String nodeCode) {
-        WorkflowNodeRunEntity latestNodeRun = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
+        // C-3: 行锁防止 isNodeAlreadyActivated 与 createPartitions 之间的 TOCTOU 竞态
+        WorkflowNodeRunEntity latestNodeRun = workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(workflowRunId, nodeCode);
         if (latestNodeRun == null) {
             return false;
         }
@@ -423,11 +413,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         readyNode.setNodeStatus(com.example.batch.common.enums.WorkflowNodeRunStatus.READY.code());
         readyNode.setRetryCount(0);
         readyNode.setDurationMs(0L);
-        workflowNodeRunMapper.insert(readyNode);
+        workflowMappers.workflowNodeRunMapper.insert(readyNode);
     }
 
     private int nextRunSeq(Long workflowRunId, String nodeCode) {
-        WorkflowNodeRunEntity latestNodeRun = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
+        WorkflowNodeRunEntity latestNodeRun = workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, nodeCode);
         return latestNodeRun == null || latestNodeRun.getRunSeq() == null ? 1 : latestNodeRun.getRunSeq() + 1;
     }
 

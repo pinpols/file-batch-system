@@ -5,14 +5,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Normalizes the runtime launch intent so launch / retry / recover / compensate
- * flows all write the same canonical key into payload and execution context.
+ * 统一运行模式意图，使 launch/retry/recover/compensate 流程都写入相同的规范键到 payload 和执行上下文。
  */
 public final class RunModeSupport {
 
     public static final String RUN_MODE = "run_mode";
     /**
-     * Legacy alias kept for compatibility with older JSON payloads.
+     * 兼容旧版 JSON payload 保留的遗留别名。
      */
     public static final String LEGACY_RUN_MODE = "runMode";
 

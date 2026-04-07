@@ -11,11 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Resolves partition count from the number of currently online workers.
- *
- * <p>Formula: {@code min(256, onlineWorkerCount × partitionFactor)}.
- * The partition factor defaults to {@code 2} for DYNAMIC strategy and {@code 1} otherwise.
- * Returns {@code 0} when no online workers can be found.
+ * 根据当前在线 Worker 数量解析分区数，公式为 {@code min(256, onlineWorkerCount × partitionFactor)}。
+ * DYNAMIC 策略下 partitionFactor 默认为 {@code 2}，其他策略为 {@code 1}；无在线 Worker 时返回 {@code 0}。
  */
 @Component
 @Order(4)

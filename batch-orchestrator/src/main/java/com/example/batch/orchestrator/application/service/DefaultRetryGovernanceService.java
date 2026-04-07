@@ -172,6 +172,13 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         if (task == null) {
             throw new IllegalStateException("retry task not found");
         }
+        String status = task.getStatus();
+        if (!TaskStatus.FAILED.code().equals(status)
+                && !TaskStatus.CANCELLED.code().equals(status)
+                && !TaskStatus.TERMINATED.code().equals(status)) {
+            throw new IllegalStateException(
+                    "retry only allowed from terminal state (FAILED/CANCELLED/TERMINATED), current status: " + status);
+        }
         if (task.getJobPartitionId() != null) {
             requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
             return;
@@ -354,16 +361,19 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         long delaySeconds = governance.retry().getFixedDelaySeconds();
         if (RetryPolicyType.EXPONENTIAL.code().equalsIgnoreCase(retryPolicy)) {
             long multiplier = Math.max(1L, governance.retry().getExponentialMultiplier());
+            long maxDelay = governance.retry().getMaxDelaySeconds();
             long candidate = delaySeconds;
             for (int i = 1; i < retryCount; i++) {
-                if (candidate >= governance.retry().getMaxDelaySeconds()) {
-                    candidate = governance.retry().getMaxDelaySeconds();
+                if (candidate >= maxDelay) {
+                    candidate = maxDelay;
                     break;
                 }
-                candidate = Math.min(
-                        governance.retry().getMaxDelaySeconds(),
-                        candidate * multiplier
-                );
+                // L-1: 乘法前溢出保护，candidate * multiplier 可能溢出 long 范围
+                if (candidate > maxDelay / multiplier) {
+                    candidate = maxDelay;
+                } else {
+                    candidate = Math.min(maxDelay, candidate * multiplier);
+                }
             }
             delaySeconds = candidate;
         }

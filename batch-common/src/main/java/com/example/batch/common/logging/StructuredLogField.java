@@ -1,7 +1,7 @@
 package com.example.batch.common.logging;
 
 /**
- * Canonical MDC keys for JSON-friendly log shipping (Loki/ELK) and cross-service correlation.
+ * 用于 JSON 日志传输（Loki/ELK）和跨服务关联的规范 MDC 键。
  */
 public final class StructuredLogField {
 

@@ -15,6 +15,7 @@ import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -34,12 +35,22 @@ public class ReceiveStep implements ImportStageStep {
     private final BatchSecurityProperties batchSecurityProperties;
     private final ObjectMapper objectMapper;
 
+    @Value("${batch.worker.import.max-payload-size-mb:100}")
+    private int maxPayloadSizeMb;
+
+    private long maxPayloadSizeBytes;
+
     public ReceiveStep(PlatformFileRuntimeRepository runtimeRepository,
                        BatchSecurityProperties batchSecurityProperties,
                        ObjectMapper objectMapper) {
         this.runtimeRepository = runtimeRepository;
         this.batchSecurityProperties = batchSecurityProperties;
         this.objectMapper = objectMapper;
+    }
+
+    @jakarta.annotation.PostConstruct
+    void init() {
+        this.maxPayloadSizeBytes = maxPayloadSizeMb <= 0 ? Long.MAX_VALUE : (long) maxPayloadSizeMb * 1024 * 1024;
     }
 
     @Override
@@ -51,6 +62,12 @@ public class ReceiveStep implements ImportStageStep {
     public ImportStageResult execute(ImportJobContext context) {
         if (context == null || !StringUtils.hasText(context.getTenantId()) || !StringUtils.hasText(context.getRawPayload())) {
             return ImportStageResult.failure(stage(), "IMPORT_RECEIVE_INVALID", "tenantId or payload is blank");
+        }
+        // C-5/D-4: reject oversized payloads before any heap allocation
+        long payloadLength = context.getRawPayload().length();
+        if (payloadLength > maxPayloadSizeBytes) {
+            return ImportStageResult.failure(stage(), "IMPORT_RECEIVE_TOO_LARGE",
+                    "payload size " + payloadLength + " bytes exceeds limit " + maxPayloadSizeBytes + " bytes");
         }
         ImportPayload importPayload = resolvePayload(context);
         Long existingFileId = runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
@@ -74,7 +91,7 @@ public class ReceiveStep implements ImportStageStep {
                     .fileCategory("INPUT")
                     .fileName(fileName).originalFileName(defaultText(importPayload.originalFileName(), fileName))
                     .fileFormatType(fileFormatType).charset(defaultText(importPayload.charset(), "UTF-8"))
-                    .fileSizeBytes(context.getRawPayload().getBytes().length)
+                    .fileSizeBytes(payloadLength)
                     .checksumType(defaultText(importPayload.checksumType(), "NONE"))
                     .checksumValue(importPayload.checksumValue())
                     .storageType(defaultText(importPayload.storageType(), "LOCAL"))

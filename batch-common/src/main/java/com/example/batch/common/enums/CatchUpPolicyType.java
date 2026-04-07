@@ -30,6 +30,18 @@ public enum CatchUpPolicyType {
                 return value;
             }
         }
+        throw new IllegalArgumentException("Unknown CatchUpPolicyType code: '" + code + "'");
+    }
+
+    public static CatchUpPolicyType fromCodeOrDefault(String code) {
+        if (code == null || code.isBlank()) {
+            return NONE;
+        }
+        for (CatchUpPolicyType value : values()) {
+            if (value.code.equalsIgnoreCase(code)) {
+                return value;
+            }
+        }
         return NONE;
     }
 }

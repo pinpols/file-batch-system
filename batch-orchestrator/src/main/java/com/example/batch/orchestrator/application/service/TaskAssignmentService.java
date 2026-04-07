@@ -6,8 +6,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Handles worker assignment, task lease management, status updates, and log appending.
- * Extracted from {@link DefaultTaskExecutionService}.
+ * 处理 Worker 分配、任务租约管理、状态更新及日志追加，从 {@link DefaultTaskExecutionService} 中拆分。
  */
 public interface TaskAssignmentService {
 
