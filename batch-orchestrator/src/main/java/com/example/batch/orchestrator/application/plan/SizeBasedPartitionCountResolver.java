@@ -7,14 +7,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * Resolves partition count from estimated data volume.
- *
- * <p>Supports two workload signals (tried in order):
- * <ol>
- *   <li>Item count ÷ target items-per-partition</li>
- *   <li>File size (bytes) ÷ target bytes-per-partition</li>
- * </ol>
- * Returns {@code 0} when the necessary parameters are absent or non-positive.
+ * 根据预估数据量解析分区数。依次尝试：条目数 ÷ 每分区目标条目数、文件大小 ÷ 每分区目标字节数。
+ * 所需参数缺失或非正时返回 {@code 0}。
  */
 @Component
 @Order(2)

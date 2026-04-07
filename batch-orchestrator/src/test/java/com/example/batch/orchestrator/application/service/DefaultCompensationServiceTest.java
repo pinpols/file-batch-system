@@ -13,6 +13,7 @@ import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.service.LaunchService;
+import org.mockito.Mockito;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,11 +26,7 @@ import org.springframework.beans.factory.ObjectProvider;
 class DefaultCompensationServiceTest {
 
     private CompensationCommandMapper compensationCommandMapper;
-    private JobInstanceMapper jobInstanceMapper;
-    private JobPartitionMapper jobPartitionMapper;
-    private JobStepInstanceMapper jobStepInstanceMapper;
-    private JobTaskMapper jobTaskMapper;
-    private TriggerRequestMapper triggerRequestMapper;
+    private OrchestratorJobMappers jobMappers;
     private RetryGovernanceService retryGovernanceService;
     private FileGovernanceService fileGovernanceService;
     private LaunchService launchService;
@@ -40,11 +37,13 @@ class DefaultCompensationServiceTest {
     @BeforeEach
     void setUp() {
         compensationCommandMapper = mock(CompensationCommandMapper.class);
-        jobInstanceMapper = mock(JobInstanceMapper.class);
-        jobPartitionMapper = mock(JobPartitionMapper.class);
-        jobStepInstanceMapper = mock(JobStepInstanceMapper.class);
-        jobTaskMapper = mock(JobTaskMapper.class);
-        triggerRequestMapper = mock(TriggerRequestMapper.class);
+        jobMappers = new OrchestratorJobMappers(
+                mock(JobInstanceMapper.class),
+                mock(JobPartitionMapper.class),
+                mock(JobTaskMapper.class),
+                mock(JobStepInstanceMapper.class),
+                mock(TriggerRequestMapper.class)
+        );
         retryGovernanceService = mock(RetryGovernanceService.class);
         fileGovernanceService = mock(FileGovernanceService.class);
         launchService = mock(LaunchService.class);
@@ -53,17 +52,13 @@ class DefaultCompensationServiceTest {
 
         service = new DefaultCompensationService(
                 compensationCommandMapper,
-                jobInstanceMapper,
-                jobPartitionMapper,
-                jobStepInstanceMapper,
-                jobTaskMapper,
-                triggerRequestMapper,
+                jobMappers,
                 retryGovernanceService,
                 fileGovernanceService,
                 launchServiceProvider,
                 taskExecutionService
         );
-        org.mockito.Mockito.when(launchServiceProvider.getObject()).thenReturn(launchService);
+        Mockito.when(launchServiceProvider.getObject()).thenReturn(launchService);
     }
 
     // ── validate() ────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 public class CalendarBizDateResolver {
 
     private static final LocalTime DEFAULT_CUTOFF_TIME = LocalTime.of(6, 0);
+    private static final int MAX_WORKDAY_SEARCH_DAYS = 365;
 
     public LocalDate resolve(Instant fireTime, ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
         Objects.requireNonNull(fireTime, "fireTime");
@@ -52,18 +53,28 @@ public class CalendarBizDateResolver {
 
     private LocalDate previousWorkday(LocalDate date, CalendarBizDateDefinition calendar) {
         LocalDate candidate = date.minusDays(1);
-        while (isHoliday(candidate, calendar)) {
+        for (int i = 0; i < MAX_WORKDAY_SEARCH_DAYS; i++) {
+            if (!isHoliday(candidate, calendar)) {
+                return candidate;
+            }
             candidate = candidate.minusDays(1);
         }
-        return candidate;
+        throw new IllegalStateException(
+                "No workday found within " + MAX_WORKDAY_SEARCH_DAYS + " days before " + date
+                        + " — calendar may have all days marked as holidays");
     }
 
     private LocalDate nextWorkday(LocalDate date, CalendarBizDateDefinition calendar) {
         LocalDate candidate = date.plusDays(1);
-        while (isHoliday(candidate, calendar)) {
+        for (int i = 0; i < MAX_WORKDAY_SEARCH_DAYS; i++) {
+            if (!isHoliday(candidate, calendar)) {
+                return candidate;
+            }
             candidate = candidate.plusDays(1);
         }
-        return candidate;
+        throw new IllegalStateException(
+                "No workday found within " + MAX_WORKDAY_SEARCH_DAYS + " days after " + date
+                        + " — calendar may have all days marked as holidays");
     }
 
     private boolean isHoliday(LocalDate date, CalendarBizDateDefinition calendar) {

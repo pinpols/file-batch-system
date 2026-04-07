@@ -77,6 +77,15 @@
           and request_id = #{requestId}
     </update>
 
+    <update id="updateRequestStatusConditional">
+        update batch.trigger_request
+        set request_status = #{requestStatus},
+            updated_at     = current_timestamp
+        where tenant_id      = #{tenantId}
+          and request_id     = #{requestId}
+          and request_status = #{expectedStatus}
+    </update>
+
     <update id="updateRelatedJobInstanceId">
         update batch.trigger_request
         set related_job_instance_id = #{relatedJobInstanceId},

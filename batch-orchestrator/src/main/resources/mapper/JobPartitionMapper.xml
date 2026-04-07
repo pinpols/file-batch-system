@@ -40,6 +40,21 @@
         order by id desc
     </select>
 
+    <!-- C-2: locking SELECT to prevent concurrent task outcome processors from seeing stale partition counts -->
+    <select id="selectByQueryForUpdate" resultMap="JobPartitionResultMap">
+        select *
+        from batch.job_partition
+        where tenant_id = #{tenantId}
+        <if test="jobInstanceId != null">
+            and job_instance_id = #{jobInstanceId}
+        </if>
+        <if test="partitionStatus != null and partitionStatus != ''">
+            and partition_status = #{partitionStatus}
+        </if>
+        order by id desc
+        for update
+    </select>
+
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobPartitionEntity"
             useGeneratedKeys="true" keyProperty="id">
         insert into batch.job_partition (
@@ -155,6 +170,7 @@
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          and partition_status not in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4})
     </update>
 
     <select id="selectExpiredLeases" resultMap="JobPartitionResultMap">

@@ -46,6 +46,8 @@ batch:
       topic: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
       # Kafka consumer group（同类 worker 负载均衡）
       consumer-group-id: ${BATCH_WORKER_IMPORT_CONSUMER_GROUP_ID:batch-worker-import}
+      # C-5/D-4: 入口文件大小限制（MB），超出直接拒绝，防止 OOM；0 表示不限制（不推荐）
+      max-payload-size-mb: ${BATCH_WORKER_IMPORT_MAX_PAYLOAD_SIZE_MB:100}
       file-processing:
         # 流式处理开关：大文件优先建议开启（降低内存峰值）
         streaming-enabled: ${BATCH_WORKER_IMPORT_STREAMING_ENABLED:true}

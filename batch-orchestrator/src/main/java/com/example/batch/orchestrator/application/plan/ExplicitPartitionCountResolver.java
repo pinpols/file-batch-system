@@ -7,12 +7,9 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * Resolves partition count from an explicit caller-supplied override.
- *
- * <p>Highest priority: if the caller already knows the exact partition count it wins
- * over any workload or capacity estimate.  Recognised parameter keys (in priority order):
- * {@code partitionCount}, {@code estimatedPartitionCount}, {@code suggestedPartitionCount},
- * {@code shardCount}.
+ * 从调用方显式传入的参数中解析分区数，优先级最高。
+ * 识别的参数键（按优先级）：{@code partitionCount}、{@code estimatedPartitionCount}、
+ * {@code suggestedPartitionCount}、{@code shardCount}。
  */
 @Component
 @Order(1)

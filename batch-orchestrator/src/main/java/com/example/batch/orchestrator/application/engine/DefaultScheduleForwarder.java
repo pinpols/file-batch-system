@@ -101,7 +101,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     }
 
     /**
-     * Persist outbox publish retry attempts separately from business retry counters.
+     * 单独持久化 Outbox 发布重试记录，与业务重试计数器分开管理。
      */
     private void recordRetry(OutboxEventEntity event,
                              int publishAttemptNo,

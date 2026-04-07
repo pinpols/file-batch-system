@@ -1,10 +1,9 @@
 package com.example.batch.worker.core.support;
 
 /**
- * Immutable context snapshot for a single stage execution.
+ * 单次阶段执行的不可变上下文快照。
  *
- * <p>Carried through MDC so every log line emitted during a stage automatically includes
- * the canonical correlation fields (tenantId / jobInstanceId / taskId / stage / workerId).
+ * <p>写入 MDC，使阶段执行期间产生的每条日志自动包含关联字段（tenantId / jobInstanceId / taskId / stage / workerId）。
  */
 public record StageExecutionContext(
         String tenantId,

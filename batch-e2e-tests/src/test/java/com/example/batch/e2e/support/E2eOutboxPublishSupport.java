@@ -32,17 +32,15 @@ public class E2eOutboxPublishSupport {
     private final OutboxEventMapper outboxEventMapper;
     private final BatchMqTopicsProperties batchMqTopicsProperties;
 
-    private final String kafkaBootstrapServers;
+    @Value("${spring.kafka.bootstrap-servers}")
+    private String kafkaBootstrapServers;
 
     public E2eOutboxPublishSupport(OutboxPublisher outboxPublisher,
                                    OutboxEventMapper outboxEventMapper,
-                                   BatchMqTopicsProperties batchMqTopicsProperties,
-                                   @Value("${spring.kafka.bootstrap-servers}")
-                                   String kafkaBootstrapServers) {
+                                   BatchMqTopicsProperties batchMqTopicsProperties) {
         this.outboxPublisher = outboxPublisher;
         this.outboxEventMapper = outboxEventMapper;
         this.batchMqTopicsProperties = batchMqTopicsProperties;
-        this.kafkaBootstrapServers = kafkaBootstrapServers;
     }
 
     public void publishAllPending(String tenantId) {

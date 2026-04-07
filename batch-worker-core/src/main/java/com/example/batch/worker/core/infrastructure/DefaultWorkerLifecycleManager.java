@@ -47,7 +47,7 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
         }
         activeRegistration.setActive(Boolean.FALSE);
 
-        // Always mark as DRAINING first so orchestrator can stop dispatching new tasks immediately.
+        // 先标记为 DRAINING，让 Orchestrator 立即停止分发新任务。
         String finalStatus = hasActiveLeases(workerId)
                 ? WorkerRegistryStatus.DRAINING.code()
                 : WorkerRegistryStatus.DECOMMISSIONED.code();

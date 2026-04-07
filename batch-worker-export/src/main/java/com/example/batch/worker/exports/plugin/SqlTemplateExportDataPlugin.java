@@ -20,15 +20,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Export plugin that runs template-provided SELECT SQL (stored in {@code default_query_sql}).
+ * 执行模板配置的 SELECT SQL（存储于 {@code default_query_sql}）的导出插件。
  *
- * <p>Pagination is implemented by wrapping the configured SQL as a CTE and applying keyset paging
- * on a configured cursor column.
+ * <p>分页通过将配置 SQL 包装为 CTE 并按配置的游标列进行 keyset 分页实现。
  *
- * <p>SQL governance: the base SQL is validated at load time using {@link SqlTemplateExportSqlValidator}
- * (JSqlParser AST, schema whitelist, SELECT * prohibition, required params). When
- * {@code explainCheckEnabled=true}, a {@code EXPLAIN (FORMAT JSON)} is also executed before the
- * first page to guard against accidentally large full-table scans.
+ * <p>SQL 治理：基础 SQL 在加载时经由 {@link SqlTemplateExportSqlValidator}
+ * 验证（JSqlParser AST、schema 白名单、禁止 SELECT *、必填参数）。
+ * 当 {@code explainCheckEnabled=true} 时，首页前还会执行 {@code EXPLAIN (FORMAT JSON)} 防止全表扫描。
  */
 @Component
 public class SqlTemplateExportDataPlugin implements ExportDataPlugin {

@@ -6,9 +6,8 @@ import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import java.time.Instant;
 
 /**
- * Handles task completion reporting and workflow node lifecycle tracking.
- * Extracted from {@link DefaultTaskExecutionService} to isolate the high-complexity
- * outcome processing logic (retry scheduling, partition/instance progress, DAG continuation).
+ * 处理任务完成上报及工作流节点生命周期跟踪，从 {@link DefaultTaskExecutionService} 中拆分，
+ * 隔离高复杂度的结果处理逻辑（重试调度、分区/实例进度推进、DAG 继续流转）。
  */
 public interface TaskOutcomeService {
 

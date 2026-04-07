@@ -2,6 +2,7 @@ package com.example.batch.worker.exports.runtime;
 
 import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.config.WorkerConfiguration;
+import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import com.example.batch.worker.core.support.AbstractTaskConsumer;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
@@ -16,15 +17,18 @@ public class ExportTaskConsumer extends AbstractTaskConsumer {
     private final ExportWorkerLoop workerLoop;
     private final ExportWorkerConfiguration configuration;
     private final TaskDispatchExecutor taskDispatchExecutor;
+    private final DeadLetterPublisher deadLetterPublisher;
 
     public ExportTaskConsumer(ExportWorkerLoop workerLoop,
                              ExportWorkerConfiguration configuration,
                              TaskDispatchExecutor taskDispatchExecutor,
-                             KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
+                             KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+                             DeadLetterPublisher deadLetterPublisher) {
         super(kafkaListenerEndpointRegistry);
         this.workerLoop = workerLoop;
         this.configuration = configuration;
         this.taskDispatchExecutor = taskDispatchExecutor;
+        this.deadLetterPublisher = deadLetterPublisher;
     }
 
     @Override
@@ -40,6 +44,11 @@ public class ExportTaskConsumer extends AbstractTaskConsumer {
     @Override
     protected TaskDispatchExecutor taskDispatchExecutor() {
         return taskDispatchExecutor;
+    }
+
+    @Override
+    protected DeadLetterPublisher deadLetterPublisher() {
+        return deadLetterPublisher;
     }
 
     @Override

@@ -3,17 +3,13 @@ package com.example.batch.worker.core.support;
 import java.util.Map;
 
 /**
- * Common interface for domain-specific pipeline stage contexts.
+ * 各业务域 pipeline 阶段上下文的公共接口。
  *
- * <p>This is the worker-side execution context, not the orchestrator-side
- * workflow context. The canonical terminology is documented in
- * {@link com.example.batch.orchestrator.domain.pipeline.ExecutionContext} and
- * {@code docs/architecture/core-model.md}.
+ * <p>这是 Worker 侧执行上下文，非 Orchestrator 侧工作流上下文。
  *
- * <p>All three worker domains (import / export / dispatch) carry the same base
- * fields. Implementing this interface allows {@link AbstractStageExecutor} to
- * access those fields without reflection, keeping the generic stage loop
- * compile-time safe across all three pipelines.
+ * <p>三个 Worker 域（import / export / dispatch）均包含相同的基础字段。
+ * 实现此接口可让 {@link AbstractStageExecutor} 无需反射即可访问这些字段，
+ * 保证泛型阶段循环在三条 pipeline 上都是编译期安全的。
  */
 public interface ExecutionContext {
 
@@ -24,8 +20,7 @@ public interface ExecutionContext {
     String getWorkerId();
 
     /**
-     * Mutable attribute bag used to share state between pipeline stages.
-     * Keys are defined in {@link PipelineRuntimeKeys}.
+     * 用于在 pipeline 阶段间共享状态的可变属性集合，键定义于 {@link PipelineRuntimeKeys}。
      */
     Map<String, Object> getAttributes();
 }

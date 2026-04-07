@@ -67,7 +67,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
                 report.setErrorCode(response.code());
                 report.setErrorMessage(response.message());
             }
-            // carry traceId to orchestrator so status updates and retry/dlq become traceable end-to-end
+            // 将 traceId 传递给 Orchestrator，确保状态更新与重试/DLQ 全链路可追踪
             report.setTraceId(task.getTraceId());
             report.setResultSummary(JsonUtils.toJson(Map.of(
                     "code", response.code(),
@@ -90,7 +90,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
                 return RunModeSupport.resolveCode((Map<String, Object>) payloadMap);
             }
         } catch (RuntimeException ignored) {
-            // Leave run_mode absent when payload is not valid JSON.
+            // payload 非合法 JSON 时不设置 run_mode。
         }
         return null;
     }

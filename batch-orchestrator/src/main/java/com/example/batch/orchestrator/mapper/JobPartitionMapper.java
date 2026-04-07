@@ -9,6 +9,9 @@ public interface JobPartitionMapper {
 
     List<JobPartitionEntity> selectByQuery(JobPartitionQuery query);
 
+    // C-2: row-level lock to serialize concurrent partition counting during task outcome processing
+    List<JobPartitionEntity> selectByQueryForUpdate(JobPartitionQuery query);
+
     int insert(JobPartitionEntity entity);
 
     JobPartitionEntity selectByTenantAndJobInstanceIdAndPartitionNo(@Param("tenantId") String tenantId,

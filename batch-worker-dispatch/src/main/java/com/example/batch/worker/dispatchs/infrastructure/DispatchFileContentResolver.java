@@ -47,7 +47,11 @@ public class DispatchFileContentResolver {
         if (!StringUtils.hasText(storagePath)) {
             throw new IllegalStateException("storage_path missing");
         }
-        Path local = Path.of(storagePath);
+        // C-4: reject path traversal sequences before normalization
+        if (storagePath.contains("..")) {
+            throw new SecurityException("storage_path contains path traversal sequence: " + storagePath);
+        }
+        Path local = Path.of(storagePath).toAbsolutePath().normalize();
         if ("LOCAL".equals(storageType) || Files.isRegularFile(local)) {
             return Files.newInputStream(local);
         }
@@ -58,13 +62,22 @@ public class DispatchFileContentResolver {
         if (!StringUtils.hasText(bucket)) {
             bucket = minioProperties.getBucket();
         }
+        // M-7: ensure MinIO stream is closed if decryptIfNeeded throws
         InputStream inputStream = minioClient.getObject(
                 GetObjectArgs.builder().bucket(bucket).object(storagePath).build()
         );
-        if (cryptoService.isTestingOpen()) {
-            return inputStream;
+        try {
+            if (cryptoService.isTestingOpen()) {
+                return inputStream;
+            }
+            return cryptoService.decryptIfNeeded(inputStream);
+        } catch (Exception e) {
+            try {
+                inputStream.close();
+            } catch (Exception ignored) {
+            }
+            throw e;
         }
-        return cryptoService.decryptIfNeeded(inputStream);
     }
 
     private Map<String, Object> fileSecurity(Map<String, Object> fileRecord) {

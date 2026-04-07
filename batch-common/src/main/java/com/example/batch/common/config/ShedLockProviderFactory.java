@@ -7,7 +7,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Shared helper for creating the JDBC-based ShedLock provider.
+ * 创建基于 JDBC 的 ShedLock 提供者的共享工具类。
  */
 public final class ShedLockProviderFactory {
 

@@ -3,7 +3,7 @@ package com.example.batch.common.logging;
 import org.slf4j.MDC;
 
 /**
- * Thin wrapper around SLF4J MDC for consistent structured fields.
+ * 基于 SLF4J MDC 的轻量封装，统一结构化日志字段写入。
  */
 public final class BatchMdc {
 

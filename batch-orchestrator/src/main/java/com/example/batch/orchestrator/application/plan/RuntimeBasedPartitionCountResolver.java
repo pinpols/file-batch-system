@@ -7,10 +7,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * Resolves partition count from historical execution duration.
- *
- * <p>Formula: {@code ceil(historicalDurationSeconds / targetPartitionDurationSeconds)}.
- * Returns {@code 0} when the necessary parameters are absent or non-positive.
+ * 根据历史执行时长解析分区数，公式为 {@code ceil(historicalDurationSeconds / targetPartitionDurationSeconds)}。
+ * 所需参数缺失或非正时返回 {@code 0}。
  */
 @Component
 @Order(3)

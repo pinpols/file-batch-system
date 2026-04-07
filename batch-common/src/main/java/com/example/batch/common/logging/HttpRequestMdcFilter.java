@@ -13,7 +13,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Populates MDC from standard HTTP headers for servlet-based services (orchestrator, trigger, workers HTTP).
+ * 从标准 HTTP 请求头填充 MDC，适用于基于 Servlet 的服务（orchestrator、trigger、worker HTTP）。
  */
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class HttpRequestMdcFilter extends OncePerRequestFilter {

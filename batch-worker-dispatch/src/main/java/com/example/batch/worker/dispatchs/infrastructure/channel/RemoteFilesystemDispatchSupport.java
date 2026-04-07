@@ -44,7 +44,8 @@ final class RemoteFilesystemDispatchSupport {
             if (!StringUtils.hasText(remoteDir)) {
                 return new DispatchResult(false, null, null, false, false, "nas_remote_directory missing", null);
             }
-            Path directory = Path.of(remoteDir);
+            // H-10: normalize to prevent path traversal (matches probeNas behaviour)
+            Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
             Files.createDirectories(directory);
             String externalRequestId = resolveExternalRequestId(command);
             String receiptCode = resolveReceiptCode(command, externalRequestId);

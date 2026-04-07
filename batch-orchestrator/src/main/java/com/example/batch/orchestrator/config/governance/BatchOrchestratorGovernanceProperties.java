@@ -13,10 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * Configuration composition for orchestrator governance.
- *
- * <p>方案 A：不迁移 YAML key，只在代码层把分散的 {@code @ConfigurationProperties}
- * 聚合到一棵复合配置树，统一命名/层次/边界，减少重复注入点。</p>
+ * Orchestrator 治理配置聚合类，将分散的 {@code @ConfigurationProperties} 统一组合，减少重复注入点。
  */
 @Component
 @RequiredArgsConstructor

@@ -4,9 +4,11 @@ import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.domain.TriggerStatusInfo;
 import com.example.batch.trigger.support.TriggerDescriptor;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TimeZone;
+import org.quartz.CronExpression;
 import lombok.RequiredArgsConstructor;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.CronTrigger;
@@ -32,7 +34,8 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     private final Scheduler scheduler;
 
     @Override
-    @SchedulerLock(name = "trigger_register_all", lockAtMostFor = "PT5M", lockAtLeastFor = "PT10S")
+    // M-13: lockAtMostFor 从 PT5M 增加到 PT15M，大集群枚举注册所有触发器可能超过 5 分钟
+    @SchedulerLock(name = "trigger_register_all", lockAtMostFor = "PT15M", lockAtLeastFor = "PT10S")
     public void registerAll() {
         List<TriggerDescriptor> descriptors = triggerDefinitionLoader.loadAll();
         descriptors.stream()
@@ -160,6 +163,20 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     private void scheduleDescriptor(TriggerDescriptor descriptor) {
         if (!"CRON".equalsIgnoreCase(descriptor.getScheduleType())) {
             return;
+        }
+        String expression = descriptor.getScheduleExpression();
+        if (!CronExpression.isValidExpression(expression)) {
+            throw new IllegalArgumentException(
+                    "invalid cron expression for job " + descriptor.getJobCode() + ": '" + expression + "'");
+        }
+        String timezone = descriptor.getTimezone();
+        if (timezone != null && !timezone.isBlank()) {
+            try {
+                ZoneId.of(timezone);
+            } catch (java.time.DateTimeException e) {
+                throw new IllegalArgumentException(
+                        "invalid timezone for job " + descriptor.getJobCode() + ": '" + timezone + "'", e);
+            }
         }
         try {
             String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();

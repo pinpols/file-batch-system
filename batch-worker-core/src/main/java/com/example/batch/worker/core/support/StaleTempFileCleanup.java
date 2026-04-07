@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -20,6 +21,12 @@ public class StaleTempFileCleanup {
 
     @EventListener(ApplicationReadyEvent.class)
     public void cleanOnReady() {
+        cleanStaleTempFiles();
+    }
+
+    // M-6: 运行期定时清理，防止长时间运行的 worker 累积过多过期临时文件（默认 4 小时一次）
+    @Scheduled(fixedDelayString = "${batch.worker.stale-temp-cleanup-interval:PT4H}")
+    public void cleanPeriodically() {
         cleanStaleTempFiles();
     }
 

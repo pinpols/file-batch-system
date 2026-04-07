@@ -102,8 +102,9 @@ public class QuotaRuntimeStateService {
                     borrowedNeeded,
                     state.lastResetAt() == null ? now : state.lastResetAt(),
                     now);
-            quotaRuntimeStateRepository.save(state);
         }
+        // M-4: 只要使用了突发容量就必须持久化状态，否则 lastUpdatedAt 漂移导致窗口过期误判
+        quotaRuntimeStateRepository.save(state);
         return ResourceCheck.allow();
     }
 

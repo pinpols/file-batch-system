@@ -24,10 +24,7 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.IdGenerator;
 
-/**
- * Calls orchestrator internal task APIs with explicit timeouts, bounded retries on transient failures,
- * and Micrometer counters for report failures ({@code worker.report.failed.total} tagged by {@code reason}).
- */
+/** 调用 orchestrator 内部任务 API，带超时、瞬态失败有限重试及 Micrometer 失败计数。 */
 @Component
 @Slf4j
 public class HttpTaskExecutionClient implements TaskExecutionClient {
@@ -36,7 +33,8 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     private final RestClient.Builder builder;
     private final Environment environment;
     private final Optional<MeterRegistry> meterRegistry;
-    private RestClient restClient;
+    // L-2: volatile 保证双重检查锁的可见性，避免其他线程读到未完全构造的 RestClient
+    private volatile RestClient restClient;
 
     public HttpTaskExecutionClient(
             OrchestratorTaskClientProperties properties,

@@ -9,10 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Creates partitions, tasks, and outbox events for a launched job.
- * Runs in its own {@code @Transactional} boundary (T2), separate from the
- * job-instance creation transaction (T1) to reduce lock duration.
- * Extracted from {@link com.example.batch.orchestrator.service.DefaultLaunchService}.
+ * 为已启动的 Job 创建分区、任务及 Outbox 事件，在独立事务（T2）中执行，与 Job 实例创建事务（T1）分离以降低锁持有时长。
+ * 从 {@link com.example.batch.orchestrator.service.DefaultLaunchService} 中拆分。
  */
 public interface PartitionDispatchService {
 
@@ -79,8 +77,7 @@ public interface PartitionDispatchService {
     }
 
     /**
-     * Builds the schedule plan, creates partitions, creates tasks, writes outbox events,
-     * and marks the job instance as RUNNING. Runs in its own transaction.
+     * 构建调度计划，创建分区、任务，写入 Outbox 事件，并将 Job 实例标记为 RUNNING，在独立事务中执行。
      */
     void dispatch(DispatchContext context);
 }

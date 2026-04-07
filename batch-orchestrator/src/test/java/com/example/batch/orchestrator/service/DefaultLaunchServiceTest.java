@@ -21,9 +21,15 @@ import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import com.example.batch.orchestrator.application.service.OrchestratorJobMappers;
+import com.example.batch.orchestrator.application.service.OrchestratorWorkflowMappers;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import com.example.batch.orchestrator.mapper.JobPartitionMapper;
+import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
+import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
+import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
@@ -42,8 +48,10 @@ class DefaultLaunchServiceTest {
 
     private LaunchValidationService launchValidationService;
     private PartitionDispatchService partitionDispatchService;
-    private TriggerRequestMapper triggerRequestMapper;
+    private OrchestratorJobMappers jobMappers;
+    private OrchestratorWorkflowMappers workflowMappers;
     private JobInstanceMapper jobInstanceMapper;
+    private TriggerRequestMapper triggerRequestMapper;
     private WorkflowRunMapper workflowRunMapper;
     private WorkflowNodeRunMapper workflowNodeRunMapper;
     private WorkflowDagService workflowDagService;
@@ -62,6 +70,18 @@ class DefaultLaunchServiceTest {
         jobInstanceMapper = mock(JobInstanceMapper.class);
         workflowRunMapper = mock(WorkflowRunMapper.class);
         workflowNodeRunMapper = mock(WorkflowNodeRunMapper.class);
+        jobMappers = new OrchestratorJobMappers(
+                jobInstanceMapper,
+                mock(JobPartitionMapper.class),
+                mock(JobTaskMapper.class),
+                mock(JobStepInstanceMapper.class),
+                triggerRequestMapper
+        );
+        workflowMappers = new OrchestratorWorkflowMappers(
+                mock(WorkflowNodeMapper.class),
+                workflowRunMapper,
+                workflowNodeRunMapper
+        );
         workflowDagService = mock(WorkflowDagService.class);
         configCacheService = mock(OrchestratorConfigCacheService.class);
         batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
@@ -70,10 +90,8 @@ class DefaultLaunchServiceTest {
         service = new DefaultLaunchService(
                 launchValidationService,
                 partitionDispatchService,
-                triggerRequestMapper,
-                jobInstanceMapper,
-                workflowRunMapper,
-                workflowNodeRunMapper,
+                jobMappers,
+                workflowMappers,
                 workflowDagService,
                 configCacheService,
                 batchDayInstanceRepository,

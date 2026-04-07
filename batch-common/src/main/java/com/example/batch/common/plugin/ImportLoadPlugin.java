@@ -4,20 +4,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Import LOAD plugin: turns validated logical rows (maps) into upstream persistence.
- * Add new implementations as Spring beans; register by {@link #id()}.
+ * 导入 LOAD 插件：将校验后的逻辑行（map）持久化到上游系统。新实现注册为 Spring bean，通过 {@link #id()} 标识。
  */
 public interface ImportLoadPlugin {
 
     /**
-     * Stable id, e.g. {@link WorkerPluginIds#IMPORT_LOAD_CUSTOMER_ACCOUNT}.
+     * 稳定标识符，如 {@link WorkerPluginIds#IMPORT_LOAD_CUSTOMER_ACCOUNT}。
      */
     String id();
 
     /**
-     * Persist one chunk of rows. Rows match NDJSON lines produced by PARSE/VALIDATE (typically camelCase keys).
-     *
-     * @return number of rows applied (same spirit as legacy upsert row count)
+     * 持久化一批行数据，行结构对应 PARSE/VALIDATE 阶段产出的 NDJSON 行（通常为 camelCase 键），返回实际写入行数。
      */
     int loadChunk(ImportLoadContext context, List<Map<String, Object>> records) throws Exception;
 }

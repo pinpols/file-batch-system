@@ -13,10 +13,12 @@ import org.springframework.context.annotation.Configuration;
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
 public class ShedLockConfiguration {
 
+    @Value("${batch.shedlock.auto-create:false}")
+    private boolean autoCreateTable;
+
     @Bean
     public LockProvider lockProvider(
-            @Qualifier("importPlatformDataSource") DataSource dataSource,
-            @Value("${batch.shedlock.auto-create:false}") boolean autoCreateTable
+            @Qualifier("importPlatformDataSource") DataSource dataSource
     ) {
         return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
     }

@@ -1,17 +1,17 @@
 package com.example.batch.worker.core.support;
 
 /**
- * Marker interface for domain-specific stage results.
+ * 各业务域阶段结果的标记接口。
  *
- * <p>All three result record types ({@code ImportStageResult}, {@code ExportStageResult},
- * {@code DispatchStageResult}) share the same three fields.  Implementing this interface
- * lets {@link AbstractStageExecutor} read the outcome without reflection.
+ * <p>三种结果 record（{@code ImportStageResult}、{@code ExportStageResult}、
+ * {@code DispatchStageResult}）共享相同的三个字段。实现此接口可让
+ * {@link AbstractStageExecutor} 无需反射即可读取执行结果。
  */
 public interface StageExecutionResult {
 
     boolean success();
 
-    /** Failure code — {@code "SUCCESS"} when the stage succeeded. */
+    /** 失败码——阶段成功时值为 {@code "SUCCESS"}。 */
     String code();
 
     String message();

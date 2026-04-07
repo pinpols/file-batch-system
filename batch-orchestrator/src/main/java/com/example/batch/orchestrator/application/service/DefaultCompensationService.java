@@ -20,11 +20,6 @@ import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;
 import com.example.batch.orchestrator.mapper.UpdateCompensationStatusParam;
-import com.example.batch.orchestrator.mapper.JobInstanceMapper;
-import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
-import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.service.LaunchService;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,11 +39,7 @@ import org.springframework.util.StringUtils;
 public class DefaultCompensationService implements CompensationService {
 
     private final CompensationCommandMapper compensationCommandMapper;
-    private final JobInstanceMapper jobInstanceMapper;
-    private final JobPartitionMapper jobPartitionMapper;
-    private final JobStepInstanceMapper jobStepInstanceMapper;
-    private final JobTaskMapper jobTaskMapper;
-    private final TriggerRequestMapper triggerRequestMapper;
+    private final OrchestratorJobMappers jobMappers;
     private final RetryGovernanceService retryGovernanceService;
     private final FileGovernanceService fileGovernanceService;
     private final ObjectProvider<LaunchService> launchServiceProvider;
@@ -141,19 +132,19 @@ public class DefaultCompensationService implements CompensationService {
                 yield sourceInstance == null ? null : sourceInstance.getTraceId();
             }
             case "STEP" -> {
-                JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectById(command.tenantId(), command.targetId());
+                JobStepInstanceEntity stepInstance = jobMappers.jobStepInstanceMapper.selectById(command.tenantId(), command.targetId());
                 if (stepInstance == null) {
                     yield null;
                 }
-                JobInstanceEntity inst = jobInstanceMapper.selectById(command.tenantId(), stepInstance.getJobInstanceId());
+                JobInstanceEntity inst = jobMappers.jobInstanceMapper.selectById(command.tenantId(), stepInstance.getJobInstanceId());
                 yield inst == null ? null : inst.getTraceId();
             }
             case "PARTITION" -> {
-                JobPartitionEntity partition = jobPartitionMapper.selectById(command.tenantId(), command.targetId());
+                JobPartitionEntity partition = jobMappers.jobPartitionMapper.selectById(command.tenantId(), command.targetId());
                 if (partition == null) {
                     yield null;
                 }
-                JobInstanceEntity inst = jobInstanceMapper.selectById(command.tenantId(), partition.getJobInstanceId());
+                JobInstanceEntity inst = jobMappers.jobInstanceMapper.selectById(command.tenantId(), partition.getJobInstanceId());
                 yield inst == null ? null : inst.getTraceId();
             }
             default -> null;
@@ -201,7 +192,7 @@ public class DefaultCompensationService implements CompensationService {
                 traceId,
                 commandNo
         ));
-        JobInstanceEntity launched = jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
+        JobInstanceEntity launched = jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
         entity.setRelatedJobInstanceId(launched == null ? sourceInstance.getId() : launched.getId());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("action", "JOB_RERUN");
@@ -220,7 +211,7 @@ public class DefaultCompensationService implements CompensationService {
         if (stepId == null) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "step targetId is required");
         }
-        JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectById(command.tenantId(), stepId);
+        JobStepInstanceEntity stepInstance = jobMappers.jobStepInstanceMapper.selectById(command.tenantId(), stepId);
         if (stepInstance == null) {
             throw new BizException(ResultCode.NOT_FOUND, "job step instance not found");
         }
@@ -238,7 +229,7 @@ public class DefaultCompensationService implements CompensationService {
         result.put("action", "STEP_RERUN");
         result.put("stepInstanceId", stepInstance.getId());
         result.put("jobInstanceId", stepInstance.getJobInstanceId());
-        JobTaskEntity task = jobTaskMapper.selectById(command.tenantId(), taskId);
+        JobTaskEntity task = jobMappers.jobTaskMapper.selectById(command.tenantId(), taskId);
         if (task != null) {
             result.put("jobTaskId", task.getId());
             result.put("jobPartitionId", task.getJobPartitionId());
@@ -319,7 +310,7 @@ public class DefaultCompensationService implements CompensationService {
                 traceId,
                 commandNo
         ));
-        JobInstanceEntity launched = jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
+        JobInstanceEntity launched = jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
         entity.setRelatedJobInstanceId(launched == null ? null : launched.getId());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("action", "BATCH_RERUN");
@@ -358,7 +349,7 @@ public class DefaultCompensationService implements CompensationService {
         triggerRequest.setDedupKey(request.target().tenantId() + ":compensation:" + request.commandNo() + ":" + requestId);
         triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
         triggerRequest.setTraceId(request.traceId());
-        triggerRequestMapper.insert(triggerRequest);
+        jobMappers.triggerRequestMapper.insert(triggerRequest);
         return launchServiceProvider.getObject().launch(new LaunchRequest(
                 request.target().tenantId(),
                 request.target().jobCode(),
@@ -393,13 +384,13 @@ public class DefaultCompensationService implements CompensationService {
 
     private JobInstanceEntity resolveJobInstance(CompensationSubmitCommand command) {
         if (command.targetId() != null) {
-            JobInstanceEntity entity = jobInstanceMapper.selectById(command.tenantId(), command.targetId());
+            JobInstanceEntity entity = jobMappers.jobInstanceMapper.selectById(command.tenantId(), command.targetId());
             if (entity != null) {
                 return entity;
             }
         }
         if (StringUtils.hasText(command.targetInstanceNo())) {
-            JobInstanceEntity entity = jobInstanceMapper.selectByInstanceNo(command.tenantId(), command.targetInstanceNo());
+            JobInstanceEntity entity = jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), command.targetInstanceNo());
             if (entity != null) {
                 return entity;
             }

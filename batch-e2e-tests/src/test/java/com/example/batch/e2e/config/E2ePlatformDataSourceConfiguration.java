@@ -16,13 +16,19 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class E2ePlatformDataSourceConfiguration {
 
+    @Value("${spring.datasource.url}")
+    private String url;
+
+    @Value("${spring.datasource.username}")
+    private String username;
+
+    @Value("${spring.datasource.password}")
+    private String password;
+
     @Bean(name = "dataSource")
     @Primary
     @ConditionalOnMissingBean(name = "dataSource")
-    public DataSource platformDataSource(
-            @Value("${spring.datasource.url}") String url,
-            @Value("${spring.datasource.username}") String username,
-            @Value("${spring.datasource.password}") String password) {
+    public DataSource platformDataSource() {
         return DataSourceBuilder.create()
                 .url(url)
                 .username(username)
