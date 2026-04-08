@@ -1,6 +1,6 @@
 package com.example.batch.worker.dispatchs;
 
-import com.example.batch.common.config.BatchJsonAutjianoConfiguration;
+import com.example.batch.common.config.BatchJsonAutoConfiguration;
 import com.example.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
