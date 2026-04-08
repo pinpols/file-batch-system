@@ -78,7 +78,27 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `ROLE_ADMIN` can perform all write actions.
 - `ROLE_AUDITOR` is read-only for operational views and queries.
 - `ROLE_CONFIG_ADMIN` can access config and worker operations, but not all write actions.
+- `ROLE_TENANT_USER` can view job/file/workflow status, trigger jobs, and download exports, but cannot modify configurations or perform ops actions.
 - AI endpoints require both role access and prompt authorization checks.
+
+### Role Permission Matrix
+
+| Operation | ADMIN | AUDITOR | CONFIG_ADMIN | TENANT_USER |
+|-----------|:-----:|:-------:|:------------:|:-----------:|
+| Dashboard / Query / Meta / Realtime SSE | ✅ | ✅ | ✅ | ✅ |
+| Job/File/Workflow status view | ✅ | ✅ | ✅ | ✅ |
+| Scheduler snapshot view | ✅ | ✅ | ✅ | ✅ |
+| Report Excel export | ✅ | ✅ | ✅ | ✅ |
+| File pipeline observability | ✅ | ✅ | ✅ | ✅ |
+| Job definition / workflow definition detail view | ✅ | ✅ | ✅ | ✅ |
+| **Trigger job** | ✅ | ❌ | ❌ | ✅ |
+| Config view (template / channel / Excel export) | ✅ | ✅ | ✅ | ❌ |
+| Config modify (create / update / Excel import) | ✅ | ❌ | ✅ | ❌ |
+| Config delete / reset | ✅ | ❌ | ❌ | ❌ |
+| Ops actions (compensate / rerun / approve / dead-letter) | ✅ | ❌ | ❌ | ❌ |
+| Worker management (drain / restore) | ✅ | ❌ | ✅ | ❌ |
+| Scheduler actions (pause-all / resume-all) | ✅ | ❌ | ❌ | ❌ |
+| Alert management | ✅ | ❌ | ✅ | ❌ |
 
 ### Tenant Rules
 
@@ -184,11 +204,16 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/ops/summary`
 - `GET /api/console/ops/summary/events`
 
-Default seeded account names for local/internal use:
+Default seeded accounts (password: `admin123`):
 
-- `admin` -> `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`
-- `auditor` -> `ROLE_AUDITOR`
-- `config-admin` -> `ROLE_CONFIG_ADMIN`
+| Username | Password | Roles | Description |
+|----------|----------|-------|-------------|
+| `admin` | `admin123` | `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN` | Super admin |
+| `auditor` | `admin123` | `ROLE_AUDITOR` | Read-only auditor |
+| `config-admin` | `admin123` | `ROLE_CONFIG_ADMIN` | Configuration manager |
+| `tenant-user` | `admin123` | `ROLE_TENANT_USER` | Tenant business user |
+
+Username is globally unique. Login requires only `username` + `password`; tenant is resolved from the account record automatically.
 
 Minimal login page:
 
@@ -249,7 +274,7 @@ Deployment note:
 - `DELETE /api/console/job-definitions/{id}`
 - `POST /api/console/job-definitions/{id}/toggle`
 - `POST /api/console/job-definitions/{id}/copy`
-- All write operations require `ROLE_ADMIN`. Read operations allow `ROLE_AUDITOR` and `ROLE_CONFIG_ADMIN`.
+- All write operations require `ROLE_ADMIN`. Read operations allow `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
 - `toggle` uses query params `tenantId` (required) and `enabled` (required).
 - `copy` uses query params `tenantId` (required) and `newJobCode` (required); the cloned definition is created with `enabled=false`.
 

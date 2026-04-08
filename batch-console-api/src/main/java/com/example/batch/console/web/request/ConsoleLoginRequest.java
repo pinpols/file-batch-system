@@ -1,10 +1,9 @@
 package com.example.batch.console.web.request;
 
-import com.example.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
-/** 最小登录请求：固定账号 + 密码，tenantId 可选。 */
+/** 控制台登录请求：用户名 + 密码（租户从账号记录自动获取）。 */
 @Data
 public class ConsoleLoginRequest {
 
@@ -13,7 +12,4 @@ public class ConsoleLoginRequest {
 
     @NotBlank
     private String password;
-
-    @ValidTenantId
-    private String tenantId;
 }

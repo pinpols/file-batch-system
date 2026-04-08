@@ -35,7 +35,8 @@ class ConsoleLoginServiceTest {
         ConsoleLoginRequest request = new ConsoleLoginRequest();
         request.setUsername("admin");
         request.setPassword("admin123");
-        Mockito.when(userAccountService.findByTenantAndUsername("default-tenant", "admin"))
+        // 用户名全局唯一，按 username 查找，租户从账号记录中获取
+        Mockito.when(userAccountService.findByUsername("admin"))
                 .thenReturn(java.util.Optional.of(new ConsoleUserAccount(
                         "default-tenant",
                         "admin",
@@ -69,7 +70,7 @@ class ConsoleLoginServiceTest {
         ConsoleLoginRequest request = new ConsoleLoginRequest();
         request.setUsername("admin");
         request.setPassword("wrong");
-        Mockito.when(userAccountService.findByTenantAndUsername("default-tenant", "admin"))
+        Mockito.when(userAccountService.findByUsername("admin"))
                 .thenReturn(java.util.Optional.of(new ConsoleUserAccount(
                         "default-tenant",
                         "admin",
@@ -86,15 +87,15 @@ class ConsoleLoginServiceTest {
     }
 
     @Test
-    void shouldRejectMissingAccountOnAnotherTenant() {
+    void shouldRejectUnknownUsername() {
         ConsoleLoginRequest request = new ConsoleLoginRequest();
-        request.setUsername("admin");
+        request.setUsername("nonexistent");
         request.setPassword("admin123");
-        request.setTenantId("other-tenant");
-        Mockito.when(userAccountService.findByTenantAndUsername("other-tenant", "admin"))
+        Mockito.when(userAccountService.findByUsername("nonexistent"))
                 .thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() -> loginService.login(request))
-                .isInstanceOf(BizException.class);
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("invalid username or password");
     }
 }
