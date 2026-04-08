@@ -139,7 +139,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         WorkerRegistryRecord result = service.forceOffline("t1", "w1");
 
         assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
-        verify(retryGovernanceService).retryTask(eq("t1"), eq(100L), anyString());
+        verify(retryGovernanceService).reclaimTask(eq("t1"), eq(100L), anyString());
     }
 
     @Test
@@ -157,7 +157,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         WorkerRegistryRecord result = service.forceOffline("t1", "w1");
 
         assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
-        verify(retryGovernanceService, never()).retryTask(anyString(), anyLong(), anyString());
+        verify(retryGovernanceService, never()).reclaimTask(anyString(), anyLong(), anyString());
     }
 
     // ── listClaimedTasks ─────────────────────────────────────────────────────
@@ -253,12 +253,12 @@ class DefaultWorkerDrainGovernanceServiceTest {
         when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
                 TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of(task1, task2));
         doThrow(new RuntimeException("retry failed")).when(retryGovernanceService)
-                .retryTask(eq("t1"), eq(301L), anyString());
+                .reclaimTask(eq("t1"), eq(301L), anyString());
 
         // Should not throw even when one retry fails
         service.takeoverAfterDrainTimeout("t1", "w1");
 
-        verify(retryGovernanceService).retryTask(eq("t1"), eq(302L), anyString());
+        verify(retryGovernanceService).reclaimTask(eq("t1"), eq(302L), anyString());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

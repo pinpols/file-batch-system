@@ -22,5 +22,11 @@ public interface RetryGovernanceService {
      */
     void retryTask(String tenantId, Long taskId, String eventKey);
 
+    /**
+     * Forcibly reclaim a task that may be in RUNNING state (e.g. during worker drain takeover).
+     * Unlike {@link #retryTask}, this method accepts RUNNING in addition to terminal states.
+     */
+    void reclaimTask(String tenantId, Long taskId, String eventKey);
+
     void replayDeadLetter(String tenantId, Long deadLetterTaskId);
 }

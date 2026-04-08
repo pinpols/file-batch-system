@@ -135,16 +135,17 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
 
         DispatchResult result = dispatch(
                 tenantId,
-                Map.of(
-                        "tenant_id", tenantId,
-                        "channel_type", "SFTP",
-                        "channel_code", channelCode,
-                        "sftp_host", SFTP_SERVER.getHost(),
-                        "sftp_port", SFTP_SERVER.getMappedPort(22),
-                        "sftp_user", SFTP_USER,
-                        "sftp_password", SFTP_PASSWORD,
-                        "sftp_remote_directory", "/upload/",
-                        "sftp_remote_file_name", remoteFileName
+                Map.ofEntries(
+                        Map.entry("tenant_id", tenantId),
+                        Map.entry("channel_type", "SFTP"),
+                        Map.entry("channel_code", channelCode),
+                        Map.entry("sftp_host", SFTP_SERVER.getHost()),
+                        Map.entry("sftp_port", SFTP_SERVER.getMappedPort(22)),
+                        Map.entry("sftp_user", SFTP_USER),
+                        Map.entry("sftp_password", SFTP_PASSWORD),
+                        Map.entry("sftp_remote_directory", "/upload/"),
+                        Map.entry("sftp_remote_file_name", remoteFileName),
+                        Map.entry("sftp_strict_host_key_checking", "no")
                 ),
                 fileRecord(localFile.toString(), "LOCAL", null, "source.txt", "text/plain"),
                 payload("file-sftp", channelCode, "req-sftp", "rc-sftp")

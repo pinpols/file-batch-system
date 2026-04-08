@@ -1,5 +1,7 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public interface ApprovalWorkflowService {
 
     String submit(ApprovalSubmitCommand command);
@@ -161,58 +163,72 @@ public interface ApprovalWorkflowService {
             );
         }
 
+        @JsonProperty("tenantId")
         public String tenantId() {
             return identity.context().tenantId();
         }
 
+        @JsonProperty("approvalNo")
         public String approvalNo() {
             return identity.approvalNo();
         }
 
+        @JsonProperty("approvalType")
         public String approvalType() {
             return target.approvalType();
         }
 
+        @JsonProperty("actionType")
         public String actionType() {
             return target.actionType();
         }
 
+        @JsonProperty("targetType")
         public String targetType() {
             return target.targetType();
         }
 
+        @JsonProperty("targetId")
         public String targetId() {
             return target.targetId();
         }
 
+        @JsonProperty("payloadJson")
         public String payloadJson() {
             return target.payloadJson();
         }
 
+        @JsonProperty("approvalStatus")
         public String approvalStatus() {
             return outcome.approvalStatus();
         }
 
+        @JsonProperty("requesterId")
         public String requesterId() {
             return source.requesterId();
         }
 
+        @JsonProperty("approverId")
         public String approverId() {
             return outcome.approverId();
         }
 
+        @JsonProperty("rejectionReason")
         public String rejectionReason() {
             return outcome.rejectionReason();
         }
 
+        @JsonProperty("approvalReason")
         public String approvalReason() {
             return outcome.approvalReason();
         }
 
+        @JsonProperty("sourceTraceId")
         public String sourceTraceId() {
             return source.sourceTraceId();
         }
 
+        @JsonProperty("sourceIdempotencyKey")
         public String sourceIdempotencyKey() {
             return source.sourceIdempotencyKey();
         }

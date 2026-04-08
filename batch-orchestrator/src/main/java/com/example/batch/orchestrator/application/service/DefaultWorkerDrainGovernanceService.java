@@ -103,7 +103,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
                 continue;
             }
             try {
-                retryGovernanceService.retryTask(
+                retryGovernanceService.reclaimTask(
                         tenantId,
                         task.getId(),
                         tenantId + ":drain-takeover:" + task.getId()

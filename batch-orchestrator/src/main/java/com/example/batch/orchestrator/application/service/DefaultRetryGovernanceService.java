@@ -188,6 +188,28 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void reclaimTask(String tenantId, Long taskId, String eventKey) {
+        JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
+        if (task == null) {
+            throw new IllegalStateException("reclaim task not found");
+        }
+        String status = task.getStatus();
+        if (!TaskStatus.RUNNING.code().equals(status)
+                && !TaskStatus.FAILED.code().equals(status)
+                && !TaskStatus.CANCELLED.code().equals(status)
+                && !TaskStatus.TERMINATED.code().equals(status)) {
+            throw new IllegalStateException(
+                    "reclaim only allowed from RUNNING or terminal state, current status: " + status);
+        }
+        if (task.getJobPartitionId() != null) {
+            requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
+            return;
+        }
+        requeueTaskWithoutPartition(tenantId, task, eventKey);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
         DeadLetterTaskEntity deadLetterTask = deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
         if (deadLetterTask == null) {

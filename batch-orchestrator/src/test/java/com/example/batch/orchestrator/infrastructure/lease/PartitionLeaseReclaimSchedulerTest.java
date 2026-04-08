@@ -96,6 +96,8 @@ class PartitionLeaseReclaimSchedulerTest {
         when(jobPartitionMapper.selectExpiredLeasesGlobal(PartitionStatus.READY.code(), PartitionStatus.RUNNING.code())).thenReturn(List.of(partition));
         when(jobTaskMapper.selectByQuery(any())).thenReturn(List.of(task));
         when(jobInstanceMapper.selectById("t1", 30L)).thenReturn(jobInstance);
+        when(jobPartitionMapper.resetForDispatch("t1", 3L, PartitionStatus.READY.code(), 0L)).thenReturn(1);
+        when(jobTaskMapper.resetForRetry("t1", 300L, TaskStatus.READY.code(), 0L)).thenReturn(1);
 
         scheduler.reclaimExpiredPartitions();
 
@@ -117,6 +119,8 @@ class PartitionLeaseReclaimSchedulerTest {
                 .thenReturn(List.of(t1))
                 .thenReturn(List.of(t2));
         when(jobInstanceMapper.selectById("t1", 40L)).thenReturn(instance);
+        when(jobPartitionMapper.resetForDispatch(eq("t1"), anyLong(), anyString(), eq(0L))).thenReturn(1);
+        when(jobTaskMapper.resetForRetry(eq("t1"), anyLong(), anyString(), eq(0L))).thenReturn(1);
 
         scheduler.reclaimExpiredPartitions();
 
