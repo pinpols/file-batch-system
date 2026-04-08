@@ -161,23 +161,28 @@
 
 ### Flyway 与文档漂移
 
-- **已治理（第 22 轮）**：原重复的 `V11__create_event_outbox_logs`、`V12__create_config_release_and_secret_version`、`V14__file_channel_type_api_push` 已分别重编号为 **`V20` / `V21` / `V22`**，版本序列可与 Flyway 唯一校验兼容。新增 **`V23__batch_runtime_default_parameter.sql`** 承载默认参数目录表与种子数据。
+- **已治理（第 22 轮）**：原重复的 `V11__create_event_outbox_logs`、`V12__create_config_release_and_secret_version`、`V14__file_channel_type_api_push` 已分别重编号为 **`V20` / `V21` / `V22`**，版本序列可与 Flyway 唯一校验兼容。新增 **`V24__batch_runtime_default_parameter.sql`** 承载默认参数目录表与种子数据。
+- **后续扩展（V27–V40，跳过 V31）**：ShedLock 表（V30）、批处理日（V32）、乐观锁版本字段（V33）、控制台用户账户（V34–V35）、多个 CHECK 约束扩展（V36–V37、V39–V40）、幂等记录表（V38，供 `DatabaseIdempotencyGuard` 使用）。当前最新版本为 **V40**。
 - **升级注意**：若某环境曾在旧命名下只执行过重复版本中的**一部分**，需对照 `flyway_schema_history` 人工核对后再迁移（详见 [runtime-default-parameters.md](./runtime-default-parameters.md)）。
 - [README.md](/Users/dengchao/Downloads/file-batch-system/README.md) 已指向设计说明书、审计文档与补全对话；模块细节仍以代码与 `docs/` 为准。
 
-## 当前优先级（截至 2026-03-27）
+## 当前优先级（截至 2026-04-08）
 
-以下核心缺口已在对话_5（12轮）中全部完成：
+以下核心缺口已全部完成：
 - ✅ Worker 生命周期/消费者模板抽象（AbstractWorkerLoop / AbstractTaskConsumer / AbstractStageExecutor）
 - ✅ Stage 异常处理契约统一（StageFailureCode / ExecutionContext / StageExecutionContext）
 - ✅ 配置基线模块化（batch-defaults.yml + spring.config.import）
 - ✅ 架构真相文档与 ADR 体系（architecture-truth.md + ADR-001~ADR-008）
 - ✅ 产物内容级验收标准化（ExportFileVerifier / DispatchReceiptVerifier + Micrometer 指标）
 - ✅ Outbox 自动轮询 E2E、失败分支 E2E、多租户并发 E2E、SQL 一致性守卫
+- ✅ 审批台账产品化（批量审批、审批 SLA 告警、运营视图 `/api/console/ops/summary`）
+- ✅ SFTP/EMAIL/HTTP/OSS/NAS 渠道主动健康探测与分级退避（`DispatchChannelHealthService`）
+- ✅ ELK / OpenTelemetry 生产侧采集管道（OTEL Collector + Jaeger + Loki，`docs/observability/`）
+- ✅ 全局幂等层（`DatabaseIdempotencyGuard` + V38 `idempotency_record`）
+- ✅ 路径遍历防护（`PathSanitizer`，SFTP StrictHostKeyChecking 默认 yes）
+- ✅ 死信队列重放 E2E（`DeadLetterApprovalReplayE2eIT`）
+- ✅ 所有 P0/P1 安全与竞态修复（C-1~C-8、H-1~H-10、D-1~D-4，见 `批量系统问题实施路线图.md`）
 
-**剩余未完成（低优先级，不影响核心运行）**：
+**剩余未完成（按需推进，不影响核心运行）**：
 - 真实 staging 集群 live rollout / readiness 实跑留档与回滚 smoke
-- 审批台账产品化（批量审批、审批 SLA 告警、运营视图）
-- SFTP/EMAIL/HTTP 渠道主动健康探测与分级退避
-- ELK / OpenTelemetry 生产侧接入细节
-- 压测脚本与容量基线
+- 压测脚本容量基线实测数据（脚本已有，需在 staging 环境实测填写）

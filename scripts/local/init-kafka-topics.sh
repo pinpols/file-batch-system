@@ -15,11 +15,13 @@
 #   KAFKA_TOPICS=batch.task.dispatch.import,batch.task.result \
 #     bash scripts/local/init-kafka-topics.sh
 #
-# 生产分区规划示例（10 实例 × 4 并发）：
+# 生产环境配置示例（10 实例 × 4 并发，3 节点 Kafka 集群）：
+#   KAFKA_TOPIC_REPLICATION_FACTOR=3
 #   KAFKA_PARTITIONS_DISPATCH=40
 #   KAFKA_PARTITIONS_RESULT=20
 #   KAFKA_PARTITIONS_RETRY=10
 #   KAFKA_PARTITIONS_DEAD_LETTER=5
+# 注意：生产环境还需在 Kafka broker 配置 min.insync.replicas=2
 set -eu
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"

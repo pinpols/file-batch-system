@@ -39,12 +39,9 @@ Phase 2 P0 回归范围见：`docs/testing/phase-2-functional-regression.md`
 - orchestrator 并发 claim：`batch-orchestrator/src/test/java/com/example/batch/orchestrator/integration/ConcurrentTaskClaimIntegrationTest.java`
 - orchestrator 外部渠道失败恢复：`batch-orchestrator/src/test/java/com/example/batch/orchestrator/infrastructure/mq/KafkaOutboxPublisherTest.java`
 
-当前统一口径（截至 2026-03-28）：
+当前统一口径（截至 2026-04-08）：
 
-- 156 个 `*Test.java`
-- 76 个 `*IT.java` / `*IntegrationTest.java`
-- 27 个 `*E2eIT.java`
-- 42 个测试支撑类
+- **247 个测试相关文件**（146 单元 + 59 集成 + 30 E2E + 支撑类）
 
 这说明项目已经完成了测试基线盘点和首轮 P0 回归收口。当前状态可以拆成两类：
 

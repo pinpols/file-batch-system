@@ -135,6 +135,12 @@
             <artifactId>kafka</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.redis</groupId>
+            <artifactId>testcontainers-redis</artifactId>
+            <version>2.2.2</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <!-- macOS：Lettuce/Netty DNS 原生解析，消除 DnsServerAddressStreamProviders 的 WARN -->

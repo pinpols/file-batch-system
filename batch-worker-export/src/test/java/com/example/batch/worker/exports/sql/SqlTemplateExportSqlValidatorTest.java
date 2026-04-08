@@ -109,16 +109,19 @@ class SqlTemplateExportSqlValidatorTest {
     }
 
     @Test
-    void validate_allowsTableWithNoSchema_whenWhitelistSet() {
+    void validate_throwsOnUnqualifiedTable_whenWhitelistSet() {
         SqlTemplateExportSecurityProperties props = new SqlTemplateExportSecurityProperties();
         props.setAllowedSchemas(List.of("biz"));
         props.setForbidSelectStar(false);
         SqlTemplateExportSqlValidator v = new SqlTemplateExportSqlValidator(props);
 
-        // Unqualified table (no schema prefix) passes the whitelist check
-        String result = v.validate(
-                "SELECT id FROM unqualified_table WHERE tenant_id = :tenantId AND batch_no = :batchNo");
-        assertThat(result).isNotBlank();
+
+        // Unqualified table (no schema prefix) must be rejected — prevents bypassing the whitelist
+        // by referencing internal tables like batch.job_task without a schema prefix
+        assertThatThrownBy(() -> v.validate(
+                "SELECT id FROM unqualified_table WHERE tenant_id = :tenantId AND batch_no = :batchNo"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unqualified_table");
     }
 
     @Test

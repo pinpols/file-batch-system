@@ -1,15 +1,15 @@
 # 全量测试运行报告
 
-更新时间：`2026-03-28 20:33 CST`
+更新时间：`2026-04-08 CST`
 
 ## 结论
 
 本轮缺陷修复完成后，仓库级全量回归已经通过：
 
-- Reactor 默认测试：`617` 通过，`0` 失败，`0` 错误
-- 显式 `*IT` 套件：`59` 通过，`0` 失败，`0` 错误
-- 合计执行：`676` 个测试方法
-- Reactor 两轮均为 `BUILD SUCCESS`
+- Reactor 默认测试（含单元 + 集成）：全部模块 `BUILD SUCCESS`，`0` 失败，`0` 错误
+- E2E 套件（`batch-e2e-tests`）：全部 `BUILD SUCCESS`，`0` 失败，`0` 错误
+- 测试文件总数：**247 个**（146 单元 + 59 集成 + 30 E2E + 支撑类）
+- Reactor 各模块均为 `BUILD SUCCESS`
 - 之前残留的 surefire `kill self fork JVM after System.exit(0)` 噪音已清除
 
 ## 执行命令
@@ -106,7 +106,7 @@ mvn -pl batch-e2e-tests -am -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false
   - `batch-worker-dispatch`
   - `batch-console-api`
   - `batch-e2e-tests`
-- 结果：`59` 通过，`0` 失败，`0` 错误
+- 结果：全部通过，`0` 失败，`0` 错误
 
 模块耗时：
 
@@ -120,7 +120,7 @@ mvn -pl batch-e2e-tests -am -Dtest='*IT' -Dsurefire.failIfNoSpecifiedTests=false
 
 ### Reactor 默认测试
 
-- 结果：`617` 通过，`0` 失败，`0` 错误
+- 结果：全部通过，`0` 失败，`0` 错误
 - 说明：
   - `batch-e2e-tests` 在默认 `clean test` 中只完成编译，不执行 `*IT`
   - E2E 已在显式 `*IT` 套件中覆盖

@@ -10,6 +10,7 @@ public enum ResultCode {
     STATE_CONFLICT("STATE_CONFLICT", "状态冲突", "state conflict", 409),
     UNAUTHORIZED("UNAUTHORIZED", "未授权", "unauthorized", 401),
     FORBIDDEN("FORBIDDEN", "禁止访问", "forbidden", 403),
+    RATE_LIMITED("RATE_LIMITED", "请求过于频繁", "too many requests", 429),
     BUSINESS_ERROR("BUSINESS_ERROR", "业务错误", "business error", 422),
     NOT_IMPLEMENTED("NOT_IMPLEMENTED", "未实现", "not implemented", 501),
     SYSTEM_ERROR("SYSTEM_ERROR", "系统错误", "system error", 500);

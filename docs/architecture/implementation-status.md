@@ -5,8 +5,9 @@
 核心模型统一口径见：`docs/architecture/core-model.md`
 
 更新记录：
-- 2026-03-25：补齐 K8s 健康探针（Actuator probes）默认配置；Worker 停机时先标记 DRAINING 并停止 Kafka Listener 拉取新消息；Worker 运行方式调整为可对外提供 Actuator HTTP 端点（用于 readiness/liveness 探针）。
+- 2026-03-25：补齐 K8s 健康探针（Actuator probes）默认配置；Worker 停机时先标记 DRAINING 并停止 Kafka Listener 拉取新消息。
 - 2026-03-26：可扩展性 & 高可用 6 项改造全部完成（详见下文及 `scalability-ha-assessment.md`）。
+- 2026-04-08：安全/竞态/幂等全量修复完成（C-1~C-8、H-1~H-10、D-1~D-4）；新增 `DatabaseIdempotencyGuard`（V38）、`PathSanitizer`、`DeadLetterPublisher`；Flyway 扩展至 V40；测试体系扩展至 247 个文件（146 单元 + 59 集成 + 30 E2E）。
 
 ---
 
@@ -27,7 +28,10 @@
 | Import Worker 链路（Receive→Preprocess→Parse→Validate→Load→Feedback） | ✅ 完整 | `ImportPreprocessPipeline`（UNZIP/GUNZIP/AES-GCM/RSA-SHA256/转码）、`ParseStep`（JSON/CSV/EXCEL/XML/FIXED_WIDTH）、`ImportLoadPlugin` |
 | Export Worker 链路（Prepare→Generate→Store→Register→Complete） | ✅ 完整 | `GenerateStep`（DELIMITED/JSON/EXCEL/FIXED_WIDTH）、`StoreStep`（.part→校验→晋升→删临时）、`MinioExportStorage` |
 | Dispatch Worker（API/SFTP/EMAIL/NAS/OSS/LOCAL + 熔断/健康/回执轮询） | ✅ 完整 | `DispatchChannelGateway`、`DispatchChannelCircuitBreaker`、`DispatchChannelHealthService`、`DispatchReceiptPollScheduler` |
-| 补偿/重试/死信/重放/审批工作流 | ✅ 完整 | `DefaultCompensationService`（STEP 级重跑）、`DefaultRetryGovernanceService`、`ApprovalWorkflowService` |
+| 补偿/重试/死信/重放/审批工作流 | ✅ 完整 | `DefaultCompensationService`（STEP 级重跑）、`DefaultRetryGovernanceService`（含 `reclaimTask`）、`ApprovalWorkflowService` |
+| 全局幂等层 | ✅ 完整 | `DatabaseIdempotencyGuard`（V38 `idempotency_record`）：executeOnce / isAlreadyExecuted |
+| 路径遍历防护 | ✅ 完整 | `PathSanitizer`（null/blank/`..`/沙箱逃逸四类校验）；SFTP StrictHostKeyChecking 默认 yes |
+| 死信队列发布 | ✅ 完整 | `DeadLetterPublisher`（`batch.task.dead-letter`，异常静默吞噬，错误截断至 2000 字符） |
 | 多租户/安全/配置发布/密钥版本 | ✅ 完整 | `ConsoleTenantGuard`、`ConfigReleaseMapper`、`SecretVersionMapper`、V17 Flyway（文件模板安全开关） |
 | AI 提示词网关（分类/脱敏/审计日志） | ✅ 完整 | `ConsoleAiPromptGuard`（REJECTED_DISABLED/SAFETY/SCOPE/APPROVED）、`DefaultConsoleAiAuditService` |
 | SLA & 文件治理定时检查 + 告警落库 | ✅ 完整 | `JobSlaScheduler`、`FileGovernanceScheduler`、V18 Flyway（`batch.alert_event`） |
@@ -38,8 +42,8 @@
 | 连接池角色隔离 | ✅ 完整 | `BusinessDataSourceConfiguration` 改造为 `HikariConfig @ConfigurationProperties`；各模块按角色定容（orchestrator platform=10；import biz=15；export biz=20；dispatch platform=10） |
 | 临时文件兜底清理 | ✅ 完整 | `StaleTempFileCleanup`（ApplicationReadyEvent，清 `batch-*` 超 6h 孤儿文件） |
 | 调度快照与控制台代理 | ✅ 完整 | `TenantSchedulerSnapshotService`、`ConsoleSchedulerSnapshotController` |
-| 默认运行参数目录 | ✅ 完整 | V23 Flyway（`batch.batch_runtime_default_parameter`）、`runtime-default-parameters.md` |
-| Flyway 完整迁移序列（V1–V23） | ✅ 完整 | 无重复版本号，V20/V21/V22 已在第 22 轮重编号修正 |
+| 默认运行参数目录 | ✅ 完整 | V24 Flyway（`batch.batch_runtime_default_parameter`）、`runtime-default-parameters.md` |
+| Flyway 完整迁移序列（V1–V40，跳过 V31） | ✅ 完整 | 无重复版本号；V27–V40 新增：ShedLock、批处理日、乐观锁版本、控制台账户、幂等记录表、多个 CHECK 约束扩展 |
 | 测试体系（单元 + 集成 + Testcontainers） | ✅ 本次补全 | 见下文测试覆盖章节 |
 
 ---
@@ -204,15 +208,18 @@
 核心业务链路（调度主链、DAG、文件处理三链路、安全治理）已全部落地且编译通过。
 对话_5（12 轮）完成：Worker 循环模板、Stage 异常契约、Outbox E2E、SQL 原子保护、三链路失败 E2E、多租户并发 E2E、HTTP 韧性、SQL CI 守卫、配置基线模块化、ADR 体系、产物验收 Verifier 框架 + Micrometer 指标。
 2026-03-26 完成：可扩展性 & 高可用 6 项改造（乐观锁 / Kafka 并发 / 连接池隔离 / 优雅关闭 / 背压 / 临时文件清理）。
-**当前测试体系（截至 2026-03-27）**：**67 单元** + **35 集成** + **13 E2E**。统一回归入口 `scripts/ci/run-full-regression.sh` 与 deploy smoke 已落地；live rollout / readiness 仍需真实 staging kube context 实跑留档。覆盖率口径待下一轮 JaCoCo / coverage 报告回填。
+**当前测试体系（截至 2026-04-08）**：**146 单元** + **59 集成** + **30 E2E**，共 247 个测试文件。统一回归入口 `scripts/ci/run-full-regression.sh` 与 deploy smoke 已落地；live rollout / readiness 仍需真实 staging kube context 实跑留档。覆盖率口径待下一轮 JaCoCo / coverage 报告回填。
 
-**未完成项（截至 2026-03-27）**：
+**未完成项（截至 2026-04-08）**：
 
 | 优先级 | 项目 |
 |---|---|
 | 🟡 上线前补全 | 压测容量基线数据（脚本已有，需在 staging 环境实测并填写基线记录表） |
 | 🟢 已完成 | Helm Chart / K8s 生产清单（`helm/batch-platform/` + `helm/values-prod.yaml`） |
 | 🟢 已完成 | 可扩展性 & 高可用 6 项改造（详见 `scalability-ha-assessment.md`） |
+| 🟢 已完成 | ELK / OpenTelemetry 生产侧采集管道（OTEL Collector + Jaeger + Loki） |
+| 🟢 已完成 | 安全/竞态/幂等全量修复（C-1~C-8、H-1~H-10、D-1~D-4） |
+| 🟢 已完成 | 审批台账产品化（批量审批、SLA 告警、运营视图） |
+| 🟢 已完成 | SFTP/EMAIL/HTTP/OSS/NAS 渠道主动健康探测 |
 | ⚪ 按需推进 | Quartz JDBC 集群模式（彻底消除触发器重复规划，`QRTZ_*` 表已存在） |
 | ⚪ 按需推进 | Kafka lag 驱动 HPA（KEDA 或自定义 metrics，比 CPU 更精准） |
-| 🟢 已完成 | ELK / OpenTelemetry 生产侧采集管道（OTEL Collector + Jaeger + Loki） |

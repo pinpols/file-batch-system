@@ -127,18 +127,24 @@ public class SqlTemplateExportSqlValidator {
 
     /**
      * 通过 TablesNamesFinder 收集所有表名（可能含 "schema.table"），验证每个 schema 均在白名单内。
+     *
+     * <p>当 {@code allowedSchemas} 非空时，所有表名必须携带 schema 前缀（{@code schema.table}
+     * 格式）；无前缀的表名一律拒绝，以防止绕过白名单访问系统内部表。
      */
     private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
         List<String> tableNames = new TablesNamesFinder().getTableList(statement);
         for (String name : tableNames) {
             int dot = name.indexOf('.');
-            if (dot > 0) {
-                String schema = name.substring(0, dot).toLowerCase();
-                if (!allowedSchemas.contains(schema)) {
-                    throw new IllegalArgumentException(
-                            "sql_template_export references disallowed schema '" + schema
-                            + "' — allowed: " + allowedSchemas);
-                }
+            if (dot <= 0) {
+                throw new IllegalArgumentException(
+                        "sql_template_export requires fully-qualified table names (schema.table),"
+                        + " but found unqualified name: '" + name + "'");
+            }
+            String schema = name.substring(0, dot).toLowerCase();
+            if (!allowedSchemas.contains(schema)) {
+                throw new IllegalArgumentException(
+                        "sql_template_export references disallowed schema '" + schema
+                        + "' — allowed: " + allowedSchemas);
             }
         }
     }

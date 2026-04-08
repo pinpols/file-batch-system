@@ -4,8 +4,10 @@ import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.console.support.ConsoleAuthenticationFilter;
+import com.example.batch.console.support.ConsoleRateLimitFilter;
 import com.example.batch.console.support.ConsoleSecurityResponseWriter;
 import com.example.batch.console.support.ConsoleSecurityHeadersWriter;
+import com.example.batch.console.support.SlidingWindowRateLimiter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,8 +29,16 @@ public class ConsoleSecurityConfiguration {
     private final BatchSecurityProperties batchSecurityProperties;
 
     @Bean
+    public ConsoleRateLimitFilter consoleRateLimitFilter(SlidingWindowRateLimiter rateLimiter,
+                                                         ConsoleRateLimitProperties rateLimitProperties,
+                                                         ConsoleSecurityResponseWriter responseWriter) {
+        return new ConsoleRateLimitFilter(rateLimiter, rateLimitProperties, responseWriter);
+    }
+
+    @Bean
     public SecurityFilterChain consoleSecurityFilterChain(HttpSecurity http,
                                                          ConsoleAuthenticationFilter consoleAuthenticationFilter,
+                                                         ConsoleRateLimitFilter consoleRateLimitFilter,
                                                          ConsoleSecurityResponseWriter responseWriter,
                                                          ConsoleSecurityHeadersWriter securityHeadersWriter) throws Exception {
         return http
@@ -44,7 +54,8 @@ public class ConsoleSecurityConfiguration {
                         .requestMatchers("/api/console/auth/login", "/console-login.html", "/favicon.ico").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(consoleAuthenticationFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(consoleRateLimitFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(consoleAuthenticationFilter, ConsoleRateLimitFilter.class)
                 .build();
     }
 

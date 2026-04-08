@@ -102,7 +102,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 
 ## 4. 数据库 Schema 基线
 
-**当前版本**：Flyway V26（`batch-orchestrator/src/main/resources/db/migration/`）
+**当前版本**：Flyway V40（`batch-orchestrator/src/main/resources/db/migration/`，跳过 V31）
 
 | 版本 | 内容摘要 | 核心表 |
 |------|---------|-------|
@@ -131,6 +131,19 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | V24 | 配额运行时状态 | quota_runtime_state |
 | V25 | 渠道健康 | file_channel_health |
 | V26 | 审批命令 | approval_command, approval_command_detail |
+| V27 | 审批工作流 | approval_command 扩展字段 |
+| V28 | 节点类型扩展 | workflow_node job_node_type 字段 |
+| V29 | 文件模板插件引用 | file_template_config plugin_ref 字段 |
+| V30 | ShedLock 表 | shedlock |
+| V32 | 批处理日支持 | batch_day, batch_day_calendar 等 |
+| V33 | 乐观锁版本字段 | job_instance / job_partition / job_task version 字段 |
+| V34 | 控制台用户账户 | console_user_account |
+| V35 | 控制台用户密码 Argon2id | console_user_account password_hash 算法升级 |
+| V36 | job_task type CHECK 扩展 | 增加新 task_type 枚举值 |
+| V37 | trigger_request dedup 约束修复 | 唯一约束重建 |
+| V38 | 幂等记录表 | idempotency_record（`DatabaseIdempotencyGuard` 使用） |
+| V39 | trigger_request status CHECK 扩展 | 增加 PENDING / PROCESSING 状态 |
+| V40 | job_execution_log type CHECK 扩展 | 增加 COMPENSATION 类型 |
 
 **关键唯一约束**（由 `SqlConsistencyIT` 持续守卫）：
 

@@ -8,7 +8,24 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class OutboxProperties {
 
     private int batchSize = 100;
+
+    /**
+     * 最大轮询间隔（空闲时退避上限），单位毫秒。
+     * 同时保留原配置键 {@code batch.outbox.poll-interval-millis} 的语义，向后兼容。
+     */
     private long pollIntervalMillis = 5000L;
+
+    /**
+     * 最小轮询间隔（积压时加速下限），单位毫秒。
+     * 当上一轮有任何事件被处理时，立即以此间隔调度下一轮。
+     */
+    private long minPollIntervalMillis = 200L;
+
+    /**
+     * 空闲退避系数：连续空闲时，每轮间隔乘以此系数，直至达到 {@link #pollIntervalMillis}。
+     */
+    private double backoffMultiplier = 1.5;
+
     private long retryDelaySeconds = 60L;
     private int maxRetryAttempts = 5;
     private String producerName = "batch-orchestrator";
