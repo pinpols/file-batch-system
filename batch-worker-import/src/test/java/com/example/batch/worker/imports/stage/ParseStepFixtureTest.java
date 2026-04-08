@@ -26,9 +26,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Fixture-based tests for {@link ParseStep} — verifies all upstream file formats
- * that the import pipeline must handle: CSV (comma / pipe / tab), XML, JSON (array
- * and envelope), FIXED_WIDTH, EXCEL, and charset variants (UTF-8 BOM).
+ * 基于 fixture 的 {@link ParseStep} 测试 — 验证导入管道必须处理的所有上游文件格式：
+ * CSV（逗号 / 竖线 / 制表符）、XML、JSON（数组和信封）、FIXED_WIDTH、EXCEL
+ * 以及字符集变体（UTF-8 BOM）。
  */
 class ParseStepFixtureTest {
 
@@ -115,15 +115,15 @@ class ParseStepFixtureTest {
 
     @Test
     void shouldParseCsvWithUtf8Bom() throws Exception {
-        // Read raw bytes and verify BOM is present in fixture
+        // 读取原始字节并验证 fixture 中包含 BOM
         byte[] raw = loadFixtureBytes("fixtures/import-customers-utf8bom.csv");
         assertThat(raw[0] & 0xFF).isEqualTo(0xEF);
         assertThat(raw[1] & 0xFF).isEqualTo(0xBB);
         assertThat(raw[2] & 0xFF).isEqualTo(0xBF);
 
-        // ParseStep receives String content; BOM should be stripped by charset detection
+        // ParseStep 接收 String 内容；BOM 应由字符集检测阶段剥离
         String content = new String(raw, StandardCharsets.UTF_8);
-        // Strip BOM manually as PreprocessStep / charset transcoder would do
+        // 手动剥离 BOM，模拟 PreprocessStep / 字符集转码器的行为
         if (content.startsWith("\uFEFF")) {
             content = content.substring(1);
         }
@@ -157,7 +157,7 @@ class ParseStepFixtureTest {
                         "openDate", "2021-06-01", "remark", "企业客户")
         ));
 
-        // Excel content delivered as base64
+        // Excel 内容以 base64 形式传递
         String contentBase64 = Base64.getEncoder().encodeToString(xlsx);
         ImportJobContext ctx = buildContextBase64(contentBase64, "EXCEL", 1);
 
@@ -171,13 +171,13 @@ class ParseStepFixtureTest {
 
     @Test
     void shouldParseBadRecordsCsv_countAllRows() throws Exception {
-        // ParseStep counts all parsed rows; validation is deferred to ValidateStep
+        // ParseStep 统计所有已解析行数；校验推迟到 ValidateStep
         String content = loadFixture("fixtures/import-customers-bad-records.csv");
         ImportJobContext ctx = buildContext(content, "DELIMITED", ",", 1, null);
 
         ImportStageResult result = parseStep.execute(ctx);
 
-        // ParseStep writes every line including bad-record lines (10 total minus 1 header)
+        // ParseStep 写入每一行（包括坏记录行）（共 10 行减 1 行表头）
         assertThat(result.success()).isTrue();
         assertThat(ctx.getAttributes().get("totalCount")).isEqualTo(10L);
     }
@@ -219,7 +219,7 @@ class ParseStepFixtureTest {
         attrs.put(PipelineRuntimeKeys.FILE_ID, 99L);
         attrs.put(PipelineRuntimeKeys.TASK_ID, 999L);
         attrs.put("importPayload", importPayload);
-        // Enables preserveLogicalRow so rows are written as maps (fixtures need not match CustomerImportPayload).
+        // 启用 preserveLogicalRow，使行以 map 形式写入（fixture 无需匹配 CustomerImportPayload）。
         attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, Map.of("jdbc_mapped_import", Map.of()));
         context.setAttributes(attrs);
         return context;

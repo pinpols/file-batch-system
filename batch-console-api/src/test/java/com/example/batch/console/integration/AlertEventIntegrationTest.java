@@ -17,7 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: alert_event table persistence and query via AlertEventMapper.
+ * 集成测试：alert_event 表通过 AlertEventMapper 的持久化与查询验证。
  */
 @SpringBootTest(
         classes = BatchConsoleApiApplication.class,

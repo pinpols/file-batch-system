@@ -11,6 +11,9 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
+/**
+ * 分发任务 Kafka 消费者，接收并处理分发类型的任务消息。
+ */
 @Service
 public class DispatchTaskConsumer extends AbstractTaskConsumer {
 

@@ -4,9 +4,9 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
 /**
- * Aggregate-root placeholder for Spring Data JDBC query-only repositories.
- * Dashboard/meta SQL targets multiple tables; this type exists only to satisfy
- * {@link org.springframework.data.repository.Repository} typing.
+ * Spring Data JDBC 仅查询仓储的聚合根占位类。
+ * 仪表盘/元数据 SQL 涉及多张表；此类型仅用于满足
+ * {@link org.springframework.data.repository.Repository} 的类型约束。
  */
 @Table(schema = "batch", name = "job_instance")
 public final class ConsoleJdbcQueryAnchor {

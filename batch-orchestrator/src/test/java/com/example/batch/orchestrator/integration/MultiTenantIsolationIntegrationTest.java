@@ -22,9 +22,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 
 /**
- * Integration test: multi-tenant data isolation.
- * Verifies that tenant t1 job instances and outbox events are not visible to tenant t2 queries,
- * and that cross-tenant seed data (t2/t3) is loaded and accessible independently.
+ * 集成测试：多租户数据隔离。
+ * 验证租户 t1 的 job instance 和 outbox event 对租户 t2 的查询不可见，
+ * 且跨租户种子数据（t2/t3）各自独立加载和访问。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
@@ -115,7 +115,7 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
         assertThat(t2Policies).isGreaterThanOrEqualTo(1L);
         assertThat(t3Policies).isGreaterThanOrEqualTo(1L);
 
-        // Verify quota limits differ per tenant
+        // 验证不同租户的配额限制不同
         Map<String, Object> t2Policy = jdbcTemplate.queryForMap(
                 "select max_running_jobs_per_tenant, quota_reset_policy from batch.tenant_quota_policy "
                         + "where tenant_id = 't2' and policy_code = 'DEFAULT' order by id desc limit 1");

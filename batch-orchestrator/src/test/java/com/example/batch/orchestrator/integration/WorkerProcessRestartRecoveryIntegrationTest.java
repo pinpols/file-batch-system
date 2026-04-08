@@ -54,8 +54,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
                 "batch.outbox.poll-interval-millis=600000",
                 "batch.retry.poll-interval-millis=600000",
                 "batch.partition-lease.reclaim-interval-millis=600000",
-                // Must stay short: if launch races before worker registry is visible, WaitingPartitionDispatchScheduler
-                // is the only path that writes the dispatch outbox for CREATED/WAITING tasks.
+                // 必须保持较短间隔：如果 launch 在 Worker 注册表可见之前就已执行，WaitingPartitionDispatchScheduler
+                // 是唯一为 CREATED/WAITING 任务写入派发 outbox 的路径。
                 "batch.resource-scheduler.waiting-dispatch-interval-millis=500",
                 "batch.resource-scheduler.quota-reset-scan-interval-millis=600000",
                 "batch.scheduler.snapshot-persist-enabled=false"

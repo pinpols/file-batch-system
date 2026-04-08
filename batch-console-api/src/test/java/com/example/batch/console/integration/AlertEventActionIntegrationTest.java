@@ -21,7 +21,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: alert event actions update status through the alert application service.
+ * 集成测试：告警事件操作通过告警应用服务更新状态。
  */
 @SpringBootTest(
         classes = BatchConsoleApiApplication.class,

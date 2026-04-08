@@ -3,10 +3,10 @@ package com.example.batch.worker.core.infrastructure;
 import com.example.batch.common.context.RunModeSupport;
 
 /**
- * Shared runtime attribute keys for worker-side pipeline execution.
+ * Worker 侧 pipeline 执行的共享运行时属性键。
  *
- * <p>Keep these keys aligned with {@code docs/architecture/core-model.md} and
- * avoid introducing module-local synonyms for the same runtime concept.
+ * <p>请保持这些键与 {@code docs/architecture/core-model.md} 一致，
+ * 避免为相同的运行时概念引入模块内的同义别名。
  */
 public final class PipelineRuntimeKeys {
 
@@ -14,12 +14,12 @@ public final class PipelineRuntimeKeys {
     public static final String TRACE_ID = "traceId";
     public static final String RUN_MODE = RunModeSupport.RUN_MODE;
     /**
-     * Legacy alias kept for compatibility with older payload maps.
+     * 为兼容旧版 payload map 保留的历史别名。
      */
     public static final String LEGACY_RUN_MODE = RunModeSupport.LEGACY_RUN_MODE;
     public static final String JOB_CODE = "jobCode";
     /**
-     * Legacy alias kept for compatibility with older worker contexts.
+     * 为兼容旧版 worker 上下文保留的历史别名。
      */
     public static final String PIPELINE_CODE = JOB_CODE;
     public static final String PIPELINE_DEFINITION_ID = "pipelineDefinitionId";

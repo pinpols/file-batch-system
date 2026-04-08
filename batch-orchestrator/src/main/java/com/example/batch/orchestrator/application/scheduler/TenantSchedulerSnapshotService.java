@@ -41,8 +41,19 @@ public class TenantSchedulerSnapshotService {
             return new SchedulerSnapshotResponse(Instant.now(), tenantId, List.of(), List.of(), List.of());
         }
         long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(tenantId);
-        long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(tenantId, PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
+        long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(tenantId,
+                PartitionStatus.WAITING.code(), PartitionStatus.READY.code(),
+                PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
 
+        List<SchedulerSnapshotResponse.PolicySnapshot> policies = buildQuotaSnapshot(tenantId, tenantActiveJobs, tenantActivePartitions);
+        List<SchedulerSnapshotResponse.QueueSnapshot> queues = buildQueueSnapshot(tenantId);
+        List<SchedulerSnapshotResponse.WorkerLoadSnapshot> workers = buildInstanceSnapshot(tenantId);
+        return new SchedulerSnapshotResponse(Instant.now(), tenantId, policies, queues, workers);
+    }
+
+    private List<SchedulerSnapshotResponse.PolicySnapshot> buildQuotaSnapshot(String tenantId,
+                                                                              long tenantActiveJobs,
+                                                                              long tenantActivePartitions) {
         List<SchedulerSnapshotResponse.PolicySnapshot> policies = new ArrayList<>();
         List<TenantQuotaPolicyRecord> quotaRows = tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
         for (TenantQuotaPolicyRecord p : quotaRows) {
@@ -86,7 +97,10 @@ public class TenantSchedulerSnapshotService {
                     effParts
             ));
         }
+        return policies;
+    }
 
+    private List<SchedulerSnapshotResponse.QueueSnapshot> buildQueueSnapshot(String tenantId) {
         List<SchedulerSnapshotResponse.QueueSnapshot> queues = new ArrayList<>();
         for (ResourceQueueRecord q : resourceQueueRepository.findByTenantIdAndEnabled(tenantId, true)) {
             long qj = jobInstanceMapper.countActiveByTenantAndQueueCode(tenantId, q.queueCode());
@@ -119,7 +133,10 @@ public class TenantSchedulerSnapshotService {
                     qj
             ));
         }
+        return queues;
+    }
 
+    private List<SchedulerSnapshotResponse.WorkerLoadSnapshot> buildInstanceSnapshot(String tenantId) {
         List<WorkerRegistryRecord> workers = workerRegistryRepository.findByTenantIdAndStatus(
                 tenantId,
                 WorkerRegistryStatus.ONLINE.code()
@@ -134,7 +151,7 @@ public class TenantSchedulerSnapshotService {
                     w.status()
             ));
         }
-        return new SchedulerSnapshotResponse(Instant.now(), tenantId, policies, queues, wl);
+        return wl;
     }
 
     public List<TenantSchedulerSnapshotRecord> history(String tenantId, int limit) {

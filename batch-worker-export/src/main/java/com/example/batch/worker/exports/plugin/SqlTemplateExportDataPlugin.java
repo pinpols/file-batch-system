@@ -148,6 +148,14 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
         }
     }
 
+    /**
+     * 将基础 SQL 包装为 keyset 分页查询（CTE + WHERE cursor > :__cursor + LIMIT :__limit）。
+     *
+     * @param baseSql      原始 SELECT SQL
+     * @param cursorColumn 游标列名
+     * @param hasCursor    是否携带游标（非首页时为 true）
+     * @return 分页 SQL 字符串
+     */
     static String buildPagedSql(String baseSql, String cursorColumn, boolean hasCursor) {
         String cursorIdent = "\"" + cursorColumn + "\"";
         String whereClause = hasCursor ? "WHERE base.%s > :__cursor%n".formatted(cursorIdent) : "";

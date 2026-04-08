@@ -85,7 +85,7 @@ class ActiveTaskLeaseRegistryTest {
         ExecutorService pool = Executors.newSingleThreadExecutor();
         Future<?> f = pool.submit(() -> registry.awaitDrain(Duration.ofSeconds(2)));
 
-        // simulate in-flight completion
+        // 模拟进行中任务完成
         Thread.sleep(200);
         registry.remove("task-1");
 

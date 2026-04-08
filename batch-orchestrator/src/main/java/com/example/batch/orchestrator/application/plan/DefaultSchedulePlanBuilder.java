@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
     private final OrchestratorConfigCacheService configCacheService;
-    /** Ordered chain of resolvers; first positive result wins. Injected by Spring via @Order. */
+    /** 有序的解析器链；第一个返回正值的结果胜出。由 Spring 通过 @Order 注入。 */
     private final List<PartitionCountResolver> dynamicResolvers;
 
     @Override
@@ -98,16 +98,16 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     }
 
     /**
-     * Chains all injected {@link PartitionCountResolver} strategies (ordered by {@code @Order}).
+     * 串联所有注入的 {@link PartitionCountResolver} 策略（按 {@code @Order} 排序）。
      *
-     * <p>Resolution steps (first positive result wins):
+     * <p>解析步骤（第一个返回正值的结果胜出）：
      * <ol>
-     *   <li>{@link ExplicitPartitionCountResolver} — caller-supplied override</li>
-     *   <li>{@link SizeBasedPartitionCountResolver} — item/byte volume ÷ target-per-partition</li>
-     *   <li>{@link RuntimeBasedPartitionCountResolver} — historical duration ÷ target duration</li>
-     *   <li>{@link WorkerBasedPartitionCountResolver} — online workers × partition factor</li>
+     *   <li>{@link ExplicitPartitionCountResolver} — 调用方显式指定的覆盖值</li>
+     *   <li>{@link SizeBasedPartitionCountResolver} — 数据量（条数/字节） ÷ 每分区目标量</li>
+     *   <li>{@link RuntimeBasedPartitionCountResolver} — 历史执行时长 ÷ 目标时长</li>
+     *   <li>{@link WorkerBasedPartitionCountResolver} — 在线 Worker 数 × 分区因子</li>
      * </ol>
-     * Falls back to {@code 1} when all resolvers return {@code 0}.
+     * 当所有解析器均返回 {@code 0} 时，回退为 {@code 1}。
      */
     private int resolveDynamicPartitionCount(JobDefinitionRecord jobDefinition,
                                              Map<String, Object> params,

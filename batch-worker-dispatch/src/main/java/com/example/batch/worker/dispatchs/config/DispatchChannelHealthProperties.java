@@ -5,6 +5,9 @@ import java.util.List;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * 分发渠道健康探针配置属性。
+ */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.dispatch.health")
 public class DispatchChannelHealthProperties {

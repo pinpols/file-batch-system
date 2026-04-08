@@ -37,7 +37,7 @@ class ParseStepStreamingTest {
         runtimeRepository = mock(PlatformFileRuntimeRepository.class);
         recordGovernanceService = mock(ImportRecordGovernanceService.class);
         when(runtimeRepository.toLong(any())).thenReturn(1L);
-        // updateFileStatus returns void — Mockito mocks do nothing by default
+        // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
         when(recordGovernanceService.withinThreshold(any())).thenReturn(true);
         when(recordGovernanceService.isSkippable(any())).thenReturn(false);
 
@@ -85,7 +85,7 @@ class ParseStepStreamingTest {
         String json = "{\"records\":[]}";
 
         ImportJobContext context = buildContext(json, "JSON");
-        // ParseStep returns failure "IMPORT_PARSE_EMPTY" when totalCount==0
+        // 当 totalCount==0 时，ParseStep 返回失败 "IMPORT_PARSE_EMPTY"
         ImportStageResult result = parseStep.execute(context);
 
         assertThat(result.success()).isFalse();
@@ -94,8 +94,8 @@ class ParseStepStreamingTest {
 
     @Test
     void shouldHandleLargeRecordsEnvelope_streaming() {
-        // 500 records in a {"records":[...]} envelope — verifies the streaming path
-        // handles bulk data without StackOverflow or excessive GC
+        // 500 条记录包装在 {"records":[...]} 信封中 — 验证流式路径
+        // 可处理大量数据而不会导致 StackOverflow 或过度 GC
         int count = 500;
         String records = IntStream.rangeClosed(1, count)
                 .mapToObj(i -> "{\"customerNo\":\"C" + i + "\",\"customerName\":\"Name" + i + "\"}")
@@ -114,7 +114,7 @@ class ParseStepStreamingTest {
 
     @Test
     void shouldReturnEmpty_forJsonObjectWithoutRecordsField() {
-        // A plain JSON object without "records" field → treated as 1 record
+        // 不含 "records" 字段的普通 JSON 对象 → 视为 1 条记录
         String json = "{\"batchId\":\"B001\",\"totalAmount\":100}";
 
         ImportJobContext context = buildContext(json, "JSON");
@@ -168,7 +168,7 @@ class ParseStepStreamingTest {
         return context;
     }
 
-    /** Reads the NDJSON staging file and counts non-blank lines. */
+    /** 读取 NDJSON 暂存文件并统计非空行数。 */
     private void assertNdjsonRecordCount(ImportJobContext context, int expected) {
         Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
         if (path == null) {

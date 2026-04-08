@@ -7,7 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * Routes to {@link DispatchChannelAdapter} by {@code channel_type}; applies per-channel circuit breaker and metrics.
+ * 根据 {@code channel_type} 将分发请求路由到对应的 {@link DispatchChannelAdapter}，
+ * 并统一应用渠道级熔断器和指标采集。
  * <ul>
  *   <li>{@code API} / {@code API_PUSH} — {@link HttpDispatchChannelAdapter}</li>
  *   <li>{@code LOCAL} — {@link LocalDispatchChannelAdapter}</li>

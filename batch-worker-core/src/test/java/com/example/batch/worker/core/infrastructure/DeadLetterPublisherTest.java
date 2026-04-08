@@ -50,7 +50,7 @@ class DeadLetterPublisherTest {
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(kafkaTemplate).send(anyString(), captor.capture());
-        // truncated message should not contain the full 3000 chars
+        // 截断后的消息不应包含完整的 3000 个字符
         assertThat(captor.getValue().length()).isLessThan(4000);
     }
 

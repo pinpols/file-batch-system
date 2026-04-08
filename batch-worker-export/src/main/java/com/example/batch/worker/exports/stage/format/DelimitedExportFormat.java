@@ -12,10 +12,9 @@ import java.util.StringJoiner;
 import org.springframework.stereotype.Component;
 
 /**
- * Generates a delimited flat-file (CSV / TSV / custom delimiter) with optional quoting and escaping.
+ * 生成分隔符平面文件（CSV / TSV / 自定义分隔符），支持可选的引号和转义策略。
  *
- * <p>Column layout and format configuration are resolved from the template config;
- * header rows are written before data rows.
+ * <p>列布局和格式参数从模板配置中解析；表头行在数据行之前写入。
  */
 @Component
 public class DelimitedExportFormat extends AbstractExportFormat {

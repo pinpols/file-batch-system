@@ -23,8 +23,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 /**
- * Shared file governance implementation. Concrete @Scheduled wrappers delegate here so each job can
- * evolve independently without coupling unrelated scans into a single scheduler bean.
+ * 共享文件治理实现。具体的 @Scheduled 包装类委托到此处，
+ * 使每个任务可以独立演进，避免将无关的扫描耦合到同一个调度器 Bean 中。
  */
 public class FileGovernanceScheduler {
 

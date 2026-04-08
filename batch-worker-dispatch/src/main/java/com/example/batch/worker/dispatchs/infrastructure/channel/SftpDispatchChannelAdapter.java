@@ -13,12 +13,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * SFTP upload of the file referenced by {@code file_record} to {@code sftp_remote_directory}.
+ * SFTP 渠道分发适配器，将 {@code file_record} 引用的文件上传到 {@code sftp_remote_directory}。
  *
- * <p>Channel config keys:
+ * <p>渠道配置关键字：
  * <ul>
- *   <li>{@code sftp_strict_host_key_checking} — "yes" (default, secure) or "no" (insecure, MITM risk)</li>
- *   <li>{@code sftp_known_hosts_path} — path to known_hosts file when strict checking is enabled</li>
+ *   <li>{@code sftp_strict_host_key_checking} — "yes"（默认，安全）或 "no"（不安全，存在中间人攻击风险）</li>
+ *   <li>{@code sftp_known_hosts_path} — 启用严格主机密钥检查时的 known_hosts 文件路径</li>
  * </ul>
  */
 @Slf4j
@@ -33,35 +33,28 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
         return channelType != null && "SFTP".equalsIgnoreCase(channelType);
     }
 
+    private record ConnectionConfig(String host, int port, String user, String password) {}
+
+    private record RemoteTarget(String remoteDir, String remoteName) {
+        String remotePath() {
+            return remoteDir + remoteName;
+        }
+    }
+
     @Override
     public DispatchResult dispatch(DispatchCommand command) {
         Map<String, Object> channelConfig = command.channelConfig();
-        String host = stringProp(channelConfig, "sftp_host");
-        if (!StringUtils.hasText(host)) {
-            return new DispatchResult(false, null, null, false, false, "sftp_host missing", null);
-        }
-        int port = intProp(channelConfig, "sftp_port", 22);
-        String user = stringProp(channelConfig, "sftp_user");
-        String password = stringProp(channelConfig, "sftp_password");
-        if (!StringUtils.hasText(user) || !StringUtils.hasText(password)) {
+
+        ConnectionConfig connConfig = resolveConnectionConfig(channelConfig);
+        if (connConfig == null) {
+            String host = stringProp(channelConfig, "sftp_host");
+            if (!StringUtils.hasText(host)) {
+                return new DispatchResult(false, null, null, false, false, "sftp_host missing", null);
+            }
             return new DispatchResult(false, null, null, false, false, "sftp_user/sftp_password missing", null);
         }
-        String remoteDir = stringProp(channelConfig, "sftp_remote_directory");
-        if (!StringUtils.hasText(remoteDir)) {
-            remoteDir = "/";
-        }
-        if (!remoteDir.endsWith("/")) {
-            remoteDir = remoteDir + "/";
-        }
-        Map<String, Object> fileRecord = command.fileRecord();
-        String remoteName = stringProp(channelConfig, "sftp_remote_file_name");
-        if (!StringUtils.hasText(remoteName)) {
-            remoteName = firstNonBlank(
-                    String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
-                    String.valueOf(fileRecord.getOrDefault("file_name", "file.bin"))
-            );
-        }
-        remoteName = sanitizeFileName(remoteName);
+
+        RemoteTarget remoteTarget = resolveRemoteTarget(channelConfig, command.fileRecord());
 
         String receiptPolicy = String.valueOf(channelConfig.getOrDefault("receipt_policy", "SYNC"));
         String externalRequestId = command.payload().externalRequestId() != null && !command.payload().externalRequestId().isBlank()
@@ -73,6 +66,47 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
         boolean acknowledged = "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
         boolean pending = "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
 
+        return uploadViaSftp(channelConfig, connConfig, remoteTarget, command.fileRecord(),
+                externalRequestId, receiptCode, acknowledged, pending);
+    }
+
+    private ConnectionConfig resolveConnectionConfig(Map<String, Object> channelConfig) {
+        String host = stringProp(channelConfig, "sftp_host");
+        if (!StringUtils.hasText(host)) {
+            return null;
+        }
+        int port = intProp(channelConfig, "sftp_port", 22);
+        String user = stringProp(channelConfig, "sftp_user");
+        String password = stringProp(channelConfig, "sftp_password");
+        if (!StringUtils.hasText(user) || !StringUtils.hasText(password)) {
+            return null;
+        }
+        return new ConnectionConfig(host, port, user, password);
+    }
+
+    private RemoteTarget resolveRemoteTarget(Map<String, Object> channelConfig, Map<String, Object> fileRecord) {
+        String remoteDir = stringProp(channelConfig, "sftp_remote_directory");
+        if (!StringUtils.hasText(remoteDir)) {
+            remoteDir = "/";
+        }
+        if (!remoteDir.endsWith("/")) {
+            remoteDir = remoteDir + "/";
+        }
+        String remoteName = stringProp(channelConfig, "sftp_remote_file_name");
+        if (!StringUtils.hasText(remoteName)) {
+            remoteName = firstNonBlank(
+                    String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
+                    String.valueOf(fileRecord.getOrDefault("file_name", "file.bin"))
+            );
+        }
+        remoteName = sanitizeFileName(remoteName);
+        return new RemoteTarget(remoteDir, remoteName);
+    }
+
+    private DispatchResult uploadViaSftp(Map<String, Object> channelConfig, ConnectionConfig connConfig,
+                                         RemoteTarget remoteTarget, Map<String, Object> fileRecord,
+                                         String externalRequestId, String receiptCode,
+                                         boolean acknowledged, boolean pending) {
         Session session = null;
         ChannelSftp sftp = null;
         try {
@@ -81,25 +115,25 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
             String strictHostKeyChecking = stringProp(channelConfig, "sftp_strict_host_key_checking");
             boolean strictMode = !"no".equalsIgnoreCase(strictHostKeyChecking);
             if (!strictMode) {
-                log.warn("SFTP StrictHostKeyChecking disabled for host {} — susceptible to MITM attacks", host);
+                log.warn("SFTP StrictHostKeyChecking disabled for host {} — susceptible to MITM attacks", connConfig.host());
             } else {
                 String knownHostsPath = stringProp(channelConfig, "sftp_known_hosts_path");
                 if (StringUtils.hasText(knownHostsPath)) {
                     jsch.setKnownHosts(knownHostsPath);
                 }
             }
-            session = jsch.getSession(user, host, port);
+            session = jsch.getSession(connConfig.user(), connConfig.host(), connConfig.port());
             // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
-            session.setPassword(password);
+            session.setPassword(connConfig.password());
             session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");
             session.connect(30_000);
             sftp = (ChannelSftp) session.openChannel("sftp");
             sftp.connect(30_000);
-            String remotePath = remoteDir + remoteName;
+            String remotePath = remoteTarget.remotePath();
             try (InputStream in = fileContentResolver.openInputStream(fileRecord)) {
                 sftp.put(in, remotePath, ChannelSftp.OVERWRITE);
             }
-            String evidence = "sftp://" + host + remotePath;
+            String evidence = "sftp://" + connConfig.host() + remotePath;
             return new DispatchResult(true, externalRequestId, receiptCode, acknowledged, pending, "uploaded via SFTP", evidence);
         } catch (Exception ex) {
             return new DispatchResult(false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);

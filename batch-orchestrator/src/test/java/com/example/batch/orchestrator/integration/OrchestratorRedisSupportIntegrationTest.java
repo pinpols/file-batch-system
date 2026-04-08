@@ -84,7 +84,7 @@ class OrchestratorRedisSupportIntegrationTest extends AbstractIntegrationTest {
         assertThat(second).isEqualTo(2L);
         assertThat(third).isEqualTo(3L);
 
-        // Key should have a TTL (set only on first increment)
+        // Key 应有 TTL（仅在首次递增时设置）
         String key = "ratelimit:" + tenantId.replace(':', '_') + ":export:" + window;
         assertThat(redisTemplate.getExpire(key)).isPositive();
     }

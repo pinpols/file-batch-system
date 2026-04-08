@@ -5,6 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Data;
 
+/**
+ * 分发任务执行上下文，贯穿整个 dispatch pipeline 的状态载体。
+ */
 @Data
 public class DispatchJobContext implements ExecutionContext {
 

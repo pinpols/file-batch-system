@@ -9,7 +9,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Thin MinIO test container wrapper used by integration tests.
+ * 集成测试使用的轻量 MinIO 测试容器封装。
  */
 public final class MinIOContainer extends GenericContainer<MinIOContainer> {
 

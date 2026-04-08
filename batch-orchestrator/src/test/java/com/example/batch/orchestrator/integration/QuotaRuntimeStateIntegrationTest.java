@@ -15,8 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Integration test: QuotaRuntimeStateService against real DB.
- * Covers SLIDING_WINDOW and CALENDAR_DAY reset, peak tracking, and reconcile.
+ * 集成测试：QuotaRuntimeStateService 在真实数据库上的验证。
+ * 覆盖 SLIDING_WINDOW 和 CALENDAR_DAY 重置、峰值追踪及 reconcile。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
@@ -152,7 +152,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     void shouldTrackPeakBorrowedCountForSlidingWindow() {
         String ownerCode = "sw-peak-" + System.currentTimeMillis();
 
-        // First reservation: active=8, base=5, requested=2 → borrowed=5
+        // 第一次预留：active=8, base=5, requested=2 → borrowed=5
         quotaRuntimeStateService.evaluateAndReserve(new ReservationSpec()
                 .ownerCode(ownerCode)
                 .quotaResetPolicy("SLIDING_WINDOW")
@@ -211,7 +211,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     void shouldDescribeExistingState() {
         String ownerCode = "describe-test-" + System.currentTimeMillis();
 
-        // Create state first
+        // 先创建状态
         quotaRuntimeStateService.evaluateAndReserve(new QuotaRuntimeStateService.QuotaReservationRequest(
                 new QuotaRuntimeStateService.QuotaReservationOwner("t1", "JOB", ownerCode),
                 new QuotaRuntimeStateService.QuotaReservationPolicy("SLIDING_WINDOW", 5, 10, 7),
@@ -234,7 +234,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     void shouldReconcileExpiredSlidingWindowState() {
         String ownerCode = "reconcile-sw-" + System.currentTimeMillis();
 
-        // Insert an already-expired state directly
+        // 直接插入一个已过期的状态
         QuotaRuntimeStateRecord expiredState = new QuotaRuntimeStateRecord(
                 null, "t1", "JOB", ownerCode, "SLIDING_WINDOW",
                 Instant.now().minusSeconds(7200), Instant.now().minusSeconds(3600), // expired
@@ -243,7 +243,7 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
         quotaRuntimeStateService.reconcileExpiredStates(2);
 
-        // After reconcile the peak should be reset
+        // reconcile 后峰值应被重置
         QuotaRuntimeStateRecord updated = quotaRuntimeStateRepository
                 .findFirstByTenantIdAndQuotaScopeAndOwnerCode("t1", "JOB", ownerCode);
         assertThat(updated).isNotNull();

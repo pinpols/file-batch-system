@@ -57,7 +57,7 @@ class ConsoleRealtimeReplayStoreTest {
         store.append(new ConsoleRealtimeStreamEnvelope(
                 "console-a", "t1", "alerts", "alert-updated", "cursor-1", false, JsonUtils.toJson("a"), Instant.now()));
 
-        // append() uses a single pipelined low-level callback (rPush + lTrim + expire), not opsForList()/expire()
+        // append() 使用单个管线化的低层回调（rPush + lTrim + expire），而非 opsForList()/expire()
         verify(redisTemplate).executePipelined(any(RedisCallback.class));
     }
 

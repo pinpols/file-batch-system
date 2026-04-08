@@ -87,7 +87,7 @@ class DefaultPipelineExecutorTest {
         executor.execute(context);
 
         verify(stepRegistry, times(2)).find(anyString());
-        // Both S2 (order=1) and S1 (order=2) should be executed
+        // S2（order=1）和 S1（order=2）都应被执行
         verify(stepRegistry).find("S2");
         verify(stepRegistry).find("S1");
     }
@@ -98,7 +98,7 @@ class DefaultPipelineExecutorTest {
         when(stepRegistry.find("UNKNOWN")).thenReturn(Optional.empty());
 
         ExecutionContext context = contextWithSteps(List.of(s1));
-        // Should not throw; result should be non-null
+        // 不应抛出异常；结果应非空
         PipelineExecutionResult result = executor.execute(context);
         assertThat(result).isNotNull();
     }

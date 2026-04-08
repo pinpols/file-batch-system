@@ -14,6 +14,9 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.springframework.stereotype.Component;
 
+/**
+ * HTTP/API 渠道分发适配器，支持 API 和 API_PUSH 类型渠道。
+ */
 @Component
 public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
 

@@ -19,6 +19,9 @@ import java.util.Map;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
+/**
+ * 导出 Pipeline 步骤执行适配器，将平台 step 执行请求转换为导出 stage 调用链。
+ */
 @Primary
 @Component
 public class ExportStepExecutionAdapter extends AbstractPipelineStepExecutionAdapter<ExportJobContext, ExportStageResult> {
@@ -41,7 +44,7 @@ public class ExportStepExecutionAdapter extends AbstractPipelineStepExecutionAda
 
     @Override
     protected String pipelineDescription() {
-        return "Chapter 9 export pipeline";
+        return "导出 pipeline";
     }
 
     @Override
@@ -104,7 +107,7 @@ public class ExportStepExecutionAdapter extends AbstractPipelineStepExecutionAda
                                                          List<ExportStageResult> results,
                                                          Map<String, Object> attributes) {
         String objectName = String.valueOf(context.getAttributes().getOrDefault("objectName", ""));
-        return new StepExecutionResponse(true, "SUCCESS", objectName.isBlank() ? "export stages executed" : objectName);
+        return new StepExecutionResponse(true, "SUCCESS", objectName.isBlank() ? "导出阶段执行完成" : objectName);
     }
 
     @Override

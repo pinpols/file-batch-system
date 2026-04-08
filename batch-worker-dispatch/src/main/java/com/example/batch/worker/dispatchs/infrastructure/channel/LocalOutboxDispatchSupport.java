@@ -10,8 +10,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Writes dispatch commands to a filesystem outbox directory (LOCAL and stub remote channels).
- * Stub channels match design intent: persist payload for operations; they do not speak NAS/OSS/SFTP/EMAIL protocols.
+ * 将分发命令写入文件系统 outbox 目录（LOCAL 渠道及存根远程渠道）。
+ * 存根渠道符合设计意图：持久化载荷供运维核查，但不执行真实的 NAS/OSS/SFTP/EMAIL 传输协议。
  */
 final class LocalOutboxDispatchSupport {
 

@@ -33,17 +33,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: job retry flow.
+ * 集成测试：任务重试流程。
  *
- * <p>Seeds a job definition with {@code retry_policy=FIXED} and {@code retry_max_count=1}.
- * Exercises the path:
+ * <p>初始化一个 {@code retry_policy=FIXED}、{@code retry_max_count=1} 的任务定义。
+ * 验证路径：
  * <ol>
- *   <li>Launch → task created.</li>
- *   <li>Claim → task is RUNNING.</li>
- *   <li>Report failure → {@link RetryGovernanceService#scheduleRetryIfNecessary} writes a
- *       {@code retry_schedule} row with status {@code WAITING}.</li>
- *   <li>{@link RetryGovernanceService#dispatchDueRetries} processes the due retry and re-queues
- *       the partition (writes a new outbox_event with event_type = worker type).</li>
+ *   <li>启动 → 创建任务。</li>
+ *   <li>认领 → 任务变为 RUNNING。</li>
+ *   <li>上报失败 → {@link RetryGovernanceService#scheduleRetryIfNecessary} 写入
+ *       状态为 {@code WAITING} 的 {@code retry_schedule} 行。</li>
+ *   <li>{@link RetryGovernanceService#dispatchDueRetries} 处理到期重试并重新入队
+ *       分区（写入 event_type = worker type 的新 outbox_event）。</li>
  * </ol>
  */
 @SpringBootTest(
@@ -86,7 +86,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         String dedupKey = "dedup-retry-" + suffix;
         String workerCode = "wk-retry-" + suffix;
 
-        // Seed a job definition with FIXED retry policy and max 1 retry
+        // 初始化一个 FIXED 重试策略、最多重试 1 次的任务定义
         jdbcTemplate.update(
                 """
                 insert into batch.job_definition (
@@ -149,7 +149,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         taskExecutionService.applyTaskOutcome(new TaskOutcomeCommand(
                 TENANT, task.getId(), false, null, "SIMULATED_ERROR", "retry flow test"));
 
-        // Verify a WAITING retry_schedule row was created for this partition
+        // 验证已为该分区创建了 WAITING 状态的 retry_schedule 行
         List<com.example.batch.orchestrator.domain.entity.RetryScheduleEntity> retries =
                 retryScheduleMapper.selectByQuery(new RetryScheduleQuery(
                         TENANT, RetryScheduleStatus.WAITING.code(), Instant.now().plusSeconds(3600), 100));

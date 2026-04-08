@@ -7,8 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Component;
 
 /**
- * Per-channel failure counting: after {@link DispatchCircuitBreakerProperties#getFailureThreshold()} consecutive
- * failed dispatches, short-circuit until {@link DispatchCircuitBreakerProperties#getCooldownMillis()} elapses.
+ * 按渠道维度统计失败次数：连续失败达到 {@link DispatchCircuitBreakerProperties#getFailureThreshold()} 次后，
+ * 在 {@link DispatchCircuitBreakerProperties#getCooldownMillis()} 冷却期内熔断该渠道。
  */
 @Component
 public class DispatchChannelCircuitBreaker {
@@ -54,7 +54,7 @@ public class DispatchChannelCircuitBreaker {
     }
 
     /**
-     * Count of channels currently short-circuited (cooldown not yet elapsed).
+     * 返回当前处于熔断（冷却期未结束）状态的渠道数量。
      */
     public int currentOpenCircuits() {
         Instant now = Instant.now();

@@ -11,6 +11,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 导出完成阶段：更新文件状态（GENERATED 或 DISPATCHING），并写入审计日志。
+ */
 @Component
 public class CompleteStep implements ExportStageStep {
 

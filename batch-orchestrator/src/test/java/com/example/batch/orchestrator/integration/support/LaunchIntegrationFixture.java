@@ -4,8 +4,8 @@ import com.example.batch.common.enums.TriggerType;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Seeds minimal platform rows so {@link com.example.batch.orchestrator.service.LaunchService#launch}
- * can run the schedule-plan path (no DAG edges from START → {@link com.example.batch.orchestrator.application.plan.SchedulePlanBuilder}).
+ * 初始化最小的平台数据行，使 {@link com.example.batch.orchestrator.service.LaunchService#launch}
+ * 能走调度计划路径（无从 START 出发的 DAG 边 → {@link com.example.batch.orchestrator.application.plan.SchedulePlanBuilder}）。
  */
 public final class LaunchIntegrationFixture {
 
@@ -16,7 +16,7 @@ public final class LaunchIntegrationFixture {
     }
 
     /**
-     * Inserts job + workflow + trigger + an ONLINE worker in {@code workerGroup} (matches job_definition.worker_group).
+     * 插入 job + workflow + trigger + 一个 ONLINE 状态的 Worker（在 {@code workerGroup} 中，匹配 job_definition.worker_group）。
      */
     public static LaunchSeed prepareLaunchWithWorker(JdbcTemplate jdbc,
                                                        String tenantId,
@@ -69,7 +69,7 @@ public final class LaunchIntegrationFixture {
     }
 
     /**
-     * Same as {@link #prepareLaunchWithWorker} but no worker row — for “no capacity” scheduling scenarios.
+     * 与 {@link #prepareLaunchWithWorker} 相同但不插入 Worker 行 —— 用于”无可用容量”的调度场景。
      */
     public static LaunchSeed prepareLaunchWithoutWorker(JdbcTemplate jdbc,
                                                         String tenantId,

@@ -61,84 +61,20 @@ public class ValidateStep implements ImportStageStep {
         }
         Path validatedRecordsPath = null;
         try {
-            List<String> schemaFields = stringList(context.getAttributes().get("schemaFields"));
-            long totalCount = numberValue(context.getAttributes().get("totalCount"));
-            ValidationSession session = dataQualityService.beginValidation(context, totalCount, schemaFields);
-            dataQualityService.validateDataset(session);
-            for (ValidationIssue issue : session.datasetIssues()) {
-                recordValidationError(context, issue.recordNo() == null ? 0L : issue.recordNo(), issue.errorCode(), issue.errorMessage(), issue.rawRecord());
-                if (!recordGovernanceService.withinThreshold(context)) {
-                    return failStreaming(context, validatedRecordsPath, "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
-                }
+            ValidationSession session = openValidationSession(context);
+            ImportStageResult datasetResult = processDatasetIssues(context, session, validatedRecordsPath);
+            if (datasetResult != null) {
+                return datasetResult;
             }
             validatedRecordsPath = createValidatedFile(context);
-            int chunkSize = resolveChunkSize(context);
-            long recordNo = 0L;
-            long validatedCount = 0L;
-            long loadedCandidateCount = 0L;
-            try (BufferedReader reader = Files.newBufferedReader(parsedRecordsPath, StandardCharsets.UTF_8);
-                 BufferedWriter writer = Files.newBufferedWriter(validatedRecordsPath, StandardCharsets.UTF_8,
-                         StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
-                List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
-                long chunkStartRecordNo = 1L;
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (!StringUtils.hasText(line)) {
-                        continue;
-                    }
-                    recordNo++;
-                    Map<String, Object> row;
-                    try {
-                        row = objectMapper.readValue(line, MAP_TYPE);
-                    } catch (Exception exception) {
-                        recordValidationError(context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
-                        if (!recordGovernanceService.withinThreshold(context)) {
-                            return failStreaming(context, validatedRecordsPath, "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
-                        }
-                        continue;
-                    }
-                    if (chunk.isEmpty()) {
-                        chunkStartRecordNo = recordNo;
-                    }
-                    chunk.add(row);
-                    if (chunk.size() >= chunkSize) {
-                        ChunkProcessResult result = processChunk(context, session, chunk, chunkStartRecordNo, writer);
-                        validatedCount += result.validCount();
-                        loadedCandidateCount += result.validCount();
-                        if (!result.success()) {
-                            return failStreaming(context, validatedRecordsPath, result.errorCode(), result.errorMessage());
-                        }
-                        chunk.clear();
-                    }
-                }
-                if (!chunk.isEmpty()) {
-                    ChunkProcessResult result = processChunk(context, session, chunk, chunkStartRecordNo, writer);
-                    validatedCount += result.validCount();
-                    loadedCandidateCount += result.validCount();
-                    if (!result.success()) {
-                        return failStreaming(context, validatedRecordsPath, result.errorCode(), result.errorMessage());
-                    }
-                }
+            StreamingValidationResult streamResult = processValidationBatch(context, session, parsedRecordsPath, validatedRecordsPath);
+            if (streamResult.failure() != null) {
+                return streamResult.failure();
             }
-            context.getAttributes().put(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH, validatedRecordsPath.toString());
-            context.getAttributes().put("validatedCount", validatedCount);
-            context.getAttributes().put("qualityChecks", session.appliedChecks());
-            context.getAttributes().put("customerPayloadCount", loadedCandidateCount);
+            writeValidationResult(context, session, validatedRecordsPath, streamResult.validatedCount(), streamResult.loadedCandidateCount());
             if (!recordGovernanceService.withinThreshold(context)) {
                 return failStreaming(context, validatedRecordsPath, "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
             }
-            runtimeRepository.updateFileStatus(
-                    runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
-                    "VALIDATED",
-                    Map.of(
-                            "validatedCount", validatedCount,
-                            "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
-                            "badRecordCount", badRecordCount(context),
-                            "manualReviewRequired", Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
-                            "qualityChecks", session.appliedChecks(),
-                            "validatedRecordsPath", validatedRecordsPath.toString()
-                    )
-            );
             return ImportStageResult.success(stage());
         } catch (Exception exception) {
             if (validatedRecordsPath != null) {
@@ -151,6 +87,101 @@ public class ValidateStep implements ImportStageStep {
                     exception);
             return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_FAILED", exception.getMessage());
         }
+    }
+
+    private ValidationSession openValidationSession(ImportJobContext context) {
+        List<String> schemaFields = stringList(context.getAttributes().get("schemaFields"));
+        long totalCount = numberValue(context.getAttributes().get("totalCount"));
+        ValidationSession session = dataQualityService.beginValidation(context, totalCount, schemaFields);
+        dataQualityService.validateDataset(session);
+        return session;
+    }
+
+    private ImportStageResult processDatasetIssues(ImportJobContext context, ValidationSession session, Path validatedRecordsPath) {
+        for (ValidationIssue issue : session.datasetIssues()) {
+            recordValidationError(context, issue.recordNo() == null ? 0L : issue.recordNo(), issue.errorCode(), issue.errorMessage(), issue.rawRecord());
+            if (!recordGovernanceService.withinThreshold(context)) {
+                return failStreaming(context, validatedRecordsPath, "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
+            }
+        }
+        return null;
+    }
+
+    private StreamingValidationResult processValidationBatch(ImportJobContext context, ValidationSession session, Path parsedRecordsPath, Path validatedRecordsPath) throws Exception {
+        int chunkSize = resolveChunkSize(context);
+        long recordNo = 0L;
+        long validatedCount = 0L;
+        long loadedCandidateCount = 0L;
+        try (BufferedReader reader = Files.newBufferedReader(parsedRecordsPath, StandardCharsets.UTF_8);
+             BufferedWriter writer = Files.newBufferedWriter(validatedRecordsPath, StandardCharsets.UTF_8,
+                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+            List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
+            long chunkStartRecordNo = 1L;
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!StringUtils.hasText(line)) {
+                    continue;
+                }
+                recordNo++;
+                Map<String, Object> row;
+                try {
+                    row = objectMapper.readValue(line, MAP_TYPE);
+                } catch (Exception exception) {
+                    recordValidationError(context, recordNo, "IMPORT_VALIDATE_TYPE_INVALID", exception.getMessage(), line);
+                    if (!recordGovernanceService.withinThreshold(context)) {
+                        return new StreamingValidationResult(validatedCount, loadedCandidateCount,
+                                failStreaming(context, validatedRecordsPath, "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded"));
+                    }
+                    continue;
+                }
+                if (chunk.isEmpty()) {
+                    chunkStartRecordNo = recordNo;
+                }
+                chunk.add(row);
+                if (chunk.size() >= chunkSize) {
+                    ChunkProcessResult result = processChunk(context, session, chunk, chunkStartRecordNo, writer);
+                    validatedCount += result.validCount();
+                    loadedCandidateCount += result.validCount();
+                    if (!result.success()) {
+                        return new StreamingValidationResult(validatedCount, loadedCandidateCount,
+                                failStreaming(context, validatedRecordsPath, result.errorCode(), result.errorMessage()));
+                    }
+                    chunk.clear();
+                }
+            }
+            if (!chunk.isEmpty()) {
+                ChunkProcessResult result = processChunk(context, session, chunk, chunkStartRecordNo, writer);
+                validatedCount += result.validCount();
+                loadedCandidateCount += result.validCount();
+                if (!result.success()) {
+                    return new StreamingValidationResult(validatedCount, loadedCandidateCount,
+                            failStreaming(context, validatedRecordsPath, result.errorCode(), result.errorMessage()));
+                }
+            }
+        }
+        return new StreamingValidationResult(validatedCount, loadedCandidateCount, null);
+    }
+
+    private void writeValidationResult(ImportJobContext context, ValidationSession session, Path validatedRecordsPath, long validatedCount, long loadedCandidateCount) {
+        context.getAttributes().put(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH, validatedRecordsPath.toString());
+        context.getAttributes().put("validatedCount", validatedCount);
+        context.getAttributes().put("qualityChecks", session.appliedChecks());
+        context.getAttributes().put("customerPayloadCount", loadedCandidateCount);
+        runtimeRepository.updateFileStatus(
+                runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+                "VALIDATED",
+                Map.of(
+                        "validatedCount", validatedCount,
+                        "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
+                        "badRecordCount", badRecordCount(context),
+                        "manualReviewRequired", Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
+                        "qualityChecks", session.appliedChecks(),
+                        "validatedRecordsPath", validatedRecordsPath.toString()
+                )
+        );
+    }
+
+    private record StreamingValidationResult(long validatedCount, long loadedCandidateCount, ImportStageResult failure) {
     }
 
     private ChunkProcessResult processChunk(ImportJobContext context,

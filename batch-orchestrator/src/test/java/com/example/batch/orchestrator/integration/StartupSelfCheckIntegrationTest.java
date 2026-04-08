@@ -11,16 +11,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: orchestrator startup + Flyway migration schema validation chain.
+ * 集成测试：编排器启动 + Flyway 迁移 schema 校验链路。
  *
- * <p>Verifies that after Spring context starts (which triggers Flyway migration via
- * {@link org.flywaydb.core.Flyway}) the following are all satisfied:
+ * <p>验证 Spring 上下文启动后（通过 {@link org.flywaydb.core.Flyway} 触发 Flyway 迁移），
+ * 以下条件均满足：
  * <ul>
- *   <li>{@code batch} and {@code quartz} schemas exist</li>
- *   <li>{@code batch.batch_day_instance} table exists (V31)</li>
- *   <li>{@code batch.business_calendar} columns added by V31 are present</li>
- *   <li>All Quartz tables exist in the {@code quartz} schema</li>
- *   <li>{@link BatchStartupSelfCheck} bean is present in the context (i.e. self-check is wired)</li>
+ *   <li>{@code batch} 和 {@code quartz} schema 存在</li>
+ *   <li>{@code batch.batch_day_instance} 表存在（V31）</li>
+ *   <li>V31 添加的 {@code batch.business_calendar} 列存在</li>
+ *   <li>所有 Quartz 表在 {@code quartz} schema 中存在</li>
+ *   <li>{@link BatchStartupSelfCheck} Bean 存在于上下文中（即自检已装配）</li>
  * </ul>
  */
 @SpringBootTest(

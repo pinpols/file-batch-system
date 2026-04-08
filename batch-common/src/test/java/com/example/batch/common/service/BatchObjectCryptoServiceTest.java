@@ -17,9 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for {@link BatchObjectCryptoService} — validates AES-GCM encrypt/decrypt
- * round-trip including the BATCHENC magic-header format used by StoreStep (export) and
- * the PreprocessStep KMS closure (import).
+ * {@link BatchObjectCryptoService} 的单元测试 —— 验证 AES-GCM 加解密往返，
+ * 包括 StoreStep（导出）使用的 BATCHENC 魔数头格式以及 PreprocessStep KMS 闭包（导入）。
  */
 class BatchObjectCryptoServiceTest {
 
@@ -42,7 +41,7 @@ class BatchObjectCryptoServiceTest {
         cryptoService = new BatchObjectCryptoService(security, kms);
     }
 
-    // ── byte[] round-trip ──────────────────────────────────────────────────────
+    // ── byte[] 加解密往返 ──────────────────────────────────────────────────────
 
     @Test
     void encryptAndDecryptBytes_shouldRoundTrip() {
@@ -58,7 +57,7 @@ class BatchObjectCryptoServiceTest {
     void encryptedBytes_shouldStartWithMagicHeader() {
         byte[] ciphertext = cryptoService.encrypt("test".getBytes(StandardCharsets.UTF_8), KEY_REF);
 
-        // BATCHENC magic (8 bytes)
+        // BATCHENC 魔数（8 字节）
         assertThat(new String(ciphertext, 0, 8, StandardCharsets.US_ASCII)).isEqualTo("BATCHENC");
     }
 
@@ -88,14 +87,14 @@ class BatchObjectCryptoServiceTest {
         byte[] cipher1 = cryptoService.encrypt(plaintext, KEY_REF);
         byte[] cipher2 = cryptoService.encrypt(plaintext, KEY_REF);
 
-        // Different IVs per call → different ciphertext
+        // 每次调用使用不同的 IV → 产生不同的密文
         assertThat(cipher1).isNotEqualTo(cipher2);
-        // Both decrypt to same plaintext
+        // 两者解密后得到相同的明文
         assertThat(cryptoService.decrypt(cipher1)).isEqualTo(plaintext);
         assertThat(cryptoService.decrypt(cipher2)).isEqualTo(plaintext);
     }
 
-    // ── stream round-trip ──────────────────────────────────────────────────────
+    // ── 流式加解密往返 ────────────────────────────────────────────────────────
 
     @Test
     void encryptStream_thenDecryptStream_shouldRoundTrip() throws Exception {
@@ -120,7 +119,7 @@ class BatchObjectCryptoServiceTest {
         }
     }
 
-    // ── file round-trip ────────────────────────────────────────────────────────
+    // ── 文件加解密往返 ─────────────────────────────────────────────────────────
 
     @Test
     void encryptFile_thenDecryptBytes_shouldRoundTrip() throws Exception {
@@ -141,7 +140,7 @@ class BatchObjectCryptoServiceTest {
         }
     }
 
-    // ── shouldEncrypt / resolveKeyRef ──────────────────────────────────────────
+    // ── shouldEncrypt / resolveKeyRef 测试 ─────────────────────────────────────
 
     @Test
     void shouldEncrypt_whenFlagTrueAndTestingNotOpen_returnsTrue() {

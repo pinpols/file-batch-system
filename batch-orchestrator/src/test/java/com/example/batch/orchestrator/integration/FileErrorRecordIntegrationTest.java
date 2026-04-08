@@ -12,8 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: batch.file_error_record table (V9 migration).
- * Covers: insert, query by tenant+file, skip flag, raw_record JSONB.
+ * 集成测试：batch.file_error_record 表（V9 迁移）。
+ * 覆盖：插入、按 tenant+file 查询、skip 标志、raw_record JSONB。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

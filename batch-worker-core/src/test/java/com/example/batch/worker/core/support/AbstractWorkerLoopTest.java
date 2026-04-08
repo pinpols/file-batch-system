@@ -18,13 +18,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for AbstractWorkerLoop:
- * - ensureStarted() is idempotent (registers only once)
- * - registration is correctly populated from WorkerConfiguration
- * - doHeartbeat() delegates to WorkerRuntimeFacade.heartbeat()
- * - doHeartbeat() is safe when not yet started
- * - shutdown() delegates to WorkerRuntimeFacade.shutdown()
- * - shutdown() is safe when never started
+ * AbstractWorkerLoop 单元测试：
+ * - ensureStarted() 是幂等的（仅注册一次）
+ * - 注册信息从 WorkerConfiguration 正确填充
+ * - doHeartbeat() 委托给 WorkerRuntimeFacade.heartbeat()
+ * - doHeartbeat() 在尚未启动时也是安全的
+ * - shutdown() 委托给 WorkerRuntimeFacade.shutdown()
+ * - shutdown() 在从未启动时也是安全的
  */
 @ExtendWith(MockitoExtension.class)
 @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
@@ -99,10 +99,10 @@ class AbstractWorkerLoopTest {
 
     @Test
     void doHeartbeat_doesNotFailBeforeStart() {
-        // Create a loop where start() is not called first
+        // 创建一个尚未调用 start() 的 loop
         TestWorkerLoop freshLoop = new TestWorkerLoop(workerRuntimeFacade);
-        // doHeartbeat on a loop that hasn't started should still trigger ensureStarted internally
-        // The behaviour: ensureStarted() returns a valid registration, heartbeat then proceeds
+        // 对未启动的 loop 调用 doHeartbeat 应内部触发 ensureStarted
+        // 行为：ensureStarted() 返回有效注册信息，随后心跳正常执行
         freshLoop.doHeartbeat();
 
         verify(workerRuntimeFacade, times(1)).start(any());
@@ -115,7 +115,7 @@ class AbstractWorkerLoopTest {
         org.mockito.Mockito.doThrow(new RuntimeException("network error"))
                 .when(workerRuntimeFacade).heartbeat(any());
 
-        // must not propagate
+        // 异常不应向外传播
         loop.doHeartbeat();
     }
 
@@ -146,7 +146,7 @@ class AbstractWorkerLoopTest {
         verify(workerRuntimeFacade, times(1)).shutdown("test-worker-001");
     }
 
-    // ── minimal concrete subclass for testing ──────────────────────────────
+    // ── 用于测试的最小具体子类 ──────────────────────────────
 
     private static class TestWorkerLoop extends AbstractWorkerLoop {
 

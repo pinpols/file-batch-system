@@ -21,39 +21,6 @@ public record PipelineStepDefinitionParam(
         boolean enabled
 ) {
     /**
-     * 完整构造方法。
-     */
-    public static PipelineStepDefinitionParam of(
-            Long id,
-            Long pipelineDefinitionId,
-            String stepCode,
-            String stepName,
-            String stageCode,
-            Integer stepOrder,
-            String implCode,
-            Map<String, Object> stepParams,
-            Integer timeoutSeconds,
-            String retryPolicy,
-            Integer retryMaxCount,
-            boolean enabled
-    ) {
-        return new PipelineStepDefinitionParam(
-                id,
-                pipelineDefinitionId,
-                stepCode,
-                stepName,
-                stageCode,
-                stepOrder,
-                implCode,
-                stepParams,
-                timeoutSeconds,
-                retryPolicy,
-                retryMaxCount,
-                enabled
-        );
-    }
-
-    /**
      * 转换为 PipelineStepDefinition。
      */
     public PipelineStepDefinition toDefinition() {

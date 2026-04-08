@@ -31,7 +31,7 @@ class WorkerRegistryStatusTest {
 
     @Test
     void drainLifecycleOrderShouldBeLogical() {
-        // Verifies the lifecycle: ONLINE → DRAINING → DECOMMISSIONED
+        // 验证生命周期顺序：ONLINE → DRAINING → DECOMMISSIONED
         List<WorkerRegistryStatus> values = List.of(WorkerRegistryStatus.values());
         int onlineIdx = values.indexOf(WorkerRegistryStatus.ONLINE);
         int drainingIdx = values.indexOf(WorkerRegistryStatus.DRAINING);

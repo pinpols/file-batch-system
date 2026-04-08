@@ -8,6 +8,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * ShedLock 分布式锁配置，防止多实例重复执行定时任务。
+ */
 @Configuration
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
 public class ShedLockConfiguration {

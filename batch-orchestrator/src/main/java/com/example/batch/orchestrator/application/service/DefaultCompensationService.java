@@ -45,7 +45,7 @@ public class DefaultCompensationService implements CompensationService {
     private final ObjectProvider<LaunchService> launchServiceProvider;
     private final TaskExecutionService taskExecutionService;
 
-    /** Routing table: compensationType → handler. Built once at construction; O(1) lookup. */
+    /** 路由表：compensationType → handler。构造时一次性构建；O(1) 查找。 */
     private final Map<String, CompensationHandler> handlersByType = Map.of(
             "JOB",       this::rerunJob,
             "STEP",      this::rerunStep,

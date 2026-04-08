@@ -54,7 +54,7 @@ public class DefaultExportStageExecutor
 
     @Override
     public List<ExportStageResult> execute(ExportJobContext context) {
-        // 先跑 stage loop；只有“全部 stage 成功”才认为产物可信并记录 rows 指标。
+        // 先执行 stage 循环；只有全部 stage 成功时才认为产物可信并记录 rows 指标。
         List<ExportStageResult> results = runStageLoop(context);
         boolean overallSuccess = results.stream().allMatch(ExportStageResult::success);
         if (overallSuccess) {
@@ -67,7 +67,7 @@ public class DefaultExportStageExecutor
         Object recordCountAttr = context.getAttributes().get("recordCount");
         if (recordCountAttr instanceof Number recordCount) {
             Counter.builder("export.file.rows.total")
-                    .description("Total rows written to export files")
+                    .description("导出文件写入总行数")
                     .tag("tenant", context.getTenantId() != null ? context.getTenantId() : "unknown")
                     .register(meterRegistry)
                     .increment(recordCount.doubleValue());
@@ -79,7 +79,7 @@ public class DefaultExportStageExecutor
         return defaultStepDefinitions;
     }
 
-    // ─── AbstractStageExecutor template methods ──────────────────────────────
+    // ─── AbstractStageExecutor 模板方法 ──────────────────────────────
 
     @Override
     protected List<PipelineStepDefinition> loadConfiguredSteps(ExportJobContext context) {
@@ -113,7 +113,7 @@ public class DefaultExportStageExecutor
         try {
             return stageStep == null
                     ? ExportStageResult.failure(stage, StageFailureCode.STEP_NOT_FOUND.name(),
-                    "step impl not found: " + step.implCode())
+                    "找不到步骤实现: " + step.implCode())
                     : stageStep.execute(context);
         } catch (BizException exception) {
             log.error("export stage business error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
@@ -157,10 +157,10 @@ public class DefaultExportStageExecutor
 
     @Override
     protected String cycleDetectedMessage() {
-        return "export pipeline step flow contains a cycle";
+        return "导出 pipeline 步骤流程存在循环依赖";
     }
 
-    // ─── Private helpers ─────────────────────────────────────────────────────
+    // ─── 私有辅助方法 ─────────────────────────────────────────────────────
 
     private ExportStage toStage(String stageCode) {
         try {

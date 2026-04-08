@@ -107,13 +107,13 @@ class DefaultTaskExecutionWrapperTest {
         task.setTaskId("9001");
         task.setTenantId("t1");
         task.setWorkerId("w1");
-        // payload, jobCode, businessKey, traceId, idempotencyKey are all null
+        // payload、jobCode、businessKey、traceId、idempotencyKey 均为 null
         when(stepExecutionAdapter.execute(any(StepExecutionRequest.class)))
                 .thenReturn(StepExecutionResponse.successResponse());
 
         wrapper.execute(task);
 
-        // verifies execute was called without NPE from null fields
+        // 验证 execute 被调用且未因 null 字段抛出 NPE
         verify(stepExecutionAdapter).execute(any(StepExecutionRequest.class));
     }
 
@@ -147,7 +147,7 @@ class DefaultTaskExecutionWrapperTest {
         wrapper.execute(task);
     }
 
-    // --- helpers ---
+    // --- 辅助方法 ---
 
     private static PulledTask sampleTask(String taskId, String tenantId, String workerId) {
         PulledTask task = new PulledTask();

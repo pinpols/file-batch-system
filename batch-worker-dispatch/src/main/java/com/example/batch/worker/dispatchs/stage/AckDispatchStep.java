@@ -12,6 +12,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 分发 ACK 阶段：处理回执确认，更新分发记录及文件状态为 DISPATCHED。
+ */
 @Component
 public class AckDispatchStep implements DispatchStageStep {
 

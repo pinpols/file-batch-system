@@ -14,8 +14,7 @@ import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.stereotype.Component;
 
 /**
- * Generates an Excel (.xlsx) file using the streaming SXSSF workbook to limit
- * heap usage when writing large datasets.
+ * 生成 Excel（.xlsx）文件，使用流式 SXSSF 工作簿以控制大数据量写入时的堆内存占用。
  */
 @Component
 public class ExcelExportFormat extends AbstractExportFormat {

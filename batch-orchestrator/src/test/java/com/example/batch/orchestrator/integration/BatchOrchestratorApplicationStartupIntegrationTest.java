@@ -10,10 +10,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 
 /**
- * Integration smoke: Spring context with real Postgres (platform + business), Kafka, and MinIO.
+ * 冒烟集成测试：使用真实 Postgres（平台 + 业务）、Kafka 和 MinIO 的 Spring 上下文。
  *
- * <p>Inherits {@link AbstractIntegrationTest} — do not duplicate {@code @BatchIntegrationTest} or
- * container setup here.
+ * <p>继承 {@link AbstractIntegrationTest} —— 不要在此重复 {@code @BatchIntegrationTest} 或容器配置。
  */
 @SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class BatchOrchestratorApplicationStartupIntegrationTest extends AbstractIntegrationTest {

@@ -19,6 +19,9 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 导出注册阶段：在平台创建 file_record，并将文件与 pipeline 实例绑定，触发插件 onRegistered 回调。
+ */
 @Component
 public class RegisterStep implements ExportStageStep {
 
@@ -62,12 +65,13 @@ public class RegisterStep implements ExportStageStep {
         String fileFormatType = String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
         String bucket = minioStorageProperties.getBucket();
         String expectedChecksum = nullableText(context.getAttributes().get("checksumValue"));
+        // 相同路径的 file_record 已存在时进行幂等复用（STORE → REGISTER 重试场景）
         if (runtimeRepository.existsFileRecordByStoragePath(context.getTenantId(), bucket, objectName)) {
             Map<String, Object> existing = runtimeRepository.loadFileRecordByStoragePath(context.getTenantId(), bucket, objectName);
             String existingChecksum = nullableText(existing.get("checksum_value"));
             if (StringUtils.hasText(expectedChecksum) && StringUtils.hasText(existingChecksum)
                     && !expectedChecksum.equalsIgnoreCase(existingChecksum)) {
-                return ExportStageResult.failure(stage(), "EXPORT_REGISTER_CHECKSUM_CONFLICT", "existing file_record checksum differs");
+                return ExportStageResult.failure(stage(), "EXPORT_REGISTER_CHECKSUM_CONFLICT", "已有 file_record 的校验值不一致");
             }
             return reuseExistingFileRecord(context, batch, existing);
         }

@@ -57,7 +57,7 @@ public class DefaultDispatchStageExecutor
 
     @Override
     public List<DispatchStageResult> execute(DispatchJobContext context) {
-        // 全流程 stage loop；只有全部成功才计入“成功回执”指标。
+        // 全流程 stage loop；只有全部阶段成功才计入”成功回执”指标。
         List<DispatchStageResult> results = runStageLoop(context);
         boolean overallSuccess = results.stream().allMatch(DispatchStageResult::success);
         if (overallSuccess) {
@@ -209,8 +209,8 @@ public class DefaultDispatchStageExecutor
                 case RETRY -> Map.of("onFailureNextStageCode", DispatchStage.COMPENSATE.name());
                 default -> Map.of();
             };
-            // 使用参数对象封装构造参数（遵循编码规范：参数 ≥ 7 必须封装）
-            PipelineStepTemplateParam param = PipelineStepTemplateParam.of(
+            // 使用 record 构造器创建参数对象（record 构造器不受参数数量约束）
+            PipelineStepTemplateParam param = new PipelineStepTemplateParam(
                     step.stepCode(),
                     step.stepName(),
                     stage.name(),

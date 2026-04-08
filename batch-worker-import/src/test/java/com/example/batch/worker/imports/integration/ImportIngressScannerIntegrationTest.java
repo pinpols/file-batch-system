@@ -20,12 +20,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * Integration test: ImportIngressScanner discovers a CSV file placed in MinIO and registers
- * it as a platform file record in the DB.
+ * 集成测试：ImportIngressScanner 发现放置在 MinIO 中的 CSV 文件并将其注册为数据库中的平台文件记录。
  *
- * <p>The scanner is enabled here via {@code @TestPropertySource}, overriding the
- * {@code scanner.enabled=false} in application-test.yml. Stability window is set to 0 so
- * the file is immediately treated as stable.
+ * <p>此处通过 {@code @TestPropertySource} 启用扫描器，覆盖 application-test.yml 中的
+ * {@code scanner.enabled=false}。稳定窗口设为 0，文件立即被视为稳定。
  */
 @SpringBootTest(
         classes = BatchWorkerImportApplication.class,
@@ -55,7 +53,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         String objectName = "ingress/it-scan-test.csv";
         String bucket = minioBucket();
 
-        // Upload a minimal CSV to MinIO
+        // 上传一个最小化的 CSV 到 MinIO
         byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
         MinioClient client = MinioClient.builder()
                 .endpoint(minioEndpoint())
@@ -70,7 +68,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
                         .build()
         );
 
-        // scanner disabled in scheduler but we call scan() directly
+        // 调度器中扫描已禁用，但我们直接调用 scan()
         scanner.scan();
 
         assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
@@ -102,13 +100,13 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
                         .build()
         );
 
-        // First scan: registers the file
+        // 第一次扫描：注册文件
         scanner.scan();
         assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
         Map<String, Object> first = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
         long firstId = ((Number) first.get("id")).longValue();
 
-        // Second scan: should not create a duplicate (idempotent)
+        // 第二次扫描：不应创建重复记录（幂等）
         scanner.scan();
         assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
         Map<String, Object> after = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);

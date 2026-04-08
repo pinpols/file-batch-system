@@ -9,11 +9,10 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
- * Registry that collects all {@link ExportFormatStrategy} beans and allows lookup by
- * {@link ExportFormatStrategy#formatType()} (case-insensitive).
+ * 导出格式策略注册中心，收集所有 {@link ExportFormatStrategy} Bean 并按
+ * {@link ExportFormatStrategy#formatType()} 大小写不敏感索引。
  *
- * <p>Mirrors the existing {@code ImportLoadPluginRegistry} / {@code ExportDataPluginRegistry}
- * pattern already used in the codebase.
+ * <p>与现有 {@code ExportDataPluginRegistry} 模式保持一致。
  */
 @Component
 public class ExportFormatStrategyRegistry {
@@ -29,8 +28,10 @@ public class ExportFormatStrategyRegistry {
     }
 
     /**
-     * Returns the strategy for the given format type, using {@code "JSON"} as the default
-     * when the format type is blank or unrecognized.
+     * 按格式类型查找策略，格式类型为空或未注册时回退到 {@code "JSON"}。
+     *
+     * @param fileFormatType 格式类型标识
+     * @return 对应的策略实现
      */
     public ExportFormatStrategy resolve(String fileFormatType) {
         if (fileFormatType == null || fileFormatType.isBlank()) {
@@ -41,12 +42,16 @@ public class ExportFormatStrategyRegistry {
     }
 
     /**
-     * Returns the strategy for the given format type, or throws if not registered.
+     * 按格式类型获取策略，未注册时抛出异常。
+     *
+     * @param fileFormatType 格式类型标识
+     * @return 对应的策略实现
+     * @throws com.example.batch.common.exception.BizException 未找到策略时抛出
      */
     public ExportFormatStrategy require(String fileFormatType) {
         ExportFormatStrategy strategy = strategiesByType.get(fileFormatType == null ? "" : fileFormatType.trim().toUpperCase());
         if (strategy == null) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "unsupported export format type: " + fileFormatType);
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "不支持的导出格式类型: " + fileFormatType);
         }
         return strategy;
     }

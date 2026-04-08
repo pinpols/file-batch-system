@@ -112,7 +112,7 @@ public class ConsoleApiExceptionHandler {
                                         : downstream.message()));
             }
         } catch (RuntimeException ignored) {
-            // fall through
+            // 继续执行
         }
         // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），避免前端只看到 500
         return ResponseEntity.status(exception.getStatusCode())

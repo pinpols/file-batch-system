@@ -9,7 +9,7 @@ import java.util.Set;
 import org.springframework.util.StringUtils;
 
 /**
- * Merges {@code file_channel_config} row with {@code config_json}; JSON keys override same-named columns.
+ * 合并 {@code file_channel_config} 行数据与 {@code config_json}；JSON 中的键会覆盖同名列值。
  */
 public final class ChannelConfigMerge {
 

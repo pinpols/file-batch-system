@@ -12,21 +12,28 @@
 ## 执行指南
 
 - [staging-live-deploy-smoke-checklist.md](./staging-live-deploy-smoke-checklist.md) - staging 上线 smoke 执行清单
-- [deployment-verification-report.md](./deployment-verification-report.md) - 升级 / 回滚验证记录
-- [load-test-capacity-baseline.md](./load-test-capacity-baseline.md) - 压测容量基线模板和回填状态
 
-## 测试报告
+## 场景矩阵
 
-- [full-test-run-report.md](./full-test-run-report.md) - 最新一次仓库级全量回归结果
-- [failure-drill-report.md](./failure-drill-report.md) - 故障演练记录和残余风险
 - [e2e-scenario-matrix.md](./e2e-scenario-matrix.md) - E2E 测试类、场景和覆盖状态矩阵
 - [e2e-three-flows-coverage.md](./e2e-three-flows-coverage.md) - 三条主链路的 E2E 覆盖分析
-- [e2e-individual-run-report.md](./e2e-individual-run-report.md) - 单次 E2E 执行记录
 
 ## 说明文档
 
 - [test-strategy.md](./test-strategy.md) - 测试分层策略
 - [test-plan.md](./test-plan.md) - 更面向项目层的测试总览和当前状态
+
+## 已完成报告归档（`completed-reports/`）
+
+历史性测试报告已归档至 `completed-reports/` 目录：
+
+- `full-test-run-report.md` - 仓库级全量回归结果
+- `failure-drill-report.md` - 故障演练记录
+- `deployment-verification-report.md` - 升级 / 回滚验证记录
+- `e2e-individual-run-report.md` - 单次 E2E 执行记录
+- `verification-e2e-unit-integration-run.md` - 逐类验证报告
+- `frontend-backend-integration-issue.md` - 前后端联调问题记录
+- `load-test-capacity-baseline.md` - 压测容量基线模板
 
 ## 命名约定
 

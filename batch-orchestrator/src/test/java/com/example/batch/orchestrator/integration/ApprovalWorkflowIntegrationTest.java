@@ -12,8 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Integration test: ApprovalWorkflowService state machine against real DB.
- * Covers: submit → PENDING, approve → APPROVED, reject → REJECTED, markExecuted → EXECUTED.
+ * 集成测试：ApprovalWorkflowService 状态机在真实数据库上的验证。
+ * 覆盖：submit → PENDING、approve → APPROVED、reject → REJECTED、markExecuted → EXECUTED。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
@@ -177,7 +177,7 @@ class ApprovalWorkflowIntegrationTest extends AbstractIntegrationTest {
                 .build());
 
         approvalWorkflowService.approve("t1", approvalNo, "approver-001", "first approval");
-        // Second approve should be idempotent — returns current APPROVED state
+        // 第二次审批应具有幂等性 —— 返回当前 APPROVED 状态
         ApprovalWorkflowService.ApprovalRecord result = approvalWorkflowService.approve(
                 "t1", approvalNo, "approver-002", "second approval attempt");
 

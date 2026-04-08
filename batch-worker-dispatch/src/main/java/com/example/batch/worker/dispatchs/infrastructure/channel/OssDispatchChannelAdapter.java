@@ -7,6 +7,9 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * OSS（对象存储）渠道分发适配器，将文件上传至 MinIO/S3 兼容存储桶。
+ */
 @Component
 @RequiredArgsConstructor
 public class OssDispatchChannelAdapter implements DispatchChannelAdapter {

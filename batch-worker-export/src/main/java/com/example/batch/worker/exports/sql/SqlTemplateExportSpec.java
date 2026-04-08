@@ -7,16 +7,24 @@ import java.util.Map;
 import org.springframework.util.StringUtils;
 
 /**
- * SQL template export spec parsed from template config.
+ * 从模板配置解析而来的 SQL 模板导出规格。
  *
- * <p>Primary SQL comes from {@code default_query_sql}. Additional settings come from
- * {@code query_param_schema.sqlTemplateExport} (or {@code sql_template_export}).
+ * <p>主查询 SQL 来自 {@code default_query_sql}，附加配置来自
+ * {@code query_param_schema.sqlTemplateExport}（或 {@code sql_template_export}）。
  */
 public record SqlTemplateExportSpec(
         String detailSql,
         String cursorColumn
 ) {
 
+    /**
+     * 从模板配置中解析 SqlTemplateExportSpec。
+     *
+     * @param templateConfig 模板配置 Map
+     * @param objectMapper   JSON 解析工具
+     * @return 解析结果
+     * @throws IllegalArgumentException 配置缺失或 SQL 为空时抛出
+     */
     public static SqlTemplateExportSpec parse(Map<String, Object> templateConfig, ObjectMapper objectMapper) {
         if (templateConfig == null || templateConfig.isEmpty()) {
             throw new IllegalArgumentException("template config missing");

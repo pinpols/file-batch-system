@@ -11,6 +11,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 分发完成阶段：汇总回执状态并写入审计日志，作为整个分发 pipeline 的终态步骤。
+ */
 @Component
 public class CompleteDispatchStep implements DispatchStageStep {
 

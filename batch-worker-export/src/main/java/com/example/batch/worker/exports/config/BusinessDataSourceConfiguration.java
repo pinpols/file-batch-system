@@ -15,6 +15,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
+/**
+ * 业务数据源配置，提供导出任务所需的业务库 MyBatis SqlSession。
+ */
 @Configuration("exportWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties(BusinessDataSourceProperties.class)
 public class BusinessDataSourceConfiguration {

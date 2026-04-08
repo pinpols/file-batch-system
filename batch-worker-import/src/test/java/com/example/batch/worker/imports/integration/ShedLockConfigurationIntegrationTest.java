@@ -24,7 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration smoke: ensures ShedLock wiring survives Flyway and test init scripts.
+ * 集成冒烟测试：确保 ShedLock 配置在 Flyway 和测试初始化脚本之后正常工作。
  */
 @SpringBootTest(
         classes = {PlatformDataSourceConfiguration.class, ShedLockConfiguration.class},

@@ -13,8 +13,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Loads the import worker with Testcontainers Postgres (platform + biz), Kafka, MinIO, and a stub
- * orchestrator HTTP endpoint.
+ * 使用 Testcontainers Postgres（platform + biz）、Kafka、MinIO 和模拟的
+ * orchestrator HTTP 端点加载导入 Worker。
  */
 @SpringBootTest(classes = BatchWorkerImportApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class BatchWorkerImportApplicationIntegrationTest extends AbstractIntegrationTest {

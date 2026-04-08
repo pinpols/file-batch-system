@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * SMTP email with file attachment from {@code file_record}.
+ * SMTP 邮件分发适配器，将 {@code file_record} 中的文件作为附件通过 SMTP 发送。
  */
 @Component
 @RequiredArgsConstructor
@@ -37,21 +37,19 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         return channelType != null && "EMAIL".equalsIgnoreCase(channelType);
     }
 
+    private record MailConfig(String host, int port, String smtpUser, String smtpPass,
+                              boolean startTls, String from, String to) {}
+
     @Override
     public DispatchResult dispatch(DispatchCommand command) {
         Map<String, Object> channelConfig = command.channelConfig();
-        String host = stringProp(channelConfig, "smtp_host");
-        if (!StringUtils.hasText(host)) {
-            return new DispatchResult(false, null, null, false, false, "smtp_host missing", null);
-        }
-        int port = intProp(channelConfig, "smtp_port", 587);
-        String smtpUser = stringProp(channelConfig, "smtp_username");
-        String smtpPass = stringProp(channelConfig, "smtp_password");
-        boolean startTls = boolProp(channelConfig, "smtp_starttls", true);
 
-        String from = firstNonBlank(stringProp(channelConfig, "mail_from"), smtpUser);
-        String to = firstNonBlank(stringProp(channelConfig, "mail_to"), stringProp(channelConfig, "target_endpoint"));
-        if (!StringUtils.hasText(from) || !StringUtils.hasText(to)) {
+        MailConfig mailConfig = resolveMailConfig(channelConfig);
+        if (mailConfig == null) {
+            String host = stringProp(channelConfig, "smtp_host");
+            if (!StringUtils.hasText(host)) {
+                return new DispatchResult(false, null, null, false, false, "smtp_host missing", null);
+            }
             return new DispatchResult(false, null, null, false, false, "mail_from/mail_to or target_endpoint missing", null);
         }
 
@@ -65,59 +63,106 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         boolean acknowledged = "NONE".equalsIgnoreCase(receiptPolicy) || "SYNC".equalsIgnoreCase(receiptPolicy);
         boolean pending = "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
 
-        Map<String, Object> fileRecord = command.fileRecord();
-        String attachName = firstNonBlank(
-                String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
-                String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin"))
-        );
-        String subject = stringProp(channelConfig, "mail_subject");
-        if (!StringUtils.hasText(subject)) {
-            subject = "File dispatch " + externalRequestId;
-        }
-        String mimeType = String.valueOf(fileRecord.getOrDefault("mime_type", "application/octet-stream"));
-
-        Properties props = new Properties();
-        props.put("mail.smtp.host", host);
-        props.put("mail.smtp.port", String.valueOf(port));
-        props.put("mail.smtp.auth", "true");
-        if (startTls) {
-            props.put("mail.smtp.starttls.enable", "true");
-        }
-        Session session = Session.getInstance(props, null);
         Path attachmentFile = null;
         try {
-            MimeMessage message = new MimeMessage(session);
-            message.setFrom(new InternetAddress(from));
-            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to.replace(";", ",")));
-            message.setSubject(subject, StandardCharsets.UTF_8.name());
-
-            MimeBodyPart textPart = new MimeBodyPart();
-            textPart.setText("Dispatch traceId=" + command.traceId() + " externalRequestId=" + externalRequestId, StandardCharsets.UTF_8.name());
-
-            MimeBodyPart attachPart = new MimeBodyPart();
-            attachmentFile = Files.createTempFile("dispatch-mail-", "-" + sanitizeAttachmentSuffix(attachName));
-            try (InputStream in = fileContentResolver.openInputStream(fileRecord)) {
-                Files.copy(in, attachmentFile, StandardCopyOption.REPLACE_EXISTING);
-            }
-            FileDataSource dataSource = new FileDataSource(attachmentFile.toFile());
-            dataSource.setFileTypeMap(new SingleMimeTypeFileTypeMap(mimeType));
-            attachPart.setDataHandler(new DataHandler(dataSource));
-            attachPart.setFileName(attachName);
-
-            MimeMultipart multipart = new MimeMultipart();
-            multipart.addBodyPart(textPart);
-            multipart.addBodyPart(attachPart);
-            message.setContent(multipart);
-
-            try (Transport transport = session.getTransport("smtp")) {
-                transport.connect(host, port, smtpUser, smtpPass);
-                transport.sendMessage(message, message.getAllRecipients());
-            }
-            return new DispatchResult(true, externalRequestId, receiptCode, acknowledged, pending, "sent via SMTP", "mailto:" + to);
+            MimeMessage message = buildMimeMessage(mailConfig, command, externalRequestId);
+            attachmentFile = buildAttachment(command.fileRecord());
+            addAttachment(message, attachmentFile, command.fileRecord());
+            sendMail(mailConfig, message);
+            return new DispatchResult(true, externalRequestId, receiptCode, acknowledged, pending,
+                    "sent via SMTP", "mailto:" + mailConfig.to());
         } catch (Exception ex) {
             return new DispatchResult(false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
         } finally {
             deleteQuietly(attachmentFile);
+        }
+    }
+
+    private MailConfig resolveMailConfig(Map<String, Object> channelConfig) {
+        String host = stringProp(channelConfig, "smtp_host");
+        if (!StringUtils.hasText(host)) {
+            return null;
+        }
+        int port = intProp(channelConfig, "smtp_port", 587);
+        String smtpUser = stringProp(channelConfig, "smtp_username");
+        String smtpPass = stringProp(channelConfig, "smtp_password");
+        boolean startTls = boolProp(channelConfig, "smtp_starttls", true);
+
+        String from = firstNonBlank(stringProp(channelConfig, "mail_from"), smtpUser);
+        String to = firstNonBlank(stringProp(channelConfig, "mail_to"), stringProp(channelConfig, "target_endpoint"));
+        if (!StringUtils.hasText(from) || !StringUtils.hasText(to)) {
+            return null;
+        }
+        return new MailConfig(host, port, smtpUser, smtpPass, startTls, from, to);
+    }
+
+    private MimeMessage buildMimeMessage(MailConfig mailConfig, DispatchCommand command,
+                                         String externalRequestId) throws Exception {
+        Properties props = new Properties();
+        props.put("mail.smtp.host", mailConfig.host());
+        props.put("mail.smtp.port", String.valueOf(mailConfig.port()));
+        props.put("mail.smtp.auth", "true");
+        if (mailConfig.startTls()) {
+            props.put("mail.smtp.starttls.enable", "true");
+        }
+        Session session = Session.getInstance(props, null);
+
+        Map<String, Object> channelConfig = command.channelConfig();
+        String subject = stringProp(channelConfig, "mail_subject");
+        if (!StringUtils.hasText(subject)) {
+            subject = "File dispatch " + externalRequestId;
+        }
+
+        MimeMessage message = new MimeMessage(session);
+        message.setFrom(new InternetAddress(mailConfig.from()));
+        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(mailConfig.to().replace(";", ",")));
+        message.setSubject(subject, StandardCharsets.UTF_8.name());
+
+        MimeBodyPart textPart = new MimeBodyPart();
+        textPart.setText("Dispatch traceId=" + command.traceId() + " externalRequestId=" + externalRequestId,
+                StandardCharsets.UTF_8.name());
+
+        MimeMultipart multipart = new MimeMultipart();
+        multipart.addBodyPart(textPart);
+        message.setContent(multipart);
+        return message;
+    }
+
+    private Path buildAttachment(Map<String, Object> fileRecord) throws Exception {
+        String attachName = firstNonBlank(
+                String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
+                String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin"))
+        );
+        Path attachmentFile = Files.createTempFile("dispatch-mail-", "-" + sanitizeAttachmentSuffix(attachName));
+        try (InputStream in = fileContentResolver.openInputStream(fileRecord)) {
+            Files.copy(in, attachmentFile, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return attachmentFile;
+    }
+
+    private void addAttachment(MimeMessage message, Path attachmentFile,
+                               Map<String, Object> fileRecord) throws Exception {
+        String attachName = firstNonBlank(
+                String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
+                String.valueOf(fileRecord.getOrDefault("file_name", "attachment.bin"))
+        );
+        String mimeType = String.valueOf(fileRecord.getOrDefault("mime_type", "application/octet-stream"));
+
+        MimeBodyPart attachPart = new MimeBodyPart();
+        FileDataSource dataSource = new FileDataSource(attachmentFile.toFile());
+        dataSource.setFileTypeMap(new SingleMimeTypeFileTypeMap(mimeType));
+        attachPart.setDataHandler(new DataHandler(dataSource));
+        attachPart.setFileName(attachName);
+
+        MimeMultipart multipart = (MimeMultipart) message.getContent();
+        multipart.addBodyPart(attachPart);
+        message.setContent(multipart);
+    }
+
+    private void sendMail(MailConfig mailConfig, MimeMessage message) throws Exception {
+        try (Transport transport = message.getSession().getTransport("smtp")) {
+            transport.connect(mailConfig.host(), mailConfig.port(), mailConfig.smtpUser(), mailConfig.smtpPass());
+            transport.sendMessage(message, message.getAllRecipients());
         }
     }
 

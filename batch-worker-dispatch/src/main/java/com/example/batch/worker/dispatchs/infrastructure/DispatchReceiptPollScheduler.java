@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * Polls {@code receipt_poll_url} (from merged channel config) for {@code receipt_status = PENDING} dispatch rows.
+ * 定时轮询 {@code receipt_poll_url}（来自合并后的渠道配置），处理 {@code receipt_status = PENDING} 的分发记录。
  */
 @Slf4j
 @Component

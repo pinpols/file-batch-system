@@ -17,7 +17,7 @@ public class ConsoleCatchUpApprovalRequest {
     @NotBlank
     @Size(max = 128, message = "jobCode too long (max 128)")
     /**
-     * Business job identifier used to resolve the catch-up target.
+     * 用于解析补跑目标的业务作业标识。
      */
     private String jobCode;
     @NotBlank

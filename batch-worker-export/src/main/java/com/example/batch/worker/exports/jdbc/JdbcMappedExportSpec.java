@@ -9,7 +9,7 @@ import java.util.Map;
 import org.springframework.util.StringUtils;
 
 /**
- * Parsed from {@code query_param_schema.jdbcMappedExport} or {@code jdbc_mapped_export}.
+ * 从模板配置的 {@code query_param_schema.jdbcMappedExport} 或 {@code jdbc_mapped_export} 解析而来的导出规格。
  */
 public record JdbcMappedExportSpec(
         String schema,
@@ -23,6 +23,14 @@ public record JdbcMappedExportSpec(
         List<String> detailSelectColumns
 ) {
 
+    /**
+     * 从模板配置中解析 JdbcMappedExportSpec。
+     *
+     * @param templateConfig 模板配置 Map
+     * @param objectMapper   JSON 解析工具
+     * @return 解析结果
+     * @throws IllegalArgumentException 配置缺失或校验失败时抛出
+     */
     @SuppressWarnings("unchecked")
     public static JdbcMappedExportSpec parse(Map<String, Object> templateConfig, ObjectMapper objectMapper) {
         Map<String, Object> root = extract(templateConfig, objectMapper);
@@ -54,6 +62,12 @@ public record JdbcMappedExportSpec(
         );
     }
 
+    /**
+     * 校验所有表名、列名标识符以及 schema 白名单。
+     *
+     * @param allowedSchemas 允许的 schema 列表
+     * @throws IllegalArgumentException 任一标识符不合法时抛出
+     */
     public void validateIdentifiers(List<String> allowedSchemas) {
         JdbcMappedSqlValidator.requireInAllowlist(schema, allowedSchemas);
         JdbcMappedSqlValidator.requireIdentifier(batchTable, "batchTable");

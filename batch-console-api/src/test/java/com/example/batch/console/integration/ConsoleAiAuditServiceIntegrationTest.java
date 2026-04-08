@@ -16,8 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Integration test: DefaultConsoleAiAuditService persists AI audit log entries to DB
- * and they are retrievable via ConsoleAiAuditLogMapper.
+ * 集成测试：DefaultConsoleAiAuditService 将 AI 审计日志条目持久化到数据库，
+ * 并可通过 ConsoleAiAuditLogMapper 查询。
  */
 @SpringBootTest(
         classes = BatchConsoleApiApplication.class,

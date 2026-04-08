@@ -18,6 +18,9 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 导出准备阶段：解析 payload、加载模板配置、确定文件名和对象路径。
+ */
 @Component
 public class PrepareStep implements ExportStageStep {
 
@@ -122,8 +125,8 @@ public class PrepareStep implements ExportStageStep {
     }
 
     /**
-     * Snapshot contract: template / query_param_schema.exportSnapshot / payload.metadata
-     * (snapshotMode, snapshotTs, sourcePartitions).
+     * 构建导出快照元数据，优先级：模板配置 &gt; payload.metadata &gt; 默认值。
+     * 包含字段：snapshotMode、snapshotTs、sourcePartitions。
      */
     private Map<String, Object> buildExportSnapshot(ExportPayload payload, Map<String, Object> templateConfig) {
         Map<String, Object> hints = extractTemplateSnapshotHints(templateConfig);

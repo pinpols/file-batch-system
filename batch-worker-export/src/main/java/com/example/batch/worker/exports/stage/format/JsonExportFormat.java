@@ -14,8 +14,8 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
- * Generates a single-document JSON file:
- * {@code {"snapshot":…, "batch":…, "details":[…]}}.
+ * 生成单文档 JSON 文件，结构为：
+ * {@code {"snapshot":…, "batch":…, "details":[…]}}。
  */
 @Component
 public class JsonExportFormat extends AbstractExportFormat {

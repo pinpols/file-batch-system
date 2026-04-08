@@ -5,6 +5,9 @@ import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * NAS 渠道分发适配器，将文件拷贝到 NAS 远程目录。
+ */
 @Component
 @RequiredArgsConstructor
 public class NasDispatchChannelAdapter implements DispatchChannelAdapter {

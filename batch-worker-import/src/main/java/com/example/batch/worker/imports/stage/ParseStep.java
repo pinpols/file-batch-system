@@ -524,8 +524,8 @@ public class ParseStep implements ImportStageStep {
                 return parseJsonArray(context, parser, writer, preserveLogicalRow);
             }
             if (token == JsonToken.START_OBJECT) {
-                // Envelope path: {"records":[...]} or single-record object.
-                // If records array is absent, treat the root object as one logical record.
+                // 信封模式路径：{"records":[...]} 或单记录对象。
+                // 若不存在 records 数组，则将根对象视为一条逻辑记录。
                 JsonNode rootObj = objectMapper.readTree(parser);
                 JsonNode recordsNode = rootObj == null ? null : rootObj.get("records");
                 if (recordsNode != null && recordsNode.isArray()) {
@@ -559,31 +559,30 @@ public class ParseStep implements ImportStageStep {
     }
 
     /**
-     * Streams a JSON object payload without loading it fully into memory.
-     * Handles {@code {"records":[...]}} envelope by navigating to the "records" array
-     * via the streaming parser. For any other top-level object, reads it as a single record.
+     * 以流式方式解析 JSON 对象载荷，无需将整个内容加载到内存。
+     * 通过流式解析器定位 {@code {"records":[...]}} 信封中的 "records" 数组；
+     * 若为其他顶层对象，则作为单条记录读取。
      */
     private long parseJsonObjectStreaming(ImportJobContext context,
                                           JsonParser parser,
                                           BufferedWriter writer,
                                           boolean preserveLogicalRow) throws Exception {
-        // Navigate fields in the root object looking for "records" array
+        // 遍历根对象的字段，查找 "records" 数组
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             if (parser.currentToken() == JsonToken.FIELD_NAME && "records".equals(parser.currentName())) {
                 JsonToken arrayToken = parser.nextToken();
                 if (arrayToken == JsonToken.START_ARRAY) {
                     return parseJsonArray(context, parser, writer, preserveLogicalRow);
                 }
-                // "records" field is not an array — read it as a single value and fall through
+                // "records" 字段不是数组——作为单个值读取并跳过
                 parser.skipChildren();
             } else {
-                // Skip non-records fields
+                // 跳过非 records 字段
                 parser.skipChildren();
             }
         }
-        // No "records" array found — this is a single-object payload; re-read is not possible
-        // since we consumed the parser. Return 0 to signal no records. Callers that need a
-        // single-record fallback should send a JSON array instead.
+        // 未找到 "records" 数组——此为单对象载荷；由于解析器已被消费，无法重读。
+        // 返回 0 表示无记录。需要单记录回退的调用方应改用 JSON 数组格式。
         return 0L;
     }
 
@@ -854,8 +853,8 @@ public class ParseStep implements ImportStageStep {
                 }
                 value = payload;
             } catch (RuntimeException ex) {
-                // Some JSON payloads may carry additional fields in the parsed row map.
-                // CustomerImportPayload only models mapped biz columns; ignore unknown fields.
+                // 部分 JSON 载荷的解析行 map 中可能携带额外字段。
+                // CustomerImportPayload 仅建模映射的业务列；忽略未知字段。
                 if (row == null) {
                     throw ex;
                 }
@@ -874,7 +873,7 @@ public class ParseStep implements ImportStageStep {
     }
 
     /**
-     * Writes one JSON value without closing the underlying writer (NDJSON writes many lines per staging file).
+     * 写入单个 JSON 值，不关闭底层 writer（NDJSON 模式下每个暂存文件写入多行）。
      */
     private void writeNdjsonValue(Writer writer, Object value) throws IOException {
         try (JsonGenerator generator = objectMapper.getFactory().createGenerator(writer)) {
@@ -887,7 +886,7 @@ public class ParseStep implements ImportStageStep {
         if (!(templateConfigObject instanceof Map<?, ?> templateConfig)) {
             return false;
         }
-        // Template config from MyBatis may use different key styles (snake_case vs camelCase).
+        // MyBatis 的模板配置可能使用不同的键风格（snake_case 或 camelCase）。
         Object direct = templateConfig.get("load_target_ref");
         if (direct == null) {
             direct = templateConfig.get("loadTargetRef");

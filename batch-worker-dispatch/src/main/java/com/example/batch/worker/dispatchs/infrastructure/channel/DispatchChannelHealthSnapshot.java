@@ -2,6 +2,9 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import java.time.Instant;
 
+/**
+ * 分发渠道健康状态快照，记录探测时间、连续失败次数及下次探测时间等信息。
+ */
 public record DispatchChannelHealthSnapshot(
         String tenantId,
         String channelCode,

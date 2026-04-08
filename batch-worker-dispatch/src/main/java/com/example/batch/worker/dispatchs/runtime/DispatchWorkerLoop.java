@@ -7,6 +7,9 @@ import com.example.batch.worker.dispatchs.config.DispatchWorkerConfiguration;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+/**
+ * 分发 Worker 心跳循环，定时向 Orchestrator 汇报存活状态。
+ */
 @Service
 public class DispatchWorkerLoop extends AbstractWorkerLoop {
 

@@ -21,8 +21,7 @@ public class QuotaRuntimeResetScheduler {
     }
 
     /**
-     * Business entrypoint intentionally kept lock-free so tests and manual invocations do not depend
-     * on ShedLock state left by background schedulers.
+     * 业务入口有意不加锁，以便测试和手动调用不依赖后台调度器遗留的 ShedLock 状态。
      */
     public void reconcile() {
         if (!governance.resourceScheduler().isQuotaResetEnabled()) {

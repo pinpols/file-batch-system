@@ -96,7 +96,7 @@ class ShedLockConfigurationIntegrationTest extends AbstractIntegrationTest {
         ));
         assertThat(first).isPresent();
 
-        // Don't unlock; rely on lockAtMostFor expiry.
+        // 不主动解锁；依赖 lockAtMostFor 到期自动释放。
         Thread.sleep(1_200);
 
         Optional<SimpleLock> second = lockProvider.lock(new LockConfiguration(
