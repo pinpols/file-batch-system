@@ -3,6 +3,9 @@ package com.example.batch.worker.dispatchs.domain;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+/**
+ * 分发任务载荷，携带文件 ID、渠道编码、接收方及回执策略等信息。
+ */
 public record DispatchPayload(
         String fileId,
         String fileCode,

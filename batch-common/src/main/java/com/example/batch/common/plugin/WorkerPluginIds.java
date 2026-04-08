@@ -1,17 +1,17 @@
 package com.example.batch.common.plugin;
 
 /**
- * Default plugin ids for {@link ImportLoadPlugin} / {@link ExportDataPlugin}.
- * Templates reference these via {@code load_target_ref} / {@code export_data_ref}.
+ * {@link ImportLoadPlugin} / {@link ExportDataPlugin} 的默认插件标识。
+ * 模板通过 {@code load_target_ref} / {@code export_data_ref} 引用这些标识。
  */
 public final class WorkerPluginIds {
 
-    /** Template-driven JDBC INSERT/UPSERT ({@code jdbc_mapped_import} in template). */
+    /** 基于模板驱动的 JDBC INSERT/UPSERT（模板中为 {@code jdbc_mapped_import}）。 */
     public static final String IMPORT_LOAD_JDBC_MAPPED = "jdbc_mapped";
 
-    /** Template-driven batch + detail SELECT ({@code jdbc_mapped_export} in template). */
+    /** 基于模板驱动的批量 + 明细 SELECT（模板中为 {@code jdbc_mapped_export}）。 */
     public static final String EXPORT_DATA_JDBC_MAPPED = "jdbc_mapped_export";
-    /** Template-driven SQL export ({@code default_query_sql} + {@code query_param_schema.sqlTemplateExport}). */
+    /** 基于模板驱动的 SQL 导出（{@code default_query_sql} + {@code query_param_schema.sqlTemplateExport}）。 */
     public static final String EXPORT_DATA_SQL_TEMPLATE = "sql_template_export";
 
     private WorkerPluginIds() {

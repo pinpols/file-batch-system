@@ -11,11 +11,10 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
- * Generates a fixed-width flat file.
+ * 生成固定宽度平面文件。
  *
- * <p>Each field is padded or truncated to its configured {@code width}; the optional
- * {@code record_length} configuration enforces a total line length by padding the
- * entire record on the right.
+ * <p>每个字段按配置的 {@code width} 填充或截断；可选的 {@code record_length} 配置
+ * 通过在整行右侧补空格来强制统一行长。
  */
 @Component
 public class FixedWidthExportFormat extends AbstractExportFormat {

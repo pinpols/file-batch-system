@@ -19,6 +19,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 分发渠道健康管理服务，负责探针执行、状态更新及分发前健康门控。
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -174,7 +177,7 @@ public class DispatchChannelHealthService {
     }
 
     /**
-     * 只读盘、权限不足等在本机联调常见，降级为 DEBUG；其余仍用 WARN 便于发现真实故障。
+     * 只读挂载、权限不足等本机联调场景频发，降级为 DEBUG 避免噪音；其余情况仍使用 WARN 以便发现真实故障。
      */
     private void logProbeFailure(String tenantId, String channelCode, String channelType, String message, String evidence) {
         String m = message == null ? "" : message.toLowerCase(Locale.ROOT);

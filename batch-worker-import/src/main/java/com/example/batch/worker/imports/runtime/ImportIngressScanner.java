@@ -49,8 +49,8 @@ public class ImportIngressScanner {
     }
 
     /**
-     * Lock-free entrypoint for tests and manual invocations. Scheduling concerns stay in
-     * {@link #scheduledScan()} so direct calls always execute scanner logic.
+     * 无锁入口，供测试和手动调用使用。调度逻辑留在
+     * {@link #scheduledScan()} 中，直接调用时始终执行扫描逻辑。
      */
     public void scan() {
         if (!scannerProperties.isEnabled() || !StringUtils.hasText(workerConfiguration.tenantId())) {

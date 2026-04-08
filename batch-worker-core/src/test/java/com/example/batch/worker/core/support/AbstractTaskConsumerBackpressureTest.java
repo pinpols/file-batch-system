@@ -101,7 +101,7 @@ class AbstractTaskConsumerBackpressureTest {
             }
         };
 
-        // Force permits = 1
+        // 强制 permits = 1
         ReflectionTestUtils.setField(consumer, "maxConcurrentTasks", 1);
 
         String msg = JsonUtils.toJson(new TaskDispatchMessage(
@@ -130,13 +130,13 @@ class AbstractTaskConsumerBackpressureTest {
 
         assertThat(entered.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
 
-        // Second call should pause and return immediately (no permit)
+        // 第二次调用应触发 pause 并立即返回（无可用 permit）
         when(container.isPauseRequested()).thenReturn(false).thenReturn(true);
         Future<?> f2 = pool.submit(() -> ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg));
         f2.get();
         verify(container, times(1)).pause();
 
-        // When first finishes, it should release and resume
+        // 第一个任务完成后，应释放 permit 并恢复消费
         when(container.isPauseRequested()).thenReturn(true);
         allowFinish.countDown();
         f1.get();

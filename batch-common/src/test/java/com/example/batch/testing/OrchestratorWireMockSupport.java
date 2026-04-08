@@ -7,8 +7,8 @@ import java.nio.charset.StandardCharsets;
 import org.springframework.test.context.DynamicPropertyRegistry;
 
 /**
- * Stubs orchestrator HTTP endpoints used by workers ({@code /internal/workers/**}) so integration
- * tests can run without a real orchestrator process.
+ * 为 Worker 使用的编排器 HTTP 端点（{@code /internal/workers/**}）提供桩服务，
+ * 使集成测试无需启动真实的编排器进程。
  */
 public final class OrchestratorWireMockSupport {
 
@@ -50,7 +50,7 @@ public final class OrchestratorWireMockSupport {
     }
 
     /**
-     * Registers {@code batch.orchestrator.base-url} and {@code batch.worker.task-client.base-url}.
+     * 注册 {@code batch.orchestrator.base-url} 和 {@code batch.worker.task-client.base-url} 属性。
      */
     public static void registerOrchestratorBaseUrls(DynamicPropertyRegistry registry) {
         ensureStarted();

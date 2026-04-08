@@ -17,10 +17,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for the {@code VERIFY_RSA_SHA256} preprocess step using the test RSA keys
- * at {@code fixtures/test-rsa-public.pem} and {@code fixtures/test-rsa-private.pem}.
+ * {@code VERIFY_RSA_SHA256} 预处理步骤的测试，使用位于
+ * {@code fixtures/test-rsa-public.pem} 和 {@code fixtures/test-rsa-private.pem} 的测试 RSA 密钥。
  *
- * <p>Key generation (one-time, already done):
+ * <p>密钥生成（一次性，已完成）：
  * <pre>
  *   openssl genrsa -out test-rsa-private.pem 2048
  *   openssl rsa -in test-rsa-private.pem -pubout -out test-rsa-public.pem
@@ -38,7 +38,7 @@ class ImportPreprocessPipelineRsaTest {
     static void loadKeys() throws Exception {
         publicKeyPem = loadResource("fixtures/test-rsa-public.pem");
 
-        // Sign the test payload with the PKCS#8 private key (fresh signature each test run)
+        // 使用 PKCS#8 私钥对测试载荷签名（每次测试运行生成新签名）
         String privateKeyPem = loadResource("fixtures/test-rsa-private-pkcs8.pem");
         PrivateKey privateKey = parsePkcs8PrivateKey(privateKeyPem);
         Signature signer = Signature.getInstance("SHA256withRSA");
@@ -93,7 +93,7 @@ class ImportPreprocessPipelineRsaTest {
         Map<String, Object> step = Map.of(
                 "type", "VERIFY_RSA_SHA256",
                 "signatureBase64", validSignatureB64
-                // no publicKeyPem
+                // 未提供 publicKeyPem
         );
         Map<String, Object> template = Map.of(
                 "preprocess_pipeline", java.util.List.of(step)
@@ -119,7 +119,7 @@ class ImportPreprocessPipelineRsaTest {
         Map<String, Object> step = Map.of(
                 "type", "VERIFY_RSA_SHA256",
                 "publicKeyPem", publicKeyPem
-                // signatureBase64 not in step — provided via metadata
+                // signatureBase64 不在 step 中 — 通过 metadata 提供
         );
         Map<String, Object> template = Map.of(
                 "preprocess_pipeline", java.util.List.of(step)
@@ -143,7 +143,7 @@ class ImportPreprocessPipelineRsaTest {
                 "preprocess_pipeline", java.util.List.of(step)
         );
 
-        // testingOpen=true skips the RSA check entirely
+        // testingOpen=true 时完全跳过 RSA 校验
         byte[] result = ImportPreprocessPipeline.run(PAYLOAD, null, template, true);
         assertThat(result).isEqualTo(PAYLOAD);
     }
@@ -157,8 +157,8 @@ class ImportPreprocessPipelineRsaTest {
     }
 
     /**
-     * Parse a PKCS#8 PEM-encoded RSA private key.
-     * Key generated with:
+     * 解析 PKCS#8 PEM 编码的 RSA 私钥。
+     * 密钥生成命令：
      *   openssl genrsa -out test-rsa-private.pem 2048
      *   openssl pkcs8 -topk8 -nocrypt -in test-rsa-private.pem -out test-rsa-private-pkcs8.pem
      */

@@ -217,7 +217,7 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
                     try {
                         return LocalDateTime.parse(text, formatter).toInstant(ZoneOffset.UTC);
                     } catch (DateTimeParseException ignoredPattern) {
-                        // try next pattern
+                        // 尝试下一个格式
                     }
                 }
                 throw ignoredToo;

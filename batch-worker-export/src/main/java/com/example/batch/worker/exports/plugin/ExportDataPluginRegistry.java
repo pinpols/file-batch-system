@@ -7,6 +7,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 导出数据插件注册中心，收集所有 {@link com.example.batch.common.plugin.ExportDataPlugin} Bean 并按 id 索引。
+ */
 @Component
 public class ExportDataPluginRegistry {
 
@@ -25,6 +28,13 @@ public class ExportDataPluginRegistry {
         this.byId = Map.copyOf(resolved);
     }
 
+    /**
+     * 按 id 获取插件，不存在时抛出异常。
+     *
+     * @param id 插件标识（大小写不敏感）
+     * @return 对应的 ExportDataPlugin
+     * @throws IllegalStateException id 为空或未找到插件时抛出
+     */
     public ExportDataPlugin require(String id) {
         if (id == null || id.isBlank()) {
             throw new IllegalStateException(

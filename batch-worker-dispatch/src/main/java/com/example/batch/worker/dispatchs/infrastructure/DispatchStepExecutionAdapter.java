@@ -19,6 +19,9 @@ import java.util.Map;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
+/**
+ * 分发 pipeline 的步骤执行适配器，负责构建上下文并驱动各阶段执行。
+ */
 @Primary
 @Component
 public class DispatchStepExecutionAdapter extends AbstractPipelineStepExecutionAdapter<DispatchJobContext, DispatchStageResult> {
@@ -41,7 +44,7 @@ public class DispatchStepExecutionAdapter extends AbstractPipelineStepExecutionA
 
     @Override
     protected String pipelineDescription() {
-        return "Chapter 9 dispatch pipeline";
+        return "分发 pipeline";
     }
 
     @Override
@@ -103,7 +106,7 @@ public class DispatchStepExecutionAdapter extends AbstractPipelineStepExecutionA
     protected StepExecutionResponse buildSuccessResponse(DispatchJobContext context,
                                                          List<DispatchStageResult> results,
                                                          Map<String, Object> attributes) {
-        return new StepExecutionResponse(true, "SUCCESS", "dispatch stages executed");
+        return new StepExecutionResponse(true, "SUCCESS", "分发阶段执行完毕");
     }
 
     @Override

@@ -24,6 +24,9 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
         "com.example.batch.worker.core.mapper",
         "com.example.batch.worker.dispatchs.mapper"
 })
+/**
+ * 分发 Worker 应用程序入口。
+ */
 public class BatchWorkerDispatchApplication {
 
     public static void main(String[] args) {

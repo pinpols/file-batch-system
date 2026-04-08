@@ -16,7 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Generic export: batch header + detail pages from whitelisted tables/columns in template.
+ * 通用 JDBC 映射导出插件：从模板配置的白名单表/列中查询批次头部及明细分页数据。
  */
 @Component
 public class GenericJdbcMappedExportDataPlugin implements ExportDataPlugin {

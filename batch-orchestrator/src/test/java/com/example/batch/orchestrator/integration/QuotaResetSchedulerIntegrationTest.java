@@ -16,8 +16,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * Integration test: QuotaRuntimeResetScheduler invokes reconcileExpiredStates with the
- * configured sliding-window-hours, and the quota-reset-enabled flag correctly gates execution.
+ * 集成测试：QuotaRuntimeResetScheduler 使用配置的 sliding-window-hours 调用 reconcileExpiredStates，
+ * 且 quota-reset-enabled 标志正确地控制执行开关。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
@@ -58,7 +58,7 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
                 7, null, Instant.now(), Instant.now());
         quotaRuntimeStateRepository.save(expired);
 
-        // Trigger scheduler directly (schedule interval is 600s so won't auto-fire in test)
+        // 直接触发调度器（调度间隔为 600 秒，测试中不会自动触发）
         quotaRuntimeResetScheduler.reconcile();
 
         QuotaRuntimeStateRecord updated = quotaRuntimeStateRepository
@@ -69,10 +69,10 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void schedulerReconcileHandlesNoExpiredStatesGracefully() {
-        // All states in DB are either non-expired or non-existent for this owner
+        // 数据库中该 owner 的所有状态要么未过期要么不存在
         String ownerCode = "sched-no-expired-" + System.currentTimeMillis();
 
-        // Create a state that is NOT yet expired (window expires in the future)
+        // 创建一个尚未过期的状态（窗口在未来过期）
         QuotaRuntimeStateRecord active = new QuotaRuntimeStateRecord(
                 null, "t1", "JOB", ownerCode, "SLIDING_WINDOW",
                 Instant.now().minusSeconds(1800), Instant.now().plusSeconds(3600), // still valid

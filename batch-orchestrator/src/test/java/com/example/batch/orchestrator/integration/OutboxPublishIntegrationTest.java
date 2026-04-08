@@ -28,10 +28,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Integration test: OutboxEventEntity → KafkaOutboxPublisher → Kafka topic + EventDeliveryLog.
+ * 集成测试：OutboxEventEntity → KafkaOutboxPublisher → Kafka topic + EventDeliveryLog。
  *
- * <p>Schedules are disabled in application-test.yml (poll-interval-millis: 600000) so this test
- * drives publishing manually via {@link OutboxPublisher}.
+ * <p>调度在 application-test.yml 中已禁用（poll-interval-millis: 600000），
+ * 本测试通过 {@link OutboxPublisher} 手动驱动发布。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

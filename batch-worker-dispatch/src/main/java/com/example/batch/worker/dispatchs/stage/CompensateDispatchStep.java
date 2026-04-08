@@ -12,6 +12,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 分发补偿阶段：在投递彻底失败后将分发记录标记为 COMPENSATED，并写入审计日志。
+ */
 @Component
 public class CompensateDispatchStep implements DispatchStageStep {
 

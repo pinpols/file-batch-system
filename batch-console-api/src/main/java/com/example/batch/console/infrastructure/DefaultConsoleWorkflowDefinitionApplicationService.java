@@ -250,6 +250,17 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
             }
         }
 
+        validateNodeReferences(errors, nodeCodes, startNodes, endNodes, edges);
+        DagAdjacency dag = buildAdjacency(nodeCodes, edges);
+        detectCycles(errors, dag, nodeCodes);
+        validateReachability(errors, nodes, nodeCodes, startNodes, endNodes, dag);
+
+        return errors;
+    }
+
+    private void validateNodeReferences(List<String> errors, Set<String> nodeCodes,
+                                         List<String> startNodes, List<String> endNodes,
+                                         List<WorkflowEdgeEntity> edges) {
         if (startNodes.isEmpty()) {
             errors.add("Missing START node");
         } else if (startNodes.size() > 1) {
@@ -270,8 +281,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
                 errors.add("Edge references non-existent target node: " + e.getToNodeCode());
             }
         }
+    }
 
-        // 构建邻接表用于环路检测与可达性分析
+    private DagAdjacency buildAdjacency(Set<String> nodeCodes, List<WorkflowEdgeEntity> edges) {
         Map<String, List<String>> adj = new HashMap<>();
         Map<String, List<String>> reverseAdj = new HashMap<>();
         Map<String, Integer> inDegree = new HashMap<>();
@@ -287,20 +299,22 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
                 inDegree.merge(e.getToNodeCode(), 1, Integer::sum);
             }
         }
+        return new DagAdjacency(adj, reverseAdj, inDegree);
+    }
 
-        // Kahn 算法检测环路
+    private void detectCycles(List<String> errors, DagAdjacency dag, Set<String> nodeCodes) {
         Deque<String> queue = new ArrayDeque<>();
+        Map<String, Integer> inDegree = new HashMap<>(dag.inDegree());
         for (Map.Entry<String, Integer> entry : inDegree.entrySet()) {
             if (entry.getValue() == 0) {
                 queue.add(entry.getKey());
             }
         }
         int visited = 0;
-        Set<String> reachableFromStart = new HashSet<>();
         while (!queue.isEmpty()) {
             String cur = queue.poll();
             visited++;
-            for (String next : adj.get(cur)) {
+            for (String next : dag.adj().get(cur)) {
                 int deg = inDegree.get(next) - 1;
                 inDegree.put(next, deg);
                 if (deg == 0) {
@@ -311,11 +325,15 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         if (visited < nodeCodes.size()) {
             errors.add("Cycle detected in workflow DAG");
         }
+    }
 
-        // 从 START 出发的可达性检查
+    private void validateReachability(List<String> errors, List<WorkflowNodeEntity> nodes,
+                                       Set<String> nodeCodes, List<String> startNodes,
+                                       List<String> endNodes, DagAdjacency dag) {
         if (startNodes.size() == 1) {
             String startCode = startNodes.get(0);
-            bfs(startCode, adj, reachableFromStart);
+            Set<String> reachableFromStart = new HashSet<>();
+            bfs(startCode, dag.adj(), reachableFromStart);
             for (String code : nodeCodes) {
                 if (!"START".equalsIgnoreCase(nodeTypeByCode(nodes, code))
                         && !reachableFromStart.contains(code)) {
@@ -324,11 +342,10 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
             }
         }
 
-        // END 节点应有入边（反向可达性检查）
         if (endNodes.size() == 1) {
             String endCode = endNodes.get(0);
             Set<String> reachableToEnd = new HashSet<>();
-            bfs(endCode, reverseAdj, reachableToEnd);
+            bfs(endCode, dag.reverseAdj(), reachableToEnd);
             for (String code : nodeCodes) {
                 if (!"END".equalsIgnoreCase(nodeTypeByCode(nodes, code))
                         && !reachableToEnd.contains(code)) {
@@ -336,8 +353,11 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
                 }
             }
         }
+    }
 
-        return errors;
+    private record DagAdjacency(Map<String, List<String>> adj,
+                                 Map<String, List<String>> reverseAdj,
+                                 Map<String, Integer> inDegree) {
     }
 
     private void bfs(String start, Map<String, List<String>> adj, Set<String> visited) {

@@ -16,7 +16,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
- * Resilience for worker → orchestrator HTTP: bounded retries on 5xx / I/O; immediate failure on 429.
+ * Worker → Orchestrator HTTP 的弹性测试：5xx / I/O 错误有限重试；429 立即失败。
  */
 @SuppressWarnings("removal")
 class HttpTaskExecutionClientTest {

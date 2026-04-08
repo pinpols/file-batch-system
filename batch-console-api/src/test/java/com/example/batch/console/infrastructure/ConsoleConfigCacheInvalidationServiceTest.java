@@ -44,13 +44,13 @@ class ConsoleConfigCacheInvalidationServiceTest {
         try {
             service.evictJobDefinition("t1", "JOB2");
 
-            // Within the transaction — Redis should NOT be called yet
+            // 事务进行中 —— 此时不应调用 Redis
             verify(redisTemplate, never()).delete("config:t1:job-definition:JOB2");
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
-        // After transaction scope ends (simulated by clearSynchronization), no hook fires here —
-        // but we verified the delete was not called during the transaction, which is the key behavior.
+        // 事务作用域结束后（通过 clearSynchronization 模拟），此处不会触发钩子 ——
+        // 但我们已验证在事务期间未调用 delete，这是核心行为。
     }
 
     @Test

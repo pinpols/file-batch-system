@@ -53,7 +53,7 @@ public abstract class AbstractIntegrationTest {
             .withCommand("redis-server", "--appendonly", "yes");
 
     static {
-        // Keep test infrastructure ports stable across all integration test classes in one JVM.
+        // 在同一 JVM 中所有集成测试类之间保持测试基础设施端口稳定。
         PLATFORM_POSTGRES.start();
         BUSINESS_POSTGRES.start();
         KAFKA.start();

@@ -17,7 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: console JobInstanceMapper query against real DB.
+ * 集成测试：控制台 JobInstanceMapper 对真实数据库的查询验证。
  */
 @SpringBootTest(
         classes = BatchConsoleApiApplication.class,

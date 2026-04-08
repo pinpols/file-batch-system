@@ -12,8 +12,8 @@ import java.util.Set;
 import org.springframework.util.StringUtils;
 
 /**
- * Parsed from {@code file_template_config.query_param_schema.jdbcMappedImport}
- * or top-level {@code jdbc_mapped_import} (JSON object).
+ * 从 {@code file_template_config.query_param_schema.jdbcMappedImport}
+ * 或顶层 {@code jdbc_mapped_import}（JSON 对象）解析而来。
  */
 public record JdbcMappedImportSpec(
         String schema,

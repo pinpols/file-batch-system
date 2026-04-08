@@ -27,18 +27,18 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: outbox event → Kafka/MQ dispatch via the scheduler forwarder.
+ * 集成测试：outbox event → Kafka/MQ 通过调度转发器投递。
  *
- * <p>Rather than driving {@link com.example.batch.orchestrator.infrastructure.mq.OutboxPollScheduler}
- * directly (which has ShedLock and a long fixed-delay by default), this test calls
- * {@link DefaultScheduleForwarder#advance} directly — the same code executed by the scheduler.
+ * <p>不直接驱动 {@link com.example.batch.orchestrator.infrastructure.mq.OutboxPollScheduler}
+ *（默认有 ShedLock 和较长的 fixed-delay），而是直接调用
+ * {@link DefaultScheduleForwarder#advance} —— 与调度器执行的代码一致。
  *
- * <p>Verifies:
+ * <p>验证：
  * <ul>
- *   <li>A NEW outbox_event is picked up and published to the correct Kafka topic.</li>
- *   <li>The outbox_event row transitions to {@code PUBLISHED} in the database.</li>
- *   <li>The message is consumable from the Kafka topic with the correct idempotency key.</li>
- *   <li>A DISPATCH-type event is routed to {@link BatchTopics#TASK_DISPATCH_IMPORT}.</li>
+ *   <li>NEW 状态的 outbox_event 被拾取并发布到正确的 Kafka topic。</li>
+ *   <li>outbox_event 行在数据库中转为 {@code PUBLISHED} 状态。</li>
+ *   <li>消息可从 Kafka topic 中以正确的幂等键消费。</li>
+ *   <li>DISPATCH 类型的事件被路由到 {@link BatchTopics#TASK_DISPATCH_IMPORT}。</li>
  * </ul>
  */
 @SpringBootTest(
@@ -61,17 +61,17 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
         OutboxEventEntity event = buildImportDispatchEvent("t1", idempotencyKey);
         outboxEventMapper.insert(event);
 
-        // Confirm event is NEW in DB
+        // 确认事件在数据库中为 NEW 状态
         String statusBefore = jdbcTemplate.queryForObject(
                 "select publish_status from batch.outbox_event where id = ?",
                 String.class, event.getId());
         assertThat(statusBefore).isEqualTo(OutboxPublishStatus.NEW.code());
 
-        // Drive forwarder (same code as the scheduler poll)
+        // 驱动转发器（与调度器轮询执行的代码一致）
         ScheduleForwarderResult result = scheduleForwarder.advance(new SchedulePlan());
         assertThat(result).isNotNull();
 
-        // Outbox row should now be PUBLISHED
+        // Outbox 行现在应为 PUBLISHED 状态
         await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
             String statusAfter = jdbcTemplate.queryForObject(
                     "select publish_status from batch.outbox_event where id = ?",
@@ -79,7 +79,7 @@ class OutboxEventToKafkaDispatchIntegrationTest extends AbstractIntegrationTest 
             assertThat(statusAfter).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
         });
 
-        // Verify the message is on the Kafka topic
+        // 验证消息已发送到 Kafka topic
         try (KafkaConsumer<String, String> consumer = buildConsumer("dispatch-it-" + System.nanoTime())) {
             consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT));
             await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(500)).untilAsserted(() -> {

@@ -7,6 +7,9 @@ import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+/**
+ * 导出 Worker 心跳与注册循环，定期向平台上报 Worker 存活状态。
+ */
 @Service
 public class ExportWorkerLoop extends AbstractWorkerLoop {
 
@@ -33,6 +36,9 @@ public class ExportWorkerLoop extends AbstractWorkerLoop {
         return 8084;
     }
 
+    /**
+     * 定时心跳方法，按配置间隔向平台上报 Worker 存活。
+     */
     @Scheduled(fixedDelayString = "${batch.worker.export.heartbeat-interval-millis:15000}")
     public void heartbeat() {
         doHeartbeat();

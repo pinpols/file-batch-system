@@ -52,20 +52,20 @@ class PreprocessStepKmsDecryptTest {
         runtimeRepo = mock(PlatformFileRuntimeRepository.class);
         when(runtimeRepo.toLong(any())).thenReturn(1L);
         when(runtimeRepo.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
-        // updateFileStatus returns void — Mockito mocks do nothing by default
+        // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
 
         preprocessStep = new PreprocessStep(runtimeRepo, security, cryptoService);
     }
 
     @Test
     void shouldDecryptBatchEncPayload_beforePipelineRuns() {
-        // Simulate what StoreStep does: encrypt plaintext with BatchObjectCryptoService
+        // 模拟 StoreStep 的行为：使用 BatchObjectCryptoService 加密明文
         byte[] encryptedBytes = cryptoService.encrypt(
                 PLAINTEXT.getBytes(StandardCharsets.UTF_8), KEY_REF);
         String encryptedBase64 = Base64.getEncoder().encodeToString(encryptedBytes);
 
-        // Build ImportPayload carrying the BATCHENC-encrypted content as base64
-        // Fields: fileCode, fileName, originalFileName, bizType, fileFormatType, charset,
+        // 构建携带 BATCHENC 加密内容（base64 编码）的 ImportPayload
+        // 字段: fileCode, fileName, originalFileName, bizType, fileFormatType, charset,
         //   targetCharset, checksumType, checksumValue, sourceType, sourceRef, storageType,
         //   storagePath, storageBucket, templateCode, batchNo, content, contentBase64,
         //   delimiter, headerRows, footerRows, withHeader, metadata
@@ -73,7 +73,7 @@ class PreprocessStepKmsDecryptTest {
                 null, null, null, null, "JSON", null, null, null,
                 null, null, null, null,
                 null, null, null, null,
-                null, encryptedBase64, // contentBase64 (field 18)
+                null, encryptedBase64, // contentBase64（第 18 个字段）
                 null, null, null, null,
                 Map.of()
         );
@@ -84,7 +84,7 @@ class PreprocessStepKmsDecryptTest {
         ImportStageResult result = preprocessStep.execute(context);
 
         assertThat(result.success()).isTrue();
-        // After decryption, normalizedPayload should equal the original JSON
+        // 解密后，normalizedPayload 应与原始 JSON 一致
         Object normalized = context.getAttributes().get("normalizedPayload");
         assertThat(normalized).isNotNull();
         assertThat(normalized.toString()).contains("customerNo");
@@ -98,7 +98,7 @@ class PreprocessStepKmsDecryptTest {
                 null, null, null, null, "JSON", null, null, null,
                 null, null, null, null,
                 null, null, null, null,
-                rawJson, null, // content (field 17)
+                rawJson, null, // content（第 17 个字段）
                 null, null, null, null,
                 Map.of()
         );

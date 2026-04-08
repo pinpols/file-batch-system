@@ -31,7 +31,7 @@ class DeadLetterReplayStatusTest {
 
     @Test
     void shouldHaveReplayableInitialStatuses() {
-        // NEW and FAILED are replayable initial states
+        // NEW 和 FAILED 是可重放的初始状态
         assertThat(DeadLetterReplayStatus.NEW.code()).isEqualTo("NEW");
         assertThat(DeadLetterReplayStatus.FAILED.code()).isEqualTo("FAILED");
     }

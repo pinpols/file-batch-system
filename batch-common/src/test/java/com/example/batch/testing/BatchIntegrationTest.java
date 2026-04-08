@@ -11,10 +11,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Marks a test class as part of the batch integration-test suite.
+ * 将测试类标记为批量集成测试套件的一部分。
  *
- * <p>This keeps integration tests consistent without repeating the same JUnit and Testcontainers
- * annotations in every child class.
+ * <p>通过统一注解保持集成测试的一致性，避免在每个子类中重复声明 JUnit 和 Testcontainers 注解。
  */
 @Inherited
 @Documented

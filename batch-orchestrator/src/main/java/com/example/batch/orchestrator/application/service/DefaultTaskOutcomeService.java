@@ -155,41 +155,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             throw new BizException(ResultCode.STATE_CONFLICT,
                     "task already finished by concurrent update: taskId=" + command.taskId());
         }
-        // C-8: 检查 markStatus 返回值，0 行表示并发更新已推进分区状态，保证分区与任务状态在同一事务内一致
+
+        if (command.success()) {
+            applySuccessOutcome(command, partition, task);
+        } else {
+            applyFailureOutcome(command, partition, task, retryScheduled);
+        }
         if (partition != null) {
-            if (command.success()) {
-                int partitionUpdated = jobMappers.jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
-                        .tenantId(command.tenantId()).id(partition.getId())
-                        .partitionStatus(PartitionStatus.SUCCESS.code()).runningStatus(PartitionStatus.RUNNING.code())
-                        .terminalStatus1(PartitionStatus.SUCCESS.code()).terminalStatus2(PartitionStatus.FAILED.code())
-                        .terminalStatus3(PartitionStatus.CANCELLED.code()).terminalStatus4(PartitionStatus.TERMINATED.code())
-                        .expectedVersion(partition.getVersion()).build());
-                if (partitionUpdated <= 0) {
-                    log.warn("partition markStatus(SUCCESS) CAS miss - concurrent update likely already advanced: partitionId={}", partition.getId());
-                }
-            } else if (retryScheduled) {
-                // 进入 RETRYING：partition 先标记为 RETRYING，实际重排队由 retry scheduler → outbox 完成。
-                int retryUpdated = jobMappers.jobPartitionMapper.markRetrying(
-                        command.tenantId(),
-                        partition.getId(),
-                        Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1,
-                        PartitionStatus.RETRYING.code(),
-                        partition.getVersion()
-                );
-                if (retryUpdated <= 0) {
-                    log.warn("partition markRetrying CAS miss - concurrent update likely already advanced: partitionId={}", partition.getId());
-                }
-            } else {
-                int failUpdated = jobMappers.jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
-                        .tenantId(command.tenantId()).id(partition.getId())
-                        .partitionStatus(PartitionStatus.FAILED.code()).runningStatus(PartitionStatus.RUNNING.code())
-                        .terminalStatus1(PartitionStatus.SUCCESS.code()).terminalStatus2(PartitionStatus.FAILED.code())
-                        .terminalStatus3(PartitionStatus.CANCELLED.code()).terminalStatus4(PartitionStatus.TERMINATED.code())
-                        .expectedVersion(partition.getVersion()).build());
-                if (failUpdated <= 0) {
-                    log.warn("partition markStatus(FAILED) CAS miss - concurrent update likely already advanced: partitionId={}", partition.getId());
-                }
-            }
             jobMappers.jobPartitionMapper.updateOutputSummary(
                     command.tenantId(),
                     partition.getId(),
@@ -199,126 +171,206 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
         updateStepInstanceProgress(command, task, retryScheduled, finishedAt);
         if (jobInstance != null) {
-            // C-2: 行锁序列化并发 outcome 处理器的分区计数，防止读到过期计数导致状态机转换冲突
-            List<JobPartitionEntity> partitions = jobMappers.jobPartitionMapper.selectByQueryForUpdate(new JobPartitionQuery(
-                    command.tenantId(),
-                    task.getJobInstanceId(),
-                    null,
-                    null
-            ));
-            long successCount = partitions.stream().filter(p -> PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())).count();
-            long failedCount = partitions.stream().filter(p -> PartitionStatus.FAILED.code().equals(p.getPartitionStatus())).count();
-            long finishedPartitionCount = successCount + failedCount;
-            boolean allPartitionsFinished = !partitions.isEmpty() && finishedPartitionCount == partitions.size();
-            WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(command.tenantId(), jobInstance.getId());
-            String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
-            List<JobTaskEntity> tasks = jobMappers.jobTaskMapper.selectByQuery(new JobTaskQuery(
-                    command.tenantId(),
-                    task.getJobInstanceId(),
-                    null,
-                    null,
-                    null
-            ));
-            NodePartitionProgress nodeProgress = resolveNodePartitionProgress(partitions, tasks, currentNodeCode, workflowRun);
-            Set<String> activeNodes = workflowRun == null
-                    ? new LinkedHashSet<>()
-                    : parseActiveNodes(workflowRun.getCurrentNodeCode());
-            List<WorkflowDagService.DagNodeResolution> nextNodes = nodeProgress.allFinished() && workflowRun != null
-                    ? workflowDagService.resolveNextNodes(
-                            workflowRun.getWorkflowDefinitionId(),
-                            currentNodeCode,
-                            nodeProgress.failedCount() == 0,
-                            task.getTaskPayload()
-                    )
-                    : List.of();
-            if (nodeProgress.allFinished() && workflowRun != null) {
-                activeNodes.remove(currentNodeCode);
-                recordNodeRunFinish(NodeRunFinishCommand.of(
-                        new NodeRunKey(
-                                workflowRun.getId(),
-                                currentNodeCode,
-                                resolveCurrentNodeType(task)
-                        ),
-                        new NodeRunOutcome(
-                                nodeProgress.failedCount() == 0,
-                                command.errorCode(),
-                                command.errorMessage(),
-                                resolveNodeStartedAt(workflowRun.getId(), currentNodeCode, workflowRun.getStartedAt(), finishedAt),
-                                finishedAt
-                        )
-                ));
-                for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
-                    if (nextNode == null) {
-                        continue;
-                    }
-                    if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
-                        if (workflowDagService.isNodeReadyForDispatch(
-                                workflowRun.getId(),
-                                workflowRun.getWorkflowDefinitionId(),
-                                nextNode.nodeCode(),
-                                task.getTaskPayload()
-                        )) {
-                            recordNodeRunStart(workflowRun.getId(), nextNode.nodeCode(), nextNode.nodeType(), finishedAt);
-                            recordNodeRunFinish(NodeRunFinishCommand.of(
-                                    new NodeRunKey(
-                                            workflowRun.getId(),
-                                            nextNode.nodeCode(),
-                                            nextNode.nodeType()
-                                    ),
-                                    new NodeRunOutcome(
-                                            nodeProgress.failedCount() == 0,
-                                            command.errorCode(),
-                                            command.errorMessage(),
-                                            finishedAt,
-                                            finishedAt
-                                    )
-                            ));
-                        }
-                        continue;
-                    }
-                    workflowNodeDispatchServiceProvider.getObject().dispatchNode(
-                            jobInstance,
-                            workflowRun,
-                            nextNode,
-                            task.getTaskPayload(),
-                            jobInstance.getTraceId()
-                    );
-                    if (isActiveNode(workflowRun.getId(), nextNode.nodeCode())) {
-                        activeNodes.add(nextNode.nodeCode());
-                    }
-                }
-            }
-            boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
-            String instanceEvent = resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
-            String instanceStatus = stateMachine.transition(jobInstance, instanceEvent).toState();
-            int progressUpdated = jobMappers.jobInstanceMapper.updateProgress(UpdateInstanceProgressParam.builder()
-                    .tenantId(command.tenantId()).id(jobInstance.getId())
-                    .instanceStatus(instanceStatus)
-                    .successPartitionCount((int) successCount).failedPartitionCount((int) failedCount)
-                    .resultSummary(buildJobInstanceResultSummary(jobInstance, partitions, command))
-                    .finishedAt(allPartitionsFinished && !dagContinues ? finishedAt : null)
-                    .expectedVersion(jobInstance.getVersion()).build());
-            if (progressUpdated <= 0) {
-                throw new BizException(ResultCode.STATE_CONFLICT, "job instance progress conflict");
-            }
-            jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
-            // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
-            if (allPartitionsFinished && !dagContinues && isTerminalJobInstanceStatus(instanceStatus)) {
-                signalParentVirtualTask(jobInstance, instanceStatus, command, finishedAt);
-            }
-            if (workflowRun != null) {
-                String workflowEvent = resolveWorkflowEvent(failedCount, allPartitionsFinished, dagContinues);
-                String workflowStatus = stateMachine.transition(workflowRun, workflowEvent).toState();
-                workflowMappers.workflowRunMapper.updateStatus(
-                        command.tenantId(),
-                        workflowRun.getId(),
-                        workflowStatus,
-                        resolveWorkflowCurrentNode(activeNodes, workflowStatus, currentNodeCode),
-                        allPartitionsFinished && !dagContinues ? finishedAt : null
-                );
-            }
+            advancePartitionAndInstance(command, task, jobInstance, finishedAt);
         }
         return jobMappers.jobTaskMapper.selectById(command.tenantId(), command.taskId());
+    }
+
+    /**
+     * 处理成功路径：将分区标记为 SUCCESS。
+     */
+    private void applySuccessOutcome(TaskOutcomeCommand command,
+                                     JobPartitionEntity partition,
+                                     JobTaskEntity task) {
+        if (partition == null) {
+            return;
+        }
+        // C-8: 检查 markStatus 返回值，0 行表示并发更新已推进分区状态，保证分区与任务状态在同一事务内一致
+        int partitionUpdated = jobMappers.jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
+                .tenantId(command.tenantId()).id(partition.getId())
+                .partitionStatus(PartitionStatus.SUCCESS.code()).runningStatus(PartitionStatus.RUNNING.code())
+                .terminalStatus1(PartitionStatus.SUCCESS.code()).terminalStatus2(PartitionStatus.FAILED.code())
+                .terminalStatus3(PartitionStatus.CANCELLED.code()).terminalStatus4(PartitionStatus.TERMINATED.code())
+                .expectedVersion(partition.getVersion()).build());
+        if (partitionUpdated <= 0) {
+            log.warn("partition markStatus(SUCCESS) CAS miss - concurrent update likely already advanced: partitionId={}", partition.getId());
+        }
+    }
+
+    /**
+     * 处理失败/重试路径：根据是否安排重试，将分区标记为 RETRYING 或 FAILED。
+     */
+    private void applyFailureOutcome(TaskOutcomeCommand command,
+                                     JobPartitionEntity partition,
+                                     JobTaskEntity task,
+                                     boolean retryScheduled) {
+        if (partition == null) {
+            return;
+        }
+        if (retryScheduled) {
+            // 进入 RETRYING：partition 先标记为 RETRYING，实际重排队由 retry scheduler → outbox 完成。
+            int retryUpdated = jobMappers.jobPartitionMapper.markRetrying(
+                    command.tenantId(),
+                    partition.getId(),
+                    Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1,
+                    PartitionStatus.RETRYING.code(),
+                    partition.getVersion()
+            );
+            if (retryUpdated <= 0) {
+                log.warn("partition markRetrying CAS miss - concurrent update likely already advanced: partitionId={}", partition.getId());
+            }
+        } else {
+            int failUpdated = jobMappers.jobPartitionMapper.markStatus(MarkPartitionStatusParam.builder()
+                    .tenantId(command.tenantId()).id(partition.getId())
+                    .partitionStatus(PartitionStatus.FAILED.code()).runningStatus(PartitionStatus.RUNNING.code())
+                    .terminalStatus1(PartitionStatus.SUCCESS.code()).terminalStatus2(PartitionStatus.FAILED.code())
+                    .terminalStatus3(PartitionStatus.CANCELLED.code()).terminalStatus4(PartitionStatus.TERMINATED.code())
+                    .expectedVersion(partition.getVersion()).build());
+            if (failUpdated <= 0) {
+                log.warn("partition markStatus(FAILED) CAS miss - concurrent update likely already advanced: partitionId={}", partition.getId());
+            }
+        }
+    }
+
+    /**
+     * 推进分区/实例状态机：统计分区完成情况，更新 job_instance 状态，处理 DAG 节点流转。
+     */
+    private void advancePartitionAndInstance(TaskOutcomeCommand command,
+                                            JobTaskEntity task,
+                                            JobInstanceEntity jobInstance,
+                                            Instant finishedAt) {
+        // C-2: 行锁序列化并发 outcome 处理器的分区计数，防止读到过期计数导致状态机转换冲突
+        List<JobPartitionEntity> partitions = jobMappers.jobPartitionMapper.selectByQueryForUpdate(new JobPartitionQuery(
+                command.tenantId(),
+                task.getJobInstanceId(),
+                null,
+                null
+        ));
+        long successCount = partitions.stream().filter(p -> PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())).count();
+        long failedCount = partitions.stream().filter(p -> PartitionStatus.FAILED.code().equals(p.getPartitionStatus())).count();
+        long finishedPartitionCount = successCount + failedCount;
+        boolean allPartitionsFinished = !partitions.isEmpty() && finishedPartitionCount == partitions.size();
+        WorkflowRunEntity workflowRun = workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(command.tenantId(), jobInstance.getId());
+        String currentNodeCode = resolveCurrentNodeCode(task, workflowRun);
+        List<JobTaskEntity> tasks = jobMappers.jobTaskMapper.selectByQuery(new JobTaskQuery(
+                command.tenantId(),
+                task.getJobInstanceId(),
+                null,
+                null,
+                null
+        ));
+        NodePartitionProgress nodeProgress = resolveNodePartitionProgress(partitions, tasks, currentNodeCode, workflowRun);
+        Set<String> activeNodes = workflowRun == null
+                ? new LinkedHashSet<>()
+                : parseActiveNodes(workflowRun.getCurrentNodeCode());
+
+        if (nodeProgress.allFinished() && workflowRun != null) {
+            advanceDagNodes(command, task, jobInstance, workflowRun, currentNodeCode, nodeProgress, activeNodes, finishedAt);
+        }
+
+        boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
+        String instanceEvent = resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
+        String instanceStatus = stateMachine.transition(jobInstance, instanceEvent).toState();
+        int progressUpdated = jobMappers.jobInstanceMapper.updateProgress(UpdateInstanceProgressParam.builder()
+                .tenantId(command.tenantId()).id(jobInstance.getId())
+                .instanceStatus(instanceStatus)
+                .successPartitionCount((int) successCount).failedPartitionCount((int) failedCount)
+                .resultSummary(buildJobInstanceResultSummary(jobInstance, partitions, command))
+                .finishedAt(allPartitionsFinished && !dagContinues ? finishedAt : null)
+                .expectedVersion(jobInstance.getVersion()).build());
+        if (progressUpdated <= 0) {
+            throw new BizException(ResultCode.STATE_CONFLICT, "job instance progress conflict");
+        }
+        jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
+        // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
+        if (allPartitionsFinished && !dagContinues && isTerminalJobInstanceStatus(instanceStatus)) {
+            signalParentVirtualTask(jobInstance, instanceStatus, command, finishedAt);
+        }
+        if (workflowRun != null) {
+            String workflowEvent = resolveWorkflowEvent(failedCount, allPartitionsFinished, dagContinues);
+            String workflowStatus = stateMachine.transition(workflowRun, workflowEvent).toState();
+            workflowMappers.workflowRunMapper.updateStatus(
+                    command.tenantId(),
+                    workflowRun.getId(),
+                    workflowStatus,
+                    resolveWorkflowCurrentNode(activeNodes, workflowStatus, currentNodeCode),
+                    allPartitionsFinished && !dagContinues ? finishedAt : null
+            );
+        }
+    }
+
+    /**
+     * DAG 工作流节点推进：完成当前节点运行记录，解析并派发后继节点。
+     */
+    private void advanceDagNodes(TaskOutcomeCommand command,
+                                 JobTaskEntity task,
+                                 JobInstanceEntity jobInstance,
+                                 WorkflowRunEntity workflowRun,
+                                 String currentNodeCode,
+                                 NodePartitionProgress nodeProgress,
+                                 Set<String> activeNodes,
+                                 Instant finishedAt) {
+        activeNodes.remove(currentNodeCode);
+        recordNodeRunFinish(NodeRunFinishCommand.of(
+                new NodeRunKey(
+                        workflowRun.getId(),
+                        currentNodeCode,
+                        resolveCurrentNodeType(task)
+                ),
+                new NodeRunOutcome(
+                        nodeProgress.failedCount() == 0,
+                        command.errorCode(),
+                        command.errorMessage(),
+                        resolveNodeStartedAt(workflowRun.getId(), currentNodeCode, workflowRun.getStartedAt(), finishedAt),
+                        finishedAt
+                )
+        ));
+        List<WorkflowDagService.DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
+                workflowRun.getWorkflowDefinitionId(),
+                currentNodeCode,
+                nodeProgress.failedCount() == 0,
+                task.getTaskPayload()
+        );
+        for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
+            if (nextNode == null) {
+                continue;
+            }
+            if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
+                if (workflowDagService.isNodeReadyForDispatch(
+                        workflowRun.getId(),
+                        workflowRun.getWorkflowDefinitionId(),
+                        nextNode.nodeCode(),
+                        task.getTaskPayload()
+                )) {
+                    recordNodeRunStart(workflowRun.getId(), nextNode.nodeCode(), nextNode.nodeType(), finishedAt);
+                    recordNodeRunFinish(NodeRunFinishCommand.of(
+                            new NodeRunKey(
+                                    workflowRun.getId(),
+                                    nextNode.nodeCode(),
+                                    nextNode.nodeType()
+                            ),
+                            new NodeRunOutcome(
+                                    nodeProgress.failedCount() == 0,
+                                    command.errorCode(),
+                                    command.errorMessage(),
+                                    finishedAt,
+                                    finishedAt
+                            )
+                    ));
+                }
+                continue;
+            }
+            workflowNodeDispatchServiceProvider.getObject().dispatchNode(
+                    jobInstance,
+                    workflowRun,
+                    nextNode,
+                    task.getTaskPayload(),
+                    jobInstance.getTraceId()
+            );
+            if (isActiveNode(workflowRun.getId(), nextNode.nodeCode())) {
+                activeNodes.add(nextNode.nodeCode());
+            }
+        }
     }
 
     private void updateStepInstanceProgress(TaskOutcomeCommand command,

@@ -120,7 +120,7 @@ class JobSlaSchedulerTest {
         candidate.setJobCode("TEST_JOB");
         candidate.setInstanceStatus("RUNNING");
         candidate.setTraceId("trace-003");
-        // No deadline, but expectedDurationSeconds exceeded
+        // 无截止时间，但 expectedDurationSeconds 已超出
         candidate.setExpectedDurationSeconds(60);
         candidate.setStartedAt(Instant.now().minusSeconds(3600)); // started 1h ago, expected 60s
 

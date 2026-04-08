@@ -4,8 +4,8 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
- * NAS / OSS / SFTP / EMAIL: persists the same filesystem envelope as LOCAL for pickup.
- * Does not implement real remote protocols — aligns with design by making the gap explicit in {@code transportStub} on the envelope.
+ * NAS / OSS 渠道存根适配器：以与 LOCAL 相同的方式将分发信封写入文件系统供运维捡收，
+ * 不实现真实远程传输协议——通过信封中的 {@code transportStub} 字段显式标记该差异。
  */
 @Component
 public class StubRemoteFilesystemDispatchChannelAdapter implements DispatchChannelAdapter {

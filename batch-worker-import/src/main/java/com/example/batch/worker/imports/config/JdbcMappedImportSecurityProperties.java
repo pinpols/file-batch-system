@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class JdbcMappedImportSecurityProperties {
 
     /**
-     * Schemas allowed in jdbc_mapped_import (default: only {@code biz} business schema).
+     * jdbc_mapped_import 允许使用的 schema（默认：仅 {@code biz} 业务 schema）。
      */
     private List<String> allowedSchemas = new ArrayList<>(List.of("biz"));
 }

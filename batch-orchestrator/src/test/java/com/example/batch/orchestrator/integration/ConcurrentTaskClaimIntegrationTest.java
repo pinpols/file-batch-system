@@ -35,10 +35,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: two workers race to claim the same launched task.
+ * 集成测试：两个 Worker 竞争认领同一个已启动的任务。
  *
- * <p>Proves the real claim path only admits one winner under concurrency. The loser observes the
- * winner's assignment when it re-reads the row, which is the expected conflict behavior.
+ * <p>验证在并发条件下真实认领路径只允许一个获胜者。失败方在重新读取行时
+ * 观察到获胜方的分配结果，这是预期的冲突行为。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

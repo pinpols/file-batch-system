@@ -21,8 +21,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration: each {@link TriggerType} produces a {@code job_instance} with matching {@code trigger_type}
- * and dispatches at least one outbox row when a worker exists (schedule-plan path).
+ * 集成测试：每种 {@link TriggerType} 生成匹配 {@code trigger_type} 的 {@code job_instance}，
+ * 并在存在 Worker 时（调度计划路径）至少派发一条 outbox 行。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

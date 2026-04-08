@@ -4,6 +4,9 @@ import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.worker.exports.domain.ExportWorkerType;
 import org.springframework.stereotype.Component;
 
+/**
+ * 默认导出 Worker 路由适配器，将 Worker 类型设置为 EXPORT 并标记为可用。
+ */
 @Component
 public class DefaultExportWorkerRouteAdapter implements ExportWorkerRouteAdapter {
 

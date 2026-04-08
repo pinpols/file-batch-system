@@ -52,9 +52,8 @@ class RetryScheduleSchedulerTest {
             entered.await();
 
             Future<?> second = pool.submit(scheduler::poll);
-            // Ensure the second poll() runs (and returns early on CAS) while the first is still
-            // blocked inside dispatch; otherwise the first may finish and clear `running` before
-            // the second poll, allowing a second dispatch.
+            // 确保第二个 poll() 在第一个仍阻塞在 dispatch 内部时执行（并在 CAS 上提前返回）；
+            // 否则第一个可能先完成并清除 `running`，导致第二个 poll 也触发了 dispatch。
             second.get(5, TimeUnit.SECONDS);
             release.countDown();
 

@@ -275,96 +275,78 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
     }
 
     private TemplateRow toTemplateRow(String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
+        String effectiveTenant = resolveTenantField(tenantId, values, issues);
+        TemplateRow.TemplateRowBuilder builder = TemplateRow.builder()
+                .rowNo(rowNo)
+                .tenantId(effectiveTenant);
+        extractBasicFields(builder, values, issues);
+        extractFieldMappings(builder, values, issues);
+        extractStepConfig(builder, values, issues);
+        extractSecurityConfig(builder, values, issues);
+        return builder.build();
+    }
+
+    private String resolveTenantField(String tenantId, Map<String, String> values, List<String> issues) {
         String effectiveTenant = normalize(values.get("tenant_id"));
         if (!StringUtils.hasText(effectiveTenant)) {
-            effectiveTenant = tenantId;
-        } else if (!tenantId.equals(effectiveTenant)) {
+            return tenantId;
+        }
+        if (!tenantId.equals(effectiveTenant)) {
             issues.add("tenant_id must match current tenant: " + tenantId);
         }
-        String templateCode = requireText(values, "template_code", 128, issues);
-        String templateName = requireText(values, "template_name", 256, issues);
-        String templateType = requireEnum(values, "template_type", TEMPLATE_TYPES, 32, issues);
-        String bizType = optionalText(values, "biz_type", 64, issues);
-        String fileFormatType = requireEnum(values, "file_format_type", FILE_FORMAT_TYPES, 32, issues);
-        String charset = optionalText(values, "charset", 32, issues);
-        String targetCharset = optionalText(values, "target_charset", 32, issues);
-        Boolean withBom = optionalBoolean(values, "with_bom", false, issues);
-        String lineSeparator = optionalText(values, "line_separator", 16, issues);
-        String delimiter = optionalText(values, "delimiter", 8, issues);
-        String quoteChar = optionalText(values, "quote_char", 8, issues);
-        String escapeChar = optionalText(values, "escape_char", 8, issues);
-        Integer recordLength = optionalInteger(values, "record_length", 0, issues);
-        Integer headerRows = optionalInteger(values, "header_rows", 0, issues);
-        Integer footerRows = optionalInteger(values, "footer_rows", 0, issues);
-        String headerTemplateJson = optionalJson(values, "header_template", issues);
-        String trailerTemplateJson = optionalJson(values, "trailer_template", issues);
-        String checksumType = requireEnum(values, "checksum_type", CHECKSUM_TYPES, 32, issues);
-        String compressType = requireEnum(values, "compress_type", COMPRESS_TYPES, 32, issues);
-        String encryptType = requireEnum(values, "encrypt_type", ENCRYPT_TYPES, 32, issues);
-        String namingRule = optionalText(values, "naming_rule", 512, issues);
-        String fieldMappingsJson = optionalJson(values, "field_mappings", issues);
-        String validationRuleSetJson = optionalJson(values, "validation_rule_set", issues);
-        String defaultQueryCode = optionalText(values, "default_query_code", 128, issues);
-        String defaultQuerySql = optionalText(values, "default_query_sql", 10000, issues);
-        String queryParamSchemaJson = optionalJson(values, "query_param_schema", issues);
-        Boolean streamingEnabled = optionalBoolean(values, "streaming_enabled", true, issues);
-        Integer pageSize = optionalInteger(values, "page_size", 1000, issues);
-        Integer fetchSize = optionalInteger(values, "fetch_size", 1000, issues);
-        Integer chunkSize = optionalInteger(values, "chunk_size", 500, issues);
-        Boolean previewMaskingEnabled = optionalBoolean(values, "preview_masking_enabled", false, issues);
-        Boolean errorLineMaskingEnabled = optionalBoolean(values, "error_line_masking_enabled", false, issues);
-        Boolean logMaskingEnabled = optionalBoolean(values, "log_masking_enabled", false, issues);
-        Boolean contentEncryptionEnabled = optionalBoolean(values, "content_encryption_enabled", false, issues);
-        String encryptionKeyRef = optionalText(values, "encryption_key_ref", 128, issues);
-        Boolean downloadRequiresApproval = optionalBoolean(values, "download_requires_approval", false, issues);
-        String maskingRuleSet = optionalText(values, "masking_rule_set", 256, issues);
-        Boolean enabled = optionalBoolean(values, "enabled", true, issues);
-        Integer version = optionalInteger(values, "version", 1, issues);
-        String description = optionalText(values, "description", 1024, issues);
-        return TemplateRow.builder()
-                .rowNo(rowNo)
-                .tenantId(effectiveTenant)
-                .templateCode(templateCode)
-                .templateName(templateName)
-                .templateType(templateType)
-                .bizType(bizType)
-                .fileFormatType(fileFormatType)
-                .charset(charset)
-                .targetCharset(targetCharset)
-                .withBom(withBom)
-                .lineSeparator(lineSeparator)
-                .delimiter(delimiter)
-                .quoteChar(quoteChar)
-                .escapeChar(escapeChar)
-                .recordLength(recordLength)
-                .headerRows(headerRows)
-                .footerRows(footerRows)
-                .headerTemplateJson(headerTemplateJson)
-                .trailerTemplateJson(trailerTemplateJson)
-                .checksumType(checksumType)
-                .compressType(compressType)
-                .encryptType(encryptType)
-                .namingRule(namingRule)
-                .fieldMappingsJson(fieldMappingsJson)
-                .validationRuleSetJson(validationRuleSetJson)
-                .defaultQueryCode(defaultQueryCode)
-                .defaultQuerySql(defaultQuerySql)
-                .queryParamSchemaJson(queryParamSchemaJson)
-                .streamingEnabled(streamingEnabled)
-                .pageSize(pageSize)
-                .fetchSize(fetchSize)
-                .chunkSize(chunkSize)
-                .previewMaskingEnabled(previewMaskingEnabled)
-                .errorLineMaskingEnabled(errorLineMaskingEnabled)
-                .logMaskingEnabled(logMaskingEnabled)
-                .contentEncryptionEnabled(contentEncryptionEnabled)
-                .encryptionKeyRef(encryptionKeyRef)
-                .downloadRequiresApproval(downloadRequiresApproval)
-                .maskingRuleSet(maskingRuleSet)
-                .enabled(enabled)
-                .version(version)
-                .description(description)
-                .build();
+        return effectiveTenant;
+    }
+
+    private void extractBasicFields(TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
+        builder.templateCode(requireText(values, "template_code", 128, issues))
+                .templateName(requireText(values, "template_name", 256, issues))
+                .templateType(requireEnum(values, "template_type", TEMPLATE_TYPES, 32, issues))
+                .bizType(optionalText(values, "biz_type", 64, issues))
+                .fileFormatType(requireEnum(values, "file_format_type", FILE_FORMAT_TYPES, 32, issues))
+                .enabled(optionalBoolean(values, "enabled", true, issues))
+                .version(optionalInteger(values, "version", 1, issues))
+                .description(optionalText(values, "description", 1024, issues));
+    }
+
+    private void extractFieldMappings(TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
+        builder.charset(optionalText(values, "charset", 32, issues))
+                .targetCharset(optionalText(values, "target_charset", 32, issues))
+                .withBom(optionalBoolean(values, "with_bom", false, issues))
+                .lineSeparator(optionalText(values, "line_separator", 16, issues))
+                .delimiter(optionalText(values, "delimiter", 8, issues))
+                .quoteChar(optionalText(values, "quote_char", 8, issues))
+                .escapeChar(optionalText(values, "escape_char", 8, issues))
+                .recordLength(optionalInteger(values, "record_length", 0, issues))
+                .headerRows(optionalInteger(values, "header_rows", 0, issues))
+                .footerRows(optionalInteger(values, "footer_rows", 0, issues))
+                .headerTemplateJson(optionalJson(values, "header_template", issues))
+                .trailerTemplateJson(optionalJson(values, "trailer_template", issues))
+                .checksumType(requireEnum(values, "checksum_type", CHECKSUM_TYPES, 32, issues))
+                .compressType(requireEnum(values, "compress_type", COMPRESS_TYPES, 32, issues))
+                .encryptType(requireEnum(values, "encrypt_type", ENCRYPT_TYPES, 32, issues))
+                .namingRule(optionalText(values, "naming_rule", 512, issues))
+                .fieldMappingsJson(optionalJson(values, "field_mappings", issues))
+                .validationRuleSetJson(optionalJson(values, "validation_rule_set", issues));
+    }
+
+    private void extractStepConfig(TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
+        builder.defaultQueryCode(optionalText(values, "default_query_code", 128, issues))
+                .defaultQuerySql(optionalText(values, "default_query_sql", 10000, issues))
+                .queryParamSchemaJson(optionalJson(values, "query_param_schema", issues))
+                .streamingEnabled(optionalBoolean(values, "streaming_enabled", true, issues))
+                .pageSize(optionalInteger(values, "page_size", 1000, issues))
+                .fetchSize(optionalInteger(values, "fetch_size", 1000, issues))
+                .chunkSize(optionalInteger(values, "chunk_size", 500, issues));
+    }
+
+    private void extractSecurityConfig(TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
+        builder.previewMaskingEnabled(optionalBoolean(values, "preview_masking_enabled", false, issues))
+                .errorLineMaskingEnabled(optionalBoolean(values, "error_line_masking_enabled", false, issues))
+                .logMaskingEnabled(optionalBoolean(values, "log_masking_enabled", false, issues))
+                .contentEncryptionEnabled(optionalBoolean(values, "content_encryption_enabled", false, issues))
+                .encryptionKeyRef(optionalText(values, "encryption_key_ref", 128, issues))
+                .downloadRequiresApproval(optionalBoolean(values, "download_requires_approval", false, issues))
+                .maskingRuleSet(optionalText(values, "masking_rule_set", 256, issues));
     }
 
     private String requireText(Map<String, String> values, String key, int maxLength, List<String> issues) {

@@ -5,6 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Data;
 
+/**
+ * 导出任务执行上下文，贯穿各 stage 传递状态和属性。
+ */
 @Data
 public class ExportJobContext implements ExecutionContext {
 

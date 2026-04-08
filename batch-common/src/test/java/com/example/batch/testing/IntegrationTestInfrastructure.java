@@ -6,9 +6,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.kafka.KafkaContainer;
 
 /**
- * Central place for integration-test property wiring.
+ * 集成测试属性注册的统一入口。
  *
- * <p>Keep container-specific details out of child test classes.
+ * <p>将容器相关的配置细节与子测试类隔离。
  */
 final class IntegrationTestInfrastructure {
 

@@ -214,7 +214,7 @@ public class ConsoleRealtimeEventHub {
         try {
             subscription.emitter.complete();
         } catch (IllegalStateException ignored) {
-            // emitter already completed
+            // emitter 已完成
         }
     }
 

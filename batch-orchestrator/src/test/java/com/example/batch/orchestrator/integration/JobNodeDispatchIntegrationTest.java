@@ -22,15 +22,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration tests for the JOB node type in workflow DAGs.
+ * 集成测试：工作流 DAG 中的 JOB 节点类型。
  *
- * <p>Scenario: a parent workflow has a single JOB node that references a child job.
- * When the parent is launched, the orchestrator should:
+ * <p>场景：父工作流包含一个引用子任务的 JOB 节点。
+ * 当父任务启动时，编排器应：
  * <ol>
- *   <li>Launch the child job instance automatically.</li>
- *   <li>Create a virtual partition + task (RUNNING) in the parent job to track the child.</li>
- *   <li>When the child job's task completes, signal back to the parent virtual task so the
- *       parent DAG advances and the parent job instance reaches SUCCESS.</li>
+ *   <li>自动启动子 job instance。</li>
+ *   <li>在父任务中创建虚拟分区 + 任务（RUNNING）以跟踪子任务。</li>
+ *   <li>当子任务的 task 完成时，回信号给父虚拟任务，
+ *       使父 DAG 推进且父 job instance 达到 SUCCESS。</li>
  * </ol>
  */
 @SpringBootTest(
@@ -55,7 +55,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    /** Seeds a child job (simple job with one TASK worker, empty workflow DAG). */
+    /** 初始化子任务（单 TASK Worker 的简单任务，空工作流 DAG）。 */
     private String seedChildJob(String workerGroup) {
         String suffix = Long.toUnsignedString(System.nanoTime());
         String childCode = "CHILD_" + suffix;
@@ -89,10 +89,10 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
-     * Seeds a parent job whose workflow DAG is: START → JOB_NODE_1 (JOB type) → END.
-     * The JOB node's {@code related_job_code} points to {@code childJobCode}.
+     * 初始化父任务，其工作流 DAG 为：START → JOB_NODE_1（JOB 类型）→ END。
+     * JOB 节点的 {@code related_job_code} 指向 {@code childJobCode}。
      *
-     * @return the trigger request details needed to call {@link LaunchService#launch}.
+     * @return 调用 {@link LaunchService#launch} 所需的触发请求详情。
      */
     private ParentSeed seedParentJob(String childJobCode) {
         String suffix = Long.toUnsignedString(System.nanoTime());
@@ -132,7 +132,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
                 """,
                 parentWfDefId, childJobCode);
 
-        // Edges: START → JOB_NODE_1 (ALWAYS), JOB_NODE_1 → END (SUCCESS)
+        // 边：START → JOB_NODE_1（ALWAYS），JOB_NODE_1 → END（SUCCESS）
         jdbcTemplate.update("""
                 insert into batch.workflow_edge (
                     workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
@@ -147,7 +147,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
                 """,
                 parentWfDefId);
 
-        // Trigger request for the parent launch
+        // 父任务启动所需的触发请求
         jdbcTemplate.update("""
                 insert into batch.trigger_request (
                     tenant_id, request_id, trigger_type, job_code, biz_date,
@@ -179,13 +179,13 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         assertThat(parentInstance).isNotNull();
         assertThat(parentInstance.getExpectedPartitionCount()).isEqualTo(1);
 
-        // Child job_instance was created automatically
+        // 子 job_instance 已自动创建
         Long childInstanceCount = jdbcTemplate.queryForObject(
                 "select count(*) from batch.job_instance where tenant_id = ? and job_code = ?",
                 Long.class, TENANT, childCode);
         assertThat(childInstanceCount).isEqualTo(1L);
 
-        // Virtual partition created in parent job scope (status = RUNNING)
+        // 在父任务范围内创建了虚拟分区（状态 = RUNNING）
         Long virtualPartitionCount = jdbcTemplate.queryForObject("""
                 select count(*) from batch.job_partition
                 where tenant_id = ? and job_instance_id = ? and partition_status = 'RUNNING'
@@ -193,7 +193,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
                 Long.class, TENANT, parentInstance.getId());
         assertThat(virtualPartitionCount).isEqualTo(1L);
 
-        // Virtual task created in parent job scope (status = RUNNING)
+        // 在父任务范围内创建了虚拟任务（状态 = RUNNING）
         Long virtualTaskCount = jdbcTemplate.queryForObject("""
                 select count(*) from batch.job_task
                 where tenant_id = ? and job_instance_id = ? and task_status = 'RUNNING'
@@ -201,7 +201,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
                 Long.class, TENANT, parentInstance.getId());
         assertThat(virtualTaskCount).isEqualTo(1L);
 
-        // Parent workflow_node_run for JOB_NODE_1 is READY
+        // 父 workflow_node_run 中 JOB_NODE_1 为 READY 状态
         Long nodeRunCount = jdbcTemplate.queryForObject("""
                 select count(*)
                 from batch.workflow_node_run wnr
@@ -227,41 +227,41 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         JobInstanceEntity parentInstance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, parent.dedupKey());
         assertThat(parentInstance).isNotNull();
 
-        // Find child job instance
+        // 查找子 job instance
         Long childInstanceId = jdbcTemplate.queryForObject(
                 "select id from batch.job_instance where tenant_id = ? and job_code = ?",
                 Long.class, TENANT, childCode);
         assertThat(childInstanceId).isNotNull();
 
-        // Find child task (belongs to the child job instance)
+        // 查找子任务（属于子 job instance）
         Long childTaskId = jdbcTemplate.queryForObject("""
                 select id from batch.job_task where tenant_id = ? and job_instance_id = ?
                 """,
                 Long.class, TENANT, childInstanceId);
         assertThat(childTaskId).isNotNull();
 
-        // Simulate worker picking up child task: move to RUNNING
+        // 模拟 Worker 拾取子任务：转为 RUNNING
         jdbcTemplate.update(
                 "update batch.job_task set task_status = 'RUNNING', started_at = ? where id = ?",
                 Timestamp.from(Instant.now()), childTaskId);
 
-        // Simulate child task completing successfully
+        // 模拟子任务成功完成
         taskOutcomeService.applyTaskOutcome(new TaskOutcomeCommand(
                 TENANT, childTaskId, true, "{}", null, null));
 
-        // Child job instance should be SUCCESS
+        // 子 job instance 应为 SUCCESS
         String childStatus = jdbcTemplate.queryForObject(
                 "select instance_status from batch.job_instance where id = ?",
                 String.class, childInstanceId);
         assertThat(childStatus).isEqualTo("SUCCESS");
 
-        // Parent job instance should also be SUCCESS (signalled via virtual task)
+        // 父 job instance 也应为 SUCCESS（通过虚拟任务信号传递）
         String parentStatus = jdbcTemplate.queryForObject(
                 "select instance_status from batch.job_instance where id = ?",
                 String.class, parentInstance.getId());
         assertThat(parentStatus).isEqualTo("SUCCESS");
 
-        // Parent workflow_node_run for JOB_NODE_1 should be SUCCESS
+        // 父 workflow_node_run 中 JOB_NODE_1 应为 SUCCESS
         String nodeRunStatus = jdbcTemplate.queryForObject("""
                 select wnr.node_status
                 from batch.workflow_node_run wnr
@@ -300,13 +300,13 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         taskOutcomeService.applyTaskOutcome(new TaskOutcomeCommand(
                 TENANT, childTaskId, false, "{}", "ERR_CHILD", "child task failed"));
 
-        // Parent should be FAILED (child failed, no retry policy)
+        // 父任务应为 FAILED（子任务失败，无重试策略）
         String parentStatus = jdbcTemplate.queryForObject(
                 "select instance_status from batch.job_instance where id = ?",
                 String.class, parentInstance.getId());
         assertThat(parentStatus).isEqualTo("FAILED");
 
-        // Parent workflow_node_run for JOB_NODE_1 should be FAILED
+        // 父 workflow_node_run 中 JOB_NODE_1 应为 FAILED
         String nodeRunStatus = jdbcTemplate.queryForObject("""
                 select wnr.node_status
                 from batch.workflow_node_run wnr

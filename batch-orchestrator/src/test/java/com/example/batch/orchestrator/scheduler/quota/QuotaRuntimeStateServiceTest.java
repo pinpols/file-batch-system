@@ -278,7 +278,7 @@ class QuotaRuntimeStateServiceTest {
                 null, "t1", "JOB", "job-cal", "CALENDAR_DAY",
                 Instant.now().minusSeconds(3600), Instant.now().plusSeconds(82800),
                 1, null, Instant.now(), Instant.now());
-        // Window still valid (far future)
+        // 窗口仍然有效（远未到期）
 
         when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
                 "t1", "JOB", "job-cal"))

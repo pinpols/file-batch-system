@@ -10,7 +10,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 /**
- * Test utility for generating .xlsx file bytes in-memory using Apache POI.
+ * 使用 Apache POI 在内存中生成 .xlsx 文件字节的测试工具类。
  */
 public final class TestExcelFileBuilder {
 

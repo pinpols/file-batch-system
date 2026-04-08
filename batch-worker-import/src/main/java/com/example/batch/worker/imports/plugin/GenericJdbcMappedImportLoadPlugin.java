@@ -19,9 +19,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Generic LOAD: INSERT / UPSERT into a single business table using template-driven column mappings (whitelist).
- * Each {@link ImportLoadPlugin#loadChunk} call uses JDBC {@code batchUpdate} for the whole chunk (not one round-trip per row).
- * Configure via {@code query_param_schema.jdbcMappedImport} or {@code jdbc_mapped_import}.
+ * 通用 LOAD：通过模板驱动的列映射（白名单）向单张业务表执行 INSERT / UPSERT。
+ * 每次 {@link ImportLoadPlugin#loadChunk} 调用使用 JDBC {@code batchUpdate} 处理整个批次（非逐行请求）。
+ * 通过 {@code query_param_schema.jdbcMappedImport} 或 {@code jdbc_mapped_import} 配置。
  */
 @Component
 public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {

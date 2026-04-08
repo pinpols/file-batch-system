@@ -19,13 +19,13 @@ public record QuotaRuntimeStateRecord(
         @Column("created_at") Instant createdAt,
         @Column("updated_at") Instant updatedAt
 ) {
-    /** Update peak + last timestamps (called by evaluateAndReserve). */
+    /** 更新峰值和最后时间戳（由 evaluateAndReserve 调用）。 */
     public QuotaRuntimeStateRecord withPeakAndTimestamps(int newPeak, Instant lastResetAt, Instant updatedAt) {
         return new QuotaRuntimeStateRecord(id, tenantId, quotaScope, ownerCode, quotaResetPolicy,
                 windowStartedAt, windowExpiresAt, newPeak, lastResetAt, createdAt, updatedAt);
     }
 
-    /** Full window refresh (called by reconcileExpiredStates / refreshState). */
+    /** 完整窗口刷新（由 reconcileExpiredStates / refreshState 调用）。 */
     public QuotaRuntimeStateRecord withRefresh(String quotaResetPolicy,
                                                Instant windowStartedAt,
                                                Instant windowExpiresAt,

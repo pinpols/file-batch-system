@@ -15,8 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Integration test: WorkerRegistryRepository persistence and query against real DB.
- * Covers the drain lifecycle: ONLINE → DRAINING → DECOMMISSIONED.
+ * 集成测试：WorkerRegistryRepository 在真实数据库上的持久化和查询。
+ * 覆盖排空生命周期：ONLINE → DRAINING → DECOMMISSIONED。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

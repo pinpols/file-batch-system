@@ -26,8 +26,8 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.util.StringUtils;
 
 /**
- * Ordered binary preprocess: unzip / gunzip / AES-GCM / digest & RSA verify.
- * When {@code preprocess_pipeline} is absent, derives steps from {@code compress_type} / {@code encrypt_type}.
+ * 有序二进制预处理：unzip / gunzip / AES-GCM / 摘要校验 & RSA 验签。
+ * 当 {@code preprocess_pipeline} 不存在时，根据 {@code compress_type} / {@code encrypt_type} 推导步骤。
  */
 public final class ImportPreprocessPipeline {
 

@@ -15,7 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Integration test: RetryScheduleMapper persistence and query against real DB.
+ * 集成测试：RetryScheduleMapper 在真实数据库上的持久化和查询。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
@@ -90,7 +90,7 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
         retryScheduleMapper.insert(entity);
 
         retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
-        // Second attempt should fail (optimistic lock via fromStatus check)
+        // 第二次尝试应失败（通过 fromStatus 检查实现乐观锁）
         int second = retryScheduleMapper.markRunning(entity.getId(), RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code());
 
         assertThat(second).isZero();

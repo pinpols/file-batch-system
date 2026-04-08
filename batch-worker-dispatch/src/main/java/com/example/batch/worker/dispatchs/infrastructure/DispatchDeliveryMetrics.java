@@ -7,6 +7,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
+/**
+ * 分发投递指标采集，包括熔断器开路数量和各渠道投递结果计数。
+ */
 @Component
 public class DispatchDeliveryMetrics {
 
@@ -21,7 +24,7 @@ public class DispatchDeliveryMetrics {
     @PostConstruct
     void registerOpenCircuitGauge() {
         Gauge.builder("batch.dispatch.circuits.open", circuitBreaker, DispatchChannelCircuitBreaker::currentOpenCircuits)
-                .description("Dispatch channels currently in circuit-open cooldown")
+                .description("当前处于熔断冷却期的分发渠道数量")
                 .register(registry);
     }
 

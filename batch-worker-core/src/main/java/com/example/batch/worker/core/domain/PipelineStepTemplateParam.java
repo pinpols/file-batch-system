@@ -19,35 +19,6 @@ public record PipelineStepTemplateParam(
         boolean enabled
 ) {
     /**
-     * 便利构造方法，支持常见参数组合。
-     */
-    public static PipelineStepTemplateParam of(
-            String stepCode,
-            String stepName,
-            String stageCode,
-            Integer stepOrder,
-            String implCode,
-            Map<String, Object> stepParams,
-            Integer timeoutSeconds,
-            String retryPolicy,
-            Integer retryMaxCount,
-            boolean enabled
-    ) {
-        return new PipelineStepTemplateParam(
-                stepCode,
-                stepName,
-                stageCode,
-                stepOrder,
-                implCode,
-                stepParams,
-                timeoutSeconds,
-                retryPolicy,
-                retryMaxCount,
-                enabled
-        );
-    }
-
-    /**
      * 转换为 PipelineStepTemplate。
      */
     public PipelineStepTemplate toTemplate() {

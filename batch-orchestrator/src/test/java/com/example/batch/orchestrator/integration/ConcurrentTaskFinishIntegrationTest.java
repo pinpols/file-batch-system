@@ -20,9 +20,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Proves that {@code JobTaskMapper.finishTask} carries a {@code WHERE task_status = expectedStatus}
- * CAS guard: when two concurrent threads race to finish the same RUNNING task, exactly one of them
- * gets a row-count of 1 (winner) and the other gets 0 (loser).
+ * 验证 {@code JobTaskMapper.finishTask} 带有 {@code WHERE task_status = expectedStatus} 的 CAS 守卫：
+ * 当两个并发线程竞争完成同一个 RUNNING 任务时，恰好一个获得 row-count=1（获胜者），
+ * 另一个获得 0（失败者）。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

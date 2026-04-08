@@ -14,12 +14,11 @@ import java.util.Map;
 import org.springframework.util.StringUtils;
 
 /**
- * Shared infrastructure for all {@link ExportFormatStrategy} implementations.
+ * 所有 {@link ExportFormatStrategy} 实现的公共基础设施。
  *
- * <p>Contains column-layout resolution, delimited-format configuration, header writing,
- * value formatting helpers, and the inner types ({@link ColumnLayout},
- * {@link DelimitedFormatConfig}, {@link QuotePolicy}, {@link EscapePolicy}) that are
- * used by two or more concrete strategies.
+ * <p>包含列布局解析、分隔格式配置、表头写入、值格式化辅助方法，
+ * 以及被两个或以上具体策略共用的内部类型
+ * （{@link ColumnLayout}、{@link DelimitedFormatConfig}、{@link QuotePolicy}、{@link EscapePolicy}）。
  */
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
@@ -31,8 +30,11 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         this.objectMapper = objectMapper;
     }
 
-    // ─── Column layout resolution ────────────────────────────────────────────
+    // ─── 列布局解析 ────────────────────────────────────────────
 
+    /**
+     * 解析分隔格式的列布局，优先级：模板配置 &gt; 插件描述 &gt; 首页字段推断。
+     */
     protected List<ColumnLayout> resolveDelimitedColumns(ExportDataContext dataCtx,
                                                          ExportDataPlugin dataPlugin,
                                                          Map<String, Object> batch,
@@ -57,6 +59,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return inferred;
     }
 
+    /**
+     * 解析 Excel 格式的列布局，逻辑与分隔格式相同。
+     */
     protected List<ColumnLayout> resolveExcelColumns(ExportDataContext dataCtx,
                                                       ExportDataPlugin dataPlugin,
                                                       Map<String, Object> batch,
@@ -64,6 +69,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return resolveDelimitedColumns(dataCtx, dataPlugin, batch, firstPage);
     }
 
+    /**
+     * 解析固定宽度格式的列布局，优先级：模板配置 &gt; 插件描述 &gt; 首页字段推断（含默认宽度）。
+     */
     protected List<ColumnLayout> resolveFixedWidthColumns(ExportDataContext dataCtx,
                                                            ExportDataPlugin dataPlugin,
                                                            Map<String, Object> batch,
@@ -88,7 +96,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return inferred;
     }
 
-    // ─── Template config helpers ─────────────────────────────────────────────
+    // ─── 模板配置辅助方法 ─────────────────────────────────────────────
 
     protected List<ColumnLayout> templateDelimitedColumns(Map<String, Object> templateConfig) {
         if (templateConfig == null || templateConfig.isEmpty()) {
@@ -158,8 +166,11 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return idx >= 0 && idx + 1 < source.length() ? source.substring(idx + 1) : source;
     }
 
-    // ─── Format config ───────────────────────────────────────────────────────
+    // ─── 格式配置 ───────────────────────────────────────────────────────
 
+    /**
+     * 从模板配置中解析分隔格式参数（分隔符、引号字符、引号策略、转义策略、表头行数）。
+     */
     protected DelimitedFormatConfig resolveDelimitedFormatConfig(Map<String, Object> templateConfig) {
         Map<String, Object> source = templateConfig == null ? Map.of() : templateConfig;
         Object schema = source.get("query_param_schema");
@@ -194,7 +205,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return cleaned.length() > 31 ? cleaned.substring(0, 31) : cleaned;
     }
 
-    // ─── Value resolution ────────────────────────────────────────────────────
+    // ─── 值解析 ────────────────────────────────────────────────────
 
     protected Object resolveDelimitedValue(Map<String, Object> batch, Map<String, Object> detail, String source) {
         if (!StringUtils.hasText(source)) {
@@ -224,7 +235,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return fallback;
     }
 
-    // ─── Delimited formatting ────────────────────────────────────────────────
+    // ─── 分隔格式化 ────────────────────────────────────────────────────
 
     protected String csv(Object value, DelimitedFormatConfig formatConfig) {
         String text = textValue(value);
@@ -260,7 +271,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         };
     }
 
-    // ─── Fixed-width formatting ──────────────────────────────────────────────
+    // ─── 固定宽度格式化 ──────────────────────────────────────────────
 
     protected String fixedWidthLine(List<ColumnLayout> columns, int recordLength,
                                     java.util.function.Function<ColumnLayout, String> valueMapper) {
@@ -300,7 +311,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return value + " ".repeat(length - value.length());
     }
 
-    // ─── Common utilities ────────────────────────────────────────────────────
+    // ─── 通用工具方法 ────────────────────────────────────────────────────
 
     protected Object firstNonNull(Object... values) {
         for (Object value : values) {
@@ -365,11 +376,17 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         return padChar.charAt(0);
     }
 
-    // ─── Inner types ─────────────────────────────────────────────────────────
+    // ─── 内部类型 ─────────────────────────────────────────────────────────
 
+    /**
+     * 列布局描述，包含表头、数据源路径、宽度及对齐信息。
+     */
     public record ColumnLayout(String header, String source, Integer width, boolean rightAlign, char padChar) {
     }
 
+    /**
+     * 分隔格式参数，包含分隔符、引号字符、引号策略、转义策略和表头行数。
+     */
     public record DelimitedFormatConfig(String delimiter,
                                         String quoteChar,
                                         QuotePolicy quotePolicy,
@@ -377,6 +394,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
                                         int headerRows) {
     }
 
+    /**
+     * 引号策略：NONE 不加引号，REQUIRED 仅必要时加，ALL 全部加引号。
+     */
     public enum QuotePolicy {
         NONE, REQUIRED, ALL;
 
@@ -392,6 +412,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         }
     }
 
+    /**
+     * 转义策略：DOUBLE_QUOTE 双写引号，BACKSLASH 反斜杠转义，NONE 不转义。
+     */
     public enum EscapePolicy {
         DOUBLE_QUOTE, BACKSLASH, NONE;
 

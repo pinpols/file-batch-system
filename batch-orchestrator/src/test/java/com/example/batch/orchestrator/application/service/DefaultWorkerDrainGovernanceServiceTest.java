@@ -255,7 +255,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         doThrow(new RuntimeException("retry failed")).when(retryGovernanceService)
                 .reclaimTask(eq("t1"), eq(301L), anyString());
 
-        // Should not throw even when one retry fails
+        // 即使某个重试失败也不应抛出异常
         service.takeoverAfterDrainTimeout("t1", "w1");
 
         verify(retryGovernanceService).reclaimTask(eq("t1"), eq(302L), anyString());

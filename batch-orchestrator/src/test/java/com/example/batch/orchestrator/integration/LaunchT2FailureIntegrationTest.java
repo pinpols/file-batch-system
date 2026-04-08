@@ -25,15 +25,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * Integration test for the T1/T2 transaction split in {@link LaunchService#launch}.
+ * 集成测试：{@link LaunchService#launch} 中 T1/T2 事务拆分。
  *
- * <p>Scenario: T2 ({@link PartitionDispatchService#dispatch}) throws after T1
- * ({@code prepareJobInstance}) has already committed. Verifies that:
+ * <p>场景：T2（{@link PartitionDispatchService#dispatch}）在 T1
+ *（{@code prepareJobInstance}）已提交之后抛出异常。验证：
  * <ol>
- *   <li>The {@code job_instance} row written by T1 survives the T2 failure.</li>
- *   <li>No {@code job_partition} rows exist (T2 rolled back entirely).</li>
- *   <li>A subsequent {@code launch()} with the same {@code requestId} hits the dedup path
- *       and returns the already-created instance without calling T2 again.</li>
+ *   <li>T1 写入的 {@code job_instance} 行在 T2 失败后依然存在。</li>
+ *   <li>不存在 {@code job_partition} 行（T2 已完整回滚）。</li>
+ *   <li>使用相同 {@code requestId} 的后续 {@code launch()} 命中去重路径，
+ *       返回已创建的实例而不再调用 T2。</li>
  * </ol>
  */
 @SpringBootTest(
@@ -69,7 +69,7 @@ class LaunchT2FailureIntegrationTest extends AbstractIntegrationTest {
                 TENANT, seed.jobCode(), BIZ_DATE, TriggerType.MANUAL,
                 seed.requestId(), "trace-t2-failure-test", Map.of());
 
-        // First call: T2 fails — exception propagates out of launch()
+        // 第一次调用：T2 失败 —— 异常从 launch() 传播出去
         assertThatThrownBy(() -> launchService.launch(request))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("simulated T2 failure");
@@ -98,7 +98,7 @@ class LaunchT2FailureIntegrationTest extends AbstractIntegrationTest {
                 .as("no job_task rows should exist when T2 rolled back")
                 .isZero();
 
-        // Second call with same requestId: dedup path — T2 is never called again
+        // 使用相同 requestId 的第二次调用：走去重路径 —— T2 不会再被调用
         LaunchResponse retryResponse = launchService.launch(request);
         assertThat(retryResponse.instanceNo())
                 .as("retry should return the instance created by the first T1")

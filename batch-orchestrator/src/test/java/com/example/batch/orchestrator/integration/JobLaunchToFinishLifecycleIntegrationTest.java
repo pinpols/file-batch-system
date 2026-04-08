@@ -28,14 +28,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: job launch → task claim → task report (success) → job_instance reaches SUCCESS.
+ * 集成测试：任务启动 → 任务认领 → 任务上报（成功）→ job_instance 达到 SUCCESS。
  *
- * <p>Exercises the full synchronous lifecycle chain:
+ * <p>验证完整的同步生命周期链路：
  * <ol>
- *   <li>{@link LaunchService#launch} creates job_instance + partitions + tasks + outbox_event.</li>
- *   <li>{@link TaskExecutionService#assignWorker} transitions the task to RUNNING.</li>
- *   <li>{@link TaskExecutionService#applyTaskOutcome} with success=true promotes the task and
- *       eventually the job_instance to SUCCESS.</li>
+ *   <li>{@link LaunchService#launch} 创建 job_instance + 分区 + 任务 + outbox_event。</li>
+ *   <li>{@link TaskExecutionService#assignWorker} 将任务转为 RUNNING。</li>
+ *   <li>{@link TaskExecutionService#applyTaskOutcome} 以 success=true 推进任务，
+ *       最终使 job_instance 达到 SUCCESS。</li>
  * </ol>
  */
 @SpringBootTest(
@@ -125,7 +125,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
 
         taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
 
-        // Report failure (no retry policy configured in the fixture: retry_max_count = 0)
+        // 上报失败（测试夹具中未配置重试策略：retry_max_count = 0）
         taskExecutionService.applyTaskOutcome(new TaskOutcomeCommand(
                 TENANT, task.getId(), false, null, "TEST_FAILURE", "simulated error"));
 

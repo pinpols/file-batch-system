@@ -7,15 +7,15 @@ import lombok.Data;
 public class WorkerRegistration {
 
     /**
-     * Registry-side worker identity.
+     * 注册中心侧的 worker 标识。
      *
-     * <p>Use this as the stable runtime instance key for heartbeats and lease ownership.
+     * <p>将此值作为心跳和租约归属的稳定运行时实例键。
      */
     private String workerId;
     private String tenantId;
     private String workerType;
     /**
-     * Orchestrator scheduling / consumer grouping key.
+     * Orchestrator 调度 / 消费者分组键。
      */
     private String workerGroup;
     private String status;

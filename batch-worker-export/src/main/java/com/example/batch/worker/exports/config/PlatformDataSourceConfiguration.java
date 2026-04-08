@@ -16,6 +16,9 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
+/**
+ * 平台数据源配置，提供导出 Worker 所需的平台库 MyBatis SqlSession（Primary）。
+ */
 @Configuration
 @EnableConfigurationProperties(DataSourceProperties.class)
 public class PlatformDataSourceConfiguration {

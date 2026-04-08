@@ -17,8 +17,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration: main worker-route types each emit the matching task / outbox {@code event_type}
- * (IMPORT / EXPORT / DISPATCH) after launch.
+ * 集成测试：主要的 Worker 路由类型在启动后各自发出匹配的 task / outbox {@code event_type}
+ *（IMPORT / EXPORT / DISPATCH）。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

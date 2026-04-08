@@ -17,8 +17,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration: {@link com.example.batch.orchestrator.scheduler.ResourceScheduler} gating —
- * outbox dispatch only when an ONLINE worker matches {@code worker_group}; otherwise partitions stay waiting and no dispatch outbox.
+ * 集成测试：{@link com.example.batch.orchestrator.scheduler.ResourceScheduler} 资源门控 ——
+ * 仅当有 ONLINE 状态的 Worker 匹配 {@code worker_group} 时才派发 outbox；否则分区保持等待且不生成派发 outbox。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,

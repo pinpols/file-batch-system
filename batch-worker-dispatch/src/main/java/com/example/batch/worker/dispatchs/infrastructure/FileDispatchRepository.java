@@ -10,6 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
+/**
+ * 文件分发数据仓库，封装分发记录、渠道配置的增删改查操作。
+ */
 @Repository
 @RequiredArgsConstructor
 public class FileDispatchRepository {

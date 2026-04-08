@@ -6,11 +6,11 @@ public record ConsoleWorkerRegistryResponse(
         Long id,
         String tenantId,
         /**
-         * Stable worker registration code in storage.
+         * 存储中稳定的 Worker 注册编码。
          */
         String workerCode,
         /**
-         * Scheduling and consumption grouping key.
+         * 调度与消费的分组键。
          */
         String workerGroup,
         Object capabilityTags,

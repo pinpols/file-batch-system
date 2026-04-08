@@ -5,51 +5,54 @@ import java.util.List;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * SQL 模板导出安全配置，绑定前缀 {@code batch.worker.export.sql-template}。
+ */
 @Data
 @ConfigurationProperties(prefix = "batch.worker.export.sql-template")
 public class SqlTemplateExportSecurityProperties {
 
     /**
-     * Statement timeout for each query execution.
+     * 每次查询的语句超时时间（秒）。
      */
     private int queryTimeoutSeconds = 30;
 
     /**
-     * Hard cap to avoid accidental huge pages.
+     * 单页最大行数上限，防止误配大页造成内存压力。
      */
     private int maxPageSize = 5000;
 
     /**
-     * Required named parameters in template SQL to enforce tenant isolation.
+     * 模板 SQL 中必须包含的具名参数，用于强制租户隔离。
      */
     private List<String> requiredParams = new ArrayList<>(List.of("tenantId", "batchNo"));
 
     /**
-     * Allowed schema names for table references. Empty list means all schemas are allowed.
-     * Example: ["biz", "ref"] — tables in other schemas (e.g. pg_catalog) will be rejected.
+     * 允许引用的 schema 白名单，空列表表示不限制。
+     * 示例：["biz", "ref"] — 引用其他 schema（如 pg_catalog）的表将被拒绝。
      */
     private List<String> allowedSchemas = new ArrayList<>();
 
     /**
-     * Reject {@code SELECT *} / {@code SELECT table.*} at parse time.
+     * 在解析阶段拒绝 {@code SELECT *} / {@code SELECT table.*}。
      */
     private boolean forbidSelectStar = true;
 
     /**
-     * Run {@code EXPLAIN (FORMAT JSON)} on the base SQL before the first page fetch.
-     * Disabled by default; enable in environments where you want cost/row estimates checked.
+     * 在首页查询前对基础 SQL 执行 {@code EXPLAIN (FORMAT JSON)} 预检。
+     * 默认关闭；在需要检查执行计划代价或预估行数的环境中可开启。
      */
     private boolean explainCheckEnabled = false;
 
     /**
-     * Maximum estimated row count returned by EXPLAIN. <= 0 means no limit.
-     * Only used when {@link #explainCheckEnabled} is true.
+     * EXPLAIN 预估最大行数上限，&lt;= 0 表示不限制。
+     * 仅在 {@link #explainCheckEnabled} 为 true 时生效。
      */
     private long maxEstimatedRows = 5_000_000L;
 
     /**
-     * Maximum estimated total cost returned by EXPLAIN. <= 0 means no limit.
-     * Only used when {@link #explainCheckEnabled} is true.
+     * EXPLAIN 预估最大总代价上限，&lt;= 0 表示不限制。
+     * 仅在 {@link #explainCheckEnabled} 为 true 时生效。
      */
     private double maxPlanCost = -1;
 }

@@ -24,8 +24,14 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
 @MapperScan(basePackages = "com.example.batch.worker.core.mapper", sqlSessionFactoryRef = "exportPlatformSqlSessionFactory")
+/**
+ * 批量导出 Worker 服务启动类。
+ */
 public class BatchWorkerExportApplication {
 
+    /**
+     * 导出 Worker 服务启动入口。
+     */
     public static void main(String[] args) {
         SpringApplication.run(BatchWorkerExportApplication.class, args);
     }

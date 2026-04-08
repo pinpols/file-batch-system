@@ -32,17 +32,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Integration test: worker claim → lease renew → progress report → complete.
+ * 集成测试：Worker 认领 → 续约 → 进度上报 → 完成。
  *
- * <p>Exercises the full worker-side interaction:
+ * <p>验证完整的 Worker 侧交互流程：
  * <ol>
- *   <li>Worker calls <em>claim</em> ({@link TaskExecutionService#assignWorker}) — task moves to RUNNING.</li>
- *   <li>Worker calls <em>renew</em> ({@link TaskExecutionService#renewTaskLease}) — lease is extended.</li>
- *   <li>Worker calls <em>report success</em> ({@link TaskExecutionService#applyTaskOutcome}) — task reaches SUCCESS.</li>
- *   <li>Partition and job_instance both reach SUCCESS terminal state.</li>
+ *   <li>Worker 调用 <em>claim</em>（{@link TaskExecutionService#assignWorker}）—— 任务转为 RUNNING。</li>
+ *   <li>Worker 调用 <em>renew</em>（{@link TaskExecutionService#renewTaskLease}）—— 续约延期。</li>
+ *   <li>Worker 调用 <em>report success</em>（{@link TaskExecutionService#applyTaskOutcome}）—— 任务达到 SUCCESS。</li>
+ *   <li>分区和 job_instance 均达到 SUCCESS 终态。</li>
  * </ol>
  *
- * <p>Also verifies that a second claim attempt by a different worker is rejected (conflict semantics).
+ * <p>同时验证不同 Worker 的第二次认领尝试被拒绝（冲突语义）。
  */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
@@ -100,7 +100,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
         assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
 
-        // Partition should also reflect RUNNING
+        // 分区也应为 RUNNING 状态
         JobPartitionEntity runningPartition = jobPartitionMapper.selectById(TENANT, partition.getId());
         assertThat(runningPartition.getPartitionStatus()).isEqualTo(PartitionStatus.RUNNING.code());
 
@@ -144,12 +144,12 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         assertThat(tasks).isNotEmpty();
         JobTaskEntity task = tasks.get(0);
 
-        // First claim succeeds
+        // 第一次认领成功
         JobTaskEntity first = taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
         assertThat(first.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
 
-        // Second claim by a different worker: should return the task row but the worker code
-        // should reflect the first claimer (no overwrite)
+        // 不同 Worker 的第二次认领：应返回任务行，但 worker code
+        // 应保持为第一个认领者（不会被覆盖）
         JobTaskEntity second = taskExecutionService.assignWorker(TENANT, task.getId(), "other-worker");
         assertThat(second).isNotNull();
         assertThat(second.getAssignedWorkerCode()).isEqualTo(seed.workerCode());

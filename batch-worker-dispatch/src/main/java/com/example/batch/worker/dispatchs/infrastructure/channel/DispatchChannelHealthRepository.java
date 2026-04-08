@@ -12,6 +12,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
+/**
+ * 分发渠道健康状态持久化仓库。
+ */
 @Repository
 @RequiredArgsConstructor
 public class DispatchChannelHealthRepository {
