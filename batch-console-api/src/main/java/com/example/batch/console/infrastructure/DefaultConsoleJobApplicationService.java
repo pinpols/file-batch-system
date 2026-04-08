@@ -407,19 +407,18 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     private String submitCompensation(CompensationPayload payload, String idempotencyKey) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-        CommonResponse<CompensationResponse> response = restClient.post()
+        CompensationResponse response = restClient.post()
                 .uri("/internal/compensations")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
                 .body(payload.withTraceId(requestMetadata.traceId()))
                 .retrieve()
-                .body(new org.springframework.core.ParameterizedTypeReference<CommonResponse<CompensationResponse>>() {
-                });
-        if (response == null || response.data() == null) {
+                .body(CompensationResponse.class);
+        if (response == null || response.commandNo() == null) {
             throw new BizException(ResultCode.SYSTEM_ERROR, "orchestrator returned empty compensation response");
         }
-        return response.data().commandNo();
+        return response.commandNo();
     }
 
     private record RecoveryOperationResponse(String operationNo) {

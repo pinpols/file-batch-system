@@ -9,7 +9,6 @@ import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.worker.dispatchs.BatchWorkerDispatchApplication;
 import com.example.batch.worker.exports.BatchWorkerExportApplication;
 import com.example.batch.worker.exports.infrastructure.ExportStepExecutionAdapter;
-import com.example.batch.e2e.config.E2eKafkaProducerConfiguration;
 import com.example.batch.e2e.config.E2ePlatformDataSourceConfiguration;
 import com.example.batch.e2e.config.E2ePlatformMybatisConfiguration;
 import com.example.batch.e2e.config.E2eShedLockConfiguration;
@@ -48,7 +47,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableJdbcRepositories(basePackages = "com.example.batch.orchestrator.repository")
 @Import({
     E2ePlatformDataSourceConfiguration.class,
-    E2eKafkaProducerConfiguration.class,
     E2ePlatformMybatisConfiguration.class,
     E2eShedLockConfiguration.class
 })
