@@ -1,6 +1,5 @@
 package com.example.batch.console.support;
 
-import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.config.ConsoleSecurityProperties;
@@ -8,9 +7,11 @@ import com.example.batch.console.web.request.ConsoleLoginRequest;
 import com.example.batch.console.web.response.ConsoleAuthTokenResponse;
 import java.util.LinkedHashSet;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
-/** 控制台登录服务：从平台库校验账号并签发 JWT。 */
+/**
+ * 控制台登录服务：按用户名全局查找账号、校验密码并签发 JWT。
+ * 用户名全局唯一，租户从账号记录中自动获取，前端无需传入 tenantId。
+ */
 @Service
 public class ConsoleLoginService {
 
@@ -36,8 +37,8 @@ public class ConsoleLoginService {
         if (request == null) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "login request is required");
         }
-        String tenantId = StringUtils.hasText(request.getTenantId()) ? request.getTenantId() : securityProperties.getDefaultTenantId();
-        ConsoleUserAccount account = userAccountService.findByTenantAndUsername(tenantId, request.getUsername())
+        // 用户名全局唯一，直接按 username 查找，租户从账号记录中获取
+        ConsoleUserAccount account = userAccountService.findByUsername(request.getUsername())
                 .orElseThrow(this::invalidCredentials);
         if (!account.enabled()) {
             throw invalidCredentials();
@@ -45,6 +46,7 @@ public class ConsoleLoginService {
         if (!passwordHasher.matches(request.getPassword(), account.passwordHash())) {
             throw invalidCredentials();
         }
+        String tenantId = account.tenantId();
         long sessionVersion = sessionRegistry.nextSessionVersion(account.username(), tenantId);
         return jwtService.issueToken(
                 account.username(),

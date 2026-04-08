@@ -22,8 +22,11 @@ public class ConsoleUserAccountService {
         this.repository = repository;
     }
 
-    public Optional<ConsoleUserAccount> findByTenantAndUsername(String tenantId, String username) {
-        return repository.findByTenantIdAndUsernameIgnoreCase(tenantId, username)
+    /**
+     * 按用户名全局查找账号（用户名全局唯一，租户从账号记录中获取）。
+     */
+    public Optional<ConsoleUserAccount> findByUsername(String username) {
+        return repository.findByUsernameIgnoreCase(username)
                 .map(this::toAccount);
     }
 

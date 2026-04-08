@@ -21,7 +21,7 @@ public class ConsoleTriggerController {
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
     public CommonResponse<List<Object>> list() {
         return responseFactory.success(triggerProxyService.triggerList());
     }

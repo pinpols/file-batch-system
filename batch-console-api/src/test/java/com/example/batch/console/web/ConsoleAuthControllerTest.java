@@ -56,8 +56,7 @@ class ConsoleAuthControllerTest {
                         .content("""
                                 {
                                   "username": "admin",
-                                  "password": "admin123",
-                                  "tenantId": "default-tenant"
+                                  "password": "admin123"
                                 }
                                 """))
                 .andExpect(status().isOk())

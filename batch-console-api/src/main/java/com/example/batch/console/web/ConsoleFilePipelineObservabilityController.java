@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 @RestController
 @Validated
 @RequestMapping("/api/console")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
 public class ConsoleFilePipelineObservabilityController {
 

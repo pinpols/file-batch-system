@@ -20,7 +20,7 @@ public class ConsoleSchedulerController {
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping("/status")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
     public CommonResponse<Map<String, String>> status() {
         return responseFactory.success(triggerProxyService.schedulerStatus());
     }

@@ -17,10 +17,8 @@ public interface ConsoleUserAccountRepository extends Repository<ConsoleUserAcco
                    authorities_csv,
                    enabled
               FROM batch.console_user_account
-             WHERE tenant_id = :tenantId
-               AND lower(username) = lower(:username)
+             WHERE lower(username) = lower(:username)
              LIMIT 1
             """)
-    Optional<ConsoleUserAccountEntity> findByTenantIdAndUsernameIgnoreCase(@Param("tenantId") String tenantId,
-                                                                           @Param("username") String username);
+    Optional<ConsoleUserAccountEntity> findByUsernameIgnoreCase(@Param("username") String username);
 }

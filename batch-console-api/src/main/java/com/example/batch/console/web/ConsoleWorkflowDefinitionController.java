@@ -30,7 +30,7 @@ public class ConsoleWorkflowDefinitionController {
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
     public CommonResponse<WorkflowDefinitionDetailResponse> getById(
             @PathVariable Long id,
             @RequestParam("tenantId") String tenantId) {

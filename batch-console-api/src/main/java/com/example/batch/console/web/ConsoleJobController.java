@@ -26,20 +26,22 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 控制台作业运维 REST：触发、补偿、重跑、死信回放、Catch-Up 审批（需管理员角色）。
+ * 控制台作业运维 REST：触发、补偿、重跑、死信回放、Catch-Up 审批。
+ * <p>触发作业对所有已认证用户开放（含 ROLE_TENANT_USER），其余运维操作需 ROLE_ADMIN。
  */
 @RestController
 @Validated
 @RequestMapping("/api/console/jobs")
-@PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 public class ConsoleJobController {
 
     private final ConsoleJobApplicationService applicationService;
     private final ConsoleResponseFactory responseFactory;
 
-    /** 手工触发作业运行。 */
+    /** 手工触发作业运行（所有已认证用户均可触发）。 */
     @PostMapping("/trigger")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
     public CommonResponse<String> trigger(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                           @Valid @RequestBody TriggerRequest request) {
         return responseFactory.success(applicationService.trigger(request, idempotencyKey));
@@ -47,6 +49,7 @@ public class ConsoleJobController {
 
     /** 登记补偿命令。 */
     @PostMapping("/compensations")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> compensation(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                @Valid @RequestBody CompensationCommandRequest request) {
         return responseFactory.success(applicationService.compensation(request, idempotencyKey));
@@ -54,6 +57,7 @@ public class ConsoleJobController {
 
     /** 执行补偿。 */
     @PostMapping("/compensate")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> compensate(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                              @Valid @RequestBody CompensateRequest request) {
         return responseFactory.success(applicationService.compensate(request, idempotencyKey));
@@ -61,6 +65,7 @@ public class ConsoleJobController {
 
     /** 重跑实例或分区。 */
     @PostMapping("/rerun")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> rerun(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                         @Valid @RequestBody RerunRequest request) {
         return responseFactory.success(applicationService.rerun(request, idempotencyKey));
@@ -68,6 +73,7 @@ public class ConsoleJobController {
 
     /** 死信重放。 */
     @PostMapping("/dead-letters/replay")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> replayDeadLetter(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                    @Valid @RequestBody DeadLetterReplayRequest request) {
         return responseFactory.success(applicationService.replayDeadLetter(request, idempotencyKey));
@@ -75,6 +81,7 @@ public class ConsoleJobController {
 
     /** 任务重放（job_task 粒度）。 */
     @PostMapping("/tasks/replay")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> replayTask(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                               @Valid @RequestBody TaskReplayRequest request) {
         return responseFactory.success(applicationService.replayTask(request, idempotencyKey));
@@ -82,6 +89,7 @@ public class ConsoleJobController {
 
     /** 分区重放（job_partition 粒度）。 */
     @PostMapping("/partitions/replay")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> replayPartition(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                  @Valid @RequestBody PartitionReplayRequest request) {
         return responseFactory.success(applicationService.replayPartition(request, idempotencyKey));
@@ -89,6 +97,7 @@ public class ConsoleJobController {
 
     /** 审批通过 Catch-Up 请求。 */
     @PostMapping("/catch-up/approve")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> approveCatchUp(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                  @Valid @RequestBody ConsoleCatchUpApprovalRequest request) {
         return responseFactory.success(applicationService.approveCatchUp(request, idempotencyKey));
@@ -96,6 +105,7 @@ public class ConsoleJobController {
 
     /** 按批量日发起 catch-up。 */
     @PostMapping("/batch-days/{bizDate}/catchup")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<ConsoleBatchDayCatchUpResponse> batchDayCatchUp(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                                           @PathVariable String bizDate,
                                                                           @Valid @RequestBody BatchDayCatchUpRequest request) {

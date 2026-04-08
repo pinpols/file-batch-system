@@ -33,6 +33,8 @@ import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
+import com.example.batch.orchestrator.service.LaunchBatchDayService;
+import com.example.batch.orchestrator.service.LaunchParamResolver;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -58,6 +60,8 @@ class DefaultLaunchServiceTest {
     private OrchestratorConfigCacheService configCacheService;
     private BatchDayInstanceRepository batchDayInstanceRepository;
     private JobExecutionLogMapper jobExecutionLogMapper;
+    private LaunchBatchDayService launchBatchDayService;
+    private LaunchParamResolver launchParamResolver;
     @SuppressWarnings("unchecked")
     private ObjectProvider<DefaultLaunchService> selfProvider;
     private DefaultLaunchService service;
@@ -87,15 +91,17 @@ class DefaultLaunchServiceTest {
         batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
         jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
         selfProvider = mock(ObjectProvider.class);
+        launchBatchDayService = new LaunchBatchDayService(
+                configCacheService, batchDayInstanceRepository, jobExecutionLogMapper, jobMappers);
+        launchParamResolver = new LaunchParamResolver();
         service = new DefaultLaunchService(
                 launchValidationService,
                 partitionDispatchService,
                 jobMappers,
                 workflowMappers,
                 workflowDagService,
-                configCacheService,
-                batchDayInstanceRepository,
-                jobExecutionLogMapper,
+                launchBatchDayService,
+                launchParamResolver,
                 selfProvider
         );
         when(selfProvider.getObject()).thenReturn(service);
