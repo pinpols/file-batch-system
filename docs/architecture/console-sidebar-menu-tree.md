@@ -10,6 +10,7 @@
 - `ROLE_ADMIN`：全权限管理员
 - `ROLE_AUDITOR`：只读审计角色
 - `ROLE_CONFIG_ADMIN`：配置与运维角色
+- `ROLE_TENANT_USER`：租户业务用户（可查看状态、触发作业、下载文件，不可修改配置或运维操作）
 
 ## Sidebar 树
 
