@@ -4,3 +4,7 @@ batch:
       worker-type: DISPATCH
       default-stage: PREPARE
       batch-size: 100
+      http-channel:
+        connect-timeout-millis: 10000   # 10s
+        read-timeout-millis: 30000      # 30s
+        write-timeout-millis: 30000     # 30s

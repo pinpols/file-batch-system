@@ -116,13 +116,13 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 - 集成测试：中等，覆盖约 25% 的模块协作
 - 端到端测试：少而精，覆盖约 15% 的核心链路
 
-## 当前状态（截至 2026-03-27）
+## 当前状态（截至 2026-04-08）
 
 三层测试体系和统一回归入口已落地：
 
-1. ✅ 单元测试：67 个（覆盖状态机、调度规则、文件链、安全、加解密、触发链路与 Worker 纯逻辑）
-2. ✅ 集成测试：35 个（含 Testcontainers 主链路协作、ShedLock 配置校验、应用启动 smoke）
-3. ✅ 端到端测试：13 个 E2E（主链路、失败分支、内容验证、Outbox 轮询与重试、多租户并发、dedup 幂等）
+1. ✅ 单元测试：146 个（覆盖状态机、调度规则、文件链、安全、加解密、触发链路与 Worker 纯逻辑；含 PathSanitizer、DatabaseIdempotencyGuard、DeadLetterPublisher 等新增类）
+2. ✅ 集成测试：59 个（含 Testcontainers 主链路协作、ShedLock 配置校验、应用启动 smoke）
+3. ✅ 端到端测试：15 个 E2E（主链路、失败分支、内容验证、Outbox 轮询与重试、多租户并发、dedup 幂等、Worker 排空、死信审批重放）
 4. ✅ SQL 一致性守卫：`SqlConsistencyIT`（批量调度器门禁）
 5. ✅ 统一回归入口：`scripts/ci/run-full-regression.sh`
 6. ✅ 部署 smoke：Helm `lint + template`，并已具备可选 live rollout / readiness 校验逻辑

@@ -22,6 +22,9 @@ spring:
   kafka:
     # Kafka 集群地址（逗号分隔）
     bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
+    producer:
+      # 要求所有 ISR 副本确认写入后才返回成功，配合 replication-factor=3 + min.insync.replicas=2 防止数据丢失
+      acks: all
   data:
     redis:
       # Redis：本地 compose 宿主机映射 16379→6379；容器内由环境变量覆盖为 redis:6379

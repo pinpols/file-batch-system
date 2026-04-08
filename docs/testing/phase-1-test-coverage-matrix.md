@@ -1,7 +1,7 @@
 # Phase 1：P1 功能回归补齐
 # 全项目测试覆盖矩阵（Phase 1）
 
-更新时间：2026-03-28
+更新时间：2026-04-08
 
 ## 目标
 
@@ -27,7 +27,7 @@
 
 ### 结论 2：`batch-trigger` 的 Phase 2 P0 缺口已补齐第一轮门禁
 
-`batch-trigger` 现有 11 个测试文件，已覆盖请求校验、dedup 落库、Quartz misfire/catch-up、调度元数据透传、启动加载和基础 DB 协作。剩余缺口主要是 trigger 专属 E2E 与多实例 Quartz 集群行为验证。
+`batch-trigger` 现有 14 个测试文件，已覆盖请求校验、dedup 落库、Quartz misfire/catch-up、调度元数据透传、启动加载和基础 DB 协作。剩余缺口主要是 trigger 专属 E2E 与多实例 Quartz 集群行为验证。
 
 ### 结论 3：项目已有统一回归入口，并已落地三层 GitHub Actions workflow
 
@@ -39,21 +39,21 @@
 
 ### 结论 5：测试口径已统一到当前仓库基线
 
-当前统一口径为：156 个 `*Test.java`、76 个 `*IT.java` / `*IntegrationTest.java`、27 个 `*E2eIT.java`、42 个测试支撑类，合计 301 个测试相关文件。后续文档引用应以本文件和 `docs/testing/test-strategy.md` 为准。
+当前统一口径为：**247 个测试相关文件**（146 单元 + 59 集成 + 30 E2E + 支撑类）。后续文档引用应以本文件和 `docs/testing/test-strategy.md` 为准。
 
 ## 当前测试资产总览
 
 | 模块 | 真实测试资产 | 当前判断 |
 |---|---:|---|
-| `batch-trigger` | 11 个测试文件 | P0 首批门禁已具备 |
-| `batch-common` | 21 个测试相关文件 | 基础能力覆盖较好 |
-| `batch-orchestrator` | 43 个测试相关文件 | 覆盖最完整 |
-| `batch-worker-core` | 7 个测试文件 | 纯逻辑覆盖，缺真实依赖协作 |
-| `batch-worker-import` | 10 个测试文件 | 主链路覆盖较好 |
-| `batch-worker-export` | 12 个测试文件 | 主链路覆盖较好 |
-| `batch-worker-dispatch` | 8 个测试文件 | 主链路可用，外部渠道侧仍偏薄 |
-| `batch-console-api` | 31 个测试相关文件 | 查询、审计与 Excel 维护较强，HTTP smoke + 安全负向 + Excel 维护与报表导出已补齐 |
-| `batch-e2e-tests` | 26 个测试相关文件 | 端到端骨架已成型 |
+| `batch-trigger` | 14 个测试文件 | P0 首批门禁已具备 |
+| `batch-common` | 27 个测试相关文件 | 基础能力覆盖较好，PathSanitizer / CatchUpPolicyType / WorkflowJoinMode 已补测试 |
+| `batch-orchestrator` | 66 个测试相关文件 | 覆盖最完整，DatabaseIdempotencyGuard / TaskDispatchOutboxService / DefaultTaskOutcomeService 已补测试 |
+| `batch-worker-core` | 10 个测试文件 | 纯逻辑覆盖，DeadLetterPublisher 已补测试 |
+| `batch-worker-import` | 12 个测试文件 | 主链路覆盖较好，ReceiveStepPayloadSizeLimit 已补测试 |
+| `batch-worker-export` | 13 个测试文件 | 主链路覆盖较好 |
+| `batch-worker-dispatch` | 11 个测试文件 | 主链路可用，DispatchFileContentResolverPath / RemoteFilesystemNasPath 已补测试 |
+| `batch-console-api` | 56 个测试相关文件 | 查询、审计与 Excel 维护较强，HTTP smoke + 安全负向 + Excel 维护与报表导出已补齐 |
+| `batch-e2e-tests` | 32 个测试相关文件 | 端到端骨架已成型，DeadLetterApprovalReplay E2E 已补齐 |
 | `load-tests` | 5 个文件（3 个 Gatling Simulation + 2 个支撑/配置文件） | smoke 与 CI 编译门禁已接入 |
 
 ## 模块覆盖矩阵

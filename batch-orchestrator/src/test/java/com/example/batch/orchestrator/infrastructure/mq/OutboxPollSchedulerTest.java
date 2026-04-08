@@ -46,6 +46,7 @@ class OutboxPollSchedulerTest {
             return null;
         }).when(lockingTaskExecutor).executeWithLock(any(LockingTaskExecutor.Task.class), any());
         scheduler = new OutboxPollScheduler(scheduleForwarder, outboxPublishCircuitBreaker, governance, lockingTaskExecutor);
+        // 不调用 start()，避免后台线程干扰单元测试
     }
 
     @Test
@@ -70,4 +71,6 @@ class OutboxPollSchedulerTest {
         verify(scheduleForwarder, never()).advance(any());
         verify(outboxPublishCircuitBreaker, never()).onAdvanceResult(anyInt());
     }
+
+    // 自适应间隔行为通过 OutboxForwarderE2eIT 验证
 }

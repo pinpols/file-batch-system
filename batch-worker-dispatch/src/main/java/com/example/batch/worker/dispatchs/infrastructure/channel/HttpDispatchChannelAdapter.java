@@ -1,10 +1,12 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -17,7 +19,15 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
-    private final OkHttpClient okHttpClient = new OkHttpClient();
+    private final OkHttpClient okHttpClient;
+
+    public HttpDispatchChannelAdapter(HttpDispatchChannelProperties properties) {
+        this.okHttpClient = new OkHttpClient.Builder()
+                .connectTimeout(properties.getConnectTimeoutMillis(), TimeUnit.MILLISECONDS)
+                .readTimeout(properties.getReadTimeoutMillis(), TimeUnit.MILLISECONDS)
+                .writeTimeout(properties.getWriteTimeoutMillis(), TimeUnit.MILLISECONDS)
+                .build();
+    }
 
     @Override
     public boolean supports(String channelType) {

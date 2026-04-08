@@ -318,13 +318,17 @@
 
 ---
 
-## 9. 当前状态（截至 2026-03-25）
+## 9. 当前状态（截至 2026-04-08）
 
-P0/P1/P2 全部已完成，系统已从”主链路可跑”提升到”异常流可控、回归可依赖”阶段。
+P0/P1/P2 全部已完成，系统已从”主链路可跑”提升到”异常流可控、安全可守、回归可依赖”阶段。
 
-**剩余低优先级工作（不影响核心运行）**：
-1. 生产部署产物（Dockerfile/Helm/K8s 清单）
-2. 审批台账产品化（批量审批、SLA 告警、运营视图）
-3. SFTP/EMAIL/HTTP 渠道主动健康探测与分级退避
-4. ELK / OpenTelemetry 生产侧采集管道
-5. 压测脚本与容量基线数据
+**原剩余低优先级工作——已全部完成**：
+1. ✅ 生产部署产物（`Dockerfile` + `helm/batch-platform/` + K8s 清单）
+2. ✅ 审批台账产品化（批量审批、SLA 告警、运营视图 `/api/console/ops/summary`）
+3. ✅ SFTP/EMAIL/HTTP/OSS/NAS 渠道主动健康探测（`DispatchChannelHealthService`）
+4. ✅ ELK / OpenTelemetry 生产侧采集管道（`docs/observability/`）
+5. ✅ 安全/竞态/幂等全量修复（C-1~C-8、H-1~H-10、D-1~D-4；含 `DatabaseIdempotencyGuard`、`PathSanitizer`、`DeadLetterPublisher`）
+
+**仍未完成（按需推进）**：
+- 真实 staging 集群 live rollout / readiness 实跑留档
+- 压测容量基线实测数据回填

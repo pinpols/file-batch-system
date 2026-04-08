@@ -4,7 +4,7 @@
 
 本文分析 `batch-e2e-tests` 中三个 E2E 测试类当前覆盖了哪些核心链路、哪些风险点仍未覆盖，并给出后续可执行的覆盖优化清单。
 
-涉及测试类（截至 2026-03-27，共 13 个 E2E）：
+涉及测试类（截至 2026-04-08，共 15 个 E2E）：
 
 **主链路（Happy Path）**
 - `ImportPipelineE2eIT`、`ExportPipelineE2eIT`、`DispatchPipelineE2eIT`
@@ -20,6 +20,8 @@
 - `MultiTenantConcurrentE2eIT`（多租户并发隔离）
 - `DedupJobLaunchE2eIT`（顺序 + 并发 dedup 幂等）
 - `OutboxForwarderRetryE2eIT`（Outbox 失败重试）
+- `WorkerDrainE2eIT`（Worker 排空接管）
+- `DeadLetterApprovalReplayE2eIT`（死信审批重放全链路）
 
 ---
 
@@ -75,7 +77,7 @@
 
 ---
 
-## 覆盖状态（截至 2026-03-27）
+## 覆盖状态（截至 2026-04-08）
 
 ### A. Outbox Forwarder 定时轮询机制 ✅ 已覆盖
 
@@ -109,7 +111,7 @@
 
 ---
 
-## 覆盖优化完成情况（截至 2026-03-27）
+## 覆盖优化完成情况（截至 2026-04-08）
 
 ## P0 ✅ 全部完成
 
@@ -147,8 +149,8 @@
 
 ---
 
-## 当前结论（截至 2026-03-27）
+## 当前结论（截至 2026-04-08）
 
-E2E 套件已覆盖：主链路（Import/Export/Dispatch）、Outbox 自动轮询与重试、失败分支（三链路 + pipeline 级失败）、内容级验收（导出/分发）、多租户并发隔离、dedup 幂等（顺序 + 并发），共 13 个 E2E 测试类。
+E2E 套件已覆盖：主链路（Import/Export/Dispatch）、Outbox 自动轮询与重试、失败分支（三链路 + pipeline 级失败）、内容级验收（导出/分发）、多租户并发隔离、dedup 幂等（顺序 + 并发）、Worker 排空接管、死信审批重放，共 **15 个 E2E 测试类**。
 
 能够作为生产风险防线级别的回归门禁。剩余未覆盖的场景：单 worker 并发 claim 竞争（低风险，有单元和集成测试兜底）。
