@@ -3,6 +3,7 @@ package com.example.batch.trigger.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.domain.TriggerStatusInfo;
+import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 public class TriggerManagementController {
 
     private final TriggerRegistrationService triggerRegistrationService;
+    private final TriggerGracefulShutdown gracefulShutdown;
 
     @GetMapping("/list")
     public CommonResponse<List<TriggerStatusInfo>> list() {
@@ -64,5 +66,22 @@ public class TriggerManagementController {
     public CommonResponse<Map<String, String>> resumeAll() {
         triggerRegistrationService.resumeAll();
         return CommonResponse.success(Map.of("status", "ALL_RESUMED"));
+    }
+
+    @GetMapping("/drain/status")
+    public CommonResponse<Map<String, Object>> drainStatus() throws Exception {
+        return CommonResponse.success(gracefulShutdown.status());
+    }
+
+    @PostMapping("/drain/enable")
+    public CommonResponse<Map<String, Object>> enableDrain() throws Exception {
+        gracefulShutdown.startDraining("manual-enable");
+        return CommonResponse.success(gracefulShutdown.status());
+    }
+
+    @PostMapping("/drain/disable")
+    public CommonResponse<Map<String, Object>> disableDrain() throws Exception {
+        gracefulShutdown.stopDraining("manual-disable");
+        return CommonResponse.success(gracefulShutdown.status());
     }
 }

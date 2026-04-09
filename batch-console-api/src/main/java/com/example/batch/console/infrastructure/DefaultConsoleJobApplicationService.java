@@ -389,10 +389,17 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
             entry.put("jobCode", item.getJobCode());
             entry.put("bizDate", item.getBizDate());
             try {
-                String itemKey = idempotencyKey + ":" + i;
-                String instanceNo = trigger(item, itemKey);
-                entry.put("status", "SUCCESS");
-                entry.put("instanceNo", instanceNo);
+                if (item.isDryRun()) {
+                    Map<String, Object> dryRun = dryRunTrigger(item);
+                    entry.put("dryRun", true);
+                    entry.put("status", Boolean.TRUE.equals(dryRun.get("valid")) ? "DRY_RUN_OK" : "DRY_RUN_FAILED");
+                    entry.put("result", dryRun);
+                } else {
+                    String itemKey = idempotencyKey + ":" + i;
+                    String instanceNo = trigger(item, itemKey);
+                    entry.put("status", "SUCCESS");
+                    entry.put("instanceNo", instanceNo);
+                }
             } catch (Exception e) {
                 entry.put("status", "FAILED");
                 entry.put("error", e.getMessage());

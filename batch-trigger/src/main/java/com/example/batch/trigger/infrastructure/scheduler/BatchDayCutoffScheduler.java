@@ -1,5 +1,6 @@
 package com.example.batch.trigger.infrastructure.scheduler;
 
+import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import com.example.batch.trigger.mapper.BatchDayInstanceMapper;
 import com.example.batch.trigger.support.BatchDayCutoffCandidate;
 import java.time.Instant;
@@ -21,6 +22,7 @@ public class BatchDayCutoffScheduler {
     private static final LocalTime DEFAULT_CUTOFF_TIME = LocalTime.of(6, 0);
 
     private final BatchDayInstanceMapper batchDayInstanceMapper;
+    private final TriggerGracefulShutdown gracefulShutdown;
 
     @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
     @SchedulerLock(name = "batch_day_cutoff", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
@@ -30,6 +32,9 @@ public class BatchDayCutoffScheduler {
 
     @Transactional
     public void cutoff() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
         List<BatchDayCutoffCandidate> candidates = batchDayInstanceMapper.selectOpenCutoffCandidates();
         if (candidates == null || candidates.isEmpty()) {
             return;

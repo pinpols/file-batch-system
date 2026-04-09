@@ -1,5 +1,9 @@
 package com.example.batch.trigger.infrastructure;
 
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.Scheduler;
@@ -18,6 +22,9 @@ import org.springframework.stereotype.Component;
 public class TriggerGracefulShutdown implements ApplicationListener<ContextClosedEvent> {
 
     private final Scheduler scheduler;
+    private final AtomicBoolean draining = new AtomicBoolean(false);
+    private volatile Instant drainingSince;
+    private volatile String reason;
 
     @Override
     public void onApplicationEvent(ContextClosedEvent event) {
@@ -25,13 +32,48 @@ public class TriggerGracefulShutdown implements ApplicationListener<ContextClose
             if (scheduler.isShutdown()) {
                 return;
             }
-            log.info("Trigger graceful shutdown — switching scheduler to standby");
-            scheduler.standby();
+            startDraining("context-closed");
             log.info("Trigger graceful shutdown — shutting down scheduler (waitForJobsToComplete=true)");
             scheduler.shutdown(true);
             log.info("Trigger scheduler shutdown complete");
         } catch (SchedulerException e) {
             log.warn("Error during trigger graceful shutdown: {}", e.getMessage(), e);
         }
+    }
+
+    public void startDraining(String source) throws SchedulerException {
+        if (draining.compareAndSet(false, true)) {
+            drainingSince = Instant.now();
+            reason = source;
+            log.info("Trigger graceful shutdown — switching scheduler to standby, source={}", source);
+            scheduler.standby();
+        }
+    }
+
+    public void stopDraining(String source) throws SchedulerException {
+        if (scheduler.isShutdown()) {
+            return;
+        }
+        if (draining.compareAndSet(true, false)) {
+            log.info("Trigger drain cancelled — restarting scheduler, source={}", source);
+            scheduler.start();
+        }
+        drainingSince = null;
+        reason = source;
+    }
+
+    public boolean isDraining() {
+        return draining.get();
+    }
+
+    public Map<String, Object> status() throws SchedulerException {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("draining", draining.get());
+        status.put("drainingSince", drainingSince);
+        status.put("reason", reason);
+        status.put("schedulerStatus", scheduler.isShutdown() ? "SHUTDOWN"
+                : scheduler.isInStandbyMode() ? "STANDBY"
+                : scheduler.isStarted() ? "STARTED" : "STOPPED");
+        return status;
     }
 }

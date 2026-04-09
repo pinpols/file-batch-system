@@ -1,5 +1,5 @@
 -- =========================================================
--- V11 - Webhook subscription and delivery log tables
+-- V45 - Webhook subscription and delivery log tables
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.webhook_subscription (

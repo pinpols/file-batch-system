@@ -5,6 +5,7 @@ import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
@@ -45,6 +46,7 @@ public class OutboxPollScheduler {
     private final OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
     private final BatchOrchestratorGovernanceProperties governance;
     private final LockingTaskExecutor lockingTaskExecutor;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong currentIntervalMillis = new AtomicLong(0);
@@ -114,6 +116,10 @@ public class OutboxPollScheduler {
     }
 
     private ScheduleForwarderResult executeAdvance() {
+        if (gracefulShutdown.isDraining()) {
+            log.info("Outbox 轮询跳过：orchestrator 正在 draining");
+            return null;
+        }
         if (!outboxPublishCircuitBreaker.allowNow()) {
             log.warn("Outbox 投递熔断已打开：跳过推进（cooldown 中）");
             return null;

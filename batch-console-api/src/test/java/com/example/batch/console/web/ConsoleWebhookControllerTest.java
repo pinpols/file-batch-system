@@ -1,0 +1,99 @@
+package com.example.batch.console.web;
+
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.dto.ResponseMeta;
+import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
+import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.service.ConsoleWebhookService;
+import com.example.batch.console.support.ConsoleApiExceptionHandler;
+import com.example.batch.console.support.ConsoleRequestMetadata;
+import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import java.time.Instant;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+
+class ConsoleWebhookControllerTest {
+
+    private final ConsoleWebhookService webhookService = org.mockito.Mockito.mock(ConsoleWebhookService.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+
+        when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+        when(requestMetadataResolver.current()).thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWebhookController(webhookService, responseFactory, requestMetadataResolver))
+                .setControllerAdvice(exceptionHandler)
+                .setValidator(validator)
+                .build();
+    }
+
+    @Test
+    void shouldListWebhookSubscriptions() throws Exception {
+        WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
+        entity.setId(1L);
+        entity.setTenantId("t1");
+        entity.setName("job-events");
+        entity.setCallbackUrl("https://callback.example/webhook");
+        entity.setEventTypes("JOB-INSTANCE-UPDATED");
+        entity.setEnabled(true);
+        when(webhookService.listSubscriptions("t1")).thenReturn(List.of(entity));
+
+        mockMvc.perform(get("/api/console/webhooks").param("tenantId", "t1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].name").value("job-events"))
+                .andExpect(jsonPath("$.data[0].callbackUrl").value("https://callback.example/webhook"));
+    }
+
+    @Test
+    void shouldCreateWebhookSubscription() throws Exception {
+        WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
+        entity.setId(1L);
+        entity.setTenantId("t1");
+        entity.setName("job-events");
+        entity.setCallbackUrl("https://callback.example/webhook");
+        entity.setEventTypes("JOB-INSTANCE-UPDATED");
+        entity.setEnabled(true);
+        when(webhookService.createSubscription(anyString(), anyString(), anyString(), anyString(), anyString(), anyBoolean(), anyString()))
+                .thenReturn(entity);
+
+        mockMvc.perform(post("/api/console/webhooks")
+                        .param("tenantId", "t1")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"job-events",
+                                  "callbackUrl":"https://callback.example/webhook",
+                                  "eventTypes":["job-instance-updated"],
+                                  "secret":"secret-1",
+                                  "enabled":true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.name").value("job-events"))
+                .andExpect(jsonPath("$.data.eventTypes").value("JOB-INSTANCE-UPDATED"));
+    }
+}

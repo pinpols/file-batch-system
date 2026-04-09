@@ -22,6 +22,7 @@ import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.application.service.OrchestratorJobMappers;
 import com.example.batch.orchestrator.application.service.OrchestratorWorkflowMappers;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -46,6 +47,7 @@ public class WaitingPartitionDispatchScheduler {
     private final TaskDispatchOutboxService taskDispatchOutboxService;
     private final PartitionLifecycleService partitionLifecycleService;
     private final TenantActionRateLimiter tenantActionRateLimiter;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
     /**
      * WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。
@@ -53,6 +55,9 @@ public class WaitingPartitionDispatchScheduler {
     @Scheduled(fixedDelayString = "${batch.resource-scheduler.waiting-dispatch-interval-millis:10000}")
     @SchedulerLock(name = "waiting_partition_dispatch", lockAtMostFor = "PT1M", lockAtLeastFor = "PT5S")
     public void dispatchWaitingPartitions() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
         List<JobPartitionEntity> waitingPartitions = jobMappers.jobPartitionMapper.selectWaitingPartitionsGlobal(
                 governance.resourceScheduler().getWaitingDispatchBatchSize(),
                 PartitionStatus.WAITING.code()

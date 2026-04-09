@@ -33,6 +33,16 @@ public interface ConsoleWebhookSubscriptionRepository extends Repository<Webhook
             SELECT id, tenant_id, name, callback_url, event_types, secret, enabled,
                    created_by, updated_by, created_at, updated_at
               FROM batch.webhook_subscription
+             WHERE tenant_id = :tenantId AND name = :name
+             LIMIT 1
+            """)
+    Optional<WebhookSubscriptionEntity> findByTenantAndName(@Param("tenantId") String tenantId,
+                                                            @Param("name") String name);
+
+    @Query("""
+            SELECT id, tenant_id, name, callback_url, event_types, secret, enabled,
+                   created_by, updated_by, created_at, updated_at
+              FROM batch.webhook_subscription
              WHERE tenant_id = :tenantId AND enabled = TRUE
             """)
     List<WebhookSubscriptionEntity> findEnabledByTenant(@Param("tenantId") String tenantId);
