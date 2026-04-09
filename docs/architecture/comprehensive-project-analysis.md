@@ -1,6 +1,6 @@
 # File Batch System 项目综合分析报告
 
-> 分析基准日期：2026-04-08
+> 分析基准日期：2026-04-09
 
 ---
 
@@ -430,12 +430,63 @@
 
 ---
 
-## 五、当前状态与结论
+## 五、开源软件使用分析
 
-截至 2026-04-08，系统核心链路（Import / Export / Dispatch）已完整打通，E2E 覆盖 15 个测试类，结构化治理（`AbstractWorkerLoop` / `DatabaseIdempotencyGuard` / `PathSanitizer` 等）全部落地。
+### 5.1 依赖概况
+
+系统共引入 **30+ 个直接运行时依赖**（不含传递依赖），主要通过 Spring Boot 4.0.3 BOM 统一管理版本。完整清单见 `docs/compliance/THIRD-PARTY-LICENSES.md`。
+
+### 5.2 许可证分布
+
+| 许可证家族 | 组件数 | 风险等级 | 代表组件 |
+|-----------|--------|---------|---------|
+| Apache-2.0 | ~25 | 低 | Spring Boot, Kafka, MyBatis, Flyway, MinIO SDK, POI, ShedLock, Micrometer, OTel |
+| MIT | 3 | 低 | Lombok, SLF4J, Mockito |
+| BSD-2/3-Clause | 3 | 低 | PostgreSQL JDBC, JSch, Redis |
+| EPL-2.0 | 3 | 中 | Jakarta EE APIs, JUnit, Angus Mail |
+| EPL-1.0 + LGPL-2.1 | 1 | 中 | Logback |
+| AGPL-3.0 | 2 | **高** | Grafana（运维基础设施）、MinIO Server（对象存储） |
+
+### 5.3 高风险许可证评估
+
+| 组件 | 许可证 | 使用方式 | 风险缓解 |
+|------|--------|---------|---------|
+| Grafana | AGPL-3.0 | 独立运维基础设施，不嵌入应用代码 | 作为独立服务部署，不修改源码，不对外提供 SaaS，合规风险可控 |
+| MinIO Server | AGPL-3.0 / 商业 | 独立对象存储服务 | 生产环境可替换为 S3/OSS/商业 MinIO；开发/测试使用社区版 |
+| Angus Mail | EPL-2.0 + GPL-2.0 CE | dispatch 模块 SMTP 分发 | GPL with Classpath Exception 允许链接不传染；需在许可证清单标注 |
+| Logback | EPL-1.0 + LGPL-2.1 | 日志后端（transitive） | LGPL 动态链接不传染，但需保留许可证声明 |
+
+### 5.4 合规工具链
+
+系统已在 `pom.xml` 中配置 `compliance` Profile：
+
+- **CycloneDX Maven Plugin 2.9.1**：生成 SBOM（`target/bom.json` / `target/bom.xml`）
+- **License Maven Plugin 2.4.0**：聚合第三方许可证报告
+
+```bash
+mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party
+```
+
+### 5.5 待改进项
+
+| 编号 | 问题 | 建议 | 优先级 |
+|------|------|------|--------|
+| OSS-1 | MinIO Server 生产合规未确认 | 正式评估 AGPL 影响或切换 S3/商业版 | P1（上线前） |
+| OSS-2 | CI 未集成许可证扫描 | 在 CI pipeline 中加入 `license:aggregate-add-third-party` 并阻断未知许可证 | P2 |
+| OSS-3 | NOTICE 文件未生成 | 生成并维护 `NOTICE` 文件，保留 Apache-2.0 组件的版权声明 | P2 |
+| OSS-4 | testcontainers-redis 版本不一致 | dispatch (2.2.4) vs console-api (2.2.2)，建议统一到 dependencyManagement | P3 |
+| OSS-5 | DEPENDENCY-APPROVAL.md 未创建 | 为 AGPL/EPL 类依赖补充正式审批记录 | P2 |
+
+---
+
+## 六、当前状态与结论
+
+截至 2026-04-09，系统核心链路（Import / Export / Dispatch）已完整打通，E2E 覆盖 15 个测试类，结构化治理（`AbstractWorkerLoop` / `DatabaseIdempotencyGuard` / `PathSanitizer` 等）全部落地。
 
 **最关键的风险集中在安全层面**：P0 中的 4 项（默认密码、鉴权绕过、Trigger 无鉴权、JWT 默认 Secret）在生产上线前必须全部修复，任何一项未修复都会导致系统在生产环境存在严重暴露面。
 
 P1 的架构竞态（Lease Reclaim）和安全补丁（CSRF、SSRF、SQL 白名单绕过、Worker 无鉴权）应在上线前完成。P2/P3 可在上线后按版本迭代推进。
 
-**结论**：功能层面系统已具备生产就绪条件；安全加固是当前最高优先级工作，完成 P0+P1 后方可评估 staging 实测与生产发布。
+**开源合规方面**：30+ 运行时依赖中绝大多数为 Apache-2.0 / MIT / BSD 宽松许可证，合规风险低。AGPL 类组件（Grafana、MinIO Server）均作为独立基础设施部署，不嵌入应用代码。上线前需完成 MinIO Server 生产合规评估（OSS-1）和 CI 许可证扫描集成（OSS-2）。
+
+**结论**：功能层面系统已具备生产就绪条件；安全加固是当前最高优先级工作，完成 P0+P1 后方可评估 staging 实测与生产发布。开源合规基线已建立，需在上线前完成 AGPL 组件正式评估。

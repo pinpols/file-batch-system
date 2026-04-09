@@ -120,6 +120,19 @@ jdbc:postgresql://localhost:15432/batch_business
 - Secret Key：`minioadmin123`
 - Bucket：`batch-dev`
 
+## Console 默认账号
+
+系统通过 Flyway 迁移脚本预置以下账号（用户名全局唯一，登录时无需指定租户，后端自动解析所属租户）：
+
+| 用户名 | 密码 | 角色 | 说明 |
+|--------|------|------|------|
+| `admin` | `admin123` | `ROLE_ADMIN` | 全权限管理员 |
+| `auditor` | `auditor123` | `ROLE_AUDITOR` | 只读审计角色 |
+| `config-admin` | `config123` | `ROLE_CONFIG_ADMIN` | 配置与运维角色 |
+| `tenant-user` | `tenant123` | `ROLE_TENANT_USER` | 租户业务用户（可查看状态、触发作业、下载文件） |
+
+所有账号默认属于 `default-tenant` 租户。
+
 ## 常用命令
 
 进入 PostgreSQL：

@@ -6473,12 +6473,13 @@ components:
       required: [username, tenantId, authorities]
     ConsoleLoginRequest:
       type: object
+      description: >
+        Username is globally unique. Tenant is resolved from the account record
+        automatically; no tenantId field is needed.
       properties:
         username:
           type: string
         password:
-          type: string
-        tenantId:
           type: string
       required: [username, password]
     ConsoleFileOperationResponse:
