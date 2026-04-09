@@ -18,6 +18,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -128,7 +129,7 @@ class AbstractTaskConsumerBackpressureTest {
             ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg);
         });
 
-        assertThat(entered.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
 
         // 第二次调用应触发 pause 并立即返回（无可用 permit）
         when(container.isPauseRequested()).thenReturn(false).thenReturn(true);

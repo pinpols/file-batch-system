@@ -28,6 +28,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
@@ -448,9 +450,9 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
                     String.class,
                     tenantId,
                     dedupKey);
-        } catch (org.springframework.dao.EmptyResultDataAccessException ex) {
+        } catch (EmptyResultDataAccessException ex) {
             return null;
-        } catch (org.springframework.dao.DataAccessException ex) {
+        } catch (DataAccessException ex) {
             return null;
         }
     }

@@ -54,6 +54,9 @@
         <if test="startedTo != null">
             and started_at &lt;= #{startedTo}
         </if>
+        <if test="minDurationSeconds != null">
+            and extract(epoch from (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
+        </if>
         <choose>
             <when test="sortBy == 'duration'">
                 order by (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at)) desc
@@ -100,6 +103,9 @@
         </if>
         <if test="startedTo != null">
             and started_at &lt;= #{startedTo}
+        </if>
+        <if test="minDurationSeconds != null">
+            and extract(epoch from (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at))) &gt;= #{minDurationSeconds}
         </if>
     </select>
 

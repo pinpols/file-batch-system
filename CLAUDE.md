@@ -9,6 +9,11 @@
 - 构造器（record、DTO、Response、data holder、Spring DI 注入）不受此约束
 - 封装类型优先选用 `private record`（私有方法）或独立 Command/Param 类（公共接口）
 
+## Java 代码风格
+
+- **禁止在代码中使用全限定类名（FQN）**——必须通过 `import` 导入后使用短名。例如写 `TimeUnit.SECONDS` 而非 `java.util.concurrent.TimeUnit.SECONDS`
+- 注解同理：写 `@MockitoSettings` 而非 `@org.mockito.junit.jupiter.MockitoSettings`
+
 ## 架构硬约束
 
 - 任务分发主链：`DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT`
