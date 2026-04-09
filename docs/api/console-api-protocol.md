@@ -310,31 +310,32 @@ Deployment note:
 - `PUT /api/console/pipeline-definitions/{id}`
 - `POST /api/console/pipeline-definitions/{id}/toggle`
 - `GET /api/console/pipeline-definitions/events`
+- Create and update are transactional: definition and step list are persisted or replaced atomically.
+- Detail response (`PipelineDefinitionDetailResponse`) includes the ordered step list.
 - `GET /api/console/pipeline-definitions/events` is the domain-level realtime entry for pipeline editing screens. It subscribes to the same event hub used by the other realtime console streams, but keeps the route close to the pipeline-definition UX.
 
 ### Workers
 
-- `GET /api/console/workers`
 - `POST /api/console/workers/{workerCode}/drain`
 - `POST /api/console/workers/{workerCode}/force-offline`
 - `POST /api/console/workers/{workerCode}/takeover`
 - `GET /api/console/workers/{workerCode}/claimed-tasks`
 - `GET /api/console/workers/events`
 - `GET /api/console/workers/events` subscribes to worker registry realtime changes. It emits `worker-updated` signals after drain, force-offline, or takeover actions succeed.
+- Worker list query is served by `GET /api/console/query/workers`.
 
 ### Alerts
 
-- `GET /api/console/alerts`
 - `POST /api/console/alerts/{alertId}/ack`
 - `POST /api/console/alerts/{alertId}/silence`
 - `POST /api/console/alerts/{alertId}/close`
 - `GET /api/console/alerts/events`
 - `GET /api/console/alerts/events` subscribes to alert governance realtime changes. It emits `alert-updated` signals after ack, silence, or close actions succeed.
+- Alert list query is served by `GET /api/console/query/alerts`.
 
 ### Job Instances and Workflow Runs
 
 - `GET /api/console/stream/job-instances/events`
-- `GET /api/console/stream/workflow-runs/events`
 - `GET /api/console/workflow-runs/events`
 - `POST /api/console/jobs/trigger`
 - `POST /api/console/jobs/compensations`
@@ -345,7 +346,7 @@ Deployment note:
 - `POST /api/console/jobs/partitions/replay`
 - `POST /api/console/jobs/catch-up/approve`
 - `POST /api/console/jobs/batch-days/{bizDate}/catchup`
-- `GET /api/console/stream/job-instances/events` and `GET /api/console/stream/workflow-runs/events` expose the shared realtime hub for run-state pages. `GET /api/console/workflow-runs/events` is the domain-specific shortcut for the workflow-run screen.
+- `GET /api/console/stream/job-instances/events` exposes the shared realtime hub for job-instance run-state pages. `GET /api/console/workflow-runs/events` is the domain-specific shortcut for the workflow-run screen.
 - `job-instances` emits `job-instance-updated` signals and `workflow-runs` emits `workflow-run-updated` signals after job and workflow-run write actions succeed.
 
 ### Outbox
@@ -443,16 +444,6 @@ Deployment note:
 - All write operations require `ROLE_ADMIN`.
 - `policy_code` uniqueness is enforced on create.
 - Policy definition includes concurrent cap, QPS, fair-share configuration, burst limit, and sliding window hours.
-
-### Pipeline Definitions
-
-- `GET /api/console/pipeline-definitions`
-- `POST /api/console/pipeline-definitions`
-- `GET /api/console/pipeline-definitions/{id}`
-- `PUT /api/console/pipeline-definitions/{id}`
-- `POST /api/console/pipeline-definitions/{id}/toggle`
-- Create and update are transactional: definition and step list are persisted or replaced atomically.
-- Detail response (`PipelineDefinitionDetailResponse`) includes the ordered step list.
 
 ### Workflow Runs
 
@@ -562,6 +553,15 @@ Deployment note:
 - `GET /api/console/reports/excel/outbox-deliveries`
 - Report Excel exports are export-only snapshots or logs. They do not accept upload / preview / apply flows.
 
+### Tenant Config Init
+
+- `POST /api/console/config/tenant-init`
+- Batch-initializes or updates configuration for multiple tenants in one request.
+- Supports two modes: `SKIP_EXISTING` (default, create missing only) and `UPSERT` (create or update).
+- Pushes job definitions, workflow definitions, pipeline definitions, file channels, and file templates.
+- Requires `ROLE_ADMIN`.
+- Requires `Idempotency-Key` header.
+
 ### Workers
 
 - `POST /api/console/workers/{workerCode}/drain`
@@ -647,6 +647,23 @@ Deployment note:
 - `execution-logs` is a UI alias for `audits` and uses the same response shape.
 - `channel-receipts` is a receipt-focused alias of `file-dispatches`; it uses the same request fields and response DTO, but gives the frontend a stable semantic entrypoint for receipt tracking.
 - `workflow-topology` returns `ConsoleWorkflowTopologyResponse` with `workflowDefinition`, `nodes`, `edges`, `workflowRuns`, and `nodeRuns`; the frontend should use those five fields directly instead of reconstructing a generic object map.
+- All paginated query endpoints accept `tenantId`, `pageNo`, and `pageSize`. In addition, the following endpoints support server-side filtering:
+
+| Endpoint | Filter Parameters | Match |
+|----------|-------------------|-------|
+| `/query/audits` | `operationType`, `operationResult` (exact); `operatorId`, `traceId` (partial); `fileId` (exact); `startTime`/`endTime` (range) | mixed |
+| `/query/alerts` | `severity`, `status`, `alertType` (exact) | exact |
+| `/query/files` | `fileStatus`, `bizType` (exact); `fileName` (partial); `traceId`, `fileId` (exact); `fromTime`/`toTime` (range) | mixed |
+| `/query/instances` | `jobCode` (partial); `instanceStatus`, `instanceNo`, `bizDate` (exact); `traceId` (partial); `startDate`/`endDate` (range) | mixed |
+| `/query/job-definitions` | `jobCode`, `jobName`, `workerGroup`, `queueCode` (partial); `jobType`, `scheduleType`, `enabled` (exact) | mixed |
+| `/query/job-step-instances` | `jobInstanceId`, `jobPartitionId`, `stepCode`, `stepStatus` (exact) | exact |
+| `/query/workflow-definitions` | `workflowCode` (partial) | partial |
+| `/query/workflow-nodes` | `workflowDefinitionId` (exact); `workflowCode`, `nodeCode` (exact); `nodeType`, `enabled` (exact) | exact |
+| `/query/workflow-edges` | `workflowDefinitionId` (exact); `workflowCode`, `fromNodeCode`, `toNodeCode`, `edgeType`, `enabled` (exact) | exact |
+| `/query/workflow-runs` | `workflowDefinitionId`, `relatedJobInstanceId`, `runStatus`, `currentNodeCode`, `traceId` (exact) | exact |
+| `/query/workflow-node-runs` | `workflowRunId`, `nodeCode`, `nodeStatus` (exact) | exact |
+| `/query/outbox-retries` | `retryStatus`, `eventKey` (exact) | exact |
+| `/query/outbox-deliveries` | `deliveryStatus`, `eventType`, `eventKey` (exact) | exact |
 
 ### Streaming
 
@@ -718,7 +735,8 @@ Request body:
 
 ## File Download API
 
-- `GET /api/console/files/{fileId}/download?tenantId={tenantId}&approvalId={optional}`
+- `GET /api/console/files/{fileId}/download`
+- Query params: `tenantId` (required), `approvalId` (optional).
 - Response is **raw file bytes** (`Content-Disposition: attachment`, MIME from metadata or `application/octet-stream`), **not** the `CommonResponse` JSON envelope.
 - When the file’s template enforces download approval, `approvalId` must reference an **APPROVED** (or **EXECUTED**) approval; omit only when testing-open or policy does not require approval.
 
