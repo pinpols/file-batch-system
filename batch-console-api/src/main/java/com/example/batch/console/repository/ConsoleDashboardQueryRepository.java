@@ -264,6 +264,42 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
             """)
     Long countFileTemplates(@Param("tenantId") String tenantId);
 
+    // ── SLA 报表（按 job 维度） ─────────────────────────────
+
+    @Query("""
+            SELECT i.job_code AS jobCode,
+                   d.job_name AS jobName,
+                   count(1) AS totalInstances,
+                   count(1) FILTER (WHERE i.instance_status = 'SUCCESS') AS successCount,
+                   count(1) FILTER (WHERE i.instance_status IN ('FAILED','PARTIAL_FAILED')) AS failedCount,
+                   count(1) FILTER (WHERE i.deadline_at IS NOT NULL AND i.finished_at > i.deadline_at) AS slaBreached,
+                   count(1) FILTER (WHERE i.deadline_at IS NOT NULL AND (i.finished_at IS NULL OR i.finished_at <= i.deadline_at)) AS slaOnTime,
+                   round(avg(EXTRACT(EPOCH FROM (i.finished_at - i.started_at)))::numeric, 2) AS avgDurationSeconds,
+                   round(max(EXTRACT(EPOCH FROM (i.finished_at - i.started_at)))::numeric, 2) AS maxDurationSeconds,
+                   coalesce(sum(i.expected_partition_count), 0) AS totalPartitions
+              FROM batch.job_instance i
+              LEFT JOIN batch.job_definition d ON d.tenant_id = i.tenant_id AND d.job_code = i.job_code
+             WHERE i.tenant_id = :tenantId
+               AND i.created_at >= current_date - :days
+               AND i.instance_status IN ('SUCCESS', 'FAILED', 'PARTIAL_FAILED')
+             GROUP BY i.job_code, d.job_name
+             ORDER BY slaBreached DESC, totalInstances DESC
+            """)
+    List<SlaJobReportView> slaJobReport(@Param("tenantId") String tenantId, @Param("days") int days);
+
+    interface SlaJobReportView {
+        String getJobCode();
+        String getJobName();
+        Long getTotalInstances();
+        Long getSuccessCount();
+        Long getFailedCount();
+        Long getSlaBreached();
+        Long getSlaOnTime();
+        BigDecimal getAvgDurationSeconds();
+        BigDecimal getMaxDurationSeconds();
+        Long getTotalPartitions();
+    }
+
     interface SlaStatsView {
         Long getBreached();
         Long getOnTime();

@@ -68,4 +68,13 @@ public class ConsoleWorkerController {
                                                                   @RequestParam String tenantId) {
         return responseFactory.success(applicationService.claimedTasks(tenantId, workerCode));
     }
+
+    /** 预热 Worker：提前建立连接池/缓存，为接收任务做准备。 */
+    @PostMapping("/{workerCode}/warmup")
+    public CommonResponse<ConsoleWorkerRegistryResponse> warmup(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String workerCode,
+            @RequestParam String tenantId) {
+        return responseFactory.success(applicationService.warmup(workerCode, tenantId, idempotencyKey));
+    }
 }

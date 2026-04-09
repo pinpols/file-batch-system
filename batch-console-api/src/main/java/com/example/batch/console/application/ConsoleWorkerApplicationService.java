@@ -22,4 +22,7 @@ public interface ConsoleWorkerApplicationService {
 
     /** 查询指定 Worker 当前已认领的任务列表。 */
     List<ConsoleWorkerClaimedTaskResponse> claimedTasks(String tenantId, String workerCode);
+
+    /** 预热指定 Worker：发送预热信号使其提前建立连接池/缓存。 */
+    ConsoleWorkerRegistryResponse warmup(String workerCode, String tenantId, String idempotencyKey);
 }

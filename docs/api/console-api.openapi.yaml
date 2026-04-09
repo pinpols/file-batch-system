@@ -67,6 +67,26 @@ tags:
     description: Workflow run cancel, terminate, and node-skip operations.
   - name: Streams
     description: SSE streams for execution logs, trace snapshots, and event-driven realtime updates.
+  - name: SystemParameters
+    description: Runtime system parameter CRUD with Redis cache.
+  - name: Webhooks
+    description: Webhook subscription CRUD, delivery logs, and async event dispatch.
+  - name: ResourceTags
+    description: Resource tagging for job, workflow, file channel, and file template.
+  - name: ApiKeys
+    description: API key self-service creation, listing, and revocation.
+  - name: Governance
+    description: Circuit breaker and rate limit parameter management.
+  - name: ArchivePolicies
+    description: Data archive and cleanup policy management.
+  - name: ClusterDiagnostic
+    description: Cross-node consistency diagnostic endpoints.
+  - name: TenantSelfService
+    description: Tenant quota and usage self-service.
+  - name: SelfServiceJobs
+    description: Tenant self-service rerun and compensation requests.
+  - name: EventCatalog
+    description: Event type catalog and Kafka topic directory.
 security:
   - bearerAuth: []
   - consoleToken: []
@@ -572,6 +592,517 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleBatchDayCatchUpResponse'
+  /api/console/jobs/batch-trigger:
+    post:
+      tags: [Jobs]
+      summary: Batch trigger up to 50 jobs
+      operationId: batchTriggerJobs
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TriggerRequest'
+              maxItems: 50
+      responses:
+        '200':
+          description: Batch trigger results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/system-parameters:
+    get:
+      tags: [SystemParameters]
+      summary: List all system parameters for tenant
+      operationId: listSystemParameters
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Parameter list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [SystemParameters]
+      summary: Upsert a system parameter
+      operationId: upsertSystemParameter
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                  maxLength: 128
+                value:
+                  type: string
+                  maxLength: 2048
+                description:
+                  type: string
+                  maxLength: 512
+      responses:
+        '200':
+          description: Upsert success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+    delete:
+      tags: [SystemParameters]
+      summary: Delete a system parameter
+      operationId: deleteSystemParameter
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: key
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Delete success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/system-parameters/value:
+    get:
+      tags: [SystemParameters]
+      summary: Get single parameter value
+      operationId: getSystemParameterValue
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: key
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Parameter value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhook subscriptions
+      operationId: listWebhooks
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Subscription list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Webhooks]
+      summary: Create webhook subscription
+      operationId: createWebhook
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, callbackUrl, eventTypes]
+              properties:
+                name:
+                  type: string
+                  maxLength: 128
+                callbackUrl:
+                  type: string
+                  maxLength: 1024
+                eventTypes:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 64
+                secret:
+                  type: string
+                  maxLength: 256
+                enabled:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Created subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/webhooks/{id}:
+    get:
+      tags: [Webhooks]
+      summary: Get webhook subscription detail
+      operationId: getWebhook
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Subscription detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [Webhooks]
+      summary: Update webhook subscription
+      operationId: updateWebhook
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [callbackUrl, eventTypes]
+              properties:
+                callbackUrl:
+                  type: string
+                eventTypes:
+                  type: array
+                  items:
+                    type: string
+                secret:
+                  type: string
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    delete:
+      tags: [Webhooks]
+      summary: Delete webhook subscription
+      operationId: deleteWebhook
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/webhooks/delivery-logs:
+    get:
+      tags: [Webhooks]
+      summary: Query webhook delivery logs
+      operationId: listWebhookDeliveryLogs
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: subscriptionId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 200
+      responses:
+        '200':
+          description: Delivery log list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/tags:
+    get:
+      tags: [ResourceTags]
+      summary: List tags for a resource
+      operationId: listResourceTags
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: resourceType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [JOB, WORKFLOW, FILE_CHANNEL, FILE_TEMPLATE]
+        - name: resourceCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tag list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [ResourceTags]
+      summary: Upsert a resource tag
+      operationId: upsertResourceTag
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resourceType, resourceCode, tagKey]
+              properties:
+                resourceType:
+                  type: string
+                  enum: [JOB, WORKFLOW, FILE_CHANNEL, FILE_TEMPLATE]
+                resourceCode:
+                  type: string
+                  maxLength: 128
+                tagKey:
+                  type: string
+                  maxLength: 64
+                tagValue:
+                  type: string
+                  maxLength: 256
+      responses:
+        '200':
+          description: Tag upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+    delete:
+      tags: [ResourceTags]
+      summary: Delete a single resource tag
+      operationId: deleteResourceTag
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: resourceType
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: resourceCode
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: tagKey
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tag deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/tags/search:
+    get:
+      tags: [ResourceTags]
+      summary: Search resources by tag key and optional value
+      operationId: searchByTag
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: tagKey
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: tagValue
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching resources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/tags/keys:
+    get:
+      tags: [ResourceTags]
+      summary: List distinct tag keys for tenant
+      operationId: listTagKeys
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Tag key list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/tags/all:
+    delete:
+      tags: [ResourceTags]
+      summary: Delete all tags for a resource
+      operationId: deleteAllResourceTags
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: resourceType
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: resourceCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: All tags deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/api-keys:
+    get:
+      tags: [ApiKeys]
+      summary: List API keys for tenant
+      operationId: listApiKeys
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: API key list (no raw key)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [ApiKeys]
+      summary: Create API key (raw key returned once only)
+      operationId: createApiKey
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keyName]
+              properties:
+                keyName:
+                  type: string
+                  maxLength: 128
+                scopes:
+                  type: string
+                  maxLength: 512
+                expiresAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Created key with raw key visible once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/api-keys/{id}:
+    get:
+      tags: [ApiKeys]
+      summary: Get API key detail
+      operationId: getApiKey
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: API key detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    delete:
+      tags: [ApiKeys]
+      summary: Revoke API key
+      operationId: revokeApiKey
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/query/instances/batch-status:
+    get:
+      tags: [Queries]
+      summary: Batch query instance status by instanceNos
+      operationId: batchInstanceStatus
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: instanceNos
+          in: query
+          required: true
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: Instance status list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/approvals/{approvalNo}/approve:
     post:
       tags: [Approvals]
@@ -2316,6 +2847,20 @@ paths:
         - $ref: '#/components/parameters/InstanceStatusFilter'
         - $ref: '#/components/parameters/StartDateFilter'
         - $ref: '#/components/parameters/EndDateFilter'
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [id, duration]
+            default: id
+          description: Sort order. Use 'duration' for slow task diagnosis (descending by runtime).
+        - name: minDurationSeconds
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Minimum runtime threshold in seconds. Only returns instances running >= this value.
       responses:
         '200':
           description: Job instance list
@@ -4921,6 +5466,435 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
 
+  /api/console/ops/governance:
+    get:
+      tags: [Governance]
+      summary: List governance parameters (circuit breaker / rate limit)
+      operationId: listGovernanceParams
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Governance parameters with defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Governance]
+      summary: Update a governance parameter
+      operationId: updateGovernanceParam
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/ops/governance/reset:
+    post:
+      tags: [Governance]
+      summary: Reset governance parameter to default
+      operationId: resetGovernanceParam
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key:
+                  type: string
+      responses:
+        '200':
+          description: Reset to default
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/ops/archive-policies:
+    get:
+      tags: [ArchivePolicies]
+      summary: List archive/cleanup policies
+      operationId: listArchivePolicies
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Archive policy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [ArchivePolicies]
+      summary: Upsert archive/cleanup policy
+      operationId: upsertArchivePolicy
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetTable, retentionDays, archiveEnabled, cleanupEnabled, batchSize]
+              properties:
+                targetTable:
+                  type: string
+                  maxLength: 64
+                retentionDays:
+                  type: integer
+                  minimum: 1
+                archiveEnabled:
+                  type: boolean
+                cleanupEnabled:
+                  type: boolean
+                batchSize:
+                  type: integer
+                  minimum: 100
+                description:
+                  type: string
+                  maxLength: 512
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/ops/cluster-diagnostic:
+    get:
+      tags: [ClusterDiagnostic]
+      summary: Full cluster health diagnostic
+      operationId: clusterDiagnostic
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Diagnostic report (shedlock + workers + outbox)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cluster-diagnostic/shedlock:
+    get:
+      tags: [ClusterDiagnostic]
+      summary: ShedLock lease status
+      operationId: shedLockStatus
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: ShedLock status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cluster-diagnostic/workers:
+    get:
+      tags: [ClusterDiagnostic]
+      summary: Worker registry consistency
+      operationId: workerConsistency
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Worker consistency
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cluster-diagnostic/outbox:
+    get:
+      tags: [ClusterDiagnostic]
+      summary: Outbox health
+      operationId: outboxHealth
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Outbox health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/tenant/quota:
+    get:
+      tags: [TenantSelfService]
+      summary: Query tenant quota policies
+      operationId: tenantQuota
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Quota policies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/tenant/usage:
+    get:
+      tags: [TenantSelfService]
+      summary: Query tenant usage metrics
+      operationId: tenantUsage
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      responses:
+        '200':
+          description: Usage metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/tenant/quota/request:
+    post:
+      tags: [TenantSelfService]
+      summary: Request quota change
+      operationId: requestQuotaChange
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quotaKey, requestedValue, reason]
+              properties:
+                quotaKey:
+                  type: string
+                requestedValue:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/files/presign-upload:
+    post:
+      tags: [Files]
+      summary: Get pre-signed upload URL
+      operationId: presignUpload
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channelCode
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: fileName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pre-signed upload info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/files/{fileId}/confirm-arrival:
+    post:
+      tags: [Files]
+      summary: Confirm file arrival
+      operationId: confirmFileArrival
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Arrival confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/self-service/jobs/rerun-request:
+    post:
+      tags: [SelfServiceJobs]
+      summary: Submit rerun request (creates approval workflow)
+      operationId: selfServiceRerunRequest
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, jobCode, bizDate]
+              properties:
+                tenantId:
+                  type: string
+                jobCode:
+                  type: string
+                  maxLength: 128
+                bizDate:
+                  type: string
+                targetInstanceNo:
+                  type: string
+                reason:
+                  type: string
+                  maxLength: 512
+      responses:
+        '200':
+          description: Approval number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/self-service/jobs/compensation-request:
+    post:
+      tags: [SelfServiceJobs]
+      summary: Submit compensation request (creates approval workflow)
+      operationId: selfServiceCompensationRequest
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, jobCode, bizDate]
+              properties:
+                tenantId:
+                  type: string
+                jobCode:
+                  type: string
+                  maxLength: 128
+                bizDate:
+                  type: string
+                compensationType:
+                  type: string
+                targetInstanceNo:
+                  type: string
+                reason:
+                  type: string
+                  maxLength: 512
+      responses:
+        '200':
+          description: Approval number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/event-catalog/event-types:
+    get:
+      tags: [EventCatalog]
+      summary: List subscribable event types
+      operationId: listEventTypes
+      responses:
+        '200':
+          description: Event type list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/event-catalog/topics:
+    get:
+      tags: [EventCatalog]
+      summary: List Kafka topics
+      operationId: listKafkaTopics
+      responses:
+        '200':
+          description: Kafka topic list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/workers/{workerCode}/warmup:
+    post:
+      tags: [Workers]
+      summary: Trigger worker warmup
+      operationId: warmupWorker
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: workerCode
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Worker warmup result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/files/{fileId}/errors/export:
+    get:
+      tags: [Files]
+      summary: Export file error records as CSV
+      operationId: exportFileErrors
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: errorStage
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
 components:
   securitySchemes:
     basicAuth:
@@ -5815,6 +6789,10 @@ components:
           enum: [MANUAL, API, SCHEDULE, CATCH_UP]
         payload:
           type: string
+        dryRun:
+          type: boolean
+          default: false
+          description: When true, validates the trigger request without executing. Idempotency-Key not required.
       required: [tenantId, jobCode, bizDate, triggerType]
     BatchDayQueryRequest:
       type: object

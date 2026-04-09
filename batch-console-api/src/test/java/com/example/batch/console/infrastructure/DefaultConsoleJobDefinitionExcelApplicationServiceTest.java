@@ -12,8 +12,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
+import com.example.batch.console.mapper.BatchWindowMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
+import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
@@ -40,6 +43,9 @@ class DefaultConsoleJobDefinitionExcelApplicationServiceTest {
     private final JobDefinitionMapper jobDefinitionMapper = mock(JobDefinitionMapper.class);
     private final ConfigChangeLogMapper configChangeLogMapper = mock(ConfigChangeLogMapper.class);
     private final InMemoryJobDefinitionExcelImportStore importStore = new InMemoryJobDefinitionExcelImportStore();
+    private final ResourceQueueMapper resourceQueueMapper = mock(ResourceQueueMapper.class);
+    private final BatchWindowMapper batchWindowMapper = mock(BatchWindowMapper.class);
+    private final BusinessCalendarMapper businessCalendarMapper = mock(BusinessCalendarMapper.class);
     private DefaultConsoleJobDefinitionExcelApplicationService service;
 
     @BeforeEach
@@ -49,7 +55,10 @@ class DefaultConsoleJobDefinitionExcelApplicationServiceTest {
                 requestMetadataResolver,
                 jobDefinitionMapper,
                 configChangeLogMapper,
-                importStore
+                importStore,
+                resourceQueueMapper,
+                batchWindowMapper,
+                businessCalendarMapper
         );
         when(requestMetadataResolver.current()).thenReturn(new ConsoleRequestMetadata(
                 "req-1",

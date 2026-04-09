@@ -492,7 +492,8 @@ Deployment note:
 
 ### Jobs
 
-- `POST /api/console/jobs/trigger`
+- `POST /api/console/jobs/trigger` — supports `dryRun: true` in request body for sandbox validation (validates tenant, jobCode, bizDate, triggerType, enabled status without executing)
+- `POST /api/console/jobs/batch-trigger` — batch trigger up to 50 jobs in one request; accepts `List<TriggerRequest>`, requires `Idempotency-Key`
 - `POST /api/console/jobs/compensations`
 - `POST /api/console/jobs/compensate`
 - `POST /api/console/jobs/rerun`
@@ -591,6 +592,7 @@ Deployment note:
 - `POST /api/console/workers/{workerCode}/takeover`
 - `POST /api/console/workers/{workerCode}/force-offline`
 - `GET /api/console/workers/{workerCode}/claimed-tasks`
+- `POST /api/console/workers/{workerCode}/warmup`
 - `takeover` is the explicit manual handoff path: it requeues in-flight tasks and marks the worker decommissioned immediately.
 - `force-offline` keeps the stronger ops semantics and should be treated as an emergency offlining command.
 
@@ -601,6 +603,8 @@ Deployment note:
 - `POST /api/console/files/redispatch`
 - `POST /api/console/files/presign-download`
 - `POST /api/console/files/arrival-groups/action`
+- `POST /api/console/files/presign-upload`
+- `POST /api/console/files/{fileId}/confirm-arrival`
 - `GET /api/console/files/{fileId}/download`
 - File operation endpoints use `ConsoleFileOperationResponse`. `POST /api/console/files/presign-download` uses `ConsolePresignDownloadResponse`, where `approvalNo` and `downloadUrl` are mutually exclusive and one side may be `null` depending on whether the request goes through approval submission or direct presign execution.
 - Download success responses are raw file bytes with `Content-Disposition: attachment`; validation or state errors still return the normal JSON error envelope via the global exception handler.
@@ -625,6 +629,85 @@ Deployment note:
 
 - `POST /api/console/ai/chat`
 
+### System Parameters
+
+- `GET /api/console/system-parameters` — list all parameters for tenant
+- `GET /api/console/system-parameters/value` — get single parameter value by `key`
+- `PUT /api/console/system-parameters` — upsert parameter (body: `key`, `value`, `description`)
+- `DELETE /api/console/system-parameters` — delete parameter by `key`
+- All endpoints require `ROLE_ADMIN`.
+- Parameters are cached in Redis (`sys-param:{tenantId}:{key}`, TTL 30min); writes invalidate cache immediately.
+
+### Webhooks
+
+- `GET /api/console/webhooks` — list webhook subscriptions for tenant
+- `GET /api/console/webhooks/{id}` — subscription detail
+- `POST /api/console/webhooks` — create subscription (body: `name`, `callbackUrl`, `eventTypes[]`, `secret`, `enabled`)
+- `PUT /api/console/webhooks/{id}` — update subscription
+- `DELETE /api/console/webhooks/{id}` — delete subscription
+- `GET /api/console/webhooks/delivery-logs` — query delivery log history (`subscriptionId` optional, `limit` default 20)
+- Webhook delivery uses HMAC-SHA256 signature in `X-Webhook-Signature` header; payload is JSON with `eventType`, `tenantId`, `payload`, `timestamp`.
+- Delivery retries up to 3 times with exponential backoff (2s, 4s, 8s).
+- Permissions: `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`, `ROLE_TENANT_USER`.
+
+### Resource Tags
+
+- `GET /api/console/tags` — list tags for a specific resource (`resourceType`, `resourceCode` required)
+- `GET /api/console/tags/search` — search resources by tag (`tagKey` required, `tagValue` optional)
+- `GET /api/console/tags/keys` — list all distinct tag keys for tenant
+- `POST /api/console/tags` — upsert tag (body: `resourceType`, `resourceCode`, `tagKey`, `tagValue`)
+- `DELETE /api/console/tags` — delete single tag (`resourceType`, `resourceCode`, `tagKey` required)
+- `DELETE /api/console/tags/all` — delete all tags for a resource
+- Supported `resourceType` values: `JOB`, `WORKFLOW`, `FILE_CHANNEL`, `FILE_TEMPLATE`.
+- Permissions: `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`.
+
+### API Keys
+
+- `GET /api/console/api-keys` — list all API keys for tenant (key hash only, no raw key)
+- `GET /api/console/api-keys/{id}` — API key detail
+- `POST /api/console/api-keys` — create API key (body: `keyName`, `scopes`, `expiresAt`); returns raw key **once only**
+- `DELETE /api/console/api-keys/{id}` — revoke API key (requires `ROLE_ADMIN`)
+- Raw key is a `bk_`-prefixed Base64 token; only the SHA-256 hash and 8-char prefix are stored.
+- List/detail/create: `ROLE_ADMIN`, `ROLE_TENANT_USER`. Revoke: `ROLE_ADMIN` only.
+
+### Kafka Lag
+
+- `GET /api/console/ops/kafka-lag` — query Kafka consumer group lag for batch-related topics
+
+### Governance
+
+- `GET /api/console/ops/governance` — list circuit breaker / rate limit parameters
+- `POST /api/console/ops/governance` — update governance parameter
+- `POST /api/console/ops/governance/reset` — reset to default
+
+### Archive Policies
+
+- `GET /api/console/ops/archive-policies` — list archive/cleanup policies
+- `PUT /api/console/ops/archive-policies` — upsert archive/cleanup policy
+
+### Cluster Diagnostic
+
+- `GET /api/console/ops/cluster-diagnostic` — full cluster health check
+- `GET /api/console/ops/cluster-diagnostic/shedlock` — ShedLock lease status
+- `GET /api/console/ops/cluster-diagnostic/workers` — worker consistency
+- `GET /api/console/ops/cluster-diagnostic/outbox` — outbox health
+
+### Tenant Self-Service
+
+- `GET /api/console/tenant/quota` — tenant quota policies
+- `GET /api/console/tenant/usage` — tenant usage metrics
+- `POST /api/console/tenant/quota/request` — request quota change
+
+### Self-Service Jobs
+
+- `POST /api/console/self-service/jobs/rerun-request` — submit rerun via approval
+- `POST /api/console/self-service/jobs/compensation-request` — submit compensation via approval
+
+### Event Catalog
+
+- `GET /api/console/event-catalog/event-types` — subscribable event types
+- `GET /api/console/event-catalog/topics` — Kafka topic directory
+
 ### Queries
 
 - `GET /api/console/query/audits`
@@ -643,8 +726,9 @@ Deployment note:
 - `GET /api/console/query/file-arrival-groups`
 - `GET /api/console/query/file-errors`
 - `GET /api/console/query/file-templates`
-- `GET /api/console/query/instances`
+- `GET /api/console/query/instances` — supports `sortBy=duration` and `minDurationSeconds` for slow task diagnosis
 - `GET /api/console/query/instances/{id}`
+- `GET /api/console/query/instances/batch-status` — batch query instance status by `instanceNos[]`
 - `GET /api/console/query/job-step-instances`
 - `GET /api/console/query/job-step-instances/{id}`
 - `GET /api/console/query/workflow-definitions`
@@ -677,7 +761,7 @@ Deployment note:
 | `/query/audits` | `operationType`, `operationResult` (exact); `operatorId`, `traceId` (partial); `fileId` (exact); `startTime`/`endTime` (range) | mixed |
 | `/query/alerts` | `severity`, `status`, `alertType` (exact) | exact |
 | `/query/files` | `fileStatus`, `bizType` (exact); `fileName` (partial); `traceId`, `fileId` (exact); `fromTime`/`toTime` (range) | mixed |
-| `/query/instances` | `jobCode` (partial); `instanceStatus`, `instanceNo`, `bizDate` (exact); `traceId` (partial); `startDate`/`endDate` (range) | mixed |
+| `/query/instances` | `jobCode` (partial); `instanceStatus`, `instanceNo`, `bizDate` (exact); `traceId` (partial); `startDate`/`endDate` (range); `sortBy` (`id`/`duration`); `minDurationSeconds` (threshold filter) | mixed |
 | `/query/job-definitions` | `jobCode`, `jobName`, `workerGroup`, `queueCode` (partial); `jobType`, `scheduleType`, `enabled` (exact) | mixed |
 | `/query/job-step-instances` | `jobInstanceId`, `jobPartitionId`, `stepCode`, `stepStatus` (exact) | exact |
 | `/query/workflow-definitions` | `workflowCode` (partial) | partial |
@@ -720,9 +804,12 @@ Request body:
   "jobCode": "daily-settlement",
   "bizDate": "2026-03-21",
   "triggerType": "MANUAL",
-  "payload": "{\"source\":\"console\"}"
+  "payload": "{\"source\":\"console\"}",
+  "dryRun": false
 }
 ```
+
+When `dryRun` is `true`, the server validates tenant, jobCode existence, enabled status, bizDate format, and triggerType without creating an actual trigger request. `Idempotency-Key` header is not required for dry-run calls.
 
 ## Compensate API
 
@@ -755,6 +842,57 @@ Request body:
   "reason": "rerun failed partitions"
 }
 ```
+
+### Governance
+
+- `GET /api/console/ops/governance` — list circuit breaker / rate limit parameters (with defaults)
+- `POST /api/console/ops/governance` — update governance parameter
+- `POST /api/console/ops/governance/reset` — reset governance parameter to default
+
+### Tenant Self-Service
+
+- `GET /api/console/tenant/quota` — query tenant quota policies
+- `GET /api/console/tenant/usage` — query tenant usage metrics
+- `POST /api/console/tenant/quota/request` — request quota change (stored as system parameter)
+
+### File Upload & Arrival Confirmation
+
+- `POST /api/console/files/presign-upload` — get pre-signed upload URL (params: `tenantId`, `channelCode`, `fileName`)
+- `POST /api/console/files/{fileId}/confirm-arrival` — confirm file arrival (param: `tenantId`)
+
+### Archive & Cleanup Policies
+
+- `GET /api/console/ops/archive-policies` — list archive/cleanup policies
+- `PUT /api/console/ops/archive-policies` — upsert archive/cleanup policy
+
+### Cluster Diagnostic
+
+- `GET /api/console/ops/cluster-diagnostic` — full cluster health diagnostic
+- `GET /api/console/ops/cluster-diagnostic/shedlock` — ShedLock lease status
+- `GET /api/console/ops/cluster-diagnostic/workers` — worker registry consistency
+- `GET /api/console/ops/cluster-diagnostic/outbox` — outbox health
+
+### Self-Service Rerun / Compensation
+
+- `POST /api/console/self-service/jobs/rerun-request` — submit rerun request (creates approval workflow)
+- `POST /api/console/self-service/jobs/compensation-request` — submit compensation request (creates approval workflow)
+
+### Event Catalog
+
+- `GET /api/console/event-catalog/event-types` — list subscribable event types
+- `GET /api/console/event-catalog/topics` — list Kafka topics
+
+### API Versioning
+
+All console APIs support versioned paths via URL prefix:
+
+- `/api/v1/console/**` → rewritten to `/api/console/**`
+- `X-API-Version` response header indicates current version (`1`)
+- `Accept-Version` request header is recognized for future negotiation
+
+### Worker Warmup
+
+- `POST /api/console/workers/{workerCode}/warmup` — trigger worker warmup (param: `tenantId`)
 
 ## File Download API
 

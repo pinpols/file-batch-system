@@ -99,6 +99,30 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         return response == null ? null : new ConsoleFileOperationResponse(response.status());
     }
 
+    @Override
+    public java.util.Map<String, Object> presignUpload(String tenantId, String channelCode, String fileName, String idempotencyKey) {
+        ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
+        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+        return restClient.post()
+                .uri("/internal/files/presign-upload")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
+                .body(java.util.Map.of(
+                        "tenantId", tenantId,
+                        "channelCode", channelCode,
+                        "fileName", fileName,
+                        "operatorId", ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64)
+                ))
+                .retrieve()
+                .body(new org.springframework.core.ParameterizedTypeReference<java.util.Map<String, Object>>() {});
+    }
+
+    @Override
+    public ConsoleFileOperationResponse confirmArrival(String tenantId, Long fileId, String idempotencyKey) {
+        return executeFileOperation(new FileExecContext(tenantId, fileId, null, "tenant confirmed arrival", idempotencyKey, "confirm-arrival", null));
+    }
+
     private record FileExecContext(String tenantId, Long fileId, String channelCode, String reason,
                                    String idempotencyKey, String operation, String approvalId) {}
 

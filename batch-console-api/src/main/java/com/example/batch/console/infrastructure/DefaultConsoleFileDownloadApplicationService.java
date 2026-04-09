@@ -7,12 +7,18 @@ import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.console.application.ConsoleFileDownloadApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.console.domain.entity.FileErrorRecordEntity;
+import com.example.batch.console.domain.query.FileErrorRecordQuery;
+import com.example.batch.console.mapper.FileErrorRecordMapper;
 import com.example.batch.console.mapper.FileRecordMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
@@ -35,6 +41,7 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
 
     private final ConsoleTenantGuard tenantGuard;
     private final FileRecordMapper fileRecordMapper;
+    private final FileErrorRecordMapper fileErrorRecordMapper;
     private final FileTemplateConfigMapper fileTemplateConfigMapper;
     private final MinioStorageProperties minioStorageProperties;
     private final BatchObjectCryptoService cryptoService;
@@ -95,6 +102,45 @@ public class DefaultConsoleFileDownloadApplicationService implements ConsoleFile
         } catch (Exception exception) {
             throw new IllegalStateException("failed to open download stream", exception);
         }
+    }
+
+    @Override
+    public ResponseEntity<InputStreamResource> exportFileErrors(String tenantId, Long fileId, String errorStage) {
+        String effectiveTenant = tenantGuard.resolveTenant(tenantId);
+        FileErrorRecordQuery query = new FileErrorRecordQuery(effectiveTenant, fileId, errorStage,
+                null, null, null);
+        List<FileErrorRecordEntity> errors = fileErrorRecordMapper.selectByQuery(query);
+        StringBuilder csv = new StringBuilder();
+        csv.append("id,fileId,recordNo,errorStage,errorCode,errorMessage,skipped,skipAction,rawRecord,createdAt\n");
+        for (FileErrorRecordEntity e : errors) {
+            csv.append(e.getId()).append(',')
+               .append(e.getFileId()).append(',')
+               .append(e.getRecordNo() == null ? "" : e.getRecordNo()).append(',')
+               .append(escape(e.getErrorStage())).append(',')
+               .append(escape(e.getErrorCode())).append(',')
+               .append(escape(e.getErrorMessage())).append(',')
+               .append(e.getSkipped() == null ? "" : e.getSkipped()).append(',')
+               .append(escape(e.getSkipAction())).append(',')
+               .append(escape(e.getRawRecord())).append(',')
+               .append(e.getCreatedAt()).append('\n');
+        }
+        byte[] bytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+        InputStreamResource resource = new InputStreamResource(new ByteArrayInputStream(bytes));
+        String filename = "file-errors-" + fileId + ".csv";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(resource);
+    }
+
+    private static String escape(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 
     private Map<String, Object> templateSecurity(String tenantId, Long fileId) {

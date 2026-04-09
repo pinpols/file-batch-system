@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.OutboxEventMapper">
+
+    <select id="countByStatus" resultType="long">
+        select count(*)
+        from batch.outbox_event
+        where tenant_id = #{tenantId}
+          and publish_status = #{publishStatus}
+    </select>
+
+    <select id="statsByStatus" resultType="map">
+        select publish_status as "publishStatus",
+               count(*)       as "count",
+               min(created_at) as "oldest",
+               max(created_at) as "newest"
+        from batch.outbox_event
+        where tenant_id = #{tenantId}
+        group by publish_status
+        order by publish_status
+    </select>
+
+    <delete id="deletePublishedBefore">
+        delete from batch.outbox_event
+        where tenant_id = #{tenantId}
+          and publish_status = 'PUBLISHED'
+          and updated_at &lt; #{beforeTime}
+    </delete>
+
+    <delete id="deleteGiveUpBefore">
+        delete from batch.outbox_event
+        where tenant_id = #{tenantId}
+          and publish_status = 'GIVE_UP'
+          and updated_at &lt; #{beforeTime}
+    </delete>
+
+    <update id="resetToNew">
+        update batch.outbox_event
+        set publish_status = 'NEW',
+            next_publish_at = current_timestamp,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          and publish_status in
+        <foreach collection="fromStatuses" item="s" open="(" separator="," close=")">
+            #{s}
+        </foreach>
+    </update>
+
+</mapper>
