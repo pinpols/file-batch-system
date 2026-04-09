@@ -62,6 +62,7 @@ class ConsoleJobQueryService {
                 parseFlexibleInstant(request.getStartDate(), "startDate"),
                 parseFlexibleInstantEndOfDay(request.getEndDate(), "endDate"),
                 request.getSortBy(),
+                request.getMinDurationSeconds(),
                 pageRequest
         );
         List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);

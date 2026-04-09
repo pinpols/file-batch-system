@@ -22,11 +22,13 @@
 - 系统参数热更新（CRUD + Redis 缓存 + `ConsoleSystemParameterController`）
 - 沙箱 / 模拟执行（console 入口 `dryRun=true` 校验不执行）
 - Webhook 回调注册（订阅 CRUD + HMAC 签名 + 异步投递 + 投递日志 + 领域事件监听）
+- 慢任务诊断（`sortBy=duration` + `minDurationSeconds` 阈值过滤）
+- 标签 / 分组管理（V46 `resource_tag` 表 + CRUD + 按标签反查）
+- API Key 自助管理（V47 `api_key` 表 + 创建/列表/吊销 + SHA-256 哈希存储）
 
 ### 部分完成
 
 - 全局熔断 / 限流：已有 outbox 熔断、launch/console 限流，但缺运行时管理接口
-- 慢任务 / 长尾任务诊断：已支持按执行时长排序，动态阈值调整仍缺
 - 事件总线 / 订阅：已有 webhook 订阅能力，但缺更通用的 Kafka/topic 消费指引或统一订阅接口
 - 优雅停机 / 预热：优雅停机已完成，预热能力仍缺
 
@@ -50,7 +52,7 @@
 | 全局熔断 / 限流（部分完成） | 已有 outbox 熔断、launch/console 限流；仍缺运行时动态调阈值、按 job/file channel 手动熔断接口 | P1 |
 | ~~Kafka 消费积压查询~~ | ~~已完成：GET /api/console/ops/kafka-lag 查询 batch 相关 consumer group 积压~~ | ~~已完成~~ |
 | Outbox 积压 & 清理 | 有 outbox retry/delivery 查询，缺少批量清理过期 outbox、手动重投指定批次的接口 | P2 |
-| 慢任务 / 长尾任务诊断（部分完成） | 已支持 job instance 按运行时长排序；超时阈值动态调整仍缺 | P1 |
+| ~~慢任务 / 长尾任务诊断~~ | ~~已完成：`sortBy=duration` + `minDurationSeconds` 阈值过滤参数~~ | ~~已完成~~ |
 | ~~系统参数热更新~~ | ~~已完成：V44 migration + `ConsoleSystemParameterController` CRUD + Redis 缓存（`sys-param:{tenant}:{key}`，TTL 30min）~~ | ~~已完成~~ |
 | 数据归档 / 清理策略 | 文件有归档接口，但历史 job_instance、workflow_run 等运行态数据缺少批量归档/清理 | P2 |
 | 跨节点一致性检查 | 缺少检测 Orchestrator 多实例间状态一致性、lease 冲突的诊断接口 | P2 |
@@ -68,7 +70,7 @@
 | 配置模板 / 脚手架 | 缺少从已有 job 克隆并参数化生成新 job 的模板功能（copy 只是简单复制） | P2 |
 | 环境间配置同步 | 缺少跨环境（dev -> staging -> prod）配置推送/拉取接口 | P1 |
 | 配置审批流 | config release 有发布/灰度/回滚，缺少审批环节（谁批准了这次发布？） | P1 |
-| 标签 / 分组管理 | 缺少对 job、workflow、channel 打标签、分组的 CRUD 接口，大规模管理时必要 | P2 |
+| ~~标签 / 分组管理~~ | ~~已完成：V46 `resource_tag` 表 + `ConsoleResourceTagController` 打标签/按标签反查~~ | ~~已完成~~ |
 
 ---
 
@@ -83,7 +85,7 @@
 | SLA 报表 / 账单 | Dashboard 有 SLA compliance，缺少按租户维度的 SLA 达成率、处理量统计报表 | P2 |
 | 通知订阅管理 | 缺少租户自助配置告警通知渠道（邮件/webhook/钉钉）、订阅/退订接口 | P1 |
 | 文件处理结果下载 | 有 presign download，缺少批量导出处理结果、错误明细下载 | P2 |
-| API Key / 凭证自助管理 | 有 secret rotate，缺少租户自助创建/吊销 API Key 的接口 | P2 |
+| ~~API Key / 凭证自助管理~~ | ~~已完成：V47 `api_key` 表 + `ConsoleApiKeyController` 创建/列表/吊销~~ | ~~已完成~~ |
 
 ---
 
@@ -126,7 +128,7 @@
 | ~~优雅停机~~ | ~~已完成：`server.shutdown=graceful` + `OrchestratorGracefulShutdown` + `TriggerGracefulShutdown`（drain/resume/status）~~ | ~~已完成~~ |
 | ~~系统参数热更新~~ | ~~已完成：V44 migration + `ConsoleSystemParameterService` CRUD + Redis 缓存~~ | ~~已完成~~ |
 | ~~Kafka 消费积压查询~~ | ~~已完成：ConsoleKafkaLagQueryService + GET /api/console/ops/kafka-lag~~ | ~~已完成~~ |
-| 慢任务诊断（部分完成） | 已实现 `sortBy=duration`；超时阈值动态调整未完成 | 1 天（剩余） |
+| ~~慢任务诊断~~ | ~~已完成：`sortBy=duration` + `minDurationSeconds` 阈值过滤~~ | ~~已完成~~ |
 | ~~配置 Diff~~ | ~~已完成：GET /api/console/config/releases/diff 对比两个版本 payload/grayScope/status~~ | ~~已完成~~ |
 | ~~配置依赖分析~~ | ~~已完成：GET /api/console/config/dependencies 查询引用指定配置的 job 列表~~ | ~~已完成~~ |
 | ~~批量启停~~ | ~~已完成：POST /api/console/job-definitions/batch-toggle 批量启停~~ | ~~已完成~~ |
@@ -136,8 +138,8 @@
 | ~~幂等 key~~ | ~~已有：X-Idempotency-Key header 已在所有写操作中使用~~ | ~~已完成~~ |
 | ~~沙箱模拟执行~~ | ~~已完成：`TriggerRequest.dryRun` + console 侧校验链路~~ | ~~已完成~~ |
 | ~~调试日志按需开启~~ | ~~已完成：actuator/loggers 端点放行 + ROLE_ADMIN 鉴权~~ | ~~已完成~~ |
-| 标签 / 分组管理 | 新增 tag 表 + CRUD 接口 | 2-3 天 |
-| API Key 自助管理 | 新增 api_key 表 + 生成/吊销接口 | 2-3 天 |
+| ~~标签 / 分组管理~~ | ~~已完成：V46 migration + `ConsoleResourceTagController` CRUD + 按标签反查~~ | ~~已完成~~ |
+| ~~API Key 自助管理~~ | ~~已完成：V47 migration + `ConsoleApiKeyController` 创建/查看/吊销 + SHA-256 哈希存储~~ | ~~已完成~~ |
 
 ---
 
@@ -165,7 +167,7 @@
 
 ### 第四批（精细化运维）
 
-12. ~~Kafka 消费积压查询~~ + **慢任务诊断** — Kafka 已完成，慢任务诊断部分完成
+12. ~~Kafka 消费积压查询 + 慢任务诊断~~ — ~~已完成~~
 13. **数据归档清理策略** — 长期运行后的存储治理
-14. **标签 / 分组管理** — 大规模配置管理
+14. ~~标签 / 分组管理~~ — ~~已完成（V46 resource_tag + CRUD）~~
 15. **跨节点一致性检查** — 高可用场景保障

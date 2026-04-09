@@ -13,6 +13,7 @@ public record JobInstanceQuery(
         Instant startedFrom,
         Instant startedTo,
         String sortBy,
+        Integer minDurationSeconds,
         PageRequest pageRequest
 ) {
 }
