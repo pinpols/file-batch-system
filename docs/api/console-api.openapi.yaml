@@ -4702,6 +4702,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
 
+  /api/console/config/tenant-copy:
+    post:
+      tags: [Config]
+      summary: Cross-tenant configuration copy
+      description: >
+        Reads configuration from a source tenant and pushes it to one or more target tenants.
+        Supports selective config types and dry-run mode. Response format is identical to tenant-init.
+      operationId: copyTenantConfig
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceTenantId, targetTenantIds]
+              properties:
+                sourceTenantId:
+                  type: string
+                  maxLength: 64
+                targetTenantIds:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 64
+                  maxItems: 50
+                configTypes:
+                  type: array
+                  items:
+                    type: string
+                    enum: [JOB_DEFINITION, WORKFLOW_DEFINITION, PIPELINE_DEFINITION, FILE_CHANNEL, FILE_TEMPLATE]
+                  description: Empty means all 5 types
+                mode:
+                  type: string
+                  enum: [SKIP_EXISTING, UPSERT]
+                  default: SKIP_EXISTING
+                dryRun:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Copy result (same schema as tenant-init)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
 components:
   securitySchemes:
     basicAuth:

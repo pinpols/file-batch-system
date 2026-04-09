@@ -25,6 +25,7 @@ import com.example.batch.console.web.request.TenantConfigBatchInitRequest.Pipeli
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse.ItemStats;
+import com.example.batch.console.web.response.TenantConfigBatchInitResponse.ItemStatsAccumulator;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse.TenantInitResult;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,14 +57,17 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
     private final FileTemplateConfigMapper fileTemplateConfigMapper;
 
     @Override
-    public TenantConfigBatchInitResponse batchInit(TenantConfigBatchInitRequest request, String operator) {
+    public TenantConfigBatchInitResponse batchInit(TenantConfigBatchInitRequest request,
+                                                    String operator,
+                                                    String batchOperationId) {
+        boolean dryRun = request.isDryRun();
         List<TenantInitResult> results = new ArrayList<>();
         int successCount = 0;
         int failureCount = 0;
 
         for (String tenantId : request.getTargetTenantIds()) {
             try {
-                TenantInitResult result = initForTenant(tenantId, request, operator);
+                TenantInitResult result = initForTenant(tenantId, request, operator, dryRun);
                 results.add(result);
                 if (result.success()) {
                     successCount++;
@@ -71,7 +75,8 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
                     failureCount++;
                 }
             } catch (Exception ex) {
-                log.error("[TenantConfigBatchInit] unexpected error for tenant={}", tenantId, ex);
+                log.error("[TenantConfigBatchInit] unexpected error for tenant={} batchOp={}",
+                        tenantId, batchOperationId, ex);
                 results.add(new TenantInitResult(tenantId, false, ex.getMessage(),
                         ItemStats.empty(), ItemStats.empty(), ItemStats.empty(),
                         ItemStats.empty(), ItemStats.empty()));
@@ -80,18 +85,21 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
         }
 
         return new TenantConfigBatchInitResponse(
-                request.getTargetTenantIds().size(), successCount, failureCount, results);
+                batchOperationId,
+                request.getTargetTenantIds().size(),
+                successCount, failureCount, dryRun, results);
     }
 
     @Transactional
-    protected TenantInitResult initForTenant(String tenantId, TenantConfigBatchInitRequest request, String operator) {
+    protected TenantInitResult initForTenant(String tenantId, TenantConfigBatchInitRequest request,
+                                              String operator, boolean dryRun) {
         InitMode mode = request.getMode() != null ? request.getMode() : InitMode.SKIP_EXISTING;
         try {
-            ItemStats jobStats = applyJobDefinitions(tenantId, request.getJobDefinitions(), mode, operator);
-            ItemStats workflowStats = applyWorkflowDefinitions(tenantId, request.getWorkflowDefinitions(), mode, operator);
-            ItemStats pipelineStats = applyPipelineDefinitions(tenantId, request.getPipelineDefinitions(), mode, operator);
-            ItemStats channelStats = applyFileChannels(tenantId, request.getFileChannels(), mode, operator);
-            ItemStats templateStats = applyFileTemplates(tenantId, request.getFileTemplates(), mode, operator);
+            ItemStats jobStats = applyJobDefinitions(tenantId, request.getJobDefinitions(), mode, operator, dryRun);
+            ItemStats workflowStats = applyWorkflowDefinitions(tenantId, request.getWorkflowDefinitions(), mode, operator, dryRun);
+            ItemStats pipelineStats = applyPipelineDefinitions(tenantId, request.getPipelineDefinitions(), mode, operator, dryRun);
+            ItemStats channelStats = applyFileChannels(tenantId, request.getFileChannels(), mode, operator, dryRun);
+            ItemStats templateStats = applyFileTemplates(tenantId, request.getFileTemplates(), mode, operator, dryRun);
             return new TenantInitResult(tenantId, true, null,
                     jobStats, workflowStats, pipelineStats, channelStats, templateStats);
         } catch (Exception ex) {
@@ -105,32 +113,36 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
     // ------------------------------------------------------------------ job definitions
 
     private ItemStats applyJobDefinitions(String tenantId, List<JobDefinitionSpec> specs,
-                                          InitMode mode, String operator) {
+                                          InitMode mode, String operator, boolean dryRun) {
         if (specs == null || specs.isEmpty()) {
             return ItemStats.empty();
         }
-        int created = 0, updated = 0, skipped = 0, failed = 0;
+        ItemStatsAccumulator acc = new ItemStatsAccumulator();
         for (JobDefinitionSpec spec : specs) {
             try {
                 JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(tenantId, spec.getJobCode());
                 if (existing != null) {
                     if (mode == InitMode.UPSERT) {
-                        updateJobDefinition(existing, spec, operator);
-                        updated++;
+                        if (!dryRun) {
+                            updateJobDefinition(existing, spec, operator);
+                        }
+                        acc.recordUpdated(spec.getJobCode());
                     } else {
-                        skipped++;
+                        acc.recordSkipped(spec.getJobCode());
                     }
                 } else {
-                    insertJobDefinition(tenantId, spec, operator);
-                    created++;
+                    if (!dryRun) {
+                        insertJobDefinition(tenantId, spec, operator);
+                    }
+                    acc.recordCreated(spec.getJobCode());
                 }
             } catch (Exception ex) {
                 log.warn("[TenantConfigBatchInit] jobDef jobCode={} tenant={} failed: {}",
                         spec.getJobCode(), tenantId, ex.getMessage());
-                failed++;
+                acc.recordFailed(spec.getJobCode(), ex.getMessage());
             }
         }
-        return new ItemStats(created, updated, skipped, failed);
+        return acc.toItemStats();
     }
 
     private void insertJobDefinition(String tenantId, JobDefinitionSpec spec, String operator) {
@@ -188,33 +200,37 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
     // ------------------------------------------------------------------ workflow definitions
 
     private ItemStats applyWorkflowDefinitions(String tenantId, List<WorkflowDefinitionSpec> specs,
-                                                InitMode mode, String operator) {
+                                                InitMode mode, String operator, boolean dryRun) {
         if (specs == null || specs.isEmpty()) {
             return ItemStats.empty();
         }
-        int created = 0, updated = 0, skipped = 0, failed = 0;
+        ItemStatsAccumulator acc = new ItemStatsAccumulator();
         for (WorkflowDefinitionSpec spec : specs) {
             try {
                 WorkflowDefinitionEntity existing = workflowDefinitionMapper.selectByUniqueKey(
                         tenantId, spec.getWorkflowCode(), 1);
                 if (existing != null) {
                     if (mode == InitMode.UPSERT) {
-                        upsertWorkflowDefinition(tenantId, existing.getId(), spec, operator);
-                        updated++;
+                        if (!dryRun) {
+                            upsertWorkflowDefinition(tenantId, existing.getId(), spec, operator);
+                        }
+                        acc.recordUpdated(spec.getWorkflowCode());
                     } else {
-                        skipped++;
+                        acc.recordSkipped(spec.getWorkflowCode());
                     }
                 } else {
-                    upsertWorkflowDefinition(tenantId, null, spec, operator);
-                    created++;
+                    if (!dryRun) {
+                        upsertWorkflowDefinition(tenantId, null, spec, operator);
+                    }
+                    acc.recordCreated(spec.getWorkflowCode());
                 }
             } catch (Exception ex) {
                 log.warn("[TenantConfigBatchInit] workflow workflowCode={} tenant={} failed: {}",
                         spec.getWorkflowCode(), tenantId, ex.getMessage());
-                failed++;
+                acc.recordFailed(spec.getWorkflowCode(), ex.getMessage());
             }
         }
-        return new ItemStats(created, updated, skipped, failed);
+        return acc.toItemStats();
     }
 
     @Transactional
@@ -278,12 +294,13 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
     // ------------------------------------------------------------------ pipeline definitions
 
     private ItemStats applyPipelineDefinitions(String tenantId, List<PipelineDefinitionSpec> specs,
-                                               InitMode mode, String operator) {
+                                               InitMode mode, String operator, boolean dryRun) {
         if (specs == null || specs.isEmpty()) {
             return ItemStats.empty();
         }
-        int created = 0, updated = 0, skipped = 0, failed = 0;
+        ItemStatsAccumulator acc = new ItemStatsAccumulator();
         for (PipelineDefinitionSpec spec : specs) {
+            String code = spec.getJobCode() + ":" + spec.getPipelineType();
             try {
                 List<Map<String, Object>> existing = pipelineDefinitionMapper.selectByQuery(
                         tenantId, spec.getJobCode(), spec.getPipelineType(), null,
@@ -291,23 +308,27 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
                 boolean exists = !existing.isEmpty();
                 if (exists) {
                     if (mode == InitMode.UPSERT) {
-                        Long existingId = ((Number) existing.get(0).get("id")).longValue();
-                        updatePipelineDefinition(tenantId, existingId, spec, existing.get(0));
-                        updated++;
+                        if (!dryRun) {
+                            Long existingId = ((Number) existing.get(0).get("id")).longValue();
+                            updatePipelineDefinition(tenantId, existingId, spec, existing.get(0));
+                        }
+                        acc.recordUpdated(code);
                     } else {
-                        skipped++;
+                        acc.recordSkipped(code);
                     }
                 } else {
-                    insertPipelineDefinition(tenantId, spec);
-                    created++;
+                    if (!dryRun) {
+                        insertPipelineDefinition(tenantId, spec);
+                    }
+                    acc.recordCreated(code);
                 }
             } catch (Exception ex) {
                 log.warn("[TenantConfigBatchInit] pipeline jobCode={} type={} tenant={} failed: {}",
                         spec.getJobCode(), spec.getPipelineType(), tenantId, ex.getMessage());
-                failed++;
+                acc.recordFailed(code, ex.getMessage());
             }
         }
-        return new ItemStats(created, updated, skipped, failed);
+        return acc.toItemStats();
     }
 
     @Transactional
@@ -370,32 +391,36 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
     // ------------------------------------------------------------------ file channels
 
     private ItemStats applyFileChannels(String tenantId, List<FileChannelSpec> specs,
-                                        InitMode mode, String operator) {
+                                        InitMode mode, String operator, boolean dryRun) {
         if (specs == null || specs.isEmpty()) {
             return ItemStats.empty();
         }
-        int created = 0, updated = 0, skipped = 0, failed = 0;
+        ItemStatsAccumulator acc = new ItemStatsAccumulator();
         for (FileChannelSpec spec : specs) {
             try {
                 Map<String, Object> existing = fileChannelConfigMapper.selectByUniqueKey(tenantId, spec.getChannelCode());
                 if (existing != null) {
                     if (mode == InitMode.UPSERT) {
-                        upsertFileChannel(tenantId, spec, operator);
-                        updated++;
+                        if (!dryRun) {
+                            upsertFileChannel(tenantId, spec, operator);
+                        }
+                        acc.recordUpdated(spec.getChannelCode());
                     } else {
-                        skipped++;
+                        acc.recordSkipped(spec.getChannelCode());
                     }
                 } else {
-                    upsertFileChannel(tenantId, spec, operator);
-                    created++;
+                    if (!dryRun) {
+                        upsertFileChannel(tenantId, spec, operator);
+                    }
+                    acc.recordCreated(spec.getChannelCode());
                 }
             } catch (Exception ex) {
                 log.warn("[TenantConfigBatchInit] channel channelCode={} tenant={} failed: {}",
                         spec.getChannelCode(), tenantId, ex.getMessage());
-                failed++;
+                acc.recordFailed(spec.getChannelCode(), ex.getMessage());
             }
         }
-        return new ItemStats(created, updated, skipped, failed);
+        return acc.toItemStats();
     }
 
     private void upsertFileChannel(String tenantId, FileChannelSpec spec, String operator) {
@@ -418,33 +443,37 @@ public class DefaultConsoleTenantConfigInitApplicationService implements Console
     // ------------------------------------------------------------------ file templates
 
     private ItemStats applyFileTemplates(String tenantId, List<FileTemplateSpec> specs,
-                                         InitMode mode, String operator) {
+                                         InitMode mode, String operator, boolean dryRun) {
         if (specs == null || specs.isEmpty()) {
             return ItemStats.empty();
         }
-        int created = 0, updated = 0, skipped = 0, failed = 0;
+        ItemStatsAccumulator acc = new ItemStatsAccumulator();
         for (FileTemplateSpec spec : specs) {
             try {
                 Map<String, Object> existing = fileTemplateConfigMapper.selectByUniqueKey(
                         tenantId, spec.getTemplateCode(), spec.getVersion() != null ? spec.getVersion() : 1);
                 if (existing != null) {
                     if (mode == InitMode.UPSERT) {
-                        upsertFileTemplate(tenantId, spec, operator);
-                        updated++;
+                        if (!dryRun) {
+                            upsertFileTemplate(tenantId, spec, operator);
+                        }
+                        acc.recordUpdated(spec.getTemplateCode());
                     } else {
-                        skipped++;
+                        acc.recordSkipped(spec.getTemplateCode());
                     }
                 } else {
-                    upsertFileTemplate(tenantId, spec, operator);
-                    created++;
+                    if (!dryRun) {
+                        upsertFileTemplate(tenantId, spec, operator);
+                    }
+                    acc.recordCreated(spec.getTemplateCode());
                 }
             } catch (Exception ex) {
                 log.warn("[TenantConfigBatchInit] template templateCode={} tenant={} failed: {}",
                         spec.getTemplateCode(), tenantId, ex.getMessage());
-                failed++;
+                acc.recordFailed(spec.getTemplateCode(), ex.getMessage());
             }
         }
-        return new ItemStats(created, updated, skipped, failed);
+        return acc.toItemStats();
     }
 
     private void upsertFileTemplate(String tenantId, FileTemplateSpec spec, String operator) {

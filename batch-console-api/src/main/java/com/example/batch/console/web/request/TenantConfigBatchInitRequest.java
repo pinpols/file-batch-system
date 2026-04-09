@@ -23,6 +23,9 @@ public class TenantConfigBatchInitRequest {
     /** 初始化模式：SKIP_EXISTING 或 UPSERT。默认 SKIP_EXISTING。 */
     private InitMode mode = InitMode.SKIP_EXISTING;
 
+    /** 试运行模式：true 时只做查询和校验，不执行 insert/update/delete。 */
+    private boolean dryRun;
+
     /** 作业定义模板列表。 */
     @Valid
     private List<JobDefinitionSpec> jobDefinitions;
