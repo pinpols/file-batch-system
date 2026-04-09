@@ -12,7 +12,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PID_FILE="$ROOT/logs/start-all.pids"
-RUNTIME_JAR_DIR="$ROOT/logs/runtime-jars"
+APP_LOG_DIR="$ROOT/logs/app"
+RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 
 # 全量扫描顺序（兜底轮询）；分阶段停止时按 PHASE 使用子集
@@ -89,7 +90,7 @@ _should_kill_pid_file_entry() {
   if [[ -n "$jarpath" ]]; then
     [[ "$cmd" == *"$jarpath"* ]] && return 0
   fi
-  [[ "$cmd" == *"logs/runtime-jars/${name}.jar"* ]] && return 0
+  [[ "$cmd" == *"build/runtime-jars/${name}.jar"* ]] && return 0
   [[ "$cmd" == *"/${name}.jar"* && "$cmd" == *"runtime-jars"* ]] && return 0
   echo "  跳过 ${name} pid=${pid}（命令行与预期 jar 不符，避免误杀）" >&2
   return 1
@@ -147,7 +148,7 @@ _scan_runtime_and_legacy_for_names() {
     while read -r pid; do
       [[ -z "$pid" ]] && continue
       kill_pid "$n" "$pid"
-    done < <(_pids_cmd_contains "logs/runtime-jars/${n}.jar")
+    done < <(_pids_cmd_contains "build/runtime-jars/${n}.jar")
     abs_jar="${RUNTIME_JAR_DIR}/${n}.jar"
     if [[ -f "$abs_jar" ]]; then
       while read -r pid; do
@@ -171,7 +172,7 @@ _force_kill_names() {
       [[ -z "$pid" ]] && continue
       echo "  force kill pid=$pid ($n)"
       kill -9 "$pid" 2>/dev/null || true
-    done < <(_pids_cmd_contains "logs/runtime-jars/${n}.jar")
+    done < <(_pids_cmd_contains "build/runtime-jars/${n}.jar")
     abs_jar="${RUNTIME_JAR_DIR}/${n}.jar"
     if [[ -f "$abs_jar" ]]; then
       while read -r pid; do
@@ -213,7 +214,7 @@ _residual_force_all() {
       echo "  残留进程 kill -9 pid=$pid ($name)"
       kill -9 "$pid" 2>/dev/null || true
       ((left += 1)) || true
-    done < <(_pids_cmd_contains "logs/runtime-jars/${name}.jar")
+    done < <(_pids_cmd_contains "build/runtime-jars/${name}.jar")
   done
   if ((left > 0)); then
     echo "  已清理 ${left} 个残留 Java 进程。"

@@ -9,32 +9,32 @@ scrape_configs:
   - job_name: batch-console-api
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['console-api:18080']
+      - targets: ['console-api:8080']
 
   - job_name: batch-trigger
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['trigger:18081']
+      - targets: ['trigger:8081']
 
   - job_name: batch-orchestrator
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['orchestrator:18082']
+      - targets: ['orchestrator:8082']
 
   - job_name: batch-worker-import
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-import:18083']
+      - targets: ['worker-import:8083']
 
   - job_name: batch-worker-export
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-export:18084']
+      - targets: ['worker-export:8084']
 
   - job_name: batch-worker-dispatch
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker-dispatch:18085']
+      - targets: ['worker-dispatch:8085']
 
   - job_name: redis-exporter
     static_configs:
