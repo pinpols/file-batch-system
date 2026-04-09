@@ -102,7 +102,8 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 ### Tenant Rules
 
-- Every request must carry an explicit `tenantId` either in the request body, query string, or upstream header mapping.
+- Login (`POST /api/console/auth/login`) does not require `tenantId`; the backend resolves tenant from the globally unique username.
+- All other requests must carry an explicit `tenantId` either in the request body, query string, or upstream header mapping.
 - Server-side tenant resolution is authoritative.
 - Tenant mismatch must fail fast with `FORBIDDEN` or `STATE_CONFLICT` depending on the route semantics.
 - Frontend must not treat tenant values as trusted client state.
@@ -204,14 +205,14 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `GET /api/console/ops/summary`
 - `GET /api/console/ops/summary/events`
 
-Default seeded accounts (password: `admin123`):
+Default seeded accounts:
 
 | Username | Password | Roles | Description |
 |----------|----------|-------|-------------|
 | `admin` | `admin123` | `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN` | Super admin |
-| `auditor` | `admin123` | `ROLE_AUDITOR` | Read-only auditor |
-| `config-admin` | `admin123` | `ROLE_CONFIG_ADMIN` | Configuration manager |
-| `tenant-user` | `admin123` | `ROLE_TENANT_USER` | Tenant business user |
+| `auditor` | `auditor123` | `ROLE_AUDITOR` | Read-only auditor |
+| `config-admin` | `config123` | `ROLE_CONFIG_ADMIN` | Configuration manager |
+| `tenant-user` | `tenant123` | `ROLE_TENANT_USER` | Tenant business user |
 
 Username is globally unique. Login requires only `username` + `password`; tenant is resolved from the account record automatically.
 
@@ -223,7 +224,7 @@ Minimal login page:
 
 - `username` required
 - `password` required
-- `tenantId` optional, defaults to `default-tenant`
+- Username is globally unique; tenant is resolved from the account record automatically, no need to pass `tenantId`.
 - Repository does not ship plaintext default passwords; only password hashes are stored in the platform database.
 
 Session rule:
@@ -387,7 +388,7 @@ Deployment note:
 - `enums` returns all platform enum dictionaries: `triggerType`, `jobType`, `scheduleType`, `triggerMode`, `shardStrategy`, `retryPolicy`, `instanceStatus`, `workflowNodeType`, `channelType`.
 - `queues`, `calendars`, and `windows` return simplified lists (`code` + `name`) for use as dropdown options; all require `tenantId` query param.
 - `worker-groups` returns deduplicated group codes from active worker registrations.
-- All meta endpoints allow `ROLE_ADMIN`, `ROLE_AUDITOR`, and `ROLE_CONFIG_ADMIN`.
+- All meta endpoints allow `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
 
 ### Queues
 
@@ -475,7 +476,7 @@ Deployment note:
 - `worker-load`: worker status/group distribution + active partition breakdown.
 - `alert-trend`: alert severity distribution + daily trend.
 - `sla-compliance`: violation/on-time counts + average duration + daily trend.
-- Allow `ROLE_ADMIN`, `ROLE_AUDITOR`, and `ROLE_CONFIG_ADMIN`.
+- Allow `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
 
 ### File Channels
 

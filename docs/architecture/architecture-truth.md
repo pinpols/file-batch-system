@@ -3,7 +3,7 @@
 
 > **单一事实源**：本文档描述系统的**当前真实状态**（As-Is）、目标状态（To-Be）以及两者之间的差距清单。
 > 核心名词的统一定义请同时参考 [core-model.md](./core-model.md)。
-> 最后更新：2026-03-25
+> 最后更新：2026-04-09
 
 ---
 
@@ -78,25 +78,39 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | PostgreSQL 16 | 平台 DB（`batch` + `quartz` schema） | localhost:15432 |
 | Apache Kafka 4.1+ | 任务分发 / 结果回传 | localhost:19092 |
 | MinIO | 导入/导出文件存储 | localhost:19000 |
+| Redis | 分布式缓存、SSE 广播、配额快照 | localhost:6379 |
 | Prometheus / Grafana | 指标采集与展示 | — |
+| OTel Collector / Jaeger | 分布式追踪 | — |
 
 ---
 
 ## 3. 技术栈基线
 
-| 层次 | 技术 | 版本 | 备注 |
-|------|------|------|------|
-| 框架 | Spring Boot | **4.0.3** | — |
-| 语言 | Java | **25** | Records、Sealed Classes、Pattern Matching |
-| 持久化（定义层） | Spring Data JDBC | — | `*Record` 对象，读多写少 |
-| 持久化（运行时层） | MyBatis | 4.0.0 | `*Entity` 对象，CAS 条件更新 |
-| 消息 | Apache Kafka | 4.1.2 | Outbox 模式解耦 |
-| 对象存储 | MinIO SDK | 8.6.0 | — |
-| AI 集成 | Spring AI | 2.0.0-M3 | Console AI 网关 |
-| 任务调度 | Quartz（JDBC JobStore） | — | — |
-| 测试容器 | TestContainers | 1.21.4 | PostgreSQL + Kafka + MinIO |
-| HTTP 客户端 | OkHttp | 4.12.0 | Worker → Orchestrator |
-| 代码生成 | Lombok | 1.18.42 | — |
+| 层次 | 技术 | 版本 | 使用模块 | 备注 |
+|------|------|------|---------|------|
+| 框架 | Spring Boot | **4.0.3** | all | Parent BOM |
+| 语言 | Java | **25** | all | Records、Sealed Classes、Pattern Matching |
+| 持久化（定义层） | Spring Data JDBC | managed | orchestrator, console-api | `*Record` 对象，读多写少 |
+| 持久化（运行时层） | MyBatis | 4.0.0 | orchestrator, workers, trigger, console-api | `*Entity` 对象，CAS 条件更新 |
+| 数据库迁移 | Flyway | managed | all | PostgreSQL dialect |
+| 消息 | Apache Kafka | 4.1.2 | orchestrator, worker-core, workers | Outbox 模式解耦 |
+| 对象存储 | MinIO SDK | 8.6.0 | common, orchestrator, workers | — |
+| 缓存 / Realtime | Spring Data Redis (Lettuce) | managed | orchestrator, console-api | 分布式缓存、SSE 广播 |
+| 安全 | Spring Security + OAuth2 JOSE | managed | console-api | JWT 鉴权 |
+| AI 集成 | Spring AI | 2.0.0-M3 | console-api | Console AI 网关 |
+| 任务调度 | Quartz（JDBC JobStore） | managed | trigger | Cron / FixedRate |
+| 分布式锁 | ShedLock | 6.3.0 | common | JDBC-based |
+| HTTP 客户端 | OkHttp | 4.12.0 | export, dispatch | Worker → Orchestrator |
+| 电子表格 | Apache POI | 5.4.0 | import, export, console-api | Excel 解析与生成 |
+| SQL 解析 | JSqlParser | 4.5 | export | Schema 白名单校验 |
+| SFTP | JSch (mwiede fork) | 0.2.23 | dispatch | SFTP 渠道适配 |
+| 邮件 | Angus Mail | managed | dispatch | SMTP 分发 |
+| 校验 | Hibernate Validator | managed | orchestrator | Bean Validation |
+| 可观测（指标） | Micrometer + Prometheus Registry | managed | all | — |
+| 可观测（追踪） | Micrometer Tracing → OpenTelemetry | managed | common | OTLP 导出 |
+| 代码生成 | Lombok | 1.18.42 | all (provided) | — |
+| 测试容器 | TestContainers | 1.21.4 | all (test) | PostgreSQL + Kafka + MinIO + Redis |
+| 邮件测试 | GreenMail | 2.1.8 | dispatch (test) | SMTP mock |
 
 ---
 

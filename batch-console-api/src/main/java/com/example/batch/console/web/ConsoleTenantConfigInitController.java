@@ -1,0 +1,61 @@
+package com.example.batch.console.web;
+
+import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.console.application.ConsoleTenantConfigInitApplicationService;
+import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.ConsolePrincipal;
+import com.example.batch.console.web.request.TenantConfigBatchInitRequest;
+import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 租户配置批量初始化 REST 端点。
+ * <p>
+ * 允许管理员向多个租户一次性推送作业定义、工作流定义、流水线定义、文件通道和文件模板配置。
+ * 适用于新租户入驻初始化和跨租户配置同步场景。
+ */
+@RestController
+@Validated
+@RequestMapping("/api/console/config/tenant-init")
+@RequiredArgsConstructor
+public class ConsoleTenantConfigInitController {
+
+    private final ConsoleTenantConfigInitApplicationService applicationService;
+    private final ConsoleResponseFactory responseFactory;
+
+    /**
+     * 批量初始化或更新多个租户的配置。
+     * <p>
+     * mode=SKIP_EXISTING（默认）：已存在的配置不覆盖，仅创建缺失项。
+     * mode=UPSERT：存在则更新，不存在则创建。
+     */
+    @PostMapping
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public CommonResponse<TenantConfigBatchInitResponse> batchInit(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @Valid @RequestBody TenantConfigBatchInitRequest request,
+            Authentication authentication) {
+        String operator = resolveOperator(authentication);
+        return responseFactory.success(applicationService.batchInit(request, operator));
+    }
+
+    private String resolveOperator(Authentication authentication) {
+        if (authentication == null) {
+            return "system";
+        }
+        if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            return principal.username();
+        }
+        return authentication.getName();
+    }
+}

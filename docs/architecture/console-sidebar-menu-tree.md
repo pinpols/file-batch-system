@@ -18,45 +18,45 @@
 
 | 模块 | 页面 | 可见角色 | 备注 |
 |------|------|----------|------|
-| 首页总览 | 控制台首页 / 运营总览 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `GET /api/console/ops/summary`、`GET /api/console/ops/summary/events` |
-| 首页总览 | 仪表盘统计 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/dashboard/*` |
-| 首页总览 | 调度快照 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/scheduler/snapshot`、`/history` |
-| 首页总览 | 告警趋势 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/dashboard/alert-trend` |
-| 首页总览 | SLA 达标率 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/dashboard/sla-compliance` |
+| 首页总览 | 控制台首页 / 运营总览 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 对应 `GET /api/console/ops/summary`、`GET /api/console/ops/summary/events` |
+| 首页总览 | 仪表盘统计 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 对应 `/api/console/dashboard/*` |
+| 首页总览 | 调度快照 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 对应 `/api/console/scheduler/snapshot`、`/history` |
+| 首页总览 | 告警趋势 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 对应 `/api/console/dashboard/alert-trend` |
+| 首页总览 | SLA 达标率 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 对应 `/api/console/dashboard/sla-compliance` |
 
 ### 2. 查询中心
 
 | 模块 | 页面 | 可见角色 | 备注 |
 |------|------|----------|------|
-| 查询中心 | 审计日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/audits` |
-| 查询中心 | 执行日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/execution-logs` |
-| 查询中心 | 告警事件 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/alerts` |
-| 查询中心 | 批量日 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/batch-days` |
-| 查询中心 | 审批单 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/approvals` |
-| 查询中心 | 待审批 Catch-Up | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/catch-up-approvals` |
-| 查询中心 | 文件记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/files` |
-| 查询中心 | 作业实例 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/instances` |
-| 查询中心 | 作业步骤实例 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/job-step-instances` |
-| 查询中心 | 工作流运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/workflow-runs` |
-| 查询中心 | 工作流节点运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/workflow-node-runs` |
-| 查询中心 | 文件派发记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-dispatches` |
-| 查询中心 | 文件到达组 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-arrival-groups` |
-| 查询中心 | 文件错误记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-errors` |
-| 查询中心 | Outbox 投递/重试 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/outbox-deliveries`、`/outbox-retries` |
-| 查询中心 | Dead Letter / Retry | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/dead-letters`、`/retries` |
-| 查询中心 | Worker 注册信息 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/workers` |
-| 查询中心 | 文件通道详情 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-channels/{channelCode}` |
-| 查询中心 | 文件模板详情 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-templates/{templateCode}` |
-| 查询中心 | 文件流水线 / 兼容路由 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-pipelines`、`/pipeline-definitions` |
-| 查询中心 | 文件流水线步骤运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/query/file-pipeline-steps` |
-| 查询中心 | 文件流水线观测页 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/file-pipeline-observability*` |
+| 查询中心 | 审计日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/audits` |
+| 查询中心 | 执行日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/execution-logs` |
+| 查询中心 | 告警事件 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/alerts` |
+| 查询中心 | 批量日 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/batch-days` |
+| 查询中心 | 审批单 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/approvals` |
+| 查询中心 | 待审批 Catch-Up | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/catch-up-approvals` |
+| 查询中心 | 文件记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/files` |
+| 查询中心 | 作业实例 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/instances` |
+| 查询中心 | 作业步骤实例 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/job-step-instances` |
+| 查询中心 | 工作流运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/workflow-runs` |
+| 查询中心 | 工作流节点运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/workflow-node-runs` |
+| 查询中心 | 文件派发记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/file-dispatches` |
+| 查询中心 | 文件到达组 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/file-arrival-groups` |
+| 查询中心 | 文件错误记录 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/file-errors` |
+| 查询中心 | Outbox 投递/重试 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/outbox-deliveries`、`/outbox-retries` |
+| 查询中心 | Dead Letter / Retry | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/dead-letters`、`/retries` |
+| 查询中心 | Worker 注册信息 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/workers` |
+| 查询中心 | 文件通道详情 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/file-channels/{channelCode}` |
+| 查询中心 | 文件模板详情 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/file-templates/{templateCode}` |
+| 查询中心 | 文件流水线 / 兼容路由 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/file-pipelines`、`/pipeline-definitions` |
+| 查询中心 | 文件流水线步骤运行 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/query/file-pipeline-steps` |
+| 查询中心 | 文件流水线观测页 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/file-pipeline-observability*` |
 
 ### 3. 定义管理
 
 | 模块 | 页面 | 可见角色 | 备注 |
 |------|------|----------|------|
-| 定义管理 | 作业定义 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 详情可见三类角色；创建、编辑、删除、启停建议仅 `ROLE_ADMIN` |
-| 定义管理 | 工作流定义 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 详情可见三类角色；创建、编辑、删除、启停仅 `ROLE_ADMIN` |
+| 定义管理 | 作业定义 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 详情可见四类角色；创建、编辑、删除、启停建议仅 `ROLE_ADMIN` |
+| 定义管理 | 工作流定义 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 详情可见四类角色；创建、编辑、删除、启停仅 `ROLE_ADMIN` |
 | 定义管理 | 流水线定义 | `ROLE_ADMIN` | 当前页面建议仅管理员展示 |
 | 定义管理 | 文件通道 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 列表与详情可见三类角色；新建/编辑建议 `ROLE_CONFIG_ADMIN` 及以上；删除仅 `ROLE_ADMIN` |
 | 定义管理 | 文件模板 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 同文件通道 |
@@ -73,7 +73,7 @@
 | 调度与编排 | 调度器控制 | `ROLE_ADMIN` | 暂停全部 / 恢复全部仅管理员 |
 | 调度与编排 | 作业实例 | `ROLE_ADMIN` | 取消 / 终止等强操作仅管理员 |
 | 调度与编排 | 工作流运行 | `ROLE_ADMIN` | 取消 / 终止 / 跳过节点仅管理员 |
-| 调度与编排 | 作业运维 | `ROLE_ADMIN` | 触发、补偿、重跑、死信回放、Catch-Up 审批都建议仅管理员 |
+| 调度与编排 | 作业运维 | `ROLE_ADMIN` / `ROLE_TENANT_USER` | `ROLE_TENANT_USER` 仅可触发作业；补偿、重跑、死信回放、Catch-Up 审批仅 `ROLE_ADMIN` |
 | 调度与编排 | 资源队列 | `ROLE_ADMIN` | 新建 / 编辑 / 启停仅管理员 |
 | 调度与编排 | 批次窗口 | `ROLE_ADMIN` | 新建 / 编辑 / 启停仅管理员 |
 | 调度与编排 | 工作日历 | `ROLE_ADMIN` | 假日导入、编辑、删除仅管理员 |
@@ -96,7 +96,7 @@
 
 | 模块 | 页面 | 可见角色 | 备注 |
 |------|------|----------|------|
-| 元数据与公共入口 | 枚举元数据 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | `/api/console/meta/*` |
+| 元数据与公共入口 | 枚举元数据 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | `/api/console/meta/*` |
 | 元数据与公共入口 | 登录页 | 未登录可见 | `/console-login.html` |
 | 元数据与公共入口 | 当前用户信息 | 已登录可见 | `/api/console/auth/me` |
 | 元数据与公共入口 | 登录换取 Token | 未登录可见 | `/api/console/auth/login` |
@@ -123,4 +123,5 @@
   - `ROLE_ADMIN` 负责删除、发布、回滚、终止、重跑、审批执行等
   - `ROLE_CONFIG_ADMIN` 负责配置和运维类常规写操作
   - `ROLE_AUDITOR` 只读
+  - `ROLE_TENANT_USER` 可查看状态和触发作业，不可修改配置或执行运维操作
 
