@@ -24,23 +24,23 @@ route:
 receivers:
   - name: batch-default
     webhook_configs:
-      - url: ${BATCH_ALERT_WEBHOOK_URL:http://localhost:19001/alert}
+      - url: http://host.docker.internal:19001/alert
         send_resolved: true
   - name: batch-pager
     webhook_configs:
-      - url: ${BATCH_PAGER_WEBHOOK_URL:http://localhost:19001/pager}
+      - url: http://host.docker.internal:19001/pager
         send_resolved: true
   - name: batch-dispatch
     webhook_configs:
-      - url: ${BATCH_DISPATCH_WEBHOOK_URL:http://localhost:19001/dispatch}
+      - url: http://host.docker.internal:19001/dispatch
         send_resolved: true
   - name: batch-sla
     webhook_configs:
-      - url: ${BATCH_SLA_WEBHOOK_URL:http://localhost:19001/sla}
+      - url: http://host.docker.internal:19001/sla
         send_resolved: true
   - name: batch-sre
     webhook_configs:
-      - url: ${BATCH_SRE_WEBHOOK_URL:http://localhost:19001/sre}
+      - url: http://host.docker.internal:19001/sre
         send_resolved: true
 
 inhibit_rules:

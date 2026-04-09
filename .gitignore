@@ -26,6 +26,7 @@ hs_err_pid*
 replay_pid*
 coverage/
 logs/
+build/
 tmp/
 *.bak
 .claude/

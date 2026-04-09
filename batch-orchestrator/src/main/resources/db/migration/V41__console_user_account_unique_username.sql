@@ -3,5 +3,14 @@
 ALTER TABLE batch.console_user_account
     DROP CONSTRAINT IF EXISTS uk_console_user_account_tenant_username;
 
-ALTER TABLE batch.console_user_account
-    ADD CONSTRAINT uk_console_user_account_username UNIQUE (username);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'uk_console_user_account_username'
+          AND conrelid = 'batch.console_user_account'::regclass
+    ) THEN
+        ALTER TABLE batch.console_user_account
+            ADD CONSTRAINT uk_console_user_account_username UNIQUE (username);
+    END IF;
+END $$;

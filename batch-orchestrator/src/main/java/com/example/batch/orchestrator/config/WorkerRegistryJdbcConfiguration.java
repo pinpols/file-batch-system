@@ -1,7 +1,10 @@
 package com.example.batch.orchestrator.config;
 
-import java.util.List;
 import java.sql.JDBCType;
+import java.util.List;
+import java.util.Map;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.postgresql.util.PGobject;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import org.springframework.context.annotation.Bean;
@@ -25,7 +28,8 @@ public class WorkerRegistryJdbcConfiguration {
         JdbcDialect dialect = DialectResolver.getDialect(operations.getJdbcOperations());
         return JdbcConfiguration.createCustomConversions(dialect, List.of(
                 new JsonbStringToJdbcValueConverter(),
-                new JsonbToStringConverter()
+                new JsonbToStringConverter(),
+                new JsonbToMapConverter()
         ));
     }
 
@@ -42,11 +46,31 @@ public class WorkerRegistryJdbcConfiguration {
     }
 
     @ReadingConverter
-    static class JsonbToStringConverter implements Converter<PGobject, JsonbString> {
+    static class
+    JsonbToStringConverter implements Converter<PGobject, JsonbString> {
 
         @Override
         public JsonbString convert(PGobject source) {
             return source == null ? null : JsonbString.of(source.getValue());
+        }
+    }
+
+    @ReadingConverter
+    static class JsonbToMapConverter implements Converter<PGobject, Map<String, Object>> {
+
+        private static final ObjectMapper MAPPER = new ObjectMapper();
+        private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
+        @Override
+        public Map<String, Object> convert(PGobject source) {
+            if (source == null || source.getValue() == null) {
+                return null;
+            }
+            try {
+                return MAPPER.readValue(source.getValue(), MAP_TYPE);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Failed to parse jsonb to Map: " + source.getValue(), e);
+            }
         }
     }
 }
