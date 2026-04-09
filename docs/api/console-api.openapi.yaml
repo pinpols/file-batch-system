@@ -1749,6 +1749,13 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/TraceIdFilter'
+        - $ref: '#/components/parameters/OperationTypeFilter'
+        - $ref: '#/components/parameters/OperatorIdFilter'
+        - $ref: '#/components/parameters/FileIdFilter'
+        - $ref: '#/components/parameters/OperationResultFilter'
+        - $ref: '#/components/parameters/StartTimeFilter'
+        - $ref: '#/components/parameters/EndTimeFilter'
       responses:
         '200':
           description: Audit list
@@ -1781,8 +1788,9 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/AcknowledgedFilter'
+        - $ref: '#/components/parameters/StartDateFilter'
+        - $ref: '#/components/parameters/EndDateFilter'
       responses:
         '200':
           description: Alert list
@@ -1817,8 +1825,13 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/FileStatusFilter'
+        - $ref: '#/components/parameters/BizTypeFilter'
+        - $ref: '#/components/parameters/FileNameFilter'
+        - $ref: '#/components/parameters/TraceIdFilter'
+        - $ref: '#/components/parameters/FileIdFilter'
+        - $ref: '#/components/parameters/StartDateFilter'
+        - $ref: '#/components/parameters/EndDateFilter'
       responses:
         '200':
           description: File chain list
@@ -1835,8 +1848,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/JobCodeFilter'
       responses:
         '200':
           description: Job definition list
@@ -1853,8 +1865,9 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/EventTypeFilter'
+        - $ref: '#/components/parameters/EventKeyFilter'
+        - $ref: '#/components/parameters/RetryStatusFilter'
       responses:
         '200':
           description: Outbox retry list
@@ -1871,8 +1884,10 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/EventTypeFilter'
+        - $ref: '#/components/parameters/EventKeyFilter'
+        - $ref: '#/components/parameters/DeliveryStatusFilter'
+        - $ref: '#/components/parameters/TargetTopicFilter'
       responses:
         '200':
           description: Outbox delivery list
@@ -2128,8 +2143,10 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/JobCodeFilter'
+        - $ref: '#/components/parameters/InstanceStatusFilter'
+        - $ref: '#/components/parameters/StartDateFilter'
+        - $ref: '#/components/parameters/EndDateFilter'
       responses:
         '200':
           description: Job instance list
@@ -2166,8 +2183,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/JobInstanceIdFilter'
       responses:
         '200':
           description: Job step list
@@ -2204,8 +2220,12 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - name: workflowCode
+          in: query
+          required: false
+          description: Filter by workflow code (partial match)
+          schema:
+            type: string
       responses:
         '200':
           description: Workflow definition list
@@ -2222,8 +2242,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/WorkflowDefinitionIdFilter'
       responses:
         '200':
           description: Workflow node list
@@ -2240,8 +2259,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/WorkflowDefinitionIdFilter'
       responses:
         '200':
           description: Workflow edge list
@@ -2258,8 +2276,8 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/WorkflowDefinitionIdFilter'
+        - $ref: '#/components/parameters/RunStatusFilter'
       responses:
         '200':
           description: Workflow run list
@@ -2296,8 +2314,7 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/WorkflowRunIdFilter'
       responses:
         '200':
           description: Workflow node run list
@@ -4657,6 +4674,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
 
+  /api/console/config/tenant-init:
+    post:
+      tags: [Config]
+      summary: Batch-initialize tenant configurations
+      description: >
+        Pushes job definitions, workflow definitions, pipeline definitions, file channels,
+        and file templates to one or more tenants. mode=SKIP_EXISTING (default) creates
+        missing items only; mode=UPSERT creates or updates.
+      operationId: batchInitTenantConfig
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: TenantConfigBatchInitRequest
+      responses:
+        '200':
+          description: Batch init result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
 components:
   securitySchemes:
     basicAuth:
@@ -4719,6 +4764,183 @@ components:
         format: int32
         minimum: 1
         default: 20
+    # ── Domain-specific optional filter parameters ──
+    JobCodeFilter:
+      name: jobCode
+      in: query
+      required: false
+      description: Filter by job code (partial match)
+      schema:
+        type: string
+    InstanceStatusFilter:
+      name: instanceStatus
+      in: query
+      required: false
+      description: Filter by instance status (exact match)
+      schema:
+        type: string
+    StartDateFilter:
+      name: startDate
+      in: query
+      required: false
+      description: Filter start date (ISO date, inclusive)
+      schema:
+        type: string
+        format: date
+    EndDateFilter:
+      name: endDate
+      in: query
+      required: false
+      description: Filter end date (ISO date, inclusive)
+      schema:
+        type: string
+        format: date
+    FileStatusFilter:
+      name: fileStatus
+      in: query
+      required: false
+      description: Filter by file status (exact match)
+      schema:
+        type: string
+    BizTypeFilter:
+      name: bizType
+      in: query
+      required: false
+      description: Filter by biz type (partial match)
+      schema:
+        type: string
+    FileNameFilter:
+      name: fileName
+      in: query
+      required: false
+      description: Filter by file name (partial match)
+      schema:
+        type: string
+    TraceIdFilter:
+      name: traceId
+      in: query
+      required: false
+      description: Filter by trace ID (partial match)
+      schema:
+        type: string
+    FileIdFilter:
+      name: fileId
+      in: query
+      required: false
+      description: Filter by file ID
+      schema:
+        type: integer
+        format: int64
+    AcknowledgedFilter:
+      name: acknowledged
+      in: query
+      required: false
+      description: Filter by acknowledged state (true = non-OPEN, false = OPEN)
+      schema:
+        type: boolean
+    OperationTypeFilter:
+      name: operationType
+      in: query
+      required: false
+      description: Filter by audit operation type (exact match)
+      schema:
+        type: string
+    OperatorIdFilter:
+      name: operatorId
+      in: query
+      required: false
+      description: Filter by operator ID (partial match)
+      schema:
+        type: string
+    OperationResultFilter:
+      name: operationResult
+      in: query
+      required: false
+      description: Filter by operation result (exact match)
+      schema:
+        type: string
+    StartTimeFilter:
+      name: startTime
+      in: query
+      required: false
+      description: Filter start datetime (ISO date-time, inclusive)
+      schema:
+        type: string
+        format: date-time
+    EndTimeFilter:
+      name: endTime
+      in: query
+      required: false
+      description: Filter end datetime (ISO date-time, inclusive)
+      schema:
+        type: string
+        format: date-time
+    EventTypeFilter:
+      name: eventType
+      in: query
+      required: false
+      description: Filter by event type (exact match)
+      schema:
+        type: string
+    EventKeyFilter:
+      name: eventKey
+      in: query
+      required: false
+      description: Filter by event key (exact match)
+      schema:
+        type: string
+    RetryStatusFilter:
+      name: retryStatus
+      in: query
+      required: false
+      description: Filter by retry status (exact match)
+      schema:
+        type: string
+    DeliveryStatusFilter:
+      name: deliveryStatus
+      in: query
+      required: false
+      description: Filter by delivery status (exact match)
+      schema:
+        type: string
+    TargetTopicFilter:
+      name: targetTopic
+      in: query
+      required: false
+      description: Filter by target topic (partial match)
+      schema:
+        type: string
+    WorkflowDefinitionIdFilter:
+      name: workflowDefinitionId
+      in: query
+      required: false
+      description: Filter by workflow definition ID
+      schema:
+        type: integer
+        format: int64
+    WorkflowRunIdFilter:
+      name: workflowRunId
+      in: query
+      required: false
+      description: Filter by workflow run ID
+      schema:
+        type: integer
+        format: int64
+    RunStatusFilter:
+      name: runStatus
+      in: query
+      required: false
+      description: Filter by run status (exact match)
+      schema:
+        type: string
+    JobInstanceIdFilter:
+      name: jobInstanceId
+      in: query
+      required: false
+      description: Filter by job instance ID
+      schema:
+        type: integer
+        format: int64
     OperatorIdHeader:
       name: X-Operator-Id
       in: header
