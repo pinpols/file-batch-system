@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -97,7 +98,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         webTestClient.post()
                 .uri("/api/console/jobs/trigger")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-trigger-001")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"tenantId":"tenant-a","jobCode":"JOB_A","bizDate":"2026-03-27","triggerType":"MANUAL"}
                         """)
@@ -162,7 +163,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         webTestClient.post()
                 .uri("/api/console/jobs/trigger")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-trigger-002")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"tenantId":"tenant-a","bizDate":"2026-03-27"}
                         """)
@@ -183,7 +184,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         webTestClient.post()
                 .uri("/api/console/workers/worker-001/drain")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-worker-001")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"tenantId":"tenant-a","timeoutSeconds":600}
                         """)
@@ -206,7 +207,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         webTestClient.post()
                 .uri("/api/console/approvals/appr-001/approve")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-approval-001")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"tenantId":"tenant-a","operatorId":"user-1","reason":"ok"}
                         """)
@@ -228,7 +229,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         webTestClient.post()
                 .uri("/api/console/files/archive")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-001")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"tenantId":"tenant-a","fileId":1001,"reason":"cleanup"}
                         """)
@@ -251,7 +252,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         webTestClient.post()
                 .uri("/api/console/files/presign-download")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-file-002")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"tenantId":"tenant-a","fileId":1001,"reason":"cleanup","approvalId":"appr-001"}
                         """)
@@ -273,7 +274,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         webTestClient.post()
                 .uri("/api/console/config/secrets/rotate")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-config-001")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"tenantId":"tenant-a","secretRef":"DEFAULT_TEST","secretName":"console-secret","reason":"rotation"}
                         """)
@@ -303,7 +304,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         webTestClient.post()
                 .uri("/api/console/ai/chat")
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-ai-001")
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("""
                         {"tenantId":"tenant-a","sessionId":"session-1","prompt":"给我一个调度概览","context":{"topic":"summary"}}
                         """)
@@ -323,7 +324,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
     void shouldDownloadFileViaHttp() {
         byte[] content = "hello-batch".getBytes(StandardCharsets.UTF_8);
         when(fileDownloadApplicationService.download(anyString(), any(), anyString()))
-                .thenReturn(org.springframework.http.ResponseEntity.ok()
+                .thenReturn(ResponseEntity.ok()
                         .body(new InputStreamResource(new ByteArrayInputStream(content))));
 
         webTestClient.get()

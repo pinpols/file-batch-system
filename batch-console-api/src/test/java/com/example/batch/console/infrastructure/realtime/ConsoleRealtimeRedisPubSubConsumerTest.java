@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.utils.JsonUtils;
+import java.nio.charset.StandardCharsets;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,13 +89,13 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
         consumer.onMessage(message(envelope), null);
 
         verify(summaryRealtimeStream).publishSnapshot("t1");
-        verify(realtimeEventHub, never()).publish(org.mockito.ArgumentMatchers.any());
+        verify(realtimeEventHub, never()).publish(any());
     }
 
     private Message message(ConsoleRealtimeStreamEnvelope envelope) {
         Message message = mock(Message.class);
-        when(message.getBody()).thenReturn(JsonUtils.toJson(envelope).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        when(message.getChannel()).thenReturn(ConsoleRealtimeRedisPublisher.CHANNEL_KEY.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        when(message.getBody()).thenReturn(JsonUtils.toJson(envelope).getBytes(StandardCharsets.UTF_8));
+        when(message.getChannel()).thenReturn(ConsoleRealtimeRedisPublisher.CHANNEL_KEY.getBytes(StandardCharsets.UTF_8));
         return message;
     }
 }
