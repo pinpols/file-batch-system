@@ -1,0 +1,131 @@
+# dialog-2
+
+本文档用于把当前未实现项整理成后续对话推进顺序。每一轮都保持“先说明范围，再补代码”，避免推进时跑偏。
+
+## 已完成概览
+
+## Step 31 - 状态机与运行态推进
+
+- 对话目标：补齐状态机和运行态推进
+- 需要实现：
+  - 状态转移规则
+  - `workflow_node_run`
+  - `job_instance`
+  - `workflow_run`
+  - `job_partition`
+- 约束：
+  - 状态推进必须集中在 Orchestrator
+- 状态：已完成
+
+## Step 32 - Retry 与 Dead Letter 管理
+
+- 对话目标：把失败治理做完整
+- 需要实现：
+  - `retry_schedule`
+  - `dead_letter_task`
+  - 重试执行器
+  - 死信重放入口
+- 约束：
+  - 重试命令必须唯一
+- 当前实际状态：
+  - 已补 `retry_schedule` / `dead_letter_task` 的最小落库与调度器
+  - 已补失败后重试计划生成、到期重派发、死信落库
+  - 已补 `dead_letter_task` 的内部重放 API 和 `console-api` 重放入口
+  - 已补 `EXPONENTIAL` 指数退避计算与最大延迟上限
+  - 仍未补死信查询列表和人工审批流
+- 状态：进行中
+
+## Step 32.1 - 生命周期、Catch-up 与 DAG 收口
+
+- 对话目标：把治理相关剩余主缺口补到可运行
+- 需要实现：
+  - Worker `DRAINING / DECOMMISSIONED`
+  - `business_calendar.catch_up_policy`
+  - `workflow_edge` 基础流转
+- 当前实际状态：
+  - 已补 Worker 生命周期状态更新入口，并把 claim 限制到 `ONLINE`
+  - 已补 misfire 读取 `business_calendar.catch_up_policy / catch_up_max_days`
+  - 已补 `workflow_node / workflow_edge` 的最小解析与 `START -> 当前节点 -> NEXT/END` 推进
+  - 仍未补完整多节点任务生成和人工审批 catch-up 流程
+- 状态：进行中
+
+## Step 33 - Console API 实际可用
+
+- 对话目标：让控制台接口可用于运维
+- 需要实现：
+  - 触发
+  - 补偿
+  - 补跑
+  - 实例查询
+  - 文件链路查询
+  - 审计查询
+- 当前实际状态：
+  - 已补 `dead_letter_task` 列表查询
+  - 已补 `retry_schedule` 列表查询
+  - 已补 `待审批 catch-up` 列表查询
+  - 已补 Worker 运维查询
+  - 已补 `catch-up approval` 控制台入口，并接入 `trigger_request` 待审批闭环
+- 约束：
+  - 复杂查询继续走 MyBatis
+- 状态：已完成
+
+## Step 33.1 - DAG 条件边与多前驱汇聚
+
+- 对话目标：把 `workflow_edge` 从单一路径推进补到最小 DAG
+- 需要实现：
+  - 条件边解析
+  - 多后继节点 fan-out
+  - 多前驱汇聚后再 dispatch
+  - gateway 自动推进
+- 当前实际状态：
+  - 已补 `CONDITION` 边最小表达式解析
+  - 已补 `SUCCESS / FAILURE / ALWAYS / CONDITION` 的多后继解析
+  - 已补按 `workflow_edge` 判断的前驱就绪校验
+  - 已补 gateway 节点自动完成并继续向下游 dispatch
+  - 已补 `workflow_node.node_params.joinMode / joinThreshold`
+  - 已补 `ALL / ANY / N_OF` 汇聚模式
+  - 已补更完整的条件表达式：括号、`&&`、`||`、比较、`in/not in`、`contains`
+  - 已补 `Resource Scheduler` 的窗口、租户/队列并发、partition throttle、worker 选择与 WAITING 释放调度
+  - 已把 Import / Export / Dispatch 的 pipeline 生命周期模板统一到 `batch-worker-core`
+- 状态：已完成
+
+## Step 34 - 可观测性与告警
+
+- 对话目标：补齐监控、日志和告警
+- 需要实现：
+  - 结构化日志
+  - 指标暴露
+  - 错误统计
+  - 告警事件模型
+- 当前实际状态：
+  - 已补文件治理定时器，开始暴露 `arrival delay / processing delay` 指标
+  - 已补归档清理任务：按保留期清理 `ARCHIVED` 文件并写 `file_audit_log`
+  - 已补对象存储扫盘补登记：对 MinIO 中未登记对象执行 `RECONCILE_REGISTER`
+  - 已补人工 `redispatch` 运维入口：Console -> Orchestrator -> 受控重投递
+  - 已补 import 侧 MinIO 扫描器，支持 `.done` 文件与稳定窗口检测
+- 约束：
+  - tenantId、requestId、traceId、instanceNo 必须统一输出
+- 状态：已完成
+
+## Step 35 - 集成测试与演练
+
+- 对话目标：验证主链路和失败链路
+- 需要实现：
+  - 触发到执行的集成测试
+  - 重试回放演练
+  - Worker 故障与租约回收演练
+- 约束：
+  - 先覆盖主链路，再覆盖异常链路
+- 状态：已完成
+
+## Step 36 - 部署与运行手册
+
+- 对话目标：补齐上线交付物
+- 需要实现：
+  - 部署脚本
+  - 默认运行参数表
+  - 灰度顺序
+  - 排空与恢复手册
+- 约束：
+  - 以可执行为目标，不写空泛说明
+- 状态：已完成
