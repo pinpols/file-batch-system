@@ -1,5 +1,6 @@
 package com.example.batch.console.web;
 
+import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.BatchDayCatchUpRequest;
@@ -14,6 +15,8 @@ import com.example.batch.console.web.request.TaskReplayRequest;
 import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -51,6 +54,7 @@ public class ConsoleJobController {
         if (request.isDryRun()) {
             return responseFactory.success(applicationService.dryRunTrigger(request));
         }
+        requireIdempotencyKey(idempotencyKey);
         return responseFactory.success(applicationService.trigger(request, idempotencyKey));
     }
 
@@ -126,5 +130,11 @@ public class ConsoleJobController {
                                                                           @PathVariable String bizDate,
                                                                           @Valid @RequestBody BatchDayCatchUpRequest request) {
         return responseFactory.success(applicationService.catchUpBatchDay(bizDate, request, idempotencyKey));
+    }
+
+    private void requireIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BizException(ResultCode.MISSING_IDEMPOTENCY_KEY, CommonErrorMessages.MISSING_IDEMPOTENCY_KEY);
+        }
     }
 }

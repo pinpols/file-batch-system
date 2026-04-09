@@ -406,6 +406,47 @@ class ConsoleQueryControllerTest {
                 .andExpect(jsonPath("$.data.nodeStatus").value("SUCCESS"));
     }
 
+    @Test
+    void shouldReturnBatchInstanceStatus() throws Exception {
+        when(queryApplicationService.batchInstanceStatus(anyString(), any())).thenReturn(List.of(
+                new ConsoleJobInstanceResponse(
+                        11L,
+                        "t1",
+                        "IMPORT_JOB",
+                        "INS-001",
+                        java.time.LocalDate.of(2026, 3, 29),
+                        "MANUAL",
+                        "RUNNING",
+                        "batch-1",
+                        "operator-1",
+                        false,
+                        false,
+                        null,
+                        null,
+                        null,
+                        "queue-1",
+                        "worker-group-1",
+                        5,
+                        "trace-1",
+                        "{}",
+                        "running",
+                        Instant.EPOCH,
+                        3600,
+                        null,
+                        Instant.EPOCH,
+                        null
+                )
+        ));
+
+        mockMvc.perform(get("/api/console/query/instances/batch-status")
+                        .param("tenantId", "t1")
+                        .param("instanceNos", "INS-001", "INS-002"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].instanceNo").value("INS-001"))
+                .andExpect(jsonPath("$.data[0].instanceStatus").value("RUNNING"));
+    }
+
     private <T> PageResponse<T> emptyPage() {
         return new PageResponse<>(0L, 1, 20, List.of());
     }

@@ -4,6 +4,7 @@ import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.common.logging.AuditLogConstants;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
@@ -34,6 +35,7 @@ public class BatchDayCutoffScheduler {
     private final BatchDayInstanceRepository batchDayInstanceRepository;
     private final OrchestratorConfigCacheService configCacheService;
     private final JobExecutionLogMapper jobExecutionLogMapper;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
     @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
     @SchedulerLock(name = "batch_day_cutoff", lockAtMostFor = "PT2M", lockAtLeastFor = "PT20S")
@@ -43,6 +45,9 @@ public class BatchDayCutoffScheduler {
 
     @Transactional
     public void advance() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
         Instant now = Instant.now();
         List<String> tracked = List.of("OPEN");
 

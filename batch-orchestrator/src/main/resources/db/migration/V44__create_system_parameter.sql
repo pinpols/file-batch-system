@@ -1,5 +1,5 @@
 -- =========================================================
--- V10 - System parameter table for runtime configuration
+-- V44 - System parameter table for runtime configuration
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS batch.system_parameter (

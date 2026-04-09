@@ -6,6 +6,7 @@ import com.example.batch.orchestrator.application.scheduler.TenantSchedulerSnaps
 import com.example.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
 import com.example.batch.orchestrator.domain.entity.TenantSchedulerSnapshotRecord;
 import com.example.batch.orchestrator.domain.value.JsonbString;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
@@ -26,6 +27,7 @@ public class TenantSchedulerSnapshotRecorder {
     private final TenantSchedulerSnapshotService snapshotService;
     private final TenantSchedulerSnapshotRepository snapshotRepository;
     private final WorkerRegistryRepository workerRegistryRepository;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
     @Value("${batch.scheduler.snapshot-persist-enabled:true}")
     private boolean persistEnabled;
@@ -33,6 +35,9 @@ public class TenantSchedulerSnapshotRecorder {
     @Scheduled(fixedDelayString = "${batch.scheduler.snapshot-persist-ms:120000}")
     @SchedulerLock(name = "tenant_scheduler_snapshot", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1M")
     public void persist() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
         if (!persistEnabled) {
             return;
         }

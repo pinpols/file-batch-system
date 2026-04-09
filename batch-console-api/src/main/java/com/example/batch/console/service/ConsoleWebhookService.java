@@ -8,6 +8,8 @@ import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,16 +30,26 @@ public class ConsoleWebhookService {
                 .orElseThrow(() -> new BizException(ResultCode.NOT_FOUND, "webhook subscription not found"));
     }
 
-    public void createSubscription(String tenantId, String name, String callbackUrl,
-                                   String eventTypes, String secret, boolean enabled, String operator) {
-        subscriptionRepository.insert(tenantGuard.resolveTenant(tenantId),
-                name, callbackUrl, eventTypes, secret, enabled, operator);
+    public WebhookSubscriptionEntity createSubscription(String tenantId, String name, String callbackUrl,
+                                                        String eventTypes, String secret, boolean enabled, String operator) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        subscriptionRepository.findByTenantAndName(resolved, name).ifPresent(existing -> {
+            throw new BizException(ResultCode.CONFLICT, "webhook subscription already exists");
+        });
+        subscriptionRepository.insert(resolved, name, callbackUrl, normalizeEventTypes(eventTypes), secret, enabled, operator);
+        return subscriptionRepository.findByTenantAndName(resolved, name)
+                .orElseThrow(() -> new BizException(ResultCode.SYSTEM_ERROR, "webhook subscription created but not found"));
     }
 
-    public void updateSubscription(String tenantId, Long id, String callbackUrl,
-                                   String eventTypes, String secret, boolean enabled, String operator) {
-        subscriptionRepository.update(tenantGuard.resolveTenant(tenantId),
-                id, callbackUrl, eventTypes, secret, enabled, operator);
+    public WebhookSubscriptionEntity updateSubscription(String tenantId, Long id, String callbackUrl,
+                                                        String eventTypes, String secret, boolean enabled, String operator) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        if (subscriptionRepository.findByTenantAndId(resolved, id).isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, "webhook subscription not found");
+        }
+        subscriptionRepository.update(resolved, id, callbackUrl, normalizeEventTypes(eventTypes), secret, enabled, operator);
+        return subscriptionRepository.findByTenantAndId(resolved, id)
+                .orElseThrow(() -> new BizException(ResultCode.SYSTEM_ERROR, "webhook subscription updated but not found"));
     }
 
     public void deleteSubscription(String tenantId, Long id) {
@@ -54,6 +66,23 @@ public class ConsoleWebhookService {
 
     /** 查询指定租户下所有启用的订阅（供 dispatcher 使用）。 */
     public List<WebhookSubscriptionEntity> findEnabledSubscriptions(String tenantId) {
-        return subscriptionRepository.findEnabledByTenant(tenantId);
+        return subscriptionRepository.findEnabledByTenant(tenantGuard.resolveTenant(tenantId));
+    }
+
+    private String normalizeEventTypes(String eventTypes) {
+        if (eventTypes == null || eventTypes.isBlank()) {
+            throw new BizException(ResultCode.INVALID_ARGUMENT, "eventTypes is required");
+        }
+        String normalized = java.util.Arrays.stream(eventTypes.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(value -> value.toUpperCase(Locale.ROOT))
+                .distinct()
+                .reduce((left, right) -> left + "," + right)
+                .orElseThrow(() -> new BizException(ResultCode.INVALID_ARGUMENT, "eventTypes is required"));
+        if (Objects.equals(normalized, "*")) {
+            return normalized;
+        }
+        return normalized;
     }
 }

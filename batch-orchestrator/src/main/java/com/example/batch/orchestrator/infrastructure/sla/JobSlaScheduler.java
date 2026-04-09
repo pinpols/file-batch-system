@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -34,6 +35,7 @@ public class JobSlaScheduler {
     private final BatchOrchestratorGovernanceProperties governance;
     private final MeterRegistry meterRegistry;
     private final AlertEventService alertEventService;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
     private final AtomicLong violationCount = new AtomicLong();
 
     @jakarta.annotation.PostConstruct
@@ -44,6 +46,9 @@ public class JobSlaScheduler {
     @Scheduled(fixedDelayString = "${batch.sla.poll-interval-millis:30000}")
     @SchedulerLock(name = "job_sla_scan", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
     public void scanViolations() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
         if (!governance.sla().isEnabled()) {
             return;
         }

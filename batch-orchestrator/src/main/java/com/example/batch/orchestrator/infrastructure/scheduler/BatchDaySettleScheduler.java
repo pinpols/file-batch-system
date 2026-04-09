@@ -11,6 +11,7 @@ import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -45,6 +46,7 @@ public class BatchDaySettleScheduler {
     private final TriggerRequestMapper triggerRequestMapper;
     private final OrchestratorConfigCacheService configCacheService;
     private final LaunchService launchService;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
 
     @Scheduled(fixedDelayString = "${batch.batch-day.settle-scan-interval-millis:60000}")
     @SchedulerLock(name = "batch_day_settle", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
@@ -54,6 +56,9 @@ public class BatchDaySettleScheduler {
 
     @Transactional
     public void settle() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
         List<BatchDayInstanceRecord> candidates = batchDayInstanceRepository.findByDayStatusIn(TRACKED_STATUSES);
         if (candidates == null || candidates.isEmpty()) {
             return;

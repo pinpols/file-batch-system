@@ -8,6 +8,7 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
@@ -33,12 +34,16 @@ public class PartitionLeaseReclaimScheduler {
     private final JobInstanceMapper jobInstanceMapper;
     private final TaskDispatchOutboxService taskDispatchOutboxService;
     private final BatchOrchestratorGovernanceProperties governance;
+    private final OrchestratorGracefulShutdown gracefulShutdown;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Scheduled(fixedDelayString = "${batch.partition-lease.reclaim-interval-millis:15000}")
     @SchedulerLock(name = "partition_lease_reclaim", lockAtMostFor = "PT2M", lockAtLeastFor = "PT10S")
     @Transactional
     public void reclaimExpiredPartitions() {
+        if (gracefulShutdown.isDraining()) {
+            return;
+        }
         if (!running.compareAndSet(false, true)) {
             return;
         }
