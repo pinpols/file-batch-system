@@ -7,8 +7,11 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.ConsoleJobDefinitionExcelApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
+import com.example.batch.console.mapper.BatchWindowMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
+import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.mapper.param.JobDefinitionMaintenanceUpdateParam;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -109,6 +112,9 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
     private final JobDefinitionMapper jobDefinitionMapper;
     private final ConfigChangeLogMapper configChangeLogMapper;
     private final JobDefinitionExcelImportStore importStore;
+    private final ResourceQueueMapper resourceQueueMapper;
+    private final BatchWindowMapper batchWindowMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
 
     @Override
     public ResponseEntity<InputStreamResource> exportJobDefinitions(JobDefinitionQueryRequest request) {
@@ -329,6 +335,15 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
             }
             if (row.timeoutSeconds() != null && row.timeoutSeconds() < 0) {
                 rowIssues.add("timeout_seconds must be >= 0");
+            }
+            if (hasText(row.queueCode()) && resourceQueueMapper.selectByUniqueKey(row.tenantId(), row.queueCode()) == null) {
+                rowIssues.add("queue_code references non-existent resource queue: " + row.queueCode());
+            }
+            if (hasText(row.calendarCode()) && businessCalendarMapper.selectActiveByTenantAndCalendarCode(row.tenantId(), row.calendarCode()) == null) {
+                rowIssues.add("calendar_code references non-existent business calendar: " + row.calendarCode());
+            }
+            if (hasText(row.windowCode()) && batchWindowMapper.selectByUniqueKey(row.tenantId(), row.windowCode()) == null) {
+                rowIssues.add("window_code references non-existent batch window: " + row.windowCode());
             }
             if (row.paramSchema() != null) {
                 try {

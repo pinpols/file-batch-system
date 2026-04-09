@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.console.application.ConsoleOpsApplicationService;
+import com.example.batch.console.application.ConsoleOutboxOpsApplicationService;
 import com.example.batch.console.service.ConsoleKafkaLagQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
@@ -27,6 +28,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 class ConsoleOpsControllerTest {
 
     private final ConsoleOpsApplicationService opsApplicationService = org.mockito.Mockito.mock(ConsoleOpsApplicationService.class);
+    private final ConsoleOutboxOpsApplicationService outboxOpsService = org.mockito.Mockito.mock(ConsoleOutboxOpsApplicationService.class);
     private final ConsoleKafkaLagQueryService kafkaLagQueryService = org.mockito.Mockito.mock(ConsoleKafkaLagQueryService.class);
     private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
     private MockMvc mockMvc;
@@ -41,7 +43,7 @@ class ConsoleOpsControllerTest {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOpsController(opsApplicationService, responseFactory, kafkaLagQueryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOpsController(opsApplicationService, outboxOpsService, responseFactory, kafkaLagQueryService))
                 .setControllerAdvice(exceptionHandler)
                 .setValidator(validator)
                 .build();

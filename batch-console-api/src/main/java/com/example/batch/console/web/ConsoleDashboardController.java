@@ -52,6 +52,13 @@ public class ConsoleDashboardController {
         return responseFactory.success(queryService.slaCompliance(tenantId, days));
     }
 
+    /** SLA 报表：按 job 维度统计成功率、SLA 达标率、平均/最大耗时。 */
+    @GetMapping("/sla-report")
+    public CommonResponse<Map<String, Object>> slaReport(@RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "days", defaultValue = "7") int days) {
+        return responseFactory.success(queryService.slaReport(tenantId, days));
+    }
+
     /** 执行进度查询（轻量）：按 jobCode + bizDate 返回实例进度。面向业务方。 */
     @GetMapping("/execution-progress")
     public CommonResponse<List<Map<String, Object>>> executionProgress(@RequestParam("tenantId") String tenantId,

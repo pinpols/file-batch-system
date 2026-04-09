@@ -30,4 +30,12 @@ public class ConsoleFileDownloadController {
                                                         @RequestParam(required = false) String approvalId) {
         return applicationService.download(tenantId, fileId, approvalId);
     }
+
+    /** 导出文件错误记录为 CSV。 */
+    @GetMapping("/{fileId}/errors/export")
+    public ResponseEntity<InputStreamResource> exportFileErrors(@PathVariable Long fileId,
+                                                                 @RequestParam @NotNull String tenantId,
+                                                                 @RequestParam(required = false) String errorStage) {
+        return applicationService.exportFileErrors(tenantId, fileId, errorStage);
+    }
 }

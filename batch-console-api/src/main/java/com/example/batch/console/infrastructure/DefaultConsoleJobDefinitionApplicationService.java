@@ -6,6 +6,7 @@ import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.param.JobDefinitionMaintenanceUpdateParam;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.web.request.JobDefinitionCopyRequest;
 import com.example.batch.console.web.request.JobDefinitionCreateRequest;
 import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
@@ -157,6 +158,41 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
         }
         cacheInvalidationService.evictJobDefinition(resolved, newJobCode);
         return toResponse(copied);
+    }
+
+    @Override
+    public ConsoleJobDefinitionResponse copyWithOverrides(Long id, JobDefinitionCopyRequest request) {
+        String resolved = tenantGuard.resolveTenant(request.getTenantId());
+        JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode());
+        if (existing != null) {
+            throw new BizException(ResultCode.CONFLICT, "job code already exists: " + request.getNewJobCode());
+        }
+        String operator = requestMetadataResolver.current().operatorId();
+        jobDefinitionMapper.copyJobDefinition(resolved, id, request.getNewJobCode(), operator);
+        JobDefinitionEntity copied = jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode());
+        if (copied == null) {
+            throw new BizException(ResultCode.NOT_FOUND, "source job definition not found");
+        }
+        // Apply overrides
+        JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
+        param.setTenantId(resolved);
+        param.setJobCode(request.getNewJobCode());
+        param.setJobName(request.getJobName() != null ? request.getJobName() : copied.getJobName());
+        param.setQueueCode(request.getQueueCode() != null ? request.getQueueCode() : copied.getQueueCode());
+        param.setWorkerGroup(request.getWorkerGroup() != null ? request.getWorkerGroup() : copied.getWorkerGroup());
+        param.setScheduleExpr(request.getScheduleExpr() != null ? request.getScheduleExpr() : copied.getScheduleExpr());
+        param.setCalendarCode(request.getCalendarCode() != null ? request.getCalendarCode() : copied.getCalendarCode());
+        param.setWindowCode(request.getWindowCode() != null ? request.getWindowCode() : copied.getWindowCode());
+        param.setRetryPolicy(request.getRetryPolicy() != null ? request.getRetryPolicy() : copied.getRetryPolicy());
+        param.setRetryMaxCount(request.getRetryMaxCount() != null ? request.getRetryMaxCount() : copied.getRetryMaxCount());
+        param.setTimeoutSeconds(request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : copied.getTimeoutSeconds());
+        param.setShardStrategy(copied.getShardStrategy());
+        param.setEnabled(request.getEnabled() != null ? request.getEnabled() : copied.getEnabled());
+        param.setDescription(request.getDescription() != null ? request.getDescription() : copied.getDescription());
+        param.setUpdatedBy(operator);
+        jobDefinitionMapper.updateJobDefinitionMaintenance(param);
+        cacheInvalidationService.evictJobDefinition(resolved, request.getNewJobCode());
+        return toResponse(jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode()));
     }
 
     private ConsoleJobDefinitionResponse toResponse(JobDefinitionEntity e) {

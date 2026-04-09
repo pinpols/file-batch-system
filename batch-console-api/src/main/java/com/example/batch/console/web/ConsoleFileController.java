@@ -14,10 +14,12 @@ import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -65,5 +67,24 @@ public class ConsoleFileController {
     public CommonResponse<ConsoleFileOperationResponse> operateArrivalGroup(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
                                                                             @Valid @RequestBody FileArrivalGroupActionRequest request) {
         return responseFactory.success(applicationService.operateArrivalGroup(request, idempotencyKey));
+    }
+
+    /** 获取预签名上传地址（租户主动上传文件）。 */
+    @PostMapping("/presign-upload")
+    public CommonResponse<java.util.Map<String, Object>> presignUpload(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("channelCode") String channelCode,
+            @RequestParam("fileName") String fileName) {
+        return responseFactory.success(applicationService.presignUpload(tenantId, channelCode, fileName, idempotencyKey));
+    }
+
+    /** 租户确认文件已到达。 */
+    @PostMapping("/{fileId}/confirm-arrival")
+    public CommonResponse<ConsoleFileOperationResponse> confirmArrival(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @org.springframework.web.bind.annotation.PathVariable Long fileId,
+            @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(applicationService.confirmArrival(tenantId, fileId, idempotencyKey));
     }
 }

@@ -112,6 +112,23 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
         return tasks == null ? List.of() : tasks.stream().map(this::toResponse).toList();
     }
 
+    @Override
+    public ConsoleWorkerRegistryResponse warmup(String workerCode, String tenantId, String idempotencyKey) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        ConsoleRequestMetadata meta = requestMetadataResolver.current();
+        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+        ConsoleWorkerRegistryResponse response = toResponse(client.post()
+                .uri("/internal/workers/{workerCode}/warmup", workerCode)
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
+                .body(Map.of("tenantId", resolved))
+                .retrieve()
+                .body(ConsoleWorkerRegistryResponse.class));
+        domainEventPublisher.publishChanged(resolved, "workers", "worker-warmup");
+        return response;
+    }
+
     private ConsoleWorkerRegistryResponse toResponse(ConsoleWorkerRegistryResponse response) {
         return response;
     }

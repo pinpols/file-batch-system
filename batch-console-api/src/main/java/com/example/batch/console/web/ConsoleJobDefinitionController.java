@@ -2,6 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.console.application.ConsoleJobDefinitionApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.web.request.JobDefinitionCopyRequest;
 import com.example.batch.console.web.request.JobDefinitionCreateRequest;
 import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
@@ -71,5 +72,12 @@ public class ConsoleJobDefinitionController {
                                                               @RequestParam("tenantId") String tenantId,
                                                               @RequestParam("newJobCode") String newJobCode) {
         return responseFactory.success(jobDefinitionApplicationService.copy(id, tenantId, newJobCode));
+    }
+
+    /** 克隆作业定义并可选覆盖字段（脚手架模式）。 */
+    @PostMapping("/{id}/clone")
+    public CommonResponse<ConsoleJobDefinitionResponse> clone(@PathVariable Long id,
+                                                               @Valid @RequestBody JobDefinitionCopyRequest request) {
+        return responseFactory.success(jobDefinitionApplicationService.copyWithOverrides(id, request));
     }
 }

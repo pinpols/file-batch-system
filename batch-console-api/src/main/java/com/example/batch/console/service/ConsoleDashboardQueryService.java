@@ -126,6 +126,28 @@ public class ConsoleDashboardQueryService {
         return value == null ? 0L : value;
     }
 
+    public Map<String, Object> slaReport(String tenantId, int days) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("tenantId", resolved);
+        result.put("periodDays", days);
+        result.put("jobs", repository.slaJobReport(resolved, days).stream().map(row -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("jobCode", row.getJobCode());
+            item.put("jobName", row.getJobName());
+            item.put("totalInstances", nullToZero(row.getTotalInstances()));
+            item.put("successCount", nullToZero(row.getSuccessCount()));
+            item.put("failedCount", nullToZero(row.getFailedCount()));
+            item.put("slaBreached", nullToZero(row.getSlaBreached()));
+            item.put("slaOnTime", nullToZero(row.getSlaOnTime()));
+            item.put("avgDurationSeconds", row.getAvgDurationSeconds());
+            item.put("maxDurationSeconds", row.getMaxDurationSeconds());
+            item.put("totalPartitions", nullToZero(row.getTotalPartitions()));
+            return item;
+        }).toList());
+        return result;
+    }
+
     public Map<String, Object> slaCompliance(String tenantId, int days) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         Map<String, Object> result = new LinkedHashMap<>();

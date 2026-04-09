@@ -1,5 +1,6 @@
 package com.example.batch.console.application;
 
+import com.example.batch.console.web.request.JobDefinitionCopyRequest;
 import com.example.batch.console.web.request.JobDefinitionCreateRequest;
 import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
@@ -23,4 +24,7 @@ public interface ConsoleJobDefinitionApplicationService {
     void delete(Long id, String tenantId);
 
     ConsoleJobDefinitionResponse copy(Long id, String tenantId, String newJobCode);
+
+    /** 克隆作业定义并可选覆盖字段。 */
+    ConsoleJobDefinitionResponse copyWithOverrides(Long id, JobDefinitionCopyRequest request);
 }
