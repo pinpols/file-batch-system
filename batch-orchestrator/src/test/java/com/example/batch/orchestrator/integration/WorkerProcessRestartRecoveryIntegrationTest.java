@@ -29,6 +29,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -288,7 +290,7 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
         Set<String> topics = pendingEvents.stream()
                 .map(this::resolveTargetTopic)
                 .filter(topic -> topic != null && !topic.isBlank())
-                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         if (topics.isEmpty()) {
             return;
         }
@@ -416,7 +418,7 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
         builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
         Process process = builder.start();
         try {
-            if (!process.waitFor(WORKER_BUILD_TIMEOUT_MINUTES, java.util.concurrent.TimeUnit.MINUTES)) {
+            if (!process.waitFor(WORKER_BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
                 process.destroyForcibly();
                 throw new IllegalStateException("timed out building batch-worker-dispatch; see " + logFile);
             }
@@ -464,7 +466,7 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
         }
         process.destroyForcibly();
         try {
-            process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            process.waitFor(10, TimeUnit.SECONDS);
         } catch (InterruptedException interruptedException) {
             Thread.currentThread().interrupt();
         }
