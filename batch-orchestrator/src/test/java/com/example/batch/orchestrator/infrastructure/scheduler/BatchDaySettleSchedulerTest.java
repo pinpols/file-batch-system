@@ -9,6 +9,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.dto.LaunchRequest;
+import com.example.batch.common.dto.LaunchResponse;
+import com.example.batch.common.enums.TriggerType;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -130,7 +133,7 @@ class BatchDaySettleSchedulerTest {
                 .thenReturn(calendar);
         when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
         when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(launchService.launch(any())).thenReturn(new com.example.batch.common.dto.LaunchResponse("inst-001", "trace-001"));
+        when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-001"));
 
         scheduler.settle();
 
@@ -138,10 +141,10 @@ class BatchDaySettleSchedulerTest {
         verify(batchDayInstanceRepository).save(batchCaptor.capture());
         assertThat(batchCaptor.getValue().dayStatus()).isEqualTo("FAILED");
         verify(triggerRequestMapper).insert(any());
-        ArgumentCaptor<com.example.batch.common.dto.LaunchRequest> launchCaptor =
-                ArgumentCaptor.forClass(com.example.batch.common.dto.LaunchRequest.class);
+        ArgumentCaptor<LaunchRequest> launchCaptor =
+                ArgumentCaptor.forClass(LaunchRequest.class);
         verify(launchService).launch(launchCaptor.capture());
-        assertThat(launchCaptor.getValue().triggerType()).isEqualTo(com.example.batch.common.enums.TriggerType.CATCH_UP);
+        assertThat(launchCaptor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
         assertThat(launchCaptor.getValue().jobCode()).isEqualTo("FAILED_JOB");
     }
 

@@ -4,6 +4,7 @@ import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.support.ScopeNotActiveException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -41,7 +42,7 @@ public class ConsoleTenantGuard {
             return requestMetadataResolver.current();
         } catch (IllegalStateException exception) {
             return null;
-        } catch (org.springframework.beans.factory.support.ScopeNotActiveException exception) {
+        } catch (ScopeNotActiveException exception) {
             return null;
         }
     }

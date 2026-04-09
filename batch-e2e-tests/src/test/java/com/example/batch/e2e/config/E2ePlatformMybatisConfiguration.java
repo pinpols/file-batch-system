@@ -3,6 +3,7 @@ package com.example.batch.e2e.config;
 import java.util.ArrayList;
 import java.util.List;
 import javax.sql.DataSource;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -38,7 +39,7 @@ public class E2ePlatformMybatisConfiguration {
             mapperLocs.add(res);
         }
         factoryBean.setMapperLocations(mapperLocs.toArray(Resource[]::new));
-        org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
+        Configuration configuration = new Configuration();
         configuration.setMapUnderscoreToCamelCase(true);
         factoryBean.setConfiguration(configuration);
         return factoryBean.getObject();

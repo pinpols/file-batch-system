@@ -10,6 +10,7 @@ import com.example.batch.worker.exports.infrastructure.MinioExportStorage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -117,7 +118,7 @@ public class StoreStep implements ExportStageStep {
     private Map<String, Object> templateSecurity(ExportJobContext context) {
         Object templateConfig = context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
         if (templateConfig instanceof Map<?, ?> map) {
-            Map<String, Object> security = new java.util.LinkedHashMap<>();
+            Map<String, Object> security = new LinkedHashMap<>();
             security.put("content_encryption_enabled", map.get("content_encryption_enabled"));
             security.put("encryption_key_ref", map.get("encryption_key_ref"));
             security.put("download_requires_approval", map.get("download_requires_approval"));

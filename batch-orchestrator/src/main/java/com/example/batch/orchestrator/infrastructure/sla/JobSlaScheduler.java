@@ -13,6 +13,7 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -38,7 +39,7 @@ public class JobSlaScheduler {
     private final OrchestratorGracefulShutdown gracefulShutdown;
     private final AtomicLong violationCount = new AtomicLong();
 
-    @jakarta.annotation.PostConstruct
+    @PostConstruct
     void initializeMeters() {
         meterRegistry.gauge("batch.job.sla.violation.count", violationCount);
     }

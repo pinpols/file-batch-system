@@ -4,6 +4,7 @@ import com.example.batch.worker.imports.domain.ImportPayload;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
@@ -159,7 +160,7 @@ public final class ImportPreprocessPipeline {
                 }
                 return zis.readAllBytes();
             }
-        } catch (java.io.IOException ex) {
+        } catch (IOException ex) {
             throw new ImportPreprocessException("IMPORT_PREPROCESS_UNZIP_FAILED", ex.getMessage(), ex);
         }
         throw new ImportPreprocessException("IMPORT_PREPROCESS_UNZIP_EMPTY", "zip archive has no usable entry");
@@ -168,7 +169,7 @@ public final class ImportPreprocessPipeline {
     private static byte[] gunzip(byte[] input) {
         try (GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(input))) {
             return gis.readAllBytes();
-        } catch (java.io.IOException ex) {
+        } catch (IOException ex) {
             throw new ImportPreprocessException("IMPORT_PREPROCESS_GUNZIP_FAILED", ex.getMessage(), ex);
         }
     }

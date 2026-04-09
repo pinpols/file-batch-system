@@ -43,6 +43,7 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.core.env.Environment;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -424,7 +425,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                         ConsoleTextSanitizer.safeInput(request.getReason(), 512)
                 ))
                 .retrieve()
-                .body(new org.springframework.core.ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {
+                .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {
                 });
         if (response == null || response.data() == null) {
             throw new BizException(ResultCode.SYSTEM_ERROR, "trigger service returned empty response");
@@ -456,7 +457,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                         params == null ? Map.of() : params
                 ))
                 .retrieve()
-                .body(new org.springframework.core.ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {
+                .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {
                 });
         if (response == null || response.data() == null) {
             throw new BizException(ResultCode.SYSTEM_ERROR, "trigger service returned empty response");
@@ -520,7 +521,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
                 .body(Map.of("tenantId", tenantId))
                 .retrieve()
-                .body(new org.springframework.core.ParameterizedTypeReference<CommonResponse<RecoveryOperationResponse>>() {
+                .body(new ParameterizedTypeReference<CommonResponse<RecoveryOperationResponse>>() {
                 });
         if (response == null || response.data() == null) {
             throw new BizException(ResultCode.SYSTEM_ERROR, "orchestrator returned empty recovery response");

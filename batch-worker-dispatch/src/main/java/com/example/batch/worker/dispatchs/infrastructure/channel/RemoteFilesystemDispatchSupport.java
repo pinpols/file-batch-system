@@ -9,6 +9,7 @@ import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import io.minio.errors.ErrorResponseException;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -19,6 +20,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -52,7 +54,7 @@ final class RemoteFilesystemDispatchSupport {
             String remoteName = resolveRemoteFileName(channelConfig, command.fileRecord(), "nas_remote_file_name");
             Path target = directory.resolve(remoteName);
             try (InputStream in = contentResolver.openInputStream(command.fileRecord())) {
-                Files.copy(in, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
             }
             return finishResult(command, externalRequestId, receiptCode, "uploaded via NAS", target.toString());
         } catch (Exception ex) {
@@ -143,7 +145,7 @@ final class RemoteFilesystemDispatchSupport {
                     PutObjectArgs.builder()
                             .bucket(bucket)
                             .object(objectName)
-                            .stream(new java.io.ByteArrayInputStream(payload), payload.length, MINIO_PART_SIZE)
+                            .stream(new ByteArrayInputStream(payload), payload.length, MINIO_PART_SIZE)
                             .contentType(BatchFileConstants.CONTENT_TYPE_TEXT_UTF8)
                             .build()
             );

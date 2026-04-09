@@ -12,6 +12,7 @@ import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepositor
 import com.example.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,7 +82,7 @@ class DispatchReceiptPollSchedulerTest {
     @Test
     void shouldSkipRowWhenChannelCodeIsBlank() {
         properties.setEnabled(true);
-        Map<String, Object> row = new java.util.HashMap<>();
+        Map<String, Object> row = new HashMap<>();
         row.put("tenant_id", "t1");
         row.put("file_id", 100L);
         row.put("channel_code", "");
@@ -96,7 +97,7 @@ class DispatchReceiptPollSchedulerTest {
     @Test
     void shouldSkipRowWhenExternalRequestIdIsNull() {
         properties.setEnabled(true);
-        Map<String, Object> row = new java.util.HashMap<>();
+        Map<String, Object> row = new HashMap<>();
         row.put("tenant_id", "t1");
         row.put("file_id", 200L);
         row.put("channel_code", "CH1");

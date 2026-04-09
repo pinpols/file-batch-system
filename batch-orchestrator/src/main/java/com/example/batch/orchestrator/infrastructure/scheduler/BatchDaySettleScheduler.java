@@ -180,7 +180,7 @@ public class BatchDaySettleScheduler {
         audit.setTraceId(null);
         audit.setMessage("BATCH_DAY_INSTANCE_STATUS_CHANGED");
         audit.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
-        audit.setExtraJson(JsonUtils.toJson(new java.util.LinkedHashMap<>() {{
+        audit.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {{
             put("calendarCode", from.calendarCode());
             put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
             put("fromDayStatus", from.dayStatus());

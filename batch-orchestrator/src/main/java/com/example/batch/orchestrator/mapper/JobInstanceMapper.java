@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.mapper;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.domain.query.JobInstanceQuery;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -37,7 +38,7 @@ public interface JobInstanceMapper {
 
     int markSlaAlerted(@Param("tenantId") String tenantId,
                        @Param("id") Long id,
-                       @Param("slaAlertedAt") java.time.Instant slaAlertedAt);
+                       @Param("slaAlertedAt") Instant slaAlertedAt);
 
     long countActiveByTenant(@Param("tenantId") String tenantId);
 
@@ -62,6 +63,6 @@ public interface JobInstanceMapper {
     int updateStatus(@Param("tenantId") String tenantId,
                      @Param("id") Long id,
                      @Param("instanceStatus") String instanceStatus,
-                     @Param("finishedAt") java.time.Instant finishedAt,
+                     @Param("finishedAt") Instant finishedAt,
                      @Param("expectedVersion") Long expectedVersion);
 }

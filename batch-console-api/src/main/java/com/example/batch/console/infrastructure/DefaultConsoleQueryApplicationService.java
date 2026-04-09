@@ -60,6 +60,7 @@ import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -224,7 +225,7 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public java.util.List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, java.util.List<String> instanceNos) {
+    public List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos) {
         return jobQueryService.batchInstanceStatus(tenantId, instanceNos);
     }
 

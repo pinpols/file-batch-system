@@ -17,6 +17,8 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -84,14 +86,14 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     }
 
     @Override
-    public java.util.List<ConsoleBatchApprovalResultResponse> batchApprove(String tenantId,
-                                                                           java.util.List<String> approvalNos,
+    public List<ConsoleBatchApprovalResultResponse> batchApprove(String tenantId,
+                                                                 List<String> approvalNos,
                                                                            String operatorId,
                                                                            String reason) {
         if (approvalNos == null || approvalNos.isEmpty()) {
-            return java.util.List.of();
+            return List.of();
         }
-        java.util.List<ConsoleBatchApprovalResultResponse> results = new java.util.ArrayList<>();
+        List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
         for (String approvalNo : approvalNos) {
             try {
                 approve(tenantId, approvalNo, operatorId, reason);
@@ -100,18 +102,18 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
             }
         }
-        return java.util.List.copyOf(results);
+        return List.copyOf(results);
     }
 
     @Override
-    public java.util.List<ConsoleBatchApprovalResultResponse> batchReject(String tenantId,
-                                                                          java.util.List<String> approvalNos,
+    public List<ConsoleBatchApprovalResultResponse> batchReject(String tenantId,
+                                                                List<String> approvalNos,
                                                                           String operatorId,
                                                                           String reason) {
         if (approvalNos == null || approvalNos.isEmpty()) {
-            return java.util.List.of();
+            return List.of();
         }
-        java.util.List<ConsoleBatchApprovalResultResponse> results = new java.util.ArrayList<>();
+        List<ConsoleBatchApprovalResultResponse> results = new ArrayList<>();
         for (String approvalNo : approvalNos) {
             try {
                 reject(tenantId, approvalNo, operatorId, reason);
@@ -120,7 +122,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
             }
         }
-        return java.util.List.copyOf(results);
+        return List.copyOf(results);
     }
 
     private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {

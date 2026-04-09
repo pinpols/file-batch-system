@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.domain.query.OutboxEventQuery;
+import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -24,7 +25,7 @@ public interface OutboxEventMapper {
     int markFailed(@Param("tenantId") String tenantId,
                    @Param("id") Long id,
                    @Param("status") String status,
-                   @Param("nextPublishAt") java.time.Instant nextPublishAt);
+                   @Param("nextPublishAt") Instant nextPublishAt);
 
     int markGiveUp(@Param("tenantId") String tenantId,
                    @Param("id") Long id,

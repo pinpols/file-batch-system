@@ -15,6 +15,7 @@ import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.StatObjectArgs;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -93,7 +94,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
                 PutObjectArgs.builder()
                         .bucket(minioBucket())
                         .object(sourceObject)
-                        .stream(new java.io.ByteArrayInputStream(content), content.length, 10 * 1024 * 1024)
+                        .stream(new ByteArrayInputStream(content), content.length, 10 * 1024 * 1024)
                         .contentType("text/plain")
                         .build()
         );
