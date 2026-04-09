@@ -34,7 +34,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
     void shouldReturnEmptyWhenNoJobInstancesExist() {
         List<JobInstanceEntity> results = jobInstanceMapper.selectByQuery(
                 new JobInstanceQuery("no-such-tenant-" + System.currentTimeMillis(),
-                        null, null, null, null, null, null, null, null));
+                        null, null, null, null, null, null, null, null, null));
 
         assertThat(results).isEmpty();
     }
@@ -49,7 +49,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
         insertJobInstance(tenantId, jobCode, "FAILED", "INST-003-" + System.currentTimeMillis(), "trace-003");
 
         List<JobInstanceEntity> runningJobs = jobInstanceMapper.selectByQuery(
-                new JobInstanceQuery(tenantId, null, "RUNNING", null, null, null, null, null, null));
+                new JobInstanceQuery(tenantId, null, "RUNNING", null, null, null, null, null, null, null));
 
         assertThat(runningJobs).hasSize(1);
         assertThat(runningJobs.get(0).getInstanceStatus()).isEqualTo("RUNNING");
@@ -65,7 +65,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
         insertJobInstance(tenantId, jobCodeB, "SUCCESS", "INST-B1-" + System.currentTimeMillis(), "trace-b1");
 
         List<JobInstanceEntity> jobAInstances = jobInstanceMapper.selectByQuery(
-                new JobInstanceQuery(tenantId, jobCodeA, null, null, null, null, null, null, null));
+                new JobInstanceQuery(tenantId, jobCodeA, null, null, null, null, null, null, null, null));
 
         assertThat(jobAInstances).hasSize(1);
         assertThat(jobAInstances.get(0).getJobCode()).isEqualTo(jobCodeA);
@@ -79,7 +79,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
         insertJobInstance(tenantId, "TEST_JOB", "RUNNING", "INST-T1-" + System.currentTimeMillis(), traceId);
 
         List<JobInstanceEntity> results = jobInstanceMapper.selectByQuery(
-                new JobInstanceQuery(tenantId, null, null, null, null, traceId, null, null, null));
+                new JobInstanceQuery(tenantId, null, null, null, null, traceId, null, null, null, null));
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getTraceId()).isEqualTo(traceId);
@@ -95,7 +95,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
         }
 
         List<JobInstanceEntity> page1 = jobInstanceMapper.selectByQuery(
-                new JobInstanceQuery(tenantId, null, null, null, null, null, null, null,
+                new JobInstanceQuery(tenantId, null, null, null, null, null, null, null, null,
                         new PageRequest(0, 3)));
 
         assertThat(page1).hasSize(3);

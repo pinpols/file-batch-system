@@ -18,6 +18,9 @@ public interface ConsoleJobDefinitionExcelApplicationService {
     /** 按条件导出作业定义为 Excel。 */
     ResponseEntity<InputStreamResource> exportJobDefinitions(JobDefinitionQueryRequest request);
 
+    /** 下载空白模板。 */
+    ResponseEntity<InputStreamResource> downloadTemplate();
+
     /** 上传 Excel 并返回 uploadToken。 */
     ConsoleJobDefinitionExcelUploadResponse upload(MultipartFile file) throws IOException;
 

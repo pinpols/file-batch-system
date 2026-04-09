@@ -19,4 +19,6 @@ public class TriggerRequest {
     private String bizDate;
     private String triggerType;
     private String payload;
+    /** true 时仅执行校验（作业定义是否存在、是否启用等），不真正触发。 */
+    private boolean dryRun;
 }

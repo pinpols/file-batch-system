@@ -52,6 +52,8 @@ public class ConsoleSecurityConfiguration {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                         .requestMatchers("/api/console/auth/login", "/console-login.html", "/favicon.ico").permitAll()
+                        .requestMatchers("/api/v3/api-docs/**", "/api/swagger-ui/**", "/api/swagger-ui.html").permitAll()
+                        .requestMatchers("/actuator/loggers/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(consoleRateLimitFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)

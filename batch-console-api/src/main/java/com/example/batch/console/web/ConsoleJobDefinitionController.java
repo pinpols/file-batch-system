@@ -7,6 +7,9 @@ import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,6 +49,14 @@ public class ConsoleJobDefinitionController {
                                         @RequestParam("enabled") Boolean enabled) {
         jobDefinitionApplicationService.toggle(id, tenantId, enabled);
         return responseFactory.success(null);
+    }
+
+    /** 批量启停作业定义。 */
+    @PostMapping("/batch-toggle")
+    public CommonResponse<Integer> batchToggle(@RequestParam("tenantId") String tenantId,
+                                               @RequestParam("enabled") Boolean enabled,
+                                               @RequestBody @NotEmpty @Size(max = 200) List<Long> ids) {
+        return responseFactory.success(jobDefinitionApplicationService.batchToggle(tenantId, ids, enabled));
     }
 
     @DeleteMapping("/{id}")

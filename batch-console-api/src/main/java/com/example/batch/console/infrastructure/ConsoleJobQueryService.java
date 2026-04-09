@@ -61,6 +61,7 @@ class ConsoleJobQueryService {
                 request.getTraceId(),
                 parseFlexibleInstant(request.getStartDate(), "startDate"),
                 parseFlexibleInstantEndOfDay(request.getEndDate(), "endDate"),
+                request.getSortBy(),
                 pageRequest
         );
         List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
@@ -71,6 +72,12 @@ class ConsoleJobQueryService {
     ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
         JobInstanceEntity entity = jobMappers.jobInstanceMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
         return toJobInstanceResponse(requireNotNull(entity, "job instance not found"));
+    }
+
+    List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos) {
+        String resolved = resolveTenant(tenantGuard, tenantId);
+        return jobMappers.jobInstanceMapper.selectByInstanceNos(resolved, instanceNos)
+                .stream().map(this::toJobInstanceResponse).toList();
     }
 
     PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request) {

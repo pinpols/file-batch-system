@@ -1,57 +1,39 @@
-# 本地脚本说明
+# 本地开发脚本
 
-这里的脚本主要用于本地联调、环境初始化、巡检和故障自愈。
+本地 JVM 模式下的启停、构建和测试脚本。
 
-## 常用脚本
+## 脚本列表
 
+- `start-all.sh`：一键启动本地联调环境（基础依赖 + 6 个 Java 模块）
+- `stop-all.sh`：分阶段停止本地 Java 进程
+- `build-apps.sh`：Maven 打包六个应用模块（-DskipTests）
 - `run-tests.sh`：**本地一键测试入口**（推荐）
-  - 默认：单元 + 集成（跳过 E2E，无需 Docker 以外的额外服务）
+  - 默认：单元 + 集成（跳过 E2E）
   - `--unit`：仅单元测试，秒级，无容器
   - `--it`：仅集成测试（`*IntegrationTest`）
-  - `--e2e`：仅 E2E 测试（`*E2eIT`，等同于 `run-e2e-tests.sh`）
+  - `--e2e`：仅 E2E 测试（`*E2eIT`）
   - `--all`：单元 + 集成 + E2E 全量
-  - `-- <mvn args>`：透传 Maven 参数，如 `-pl batch-orchestrator -am`
-- `run-e2e-tests.sh`：直接运行全部 E2E 测试（`batch-e2e-tests`）
-- `build-apps.sh`：单独打包本地联调应用模块
-- `start-all.sh`：启动本地相关服务
-- `stop-all.sh`：停止本地相关服务
-- `inspect-all.sh`：依次执行服务、数据库、Worker 巡检
-- `inspect-observability.sh`：巡检服务健康、指标和 Kafka lag
-- `inspect-db.sh`：巡检数据库、Flyway、Outbox、死信和重试积压
-- `inspect-workers.sh`：巡检 Worker 排空、心跳失联和孤儿任务
-- `init-kafka-topics.sh`：初始化 Kafka topic
-- `init-minio.sh`：初始化 MinIO 资源
-- `load-system-test-data.sh`：加载系统测试数据
-
-## 自愈脚本
-
-- `heal-drain-timeout.sh`：处理超时的 DRAINING Worker
-- `heal-dead-letters.sh`：重放新的死信任务
-- `heal-retry-tasks.sh`：重放指定条件下的失败任务（job_task 粒度）
-- `heal-retry-partitions.sh`：重放指定条件下的失败分区（job_partition 粒度）
-- `heal-stuck-outbox.sh`：重置卡住的 Outbox 事件
-- `trigger-compensation.sh`：手工触发补偿（Console API）
+  - `-- <mvn args>`：透传 Maven 参数
+- `run-e2e-tests.sh`：直接运行全部 E2E 测试
+- `docker-path.sh`：工具函数，确保 docker 在 PATH 中（供其他脚本 source）
 
 ## 运行前提
 
-- 大部分脚本默认依赖 Docker / Docker Desktop、PostgreSQL、Kafka、MinIO、Redis 或对应的本地容器
-- 使用 Testcontainers 的脚本通常需要 `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` 和 `DOCKER_API_VERSION`
-- `start-all.sh` / `stop-all.sh` 默认使用 `.env.local`，如需切换环境可设置 `COMPOSE_ENV_FILE=.env.test` 或 `COMPOSE_ENV_FILE=.env.prod`
-- `start-all.sh` 默认只启动，不自动 Maven 打包；如需构建，先执行 `build-apps.sh`，或使用 `BUILD=1`
-- 如果脚本有额外环境变量要求，直接看脚本头部注释
+- Docker / Docker Desktop、JDK
+- `start-all.sh` / `stop-all.sh` 默认使用 `.env.local`
+- `start-all.sh` 默认只启动不打包；如需构建：先 `build-apps.sh` 或 `BUILD=1 start-all.sh`
 
 ## 常见顺序
 
-1. 先执行 `build-apps.sh`（首次或代码有变更时）
-2. 再执行 `start-all.sh` 或准备好本地依赖
-3. 再执行 `init-kafka-topics.sh`、`init-minio.sh`、`load-system-test-data.sh`
-4. 日常开发：`bash scripts/local/run-tests.sh`（单元 + 集成，约 2~3 分钟）
-5. 提交前：`bash scripts/local/run-tests.sh --all`（含 E2E，约 10 分钟）
-6. 最后用 `inspect-all.sh` 做一次巡检
-7. 出现异常时再考虑对应的 `heal-*.sh`
+1. `build-apps.sh`（首次或代码变更时）
+2. `start-all.sh`
+3. `scripts/data/init-kafka-topics.sh`、`scripts/data/init-minio.sh`（通常 Docker Compose 自动完成）
+4. `run-tests.sh`（日常开发）
+5. `run-tests.sh --all`（提交前）
+6. `scripts/ops/inspect-all.sh`（巡检）
 
-## 相关文档
+## 相关目录
 
-- [../README.md](../README.md)
-- [../../docs/testing/README.md](../../docs/testing/README.md)
-- [../../docs/testing/test-plan.md](../../docs/testing/test-plan.md)
+- [`scripts/ops/`](../ops/)：巡检与自愈脚本
+- [`scripts/data/`](../data/)：数据初始化与加载
+- [`scripts/docker/`](../docker/)：Docker 容器操作

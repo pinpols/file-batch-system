@@ -8,7 +8,7 @@
 #
 # 使用方法：
 #   PGHOST=localhost PGPORT=15432 PGDATABASE=batch_platform PGUSER=batch_user \
-#     PGPASSWORD=secret bash scripts/local/inspect-workers.sh
+#     PGPASSWORD=secret bash scripts/ops/inspect-workers.sh
 #
 # 如发现 DRAINING 超时 worker，可运行 heal-drain-timeout.sh 自动处理。
 
@@ -133,9 +133,17 @@ check_decommissioned_with_tasks() {
         AND table_name = 'task_assignment'" \
     2>/dev/null)" || table_exists=0
 
-  if [[ "${table_exists}" -lt 1 ]]; then
-    # Try job_task table
-    local orphaned
+  local orphaned
+  if [[ "${table_exists}" -ge 1 ]]; then
+    orphaned="$(psql_query \
+      "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.task_assignment ta
+         JOIN ${BATCH_SCHEMA}.worker_registry wr
+              ON wr.worker_code = ta.worker_code
+              AND wr.tenant_id  = ta.tenant_id
+        WHERE wr.worker_status = 'DECOMMISSIONED'
+          AND ta.assignment_status IN ('CLAIMED','RUNNING')" \
+      2>/dev/null)" || { warn "Cannot check decommissioned/task overlap via task_assignment"; return; }
+  else
     orphaned="$(psql_query \
       "SELECT COUNT(*) FROM ${BATCH_SCHEMA}.job_task jt
          JOIN ${BATCH_SCHEMA}.worker_registry wr
@@ -143,13 +151,13 @@ check_decommissioned_with_tasks() {
               AND wr.tenant_id  = jt.tenant_id
         WHERE wr.worker_status = 'DECOMMISSIONED'
           AND jt.task_status IN ('RUNNING','READY','CREATED')" \
-      2>/dev/null)" || { warn "Cannot check decommissioned/task overlap (table structure unclear)"; return; }
+      2>/dev/null)" || { warn "Cannot check decommissioned/task overlap via job_task"; return; }
+  fi
 
-    if [[ "${orphaned}" -gt 0 ]]; then
-      fail "Orphaned tasks: ${orphaned} active task(s) assigned to DECOMMISSIONED workers"
-    else
-      ok "Orphaned tasks: none on DECOMMISSIONED workers"
-    fi
+  if [[ "${orphaned}" -gt 0 ]]; then
+    fail "Orphaned tasks: ${orphaned} active task(s) assigned to DECOMMISSIONED workers"
+  else
+    ok "Orphaned tasks: none on DECOMMISSIONED workers"
   fi
 }
 

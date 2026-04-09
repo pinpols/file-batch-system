@@ -9,6 +9,7 @@
 - 必须有冻结表头、必填高亮、下拉枚举、示例值、自动列宽
 - 复杂字段靠说明页、字典页、预览校验页辅助
 - 导入必须先 `upload -> preview -> apply`
+- 每个可导入对象都提供 `GET /template` 端点下载空白模板，新租户无数据时可直接获取填写模板
 - 数据页必须放在第一个 sheet，便于直接作为上传模板
 - 运行时导出的 Excel 也按同一 workbook 结构生成，用户可以导出后修改再导入
 
@@ -136,11 +137,26 @@
 
 ---
 
-## 你现在可以先看的结论
+## 统一 API 端点
 
-- `file template config` 已与实际导入解析字段对齐
-- `file channel config` 次之
-- `workflow definition / node / edge` 适合迁移，不适合日常编辑
-- `job definition` 只开放安全字段，并把系统字段单独说明
-- `alert routing / notification policy` 对齐 observability 里的 Alertmanager 路由约定
-- 运行记录类只导出，不导入
+每个可导入对象提供 5 个 REST 端点：
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/excel/export` | GET | 按条件导出已有数据 |
+| `/excel/template` | GET | 下载空白模板（新租户首次导入用） |
+| `/excel/upload` | POST | 上传 Excel，返回 uploadToken |
+| `/excel/preview/{uploadToken}` | GET | 预览解析与校验结果 |
+| `/excel/apply/{uploadToken}` | POST | 确认导入并写库（需幂等键） |
+
+## 实现状态
+
+| 对象 | Controller | Service | Impl | Store | xlsx 模板 | 测试 |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| file template config | Y | Y | Y | Y | Y | Y |
+| file channel config | Y | Y | Y | Y | Y | Y |
+| workflow definition | Y | Y | Y | Y | Y | Y |
+| job definition | Y | Y | Y | Y | Y | Y |
+| alert routing / notification policy | Y | Y | Y | Y | Y | Y |
+
+运行记录类只导出，不导入

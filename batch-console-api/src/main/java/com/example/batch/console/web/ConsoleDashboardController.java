@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleDashboardQueryService;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -49,5 +50,20 @@ public class ConsoleDashboardController {
     public CommonResponse<Map<String, Object>> slaCompliance(@RequestParam("tenantId") String tenantId,
             @RequestParam(value = "days", defaultValue = "7") int days) {
         return responseFactory.success(queryService.slaCompliance(tenantId, days));
+    }
+
+    /** 执行进度查询（轻量）：按 jobCode + bizDate 返回实例进度。面向业务方。 */
+    @GetMapping("/execution-progress")
+    public CommonResponse<List<Map<String, Object>>> executionProgress(@RequestParam("tenantId") String tenantId,
+            @RequestParam("jobCode") String jobCode,
+            @RequestParam("bizDate") String bizDate) {
+        return responseFactory.success(queryService.executionProgress(tenantId, jobCode, bizDate));
+    }
+
+    /** 租户用量统计：配置数量 + 近期实例/文件处理量。 */
+    @GetMapping("/tenant-usage")
+    public CommonResponse<Map<String, Object>> tenantUsage(@RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "days", defaultValue = "30") int days) {
+        return responseFactory.success(queryService.tenantUsage(tenantId, days));
     }
 }

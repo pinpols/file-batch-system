@@ -7,13 +7,17 @@ services:
     image: prom/prometheus:v3.4.1
     container_name: batch-prometheus
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/prometheus/entrypoint.sh"]
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=7d
       - --web.enable-lifecycle
+    environment:
+      BATCH_DEPLOY_MODE: ${BATCH_DEPLOY_MODE:-container}
     volumes:
       - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./docker/observability/prometheus-batch-rules.yml:/etc/prometheus/rules/batch.yml:ro
+      - ./docker/observability/prometheus-entrypoint.sh:/etc/prometheus/entrypoint.sh:ro
       - prometheus-data:/prometheus
     ports:
       - "${PROMETHEUS_PORT:-19090}:9090"

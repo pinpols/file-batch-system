@@ -13,4 +13,6 @@ public class JobInstanceQueryRequest extends PageQueryRequest {
     private String traceId;
     private String startDate;
     private String endDate;
+    /** 排序方式：id（默认）、duration（按运行时长降序，用于慢任务诊断）。 */
+    private String sortBy;
 }

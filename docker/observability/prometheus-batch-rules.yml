@@ -82,7 +82,7 @@ groups:
           description: "Consumer group {{ $labels.consumergroup }} topic {{ $labels.topic }} partition {{ $labels.partition }} lag exceeds 1000 messages for 10 minutes."
 
       - alert: BatchRedisMemoryUsageHigh
-        expr: redis_memory_used_bytes / clamp_min(redis_memory_max_bytes, 1) > 0.80
+        expr: redis_memory_max_bytes > 0 and redis_memory_used_bytes / redis_memory_max_bytes > 0.80
         for: 10m
         labels:
           severity: warning

@@ -27,7 +27,7 @@ Phase 2 P0 回归范围见：`docs/testing/phase-2-functional-regression.md`
 - 统一回归入口：`scripts/ci/run-full-regression.sh`
 - 门禁与 staging 说明：`docs/testing/release-gate.md`
 - 压测模块与容量基线文档：`load-tests/`、`docs/testing/load-test-capacity-baseline.md`
-- 本地巡检与自愈脚本：`scripts/local/inspect-*.sh`、`scripts/local/heal-*.sh`
+- 本地巡检与自愈脚本：`scripts/ops/inspect-*.sh`、`scripts/ops/heal-*.sh`
 - Helm 生产部署产物：`helm/batch-platform/`
 - Phase 1 盘点矩阵：`docs/testing/phase-1-test-coverage-matrix.md`
 - Phase 2 P0 回归范围：`docs/testing/phase-2-functional-regression.md`

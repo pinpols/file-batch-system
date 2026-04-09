@@ -4,6 +4,7 @@ import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
 import com.example.batch.console.mapper.param.JobDefinitionMaintenanceUpdateParam;
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 public interface JobDefinitionMapper {
 
@@ -22,6 +23,9 @@ public interface JobDefinitionMapper {
     int deleteByTenantAndId(String tenantId, Long id);
 
     int toggleEnabled(String tenantId, Long id, Boolean enabled, String updatedBy);
+
+    int batchToggleEnabled(@Param("tenantId") String tenantId, @Param("ids") List<Long> ids,
+                           @Param("enabled") Boolean enabled, @Param("updatedBy") String updatedBy);
 
     int copyJobDefinition(String tenantId, Long sourceId, String newJobCode, String createdBy);
 }

@@ -111,6 +111,24 @@ public class ConsoleConfigController {
         return responseFactory.success(applicationService.configReleaseDetail(tenantId, releaseId));
     }
 
+    /** 查询配置项的依赖关系。 */
+    @GetMapping("/dependencies")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+    public CommonResponse<java.util.Map<String, Object>> configDependencies(@RequestParam("tenantId") String tenantId,
+                                                                             @RequestParam("configType") String configType,
+                                                                             @RequestParam("configCode") String configCode) {
+        return responseFactory.success(applicationService.configDependencies(tenantId, configType, configCode));
+    }
+
+    /** 对比两个配置发布版本的差异。 */
+    @GetMapping("/releases/diff")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
+    public CommonResponse<java.util.Map<String, Object>> diffConfigReleases(@RequestParam("tenantId") String tenantId,
+                                                                             @RequestParam("releaseIdA") Long releaseIdA,
+                                                                             @RequestParam("releaseIdB") Long releaseIdB) {
+        return responseFactory.success(applicationService.diffConfigReleases(tenantId, releaseIdA, releaseIdB));
+    }
+
     @GetMapping("/secrets/{secretVersionId}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
     public CommonResponse<ConsoleSecretVersionResponse> secretVersionDetail(@PathVariable Long secretVersionId,

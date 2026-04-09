@@ -111,6 +111,9 @@ public interface ConsoleQueryApplicationService {
     /** 查询作业实例详情。 */
     ConsoleJobInstanceResponse jobInstance(String tenantId, Long id);
 
+    /** 批量查询作业实例状态。 */
+    java.util.List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, java.util.List<String> instanceNos);
+
     /** 查询作业步骤实例列表。 */
     PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request);
 

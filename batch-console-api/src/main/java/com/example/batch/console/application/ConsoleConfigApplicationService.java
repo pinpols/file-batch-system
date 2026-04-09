@@ -43,4 +43,10 @@ public interface ConsoleConfigApplicationService {
     ConsoleConfigReleaseResponse configReleaseDetail(String tenantId, Long releaseId);
 
     ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId);
+
+    /** 对比两个配置发布版本的差异。 */
+    java.util.Map<String, Object> diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB);
+
+    /** 查询配置项的依赖关系：哪些 job / workflow 引用了指定的 channel、template、calendar、window、queue。 */
+    java.util.Map<String, Object> configDependencies(String tenantId, String configType, String configCode);
 }

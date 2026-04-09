@@ -19,7 +19,7 @@
 3. workflow 级 `load-tests/` 额外 `test-compile`
 4. 可选 load smoke：`JobLaunchSimulation`
 5. 可选 deploy smoke：Helm `lint + template`
-6. 可选巡检：`scripts/local/inspect-all.sh`
+6. 可选巡检：`scripts/ops/inspect-all.sh`
 
 GitHub Actions Workflow：
 

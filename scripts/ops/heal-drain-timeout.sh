@@ -7,12 +7,12 @@
 # =========================================================
 # 使用方法（dry-run 模式默认开启，需显式关闭）：
 #   # 仅预览，不实际执行（默认）
-#   bash scripts/local/heal-drain-timeout.sh
+#   bash scripts/ops/heal-drain-timeout.sh
 #
 #   # 真正执行 force-offline
 #   BATCH_HEAL_DRY_RUN=false BATCH_CONSOLE_URL=http://localhost:8080 \
 #     PGHOST=localhost PGUSER=batch PGPASSWORD=secret \
-#     bash scripts/local/heal-drain-timeout.sh
+#     bash scripts/ops/heal-drain-timeout.sh
 #
 # 所有变量：
 #   BATCH_CONSOLE_URL       控制台 base URL（含协议和端口）

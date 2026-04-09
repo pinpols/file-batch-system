@@ -17,6 +17,9 @@ public interface ConsoleJobDefinitionApplicationService {
 
     void toggle(Long id, String tenantId, Boolean enabled);
 
+    /** 批量启停作业定义。 */
+    int batchToggle(String tenantId, java.util.List<Long> ids, Boolean enabled);
+
     void delete(Long id, String tenantId);
 
     ConsoleJobDefinitionResponse copy(Long id, String tenantId, String newJobCode);

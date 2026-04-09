@@ -7,13 +7,13 @@
 # =========================================================
 # 使用方法：
 #   # dry-run（默认）
-#   bash scripts/local/heal-dead-letters.sh
+#   bash scripts/ops/heal-dead-letters.sh
 #
 #   # 实际重放，限定单个租户
 #   BATCH_HEAL_DRY_RUN=false \
 #   BATCH_ORCHESTRATOR_URL=http://localhost:8082 \
 #   BATCH_HEAL_DLQ_TENANT=tenant-001 \
-#     bash scripts/local/heal-dead-letters.sh
+#     bash scripts/ops/heal-dead-letters.sh
 #
 # 变量：
 #   BATCH_HEAL_DLQ_TENANT       只处理指定租户（留空处理全部）

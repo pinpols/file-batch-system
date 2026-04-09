@@ -178,7 +178,7 @@ make observability-down
 ### 系统测试种子数据
 
 ```bash
-scripts/local/load-system-test-data.sh
+scripts/data/load-system-test-data.sh
 ```
 
 详见 [docs/sql/system-test/README.md](docs/sql/system-test/README.md)。

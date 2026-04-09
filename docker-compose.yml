@@ -70,8 +70,8 @@ services:
       KAFKA_PARTITIONS_RETRY: ${KAFKA_PARTITIONS_RETRY:-${KAFKA_DEFAULT_PARTITIONS}}
       KAFKA_PARTITIONS_DEAD_LETTER: ${KAFKA_PARTITIONS_DEAD_LETTER:-${KAFKA_DEFAULT_PARTITIONS}}
     volumes:
-      - ./scripts/local/init-kafka-topics.sh:/scripts/local/init-kafka-topics.sh:ro
-    entrypoint: ["/bin/sh", "/scripts/local/init-kafka-topics.sh"]
+      - ./scripts/data/init-kafka-topics.sh:/scripts/data/init-kafka-topics.sh:ro
+    entrypoint: ["/bin/sh", "/scripts/data/init-kafka-topics.sh"]
     restart: "no"
     networks:
       - batch-network
@@ -111,8 +111,8 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
     volumes:
-      - ./scripts/local/init-minio.sh:/scripts/local/init-minio.sh:ro
-    entrypoint: ["/bin/sh", "/scripts/local/init-minio.sh"]
+      - ./scripts/data/init-minio.sh:/scripts/data/init-minio.sh:ro
+    entrypoint: ["/bin/sh", "/scripts/data/init-minio.sh"]
     restart: "no"
     networks:
       - batch-network

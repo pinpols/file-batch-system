@@ -59,6 +59,8 @@ tags:
     description: File channel CRUD and toggle.
   - name: FileTemplates
     description: File template CRUD and toggle.
+  - name: AlertRoutings
+    description: Alert routing configuration Excel import/export.
   - name: Instances
     description: Job instance and partition cancel/terminate/retry operations.
   - name: WorkflowRuns
@@ -819,6 +821,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConfigChangeLogList'
+  /api/console/config/file-templates/excel/template:
+    get:
+      tags: [Config]
+      summary: Download blank file template Excel template
+      operationId: downloadFileTemplateExcelTemplate
+      responses:
+        '200':
+          description: Empty Excel template download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /api/console/config/file-templates/excel/export:
     get:
       tags: [Config]
@@ -915,6 +930,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileTemplateExcelApply'
+  /api/console/config/file-channels/excel/template:
+    get:
+      tags: [Config]
+      summary: Download blank file channel Excel template
+      operationId: downloadFileChannelExcelTemplate
+      responses:
+        '200':
+          description: Empty Excel template download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /api/console/config/file-channels/excel/export:
     get:
       tags: [Config]
@@ -1011,6 +1039,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileChannelExcelApply'
+  /api/console/config/workflows/excel/template:
+    get:
+      tags: [Config]
+      summary: Download blank workflow Excel template
+      operationId: downloadWorkflowExcelTemplate
+      responses:
+        '200':
+          description: Empty Excel template download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /api/console/config/workflows/excel/export:
     get:
       tags: [Config]
@@ -1113,6 +1154,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleWorkflowExcelApply'
+  /api/console/config/job-definitions/excel/template:
+    get:
+      tags: [Config]
+      summary: Download blank job definition Excel template
+      operationId: downloadJobDefinitionExcelTemplate
+      responses:
+        '200':
+          description: Empty Excel template download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /api/console/config/job-definitions/excel/export:
     get:
       tags: [Config]
@@ -1209,6 +1263,121 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleJobDefinitionExcelApply'
+  /api/console/config/alert-routings/excel/template:
+    get:
+      tags: [AlertRoutings]
+      summary: Download blank alert routing Excel template
+      operationId: downloadAlertRoutingExcelTemplate
+      responses:
+        '200':
+          description: Empty Excel template download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/alert-routings/excel/export:
+    get:
+      tags: [AlertRoutings]
+      summary: Export alert routing configs as Excel
+      operationId: exportAlertRoutingExcel
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - name: routeCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: team
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: severity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [INFO, WARN, ERROR, CRITICAL]
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/alert-routings/excel/upload:
+    post:
+      tags: [AlertRoutings]
+      summary: Upload alert routing Excel
+      operationId: uploadAlertRoutingExcel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Upload session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAlertRoutingExcelUpload'
+  /api/console/config/alert-routings/excel/preview/{uploadToken}:
+    get:
+      tags: [AlertRoutings]
+      summary: Preview uploaded alert routing Excel
+      operationId: previewAlertRoutingExcel
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preview result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAlertRoutingExcelPreview'
+  /api/console/config/alert-routings/excel/apply/{uploadToken}:
+    post:
+      tags: [AlertRoutings]
+      summary: Apply uploaded alert routing Excel
+      operationId: applyAlertRoutingExcel
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRoutingExcelApplyRequest'
+      responses:
+        '200':
+          description: Apply result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleAlertRoutingExcelApply'
   /api/console/reports/excel/config-releases:
     get:
       tags: [Reports]
@@ -5581,6 +5750,27 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/ConsoleJobDefinitionExcelApplyResponse'
+    CommonResponseConsoleAlertRoutingExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleAlertRoutingExcelUploadResponse'
+    CommonResponseConsoleAlertRoutingExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleAlertRoutingExcelPreviewResponse'
+    CommonResponseConsoleAlertRoutingExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleAlertRoutingExcelApplyResponse'
     CommonResponseAiAuditLogList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -5860,6 +6050,12 @@ components:
           type: string
       required: []
     JobDefinitionExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    AlertRoutingExcelApplyRequest:
       type: object
       properties:
         reason:
@@ -8247,3 +8443,118 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, eventType, eventKey, deliveryStatus, targetTopic, deliveryAttempt, errorMessage, createdAt, updatedAt]
+    ConsoleAlertRoutingResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        routeCode:
+          type: string
+        routeName:
+          type: string
+        team:
+          type: string
+        alertGroup:
+          type: string
+        severity:
+          type: string
+          enum: [INFO, WARN, ERROR, CRITICAL]
+        receiver:
+          type: string
+        groupBy:
+          type: string
+        groupWaitSeconds:
+          type: integer
+          format: int32
+        groupIntervalSeconds:
+          type: integer
+          format: int32
+        repeatIntervalSeconds:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [tenantId, routeCode, routeName, team, alertGroup, severity, receiver, enabled]
+    ConsoleAlertRoutingExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        rowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, sheetName, rowCount]
+    ConsoleAlertRoutingExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleAlertRoutingResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleAlertRoutingExcelRowIssueResponse'
+      required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
+    ConsoleAlertRoutingExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedRows:
+          type: integer
+          format: int32
+        insertedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+    ConsoleAlertRoutingExcelRowIssueResponse:
+      type: object
+      properties:
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        routeCode:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [rowNo, routeCode, messages]

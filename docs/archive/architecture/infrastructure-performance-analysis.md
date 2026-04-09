@@ -230,7 +230,7 @@ properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollIntervalMs);
 
 ### 问题 3：Kafka 分区数固定为 3（P1 → ✅ 已修复）
 
-**位置：** `.env.example` / `scripts/local/init-kafka-topics.sh` / `docker-compose.yml`
+**位置：** `.env.example` / `scripts/data/init-kafka-topics.sh` / `docker-compose.yml`
 
 **修复内容：** `init-kafka-topics.sh` 新增 `resolve_partitions()` 函数，支持按 topic 类型独立配置分区数：
 

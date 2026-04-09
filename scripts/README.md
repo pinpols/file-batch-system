@@ -4,9 +4,12 @@
 
 ## 目录分工
 
+- `scripts/local/`：本地 JVM 开发——启停、构建、测试
+- `scripts/docker/`：Docker / Docker Compose 容器操作（构建镜像、启停容器、观测栈管理）
+- `scripts/ops/`：运维巡检与自愈（inspect-*、heal-*、trigger-compensation）
+- `scripts/data/`：数据初始化与加载（init-kafka、init-minio、load-*）
 - `scripts/ci/`：CI / staging 统一回归入口和门禁脚本（说明见 [scripts/ci/README.md](ci/README.md)）
-- `scripts/docker/`：Docker / Docker Compose 容器入口脚本
-- `scripts/local/`：本地开发、联调、巡检、自愈脚本
+- `scripts/db/`：数据库维护（Flyway 历史重置等）
 
 ## 主要入口
 
@@ -15,14 +18,15 @@
 - `scripts/ci/security-scan.sh`：本地 / CI 安全扫描一键入口，编排 `gitleaks` / `dependency-check` / `semgrep` / `trivy` / `ZAP`
 - `scripts/ci/check-console-openapi-paths.py`：Console OpenAPI 与 `Console*Controller` 路由一致性检查（CI 与本地均可运行，详见 [scripts/ci/README.md](ci/README.md)）
 - `scripts/local/run-e2e-tests.sh`：本地运行 `batch-e2e-tests`
-- `scripts/local/inspect-all.sh`：本地巡检总入口
+- `scripts/ops/inspect-all.sh`：本地巡检总入口
 
 ## 使用建议
 
 - 先看每个脚本文件头部的注释，通常会说明前置条件、环境变量和示例命令
 - `scripts/ci/run-full-regression.sh` 自带 `usage()`，直接执行 `bash scripts/ci/run-full-regression.sh --help` 可以查看参数
 - 容器启动/停止类入口优先看 `scripts/docker/`
-- `scripts/local/` 下的脚本更偏操作型，适合在本地或 staging 前做验证
+- `scripts/ops/` 下的巡检和自愈脚本适合在本地或 staging 前做验证
+- `scripts/data/` 下的数据加载脚本适合初始化开发/测试环境
 
 ## 相关文档
 

@@ -9,13 +9,13 @@
 #
 # 使用方法：
 #   # dry-run（默认）
-#   bash scripts/local/heal-retry-partitions.sh
+#   bash scripts/ops/heal-retry-partitions.sh
 #
 #   # 实际执行（建议限定租户）
 #   BATCH_HEAL_RETRY_DRY_RUN=false \
 #     BATCH_ORCHESTRATOR_URL=http://localhost:8082 \
 #     BATCH_HEAL_RETRY_TENANT=tenant-001 \
-#     bash scripts/local/heal-retry-partitions.sh
+#     bash scripts/ops/heal-retry-partitions.sh
 #
 # 变量：
 #   BATCH_HEAL_RETRY_DRY_RUN                 true/false（默认 true）

@@ -46,7 +46,7 @@
 - **作用**：
   - 为系统联调/验收准备可复现测试数据集（基础数据 + 边界数据）
 - **执行方**：
-  - `scripts/local/load-system-test-data.sh`
+  - `scripts/data/load-system-test-data.sh`
   - 或手工 `psql -f ...`
 - **适用场景**：
   - 本地联调、演示、回归环境准备

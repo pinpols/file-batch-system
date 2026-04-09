@@ -44,4 +44,10 @@ public interface ConsoleJobApplicationService {
     ConsoleBatchDayCatchUpResponse catchUpBatchDay(String bizDate,
                                                   BatchDayCatchUpRequest request,
                                                   String idempotencyKey);
+
+    /** dryRun 校验：检查 job 是否可触发，不真正执行。 */
+    java.util.Map<String, Object> dryRunTrigger(TriggerRequest request);
+
+    /** 批量触发：同时触发多个 job。 */
+    java.util.List<java.util.Map<String, Object>> batchTrigger(java.util.List<TriggerRequest> items, String idempotencyKey);
 }

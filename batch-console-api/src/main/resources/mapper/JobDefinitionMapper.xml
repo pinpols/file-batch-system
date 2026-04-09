@@ -151,6 +151,15 @@
         where tenant_id = #{tenantId} and id = #{id}
     </update>
 
+    <update id="batchToggleEnabled">
+        update batch.job_definition
+        set enabled = #{enabled}, updated_by = #{updatedBy}, updated_at = current_timestamp
+        where tenant_id = #{tenantId} and id in
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </update>
+
     <insert id="copyJobDefinition">
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, schedule_expr,

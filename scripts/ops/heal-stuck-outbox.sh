@@ -12,11 +12,11 @@
 #
 # 使用方法：
 #   # dry-run（默认）
-#   bash scripts/local/heal-stuck-outbox.sh
+#   bash scripts/ops/heal-stuck-outbox.sh
 #
 #   # 实际重置（需 DB 写权限）
 #   BATCH_HEAL_DRY_RUN=false PGHOST=localhost PGUSER=batch PGPASSWORD=secret \
-#     bash scripts/local/heal-stuck-outbox.sh
+#     bash scripts/ops/heal-stuck-outbox.sh
 
 set -euo pipefail
 

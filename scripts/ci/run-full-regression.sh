@@ -45,7 +45,7 @@ Options:
   --with-deploy-smoke    Run Helm lint/template deployment smoke
   --with-deployment-verification
                          Run upgrade / rollback verification smoke
-  --with-inspection      Run scripts/local/inspect-all.sh after tests
+  --with-inspection      Run scripts/ops/inspect-all.sh after tests
   --help                 Show this message
 
 Examples:
@@ -483,8 +483,7 @@ fi
 if [[ "$RUN_INSPECTION" == true ]]; then
   run_step \
     "Post-run Inspection" \
-    bash "$ROOT_DIR/scripts/local/inspect-all.sh"
+    bash "$ROOT_DIR/scripts/ops/inspect-all.sh"
 fi
 
 banner "FULL REGRESSION PASSED"
-printf 'Completed in %s\n' "$ROOT_DIR"

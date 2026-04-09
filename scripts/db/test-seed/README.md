@@ -19,7 +19,7 @@
 优先使用辅助脚本：
 
 ```bash
-scripts/local/load-system-test-data.sh
+scripts/data/load-system-test-data.sh
 ```
 
 Or run the SQL directly:

@@ -16,7 +16,7 @@
 #   BATCH_BUSINESS_DB_PASSWORD=... \
 #   BATCH_MINIO_ACCESS_KEY=... \
 #   BATCH_MINIO_SECRET_KEY=... \
-#     bash scripts/local/load-system-test-data.sh
+#     bash scripts/data/load-system-test-data.sh
 
 set -euo pipefail
 

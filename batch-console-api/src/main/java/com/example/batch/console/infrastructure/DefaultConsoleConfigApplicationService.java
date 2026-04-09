@@ -25,6 +25,7 @@ import com.example.batch.console.web.request.SecretVersionRotateRequest;
 import com.example.batch.console.web.response.ConsoleConfigChangeLogResponse;
 import com.example.batch.console.web.response.ConsoleConfigReleaseResponse;
 import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
+import com.example.batch.console.repository.ConsoleDashboardQueryRepository;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
@@ -47,6 +48,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     private final ConfigReleaseMapper configReleaseMapper;
     private final SecretVersionMapper secretVersionMapper;
     private final ConfigChangeLogMapper configChangeLogMapper;
+    private final ConsoleDashboardQueryRepository dashboardQueryRepository;
 
     @Override
     public List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request) {
@@ -373,6 +375,59 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+    @Override
+    public Map<String, Object> configDependencies(String tenantId, String configType, String configCode) {
+        String resolved = resolveTenant(tenantId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("configType", configType);
+        result.put("configCode", configCode);
+
+        List<ConsoleDashboardQueryRepository.ConfigDependentView> dependentJobs = switch (configType.toUpperCase()) {
+            case "QUEUE", "RESOURCE_QUEUE" -> dashboardQueryRepository.jobsByQueueCode(resolved, configCode);
+            case "CALENDAR", "BUSINESS_CALENDAR" -> dashboardQueryRepository.jobsByCalendarCode(resolved, configCode);
+            case "WINDOW", "BATCH_WINDOW" -> dashboardQueryRepository.jobsByWindowCode(resolved, configCode);
+            case "WORKER_GROUP" -> dashboardQueryRepository.jobsByWorkerGroup(resolved, configCode);
+            default -> List.of();
+        };
+        result.put("dependentJobs", dependentJobs.stream().map(j -> Map.of(
+                "id", j.getId(),
+                "code", j.getCode(),
+                "name", j.getName() != null ? j.getName() : ""
+        )).toList());
+        result.put("dependentJobCount", dependentJobs.size());
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB) {
+        String resolved = resolveTenant(tenantId);
+        ConfigReleaseEntity a = loadRelease(resolved, releaseIdA);
+        ConfigReleaseEntity b = loadRelease(resolved, releaseIdB);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("releaseA", toConfigReleaseResponse(a));
+        result.put("releaseB", toConfigReleaseResponse(b));
+
+        // JSON payload diff
+        Object payloadA = a.getConfigPayload() != null ? JsonUtils.fromJson(a.getConfigPayload(), Object.class) : null;
+        Object payloadB = b.getConfigPayload() != null ? JsonUtils.fromJson(b.getConfigPayload(), Object.class) : null;
+        boolean payloadChanged = !java.util.Objects.equals(payloadA, payloadB);
+        result.put("payloadChanged", payloadChanged);
+        if (payloadChanged) {
+            result.put("payloadA", payloadA);
+            result.put("payloadB", payloadB);
+        }
+
+        // Gray scope diff
+        Object grayA = a.getGrayScope() != null ? JsonUtils.fromJson(a.getGrayScope(), Object.class) : null;
+        Object grayB = b.getGrayScope() != null ? JsonUtils.fromJson(b.getGrayScope(), Object.class) : null;
+        boolean grayChanged = !java.util.Objects.equals(grayA, grayB);
+        result.put("grayScopeChanged", grayChanged);
+
+        // Status diff
+        result.put("statusChanged", !java.util.Objects.equals(a.getConfigStatus(), b.getConfigStatus()));
+        return result;
     }
 
     private ConsoleConfigChangeLogResponse toConfigChangeLogResponse(ConfigChangeLogEntity entity) {

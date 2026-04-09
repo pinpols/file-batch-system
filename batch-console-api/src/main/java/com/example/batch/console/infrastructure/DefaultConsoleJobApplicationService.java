@@ -63,6 +63,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
     private final BusinessCalendarMapper businessCalendarMapper;
     private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
     private final Environment environment;
+    private final com.example.batch.console.mapper.JobDefinitionMapper jobDefinitionMapper;
 
     /** 手工/API 触发作业运行。 */
     @Override
@@ -324,6 +325,81 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
         );
         publishRefresh(tenantId);
         return response;
+    }
+
+    @Override
+    public Map<String, Object> dryRunTrigger(TriggerRequest request) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("dryRun", true);
+        List<String> errors = new ArrayList<>();
+        String tenantId;
+        try {
+            tenantId = resolveTenant(request.getTenantId());
+        } catch (Exception e) {
+            errors.add("tenantId invalid: " + e.getMessage());
+            result.put("valid", false);
+            result.put("errors", errors);
+            return result;
+        }
+        result.put("tenantId", tenantId);
+        result.put("jobCode", request.getJobCode());
+        result.put("bizDate", request.getBizDate());
+
+        if (request.getJobCode() == null || request.getJobCode().isBlank()) {
+            errors.add("jobCode is required");
+        }
+        if (request.getBizDate() == null || request.getBizDate().isBlank()) {
+            errors.add("bizDate is required");
+        } else {
+            try {
+                parseBizDate(request.getBizDate());
+            } catch (Exception e) {
+                errors.add("bizDate format invalid (expected yyyy-MM-dd)");
+            }
+        }
+        if (request.getTriggerType() != null && !request.getTriggerType().isBlank()) {
+            try {
+                resolveTriggerType(request.getTriggerType(), TriggerType.MANUAL);
+            } catch (Exception e) {
+                errors.add("unsupported triggerType: " + request.getTriggerType());
+            }
+        }
+        if (errors.isEmpty() && request.getJobCode() != null) {
+            var jobDef = jobDefinitionMapper.selectByUniqueKey(tenantId, request.getJobCode());
+            if (jobDef == null) {
+                errors.add("job definition not found: " + request.getJobCode());
+            } else if (jobDef.getEnabled() != null && !jobDef.getEnabled()) {
+                errors.add("job definition is disabled: " + request.getJobCode());
+            }
+        }
+        result.put("valid", errors.isEmpty());
+        if (!errors.isEmpty()) {
+            result.put("errors", errors);
+        }
+        return result;
+    }
+
+    @Override
+    public List<Map<String, Object>> batchTrigger(List<TriggerRequest> items, String idempotencyKey) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
+            TriggerRequest item = items.get(i);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("index", i);
+            entry.put("jobCode", item.getJobCode());
+            entry.put("bizDate", item.getBizDate());
+            try {
+                String itemKey = idempotencyKey + ":" + i;
+                String instanceNo = trigger(item, itemKey);
+                entry.put("status", "SUCCESS");
+                entry.put("instanceNo", instanceNo);
+            } catch (Exception e) {
+                entry.put("status", "FAILED");
+                entry.put("error", e.getMessage());
+            }
+            results.add(entry);
+        }
+        return results;
     }
 
     private String approvePendingCatchUpRequest(ConsoleCatchUpApprovalRequest request, String idempotencyKey) {
