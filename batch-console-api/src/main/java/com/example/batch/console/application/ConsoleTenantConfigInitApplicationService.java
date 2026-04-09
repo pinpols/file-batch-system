@@ -16,7 +16,10 @@ public interface ConsoleTenantConfigInitApplicationService {
      *
      * @param request 包含目标租户列表与各类配置模板
      * @param operator 操作人标识（来自认证信息）
+     * @param batchOperationId 批次操作 ID，用于审计关联
      * @return 每个租户的初始化结果汇总
      */
-    TenantConfigBatchInitResponse batchInit(TenantConfigBatchInitRequest request, String operator);
+    TenantConfigBatchInitResponse batchInit(TenantConfigBatchInitRequest request,
+                                             String operator,
+                                             String batchOperationId);
 }

@@ -558,7 +558,19 @@ Deployment note:
 - `POST /api/console/config/tenant-init`
 - Batch-initializes or updates configuration for multiple tenants in one request.
 - Supports two modes: `SKIP_EXISTING` (default, create missing only) and `UPSERT` (create or update).
+- Supports `dryRun` mode: when `true`, performs read and validation only without executing writes.
 - Pushes job definitions, workflow definitions, pipeline definitions, file channels, and file templates.
+- Response includes `batchOperationId` for audit correlation, per-tenant results with per-item details (code, action, errorMessage).
+- Requires `ROLE_ADMIN`.
+- Requires `Idempotency-Key` header.
+
+### Tenant Config Copy
+
+- `POST /api/console/config/tenant-copy`
+- Reads configuration from a source tenant and pushes it to one or more target tenants.
+- Request body: `sourceTenantId`, `targetTenantIds` (max 50), optional `configTypes` (subset of `JOB_DEFINITION`, `WORKFLOW_DEFINITION`, `PIPELINE_DEFINITION`, `FILE_CHANNEL`, `FILE_TEMPLATE`; empty means all), `mode` (default `SKIP_EXISTING`), `dryRun`.
+- Internally reads source tenant's configs and delegates to the tenant-init logic.
+- Response format is identical to `tenant-init`.
 - Requires `ROLE_ADMIN`.
 - Requires `Idempotency-Key` header.
 
