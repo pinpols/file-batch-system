@@ -73,7 +73,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
         when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.successTenants()).isEqualTo(1);
         assertThat(response.results().get(0).jobDefinitions().created()).isEqualTo(1);
@@ -87,7 +87,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         request.setMode(InitMode.SKIP_EXISTING);
         when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(new JobDefinitionEntity());
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).jobDefinitions().skipped()).isEqualTo(1);
         assertThat(response.results().get(0).jobDefinitions().created()).isEqualTo(0);
@@ -103,7 +103,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         existing.setTenantId("t1");
         when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).jobDefinitions().updated()).isEqualTo(1);
         verify(jobDefinitionMapper).updateJobDefinitionMaintenance(any());
@@ -116,7 +116,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         TenantConfigBatchInitRequest request = requestWithChannel("ch-1", List.of("t1"));
         when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1")).thenReturn(null);
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).fileChannels().created()).isEqualTo(1);
         verify(fileChannelConfigMapper).upsertFileChannelConfig(any());
@@ -127,7 +127,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         TenantConfigBatchInitRequest request = requestWithChannel("ch-1", List.of("t1"));
         when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1")).thenReturn(Map.of("id", 1));
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).fileChannels().skipped()).isEqualTo(1);
         verify(fileChannelConfigMapper, never()).upsertFileChannelConfig(any());
@@ -139,7 +139,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         request.setMode(InitMode.UPSERT);
         when(fileChannelConfigMapper.selectByUniqueKey("t1", "ch-1")).thenReturn(Map.of("id", 1));
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).fileChannels().updated()).isEqualTo(1);
         verify(fileChannelConfigMapper).upsertFileChannelConfig(any());
@@ -152,7 +152,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         TenantConfigBatchInitRequest request = requestWithTemplate("tpl-1", List.of("t1"));
         when(fileTemplateConfigMapper.selectByUniqueKey("t1", "tpl-1", 1)).thenReturn(null);
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).fileTemplates().created()).isEqualTo(1);
         verify(fileTemplateConfigMapper).upsertFileTemplateConfig(any());
@@ -163,7 +163,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         TenantConfigBatchInitRequest request = requestWithTemplate("tpl-1", List.of("t1"));
         when(fileTemplateConfigMapper.selectByUniqueKey("t1", "tpl-1", 1)).thenReturn(Map.of("id", 1));
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).fileTemplates().skipped()).isEqualTo(1);
         verify(fileTemplateConfigMapper, never()).upsertFileTemplateConfig(any());
@@ -176,7 +176,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1", "t2", "t3"));
         when(jobDefinitionMapper.selectByUniqueKey(anyString(), eq("job-1"))).thenReturn(null);
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.totalTenants()).isEqualTo(3);
         assertThat(response.successTenants()).isEqualTo(3);
@@ -197,7 +197,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
             return 1;
         });
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         // t1 succeeds with 1 created; t2 has 1 failed item but tenant-level success=true
         assertThat(response.totalTenants()).isEqualTo(2);
@@ -217,7 +217,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
         request.setTargetTenantIds(List.of("t1", "t2"));
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.successTenants()).isEqualTo(2);
         assertThat(response.results()).hasSize(2);
@@ -243,7 +243,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
                 .thenReturn(null)      // first call (check existence) = not found
                 .thenReturn(saved);   // second call (after upsert) = found
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).workflowDefinitions().created()).isEqualTo(1);
         verify(workflowDefinitionMapper).upsertWorkflowDefinition(any());
@@ -256,10 +256,37 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         existing.setId(1L);
         when(workflowDefinitionMapper.selectByUniqueKey("t1", "wf-1", 1)).thenReturn(existing);
 
-        TenantConfigBatchInitResponse response = service.batchInit(request, "admin");
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
         assertThat(response.results().get(0).workflowDefinitions().skipped()).isEqualTo(1);
         verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+    }
+
+    // ------------------------------------------------------------------ dry-run & batchOperationId
+
+    @Test
+    void batchInit_dryRunSkipsAllWrites() {
+        TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+        request.setDryRun(true);
+        when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
+
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-dry-001");
+
+        assertThat(response.dryRun()).isTrue();
+        assertThat(response.batchOperationId()).isEqualTo("batch-dry-001");
+        assertThat(response.results().get(0).jobDefinitions().created()).isEqualTo(1);
+        verify(jobDefinitionMapper, never()).insert(any());
+    }
+
+    @Test
+    void batchInit_returnsBatchOperationId() {
+        TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
+        when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
+
+        TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-abc-123");
+
+        assertThat(response.batchOperationId()).isEqualTo("batch-abc-123");
+        assertThat(response.dryRun()).isFalse();
     }
 
     // ------------------------------------------------------------------ helpers
