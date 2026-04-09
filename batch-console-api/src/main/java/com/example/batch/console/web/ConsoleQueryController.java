@@ -64,6 +64,7 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.model.PageResponse;
 import java.util.Map;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -213,6 +214,14 @@ public class ConsoleQueryController {
     public CommonResponse<ConsoleJobInstanceResponse> instanceDetail(@PathVariable Long id,
                                                                      @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(applicationService.jobInstance(tenantId, id));
+    }
+
+    /** GET /instances/batch-status — 批量查询作业实例状态。 */
+    @GetMapping("/instances/batch-status")
+    public CommonResponse<List<ConsoleJobInstanceResponse>> batchInstanceStatus(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("instanceNos") List<String> instanceNos) {
+        return responseFactory.success(applicationService.batchInstanceStatus(tenantId, instanceNos));
     }
 
     /** GET /job-step-instances — 作业步骤实例。 */

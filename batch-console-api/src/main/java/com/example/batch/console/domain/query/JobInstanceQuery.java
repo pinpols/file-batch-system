@@ -12,6 +12,7 @@ public record JobInstanceQuery(
         String traceId,
         Instant startedFrom,
         Instant startedTo,
+        String sortBy,
         PageRequest pageRequest
 ) {
 }

@@ -39,13 +39,13 @@ bash scripts/ci/run-full-regression.sh --skip-default-tests --skip-it-suite --wi
 
 可用于 Phase 3 演练后的恢复检查：
 
-- `scripts/local/inspect-all.sh`
-- `scripts/local/inspect-db.sh`
-- `scripts/local/inspect-workers.sh`
-- `scripts/local/inspect-observability.sh`
-- `scripts/local/heal-stuck-outbox.sh`
-- `scripts/local/heal-dead-letters.sh`
-- `scripts/local/heal-drain-timeout.sh`
+- `scripts/ops/inspect-all.sh`
+- `scripts/ops/inspect-db.sh`
+- `scripts/ops/inspect-workers.sh`
+- `scripts/ops/inspect-observability.sh`
+- `scripts/ops/heal-stuck-outbox.sh`
+- `scripts/ops/heal-dead-letters.sh`
+- `scripts/ops/heal-drain-timeout.sh`
 
 ## 尚未在当前环境完成的项
 

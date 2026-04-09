@@ -18,6 +18,9 @@ public interface ConsoleFileChannelExcelApplicationService {
     /** 导出文件通道配置为 Excel。 */
     ResponseEntity<InputStreamResource> exportFileChannels(FileChannelQueryRequest request);
 
+    /** 下载空白模板。 */
+    ResponseEntity<InputStreamResource> downloadTemplate();
+
     /** 上传 Excel 并返回 uploadToken。 */
     ConsoleFileChannelExcelUploadResponse upload(MultipartFile file) throws IOException;
 

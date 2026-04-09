@@ -56,6 +56,13 @@ public class ConsoleFileChannelExcelController {
         return applicationService.exportFileChannels(request);
     }
 
+    /** 下载空白模板。 */
+    @GetMapping("/template")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
+    public ResponseEntity<InputStreamResource> template() {
+        return applicationService.downloadTemplate();
+    }
+
     /**
      * 上传 Excel 工作簿，解析后写入服务端临时会话，返回 {@code uploadToken} 供预览与确认。
      *

@@ -160,6 +160,110 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
         Long getCount();
     }
 
+    // ── 配置依赖分析 ──────────────────────────────────────
+
+    @Query("""
+            SELECT id, job_code AS code, job_name AS name
+              FROM batch.job_definition
+             WHERE tenant_id = :tenantId AND queue_code = :configCode
+            """)
+    List<ConfigDependentView> jobsByQueueCode(@Param("tenantId") String tenantId, @Param("configCode") String configCode);
+
+    @Query("""
+            SELECT id, job_code AS code, job_name AS name
+              FROM batch.job_definition
+             WHERE tenant_id = :tenantId AND calendar_code = :configCode
+            """)
+    List<ConfigDependentView> jobsByCalendarCode(@Param("tenantId") String tenantId, @Param("configCode") String configCode);
+
+    @Query("""
+            SELECT id, job_code AS code, job_name AS name
+              FROM batch.job_definition
+             WHERE tenant_id = :tenantId AND window_code = :configCode
+            """)
+    List<ConfigDependentView> jobsByWindowCode(@Param("tenantId") String tenantId, @Param("configCode") String configCode);
+
+    @Query("""
+            SELECT id, job_code AS code, job_name AS name
+              FROM batch.job_definition
+             WHERE tenant_id = :tenantId AND worker_group = :configCode
+            """)
+    List<ConfigDependentView> jobsByWorkerGroup(@Param("tenantId") String tenantId, @Param("configCode") String configCode);
+
+    interface ConfigDependentView {
+        Long getId();
+        String getCode();
+        String getName();
+    }
+
+    // ── 执行进度查询（轻量） ──────────────────────────────
+
+    @Query("""
+            SELECT i.id,
+                   i.job_code AS jobCode,
+                   i.instance_no AS instanceNo,
+                   i.instance_status AS instanceStatus,
+                   i.expected_partition_count AS expectedPartitions,
+                   i.success_partition_count AS successPartitions,
+                   i.failed_partition_count AS failedPartitions,
+                   i.started_at AS startedAt,
+                   i.finished_at AS finishedAt
+              FROM batch.job_instance i
+             WHERE i.tenant_id = :tenantId
+               AND i.job_code = :jobCode
+               AND i.biz_date = CAST(:bizDate AS DATE)
+             ORDER BY i.id DESC
+            """)
+    List<ExecutionProgressView> executionProgress(@Param("tenantId") String tenantId,
+                                                  @Param("jobCode") String jobCode,
+                                                  @Param("bizDate") String bizDate);
+
+    interface ExecutionProgressView {
+        Long getId();
+        String getJobCode();
+        String getInstanceNo();
+        String getInstanceStatus();
+        Integer getExpectedPartitions();
+        Integer getSuccessPartitions();
+        Integer getFailedPartitions();
+        java.time.Instant getStartedAt();
+        java.time.Instant getFinishedAt();
+    }
+
+    // ── 租户用量统计 ──────────────────────────────────────
+
+    @Query("""
+            SELECT count(1) AS count FROM batch.job_definition WHERE tenant_id = :tenantId
+            """)
+    Long countJobDefinitions(@Param("tenantId") String tenantId);
+
+    @Query("""
+            SELECT count(1) AS count FROM batch.job_instance
+             WHERE tenant_id = :tenantId AND created_at >= current_date - :days
+            """)
+    Long countRecentJobInstances(@Param("tenantId") String tenantId, @Param("days") int days);
+
+    @Query("""
+            SELECT count(1) AS count FROM batch.workflow_definition WHERE tenant_id = :tenantId
+            """)
+    Long countWorkflowDefinitions(@Param("tenantId") String tenantId);
+
+    @Query("""
+            SELECT count(1) AS count FROM batch.file_record
+             WHERE tenant_id = :tenantId AND created_at >= current_date - :days
+            """)
+    Long countRecentFiles(@Param("tenantId") String tenantId, @Param("days") int days);
+
+    @Query("""
+            SELECT count(1) AS count FROM batch.file_channel_config WHERE tenant_id = :tenantId
+            """)
+    Long countFileChannels(@Param("tenantId") String tenantId);
+
+    @Query("""
+            SELECT count(1) AS count FROM batch.file_template_config WHERE tenant_id = :tenantId
+            """)
+    Long countFileTemplates(@Param("tenantId") String tenantId);
+
     interface SlaStatsView {
         Long getBreached();
         Long getOnTime();

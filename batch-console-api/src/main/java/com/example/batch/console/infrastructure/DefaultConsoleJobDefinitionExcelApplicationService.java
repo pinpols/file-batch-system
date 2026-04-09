@@ -134,6 +134,15 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
     }
 
     @Override
+    public ResponseEntity<InputStreamResource> downloadTemplate() {
+        byte[] workbookBytes = writeWorkbook(List.of());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename("job-definition-maintenance-template.xlsx").build().toString())
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
+    }
+
+    @Override
     public ConsoleJobDefinitionExcelUploadResponse upload(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "file is required");

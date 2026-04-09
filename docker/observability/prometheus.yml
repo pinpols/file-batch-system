@@ -6,35 +6,14 @@ rule_files:
   - /etc/prometheus/rules/batch.yml
 
 scrape_configs:
-  - job_name: batch-console-api
+  # Java 应用：由 prometheus-entrypoint.sh 根据 BATCH_DEPLOY_MODE 自动生成 targets 文件
+  #   container 模式 → 容器名:容器端口（Docker 网络内直连）
+  #   local 模式     → host.docker.internal:宿主机端口
+  - job_name: batch-apps
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ['console-api:8080']
-
-  - job_name: batch-trigger
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ['trigger:8081']
-
-  - job_name: batch-orchestrator
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ['orchestrator:8082']
-
-  - job_name: batch-worker-import
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ['worker-import:8083']
-
-  - job_name: batch-worker-export
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ['worker-export:8084']
-
-  - job_name: batch-worker-dispatch
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ['worker-dispatch:8085']
+    file_sd_configs:
+      - files: ['/etc/prometheus/targets/app-targets.json']
+        refresh_interval: 30s
 
   - job_name: redis-exporter
     static_configs:

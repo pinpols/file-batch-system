@@ -12,7 +12,7 @@
 PGHOST=localhost PGPORT=15432 PGDATABASE=batch_platform PGUSER=batch_user PGPASSWORD=batch_pass_123 \
 BATCH_OBSERVABILITY_BASE_URLS=http://localhost:18080,http://localhost:18081,http://localhost:18082 \
 BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
-  bash scripts/local/inspect-all.sh
+  bash scripts/ops/inspect-all.sh
 ```
 
 生产 / K8s 请改为实际主机与服务端口（集群内 Kafka 常为 `:9092`，与宿主机映射无关）。
@@ -23,17 +23,17 @@ BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
 
 | 脚本 | 检查内容 | 跳过环境变量 |
 |---|---|---|
-| `scripts/local/inspect-observability.sh` | 服务 health、Prometheus 指标、Kafka consumer lag、Redis/Postgres/Kafka/MinIO exporter 指标 | `BATCH_INSPECT_SKIP_OBSERVABILITY=true` |
-| `scripts/local/inspect-db.sh` | Flyway 历史、告警事件、卡死作业、Outbox 积压、死信积压、重试积压 | `BATCH_INSPECT_SKIP_DB=true` |
-| `scripts/local/inspect-workers.sh` | DRAINING 超时、心跳失联、孤儿任务 | `BATCH_INSPECT_SKIP_WORKERS=true` |
+| `scripts/ops/inspect-observability.sh` | 服务 health、Prometheus 指标、Kafka consumer lag、Redis/Postgres/Kafka/MinIO exporter 指标 | `BATCH_INSPECT_SKIP_OBSERVABILITY=true` |
+| `scripts/ops/inspect-db.sh` | Flyway 历史、告警事件、卡死作业、Outbox 积压、死信积压、重试积压 | `BATCH_INSPECT_SKIP_DB=true` |
+| `scripts/ops/inspect-workers.sh` | DRAINING 超时、心跳失联、孤儿任务 | `BATCH_INSPECT_SKIP_WORKERS=true` |
 
 ## 自愈脚本（发现异常后执行）
 
 | 脚本 | 适用场景 | 安全说明 |
 |---|---|---|
-| `scripts/local/heal-drain-timeout.sh` | inspect-workers 报告 DRAINING 超时 Worker | 默认 dry-run；`BATCH_HEAL_DRY_RUN=false` 才实际执行 |
-| `scripts/local/heal-dead-letters.sh` | 死信积压 > 阈值，需批量重放 | 默认 dry-run；可按 tenant/source_type 过滤 |
-| `scripts/local/heal-stuck-outbox.sh` | Outbox 积压长期不消费（Kafka 恢复后 Orchestrator 未重启） | 默认 dry-run；重置 retry_count 触发重发 |
+| `scripts/ops/heal-drain-timeout.sh` | inspect-workers 报告 DRAINING 超时 Worker | 默认 dry-run；`BATCH_HEAL_DRY_RUN=false` 才实际执行 |
+| `scripts/ops/heal-dead-letters.sh` | 死信积压 > 阈值，需批量重放 | 默认 dry-run；可按 tenant/source_type 过滤 |
+| `scripts/ops/heal-stuck-outbox.sh` | Outbox 积压长期不消费（Kafka 恢复后 Orchestrator 未重启） | 默认 dry-run；重置 retry_count 触发重发 |
 
 ## 检查项说明
 

@@ -47,6 +47,13 @@ public class ConsoleWorkflowExcelController {
         return applicationService.exportWorkflowExcel(request);
     }
 
+    /** 下载空白模板。 */
+    @GetMapping("/template")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
+    public ResponseEntity<InputStreamResource> template() {
+        return applicationService.downloadTemplate();
+    }
+
     /** 上传 Excel，返回临时 uploadToken。 */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")

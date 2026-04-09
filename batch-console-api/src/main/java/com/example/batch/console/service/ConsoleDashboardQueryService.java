@@ -86,6 +86,46 @@ public class ConsoleDashboardQueryService {
         return result;
     }
 
+    public List<Map<String, Object>> executionProgress(String tenantId, String jobCode, String bizDate) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        return repository.executionProgress(resolved, jobCode, bizDate).stream().map(row -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", row.getId());
+            item.put("jobCode", row.getJobCode());
+            item.put("instanceNo", row.getInstanceNo());
+            item.put("instanceStatus", row.getInstanceStatus());
+            int expected = row.getExpectedPartitions() == null ? 0 : row.getExpectedPartitions();
+            int success = row.getSuccessPartitions() == null ? 0 : row.getSuccessPartitions();
+            int failed = row.getFailedPartitions() == null ? 0 : row.getFailedPartitions();
+            item.put("expectedPartitions", expected);
+            item.put("successPartitions", success);
+            item.put("failedPartitions", failed);
+            item.put("completedPartitions", success + failed);
+            item.put("progressPercent", expected > 0 ? Math.round((success + failed) * 100.0 / expected) : 0);
+            item.put("startedAt", row.getStartedAt());
+            item.put("finishedAt", row.getFinishedAt());
+            return item;
+        }).toList();
+    }
+
+    public Map<String, Object> tenantUsage(String tenantId, int days) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("tenantId", resolved);
+        result.put("jobDefinitions", nullToZero(repository.countJobDefinitions(resolved)));
+        result.put("workflowDefinitions", nullToZero(repository.countWorkflowDefinitions(resolved)));
+        result.put("fileChannels", nullToZero(repository.countFileChannels(resolved)));
+        result.put("fileTemplates", nullToZero(repository.countFileTemplates(resolved)));
+        result.put("recentJobInstances", nullToZero(repository.countRecentJobInstances(resolved, days)));
+        result.put("recentFiles", nullToZero(repository.countRecentFiles(resolved, days)));
+        result.put("periodDays", days);
+        return result;
+    }
+
+    private long nullToZero(Long value) {
+        return value == null ? 0L : value;
+    }
+
     public Map<String, Object> slaCompliance(String tenantId, int days) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         Map<String, Object> result = new LinkedHashMap<>();

@@ -11,7 +11,7 @@
 # 使用方法：
 #   MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin123 \
 #   MINIO_ENDPOINT=http://localhost:19000 \
-#     bash scripts/local/init-minio.sh
+#     bash scripts/data/init-minio.sh
 set -eu
 
 alias_name="${MINIO_ALIAS_NAME:-local}"

@@ -15,6 +15,10 @@ import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -39,12 +43,24 @@ public class ConsoleJobController {
     private final ConsoleJobApplicationService applicationService;
     private final ConsoleResponseFactory responseFactory;
 
-    /** 手工触发作业运行（所有已认证用户均可触发）。 */
+    /** 手工触发作业运行（所有已认证用户均可触发）。dryRun=true 时仅校验不执行。 */
     @PostMapping("/trigger")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<String> trigger(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-                                          @Valid @RequestBody TriggerRequest request) {
+    public CommonResponse<?> trigger(@RequestHeader(value = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
+                                     @Valid @RequestBody TriggerRequest request) {
+        if (request.isDryRun()) {
+            return responseFactory.success(applicationService.dryRunTrigger(request));
+        }
         return responseFactory.success(applicationService.trigger(request, idempotencyKey));
+    }
+
+    /** 批量触发多个作业。 */
+    @PostMapping("/batch-trigger")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
+    public CommonResponse<List<Map<String, Object>>> batchTrigger(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @RequestBody @NotEmpty @Size(max = 50) List<@Valid TriggerRequest> items) {
+        return responseFactory.success(applicationService.batchTrigger(items, idempotencyKey));
     }
 
     /** 登记补偿命令。 */

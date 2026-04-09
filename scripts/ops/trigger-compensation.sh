@@ -8,7 +8,7 @@
 #
 # 使用方法：
 #   # dry-run（默认）
-#   bash scripts/local/trigger-compensation.sh
+#   bash scripts/ops/trigger-compensation.sh
 #
 #   # 实际执行
 #   BATCH_CONSOLE_URL=http://localhost:8080 \
@@ -16,7 +16,7 @@
 #   BATCH_COMPENSATION_DRY_RUN=false \
 #   BATCH_COMPENSATION_IDEMPOTENCY_KEY=cmp-001 \
 #   BATCH_COMPENSATION_JSON='{"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27","compensationType":"JOB","targetId":123,"reason":"manual compensate","operatorId":"ops-user"}' \
-#   bash scripts/local/trigger-compensation.sh
+#   bash scripts/ops/trigger-compensation.sh
 #
 # 注意：
 # - compensate 接口存在字段校验（例如 jobCode/bizDate/compensationType/targetId），JSON 需满足校验要求。

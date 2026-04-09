@@ -7,9 +7,17 @@
 # ============================================================
 
 # ------------------------------------------------------------------
+# 优雅停机（所有服务模块共用）
+# ------------------------------------------------------------------
+server:
+  shutdown: graceful
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: ${BATCH_SHUTDOWN_TIMEOUT:30s}
+
+# ------------------------------------------------------------------
 # 平台数据库（Platform PostgreSQL，所有服务模块共用）
 # ------------------------------------------------------------------
-spring:
   datasource:
     # 平台库 JDBC URL（所有服务模块共用）
     url: ${BATCH_PLATFORM_DB_URL:jdbc:postgresql://localhost:15432/batch_platform}
@@ -62,7 +70,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,loggers
   endpoint:
     health:
       probes:

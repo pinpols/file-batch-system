@@ -7,4 +7,4 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
 
-bash "$ROOT/scripts/local/inspect-observability.sh" "$@"
+bash "$ROOT/scripts/ops/inspect-observability.sh" "$@"

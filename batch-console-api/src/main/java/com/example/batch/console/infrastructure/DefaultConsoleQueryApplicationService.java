@@ -224,6 +224,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
+    public java.util.List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, java.util.List<String> instanceNos) {
+        return jobQueryService.batchInstanceStatus(tenantId, instanceNos);
+    }
+
+    @Override
     public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request) {
         return jobQueryService.jobStepInstances(request);
     }

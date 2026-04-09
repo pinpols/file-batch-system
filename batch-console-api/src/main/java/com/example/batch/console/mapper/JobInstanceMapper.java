@@ -16,4 +16,7 @@ public interface JobInstanceMapper {
     long countByStatuses(@Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 
     long countSlaBreaches(@Param("tenantId") String tenantId, @Param("activeStatuses") List<String> activeStatuses);
+
+    List<JobInstanceEntity> selectByInstanceNos(@Param("tenantId") String tenantId,
+                                                @Param("instanceNos") List<String> instanceNos);
 }

@@ -18,6 +18,9 @@ public interface ConsoleFileTemplateExcelApplicationService {
     /** 导出文件模板配置为 Excel。 */
     ResponseEntity<InputStreamResource> exportFileTemplates(FileTemplateQueryRequest request);
 
+    /** 下载空白模板。 */
+    ResponseEntity<InputStreamResource> downloadTemplate();
+
     /** 上传 Excel 并返回 uploadToken。 */
     ConsoleFileTemplateExcelUploadResponse upload(MultipartFile file) throws IOException;
 

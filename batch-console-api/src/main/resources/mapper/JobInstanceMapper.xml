@@ -54,7 +54,14 @@
         <if test="startedTo != null">
             and started_at &lt;= #{startedTo}
         </if>
-        order by id desc
+        <choose>
+            <when test="sortBy == 'duration'">
+                order by (coalesce(finished_at, current_timestamp) - coalesce(started_at, created_at)) desc
+            </when>
+            <otherwise>
+                order by id desc
+            </otherwise>
+        </choose>
         <if test="pageRequest != null">
             <bind name="offset" value="(pageRequest.pageNo - 1) * pageRequest.pageSize"/>
             limit #{pageRequest.pageSize}
@@ -116,5 +123,16 @@
         <foreach collection="activeStatuses" item="status" open="(" close=")" separator=",">
             #{status}
         </foreach>
+    </select>
+
+    <select id="selectByInstanceNos" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and instance_no in
+        <foreach collection="instanceNos" item="no" open="(" close=")" separator=",">
+            #{no}
+        </foreach>
+        order by id desc
     </select>
 </mapper>

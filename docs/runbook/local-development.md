@@ -23,8 +23,8 @@
 - `.env.prod`：生产环境模板变量
 - `docker/postgres/init/000-create-business-db.sql`：业务库与业务 schema 初始化
 - `docker/postgres/init/001-create-schemas.sql`：数据库 schema 初始化
-- `scripts/local/init-kafka-topics.sh`：Kafka Topic 初始化
-- `scripts/local/init-minio.sh`：MinIO bucket 初始化
+- `scripts/data/init-kafka-topics.sh`：Kafka Topic 初始化
+- `scripts/data/init-minio.sh`：MinIO bucket 初始化
 - `scripts/local/build-apps.sh`：单独打包本地 Java 应用模块
 - `scripts/local/start-all.sh`：一键启动本地依赖 + Java 模块
 - `scripts/local/stop-all.sh`：停止本地 Java 模块，可选停止 Docker 依赖（只 stop，不 down）

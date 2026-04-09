@@ -10,7 +10,7 @@
 #
 # 使用方法：
 #   PGHOST=localhost PGPORT=15432 PGDATABASE=batch_platform PGUSER=batch_user \
-#     PGPASSWORD=secret bash scripts/local/inspect-db.sh
+#     PGPASSWORD=secret bash scripts/ops/inspect-db.sh
 #
 # 全部可配置环境变量见下方 "configuration" 节。
 

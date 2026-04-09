@@ -177,7 +177,8 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - `preview` must be a read-only check; it may validate and summarize rows, but it must not persist anything.
 - `apply` must take the `uploadToken` in the path and the idempotency key header in the request headers.
 - `export` remains a raw `.xlsx` download, not a JSON response.
-- `file template config`, `file channel config`, and `workflow definition / node / edge` are the first-class editable domains.
+- Each importable object also provides `GET /template` for downloading a blank template (for first-time import with no existing data).
+- `file template config`, `file channel config`, `workflow definition / node / edge`, `job definition`, and `alert routing / notification policy` are the first-class editable domains.
 - Excel templates must be user-facing edit forms, not raw database dumps.
 - The main sheet should use frozen headers, required-field highlighting, enum dropdowns where practical, sample values, and automatic column sizing.
 - A workbook should include a concise instruction sheet and, where useful, a dictionary sheet for enum values and a validation sheet for preview errors.
@@ -521,26 +522,36 @@ Deployment note:
 - `GET /api/console/config/secrets/{secretVersionId}`
 - `POST /api/console/config/secrets/rotate`
 - `GET /api/console/config/change-logs`
+- `GET /api/console/config/file-templates/excel/template`
 - `GET /api/console/config/file-templates/excel/export`
 - `POST /api/console/config/file-templates/excel/upload`
 - `GET /api/console/config/file-templates/excel/preview/{uploadToken}`
 - `POST /api/console/config/file-templates/excel/apply/{uploadToken}`
+- `GET /api/console/config/file-channels/excel/template`
 - `GET /api/console/config/file-channels/excel/export`
 - `POST /api/console/config/file-channels/excel/upload`
 - `GET /api/console/config/file-channels/excel/preview/{uploadToken}`
 - `POST /api/console/config/file-channels/excel/apply/{uploadToken}`
+- `GET /api/console/config/workflows/excel/template`
 - `GET /api/console/config/workflows/excel/export`
 - `POST /api/console/config/workflows/excel/upload`
 - `GET /api/console/config/workflows/excel/preview/{uploadToken}`
 - `POST /api/console/config/workflows/excel/apply/{uploadToken}`
+- `GET /api/console/config/job-definitions/excel/template`
 - `GET /api/console/config/job-definitions/excel/export`
 - `POST /api/console/config/job-definitions/excel/upload`
 - `GET /api/console/config/job-definitions/excel/preview/{uploadToken}`
 - `POST /api/console/config/job-definitions/excel/apply/{uploadToken}`
+- `GET /api/console/config/alert-routings/excel/template`
+- `GET /api/console/config/alert-routings/excel/export`
+- `POST /api/console/config/alert-routings/excel/upload`
+- `GET /api/console/config/alert-routings/excel/preview/{uploadToken}`
+- `POST /api/console/config/alert-routings/excel/apply/{uploadToken}`
 - Config list views should use typed response DTOs for releases, secrets, and change logs.
-- Excel maintenance for `file template config` and `file channel config` follows the dedicated adapter flow: upload, preview, apply, then export.
+- Excel maintenance for `file template config` and `file channel config` follows the dedicated adapter flow: template, upload, preview, apply, then export.
 - Excel maintenance for `workflow definition / node / edge` follows the same dedicated adapter flow and keeps definition, node, and edge sheets aligned by workflow code + version.
 - Excel maintenance for the safe subset of `job definition` follows the same dedicated adapter flow, but only allows white-listed mutable columns and update-only apply semantics.
+- Excel maintenance for `alert routing / notification policy` follows the same dedicated adapter flow, aligning with Alertmanager route semantics.
 - Export workbooks for editable Excel flows must stay as recoverable templates: data sheet first, then README / DICT / VALIDATION sheets, so users can edit and re-upload the same file family.
 - `GET /api/console/reports/excel/config-releases`
 - `GET /api/console/reports/excel/secrets`

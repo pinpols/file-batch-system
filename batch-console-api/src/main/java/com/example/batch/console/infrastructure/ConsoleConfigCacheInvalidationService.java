@@ -17,6 +17,10 @@ public class ConsoleConfigCacheInvalidationService {
         evictAfterCommit(configKey(tenantId, "job-definition", jobCode));
     }
 
+    public void evictAllJobDefinitions(String tenantId) {
+        evictByPatternAfterCommit("config:%s:job-definition:*".formatted(safe(tenantId)));
+    }
+
     public void evictWorkflowDefinition(String tenantId, String workflowCode) {
         evictAfterCommit(configKey(tenantId, "workflow-definition", workflowCode));
     }
@@ -31,6 +35,28 @@ public class ConsoleConfigCacheInvalidationService {
 
     public void evictQuotaPolicies(String tenantId) {
         evictAfterCommit(configKey(tenantId, "tenant-quota-policy", "enabled-first"));
+    }
+
+    private void evictByPatternAfterCommit(String pattern) {
+        if (!StringUtils.hasText(pattern)) {
+            return;
+        }
+        Runnable evict = () -> {
+            var keys = redisTemplate.keys(pattern);
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    evict.run();
+                }
+            });
+            return;
+        }
+        evict.run();
     }
 
     private void evictAfterCommit(String key) {

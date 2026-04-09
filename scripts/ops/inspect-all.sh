@@ -13,18 +13,18 @@
 #   # 最小配置（DB 巡检 + 服务巡检）
 #   PGHOST=localhost PGPORT=15432 PGDATABASE=batch_db PGUSER=batch PGPASSWORD=secret \
 #   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:8080,http://localhost:8082 \
-#     bash scripts/local/inspect-all.sh
+#     bash scripts/ops/inspect-all.sh
 #
 #   # 完整配置（含 Kafka lag）
 #   PGHOST=... PGPASSWORD=... \
 #   BATCH_OBSERVABILITY_BASE_URLS=http://localhost:8080,http://localhost:8082 \
 #   BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
-#     bash scripts/local/inspect-all.sh
+#     bash scripts/ops/inspect-all.sh
 #
 #   # 仅巡检（跳过某个脚本）
-#   BATCH_INSPECT_SKIP_OBSERVABILITY=true bash scripts/local/inspect-all.sh
-#   BATCH_INSPECT_SKIP_DB=true           bash scripts/local/inspect-all.sh
-#   BATCH_INSPECT_SKIP_WORKERS=true      bash scripts/local/inspect-all.sh
+#   BATCH_INSPECT_SKIP_OBSERVABILITY=true bash scripts/ops/inspect-all.sh
+#   BATCH_INSPECT_SKIP_DB=true           bash scripts/ops/inspect-all.sh
+#   BATCH_INSPECT_SKIP_WORKERS=true      bash scripts/ops/inspect-all.sh
 #
 # 输出格式：
 #   每个脚本的输出以 banner 分隔，最后打印汇总表。

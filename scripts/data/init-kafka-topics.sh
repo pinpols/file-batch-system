@@ -13,7 +13,7 @@
 # 使用方法：
 #   KAFKA_BOOTSTRAP_SERVER=localhost:19092 \
 #   KAFKA_TOPICS=batch.task.dispatch.import,batch.task.result \
-#     bash scripts/local/init-kafka-topics.sh
+#     bash scripts/data/init-kafka-topics.sh
 #
 # 生产环境配置示例（10 实例 × 4 并发，3 节点 Kafka 集群）：
 #   KAFKA_TOPIC_REPLICATION_FACTOR=3

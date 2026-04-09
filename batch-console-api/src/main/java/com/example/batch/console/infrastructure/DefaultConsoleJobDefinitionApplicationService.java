@@ -120,6 +120,15 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     }
 
     @Override
+    public int batchToggle(String tenantId, java.util.List<Long> ids, Boolean enabled) {
+        String resolved = tenantGuard.resolveTenant(tenantId);
+        String operator = requestMetadataResolver.current().operatorId();
+        int rows = jobDefinitionMapper.batchToggleEnabled(resolved, ids, enabled, operator);
+        cacheInvalidationService.evictAllJobDefinitions(resolved);
+        return rows;
+    }
+
+    @Override
     public void delete(Long id, String tenantId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         JobDefinitionEntity existing = jobDefinitionMapper.selectById(resolved, id);

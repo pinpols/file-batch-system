@@ -104,6 +104,14 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.4.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

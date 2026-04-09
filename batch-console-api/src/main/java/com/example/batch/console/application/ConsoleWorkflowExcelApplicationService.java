@@ -18,6 +18,9 @@ public interface ConsoleWorkflowExcelApplicationService {
     /** 按筛选条件导出工作流定义为 Excel 流。 */
     ResponseEntity<InputStreamResource> exportWorkflowExcel(WorkflowDefinitionQueryRequest request);
 
+    /** 下载空白模板。 */
+    ResponseEntity<InputStreamResource> downloadTemplate();
+
     /** 上传 Excel 并生成临时 uploadToken。 */
     ConsoleWorkflowExcelUploadResponse upload(MultipartFile file) throws IOException;
 
