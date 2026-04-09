@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
+import java.time.Instant;
 import org.apache.ibatis.annotations.Param;
 
 public interface DeadLetterTaskMapper {
@@ -19,13 +20,13 @@ public interface DeadLetterTaskMapper {
                           @Param("id") Long id,
                           @Param("successStatus") String successStatus,
                           @Param("replayCount") Integer replayCount,
-                          @Param("lastReplayAt") java.time.Instant lastReplayAt,
+                          @Param("lastReplayAt") Instant lastReplayAt,
                           @Param("lastReplayResult") String lastReplayResult);
 
     int markReplayFailure(@Param("tenantId") String tenantId,
                           @Param("id") Long id,
                           @Param("targetStatus") String targetStatus,
                           @Param("replayCount") Integer replayCount,
-                          @Param("lastReplayAt") java.time.Instant lastReplayAt,
+                          @Param("lastReplayAt") Instant lastReplayAt,
                           @Param("lastReplayResult") String lastReplayResult);
 }

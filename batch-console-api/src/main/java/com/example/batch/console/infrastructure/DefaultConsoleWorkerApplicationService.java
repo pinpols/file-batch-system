@@ -11,6 +11,7 @@ import com.example.batch.console.web.request.ForceOfflineWorkerRequest;
 import com.example.batch.console.web.response.ConsoleWorkerClaimedTaskResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,7 +99,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
         String resolved = tenantGuard.resolveTenant(tenantId);
         ConsoleRequestMetadata meta = requestMetadataResolver.current();
         RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-        List<com.example.batch.orchestrator.domain.entity.JobTaskEntity> tasks = client.get()
+        List<JobTaskEntity> tasks = client.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/internal/workers/{workerCode}/claimed-tasks")
                         .queryParam("tenantId", resolved)
@@ -106,7 +107,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
                 .retrieve()
-                .body(new ParameterizedTypeReference<List<com.example.batch.orchestrator.domain.entity.JobTaskEntity>>() {
+                .body(new ParameterizedTypeReference<List<JobTaskEntity>>() {
                 });
         return tasks == null ? List.of() : tasks.stream().map(this::toResponse).toList();
     }
@@ -115,7 +116,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
         return response;
     }
 
-    private ConsoleWorkerClaimedTaskResponse toResponse(com.example.batch.orchestrator.domain.entity.JobTaskEntity task) {
+    private ConsoleWorkerClaimedTaskResponse toResponse(JobTaskEntity task) {
         if (task == null) {
             return null;
         }

@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.preprocess;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.worker.imports.domain.ImportPayload;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -108,8 +109,8 @@ class ImportPreprocessPipelineRsaTest {
 
     @Test
     void shouldPassVerification_signatureViaPayloadMetadata() {
-        com.example.batch.worker.imports.domain.ImportPayload payload =
-                new com.example.batch.worker.imports.domain.ImportPayload(
+        ImportPayload payload =
+                new ImportPayload(
                         null, null, null, null, "JSON", null, null, null, null,
                         null, null, null, null, null, null, null,
                         null, null, null, null, null, null,

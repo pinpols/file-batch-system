@@ -4,6 +4,7 @@ import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.domain.TriggerStatusInfo;
 import com.example.batch.trigger.support.TriggerDescriptor;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -102,8 +103,8 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
                 List<? extends Trigger> triggers = scheduler.getTriggersOfJob(jobKey);
                 String status = "UNKNOWN";
-                java.time.Instant prevFire = null;
-                java.time.Instant nextFire = null;
+                Instant prevFire = null;
+                Instant nextFire = null;
                 if (!triggers.isEmpty()) {
                     Trigger t = triggers.get(0);
                     Trigger.TriggerState state = scheduler.getTriggerState(t.getKey());

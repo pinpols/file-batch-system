@@ -9,6 +9,7 @@ import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCac
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
@@ -77,7 +78,7 @@ public class BatchDayCutoffScheduler {
         }
     }
 
-    private Instant resolveCutoffAt(String tenantId, String calendarCode, java.time.LocalDate bizDate) {
+    private Instant resolveCutoffAt(String tenantId, String calendarCode, LocalDate bizDate) {
         BusinessCalendarRecord calendar = configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
         if (calendar == null) {
             return null;

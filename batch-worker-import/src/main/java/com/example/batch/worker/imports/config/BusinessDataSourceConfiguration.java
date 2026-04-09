@@ -4,18 +4,18 @@ import com.example.batch.common.config.BusinessDataSourceProperties;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.beans.factory.annotation.Qualifier;
 
-@Configuration("importWorkerBusinessDataSourceConfiguration")
+@org.springframework.context.annotation.Configuration("importWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties(BusinessDataSourceProperties.class)
 public class BusinessDataSourceConfiguration {
 
@@ -47,7 +47,7 @@ public class BusinessDataSourceConfiguration {
         if (businessMappers.length > 0) {
             factoryBean.setMapperLocations(businessMappers);
         }
-        org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
+        Configuration configuration = new Configuration();
         configuration.setMapUnderscoreToCamelCase(true);
         factoryBean.setConfiguration(configuration);
         return factoryBean.getObject();

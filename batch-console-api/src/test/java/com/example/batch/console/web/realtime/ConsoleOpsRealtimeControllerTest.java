@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.console.infrastructure.realtime.ConsoleOpsSummaryRealtimeStream;
+import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import java.time.Instant;
@@ -29,7 +30,7 @@ class ConsoleOpsRealtimeControllerTest {
     @BeforeEach
     void setUp() {
         ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(
-                new com.example.batch.console.service.ConsoleResponseFactory(requestMetadataResolver),
+                new ConsoleResponseFactory(requestMetadataResolver),
                 new BatchSecurityProperties());
 
         when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));

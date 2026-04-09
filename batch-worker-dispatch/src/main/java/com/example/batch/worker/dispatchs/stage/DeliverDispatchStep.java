@@ -10,6 +10,7 @@ import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -73,7 +74,7 @@ public class DeliverDispatchStep implements DispatchStageStep {
         context.getAttributes().put("externalRequestId", dispatchResult.externalRequestId());
         context.getAttributes().put("receiptCode", dispatchResult.receiptCode());
         context.getAttributes().put("receiptStatus", dispatchResult.acknowledged() ? "SUCCESS" : dispatchResult.receiptPending() ? "PENDING" : "NONE");
-        Map<String, Object> fileMetadata = new java.util.LinkedHashMap<>();
+        Map<String, Object> fileMetadata = new LinkedHashMap<>();
         fileMetadata.put("channelCode", dispatchPayload.channelCode());
         if (dispatchResult.externalRequestId() != null) {
             fileMetadata.put("externalRequestId", dispatchResult.externalRequestId());

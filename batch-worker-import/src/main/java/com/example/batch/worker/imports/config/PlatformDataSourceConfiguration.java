@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.config;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
@@ -11,12 +12,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
-@Configuration
+@org.springframework.context.annotation.Configuration
 @EnableConfigurationProperties(DataSourceProperties.class)
 public class PlatformDataSourceConfiguration {
 
@@ -50,7 +50,7 @@ public class PlatformDataSourceConfiguration {
         if (platformMappers.length > 0) {
             factoryBean.setMapperLocations(platformMappers);
         }
-        org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
+        Configuration configuration = new Configuration();
         configuration.setMapUnderscoreToCamelCase(true);
         factoryBean.setConfiguration(configuration);
         return factoryBean.getObject();

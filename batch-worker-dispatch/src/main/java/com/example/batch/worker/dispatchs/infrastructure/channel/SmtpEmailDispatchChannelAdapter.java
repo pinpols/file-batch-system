@@ -3,6 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import jakarta.activation.DataHandler;
 import jakarta.activation.FileDataSource;
+import jakarta.activation.FileTypeMap;
 import jakarta.mail.Message;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
@@ -10,6 +11,7 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
+import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -220,7 +222,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         }
     }
 
-    private static final class SingleMimeTypeFileTypeMap extends jakarta.activation.FileTypeMap {
+    private static final class SingleMimeTypeFileTypeMap extends FileTypeMap {
 
         private final String mimeType;
 
@@ -229,7 +231,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         }
 
         @Override
-        public String getContentType(java.io.File file) {
+        public String getContentType(File file) {
             return mimeType;
         }
 

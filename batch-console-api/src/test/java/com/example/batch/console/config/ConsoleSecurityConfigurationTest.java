@@ -6,8 +6,10 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.console.support.ConsoleAuthenticationFilter;
 import com.example.batch.console.support.ConsoleJwtService;
-import com.example.batch.console.support.ConsoleSessionRegistry;
 import com.example.batch.console.support.ConsolePrincipal;
+import com.example.batch.console.support.ConsoleSessionRegistry;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 import com.example.batch.console.support.ConsoleSecurityResponseWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -98,11 +100,11 @@ class ConsoleSecurityConfigurationTest {
 
         filter.doFilter(request, response, new FilterChain() {
             @Override
-            public void doFilter(jakarta.servlet.ServletRequest servletRequest, jakarta.servlet.ServletResponse servletResponse) {
+            public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
                 chainCalled.set(true);
                 assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
-                com.example.batch.console.support.ConsolePrincipal principal =
-                        (com.example.batch.console.support.ConsolePrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+                ConsolePrincipal principal =
+                        (ConsolePrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
                 assertThat(principal.username()).isEqualTo("alice");
                 assertThat(principal.tenantId()).isEqualTo(properties.getDefaultTenantId());
             }
@@ -122,10 +124,10 @@ class ConsoleSecurityConfigurationTest {
 
         filter.doFilter(request, response, new FilterChain() {
             @Override
-            public void doFilter(jakarta.servlet.ServletRequest servletRequest, jakarta.servlet.ServletResponse servletResponse) {
+            public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
                 chainCalled.set(true);
-                com.example.batch.console.support.ConsolePrincipal principal =
-                        (com.example.batch.console.support.ConsolePrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+                ConsolePrincipal principal =
+                        (ConsolePrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
                 assertThat(principal.authorities()).contains("ROLE_ADMIN");
             }
         });
@@ -147,10 +149,10 @@ class ConsoleSecurityConfigurationTest {
 
         filter.doFilter(request, response, new FilterChain() {
             @Override
-            public void doFilter(jakarta.servlet.ServletRequest servletRequest, jakarta.servlet.ServletResponse servletResponse) {
+            public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
                 chainCalled.set(true);
-                com.example.batch.console.support.ConsolePrincipal principal =
-                        (com.example.batch.console.support.ConsolePrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+                ConsolePrincipal principal =
+                        (ConsolePrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
                 assertThat(principal.username()).isEqualTo("bob");
                 assertThat(principal.tenantId()).isEqualTo("tenant-a");
             }
@@ -174,7 +176,7 @@ class ConsoleSecurityConfigurationTest {
     private FilterChain noOpChain(AtomicBoolean chainCalled) {
         return new FilterChain() {
             @Override
-            public void doFilter(jakarta.servlet.ServletRequest request, jakarta.servlet.ServletResponse response) {
+            public void doFilter(ServletRequest request, ServletResponse response) {
                 chainCalled.set(true);
             }
         };

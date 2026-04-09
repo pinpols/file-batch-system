@@ -15,6 +15,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.ConsoleAlertEventResponse;
+import com.example.batch.console.web.response.ConsoleAuditLogResponse;
 import com.example.batch.console.web.response.ConsoleApprovalCommandResponse;
 import com.example.batch.console.web.response.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
@@ -104,7 +105,7 @@ class ConsoleQueryControllerTest {
     @Test
     void shouldReturnExecutionLogDtos() throws Exception {
         when(queryApplicationService.executionLogs(any())).thenReturn(new PageResponse<>(1L, 1, 20, List.of(
-                new com.example.batch.console.web.response.ConsoleAuditLogResponse(
+                new ConsoleAuditLogResponse(
                         1L,
                         "t1",
                         1001L,

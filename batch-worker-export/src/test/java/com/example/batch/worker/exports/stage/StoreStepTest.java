@@ -14,6 +14,7 @@ import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.infrastructure.MinioExportStorage;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import org.junit.jupiter.api.Test;
 
 class StoreStepTest {
@@ -92,7 +93,7 @@ class StoreStepTest {
         private TestSha256() {}
 
         static String sha256Hex(Path path) throws Exception {
-            java.security.MessageDigest messageDigest = java.security.MessageDigest.getInstance("SHA-256");
+            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[8192];
             try (var inputStream = Files.newInputStream(path)) {
                 int read;
@@ -111,4 +112,3 @@ class StoreStepTest {
         }
     }
 }
-

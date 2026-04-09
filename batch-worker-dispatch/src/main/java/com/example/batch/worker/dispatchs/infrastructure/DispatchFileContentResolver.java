@@ -9,6 +9,7 @@ import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -83,7 +84,7 @@ public class DispatchFileContentResolver {
     private Map<String, Object> fileSecurity(Map<String, Object> fileRecord) {
         Object metadata = fileRecord.get("metadata_json");
         if (metadata instanceof Map<?, ?> map) {
-            Map<String, Object> security = new java.util.LinkedHashMap<>();
+            Map<String, Object> security = new LinkedHashMap<>();
             map.forEach((k, v) -> security.put(String.valueOf(k), v));
             return security;
         }
@@ -92,7 +93,7 @@ public class DispatchFileContentResolver {
             try {
                 Object parsed = JsonUtils.fromJson(text, Map.class);
                 if (parsed instanceof Map<?, ?> map) {
-                    Map<String, Object> security = new java.util.LinkedHashMap<>();
+                    Map<String, Object> security = new LinkedHashMap<>();
                     map.forEach((k, v) -> security.put(String.valueOf(k), v));
                     return security;
                 }

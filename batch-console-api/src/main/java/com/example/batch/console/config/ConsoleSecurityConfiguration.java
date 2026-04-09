@@ -11,6 +11,7 @@ import com.example.batch.console.support.SlidingWindowRateLimiter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -19,6 +20,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableMethodSecurity
@@ -56,18 +58,18 @@ public class ConsoleSecurityConfiguration {
                         .requestMatchers("/actuator/loggers/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(consoleRateLimitFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(consoleRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(consoleAuthenticationFilter, ConsoleRateLimitFilter.class)
                 .build();
     }
 
     private AuthenticationEntryPoint authenticationEntryPoint(ConsoleSecurityResponseWriter responseWriter) {
         return (request, response, authException) ->
-                responseWriter.write(response, org.springframework.http.HttpStatus.UNAUTHORIZED, ResultCode.UNAUTHORIZED, CommonErrorMessages.AUTHENTICATION_REQUIRED);
+                responseWriter.write(response, HttpStatus.UNAUTHORIZED, ResultCode.UNAUTHORIZED, CommonErrorMessages.AUTHENTICATION_REQUIRED);
     }
 
     private AccessDeniedHandler accessDeniedHandler(ConsoleSecurityResponseWriter responseWriter) {
         return (request, response, accessDeniedException) ->
-                responseWriter.write(response, org.springframework.http.HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED);
+                responseWriter.write(response, HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED);
     }
 }

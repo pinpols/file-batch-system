@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.orchestrator.domain.query.WorkflowRunQuery;
+import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -20,11 +21,11 @@ public interface WorkflowRunMapper {
                      @Param("id") Long id,
                      @Param("runStatus") String runStatus,
                      @Param("currentNodeCode") String currentNodeCode,
-                     @Param("finishedAt") java.time.Instant finishedAt);
+                     @Param("finishedAt") Instant finishedAt);
 
     int markRunning(@Param("tenantId") String tenantId,
                     @Param("id") Long id,
                     @Param("runStatus") String runStatus,
                     @Param("currentNodeCode") String currentNodeCode,
-                    @Param("startedAt") java.time.Instant startedAt);
+                    @Param("startedAt") Instant startedAt);
 }
