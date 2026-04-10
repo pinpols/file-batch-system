@@ -1,0 +1,34 @@
+name: Setup Build Environment
+description: Shared setup for CI workflows — Java, Maven cache, OpenAPI validation
+
+inputs:
+  java-version:
+    description: JDK version
+    required: false
+    default: "25"
+  compile-load-tests:
+    description: Whether to compile load-tests module
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Verify console OpenAPI matches controllers
+      shell: bash
+      run: |
+        python3 -m pip install --quiet pyyaml
+        python3 scripts/ci/check-console-openapi-paths.py
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+        cache: maven
+
+    - name: Compile load-tests module
+      if: inputs.compile-load-tests == 'true'
+      shell: bash
+      run: |
+        mvn -q -f load-tests/pom.xml test-compile

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConfigApprovalMapper">
+
+    <select id="selectLatestByRelease" resultType="map">
+        SELECT id,
+               tenant_id AS tenantId,
+               release_id AS releaseId,
+               approval_status AS approvalStatus,
+               requested_by AS requestedBy,
+               requested_at AS requestedAt,
+               reviewed_by AS reviewedBy,
+               reviewed_at AS reviewedAt,
+               review_comment AS reviewComment,
+               expired_at AS expiredAt,
+               created_at AS createdAt,
+               updated_at AS updatedAt
+          FROM batch.config_approval
+         WHERE tenant_id = #{tenantId}
+           AND release_id = #{releaseId}
+         ORDER BY id DESC
+         LIMIT 1
+    </select>
+
+    <select id="selectById" resultType="map">
+        SELECT id,
+               tenant_id AS tenantId,
+               release_id AS releaseId,
+               approval_status AS approvalStatus,
+               requested_by AS requestedBy,
+               requested_at AS requestedAt,
+               reviewed_by AS reviewedBy,
+               reviewed_at AS reviewedAt,
+               review_comment AS reviewComment,
+               expired_at AS expiredAt,
+               created_at AS createdAt,
+               updated_at AS updatedAt
+          FROM batch.config_approval
+         WHERE tenant_id = #{tenantId}
+           AND id = #{id}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO batch.config_approval (
+            tenant_id, release_id, approval_status, requested_by, review_comment, expired_at,
+            created_at, updated_at
+        ) VALUES (
+            #{tenantId}, #{releaseId}, #{approvalStatus}, #{requestedBy}, #{reviewComment}, #{expiredAt},
+            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <update id="approve">
+        UPDATE batch.config_approval
+           SET approval_status = 'APPROVED',
+               reviewed_by = #{reviewedBy},
+               reviewed_at = CURRENT_TIMESTAMP,
+               review_comment = #{reviewComment},
+               updated_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = #{tenantId}
+           AND id = #{id}
+           AND approval_status = 'PENDING'
+    </update>
+
+    <update id="reject">
+        UPDATE batch.config_approval
+           SET approval_status = 'REJECTED',
+               reviewed_by = #{reviewedBy},
+               reviewed_at = CURRENT_TIMESTAMP,
+               review_comment = #{reviewComment},
+               updated_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = #{tenantId}
+           AND id = #{id}
+           AND approval_status = 'PENDING'
+    </update>
+</mapper>

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.SubscriptionRuleMapper">
+
+    <select id="selectByTenant" resultType="map">
+        SELECT id, tenant_id, rule_name, channel_code, event_types,
+               severity_filter, job_code_filter, enabled,
+               created_by, updated_by, created_at, updated_at
+          FROM batch.subscription_rule
+         WHERE tenant_id = #{tenantId}
+         ORDER BY created_at DESC
+    </select>
+
+    <select id="selectEnabledByEventType" resultType="map">
+        SELECT r.id, r.tenant_id, r.rule_name, r.channel_code, r.event_types,
+               r.severity_filter, r.job_code_filter,
+               c.channel_type, c.config_json
+          FROM batch.subscription_rule r
+          JOIN batch.notification_channel c ON c.tenant_id = r.tenant_id AND c.channel_code = r.channel_code AND c.enabled = TRUE
+         WHERE r.tenant_id = #{tenantId}
+           AND r.enabled = TRUE
+           AND r.event_types LIKE '%' || #{eventType} || '%'
+    </select>
+
+    <select id="selectById" resultType="map">
+        SELECT id, tenant_id, rule_name, channel_code, event_types,
+               severity_filter, job_code_filter, enabled,
+               created_by, updated_by, created_at, updated_at
+          FROM batch.subscription_rule
+         WHERE tenant_id = #{tenantId} AND id = #{id}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO batch.subscription_rule (tenant_id, rule_name, channel_code, event_types,
+                                             severity_filter, job_code_filter, enabled, created_by, updated_by)
+        VALUES (#{tenantId}, #{ruleName}, #{channelCode}, #{eventTypes},
+                #{severityFilter}, #{jobCodeFilter}, #{enabled}, #{createdBy}, #{updatedBy})
+    </insert>
+
+    <update id="update">
+        UPDATE batch.subscription_rule
+           SET rule_name = #{ruleName},
+               channel_code = #{channelCode},
+               event_types = #{eventTypes},
+               severity_filter = #{severityFilter},
+               job_code_filter = #{jobCodeFilter},
+               enabled = #{enabled},
+               updated_by = #{updatedBy},
+               updated_at = CURRENT_TIMESTAMP
+         WHERE tenant_id = #{tenantId} AND id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM batch.subscription_rule
+         WHERE tenant_id = #{tenantId} AND id = #{id}
+    </delete>
+</mapper>
