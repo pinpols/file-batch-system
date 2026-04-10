@@ -75,6 +75,8 @@ tags:
     description: Resource tagging for job, workflow, file channel, and file template.
   - name: ApiKeys
     description: API key self-service creation, listing, and revocation.
+  - name: Notifications
+    description: Notification channel and subscription rule management, delivery logs.
   - name: Governance
     description: Circuit breaker and rate limit parameter management.
   - name: ArchivePolicies
@@ -293,6 +295,102 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleOpsSummaryResponse'
+  /api/console/ops/kafka-lag:
+    get:
+      tags: [Ops]
+      summary: Query Kafka consumer group lag
+      operationId: getKafkaConsumerLag
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: groupId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Consumer group lag list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/outbox/stats:
+    get:
+      tags: [Ops]
+      summary: Get outbox backlog statistics
+      operationId: getOutboxStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Outbox stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/outbox/cleanup:
+    post:
+      tags: [Ops]
+      summary: Clean up published or abandoned outbox events
+      operationId: cleanupOutbox
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: retainDays
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 7
+      responses:
+        '200':
+          description: Cleanup result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/outbox/republish:
+    post:
+      tags: [Ops]
+      summary: Manually republish failed outbox events
+      operationId: republishOutbox
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+                format: int64
+      responses:
+        '200':
+          description: Republish result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/ops/summary/events:
     get:
       tags: [Ops]
@@ -3376,6 +3474,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseLong'
+  /api/console/job-definitions/batch-toggle:
+    post:
+      tags: [JobDefinitions]
+      summary: Batch enable or disable job definitions
+      operationId: batchToggleJobDefinitions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+                format: int64
+              maxItems: 200
+      responses:
+        '200':
+          description: Number of toggled definitions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/job-definitions/{id}/clone:
+    post:
+      tags: [JobDefinitions]
+      summary: Clone job definition with field overrides
+      operationId: cloneJobDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Cloned job definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
 
   # ─── P0: Workflow Definitions CRUD ───────────────────────────────────────────
   /api/console/workflow-definitions:
@@ -4415,6 +4575,271 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/dependencies:
+    get:
+      tags: [Config]
+      summary: Query config item dependencies
+      operationId: getConfigDependencies
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: configType
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: configCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dependency map
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/releases/diff:
+    get:
+      tags: [Config]
+      summary: Diff two config release versions
+      operationId: diffConfigReleases
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: releaseIdA
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: releaseIdB
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Diff result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/releases/{releaseId}/approval:
+    get:
+      tags: [Config]
+      summary: Get config release approval detail
+      operationId: getConfigReleaseApproval
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: releaseId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approval detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/releases/{releaseId}/submit-approval:
+    post:
+      tags: [Config]
+      summary: Submit config release for approval
+      operationId: submitConfigReleaseApproval
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: releaseId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Submission result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/approvals/{approvalId}/approve:
+    post:
+      tags: [Config]
+      summary: Approve config approval
+      operationId: approveConfigApproval
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Approval result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/approvals/{approvalId}/reject:
+    post:
+      tags: [Config]
+      summary: Reject config approval
+      operationId: rejectConfigApproval
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Rejection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/sync/export:
+    post:
+      tags: [Config]
+      summary: Export config bundle
+      operationId: exportConfigSync
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Export result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/sync/preview:
+    post:
+      tags: [Config]
+      summary: Preview config sync import
+      operationId: previewConfigSync
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Preview result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/sync/import:
+    post:
+      tags: [Config]
+      summary: Import config bundle
+      operationId: importConfigSync
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/config/sync/logs:
+    get:
+      tags: [Config]
+      summary: Query config sync logs
+      operationId: listConfigSyncLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 50
+      responses:
+        '200':
+          description: Sync log list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/config/releases/{releaseId}:
     get:
       tags: [Config]
@@ -4997,6 +5422,90 @@ paths:
       responses:
         '200':
           description: SLA compliance stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/dashboard/sla-report:
+    get:
+      tags: [Dashboard]
+      summary: Get SLA report by job dimension
+      operationId: getDashboardSlaReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 7
+      responses:
+        '200':
+          description: SLA report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/dashboard/execution-progress:
+    get:
+      tags: [Dashboard]
+      summary: Get execution progress by job code and biz date
+      operationId: getDashboardExecutionProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: jobCode
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: bizDate
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Execution progress list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/dashboard/tenant-usage:
+    get:
+      tags: [Dashboard]
+      summary: Get tenant usage statistics
+      operationId: getDashboardTenantUsage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 30
+      responses:
+        '200':
+          description: Tenant usage stats
           content:
             application/json:
               schema:
@@ -5894,6 +6403,311 @@ paths:
               schema:
                 type: string
                 format: binary
+
+  # ─── Notifications ──────────────────────────────────────────────────────────
+  /api/console/notifications/channels:
+    get:
+      tags: [Notifications]
+      summary: List notification channels
+      operationId: listNotificationChannels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Channel list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Notifications]
+      summary: Create notification channel
+      operationId: createNotificationChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/notifications/channels/{channelCode}:
+    get:
+      tags: [Notifications]
+      summary: Get notification channel detail
+      operationId: getNotificationChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channelCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Channel detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [Notifications]
+      summary: Update notification channel
+      operationId: updateNotificationChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channelCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+    delete:
+      tags: [Notifications]
+      summary: Delete notification channel
+      operationId: deleteNotificationChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channelCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/notifications/channels/{channelCode}/test:
+    post:
+      tags: [Notifications]
+      summary: Test notification channel
+      operationId: testNotificationChannel
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: channelCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/notifications/rules:
+    get:
+      tags: [Notifications]
+      summary: List notification rules
+      operationId: listNotificationRules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rule list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Notifications]
+      summary: Create notification rule
+      operationId: createNotificationRule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/notifications/rules/{ruleId}:
+    get:
+      tags: [Notifications]
+      summary: Get notification rule detail
+      operationId: getNotificationRule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Rule detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [Notifications]
+      summary: Update notification rule
+      operationId: updateNotificationRule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+    delete:
+      tags: [Notifications]
+      summary: Delete notification rule
+      operationId: deleteNotificationRule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/notifications/delivery-logs:
+    get:
+      tags: [Notifications]
+      summary: Query notification delivery logs
+      operationId: listNotificationDeliveryLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 100
+      responses:
+        '200':
+          description: Delivery log list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
 
 components:
   securitySchemes:
