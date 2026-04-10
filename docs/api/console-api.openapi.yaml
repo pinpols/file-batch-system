@@ -1082,7 +1082,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseVoid'
-  /api/console/query/instances/batch-status:
+  /api/console/queries/instances/batch-status:
     get:
       tags: [Queries]
       summary: Batch query instance status by instanceNos
@@ -1153,7 +1153,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
-  /api/console/approvals/batch/approve:
+  /api/console/approvals/batch-approve:
     post:
       tags: [Approvals]
       summary: Batch approve commands
@@ -1173,7 +1173,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchApprovalResultList'
-  /api/console/approvals/batch/reject:
+  /api/console/approvals/batch-reject:
     post:
       tags: [Approvals]
       summary: Batch reject commands
@@ -2440,7 +2440,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseAiChatResponse'
-  /api/console/query/audits:
+  /api/console/queries/audits:
     get:
       tags: [Queries]
       summary: Query audit logs
@@ -2463,7 +2463,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
-  /api/console/query/execution-logs:
+  /api/console/queries/execution-logs:
     get:
       tags: [Queries]
       summary: Query execution logs
@@ -2479,7 +2479,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
-  /api/console/query/alerts:
+  /api/console/queries/alerts:
     get:
       tags: [Queries]
       summary: Query alerts
@@ -2498,7 +2498,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseAlertEventList'
-  /api/console/query/approvals:
+  /api/console/queries/approvals:
     get:
       tags: [Queries]
       summary: Query approvals
@@ -2516,7 +2516,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleApprovalCommandList'
-  /api/console/query/files:
+  /api/console/queries/files:
     get:
       tags: [Queries]
       summary: Query file chains
@@ -2539,7 +2539,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseFileRecordList'
-  /api/console/query/job-definitions:
+  /api/console/queries/job-definitions:
     get:
       tags: [Queries]
       summary: Query job definitions
@@ -2556,7 +2556,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseJobDefinitionList'
-  /api/console/query/outbox-retries:
+  /api/console/queries/outbox-retries:
     get:
       tags: [Queries]
       summary: Query outbox retry logs
@@ -2575,7 +2575,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleOutboxRetryLogList'
-  /api/console/query/outbox-deliveries:
+  /api/console/queries/outbox-deliveries:
     get:
       tags: [Queries]
       summary: Query outbox delivery logs
@@ -2595,7 +2595,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleOutboxDeliveryLogList'
-  /api/console/query/file-pipelines:
+  /api/console/queries/file-pipelines:
     get:
       tags: [Queries]
       summary: Query file pipelines
@@ -2613,7 +2613,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFilePipelineList'
-  /api/console/query/file-pipelines/{id}:
+  /api/console/queries/file-pipelines/{id}:
     get:
       tags: [Queries]
       summary: Query file pipeline detail
@@ -2633,11 +2633,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/query/pipeline-definitions:
+  /api/console/queries/pipeline-definitions:
     get:
       tags: [Queries]
       summary: Query pipeline definitions compatibility alias
-      description: Compatibility alias that returns the same file pipeline list as `/api/console/query/file-pipelines`.
+      description: Compatibility alias that returns the same file pipeline list as `/api/console/queries/file-pipelines`.
       operationId: queryPipelineDefinitionsCompatibility
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
@@ -2650,11 +2650,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFilePipelineList'
-  /api/console/query/pipeline-definitions/{id}:
+  /api/console/queries/pipeline-definitions/{id}:
     get:
       tags: [Queries]
       summary: Query pipeline definition compatibility alias detail
-      description: Compatibility alias that returns the same file pipeline detail as `/api/console/query/file-pipelines/{id}`.
+      description: Compatibility alias that returns the same file pipeline detail as `/api/console/queries/file-pipelines/{id}`.
       operationId: queryPipelineDefinitionCompatibilityDetail
       parameters:
         - name: id
@@ -2675,7 +2675,7 @@ paths:
     get:
       tags: [Queries]
       summary: File pipeline observability compatibility alias
-      description: Compatibility alias that returns the same file pipeline list as `/api/console/query/file-pipelines`.
+      description: Compatibility alias that returns the same file pipeline list as `/api/console/queries/file-pipelines`.
       operationId: filePipelineObservability
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
@@ -2692,7 +2692,7 @@ paths:
     get:
       tags: [Queries]
       summary: File pipeline observability compatibility alias detail
-      description: Compatibility alias that returns the same file pipeline detail as `/api/console/query/file-pipelines/{id}`.
+      description: Compatibility alias that returns the same file pipeline detail as `/api/console/queries/file-pipelines/{id}`.
       operationId: filePipelineObservabilityDetail
       parameters:
         - name: id
@@ -2709,7 +2709,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/query/file-pipeline-steps:
+  /api/console/queries/file-pipeline-steps:
     get:
       tags: [Queries]
       summary: Query file pipeline steps
@@ -2727,7 +2727,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFilePipelineStepList'
-  /api/console/query/file-dispatches:
+  /api/console/queries/file-dispatches:
     get:
       tags: [Queries]
       summary: Query file dispatch records
@@ -2745,11 +2745,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileDispatchRecordList'
-  /api/console/query/channel-receipts:
+  /api/console/queries/channel-receipts:
     get:
       tags: [Queries]
       summary: Query channel receipt records
-      description: Receipt-focused alias of file dispatch records. Use the same filter set and response shape as `/api/console/query/file-dispatches`.
+      description: Receipt-focused alias of file dispatch records. Use the same filter set and response shape as `/api/console/queries/file-dispatches`.
       operationId: queryChannelReceipts
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
@@ -2762,7 +2762,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileDispatchRecordList'
-  /api/console/query/file-channels:
+  /api/console/queries/file-channels:
     get:
       tags: [Queries]
       summary: Query file channels
@@ -2780,7 +2780,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileChannelList'
-  /api/console/query/file-arrival-groups:
+  /api/console/queries/file-arrival-groups:
     get:
       tags: [Queries]
       summary: Query file arrival groups
@@ -2798,7 +2798,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseFileArrivalGroupList'
-  /api/console/query/file-errors:
+  /api/console/queries/file-errors:
     get:
       tags: [Queries]
       summary: Query file errors
@@ -2816,7 +2816,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseFileErrorRecordList'
-  /api/console/query/file-templates:
+  /api/console/queries/file-templates:
     get:
       tags: [Queries]
       summary: Query file templates
@@ -2834,7 +2834,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileTemplateList'
-  /api/console/query/instances:
+  /api/console/queries/instances:
     get:
       tags: [Queries]
       summary: Query job instances
@@ -2868,7 +2868,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseJobInstanceList'
-  /api/console/query/instances/{id}:
+  /api/console/queries/instances/{id}:
     get:
       tags: [Queries]
       summary: Query job instance detail
@@ -2888,7 +2888,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleJobInstanceResponse'
-  /api/console/query/job-step-instances:
+  /api/console/queries/job-step-instances:
     get:
       tags: [Queries]
       summary: Query job step instances
@@ -2905,7 +2905,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseJobStepInstanceList'
-  /api/console/query/job-step-instances/{id}:
+  /api/console/queries/job-step-instances/{id}:
     get:
       tags: [Queries]
       summary: Query job step instance detail
@@ -2925,7 +2925,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleJobStepInstanceResponse'
-  /api/console/query/workflow-definitions:
+  /api/console/queries/workflow-definitions:
     get:
       tags: [Queries]
       summary: Query workflow definitions
@@ -2947,7 +2947,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowDefinitionList'
-  /api/console/query/workflow-nodes:
+  /api/console/queries/workflow-nodes:
     get:
       tags: [Queries]
       summary: Query workflow nodes
@@ -2964,7 +2964,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowNodeList'
-  /api/console/query/workflow-edges:
+  /api/console/queries/workflow-edges:
     get:
       tags: [Queries]
       summary: Query workflow edges
@@ -2981,7 +2981,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowEdgeList'
-  /api/console/query/workflow-runs:
+  /api/console/queries/workflow-runs:
     get:
       tags: [Queries]
       summary: Query workflow runs
@@ -2999,7 +2999,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowRunList'
-  /api/console/query/workflow-runs/{id}:
+  /api/console/queries/workflow-runs/{id}:
     get:
       tags: [Queries]
       summary: Query workflow run detail
@@ -3019,7 +3019,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunResponse'
-  /api/console/query/workflow-node-runs:
+  /api/console/queries/workflow-node-runs:
     get:
       tags: [Queries]
       summary: Query workflow node runs
@@ -3036,7 +3036,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowNodeRunList'
-  /api/console/query/workflow-node-runs/{id}:
+  /api/console/queries/workflow-node-runs/{id}:
     get:
       tags: [Queries]
       summary: Query workflow node run detail
@@ -3056,7 +3056,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleWorkflowNodeRunResponse'
-  /api/console/query/workflow-topology:
+  /api/console/queries/workflow-topology:
     get:
       tags: [Queries]
       summary: Query workflow topology
@@ -3070,7 +3070,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleWorkflowTopologyResponse'
-  /api/console/query/ai-audits:
+  /api/console/queries/ai-audits:
     get:
       tags: [Queries]
       summary: Query AI audit logs
@@ -3088,7 +3088,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseAiAuditLogList'
-  /api/console/query/dead-letters:
+  /api/console/queries/dead-letters:
     get:
       tags: [Queries]
       summary: Query dead letters
@@ -3106,7 +3106,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseDeadLetterTaskList'
-  /api/console/query/retries:
+  /api/console/queries/retries:
     get:
       tags: [Queries]
       summary: Query retry schedules
@@ -3124,7 +3124,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseRetryScheduleList'
-  /api/console/query/catch-up-approvals:
+  /api/console/queries/catch-up-approvals:
     get:
       tags: [Queries]
       summary: Query catch-up approvals
@@ -3142,7 +3142,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponsePendingCatchUpList'
-  /api/console/query/batch-days:
+  /api/console/queries/batch-days:
     get:
       tags: [Queries]
       summary: Query batch day instances
@@ -3171,7 +3171,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleBatchDayList'
-  /api/console/query/batch-days/{bizDate}/window:
+  /api/console/queries/batch-days/{bizDate}/window:
     get:
       tags: [Queries]
       summary: Query batch day window status
@@ -3192,7 +3192,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleBatchDayWindowResponse'
-  /api/console/query/workers:
+  /api/console/queries/workers:
     get:
       tags: [Queries]
       summary: Query workers
@@ -4333,7 +4333,7 @@ paths:
                 $ref: '#/components/schemas/CommonResponseString'
 
   # ─── P1: Detail queries ───────────────────────────────────────────────────────
-  /api/console/query/file-channels/{channelCode}:
+  /api/console/queries/file-channels/{channelCode}:
     get:
       tags: [Queries]
       summary: Get file channel detail by code
@@ -4358,7 +4358,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/query/file-templates/{templateCode}:
+  /api/console/queries/file-templates/{templateCode}:
     get:
       tags: [Queries]
       summary: Get file template detail by code
@@ -4389,7 +4389,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/query/files/{id}:
+  /api/console/queries/files/{id}:
     get:
       tags: [Queries]
       summary: Get file record detail by id
@@ -5636,7 +5636,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/tenant/quota:
+  /api/console/tenants/quota:
     get:
       tags: [TenantSelfService]
       summary: Query tenant quota policies
@@ -5650,7 +5650,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/tenant/usage:
+  /api/console/tenants/usage:
     get:
       tags: [TenantSelfService]
       summary: Query tenant usage metrics
@@ -5664,7 +5664,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/tenant/quota/request:
+  /api/console/tenants/quota/request:
     post:
       tags: [TenantSelfService]
       summary: Request quota change
@@ -6170,6 +6170,15 @@ components:
         meta:
           $ref: '#/components/schemas/CommonMeta'
       required: [code, message, meta]
+    CommonResponseVoid:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: object
+              nullable: true
+              description: Always null for void responses.
     PageRequest:
       type: object
       properties:

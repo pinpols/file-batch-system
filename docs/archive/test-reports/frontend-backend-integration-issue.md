@@ -155,7 +155,7 @@ java.lang.IllegalStateException: failed to register quartz trigger: export_settl
 - `console-api` 的 REST 异常处理补齐了 `log.error` / `log.warn`，系统异常会打印堆栈。
 - `batch-console-api` 的 `file arrival group` 查询从 `metadata_json ? 'fileGroupCode'` 改为 `jsonb_exists(...)`，避免 MyBatis 把 JSONB `?` 运算符误判成参数占位符。
 - `batch-orchestrator` 的启动自检扩展为检查 `quartz.QRTZ_*` 关键表，不再只看 schema。
-- Quartz 官方 JDBC JobStore 建表脚本已纳入 `batch-orchestrator/src/main/resources/db/migration/V2__create_quartz_tables_postgres_2_5_2.sql`，本地空库启动会走全量迁移。
+- Quartz 官方 JDBC JobStore 建表脚本已纳入 `db/migration/V2__create_quartz_tables_postgres_2_5_2.sql`，本地空库启动会走全量迁移。
 - 本地 `batch-orchestrator` / `batch-trigger` 的 `application-local.yml` 保留 `baseline-on-migrate`，`baseline-version` 固定为 `1`（勿随新迁移递增）。
 
 仍需继续保持的事项：

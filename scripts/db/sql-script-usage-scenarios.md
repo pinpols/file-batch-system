@@ -15,7 +15,7 @@
 
 ## 1) 平台库 Flyway 迁移脚本
 
-- **目录（唯一 SQL 源）**：`batch-orchestrator/src/main/resources/db/migration/`
+- **目录（唯一 SQL 源）**：`db/migration/`
 - **文档入口**：`docs/sql/flyway/README.md`（仅说明，不再存放 `V*.sql` 副本）
 - **典型文件**：`V1__create_schema.sql` 起至当前最新版本（例如 `V32__add_batch_day_support.sql`、`V34__create_console_user_account.sql`）
 - **作用**：
@@ -124,7 +124,7 @@
 
 ## 7) 与 §1 的关系（原「双源」说明）
 
-平台迁移 **只维护一份**：`batch-orchestrator/src/main/resources/db/migration/`。不再在 `docs/sql/flyway/` 下保留 SQL 副本，避免与运行时代码漂移。
+平台迁移 **只维护一份**：`db/migration/`。不再在 `docs/sql/flyway/` 下保留 SQL 副本，避免与运行时代码漂移。
 
 ---
 

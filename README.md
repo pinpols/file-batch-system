@@ -255,5 +255,5 @@ DB (job_task: READY)
 
 1. 遵守 `AGENT.md` 中的工程基线约束
 2. 新功能必须附带对应的集成测试
-3. 修改持久层时只维护 Flyway 迁移（`batch-orchestrator/src/main/resources/db/migration/`）；`platform-init.sql` 仅含与 V1 等价的 schema，勿再复制表 DDL
+3. 修改持久层时只维护 Flyway 迁移（`db/migration/`）；`platform-init.sql` 仅含与 V1 等价的 schema，勿再复制表 DDL
 4. 不得引入 JPA/Hibernate 依赖

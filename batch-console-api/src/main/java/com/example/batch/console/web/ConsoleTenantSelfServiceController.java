@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @Validated
-@RequestMapping("/api/console/tenant")
+@RequestMapping("/api/console/tenants")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
 public class ConsoleTenantSelfServiceController {

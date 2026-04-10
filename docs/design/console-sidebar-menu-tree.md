@@ -88,8 +88,13 @@
 | 运维管理 | 运行中的 Worker 任务 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` | 对应 `/api/console/workers/{workerCode}/claimed-tasks` |
 | 运维管理 | 告警治理 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` | 确认、静默、关闭告警 |
 | 运维管理 | 配置发布单 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 查询可见；创建 / 发布 / 灰度 / 回滚建议仅 `ROLE_ADMIN` |
+| 运维管理 | 配置审批 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 查看审批详情可见三类角色；提交审批 / 批准 / 拒绝仅 `ROLE_ADMIN`。对应 `/api/console/config/releases/{releaseId}/submit-approval`、`/approval`、`/approvals/{approvalId}/approve`、`/reject` |
+| 运维管理 | 配置同步 | `ROLE_ADMIN` | 跨环境配置导出 / 预览 / 导入 + 同步日志。对应 `/api/console/config/sync/*` |
 | 运维管理 | 密钥版本 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 查询可见；轮换仅 `ROLE_ADMIN` |
 | 运维管理 | 配置变更日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` | 只读 |
+| 运维管理 | 通知渠道管理 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 渠道 CRUD + 测试发送。对应 `/api/console/notifications/channels/*` |
+| 运维管理 | 通知订阅规则 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 订阅规则 CRUD。对应 `/api/console/notifications/rules/*` |
+| 运维管理 | 通知投递日志 | `ROLE_ADMIN` / `ROLE_AUDITOR` / `ROLE_CONFIG_ADMIN` / `ROLE_TENANT_USER` | 只读。对应 `/api/console/notifications/delivery-logs` |
 | 运维管理 | AI 助手 | `ROLE_ADMIN` / `ROLE_AUDITOR` | 当前配置只允许这两个角色 |
 
 ### 6. 元数据与公共入口

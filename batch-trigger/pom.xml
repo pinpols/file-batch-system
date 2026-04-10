@@ -128,7 +128,7 @@
                 <directory>src/main/resources</directory>
             </resource>
             <resource>
-                <directory>${project.basedir}/../batch-orchestrator/src/main/resources/db/migration</directory>
+                <directory>${project.basedir}/../db/migration</directory>
                 <targetPath>db/migration</targetPath>
                 <includes>
                     <include>V*.sql</include>

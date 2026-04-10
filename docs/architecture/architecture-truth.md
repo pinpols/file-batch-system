@@ -116,7 +116,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 
 ## 4. 数据库 Schema 基线
 
-**当前版本**：Flyway V40（`batch-orchestrator/src/main/resources/db/migration/`，跳过 V31）
+**当前版本**：Flyway V40（`db/migration/`，跳过 V31）
 
 | 版本 | 内容摘要 | 核心表 |
 |------|---------|-------|

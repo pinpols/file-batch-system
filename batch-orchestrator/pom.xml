@@ -166,10 +166,16 @@
     </profiles>
 
     <build>
-        <!-- 平台 Flyway：仅 src/main/resources/db/migration（无 docs 第二副本） -->
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/../db/migration</directory>
+                <targetPath>db/migration</targetPath>
+                <includes>
+                    <include>V*.sql</include>
+                </includes>
             </resource>
         </resources>
         <testResources>
