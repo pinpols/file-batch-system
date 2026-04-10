@@ -10,9 +10,30 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-echo "==> Maven 打包应用模块（-Dmaven.test.skip=true）..."
+RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
+mkdir -p "$RUNTIME_JAR_DIR"
+
+echo "==> Maven 打包应用模块（clean package -Dmaven.test.skip=true）..."
 mvn -q -Dmaven.test.skip=true \
   -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-  -am package -T 1C
+  -am clean package -T 1C
 
-echo "==> 构建完成"
+echo "==> 复制可执行 jar 到 build/runtime-jars/..."
+MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-dispatch)
+NAMES=(orchestrator trigger console worker-import worker-export worker-dispatch)
+for i in "${!MODULES[@]}"; do
+  module="${MODULES[$i]}"
+  name="${NAMES[$i]}"
+  jar="$(ls "$ROOT/$module/target/${module}"-*-exec.jar 2>/dev/null | grep -Ev 'sources|javadoc' | head -1 || true)"
+  if [[ -z "$jar" || ! -f "$jar" ]]; then
+    jar="$(ls "$ROOT/$module/target/${module}"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc|\.original$|-exec\.jar$' | head -1 || true)"
+  fi
+  if [[ -z "$jar" || ! -f "$jar" ]]; then
+    echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar" >&2
+    exit 1
+  fi
+  cp -f "$jar" "$RUNTIME_JAR_DIR/${name}.jar"
+  echo "  ${name}.jar <- $(basename "$jar")"
+done
+
+echo "==> 构建完成（jar 已输出到 build/runtime-jars/）"
