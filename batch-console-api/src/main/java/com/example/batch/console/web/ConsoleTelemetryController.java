@@ -16,8 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 前端遥测日志收集端点：接收前端埋点日志，通过 slf4j 输出到应用日志，
- * 由 Promtail 采集进 Loki，实现前后端日志统一观测。
+ * 前端遥测日志收集：接收前端埋点，通过 slf4j + MDC 输出结构化日志，由 Promtail 采集进 Loki。
  */
 @RestController
 @Validated
@@ -30,11 +29,9 @@ public class ConsoleTelemetryController {
 
     @PostMapping("/events")
     public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryRequest request) {
-        String app = request.app();
-        String userId = request.userId();
-        MDC.put("frontendApp", app);
-        if (userId != null) {
-            MDC.put("frontendUserId", userId);
+        MDC.put("frontendApp", request.app());
+        if (request.userId() != null) {
+            MDC.put("frontendUserId", request.userId());
         }
         try {
             for (Event event : request.events()) {
@@ -42,12 +39,10 @@ public class ConsoleTelemetryController {
                 MDC.put("frontendPage", event.page() != null ? event.page() : "");
                 try {
                     String propsStr = event.props() != null ? JsonUtils.toJson(event.props()) : "";
-                    String msg = "[frontend:{}] {} | page={} props={}";
-                    Object[] args = {event.type(), event.name(), event.page(), propsStr};
                     if ("error".equals(event.type())) {
-                        log.error(msg, args);
+                        log.error("[frontend:error] {} | page={} props={}", event.name(), event.page(), propsStr);
                     } else {
-                        log.info(msg, args);
+                        log.info("[frontend:{}] {} | page={} props={}", event.type(), event.name(), event.page(), propsStr);
                     }
                 } finally {
                     MDC.remove("frontendEventType");
