@@ -27,6 +27,9 @@ public interface ConsoleFileTemplateExcelApplicationService {
     /** 预览上传会话中的行数据与校验问题。 */
     ConsoleFileTemplateExcelPreviewResponse preview(String uploadToken);
 
+    /** 下载带校验问题明细的预览 workbook。 */
+    ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
+
     /** 确认导入并更新模板配置。 */
     ConsoleFileTemplateExcelApplyResponse apply(String uploadToken, FileTemplateExcelApplyRequest request);
 }

@@ -64,6 +64,24 @@
         where tenant_id = #{tenantId} and id = #{id}
     </select>
 
+    <insert id="upsertBusinessCalendar" parameterType="com.example.batch.console.mapper.param.BusinessCalendarUpsertParam">
+        insert into batch.business_calendar (
+            tenant_id, calendar_code, calendar_name, timezone,
+            holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
+        ) values (
+            #{tenantId}, #{calendarCode}, #{calendarName}, #{timezone},
+            #{holidayRollRule}, #{catchUpPolicy}, #{catchUpMaxDays}, #{enabled}
+        )
+        on conflict (tenant_id, calendar_code) do update
+        set calendar_name = excluded.calendar_name,
+            timezone = excluded.timezone,
+            holiday_roll_rule = excluded.holiday_roll_rule,
+            catch_up_policy = excluded.catch_up_policy,
+            catch_up_max_days = excluded.catch_up_max_days,
+            enabled = excluded.enabled,
+            updated_at = current_timestamp
+    </insert>
+
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,

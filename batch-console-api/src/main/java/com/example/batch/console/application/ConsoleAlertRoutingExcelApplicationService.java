@@ -27,6 +27,9 @@ public interface ConsoleAlertRoutingExcelApplicationService {
     /** 预览解析结果。 */
     ConsoleAlertRoutingExcelPreviewResponse preview(String uploadToken);
 
+    /** 下载带校验问题明细的预览 workbook。 */
+    ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
+
     /** 确认导入并更新告警路由配置。 */
     ConsoleAlertRoutingExcelApplyResponse apply(String uploadToken, AlertRoutingExcelApplyRequest request);
 }

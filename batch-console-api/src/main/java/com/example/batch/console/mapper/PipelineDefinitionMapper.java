@@ -21,6 +21,10 @@ public interface PipelineDefinitionMapper {
     Map<String, Object> selectById(@Param("tenantId") String tenantId,
                                    @Param("id") Long id);
 
+    Map<String, Object> selectByUniqueKey(@Param("tenantId") String tenantId,
+                                          @Param("jobCode") String jobCode,
+                                          @Param("version") Integer version);
+
     int insert(Map<String, Object> params);
 
     int update(Map<String, Object> params);

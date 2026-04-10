@@ -28,6 +28,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -118,9 +119,16 @@ class DefaultConsoleWorkflowExcelApplicationServiceTest {
             assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("README");
             assertThat(workbook.getSheetAt(4).getSheetName()).isEqualTo("DICT");
             assertThat(workbook.getSheetAt(5).getSheetName()).isEqualTo("VALIDATION");
-            Sheet sheet = workbook.getSheetAt(0);
+            XSSFSheet sheet = (XSSFSheet) workbook.getSheetAt(0);
+            XSSFSheet nodeSheet = (XSSFSheet) workbook.getSheetAt(1);
+            XSSFSheet edgeSheet = (XSSFSheet) workbook.getSheetAt(2);
             Row header = sheet.getRow(0);
             assertThat(header.getCell(1).getStringCellValue()).isEqualTo("workflow_code");
+            assertThat(header.getCell(1).getCellComment()).isNotNull();
+            assertThat(sheet.getCTWorksheet().isSetAutoFilter()).isTrue();
+            assertThat(sheet.getDataValidations()).hasSize(2);
+            assertThat(nodeSheet.getDataValidations()).hasSize(3);
+            assertThat(edgeSheet.getDataValidations()).hasSize(2);
             assertThat(sheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("WF1");
         }
     }

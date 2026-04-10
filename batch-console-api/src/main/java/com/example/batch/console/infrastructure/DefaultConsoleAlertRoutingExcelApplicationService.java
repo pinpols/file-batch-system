@@ -11,6 +11,7 @@ import com.example.batch.console.mapper.param.AlertRoutingConfigUpsertParam;
 import com.example.batch.console.support.AlertRoutingExcelImportStore;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.ConsoleSingleSheetExcelImportSupport;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.query.AlertRoutingQueryRequest;
 import com.example.batch.console.web.request.AlertRoutingExcelApplyRequest;
@@ -19,11 +20,18 @@ import com.example.batch.console.web.response.ConsoleAlertRoutingExcelPreviewRes
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelRowIssueResponse;
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelUploadResponse;
 import com.example.batch.console.web.response.ConsoleAlertRoutingResponse;
-import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.addBooleanValidation;
+import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
 import com.example.batch.console.support.ConsoleExcelStyles;
+import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
+import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -39,15 +47,9 @@ import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.DataValidation;
-import org.apache.poi.ss.usermodel.DataValidationConstraint;
-import org.apache.poi.ss.usermodel.DataValidationHelper;
-import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
@@ -85,6 +87,21 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
     );
     private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
     private static final Set<String> SEVERITIES = Set.of("INFO", "WARN", "ERROR", "CRITICAL");
+    private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES = Map.ofEntries(
+            Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+            Map.entry("route_code", requiredColumn("路由唯一编码，作为导入匹配键。", "字符串", "RT_BATCH_ERROR")),
+            Map.entry("route_name", requiredColumn("控制台展示的路由名称。", "字符串", "批处理异常路由")),
+            Map.entry("team", requiredColumn("负责该路由的团队或值班组。", "字符串", "ops")),
+            Map.entry("alert_group", requiredColumn("通知引擎使用的告警分组。", "字符串", "batch")),
+            Map.entry("severity", requiredColumn("该路由处理的告警级别。", "枚举", "ERROR", "INFO", "WARN", "ERROR", "CRITICAL")),
+            Map.entry("receiver", requiredColumn("目标接收方、通道或 webhook 别名。", "字符串", "slack-ops")),
+            Map.entry("group_by", optionalColumn("用于去重和聚合的分组键，可选。", "表达式", "job_code")),
+            Map.entry("group_wait_seconds", optionalColumn("首次聚合通知前的等待秒数，必须大于等于 0。", "整数", "30")),
+            Map.entry("group_interval_seconds", optionalColumn("两次聚合通知之间的最小间隔，必须大于等于 0。", "整数", "300")),
+            Map.entry("repeat_interval_seconds", optionalColumn("持续告警的重复通知间隔，必须大于等于 0。", "整数", "3600")),
+            Map.entry("enabled", optionalColumn("告警路由是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
+            Map.entry("description", optionalColumn("面向运维人员的说明信息。", "字符串", "批处理失败默认路由"))
+    );
 
     private static final MediaType XLSX_MEDIA_TYPE = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -124,14 +141,15 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
             throw new BizException(ResultCode.INVALID_ARGUMENT, "file is required");
         }
         String tenantId = tenantGuard.resolveTenant(null);
-        ParsedWorkbook parsed = parseWorkbook(file.getBytes(), tenantId, file.getOriginalFilename());
+        ConsoleSingleSheetExcelImportSupport.ParsedWorkbook parsed = ConsoleSingleSheetExcelImportSupport.parseWorkbook(
+                file.getBytes(), tenantId, file.getOriginalFilename(), "alert-routing-config.xlsx", COLUMNS, REQUIRED_HEADERS);
         String uploadToken = importStore.save(parsed.fileName(), parsed.tenantId(), parsed.sheetName(), parsed.rows());
         return new ConsoleAlertRoutingExcelUploadResponse(uploadToken, parsed.fileName(), parsed.sheetName(), parsed.rows().size());
     }
 
     @Override
     public ConsoleAlertRoutingExcelPreviewResponse preview(String uploadToken) {
-        ParsedSession session = loadSession(uploadToken);
+        ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
         ValidationResult result = validateRows(session);
         return new ConsoleAlertRoutingExcelPreviewResponse(
                 uploadToken, session.fileName(), session.sheetName(),
@@ -141,9 +159,18 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
     }
 
     @Override
+    public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
+        ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
+        ValidationResult result = validateRows(session);
+        byte[] workbookBytes = writePreviewWorkbook(session, result);
+        return ConsoleSingleSheetExcelImportSupport.excelResponse(
+                ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), workbookBytes);
+    }
+
+    @Override
     @Transactional
     public ConsoleAlertRoutingExcelApplyResponse apply(String uploadToken, AlertRoutingExcelApplyRequest request) {
-        ParsedSession session = loadSession(uploadToken);
+        ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
         ValidationResult result = validateRows(session);
         if (result.invalidRows() > 0) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "excel contains invalid routing rows");
@@ -186,52 +213,11 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
 
     // ── internal ──
 
-    private ParsedSession loadSession(String uploadToken) {
-        AlertRoutingExcelImportStore.ExcelImportSession session = importStore.get(uploadToken);
-        if (session == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "excel upload session not found");
-        }
-        tenantGuard.assertTenantAllowed(session.tenantId());
-        return new ParsedSession(session.fileName(), session.tenantId(), session.sheetName(), session.uploadedAt(), session.rows());
+    private ConsoleSingleSheetExcelImportSupport.ParsedSession loadSession(String uploadToken) {
+        return ConsoleSingleSheetExcelImportSupport.loadSession(uploadToken, importStore.get(uploadToken), tenantGuard);
     }
 
-    private ParsedWorkbook parseWorkbook(byte[] bytes, String tenantId, String originalFileName) throws IOException {
-        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
-            if (workbook.getNumberOfSheets() == 0) {
-                throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
-            }
-            Sheet sheet = workbook.getSheetAt(0);
-            String sheetName = sheet.getSheetName();
-            DataFormatter formatter = new DataFormatter();
-            Row headerRow = sheet.getRow(sheet.getFirstRowNum());
-            if (headerRow == null) {
-                throw new BizException(ResultCode.INVALID_ARGUMENT, "excel header row is missing");
-            }
-            Map<String, Integer> headerIndex = readHeaderIndex(headerRow, formatter);
-            validateHeaders(headerIndex);
-            List<Map<String, String>> rows = new ArrayList<>();
-            for (int rowIndex = headerRow.getRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null || rowIsBlank(row, formatter)) {
-                    continue;
-                }
-                Map<String, String> rowValues = new LinkedHashMap<>();
-                for (String header : COLUMNS) {
-                    Integer columnIndex = headerIndex.get(header);
-                    rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
-                }
-                rowValues.put("tenant_id", StringUtils.hasText(rowValues.get("tenant_id")) ? rowValues.get("tenant_id") : tenantId);
-                rows.add(rowValues);
-            }
-            return new ParsedWorkbook(fileNameOrDefault(originalFileName), tenantId, sheetName, rows);
-        } catch (BizException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "failed to read excel workbook: " + e.getMessage());
-        }
-    }
-
-    private ValidationResult validateRows(ParsedSession session) {
+    private ValidationResult validateRows(ConsoleSingleSheetExcelImportSupport.ParsedSession session) {
         List<RoutingRow> rows = new ArrayList<>();
         List<ConsoleAlertRoutingExcelRowIssueResponse> issues = new ArrayList<>();
         Set<String> uniqueKeys = new LinkedHashSet<>();
@@ -353,57 +339,13 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
         return ConsoleTextSanitizer.normalize(value);
     }
 
-    private Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
-        Map<String, Integer> headers = new LinkedHashMap<>();
-        for (int i = headerRow.getFirstCellNum(); i < headerRow.getLastCellNum(); i++) {
-            Cell cell = headerRow.getCell(i);
-            String header = normalize(formatter.formatCellValue(cell));
-            if (StringUtils.hasText(header)) {
-                headers.put(header, i);
-            }
-        }
-        return headers;
-    }
-
-    private void validateHeaders(Map<String, Integer> headerIndex) {
-        Set<String> missing = new LinkedHashSet<>(REQUIRED_HEADERS);
-        missing.removeAll(headerIndex.keySet());
-        if (!missing.isEmpty()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "excel header missing: " + String.join(", ", missing));
-        }
-    }
-
-    private boolean rowIsBlank(Row row, DataFormatter formatter) {
-        for (int i = row.getFirstCellNum(); i < row.getLastCellNum(); i++) {
-            String value = normalize(formatter.formatCellValue(row.getCell(i)));
-            if (StringUtils.hasText(value)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private String cellText(Row row, Integer columnIndex, DataFormatter formatter) {
-        if (columnIndex == null) {
-            return null;
-        }
-        Cell cell = row.getCell(columnIndex);
-        return cell == null ? null : formatter.formatCellValue(cell);
-    }
-
     // ── workbook generation ──
 
     private byte[] writeWorkbook(List<Map<String, Object>> rows) {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(50); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet dataSheet = workbook.createSheet(SHEET_NAME);
             dataSheet.createFreezePane(0, 1);
-            CellStyle headerStyle = createHeaderStyle(workbook);
-            Row headerRow = dataSheet.createRow(0);
-            for (int i = 0; i < COLUMNS.size(); i++) {
-                Cell cell = headerRow.createCell(i);
-                cell.setCellValue(COLUMNS.get(i));
-                cell.setCellStyle(headerStyle);
-            }
+            writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
             int rowIndex = 1;
             for (Map<String, Object> row : rows) {
                 Row dataRow = dataSheet.createRow(rowIndex++);
@@ -414,9 +356,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
                 }
             }
             applyValidations(dataSheet);
-            for (int i = 0; i < COLUMNS.size(); i++) {
-                dataSheet.setColumnWidth(i, Math.min(12000, Math.max(18, COLUMNS.get(i).length() + 4) * 256));
-            }
+            setWidths(dataSheet, COLUMNS);
             createReadmeSheet(workbook);
             createDictSheet(workbook);
             createValidationSheet(workbook);
@@ -428,25 +368,30 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
         }
     }
 
+    private byte[] writePreviewWorkbook(ConsoleSingleSheetExcelImportSupport.ParsedSession session, ValidationResult result) {
+        List<WorkbookIssue> workbookIssues = result.issues().stream()
+                .flatMap(issue -> ConsoleExcelPreviewWorkbookSupport
+                        .expandIssues(SHEET_NAME, issue.rowNo(), issue.messages(), COLUMNS)
+                        .stream())
+                .toList();
+        return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(
+                session,
+                COLUMNS,
+                COLUMN_GUIDES,
+                this::applyValidations,
+                workbook -> {
+                    createReadmeSheet(workbook);
+                    createDictSheet(workbook);
+                    createValidationSheet(workbook);
+                },
+                workbookIssues,
+                1,
+                "failed to generate preview excel workbook");
+    }
+
     private void applyValidations(Sheet sheet) {
-        addListValidation(sheet, 5, SEVERITIES.toArray(String[]::new));
-        addBooleanValidation(sheet, 11);
-    }
-
-    private void addListValidation(Sheet sheet, int columnIndex, String[] values) {
-        DataValidationHelper helper = sheet.getDataValidationHelper();
-        DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
-        CellRangeAddressList addressList = new CellRangeAddressList(1, 5000, columnIndex, columnIndex);
-        DataValidation validation = helper.createValidation(constraint, addressList);
-        validation.setSuppressDropDownArrow(false);
-        validation.setShowErrorBox(true);
-        sheet.addValidationData(validation);
-    }
-
-    private void addBooleanValidation(Sheet sheet, int... columns) {
-        for (int col : columns) {
-            addListValidation(sheet, col, new String[]{"TRUE", "FALSE"});
-        }
+        addDropdownValidation(sheet, 5, SEVERITIES.toArray(String[]::new), "severity 填写提示", "请从下拉列表中选择告警级别。");
+        addBooleanValidation(sheet, new int[]{11}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
     }
 
     private void createReadmeSheet(Workbook workbook) {
@@ -454,13 +399,12 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
         sheet.setColumnWidth(0, 16000);
         CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
-                "alert routing config 维护模板",
-                "1. 主数据页必须在第一个 sheet。",
-                "2. 导出结果可直接修改后再导入。",
-                "3. severity 已内置下拉校验（INFO / WARN / ERROR / CRITICAL）。",
-                "4. group_by 为逗号分隔的标签列表，可留空。",
-                "5. group_wait_seconds / group_interval_seconds / repeat_interval_seconds 对齐 Alertmanager route。",
-                "6. 导入流程必须先 upload，再 preview，最后 apply。"
+                "alert routing config maintenance template",
+                "1. Orange headers mark required fields. Hover the header to see field rules and examples.",
+                "2. severity and enabled have built-in dropdown validation.",
+                "3. route_code is the unique key used during preview and apply.",
+                "4. Timing fields accept integers in seconds and must be >= 0.",
+                "5. Import flow is upload -> preview -> apply."
         };
         for (int i = 0; i < lines.length; i++) {
             Row row = sheet.createRow(i);
@@ -474,7 +418,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
     private void createDictSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("DICT");
         sheet.createFreezePane(0, 1);
-        CellStyle dictHeaderStyle = createHeaderStyle(workbook);
+        CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
         writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
         String[][] rows = {
                 {"severity", "INFO", "informational"},
@@ -530,10 +474,6 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
         return map;
     }
 
-    private String fileNameOrDefault(String fileName) {
-        return StringUtils.hasText(fileName) ? fileName : "alert-routing-config.xlsx";
-    }
-
     private ConsoleAlertRoutingResponse toResponse(RoutingRow row) {
         return new ConsoleAlertRoutingResponse(
                 null, row.tenantId(), row.routeCode(), row.routeName(),
@@ -544,12 +484,6 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
     }
 
     // ── internal records ──
-
-    private record ParsedWorkbook(String fileName, String tenantId, String sheetName, List<Map<String, String>> rows) {
-    }
-
-    private record ParsedSession(String fileName, String tenantId, String sheetName, Instant uploadedAt, List<Map<String, String>> rows) {
-    }
 
     @Builder
     private record RoutingRow(int rowNo, String tenantId, String routeCode, String routeName,

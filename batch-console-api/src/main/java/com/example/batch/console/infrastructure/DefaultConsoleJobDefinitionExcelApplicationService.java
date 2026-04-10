@@ -26,13 +26,20 @@ import com.example.batch.console.web.response.ConsoleJobDefinitionExcelPreviewRe
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelRowIssueResponse;
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelRowResponse;
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelUploadResponse;
-import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.readOnlyColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.requiredReadOnlyColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
 import com.example.batch.console.support.ConsoleExcelStyles;
+import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
+import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.io.ByteArrayInputStream;
 import org.apache.poi.ss.usermodel.Cell;
 import java.io.ByteArrayOutputStream;
@@ -50,14 +57,10 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.DataValidation;
-import org.apache.poi.ss.usermodel.DataValidationConstraint;
-import org.apache.poi.ss.usermodel.DataValidationHelper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
@@ -99,15 +102,31 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
             "description"
     );
     private static final Set<String> HEADERS = Set.copyOf(COLUMNS);
+    private static final Set<String> JOB_TYPES = Set.of("GENERAL", "IMPORT", "EXPORT", "DISPATCH", "WORKFLOW");
+    private static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL", "EVENT", "ONE_TIME");
     private static final Set<String> RETRY_POLICIES = Set.of("NONE", "FIXED", "EXPONENTIAL");
     private static final Set<String> SHARD_STRATEGIES = Set.of("NONE", "STATIC", "DYNAMIC", "AUTO");
     private static final Set<String> ENABLED_VALUES = Set.of("TRUE", "FALSE");
-    private static final Set<String> READ_ONLY_COLUMNS = Set.of(
-            "job_type",
-            "schedule_type",
-            "execution_handler",
-            "param_schema",
-            "default_params"
+    private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES = Map.ofEntries(
+            Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+            Map.entry("job_code", requiredColumn("作业唯一编码，用于匹配已有作业定义。", "字符串", "JOB_SETTLEMENT_001")),
+            Map.entry("job_name", optionalColumn("控制台展示的作业名称。", "字符串", "清算作业")),
+            Map.entry("job_type", requiredReadOnlyColumn("作业执行类型。该维护模板中为只读字段，仅校验是否与导出值一致。", "枚举", "GENERAL", "GENERAL", "IMPORT", "EXPORT", "DISPATCH", "WORKFLOW")),
+            Map.entry("queue_code", optionalColumn("资源队列编码。留空表示保持当前值。", "编码", "queue-default")),
+            Map.entry("worker_group", optionalColumn("目标执行器分组。留空表示保持当前值。", "编码", "worker-general")),
+            Map.entry("schedule_type", requiredReadOnlyColumn("调度类型在维护模板中为只读字段，必须与导出值一致。", "枚举", "CRON", "CRON", "FIXED_RATE", "MANUAL", "EVENT", "ONE_TIME")),
+            Map.entry("schedule_expr", optionalColumn("调度表达式，具体格式取决于 schedule_type。", "Cron / ISO-8601 时长 / 时间戳 / 事件主题", "0 0/30 * * * ?")),
+            Map.entry("calendar_code", optionalColumn("业务日历编码，系统中必须已存在。", "编码", "BIZ_CALENDAR")),
+            Map.entry("window_code", optionalColumn("批量窗口编码，系统中必须已存在。", "编码", "WINDOW_NIGHT")),
+            Map.entry("retry_policy", optionalColumn("执行失败后的重试策略。", "枚举", "FIXED", "NONE", "FIXED", "EXPONENTIAL")),
+            Map.entry("retry_max_count", optionalColumn("最大重试次数，必须大于等于 0。", "整数", "3")),
+            Map.entry("timeout_seconds", optionalColumn("超时时间（秒），必须大于等于 0。", "整数", "1800")),
+            Map.entry("shard_strategy", optionalColumn("编排器使用的分片策略。", "枚举", "AUTO", "NONE", "STATIC", "DYNAMIC", "AUTO")),
+            Map.entry("execution_handler", readOnlyColumn("运行时处理器 Bean/Class。该维护模板中为只读字段。", "字符串", "com.example.batch.worker.general.GenericTaskHandler")),
+            Map.entry("param_schema", readOnlyColumn("启动参数 Schema。该维护模板中请保持导出的 JSON 不变。", "JSON", "{\"type\":\"object\"}")),
+            Map.entry("default_params", readOnlyColumn("默认启动参数。该维护模板中请保持导出的 JSON 不变。", "JSON", "{\"batchSize\":1000}")),
+            Map.entry("enabled", optionalColumn("作业定义是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
+            Map.entry("description", optionalColumn("面向运维人员的说明信息。", "字符串", "夜间清算处理链路"))
     );
 
     private final ConsoleTenantGuard tenantGuard;
@@ -175,6 +194,19 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
                 validationResult.rows().stream().map(this::toResponse).toList(),
                 validationResult.issues()
         );
+    }
+
+    @Override
+    public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
+        ParsedSession session = loadSession(uploadToken);
+        ValidationResult validationResult = validate(session);
+        byte[] workbookBytes = writePreviewWorkbook(session, validationResult);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()))
+                        .build().toString())
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
     }
 
     @Override
@@ -380,12 +412,58 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
         }
     }
 
+    private byte[] writePreviewWorkbook(ParsedSession session, ValidationResult validationResult) {
+        try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
+            Sheet dataSheet = workbook.createSheet(SHEET);
+            dataSheet.createFreezePane(0, 1);
+            writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
+            int rowIndex = 1;
+            for (JobDefinitionRow rowData : session.rows()) {
+                Row row = dataSheet.createRow(rowIndex++);
+                writeCell(row, 0, rowData.tenantId());
+                writeCell(row, 1, rowData.jobCode());
+                writeCell(row, 2, rowData.jobName());
+                writeCell(row, 3, rowData.jobType());
+                writeCell(row, 4, rowData.queueCode());
+                writeCell(row, 5, rowData.workerGroup());
+                writeCell(row, 6, rowData.scheduleType());
+                writeCell(row, 7, rowData.scheduleExpr());
+                writeCell(row, 8, rowData.calendarCode());
+                writeCell(row, 9, rowData.windowCode());
+                writeCell(row, 10, rowData.retryPolicy());
+                writeCell(row, 11, rowData.retryMaxCount());
+                writeCell(row, 12, rowData.timeoutSeconds());
+                writeCell(row, 13, rowData.shardStrategy());
+                writeCell(row, 14, rowData.executionHandler());
+                writeCell(row, 15, rowData.paramSchema());
+                writeCell(row, 16, rowData.defaultParams());
+                writeCell(row, 17, rowData.enabled());
+                writeCell(row, 18, rowData.description());
+            }
+            applyValidations(dataSheet);
+            setWidths(dataSheet, COLUMNS);
+            createReadmeSheet(workbook);
+            createDictSheet(workbook);
+            createValidationSheet(workbook);
+
+            List<WorkbookIssue> workbookIssues = validationResult.issues().stream()
+                    .flatMap(issue -> ConsoleExcelPreviewWorkbookSupport
+                            .expandIssues(issue.sheetName(), issue.rowNo(), issue.messages(), COLUMNS)
+                            .stream())
+                    .toList();
+            ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, workbookIssues);
+            ConsoleExcelPreviewWorkbookSupport.addIssueComments(dataSheet, COLUMNS, workbookIssues, 1);
+            return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
+        } catch (IOException exception) {
+            throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate preview excel workbook");
+        }
+    }
+
     private byte[] writeWorkbook(List<JobDefinitionEntity> rows) {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(50); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet dataSheet = workbook.createSheet(SHEET);
             dataSheet.createFreezePane(0, 1);
-            CellStyle headerStyle = createHeaderStyle(workbook);
-            writeHeaders(dataSheet, COLUMNS, headerStyle);
+            writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
             int rowIndex = 1;
             for (JobDefinitionEntity entity : rows) {
                 Row row = dataSheet.createRow(rowIndex++);
@@ -423,19 +501,11 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
     }
 
     private void applyValidations(Sheet sheet) {
-        addListValidation(sheet, 10, RETRY_POLICIES.toArray(String[]::new));
-        addListValidation(sheet, 13, SHARD_STRATEGIES.toArray(String[]::new));
-        addListValidation(sheet, 17, ENABLED_VALUES.toArray(String[]::new));
-    }
-
-    private void addListValidation(Sheet sheet, int columnIndex, String[] values) {
-        DataValidationHelper helper = sheet.getDataValidationHelper();
-        DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
-        CellRangeAddressList addressList = new CellRangeAddressList(1, 5000, columnIndex, columnIndex);
-        DataValidation validation = helper.createValidation(constraint, addressList);
-        validation.setSuppressDropDownArrow(false);
-        validation.setShowErrorBox(true);
-        sheet.addValidationData(validation);
+        addDropdownValidation(sheet, 3, JOB_TYPES.toArray(String[]::new), "job_type 填写提示", "该字段为只读字段，请保持导出的 job_type 不变。");
+        addDropdownValidation(sheet, 6, SCHEDULE_TYPES.toArray(String[]::new), "schedule_type 填写提示", "该字段为只读字段，请保持导出的 schedule_type 不变。");
+        addDropdownValidation(sheet, 10, RETRY_POLICIES.toArray(String[]::new), "retry_policy 填写提示", "请从下拉列表中选择重试策略。");
+        addDropdownValidation(sheet, 13, SHARD_STRATEGIES.toArray(String[]::new), "shard_strategy 填写提示", "请从下拉列表中选择分片策略。");
+        addDropdownValidation(sheet, 17, ENABLED_VALUES.toArray(String[]::new), "enabled 填写提示", "请填写 TRUE 或 FALSE。");
     }
 
     private void createReadmeSheet(Workbook workbook) {
@@ -444,10 +514,10 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
         CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
                 "job definition safe-field maintenance template",
-                "1. Only the editable fields are applied on import.",
-                "2. Read-only fields must match the current job definition.",
+                "1. Orange headers mean key fields; gray-blue headers are read-only consistency fields.",
+                "2. Hover the header cells to see field purpose, format hints, dropdown values, and examples.",
                 "3. Import rows are matched by tenant_id + job_code.",
-                "4. Exported workbook can be edited and re-uploaded directly.",
+                "4. Leave editable cells blank to keep the current exported value.",
                 "5. Import flow is upload -> preview -> apply."
         };
         for (int i = 0; i < lines.length; i++) {
@@ -462,7 +532,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
     private void createDictSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("DICT");
         sheet.createFreezePane(0, 1);
-        CellStyle dictHeaderStyle = createHeaderStyle(workbook);
+        CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
         writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
         String[][] rows = {
                 {"retry_policy", "NONE", "no retry"},

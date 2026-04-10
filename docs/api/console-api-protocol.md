@@ -615,33 +615,73 @@ Deployment note:
 - `GET /api/console/config/file-templates/excel/export`
 - `POST /api/console/config/file-templates/excel/upload`
 - `GET /api/console/config/file-templates/excel/preview/{uploadToken}`
+- `GET /api/console/config/file-templates/excel/preview/{uploadToken}/workbook`
 - `POST /api/console/config/file-templates/excel/apply/{uploadToken}`
 - `GET /api/console/config/file-channels/excel/template`
 - `GET /api/console/config/file-channels/excel/export`
 - `POST /api/console/config/file-channels/excel/upload`
 - `GET /api/console/config/file-channels/excel/preview/{uploadToken}`
+- `GET /api/console/config/file-channels/excel/preview/{uploadToken}/workbook`
 - `POST /api/console/config/file-channels/excel/apply/{uploadToken}`
 - `GET /api/console/config/workflows/excel/template`
 - `GET /api/console/config/workflows/excel/export`
 - `POST /api/console/config/workflows/excel/upload`
 - `GET /api/console/config/workflows/excel/preview/{uploadToken}`
+- `GET /api/console/config/workflows/excel/preview/{uploadToken}/workbook`
 - `POST /api/console/config/workflows/excel/apply/{uploadToken}`
 - `GET /api/console/config/job-definitions/excel/template`
 - `GET /api/console/config/job-definitions/excel/export`
 - `POST /api/console/config/job-definitions/excel/upload`
 - `GET /api/console/config/job-definitions/excel/preview/{uploadToken}`
+- `GET /api/console/config/job-definitions/excel/preview/{uploadToken}/workbook`
 - `POST /api/console/config/job-definitions/excel/apply/{uploadToken}`
 - `GET /api/console/config/alert-routings/excel/template`
 - `GET /api/console/config/alert-routings/excel/export`
 - `POST /api/console/config/alert-routings/excel/upload`
 - `GET /api/console/config/alert-routings/excel/preview/{uploadToken}`
+- `GET /api/console/config/alert-routings/excel/preview/{uploadToken}/workbook`
 - `POST /api/console/config/alert-routings/excel/apply/{uploadToken}`
+- `GET /api/console/config/batch-windows/excel/template`
+- `GET /api/console/config/batch-windows/excel/export`
+- `POST /api/console/config/batch-windows/excel/upload`
+- `GET /api/console/config/batch-windows/excel/preview/{uploadToken}`
+- `GET /api/console/config/batch-windows/excel/preview/{uploadToken}/workbook`
+- `POST /api/console/config/batch-windows/excel/apply/{uploadToken}`
+- `GET /api/console/config/business-calendars/excel/template`
+- `GET /api/console/config/business-calendars/excel/export`
+- `POST /api/console/config/business-calendars/excel/upload`
+- `GET /api/console/config/business-calendars/excel/preview/{uploadToken}`
+- `GET /api/console/config/business-calendars/excel/preview/{uploadToken}/workbook`
+- `POST /api/console/config/business-calendars/excel/apply/{uploadToken}`
+- `GET /api/console/config/pipeline-definitions/excel/template`
+- `GET /api/console/config/pipeline-definitions/excel/export`
+- `POST /api/console/config/pipeline-definitions/excel/upload`
+- `GET /api/console/config/pipeline-definitions/excel/preview/{uploadToken}`
+- `GET /api/console/config/pipeline-definitions/excel/preview/{uploadToken}/workbook`
+- `POST /api/console/config/pipeline-definitions/excel/apply/{uploadToken}`
+- `GET /api/console/config/resource-queues/excel/template`
+- `GET /api/console/config/resource-queues/excel/export`
+- `POST /api/console/config/resource-queues/excel/upload`
+- `GET /api/console/config/resource-queues/excel/preview/{uploadToken}`
+- `GET /api/console/config/resource-queues/excel/preview/{uploadToken}/workbook`
+- `POST /api/console/config/resource-queues/excel/apply/{uploadToken}`
+- `GET /api/console/config/quota-policies/excel/template`
+- `GET /api/console/config/quota-policies/excel/export`
+- `POST /api/console/config/quota-policies/excel/upload`
+- `GET /api/console/config/quota-policies/excel/preview/{uploadToken}`
+- `GET /api/console/config/quota-policies/excel/preview/{uploadToken}/workbook`
+- `POST /api/console/config/quota-policies/excel/apply/{uploadToken}`
 - Config list views should use typed response DTOs for releases, secrets, and change logs.
-- Excel maintenance for `file template config` and `file channel config` follows the dedicated adapter flow: template, upload, preview, apply, then export.
-- Excel maintenance for `workflow definition / node / edge` follows the same dedicated adapter flow and keeps definition, node, and edge sheets aligned by workflow code + version.
+- Excel maintenance currently covers 10 editable config domains: `file template`, `file channel`, `workflow`, `job definition`, `alert routing`, `batch window`, `business calendar`, `pipeline definition`, `resource queue`, and `tenant quota policy`.
+- Each editable Excel domain follows the same HTTP shape: `template -> export -> upload -> preview -> preview workbook -> apply`.
+- `GET /preview/{uploadToken}/workbook` downloads a corrected workbook family that includes populated `VALIDATION` rows and cell comments pointing at the failing cells.
+- The preview workbook is intentionally re-importable: comments and extra sheets must not break a subsequent `upload`.
+- Excel maintenance for `file template config` and `file channel config` follows the dedicated adapter flow with single-sheet maintenance semantics.
+- Excel maintenance for `resource queue`, `tenant quota policy`, `batch window`, and `alert routing` follows the same single-sheet maintenance flow.
+- Excel maintenance for `workflow definition / node / edge`, `business calendar / holiday`, and `pipeline definition / step definition` follows the same dedicated adapter flow but keeps multiple sheets aligned by shared keys.
 - Excel maintenance for the safe subset of `job definition` follows the same dedicated adapter flow, but only allows white-listed mutable columns and update-only apply semantics.
-- Excel maintenance for `alert routing / notification policy` follows the same dedicated adapter flow, aligning with Alertmanager route semantics.
 - Export workbooks for editable Excel flows must stay as recoverable templates: data sheet first, then README / DICT / VALIDATION sheets, so users can edit and re-upload the same file family.
+- Preview workbook generation is read-only: it reflects validation findings from the current upload session and does not write configuration data.
 - `GET /api/console/reports/excel/config-releases`
 - `GET /api/console/reports/excel/secrets`
 - `GET /api/console/reports/excel/change-logs`

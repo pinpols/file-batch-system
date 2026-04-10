@@ -56,6 +56,15 @@
           and id = #{id}
     </select>
 
+    <select id="selectByUniqueKey" resultType="map">
+        select *
+        from batch.pipeline_definition
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+          and version = #{version}
+        limit 1
+    </select>
+
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.pipeline_definition (
             tenant_id, job_code, pipeline_name, pipeline_type,

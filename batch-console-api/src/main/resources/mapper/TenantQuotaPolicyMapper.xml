@@ -57,6 +57,26 @@
         limit 1
     </select>
 
+    <insert id="upsertTenantQuotaPolicy" parameterType="com.example.batch.console.mapper.param.TenantQuotaPolicyUpsertParam">
+        insert into batch.tenant_quota_policy (
+            tenant_id, policy_code, max_running_jobs_per_tenant,
+            max_partitions_per_tenant, max_qps_per_tenant,
+            fair_share_weight, enabled, description
+        ) values (
+            #{tenantId}, #{policyCode}, #{maxRunningJobsPerTenant},
+            #{maxPartitionsPerTenant}, #{maxQpsPerTenant},
+            #{fairShareWeight}, #{enabled}, #{description}
+        )
+        on conflict (tenant_id, policy_code) do update
+        set max_running_jobs_per_tenant = excluded.max_running_jobs_per_tenant,
+            max_partitions_per_tenant = excluded.max_partitions_per_tenant,
+            max_qps_per_tenant = excluded.max_qps_per_tenant,
+            fair_share_weight = excluded.fair_share_weight,
+            enabled = excluded.enabled,
+            description = excluded.description,
+            updated_at = current_timestamp
+    </insert>
+
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.tenant_quota_policy (
             tenant_id, policy_code, max_running_jobs_per_tenant,

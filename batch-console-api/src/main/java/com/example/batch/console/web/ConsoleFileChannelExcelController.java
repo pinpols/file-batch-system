@@ -85,6 +85,13 @@ public class ConsoleFileChannelExcelController {
         return responseFactory.success(applicationService.preview(uploadToken));
     }
 
+    /** 下载带校验问题与批注的预览 workbook。 */
+    @GetMapping("/preview/{uploadToken}/workbook")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
+    public ResponseEntity<InputStreamResource> previewWorkbook(@PathVariable String uploadToken) {
+        return applicationService.downloadPreviewWorkbook(uploadToken);
+    }
+
     /**
      * 将已通过预览的会话数据批量写入/更新文件通道配置，并记录配置变更。
      *

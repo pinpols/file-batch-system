@@ -68,6 +68,33 @@
         limit 1
     </select>
 
+    <insert id="upsertResourceQueue" parameterType="com.example.batch.console.mapper.param.ResourceQueueUpsertParam">
+        insert into batch.resource_queue (
+            tenant_id, queue_code, queue_name, queue_type,
+            max_running_jobs, max_running_partitions, max_qps,
+            worker_group, resource_tag, priority_policy, fair_share_weight,
+            enabled, description
+        ) values (
+            #{tenantId}, #{queueCode}, #{queueName}, #{queueType},
+            #{maxRunningJobs}, #{maxRunningPartitions}, #{maxQps},
+            #{workerGroup}, #{resourceTag}, #{priorityPolicy}, #{fairShareWeight},
+            #{enabled}, #{description}
+        )
+        on conflict (tenant_id, queue_code) do update
+        set queue_name = excluded.queue_name,
+            queue_type = excluded.queue_type,
+            max_running_jobs = excluded.max_running_jobs,
+            max_running_partitions = excluded.max_running_partitions,
+            max_qps = excluded.max_qps,
+            worker_group = excluded.worker_group,
+            resource_tag = excluded.resource_tag,
+            priority_policy = excluded.priority_policy,
+            fair_share_weight = excluded.fair_share_weight,
+            enabled = excluded.enabled,
+            description = excluded.description,
+            updated_at = current_timestamp
+    </insert>
+
     <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
         insert into batch.resource_queue (
             tenant_id, queue_code, queue_name, queue_type,

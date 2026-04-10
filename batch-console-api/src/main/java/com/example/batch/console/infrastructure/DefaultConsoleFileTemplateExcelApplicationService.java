@@ -11,6 +11,7 @@ import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.param.FileTemplateConfigUpsertParam;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.ConsoleSingleSheetExcelImportSupport;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.support.FileTemplateExcelImportStore;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
@@ -20,15 +21,21 @@ import com.example.batch.console.web.response.ConsoleFileTemplateExcelApplyRespo
 import com.example.batch.console.web.response.ConsoleFileTemplateExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleFileTemplateExcelUploadResponse;
 import com.example.batch.console.web.response.ConsoleFileTemplateResponse;
-import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.addBooleanValidation;
+import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownValidation;
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
 import com.example.batch.console.support.ConsoleExcelStyles;
+import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
+import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -43,16 +50,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.DataValidation;
-import org.apache.poi.ss.usermodel.DataValidationConstraint;
-import org.apache.poi.ss.usermodel.DataValidationHelper;
-import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
-import org.apache.poi.ss.util.CellRangeAddressList;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -122,6 +123,49 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
     private static final Set<String> COMPRESS_TYPES = Set.of("NONE", "ZIP", "GZIP");
     private static final Set<String> ENCRYPT_TYPES = Set.of("NONE", "AES", "PGP", "CUSTOM");
     private static final int[] BOOLEAN_VALIDATION_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
+    private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES = Map.ofEntries(
+            Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+            Map.entry("template_code", requiredColumn("模板唯一编码，与 version 一起作为导入匹配键。", "字符串", "TPL_SETTLEMENT_001")),
+            Map.entry("template_name", requiredColumn("控制台展示的模板名称。", "字符串", "清算导出模板")),
+            Map.entry("template_type", requiredColumn("文件模板在链路中的角色。", "枚举", "EXPORT", "IMPORT", "EXPORT", "SHARED")),
+            Map.entry("biz_type", optionalColumn("用于检索和治理的业务分类标签。", "字符串", "SETTLEMENT")),
+            Map.entry("file_format_type", requiredColumn("模板生产或消费的物理文件格式。", "枚举", "DELIMITED", "DELIMITED", "FIXED_WIDTH", "EXCEL", "XML", "JSON", "BINARY")),
+            Map.entry("charset", optionalColumn("文本类文件的源字符集。", "字符串", "UTF-8")),
+            Map.entry("target_charset", optionalColumn("导出转换时的目标字符集。", "字符串", "GBK")),
+            Map.entry("with_bom", optionalColumn("文本文件是否写入 BOM。", "布尔值", "FALSE", "TRUE", "FALSE")),
+            Map.entry("line_separator", optionalColumn("文本输出使用的换行符。", "字符串", "\\n")),
+            Map.entry("delimiter", optionalColumn("分隔文本使用的列分隔符。", "字符串", ",")),
+            Map.entry("quote_char", optionalColumn("分隔文本使用的引号字符。", "字符串", "\"")),
+            Map.entry("escape_char", optionalColumn("分隔文本使用的转义字符。", "字符串", "\\")),
+            Map.entry("record_length", optionalColumn("定长文件的记录长度，必须大于等于 0。", "整数", "200")),
+            Map.entry("header_rows", optionalColumn("文件头行数，必须大于等于 0。", "整数", "1")),
+            Map.entry("footer_rows", optionalColumn("文件尾行数，必须大于等于 0。", "整数", "0")),
+            Map.entry("header_template", optionalColumn("文件头模板定义，请保持为合法 JSON。", "JSON", "{\"recordType\":\"H\"}")),
+            Map.entry("trailer_template", optionalColumn("文件尾模板定义，请保持为合法 JSON。", "JSON", "{\"recordType\":\"T\"}")),
+            Map.entry("checksum_type", requiredColumn("文件使用的校验算法。", "枚举", "NONE", "NONE", "MD5", "SHA-256")),
+            Map.entry("compress_type", requiredColumn("文件使用的压缩算法。", "枚举", "ZIP", "NONE", "ZIP", "GZIP")),
+            Map.entry("encrypt_type", requiredColumn("文件使用的加密算法。", "枚举", "NONE", "NONE", "AES", "PGP", "CUSTOM")),
+            Map.entry("naming_rule", optionalColumn("文件命名规则或命名模板。", "表达式", "${bizDate}_${seq}.csv")),
+            Map.entry("field_mappings", optionalColumn("源字段与文件列之间的映射定义，请保持为合法 JSON。", "JSON", "[{\"source\":\"amount\",\"target\":\"AMOUNT\"}]")),
+            Map.entry("validation_rule_set", optionalColumn("解析或生成时执行的校验规则，请保持为合法 JSON。", "JSON", "[{\"field\":\"amount\",\"rule\":\"required\"}]")),
+            Map.entry("default_query_code", optionalColumn("导出步骤引用的默认查询编码。", "字符串", "QRY_SETTLEMENT_EXPORT")),
+            Map.entry("default_query_sql", optionalColumn("模板中可选的内联 SQL。", "SQL", "select * from settlement_result")),
+            Map.entry("query_param_schema", optionalColumn("查询参数 Schema，请保持为合法 JSON。", "JSON", "{\"type\":\"object\"}")),
+            Map.entry("streaming_enabled", optionalColumn("大结果集导出时是否启用流式处理。", "布尔值", "TRUE", "TRUE", "FALSE")),
+            Map.entry("page_size", optionalColumn("分页读取大小，必须大于等于 0。", "整数", "1000")),
+            Map.entry("fetch_size", optionalColumn("数据库抓取大小，必须大于等于 0。", "整数", "1000")),
+            Map.entry("chunk_size", optionalColumn("分段生成文件时的块大小，必须大于等于 0。", "整数", "500")),
+            Map.entry("preview_masking_enabled", optionalColumn("预览结果是否脱敏。", "布尔值", "FALSE", "TRUE", "FALSE")),
+            Map.entry("error_line_masking_enabled", optionalColumn("错误明细导出是否脱敏。", "布尔值", "FALSE", "TRUE", "FALSE")),
+            Map.entry("log_masking_enabled", optionalColumn("日志是否对敏感字段脱敏。", "布尔值", "TRUE", "TRUE", "FALSE")),
+            Map.entry("content_encryption_enabled", optionalColumn("存储中的文件内容是否加密。", "布尔值", "FALSE", "TRUE", "FALSE")),
+            Map.entry("encryption_key_ref", optionalColumn("加密所使用的密钥引用。", "字符串", "kms://file-template/settlement")),
+            Map.entry("download_requires_approval", optionalColumn("下载前是否需要人工审批。", "布尔值", "TRUE", "TRUE", "FALSE")),
+            Map.entry("masking_rule_set", optionalColumn("脱敏规则集标识或表达式。", "字符串", "MASK_RULE_SETTLEMENT")),
+            Map.entry("enabled", optionalColumn("文件模板是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
+            Map.entry("version", optionalColumn("模板版本号，template_code + version 必须唯一。", "整数", "1")),
+            Map.entry("description", optionalColumn("面向运维人员的说明信息。", "字符串", "清算导出模板"))
+    );
 
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -166,14 +210,15 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
             throw new BizException(ResultCode.INVALID_ARGUMENT, "file is required");
         }
         String tenantId = tenantGuard.resolveTenant(null);
-        ParsedWorkbook parsedWorkbook = parseWorkbook(file.getBytes(), tenantId, file.getOriginalFilename());
+        ConsoleSingleSheetExcelImportSupport.ParsedWorkbook parsedWorkbook = ConsoleSingleSheetExcelImportSupport.parseWorkbook(
+                file.getBytes(), tenantId, file.getOriginalFilename(), "file-template-config.xlsx", COLUMNS, REQUIRED_HEADERS);
         String uploadToken = importStore.save(parsedWorkbook.fileName(), parsedWorkbook.tenantId(), parsedWorkbook.sheetName(), parsedWorkbook.rows());
         return new ConsoleFileTemplateExcelUploadResponse(uploadToken, parsedWorkbook.fileName(), parsedWorkbook.sheetName(), parsedWorkbook.rows().size());
     }
 
     @Override
     public ConsoleFileTemplateExcelPreviewResponse preview(String uploadToken) {
-        ParsedSession session = loadSession(uploadToken);
+        ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
         ValidationResult validationResult = validateRows(session);
         return new ConsoleFileTemplateExcelPreviewResponse(
                 uploadToken,
@@ -188,9 +233,18 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
     }
 
     @Override
+    public ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken) {
+        ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
+        ValidationResult validationResult = validateRows(session);
+        byte[] workbookBytes = writePreviewWorkbook(session, validationResult);
+        return ConsoleSingleSheetExcelImportSupport.excelResponse(
+                ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), workbookBytes);
+    }
+
+    @Override
     @Transactional
     public ConsoleFileTemplateExcelApplyResponse apply(String uploadToken, FileTemplateExcelApplyRequest request) {
-        ParsedSession session = loadSession(uploadToken);
+        ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
         ValidationResult validationResult = validateRows(session);
         if (validationResult.invalidRows() > 0) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "excel contains invalid template rows");
@@ -213,55 +267,14 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         return new ConsoleFileTemplateExcelApplyResponse(uploadToken, session.tenantId(), validationResult.totalRows(), inserted, updated);
     }
 
-    private ParsedSession loadSession(String uploadToken) {
+    private ConsoleSingleSheetExcelImportSupport.ParsedSession loadSession(String uploadToken) {
         if (!StringUtils.hasText(uploadToken)) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "uploadToken is required");
         }
-        FileTemplateExcelImportStore.ExcelImportSession session = importStore.get(uploadToken);
-        if (session == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "excel upload session not found");
-        }
-        tenantGuard.assertTenantAllowed(session.tenantId());
-        return new ParsedSession(session.fileName(), session.tenantId(), session.sheetName(), session.uploadedAt(), session.rows());
+        return ConsoleSingleSheetExcelImportSupport.loadSession(uploadToken, importStore.get(uploadToken), tenantGuard);
     }
 
-    private ParsedWorkbook parseWorkbook(byte[] bytes, String tenantId, String originalFileName) throws IOException {
-        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
-            if (workbook.getNumberOfSheets() == 0) {
-                throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
-            }
-            Sheet sheet = workbook.getSheetAt(0);
-            String sheetName = sheet.getSheetName();
-            DataFormatter formatter = new DataFormatter();
-            Row headerRow = sheet.getRow(sheet.getFirstRowNum());
-            if (headerRow == null) {
-                throw new BizException(ResultCode.INVALID_ARGUMENT, "excel header row is missing");
-            }
-            Map<String, Integer> headerIndex = readHeaderIndex(headerRow, formatter);
-            validateHeaders(headerIndex);
-            List<Map<String, String>> rows = new ArrayList<>();
-            for (int rowIndex = headerRow.getRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null || rowIsBlank(row, formatter)) {
-                    continue;
-                }
-                Map<String, String> rowValues = new LinkedHashMap<>();
-                for (String header : COLUMNS) {
-                    Integer columnIndex = headerIndex.get(header);
-                    rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
-                }
-                rowValues.put("tenant_id", StringUtils.hasText(rowValues.get("tenant_id")) ? rowValues.get("tenant_id") : tenantId);
-                rows.add(rowValues);
-            }
-            return new ParsedWorkbook(fileNameOrDefault(originalFileName), tenantId, sheetName, rows);
-        } catch (BizException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "failed to read excel workbook: " + exception.getMessage());
-        }
-    }
-
-    private ValidationResult validateRows(ParsedSession session) {
+    private ValidationResult validateRows(ConsoleSingleSheetExcelImportSupport.ParsedSession session) {
         List<TemplateRow> rows = new ArrayList<>();
         List<ConsoleExcelRowIssueResponse> issues = new ArrayList<>();
         Set<String> uniqueKeys = new LinkedHashSet<>();
@@ -443,55 +456,11 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         return ConsoleTextSanitizer.normalize(value);
     }
 
-    private Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
-        Map<String, Integer> headers = new LinkedHashMap<>();
-        for (int cellIndex = headerRow.getFirstCellNum(); cellIndex < headerRow.getLastCellNum(); cellIndex++) {
-            Cell cell = headerRow.getCell(cellIndex);
-            String header = normalize(formatter.formatCellValue(cell));
-            if (StringUtils.hasText(header)) {
-                headers.put(header, cellIndex);
-            }
-        }
-        return headers;
-    }
-
-    private void validateHeaders(Map<String, Integer> headerIndex) {
-        Set<String> missing = new LinkedHashSet<>(REQUIRED_HEADERS);
-        missing.removeAll(headerIndex.keySet());
-        if (!missing.isEmpty()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "excel header missing: " + String.join(", ", missing));
-        }
-    }
-
-    private boolean rowIsBlank(Row row, DataFormatter formatter) {
-        for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
-            String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
-            if (StringUtils.hasText(value)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private String cellText(Row row, Integer columnIndex, DataFormatter formatter) {
-        if (columnIndex == null) {
-            return null;
-        }
-        Cell cell = row.getCell(columnIndex);
-        return cell == null ? null : formatter.formatCellValue(cell);
-    }
-
     private byte[] writeWorkbook(List<Map<String, Object>> rows) {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(50); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet dataSheet = workbook.createSheet(SHEET_NAME);
             dataSheet.createFreezePane(0, 1);
-            CellStyle headerStyle = createHeaderStyle(workbook);
-            Row headerRow = dataSheet.createRow(0);
-            for (int i = 0; i < COLUMNS.size(); i++) {
-                Cell headerCell = headerRow.createCell(i);
-                headerCell.setCellValue(COLUMNS.get(i));
-                headerCell.setCellStyle(headerStyle);
-            }
+            writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
             int rowIndex = 1;
             for (Map<String, Object> row : rows) {
                 Row dataRow = dataSheet.createRow(rowIndex++);
@@ -507,9 +476,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
                 }
             }
             applyValidations(dataSheet);
-            for (int i = 0; i < COLUMNS.size(); i++) {
-                dataSheet.setColumnWidth(i, Math.min(12000, Math.max(18, COLUMNS.get(i).length() + 4) * 256));
-            }
+            setWidths(dataSheet, COLUMNS);
             createReadmeSheet(workbook);
             createDictSheet(workbook);
             createValidationSheet(workbook);
@@ -521,29 +488,34 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         }
     }
 
+    private byte[] writePreviewWorkbook(ConsoleSingleSheetExcelImportSupport.ParsedSession session, ValidationResult validationResult) {
+        List<WorkbookIssue> workbookIssues = validationResult.issues().stream()
+                .flatMap(issue -> ConsoleExcelPreviewWorkbookSupport
+                        .expandIssues(SHEET_NAME, issue.rowNo(), issue.messages(), COLUMNS)
+                        .stream())
+                .toList();
+        return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(
+                session,
+                COLUMNS,
+                COLUMN_GUIDES,
+                this::applyValidations,
+                workbook -> {
+                    createReadmeSheet(workbook);
+                    createDictSheet(workbook);
+                    createValidationSheet(workbook);
+                },
+                workbookIssues,
+                1,
+                "failed to generate preview excel workbook");
+    }
+
     private void applyValidations(Sheet sheet) {
-        addListValidation(sheet, 3, TEMPLATE_TYPES.toArray(String[]::new));
-        addListValidation(sheet, 5, FILE_FORMAT_TYPES.toArray(String[]::new));
-        addListValidation(sheet, 18, CHECKSUM_TYPES.toArray(String[]::new));
-        addListValidation(sheet, 19, COMPRESS_TYPES.toArray(String[]::new));
-        addListValidation(sheet, 20, ENCRYPT_TYPES.toArray(String[]::new));
-        addBooleanValidation(sheet, BOOLEAN_VALIDATION_COLUMNS);
-    }
-
-    private void addListValidation(Sheet sheet, int columnIndex, String[] values) {
-        DataValidationHelper helper = sheet.getDataValidationHelper();
-        DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
-        CellRangeAddressList addressList = new CellRangeAddressList(1, 5000, columnIndex, columnIndex);
-        DataValidation validation = helper.createValidation(constraint, addressList);
-        validation.setSuppressDropDownArrow(false);
-        validation.setShowErrorBox(true);
-        sheet.addValidationData(validation);
-    }
-
-    private void addBooleanValidation(Sheet sheet, int... columns) {
-        for (int columnIndex : columns) {
-            addListValidation(sheet, columnIndex, new String[]{"TRUE", "FALSE"});
-        }
+        addDropdownValidation(sheet, 3, TEMPLATE_TYPES.toArray(String[]::new), "template_type 填写提示", "请从下拉列表中选择 IMPORT、EXPORT 或 SHARED。");
+        addDropdownValidation(sheet, 5, FILE_FORMAT_TYPES.toArray(String[]::new), "file_format_type 填写提示", "请从下拉列表中选择物理文件格式。");
+        addDropdownValidation(sheet, 18, CHECKSUM_TYPES.toArray(String[]::new), "checksum_type 填写提示", "请从下拉列表中选择校验算法。");
+        addDropdownValidation(sheet, 19, COMPRESS_TYPES.toArray(String[]::new), "compress_type 填写提示", "请从下拉列表中选择压缩算法。");
+        addDropdownValidation(sheet, 20, ENCRYPT_TYPES.toArray(String[]::new), "encrypt_type 填写提示", "请从下拉列表中选择加密算法。");
+        addBooleanValidation(sheet, BOOLEAN_VALIDATION_COLUMNS, "布尔字段填写提示", "请填写 TRUE 或 FALSE。");
     }
 
     private void createReadmeSheet(Workbook workbook) {
@@ -551,13 +523,12 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         sheet.setColumnWidth(0, 16000);
         CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
-                "file template config 维护模板",
-                "1. 主数据页必须在第一个 sheet。",
-                "2. 导出结果可以直接修改后再导入。",
-                "3. 必填列、枚举列、布尔列已经内置数据校验。",
-                "4. 只读字段不要改，preview 会进一步校验。",
-                "5. JSON 类字段请保持合法 JSON。",
-                "6. 导入流程必须先 upload，再 preview，最后 apply。"
+                "file template config maintenance template",
+                "1. Orange headers mark required fields. Hover the header to see field rules and examples.",
+                "2. template_code + version is the unique key used during preview and apply.",
+                "3. Enum fields and boolean fields have built-in dropdown validation.",
+                "4. JSON fields such as header_template, field_mappings, validation_rule_set, and query_param_schema must stay valid JSON.",
+                "5. Import flow is upload -> preview -> apply."
         };
         for (int i = 0; i < lines.length; i++) {
             Row row = sheet.createRow(i);
@@ -571,7 +542,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
     private void createDictSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("DICT");
         sheet.createFreezePane(0, 1);
-        CellStyle dictHeaderStyle = createHeaderStyle(workbook);
+        CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
         writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
         String[][] rows = {
                 {"template_type", "IMPORT", "import template"},
@@ -645,17 +616,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
             values.put(String.valueOf(pairs[index]), pairs[index + 1]);
         }
         return values;
-    }
-
-    private String fileNameOrDefault(String fileName) {
-        if (!StringUtils.hasText(fileName)) {
-            return "file-template-config.xlsx";
-        }
-        String normalized = ConsoleTextSanitizer.normalize(fileName);
-        if (!StringUtils.hasText(normalized)) {
-            return "file-template-config.xlsx";
-        }
-        return normalized.endsWith(".xlsx") ? normalized : normalized + ".xlsx";
     }
 
     private ConsoleFileTemplateResponse toResponse(TemplateRow row) {
@@ -773,12 +733,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         audit.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
         param.setAudit(audit);
         return param;
-    }
-
-    private record ParsedWorkbook(String fileName, String tenantId, String sheetName, List<Map<String, String>> rows) {
-    }
-
-    private record ParsedSession(String fileName, String tenantId, String sheetName, Instant uploadedAt, List<Map<String, String>> rows) {
     }
 
     private record ValidationResult(int totalRows,

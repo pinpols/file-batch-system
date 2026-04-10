@@ -1,6 +1,7 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.console.mapper.param.BusinessCalendarUpsertParam;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
@@ -20,6 +21,8 @@ public interface BusinessCalendarMapper {
                       @Param("enabled") Boolean enabled);
 
     Map<String, Object> selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+
+    int upsertBusinessCalendar(BusinessCalendarUpsertParam param);
 
     int insert(Map<String, Object> params);
 

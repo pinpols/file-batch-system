@@ -68,6 +68,13 @@ public class ConsoleFileTemplateExcelController {
         return responseFactory.success(applicationService.preview(uploadToken));
     }
 
+    /** 下载带校验问题与批注的预览 workbook。 */
+    @GetMapping("/preview/{uploadToken}/workbook")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
+    public ResponseEntity<InputStreamResource> previewWorkbook(@PathVariable String uploadToken) {
+        return applicationService.downloadPreviewWorkbook(uploadToken);
+    }
+
     /** 确认导入。 */
     @PostMapping("/apply/{uploadToken}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")

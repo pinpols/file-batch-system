@@ -48,6 +48,11 @@
         where id = #{id}
     </update>
 
+    <delete id="deleteByCalendarId">
+        delete from batch.calendar_holiday
+        where calendar_id = #{calendarId}
+    </delete>
+
     <delete id="deleteById">
         delete from batch.calendar_holiday where id = #{id}
     </delete>

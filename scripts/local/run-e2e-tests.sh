@@ -15,7 +15,14 @@ export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVE
 # Docker Engine 29+ requires API ≥ 1.44; docker-java default 1.32 causes Testcontainers discovery to fail with HTTP 400.
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
 
-exec mvn -pl batch-e2e-tests -am test \
+LOG_DIR="$ROOT_DIR/logs/test"
+LOG_FILE="$LOG_DIR/run-e2e-tests.log"
+
+mkdir -p "$LOG_DIR"
+
+mvn -pl batch-e2e-tests -am test \
   --no-transfer-progress \
   -Dsurefire.failIfNoSpecifiedTests=false \
-  "$@"
+  "$@" 2>&1 | tee "$LOG_FILE"
+
+exit ${PIPESTATUS[0]}

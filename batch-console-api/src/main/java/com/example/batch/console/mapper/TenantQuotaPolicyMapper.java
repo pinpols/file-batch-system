@@ -1,6 +1,7 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.console.mapper.param.TenantQuotaPolicyUpsertParam;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
@@ -21,6 +22,8 @@ public interface TenantQuotaPolicyMapper {
 
     Map<String, Object> selectByUniqueKey(@Param("tenantId") String tenantId,
                                           @Param("policyCode") String policyCode);
+
+    int upsertTenantQuotaPolicy(TenantQuotaPolicyUpsertParam param);
 
     int insert(Map<String, Object> params);
 

@@ -16,5 +16,7 @@ public interface CalendarHolidayMapper {
 
     int update(Map<String, Object> params);
 
+    int deleteByCalendarId(@Param("calendarId") Long calendarId);
+
     int deleteById(@Param("id") Long id);
 }
