@@ -10,6 +10,7 @@ import com.example.batch.console.web.response.ConsoleConfigChangeLogResponse;
 import com.example.batch.console.web.response.ConsoleConfigReleaseResponse;
 import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 控制台配置中心应用服务：配置发布单生命周期、密钥版本与变更审计查询。
@@ -45,8 +46,8 @@ public interface ConsoleConfigApplicationService {
     ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId);
 
     /** 对比两个配置发布版本的差异。 */
-    java.util.Map<String, Object> diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB);
+    Map<String, Object> diffConfigReleases(String tenantId, Long releaseIdA, Long releaseIdB);
 
     /** 查询配置项的依赖关系：哪些 job / workflow 引用了指定的 channel、template、calendar、window、queue。 */
-    java.util.Map<String, Object> configDependencies(String tenantId, String configType, String configCode);
+    Map<String, Object> configDependencies(String tenantId, String configType, String configCode);
 }

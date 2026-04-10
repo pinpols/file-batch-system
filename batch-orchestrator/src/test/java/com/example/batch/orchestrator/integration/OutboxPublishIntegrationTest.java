@@ -7,7 +7,7 @@ import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
+import OutboxEventEntity;
 import com.example.batch.orchestrator.domain.query.EventDeliveryLogQuery;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;

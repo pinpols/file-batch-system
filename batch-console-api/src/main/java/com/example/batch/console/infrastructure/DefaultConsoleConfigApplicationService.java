@@ -31,6 +31,7 @@ import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -412,7 +413,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         // JSON payload diff
         Object payloadA = a.getConfigPayload() != null ? JsonUtils.fromJson(a.getConfigPayload(), Object.class) : null;
         Object payloadB = b.getConfigPayload() != null ? JsonUtils.fromJson(b.getConfigPayload(), Object.class) : null;
-        boolean payloadChanged = !java.util.Objects.equals(payloadA, payloadB);
+        boolean payloadChanged = !Objects.equals(payloadA, payloadB);
         result.put("payloadChanged", payloadChanged);
         if (payloadChanged) {
             result.put("payloadA", payloadA);
@@ -422,11 +423,11 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         // Gray scope diff
         Object grayA = a.getGrayScope() != null ? JsonUtils.fromJson(a.getGrayScope(), Object.class) : null;
         Object grayB = b.getGrayScope() != null ? JsonUtils.fromJson(b.getGrayScope(), Object.class) : null;
-        boolean grayChanged = !java.util.Objects.equals(grayA, grayB);
+        boolean grayChanged = !Objects.equals(grayA, grayB);
         result.put("grayScopeChanged", grayChanged);
 
         // Status diff
-        result.put("statusChanged", !java.util.Objects.equals(a.getConfigStatus(), b.getConfigStatus()));
+        result.put("statusChanged", !Objects.equals(a.getConfigStatus(), b.getConfigStatus()));
         return result;
     }
 

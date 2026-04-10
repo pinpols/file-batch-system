@@ -19,13 +19,14 @@ import com.example.batch.orchestrator.service.LaunchService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.mockito.Mockito.mock;
 
 class LaunchControllerTest {
 
-    private final LaunchService launchService = org.mockito.Mockito.mock(LaunchService.class);
-    private final TenantActionRateLimiter tenantActionRateLimiter = org.mockito.Mockito.mock(TenantActionRateLimiter.class);
+    private final LaunchService launchService = mock(LaunchService.class);
+    private final TenantActionRateLimiter tenantActionRateLimiter = mock(TenantActionRateLimiter.class);
     private final LaunchApplicationService launchApplicationService = new LaunchApplicationService(launchService, tenantActionRateLimiter);
-    private final OrchestratorGracefulShutdown gracefulShutdown = org.mockito.Mockito.mock(OrchestratorGracefulShutdown.class);
+    private final OrchestratorGracefulShutdown gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
 
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new LaunchController(launchApplicationService, gracefulShutdown))
             .setControllerAdvice(new OrchestratorApiExceptionHandler())

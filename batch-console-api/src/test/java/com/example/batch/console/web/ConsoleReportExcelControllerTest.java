@@ -17,10 +17,11 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.mockito.Mockito.mock;
 
 class ConsoleReportExcelControllerTest {
 
-    private final ConsoleReportExcelApplicationService reportService = org.mockito.Mockito.mock(ConsoleReportExcelApplicationService.class);
+    private final ConsoleReportExcelApplicationService reportService = mock(ConsoleReportExcelApplicationService.class);
     private MockMvc mockMvc;
 
     @BeforeEach

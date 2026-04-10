@@ -7,6 +7,7 @@ import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -73,7 +74,7 @@ public class ConsoleWebhookService {
         if (eventTypes == null || eventTypes.isBlank()) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "eventTypes is required");
         }
-        String normalized = java.util.Arrays.stream(eventTypes.split(","))
+        String normalized = Arrays.stream(eventTypes.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .map(value -> value.toUpperCase(Locale.ROOT))

@@ -25,6 +25,7 @@ import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.common.model.PageResponse;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -33,11 +34,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import static org.mockito.Mockito.mock;
 
 class ConsoleQueryControllerTest {
 
-    private final ConsoleQueryApplicationService queryApplicationService = org.mockito.Mockito.mock(ConsoleQueryApplicationService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private final ConsoleQueryApplicationService queryApplicationService = mock(ConsoleQueryApplicationService.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -306,7 +308,7 @@ class ConsoleQueryControllerTest {
                 "t1",
                 "job-001",
                 "inst-001",
-                java.time.LocalDate.of(2026, 3, 29),
+                LocalDate.of(2026, 3, 29),
                 "MANUAL",
                 "SUCCESS",
                 "batch-1",
@@ -368,7 +370,7 @@ class ConsoleQueryControllerTest {
                 "t1",
                 100L,
                 11L,
-                java.time.LocalDate.of(2026, 3, 29),
+                LocalDate.of(2026, 3, 29),
                 "RUNNING",
                 "node-1",
                 "trace-1",
@@ -415,7 +417,7 @@ class ConsoleQueryControllerTest {
                         "t1",
                         "IMPORT_JOB",
                         "INS-001",
-                        java.time.LocalDate.of(2026, 3, 29),
+                        LocalDate.of(2026, 3, 29),
                         "MANUAL",
                         "RUNNING",
                         "batch-1",

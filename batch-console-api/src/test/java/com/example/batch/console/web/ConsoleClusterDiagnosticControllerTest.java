@@ -18,11 +18,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import static org.mockito.Mockito.mock;
 
 class ConsoleClusterDiagnosticControllerTest {
 
-    private final ConsoleClusterDiagnosticService diagnosticService = org.mockito.Mockito.mock(ConsoleClusterDiagnosticService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private final ConsoleClusterDiagnosticService diagnosticService = mock(ConsoleClusterDiagnosticService.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
     private MockMvc mockMvc;
 
     @BeforeEach

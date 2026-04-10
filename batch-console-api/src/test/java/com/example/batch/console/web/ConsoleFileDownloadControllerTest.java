@@ -20,10 +20,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import static org.mockito.Mockito.mock;
 
 class ConsoleFileDownloadControllerTest {
 
-    private final ConsoleFileDownloadApplicationService applicationService = org.mockito.Mockito.mock(ConsoleFileDownloadApplicationService.class);
+    private final ConsoleFileDownloadApplicationService applicationService = mock(ConsoleFileDownloadApplicationService.class);
     private MockMvc mockMvc;
 
     @BeforeEach

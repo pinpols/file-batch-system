@@ -1,5 +1,7 @@
 package com.example.batch.trigger.domain;
 
+import java.util.List;
+
 public interface TriggerRegistrationService {
 
     void registerAll();
@@ -12,7 +14,7 @@ public interface TriggerRegistrationService {
 
     void resumeByJobCode(String tenantId, String jobCode);
 
-    java.util.List<TriggerStatusInfo> listRegisteredTriggers();
+    List<TriggerStatusInfo> listRegisteredTriggers();
 
     void pauseAll();
 

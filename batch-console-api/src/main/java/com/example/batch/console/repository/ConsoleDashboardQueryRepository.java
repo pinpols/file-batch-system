@@ -2,6 +2,7 @@ package com.example.batch.console.repository;
 
 import com.example.batch.console.domain.ConsoleJdbcQueryAnchor;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.jdbc.repository.query.Query;
@@ -226,8 +227,8 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
         Integer getExpectedPartitions();
         Integer getSuccessPartitions();
         Integer getFailedPartitions();
-        java.time.Instant getStartedAt();
-        java.time.Instant getFinishedAt();
+        Instant getStartedAt();
+        Instant getFinishedAt();
     }
 
     // ── 租户用量统计 ──────────────────────────────────────

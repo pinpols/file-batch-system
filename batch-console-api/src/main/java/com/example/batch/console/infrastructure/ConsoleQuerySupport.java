@@ -5,10 +5,14 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
+import com.example.batch.console.support.ConsoleTenantGuard;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +42,7 @@ final class ConsoleQuerySupport {
         return value;
     }
 
-    static String resolveTenant(com.example.batch.console.support.ConsoleTenantGuard tenantGuard, String requestTenantId) {
+    static String resolveTenant(ConsoleTenantGuard tenantGuard, String requestTenantId) {
         return tenantGuard.resolveTenant(requestTenantId);
     }
 
@@ -133,7 +137,7 @@ final class ConsoleQuerySupport {
         if (value instanceof LocalDate localDate) {
             return localDate;
         }
-        if (value instanceof java.sql.Date sqlDate) {
+        if (value instanceof Date sqlDate) {
             return sqlDate.toLocalDate();
         }
         return LocalDate.parse(String.valueOf(value));
@@ -180,11 +184,11 @@ final class ConsoleQuerySupport {
         if (value instanceof Instant instant) {
             return instant;
         }
-        if (value instanceof java.sql.Timestamp timestamp) {
+        if (value instanceof Timestamp timestamp) {
             return timestamp.toInstant();
         }
-        if (value instanceof java.time.LocalDateTime localDateTime) {
-            return localDateTime.toInstant(java.time.ZoneOffset.UTC);
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime.toInstant(ZoneOffset.UTC);
         }
         if (value instanceof java.util.Date date) {
             return date.toInstant();

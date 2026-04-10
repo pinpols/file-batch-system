@@ -29,6 +29,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
+import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
@@ -88,8 +90,8 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
         // 前置条件：DAG 检查通过，节点定义存在
         when(workflowDagService.isNodeReadyForDispatch(anyLong(), anyLong(), anyString(), anyString()))
                 .thenReturn(true);
-        com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity workflowNode =
-                new com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity();
+        WorkflowNodeEntity workflowNode =
+                new WorkflowNodeEntity();
         workflowNode.setNodeCode("NODE_A");
         workflowNode.setNodeType("TASK");
         when(workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(anyLong(), anyString()))
@@ -99,6 +101,6 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
         int result = service.dispatchNode(jobInstance, workflowRun, node, "{}", "trace-1");
 
         verify(workflowNodeRunMapper).selectLatestForUpdate(10L, "NODE_A");
-        org.assertj.core.api.Assertions.assertThat(result).isZero();
+        assertThat(result).isZero();
     }
 }

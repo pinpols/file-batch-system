@@ -24,13 +24,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import static org.mockito.Mockito.mock;
 
 class ConsoleTenantSelfServiceControllerTest {
 
-    private final ConsoleQuotaPolicyApplicationService quotaPolicyService = org.mockito.Mockito.mock(ConsoleQuotaPolicyApplicationService.class);
-    private final ConsoleSystemParameterService parameterService = org.mockito.Mockito.mock(ConsoleSystemParameterService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
-    private final ConsoleTenantGuard tenantGuard = org.mockito.Mockito.mock(ConsoleTenantGuard.class);
+    private final ConsoleQuotaPolicyApplicationService quotaPolicyService = mock(ConsoleQuotaPolicyApplicationService.class);
+    private final ConsoleSystemParameterService parameterService = mock(ConsoleSystemParameterService.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
+    private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     private MockMvc mockMvc;
 
     @BeforeEach

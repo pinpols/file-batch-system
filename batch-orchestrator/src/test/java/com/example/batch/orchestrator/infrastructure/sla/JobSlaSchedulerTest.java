@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import java.util.Arrays;
 
 /**
  * 单元测试：{@link JobSlaScheduler#scanViolations()} 各路径。
@@ -80,7 +81,7 @@ class JobSlaSchedulerTest {
     void shouldSkipNullCandidateInList() {
         when(jobInstanceMapper.countSlaViolationCandidates()).thenReturn(0L);
         when(jobInstanceMapper.selectSlaViolationCandidates(anyInt()))
-                .thenReturn(java.util.Arrays.asList(null, null));
+                .thenReturn(Arrays.asList(null, null));
 
         scheduler.scanViolations();
 

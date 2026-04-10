@@ -27,6 +27,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -92,7 +93,7 @@ class ConsoleAuthenticationFilterTest {
 
     @Test
     void filter_authenticatesViaBearerToken() throws Exception {
-        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", java.util.Set.of("ROLE_ADMIN"));
+        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
         when(jwtService.authenticate("valid-jwt")).thenReturn(principal);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
@@ -184,7 +185,7 @@ class ConsoleAuthenticationFilterTest {
 
     @Test
     void filter_resolvesBearerTokenFromQueryParam() throws Exception {
-        ConsolePrincipal principal = new ConsolePrincipal("bob", "t1", java.util.Set.of("ROLE_ADMIN"));
+        ConsolePrincipal principal = new ConsolePrincipal("bob", "t1", Set.of("ROLE_ADMIN"));
         when(jwtService.authenticate("query-jwt")).thenReturn(principal);
 
         MockHttpServletRequest request = new MockHttpServletRequest();

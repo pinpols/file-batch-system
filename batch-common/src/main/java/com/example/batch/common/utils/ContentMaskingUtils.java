@@ -1,5 +1,6 @@
 package com.example.batch.common.utils;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -49,7 +50,7 @@ public final class ContentMaskingUtils {
         if (ruleSetCode == null) {
             return masked;
         }
-        String code = ruleSetCode.toUpperCase(java.util.Locale.ROOT);
+        String code = ruleSetCode.toUpperCase(Locale.ROOT);
 
         // STRICT / PCI / GDPR 均对命名字段脱敏
         if (code.contains("STRICT") || code.contains("PCI") || code.contains("GDPR")) {

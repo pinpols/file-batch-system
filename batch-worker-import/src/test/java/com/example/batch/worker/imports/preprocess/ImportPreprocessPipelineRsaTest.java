@@ -16,6 +16,7 @@ import java.util.Base64;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import java.util.List;
 
 /**
  * {@code VERIFY_RSA_SHA256} 预处理步骤的测试，使用位于
@@ -58,7 +59,7 @@ class ImportPreprocessPipelineRsaTest {
                 "signatureBase64", validSignatureB64
         );
         Map<String, Object> template = Map.of(
-                "preprocess_pipeline", java.util.List.of(step)
+                "preprocess_pipeline", List.of(step)
         );
 
         byte[] result = ImportPreprocessPipeline.run(PAYLOAD, null, template);
@@ -79,7 +80,7 @@ class ImportPreprocessPipelineRsaTest {
                 "signatureBase64", validSignatureB64
         );
         Map<String, Object> template = Map.of(
-                "preprocess_pipeline", java.util.List.of(step)
+                "preprocess_pipeline", List.of(step)
         );
 
         assertThatThrownBy(() -> ImportPreprocessPipeline.run(tamperedPayload, null, template))
@@ -97,7 +98,7 @@ class ImportPreprocessPipelineRsaTest {
                 // 未提供 publicKeyPem
         );
         Map<String, Object> template = Map.of(
-                "preprocess_pipeline", java.util.List.of(step)
+                "preprocess_pipeline", List.of(step)
         );
 
         assertThatThrownBy(() -> ImportPreprocessPipeline.run(PAYLOAD, null, template))
@@ -123,7 +124,7 @@ class ImportPreprocessPipelineRsaTest {
                 // signatureBase64 不在 step 中 — 通过 metadata 提供
         );
         Map<String, Object> template = Map.of(
-                "preprocess_pipeline", java.util.List.of(step)
+                "preprocess_pipeline", List.of(step)
         );
 
         byte[] result = ImportPreprocessPipeline.run(PAYLOAD, payload, template);
@@ -141,7 +142,7 @@ class ImportPreprocessPipelineRsaTest {
                 "signatureBase64", "INVALID_BASE64_GARBAGE"
         );
         Map<String, Object> template = Map.of(
-                "preprocess_pipeline", java.util.List.of(step)
+                "preprocess_pipeline", List.of(step)
         );
 
         // testingOpen=true 时完全跳过 RSA 校验

@@ -12,6 +12,7 @@ import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -121,7 +122,7 @@ public class DefaultConsoleJobDefinitionApplicationService implements ConsoleJob
     }
 
     @Override
-    public int batchToggle(String tenantId, java.util.List<Long> ids, Boolean enabled) {
+    public int batchToggle(String tenantId, List<Long> ids, Boolean enabled) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         String operator = requestMetadataResolver.current().operatorId();
         int rows = jobDefinitionMapper.batchToggleEnabled(resolved, ids, enabled, operator);

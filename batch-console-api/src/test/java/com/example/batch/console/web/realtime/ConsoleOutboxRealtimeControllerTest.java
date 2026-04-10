@@ -21,12 +21,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import static org.mockito.Mockito.mock;
 
 class ConsoleOutboxRealtimeControllerTest {
 
-    private final ConsoleRealtimeEventHub realtimeEventHub = org.mockito.Mockito.mock(ConsoleRealtimeEventHub.class);
-    private final ConsoleTenantGuard tenantGuard = org.mockito.Mockito.mock(ConsoleTenantGuard.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private final ConsoleRealtimeEventHub realtimeEventHub = mock(ConsoleRealtimeEventHub.class);
+    private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
     private MockMvc mockMvc;
 
     @BeforeEach

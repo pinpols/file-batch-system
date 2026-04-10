@@ -24,11 +24,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
 
 class ConsoleNotificationControllerTest {
 
-    private final ConsoleNotificationApplicationService applicationService = org.mockito.Mockito.mock(ConsoleNotificationApplicationService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private final ConsoleNotificationApplicationService applicationService = mock(ConsoleNotificationApplicationService.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -76,6 +78,6 @@ class ConsoleNotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-        verify(applicationService).createRule(org.mockito.Mockito.eq("t1"), anyMap());
+        verify(applicationService).createRule(eq("t1"), anyMap());
     }
 }

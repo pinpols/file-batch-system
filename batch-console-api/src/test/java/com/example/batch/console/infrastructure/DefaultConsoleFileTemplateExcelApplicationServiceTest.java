@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
+import com.example.batch.testing.TestExcelFileBuilder;
 
 class DefaultConsoleFileTemplateExcelApplicationServiceTest {
 
@@ -97,7 +98,7 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
 
     @Test
     void shouldUploadPreviewAndApplyTemplateWorkbook() throws Exception {
-        byte[] xlsx = com.example.batch.testing.TestExcelFileBuilder.builder()
+        byte[] xlsx = TestExcelFileBuilder.builder()
                 .sheetName("file_template_config")
                 .headers(templateHeaders())
                 .rows(List.of(validTemplateRow()))
@@ -130,7 +131,7 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
 
     @Test
     void shouldRejectTemplateWorkbookWhenHeaderMissing() {
-        byte[] xlsx = com.example.batch.testing.TestExcelFileBuilder.builder()
+        byte[] xlsx = TestExcelFileBuilder.builder()
                 .sheetName("file_template_config")
                 .row(List.of("t1", "TPL1", "Template 1"))
                 .build();

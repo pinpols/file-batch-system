@@ -14,6 +14,7 @@ import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.example.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.query.RetryScheduleQuery;
@@ -150,7 +151,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
                 TENANT, task.getId(), false, null, "SIMULATED_ERROR", "retry flow test"));
 
         // 验证已为该分区创建了 WAITING 状态的 retry_schedule 行
-        List<com.example.batch.orchestrator.domain.entity.RetryScheduleEntity> retries =
+        List<RetryScheduleEntity> retries =
                 retryScheduleMapper.selectByQuery(new RetryScheduleQuery(
                         TENANT, RetryScheduleStatus.WAITING.code(), Instant.now().plusSeconds(3600), 100));
         boolean retryFound = retries.stream()

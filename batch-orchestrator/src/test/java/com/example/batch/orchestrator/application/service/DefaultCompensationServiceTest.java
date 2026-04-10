@@ -18,6 +18,10 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 /**
  * 单元测试：{@link DefaultCompensationService} 的校验与守卫条件。
@@ -88,11 +92,11 @@ class DefaultCompensationServiceTest {
         // UNKNOWN type → execute() switch default → BizException
         CompensationSubmitCommand cmd = command("t1", "UNKNOWN_TYPE", 1L);
         // compensationCommandMapper.countRunningByTarget returns 0, then insert, then execute throws
-        org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyLong(),
-                org.mockito.ArgumentMatchers.anyString()
+        when(compensationCommandMapper.countRunningByTarget(
+                anyString(),
+                anyString(),
+                anyLong(),
+                anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -102,11 +106,11 @@ class DefaultCompensationServiceTest {
     @Test
     void shouldThrowWhenPartitionTargetIdIsNull() {
         CompensationSubmitCommand cmd = command("t1", "PARTITION", null);
-        org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString()
+        when(compensationCommandMapper.countRunningByTarget(
+                anyString(),
+                anyString(),
+                any(),
+                anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -116,11 +120,11 @@ class DefaultCompensationServiceTest {
     @Test
     void shouldThrowWhenStepTargetIdIsNull() {
         CompensationSubmitCommand cmd = command("t1", "STEP", null);
-        org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString()
+        when(compensationCommandMapper.countRunningByTarget(
+                anyString(),
+                anyString(),
+                any(),
+                anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -130,11 +134,11 @@ class DefaultCompensationServiceTest {
     @Test
     void shouldThrowWhenDlqTargetIdIsNull() {
         CompensationSubmitCommand cmd = command("t1", "DLQ", null);
-        org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString()
+        when(compensationCommandMapper.countRunningByTarget(
+                anyString(),
+                anyString(),
+                any(),
+                anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -146,11 +150,11 @@ class DefaultCompensationServiceTest {
         CompensationSubmitCommand cmd = new CompensationSubmitCommand(
                 "t1", "BATCH", null, null, null, LocalDate.now(),
                 null, null, null, null, null, null, null, null);
-        org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString()
+        when(compensationCommandMapper.countRunningByTarget(
+                anyString(),
+                anyString(),
+                any(),
+                anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))
@@ -162,11 +166,11 @@ class DefaultCompensationServiceTest {
         CompensationSubmitCommand cmd = new CompensationSubmitCommand(
                 "t1", "FILE", null, null, null, null,
                 null, null, "CH1", null, null, null, null, null);
-        org.mockito.Mockito.when(compensationCommandMapper.countRunningByTarget(
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString()
+        when(compensationCommandMapper.countRunningByTarget(
+                anyString(),
+                anyString(),
+                any(),
+                anyString()
         )).thenReturn(0);
 
         assertThatThrownBy(() -> service.submit(cmd))

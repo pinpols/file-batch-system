@@ -10,6 +10,8 @@ import com.example.batch.console.web.request.RerunRequest;
 import com.example.batch.console.web.request.TaskReplayRequest;
 import com.example.batch.console.web.request.TriggerRequest;
 import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 控制台作业运维应用服务：触发、补偿、重跑、死信回放、Catch-Up 审批等写操作，经 HTTP 调用编排器与触发器。
@@ -46,8 +48,8 @@ public interface ConsoleJobApplicationService {
                                                   String idempotencyKey);
 
     /** dryRun 校验：检查 job 是否可触发，不真正执行。 */
-    java.util.Map<String, Object> dryRunTrigger(TriggerRequest request);
+    Map<String, Object> dryRunTrigger(TriggerRequest request);
 
     /** 批量触发：同时触发多个 job。 */
-    java.util.List<java.util.Map<String, Object>> batchTrigger(java.util.List<TriggerRequest> items, String idempotencyKey);
+    List<Map<String, Object>> batchTrigger(List<TriggerRequest> items, String idempotencyKey);
 }

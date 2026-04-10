@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.utils.JsonUtils;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,12 +48,12 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
                 "cursor-1",
                 false,
                 JsonUtils.toJson("payload"),
-                java.time.Instant.parse("2026-04-05T10:00:00Z")
+                Instant.parse("2026-04-05T10:00:00Z")
         );
 
         consumer.onMessage(message(envelope), null);
 
-        verify(realtimeEventHub, org.mockito.Mockito.never()).publish(org.mockito.ArgumentMatchers.any());
+        verify(realtimeEventHub, never()).publish(any());
     }
 
     @Test
@@ -65,12 +66,12 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
                 "cursor-1",
                 false,
                 JsonUtils.toJson("payload"),
-                java.time.Instant.parse("2026-04-05T10:00:00Z")
+                Instant.parse("2026-04-05T10:00:00Z")
         );
 
         consumer.onMessage(message(envelope), null);
 
-        verify(realtimeEventHub).publish(org.mockito.ArgumentMatchers.any());
+        verify(realtimeEventHub).publish(any());
     }
 
     @Test
@@ -83,7 +84,7 @@ class ConsoleRealtimeRedisPubSubConsumerTest {
                 "cursor-2",
                 true,
                 "",
-                java.time.Instant.parse("2026-04-05T10:00:01Z")
+                Instant.parse("2026-04-05T10:00:01Z")
         );
 
         consumer.onMessage(message(envelope), null);

@@ -12,7 +12,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
+import OutboxEventEntity;
 import com.example.batch.orchestrator.domain.query.OutboxEventQuery;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.orchestrator.service.LaunchService;
@@ -42,6 +42,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.Comparator;
 
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
@@ -440,7 +441,7 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
         try (var stream = Files.list(targetDir)) {
             return stream
                     .filter(path -> path.getFileName().toString().endsWith("-exec.jar"))
-                    .max(java.util.Comparator.comparingLong(path -> path.toFile().lastModified()))
+                    .max(Comparator.comparingLong(path -> path.toFile().lastModified()))
                     .orElse(null);
         }
     }

@@ -31,11 +31,12 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import static org.mockito.Mockito.mock;
 
 class ConsoleAlertRoutingExcelControllerTest {
 
-    private final ConsoleAlertRoutingExcelApplicationService excelService = org.mockito.Mockito.mock(ConsoleAlertRoutingExcelApplicationService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private final ConsoleAlertRoutingExcelApplicationService excelService = mock(ConsoleAlertRoutingExcelApplicationService.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
     private MockMvc mockMvc;
 
     @BeforeEach

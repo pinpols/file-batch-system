@@ -1,6 +1,7 @@
 package com.example.batch.console.repository;
 
 import com.example.batch.console.domain.entity.ApiKeyEntity;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jdbc.repository.query.Modifying;
@@ -49,7 +50,7 @@ public interface ConsoleApiKeyRepository extends Repository<ApiKeyEntity, Long> 
                 @Param("keyPrefix") String keyPrefix,
                 @Param("keyHash") String keyHash,
                 @Param("scopes") String scopes,
-                @Param("expiresAt") java.time.Instant expiresAt,
+                @Param("expiresAt") Instant expiresAt,
                 @Param("operator") String operator);
 
     @Modifying

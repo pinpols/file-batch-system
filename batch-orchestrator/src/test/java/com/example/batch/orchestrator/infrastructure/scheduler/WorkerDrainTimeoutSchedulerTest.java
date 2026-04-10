@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
+import static org.mockito.Mockito.anyString;
 
 @ExtendWith(MockitoExtension.class)
 class WorkerDrainTimeoutSchedulerTest {
@@ -54,7 +55,7 @@ class WorkerDrainTimeoutSchedulerTest {
         scheduler.expireDrains();
 
         verify(workerRegistryRepository, never()).findByStatus(WorkerRegistryStatus.DRAINING.code());
-        verify(workerDrainGovernanceService, never()).takeoverAfterDrainTimeout(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString());
+        verify(workerDrainGovernanceService, never()).takeoverAfterDrainTimeout(anyString(), anyString());
     }
 
     @Test

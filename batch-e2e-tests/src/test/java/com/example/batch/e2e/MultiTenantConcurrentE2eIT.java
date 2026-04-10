@@ -13,6 +13,7 @@ import com.example.batch.e2e.support.E2eStatusLogger;
 import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -436,7 +437,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
                 tenantId,
                 workerCode,
                 workerGroup,
-                java.sql.Timestamp.from(Instant.now()));
+                Timestamp.from(Instant.now()));
     }
 
     private String taskStatus(String tenantId, String dedupKey) {

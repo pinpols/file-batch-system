@@ -13,14 +13,16 @@ import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 
 class ConsoleOpsSummaryRealtimeStreamTest {
 
-    private final ConsoleOpsApplicationService opsApplicationService = org.mockito.Mockito.mock(ConsoleOpsApplicationService.class);
-    private final ConsoleRealtimeEventHub realtimeEventHub = org.mockito.Mockito.mock(ConsoleRealtimeEventHub.class);
-    private final ConsoleRealtimeRedisPublisher redisPublisher = org.mockito.Mockito.mock(ConsoleRealtimeRedisPublisher.class);
-    private final ConsoleRealtimeCursorFactory cursorFactory = org.mockito.Mockito.mock(ConsoleRealtimeCursorFactory.class);
-    private final ConsoleTenantGuard tenantGuard = org.mockito.Mockito.mock(ConsoleTenantGuard.class);
+    private final ConsoleOpsApplicationService opsApplicationService = mock(ConsoleOpsApplicationService.class);
+    private final ConsoleRealtimeEventHub realtimeEventHub = mock(ConsoleRealtimeEventHub.class);
+    private final ConsoleRealtimeRedisPublisher redisPublisher = mock(ConsoleRealtimeRedisPublisher.class);
+    private final ConsoleRealtimeCursorFactory cursorFactory = mock(ConsoleRealtimeCursorFactory.class);
+    private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
     private ConsoleOpsSummaryRealtimeStream stream;
 
     @BeforeEach
@@ -37,7 +39,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
 
         assertThat(emitter).isNotNull();
         verify(realtimeEventHub).subscribe("t1", "ops-summary", null, null, null);
-        verify(realtimeEventHub, never()).publish(org.mockito.ArgumentMatchers.any());
+        verify(realtimeEventHub, never()).publish(any());
         verify(opsApplicationService, never()).summary(anyString());
     }
 
@@ -67,8 +69,8 @@ class ConsoleOpsSummaryRealtimeStreamTest {
         }
 
         verify(opsApplicationService).summary("t1");
-        verify(realtimeEventHub).publish(org.mockito.ArgumentMatchers.any());
-        verify(redisPublisher).publish(org.mockito.ArgumentMatchers.any());
+        verify(realtimeEventHub).publish(any());
+        verify(redisPublisher).publish(any());
     }
 
     @Test
@@ -91,7 +93,7 @@ class ConsoleOpsSummaryRealtimeStreamTest {
         stream.subscribe("t1", null, true);
 
         verify(opsApplicationService).summary("t1");
-        verify(realtimeEventHub).publish(org.mockito.ArgumentMatchers.any());
-        verify(redisPublisher).publish(org.mockito.ArgumentMatchers.any());
+        verify(realtimeEventHub).publish(any());
+        verify(redisPublisher).publish(any());
     }
 }

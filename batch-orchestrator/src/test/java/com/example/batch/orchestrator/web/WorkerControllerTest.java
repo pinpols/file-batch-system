@@ -15,11 +15,13 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class WorkerControllerTest {
 
-    private final WorkerRegistryServerService workerRegistryService = org.mockito.Mockito.mock(WorkerRegistryServerService.class);
-    private final WorkerDrainGovernanceService workerDrainGovernanceService = org.mockito.Mockito.mock(WorkerDrainGovernanceService.class);
+    private final WorkerRegistryServerService workerRegistryService = mock(WorkerRegistryServerService.class);
+    private final WorkerDrainGovernanceService workerDrainGovernanceService = mock(WorkerDrainGovernanceService.class);
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(
                     new WorkerController(workerRegistryService, workerDrainGovernanceService))
             .setControllerAdvice(new OrchestratorApiExceptionHandler())
@@ -27,7 +29,7 @@ class WorkerControllerTest {
 
     @Test
     void shouldBindDrainRequestTimeoutSeconds() throws Exception {
-        org.mockito.Mockito.when(workerDrainGovernanceService.startDrain(eq("t1"), eq("worker-1"), eq(1)))
+        when(workerDrainGovernanceService.startDrain(eq("t1"), eq("worker-1"), eq(1)))
                 .thenReturn(new WorkerRegistryRecord(
                         1L, "t1", "worker-1", "import", null, null, "DRAINING", Instant.now(), 0, Instant.now(), Instant.now()));
 

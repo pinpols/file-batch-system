@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
-import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import WorkflowNodeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;

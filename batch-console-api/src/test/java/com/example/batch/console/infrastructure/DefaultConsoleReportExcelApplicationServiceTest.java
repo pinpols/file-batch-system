@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
+import org.springframework.core.env.Environment;
 
 class DefaultConsoleReportExcelApplicationServiceTest {
 
@@ -36,7 +37,7 @@ class DefaultConsoleReportExcelApplicationServiceTest {
         ConsoleQueryApplicationService queryService = mock(ConsoleQueryApplicationService.class);
         ConsoleOrchestratorClientProperties properties = mock(ConsoleOrchestratorClientProperties.class);
         RestClient.Builder builder = mock(RestClient.Builder.class);
-        org.springframework.core.env.Environment environment = mock(org.springframework.core.env.Environment.class);
+        Environment environment = mock(Environment.class);
         DefaultConsoleReportExcelApplicationService service = new DefaultConsoleReportExcelApplicationService(
                 configService,
                 queryService,

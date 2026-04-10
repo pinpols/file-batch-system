@@ -4,6 +4,7 @@ import com.example.batch.console.web.request.JobDefinitionCopyRequest;
 import com.example.batch.console.web.request.JobDefinitionCreateRequest;
 import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
+import java.util.List;
 
 /**
  * 作业定义应用服务：管理作业定义的 CRUD 操作。
@@ -19,7 +20,7 @@ public interface ConsoleJobDefinitionApplicationService {
     void toggle(Long id, String tenantId, Boolean enabled);
 
     /** 批量启停作业定义。 */
-    int batchToggle(String tenantId, java.util.List<Long> ids, Boolean enabled);
+    int batchToggle(String tenantId, List<Long> ids, Boolean enabled);
 
     void delete(Long id, String tenantId);
 

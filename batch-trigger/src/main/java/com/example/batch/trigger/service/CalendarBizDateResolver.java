@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import org.springframework.stereotype.Component;
@@ -87,6 +88,6 @@ public class CalendarBizDateResolver {
     }
 
     private String normalize(String value) {
-        return value == null ? "SKIP" : value.trim().toUpperCase(java.util.Locale.ROOT);
+        return value == null ? "SKIP" : value.trim().toUpperCase(Locale.ROOT);
     }
 }

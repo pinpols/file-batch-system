@@ -11,10 +11,11 @@ import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.mockito.Mockito.mock;
 
 class DeadLetterControllerTest {
 
-    private final RetryGovernanceService retryGovernanceService = org.mockito.Mockito.mock(RetryGovernanceService.class);
+    private final RetryGovernanceService retryGovernanceService = mock(RetryGovernanceService.class);
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new DeadLetterController(retryGovernanceService))
             .setControllerAdvice(new OrchestratorApiExceptionHandler())
             .build();

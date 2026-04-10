@@ -20,11 +20,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.mock;
 
 class ConsoleOpsRealtimeControllerTest {
 
-    private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream = org.mockito.Mockito.mock(ConsoleOpsSummaryRealtimeStream.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream = mock(ConsoleOpsSummaryRealtimeStream.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -34,7 +36,7 @@ class ConsoleOpsRealtimeControllerTest {
                 new BatchSecurityProperties());
 
         when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
-        when(summaryRealtimeStream.subscribe(anyString(), isNull(), org.mockito.ArgumentMatchers.anyBoolean()))
+        when(summaryRealtimeStream.subscribe(anyString(), isNull(), anyBoolean()))
                 .thenReturn(new SseEmitter());
 
         mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleOpsRealtimeController(summaryRealtimeStream))

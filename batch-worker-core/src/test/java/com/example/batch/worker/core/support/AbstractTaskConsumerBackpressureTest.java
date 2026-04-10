@@ -26,6 +26,8 @@ import org.slf4j.MDC;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.util.ReflectionTestUtils;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
 
 class AbstractTaskConsumerBackpressureTest {
 
@@ -51,14 +53,14 @@ class AbstractTaskConsumerBackpressureTest {
         CountDownLatch allowFinish = new CountDownLatch(1);
 
         TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
-        when(executor.execute(org.mockito.Mockito.any(), org.mockito.Mockito.anyString())).thenAnswer(inv -> {
+        when(executor.execute(any(), anyString())).thenAnswer(inv -> {
             entered.countDown();
             allowFinish.await();
             return new WorkerExecutionResult("1", true, "ok");
         });
 
         WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
-        when(runtimeFacade.start(org.mockito.Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
+        when(runtimeFacade.start(any())).thenAnswer(inv -> inv.getArgument(0));
 
         AbstractTaskConsumer consumer = new AbstractTaskConsumer(registry) {
             @Override
@@ -149,8 +151,8 @@ class AbstractTaskConsumerBackpressureTest {
         KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
         TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
         WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
-        when(runtimeFacade.start(org.mockito.Mockito.any())).thenAnswer(inv -> inv.getArgument(0));
-        when(executor.execute(org.mockito.Mockito.any(), org.mockito.Mockito.anyString())).thenAnswer(inv -> {
+        when(runtimeFacade.start(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(executor.execute(any(), anyString())).thenAnswer(inv -> {
             assertThat(MDC.get("runMode")).isEqualTo("RETRY");
             return new WorkerExecutionResult("1", true, "ok");
         });

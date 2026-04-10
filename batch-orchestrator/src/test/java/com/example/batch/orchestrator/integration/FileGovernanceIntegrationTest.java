@@ -7,6 +7,7 @@ import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import com.example.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
+import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage;
 import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -17,6 +18,7 @@ import io.minio.StatObjectArgs;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -106,7 +108,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     @Import({
             FileGovernanceScheduler.class,
             FileGovernanceRepository.class,
-            com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.class,
+            MinioGovernanceStorage.class,
             OrchestratorRedisSupport.class,
             FileGovernanceMetricsCacheService.class
     })
@@ -317,7 +319,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
                 spec.storagePath,
                 spec.storageBucket,
                 spec.fileStatus,
-                java.sql.Date.valueOf(LocalDate.of(2026, 3, 27)),
+                Date.valueOf(LocalDate.of(2026, 3, 27)),
                 "trace-" + suffix(),
                 spec.metadataJson,
                 Timestamp.from(spec.createdAt),

@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.redis;
 import com.example.batch.common.redis.BatchRedisKeys;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +40,7 @@ public class RedisShedLockProvider implements LockProvider {
         }
         return Optional.of(() -> redisTemplate.execute(
                 new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class),
-                java.util.List.of(key),
+                List.of(key),
                 token
         ));
     }

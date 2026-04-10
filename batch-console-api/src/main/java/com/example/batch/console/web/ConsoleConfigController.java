@@ -15,6 +15,7 @@ import com.example.batch.console.web.response.ConsoleConfigReleaseResponse;
 import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -114,7 +115,7 @@ public class ConsoleConfigController {
     /** 查询配置项的依赖关系。 */
     @GetMapping("/dependencies")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<java.util.Map<String, Object>> configDependencies(@RequestParam("tenantId") String tenantId,
+    public CommonResponse<Map<String, Object>> configDependencies(@RequestParam("tenantId") String tenantId,
                                                                              @RequestParam("configType") String configType,
                                                                              @RequestParam("configCode") String configCode) {
         return responseFactory.success(applicationService.configDependencies(tenantId, configType, configCode));
@@ -123,7 +124,7 @@ public class ConsoleConfigController {
     /** 对比两个配置发布版本的差异。 */
     @GetMapping("/releases/diff")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<java.util.Map<String, Object>> diffConfigReleases(@RequestParam("tenantId") String tenantId,
+    public CommonResponse<Map<String, Object>> diffConfigReleases(@RequestParam("tenantId") String tenantId,
                                                                              @RequestParam("releaseIdA") Long releaseIdA,
                                                                              @RequestParam("releaseIdB") Long releaseIdB) {
         return responseFactory.success(applicationService.diffConfigReleases(tenantId, releaseIdA, releaseIdB));

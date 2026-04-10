@@ -7,6 +7,7 @@ import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -159,7 +160,7 @@ public class WebhookDispatcher {
         if ("*".equals(configuredEventTypes.trim())) {
             return true;
         }
-        return java.util.Arrays.stream(configuredEventTypes.split(","))
+        return Arrays.stream(configuredEventTypes.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .map(value -> value.toUpperCase(Locale.ROOT))

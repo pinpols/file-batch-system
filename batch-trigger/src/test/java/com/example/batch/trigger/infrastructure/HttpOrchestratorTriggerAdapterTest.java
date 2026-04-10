@@ -7,6 +7,8 @@ import static org.skyscreamer.jsonassert.JSONAssert.assertEquals;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import okhttp3.mockwebserver.MockResponse;
@@ -88,7 +90,7 @@ class HttpOrchestratorTriggerAdapterTest {
 
         assertThatThrownBy(() -> shortTimeoutAdapter.sendTrigger(sampleRequest()))
                 .isInstanceOf(RestClientException.class)
-                .hasRootCauseInstanceOf(java.net.SocketTimeoutException.class);
+                .hasRootCauseInstanceOf(SocketTimeoutException.class);
     }
 
     @Test
@@ -101,7 +103,7 @@ class HttpOrchestratorTriggerAdapterTest {
         LaunchRequest request = new LaunchRequest(
                 "t1",
                 "IMPORT_JOB",
-                java.time.LocalDate.of(2026, 3, 28),
+                LocalDate.of(2026, 3, 28),
                 TriggerType.API,
                 "req-1",
                 "tr-1",
@@ -133,7 +135,7 @@ class HttpOrchestratorTriggerAdapterTest {
         return new LaunchRequest(
                 "t1",
                 "IMPORT_JOB",
-                java.time.LocalDate.of(2026, 3, 28),
+                LocalDate.of(2026, 3, 28),
                 TriggerType.SCHEDULED,
                 "req-x",
                 "tr-x",
