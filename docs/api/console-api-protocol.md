@@ -355,6 +355,7 @@ Deployment note:
 - `PUT /api/console/job-definitions/{id}`
 - `DELETE /api/console/job-definitions/{id}`
 - `POST /api/console/job-definitions/{id}/toggle`
+- `POST /api/console/job-definitions/batch-toggle` — batch enable/disable up to 200 job definitions; query params `tenantId` + `enabled`, body is `List<Long>` of ids
 - `POST /api/console/job-definitions/{id}/copy`
 - `POST /api/console/job-definitions/{id}/clone` — clone with field overrides via `JobDefinitionCopyRequest` body (jobName, workerGroup, queueCode, scheduleExpr, retryPolicy, etc.)
 - All write operations require `ROLE_ADMIN`. Read operations allow `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
@@ -545,7 +546,9 @@ Deployment note:
 - `GET /api/console/dashboard/alert-trend`
 - `GET /api/console/dashboard/sla-compliance`
 - `GET /api/console/dashboard/sla-report` — per-job SLA breakdown: avg/max duration, success/failure/breach counts
-- All endpoints require `tenantId` query param. `days` defaults to `7` where applicable.
+- `GET /api/console/dashboard/execution-progress` — execution progress by `jobCode` + `bizDate`, returns instance partition completion percentage
+- `GET /api/console/dashboard/tenant-usage` — tenant resource usage: job/workflow/channel/template definition counts + recent instance/file counts (`days` defaults to `30`)
+- All endpoints require `tenantId` query param. `days` defaults to `7` where applicable (except `tenant-usage` which defaults to `30`).
 - `job-stats`: instance status distribution + daily execution trend.
 - `trigger-stats`: trigger type distribution + daily trend.
 - `worker-load`: worker status/group distribution + active partition breakdown.
@@ -605,6 +608,8 @@ Deployment note:
 - `GET /api/console/config/secrets`
 - `GET /api/console/config/secrets/{secretVersionId}`
 - `POST /api/console/config/secrets/rotate`
+- `GET /api/console/config/dependencies` — query config item dependencies; params: `tenantId`, `configType` (QUEUE / CALENDAR / WINDOW / WORKER_GROUP), `configCode`
+- `GET /api/console/config/releases/diff` — diff two release versions; params: `tenantId`, `releaseIdA`, `releaseIdB`
 - `GET /api/console/config/change-logs`
 - `GET /api/console/config/file-templates/excel/template`
 - `GET /api/console/config/file-templates/excel/export`
@@ -1024,6 +1029,40 @@ All console APIs support versioned paths via URL prefix:
 ### Worker Warmup
 
 - `POST /api/console/workers/{workerCode}/warmup` — trigger worker warmup (param: `tenantId`)
+
+### Frontend Telemetry
+
+- `POST /api/console/telemetry/events` — receive frontend telemetry events in batch
+- Request body structure:
+
+```json
+{
+  "app": "batch-console",
+  "userId": "admin",
+  "sessionId": "sess-abc123",
+  "events": [
+    {
+      "type": "error",
+      "name": "TypeError: Cannot read property 'id' of undefined",
+      "ts": "2026-04-10T12:00:00.000Z",
+      "page": "/jobs",
+      "props": { "stack": "at JobList.vue:42", "componentName": "JobList" }
+    }
+  ]
+}
+```
+
+- `type`: event category — `route` / `click` / `api` / `error`
+- `name`: event name or description
+- `ts`: ISO 8601 timestamp string
+- `props`: arbitrary key-value object, backend serializes to JSON for logging
+- Outer `app` / `userId` / `sessionId` provide session context without repeating per event
+- Max 50 events per batch
+- Backend logs each event via slf4j with MDC fields (`frontendApp`, `frontendUserId`, `frontendEventType`, `frontendPage`), then Promtail picks up into Loki
+- `error` type events are logged at ERROR level; all others at INFO level
+- Requires JWT authentication (any authenticated console user)
+- Frontend should batch non-critical events (click, route) and report errors immediately
+- See `docs/design/logging-architecture.md` for full logging pipeline design
 
 ## File Download API
 
