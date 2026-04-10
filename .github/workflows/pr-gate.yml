@@ -31,18 +31,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify console OpenAPI matches controllers
-        shell: bash
-        run: |
-          python3 -m pip install --quiet pyyaml
-          python3 scripts/ci/check-console-openapi-paths.py
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "25"
-          cache: maven
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
 
       - name: Detect affected scope
         id: scope
@@ -138,8 +128,8 @@ jobs:
           done
 
           if [[ "$full_scope" == "true" ]]; then
-            echo "maven_scope=full" >> "$GITHUB_OUTPUT"
-            echo "maven_modules=$all_modules" >> "$GITHUB_OUTPUT"
+            maven_scope="full"
+            maven_modules="$all_modules"
           else
             modules_csv=""
             for module in "${module_order[@]}"; do
@@ -153,14 +143,16 @@ jobs:
             done
 
             if [[ -n "$modules_csv" ]]; then
-              echo "maven_scope=partial" >> "$GITHUB_OUTPUT"
-              echo "maven_modules=$modules_csv" >> "$GITHUB_OUTPUT"
+              maven_scope="partial"
+              maven_modules="$modules_csv"
             else
-              echo "maven_scope=skip" >> "$GITHUB_OUTPUT"
-              echo "maven_modules=" >> "$GITHUB_OUTPUT"
+              maven_scope="skip"
+              maven_modules=""
             fi
           fi
 
+          echo "maven_scope=$maven_scope" >> "$GITHUB_OUTPUT"
+          echo "maven_modules=$maven_modules" >> "$GITHUB_OUTPUT"
           echo "run_load_tests_build=$run_load_tests_build" >> "$GITHUB_OUTPUT"
 
           {
@@ -171,8 +163,8 @@ jobs:
             for file in "${changed_files[@]}"; do
               echo "  - $file"
             done
-            echo "- Maven scope: $(grep '^maven_scope=' "$GITHUB_OUTPUT" | tail -n1 | cut -d= -f2)"
-            echo "- Maven modules: $(grep '^maven_modules=' "$GITHUB_OUTPUT" | tail -n1 | cut -d= -f2)"
+            echo "- Maven scope: $maven_scope"
+            echo "- Maven modules: $maven_modules"
             echo "- load-tests: $run_load_tests_build"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -209,3 +201,4 @@ jobs:
           name: pr-gate-surefire-reports
           path: |
             **/target/surefire-reports/**
+          retention-days: 14

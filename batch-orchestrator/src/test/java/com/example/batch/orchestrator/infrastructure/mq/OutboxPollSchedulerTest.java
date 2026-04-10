@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -36,6 +37,9 @@ class OutboxPollSchedulerTest {
     @Mock
     private LockingTaskExecutor lockingTaskExecutor;
 
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
+
     private OutboxPollScheduler scheduler;
 
     @BeforeEach
@@ -45,7 +49,7 @@ class OutboxPollSchedulerTest {
             inv.getArgument(0, LockingTaskExecutor.Task.class).call();
             return null;
         }).when(lockingTaskExecutor).executeWithLock(any(LockingTaskExecutor.Task.class), any());
-        scheduler = new OutboxPollScheduler(scheduleForwarder, outboxPublishCircuitBreaker, governance, lockingTaskExecutor);
+        scheduler = new OutboxPollScheduler(scheduleForwarder, outboxPublishCircuitBreaker, governance, lockingTaskExecutor, gracefulShutdown);
         // 不调用 start()，避免后台线程干扰单元测试
     }
 

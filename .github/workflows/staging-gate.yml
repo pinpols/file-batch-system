@@ -44,23 +44,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify console OpenAPI matches controllers
-        shell: bash
-        run: |
-          python3 -m pip install --quiet pyyaml
-          python3 scripts/ci/check-console-openapi-paths.py
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
         with:
-          distribution: temurin
-          java-version: "25"
-          cache: maven
-
-      - name: Compile load-tests module
-        shell: bash
-        run: |
-          mvn -q -f load-tests/pom.xml test-compile
+          compile-load-tests: "true"
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
@@ -107,6 +94,7 @@ jobs:
           name: surefire-reports
           path: |
             **/target/surefire-reports/**
+          retention-days: 30
 
       - name: Upload Gatling Reports
         if: always()
@@ -115,3 +103,4 @@ jobs:
           name: gatling-reports
           path: |
             load-tests/target/gatling-results/**
+          retention-days: 30

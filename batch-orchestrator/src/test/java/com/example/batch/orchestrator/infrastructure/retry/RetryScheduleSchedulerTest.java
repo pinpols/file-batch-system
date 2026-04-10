@@ -5,6 +5,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 
 import com.example.batch.orchestrator.application.service.RetryGovernanceService;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,11 +23,14 @@ class RetryScheduleSchedulerTest {
     @Mock
     private RetryGovernanceService retryGovernanceService;
 
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
+
     private RetryScheduleScheduler scheduler;
 
     @BeforeEach
     void setUp() {
-        scheduler = new RetryScheduleScheduler(retryGovernanceService);
+        scheduler = new RetryScheduleScheduler(retryGovernanceService, gracefulShutdown);
     }
 
     @Test

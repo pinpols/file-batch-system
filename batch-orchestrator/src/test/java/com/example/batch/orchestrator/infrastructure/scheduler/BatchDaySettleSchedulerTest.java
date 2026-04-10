@@ -16,6 +16,7 @@ import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -38,6 +39,7 @@ class BatchDaySettleSchedulerTest {
     private TriggerRequestMapper triggerRequestMapper;
     private OrchestratorConfigCacheService configCacheService;
     private LaunchService launchService;
+    private OrchestratorGracefulShutdown gracefulShutdown;
     private BatchDaySettleScheduler scheduler;
 
     @BeforeEach
@@ -48,13 +50,15 @@ class BatchDaySettleSchedulerTest {
         triggerRequestMapper = mock(TriggerRequestMapper.class);
         configCacheService = mock(OrchestratorConfigCacheService.class);
         launchService = mock(LaunchService.class);
+        gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
         scheduler = new BatchDaySettleScheduler(
                 batchDayInstanceRepository,
                 jobInstanceMapper,
                 jobExecutionLogMapper,
                 triggerRequestMapper,
                 configCacheService,
-                launchService
+                launchService,
+                gracefulShutdown
         );
     }
 

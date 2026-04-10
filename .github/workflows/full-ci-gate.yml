@@ -2,25 +2,19 @@ name: full-ci-gate
 
 on:
   workflow_dispatch:
-  pull_request:
+  push:
     branches:
       - main
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
 
 permissions:
   contents: read
 
 concurrency:
-  group: full-ci-gate-${{ github.event.pull_request.number || github.ref }}
+  group: full-ci-gate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   full-ci-gate:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
@@ -29,23 +23,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify console OpenAPI matches controllers
-        shell: bash
-        run: |
-          python3 -m pip install --quiet pyyaml
-          python3 scripts/ci/check-console-openapi-paths.py
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
         with:
-          distribution: temurin
-          java-version: "25"
-          cache: maven
-
-      - name: Compile load-tests module
-        shell: bash
-        run: |
-          mvn -q -f load-tests/pom.xml test-compile
+          compile-load-tests: "true"
 
       - name: Run full CI gate
         shell: bash
@@ -59,3 +40,4 @@ jobs:
           name: full-ci-surefire-reports
           path: |
             **/target/surefire-reports/**
+          retention-days: 14

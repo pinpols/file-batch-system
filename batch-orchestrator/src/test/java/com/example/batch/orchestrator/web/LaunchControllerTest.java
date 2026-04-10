@@ -13,6 +13,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import com.example.batch.orchestrator.application.service.LaunchApplicationService;
 import com.example.batch.orchestrator.controller.LaunchController;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
 import com.example.batch.orchestrator.service.LaunchService;
 import org.junit.jupiter.api.Test;
@@ -24,8 +25,9 @@ class LaunchControllerTest {
     private final LaunchService launchService = org.mockito.Mockito.mock(LaunchService.class);
     private final TenantActionRateLimiter tenantActionRateLimiter = org.mockito.Mockito.mock(TenantActionRateLimiter.class);
     private final LaunchApplicationService launchApplicationService = new LaunchApplicationService(launchService, tenantActionRateLimiter);
+    private final OrchestratorGracefulShutdown gracefulShutdown = org.mockito.Mockito.mock(OrchestratorGracefulShutdown.class);
 
-    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new LaunchController(launchApplicationService))
+    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new LaunchController(launchApplicationService, gracefulShutdown))
             .setControllerAdvice(new OrchestratorApiExceptionHandler())
             .build();
 

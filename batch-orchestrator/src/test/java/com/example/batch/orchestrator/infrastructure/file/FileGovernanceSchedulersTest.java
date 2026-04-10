@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.infrastructure.file;
 
 import static org.mockito.Mockito.verify;
 
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +15,9 @@ class FileGovernanceSchedulersTest {
     @Mock
     private FileGovernanceScheduler fileGovernanceScheduler;
 
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
+
     private FileGovernanceArchiveCleanupScheduler archiveCleanupScheduler;
     private FileGovernanceReconcileScheduler reconcileScheduler;
     private FileGovernanceArrivalGroupScheduler arrivalGroupScheduler;
@@ -21,10 +25,10 @@ class FileGovernanceSchedulersTest {
 
     @BeforeEach
     void setUp() {
-        archiveCleanupScheduler = new FileGovernanceArchiveCleanupScheduler(fileGovernanceScheduler);
-        reconcileScheduler = new FileGovernanceReconcileScheduler(fileGovernanceScheduler);
-        arrivalGroupScheduler = new FileGovernanceArrivalGroupScheduler(fileGovernanceScheduler);
-        latencyScheduler = new FileGovernanceLatencyScheduler(fileGovernanceScheduler);
+        archiveCleanupScheduler = new FileGovernanceArchiveCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
+        reconcileScheduler = new FileGovernanceReconcileScheduler(fileGovernanceScheduler, gracefulShutdown);
+        arrivalGroupScheduler = new FileGovernanceArrivalGroupScheduler(fileGovernanceScheduler, gracefulShutdown);
+        latencyScheduler = new FileGovernanceLatencyScheduler(fileGovernanceScheduler, gracefulShutdown);
     }
 
     @Test
