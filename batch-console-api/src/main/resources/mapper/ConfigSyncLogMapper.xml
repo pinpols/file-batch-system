@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.ConfigSyncLogMapper">
+
+    <select id="selectByTenant" resultType="map">
+        SELECT id,
+               tenant_id AS tenantId,
+               sync_direction AS syncDirection,
+               source_env AS sourceEnv,
+               target_env AS targetEnv,
+               config_types AS configTypes,
+               total_items AS totalItems,
+               success_items AS successItems,
+               failed_items AS failedItems,
+               skipped_items AS skippedItems,
+               sync_status AS syncStatus,
+               detail_json AS detailJson,
+               operator_id AS operatorId,
+               created_at AS createdAt
+          FROM batch.config_sync_log
+         WHERE tenant_id = #{tenantId}
+         ORDER BY id DESC
+         LIMIT #{limit}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO batch.config_sync_log (
+            tenant_id, sync_direction, source_env, target_env, config_types,
+            total_items, success_items, failed_items, skipped_items,
+            sync_status, detail_json, operator_id, created_at
+        ) VALUES (
+            #{tenantId}, #{syncDirection}, #{sourceEnv}, #{targetEnv}, #{configTypes},
+            #{totalItems}, #{successItems}, #{failedItems}, #{skippedItems},
+            #{syncStatus}, #{detailJson,jdbcType=VARCHAR}::jsonb, #{operatorId}, CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <update id="updateResult">
+        UPDATE batch.config_sync_log
+           SET success_items = #{successItems},
+               failed_items = #{failedItems},
+               skipped_items = #{skippedItems},
+               sync_status = #{syncStatus},
+               detail_json = #{detailJson,jdbcType=VARCHAR}::jsonb
+         WHERE tenant_id = #{tenantId}
+           AND id = #{id}
+    </update>
+</mapper>
