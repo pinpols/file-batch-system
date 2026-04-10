@@ -12,7 +12,7 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
-import OutboxEventEntity;
+import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.domain.query.OutboxEventQuery;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.orchestrator.service.LaunchService;

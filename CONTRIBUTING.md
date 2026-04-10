@@ -12,8 +12,8 @@ and documentation contract.
 - Update `docs/api/console-api-protocol.md` and `docs/api/console-api.openapi.yaml`
   when HTTP contracts change.
 - Update the testing docs when test coverage or gate behavior changes.
-- Keep Excel template changes aligned with the workbook contract under
-  `docs/excel-templates/`.
+- Excel templates are generated at runtime by the API (`downloadTemplate` endpoints).
+  No static template files are maintained separately.
 - Do not introduce JPA/Hibernate dependencies.
 
 ## Recommended Checks
