@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import java.util.Map;
 
 class DefaultLaunchAdapterServiceTest {
 
@@ -27,7 +28,7 @@ class DefaultLaunchAdapterServiceTest {
         request.setJobCode("IMPORT_JOB");
         request.setBizDate(LocalDate.of(2026, 3, 27));
         request.setTriggerType(TriggerType.API);
-        request.setParams(java.util.Map.of("source", "api"));
+        request.setParams(Map.of("source", "api"));
 
         LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
                 request,

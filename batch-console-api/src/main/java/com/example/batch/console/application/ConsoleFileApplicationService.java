@@ -7,6 +7,7 @@ import com.example.batch.console.web.request.PresignDownloadFileRequest;
 import com.example.batch.console.web.request.RedispatchFileRequest;
 import com.example.batch.console.web.response.ConsoleFileOperationResponse;
 import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
+import java.util.Map;
 
 /**
  * 控制台文件治理应用服务：归档、删除、重派、预签名下载及到达组操作。
@@ -29,7 +30,7 @@ public interface ConsoleFileApplicationService {
     ConsoleFileOperationResponse operateArrivalGroup(FileArrivalGroupActionRequest request, String idempotencyKey);
 
     /** 生成对象存储预签名上传 URL（租户主动上传文件）。 */
-    java.util.Map<String, Object> presignUpload(String tenantId, String channelCode, String fileName, String idempotencyKey);
+    Map<String, Object> presignUpload(String tenantId, String channelCode, String fileName, String idempotencyKey);
 
     /** 租户确认文件到达。 */
     ConsoleFileOperationResponse confirmArrival(String tenantId, Long fileId, String idempotencyKey);

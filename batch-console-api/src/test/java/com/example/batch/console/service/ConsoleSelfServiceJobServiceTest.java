@@ -16,7 +16,7 @@ import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.env.Environment;
+import Environment;
 import org.springframework.web.client.RestClient;
 
 class ConsoleSelfServiceJobServiceTest {

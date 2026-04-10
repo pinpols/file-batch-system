@@ -4,6 +4,7 @@ import com.example.batch.common.redis.BatchRedisKeys;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -66,6 +67,6 @@ public class OrchestratorRedisSupport {
     }
 
     public Long evalLong(String script, String key, String... args) {
-        return redisTemplate.execute(new DefaultRedisScript<>(script, Long.class), java.util.List.of(key), (Object[]) args);
+        return redisTemplate.execute(new DefaultRedisScript<>(script, Long.class), List.of(key), (Object[]) args);
     }
 }

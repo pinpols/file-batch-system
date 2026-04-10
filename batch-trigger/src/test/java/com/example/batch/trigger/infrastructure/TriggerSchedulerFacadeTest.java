@@ -18,7 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.quartz.CronTrigger;
 import org.quartz.JobDetail;
-import org.quartz.JobKey;
+import JobKey;
 import org.quartz.Scheduler;
 
 @ExtendWith(MockitoExtension.class)

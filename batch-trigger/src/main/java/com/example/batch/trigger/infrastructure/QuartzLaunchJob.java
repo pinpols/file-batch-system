@@ -8,6 +8,7 @@ import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.MisfireHandler;
 import com.example.batch.trigger.service.TriggerService;
 import com.example.batch.trigger.support.TriggerDescriptor;
+import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.quartz.Job;
@@ -95,7 +96,7 @@ public class QuartzLaunchJob implements Job {
         if (maxDays <= 0L) {
             return TriggerType.CATCH_UP;
         }
-        long driftDays = Math.max(0L, java.time.Duration.between(scheduledFireTime, actualFireTime).toDays());
+        long driftDays = Math.max(0L, Duration.between(scheduledFireTime, actualFireTime).toDays());
         return driftDays <= maxDays ? TriggerType.CATCH_UP : TriggerType.SCHEDULED;
     }
 
@@ -115,7 +116,7 @@ public class QuartzLaunchJob implements Job {
         if (maxDays <= 0L) {
             return true;
         }
-        long driftDays = Math.max(0L, java.time.Duration.between(scheduledFireTime, actualFireTime).toDays());
+        long driftDays = Math.max(0L, Duration.between(scheduledFireTime, actualFireTime).toDays());
         return driftDays <= maxDays;
     }
 

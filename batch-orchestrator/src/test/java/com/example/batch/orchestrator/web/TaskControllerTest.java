@@ -20,10 +20,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.mockito.Mockito.mock;
 
 class TaskControllerTest {
 
-    private final TaskExecutionService taskExecutionService = org.mockito.Mockito.mock(TaskExecutionService.class);
+    private final TaskExecutionService taskExecutionService = mock(TaskExecutionService.class);
     private final TaskControllerApplicationService taskControllerApplicationService =
             new TaskControllerApplicationService(taskExecutionService);
 

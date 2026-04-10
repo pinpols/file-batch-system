@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
 import javax.crypto.Cipher;
@@ -124,7 +125,7 @@ public class BatchObjectCryptoService {
         try {
             PushbackInputStream pushbackInputStream = new PushbackInputStream(inputStream, 64);
             byte[] magic = pushbackInputStream.readNBytes(MAGIC.length);
-            if (magic.length < MAGIC.length || !java.util.Arrays.equals(magic, MAGIC)) {
+            if (magic.length < MAGIC.length || !Arrays.equals(magic, MAGIC)) {
                 if (magic.length > 0) {
                     pushbackInputStream.unread(magic);
                 }

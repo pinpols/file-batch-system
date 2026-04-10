@@ -5,6 +5,8 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.enums.WorkflowNodeCode;
+import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
@@ -29,6 +31,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -111,7 +114,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         ));
         int nextPartitionNo = existingPartitions.stream()
                 .map(JobPartitionEntity::getPartitionNo)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .max(Integer::compareTo)
                 .orElse(0) + 1;
         for (SchedulePlan.PartitionPlan partitionPlan : plan.getPartitions()) {
@@ -179,14 +182,14 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         runningNode.setNodeCode(node.nodeCode());
         runningNode.setNodeType(node.nodeType());
         runningNode.setRunSeq(nextRunSeq(workflowRun.getId(), node.nodeCode()));
-        runningNode.setNodeStatus(com.example.batch.common.enums.WorkflowNodeRunStatus.RUNNING.code());
+        runningNode.setNodeStatus(WorkflowNodeRunStatus.RUNNING.code());
         runningNode.setRetryCount(0);
         runningNode.setStartedAt(now);
         runningNode.setDurationMs(0L);
         workflowMappers.workflowNodeRunMapper.insert(runningNode);
         workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
                 .id(runningNode.getId())
-                .nodeStatus(com.example.batch.common.enums.WorkflowNodeRunStatus.SUCCESS.code())
+                .nodeStatus(WorkflowNodeRunStatus.SUCCESS.code())
                 .errorCode(null).errorMessage(null)
                 .durationMs(0L).finishedAt(now).build());
         List<WorkflowDagService.DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
@@ -197,7 +200,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         );
         int dispatchedCount = 0;
         for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
-            if (com.example.batch.common.enums.WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
+            if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
                 createTerminalNodeRun(workflowRun.getId(), nextNode, now);
                 continue;
             }
@@ -230,7 +233,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                 jobInstance.getTenantId(), jobInstance.getId(), null, null));
         int virtualPartitionNo = existingPartitions.stream()
                 .map(JobPartitionEntity::getPartitionNo)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .max(Integer::compareTo)
                 .orElse(0) + 1;
 
@@ -325,7 +328,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         terminalNode.setNodeCode(nextNode.nodeCode());
         terminalNode.setNodeType(nextNode.nodeType());
         terminalNode.setRunSeq(nextRunSeq(workflowRunId, nextNode.nodeCode()));
-        terminalNode.setNodeStatus(com.example.batch.common.enums.WorkflowNodeRunStatus.SUCCESS.code());
+        terminalNode.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
         terminalNode.setRetryCount(0);
         terminalNode.setStartedAt(finishedAt);
         terminalNode.setFinishedAt(finishedAt);
@@ -349,9 +352,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             return false;
         }
         String nodeStatus = latestNodeRun.getNodeStatus();
-        return com.example.batch.common.enums.WorkflowNodeRunStatus.READY.code().equals(nodeStatus)
-                || com.example.batch.common.enums.WorkflowNodeRunStatus.RUNNING.code().equals(nodeStatus)
-                || com.example.batch.common.enums.WorkflowNodeRunStatus.SUCCESS.code().equals(nodeStatus);
+        return WorkflowNodeRunStatus.READY.code().equals(nodeStatus)
+                || WorkflowNodeRunStatus.RUNNING.code().equals(nodeStatus)
+                || WorkflowNodeRunStatus.SUCCESS.code().equals(nodeStatus);
     }
 
     private ResourceSchedulingRequest buildSchedulingRequest(SchedulePlan plan) {
@@ -410,7 +413,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         readyNode.setNodeCode(nodeCode);
         readyNode.setNodeType(nodeType);
         readyNode.setRunSeq(nextRunSeq(workflowRunId, nodeCode));
-        readyNode.setNodeStatus(com.example.batch.common.enums.WorkflowNodeRunStatus.READY.code());
+        readyNode.setNodeStatus(WorkflowNodeRunStatus.READY.code());
         readyNode.setRetryCount(0);
         readyNode.setDurationMs(0L);
         workflowMappers.workflowNodeRunMapper.insert(readyNode);

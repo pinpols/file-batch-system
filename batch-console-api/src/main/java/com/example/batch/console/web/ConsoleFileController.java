@@ -12,6 +12,7 @@ import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import jakarta.validation.Valid;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -71,7 +72,7 @@ public class ConsoleFileController {
 
     /** 获取预签名上传地址（租户主动上传文件）。 */
     @PostMapping("/presign-upload")
-    public CommonResponse<java.util.Map<String, Object>> presignUpload(
+    public CommonResponse<Map<String, Object>> presignUpload(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @RequestParam("tenantId") String tenantId,
             @RequestParam("channelCode") String channelCode,
@@ -83,7 +84,7 @@ public class ConsoleFileController {
     @PostMapping("/{fileId}/confirm-arrival")
     public CommonResponse<ConsoleFileOperationResponse> confirmArrival(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-            @org.springframework.web.bind.annotation.PathVariable Long fileId,
+            @PathVariable Long fileId,
             @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(applicationService.confirmArrival(tenantId, fileId, idempotencyKey));
     }

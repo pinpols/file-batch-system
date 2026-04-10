@@ -16,9 +16,11 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
+import java.util.Map;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.env.Environment;
 import lombok.Setter;
 import org.springframework.stereotype.Service;
@@ -100,7 +102,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     }
 
     @Override
-    public java.util.Map<String, Object> presignUpload(String tenantId, String channelCode, String fileName, String idempotencyKey) {
+    public Map<String, Object> presignUpload(String tenantId, String channelCode, String fileName, String idempotencyKey) {
         ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
         RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
         return restClient.post()
@@ -108,14 +110,14 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId())
-                .body(java.util.Map.of(
+                .body(Map.of(
                         "tenantId", tenantId,
                         "channelCode", channelCode,
                         "fileName", fileName,
                         "operatorId", ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64)
                 ))
                 .retrieve()
-                .body(new org.springframework.core.ParameterizedTypeReference<java.util.Map<String, Object>>() {});
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
     }
 
     @Override

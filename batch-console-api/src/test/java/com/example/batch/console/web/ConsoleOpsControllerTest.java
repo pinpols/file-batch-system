@@ -24,13 +24,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
+import static org.mockito.Mockito.mock;
 
 class ConsoleOpsControllerTest {
 
-    private final ConsoleOpsApplicationService opsApplicationService = org.mockito.Mockito.mock(ConsoleOpsApplicationService.class);
-    private final ConsoleOutboxOpsApplicationService outboxOpsService = org.mockito.Mockito.mock(ConsoleOutboxOpsApplicationService.class);
-    private final ConsoleKafkaLagQueryService kafkaLagQueryService = org.mockito.Mockito.mock(ConsoleKafkaLagQueryService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = org.mockito.Mockito.mock(ConsoleRequestMetadataResolver.class);
+    private final ConsoleOpsApplicationService opsApplicationService = mock(ConsoleOpsApplicationService.class);
+    private final ConsoleOutboxOpsApplicationService outboxOpsService = mock(ConsoleOutboxOpsApplicationService.class);
+    private final ConsoleKafkaLagQueryService kafkaLagQueryService = mock(ConsoleKafkaLagQueryService.class);
+    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
     private MockMvc mockMvc;
 
     @BeforeEach

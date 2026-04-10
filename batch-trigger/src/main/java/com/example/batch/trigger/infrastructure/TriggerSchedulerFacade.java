@@ -4,6 +4,7 @@ import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.domain.TriggerStatusInfo;
 import com.example.batch.trigger.support.TriggerDescriptor;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -174,7 +175,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         if (timezone != null && !timezone.isBlank()) {
             try {
                 ZoneId.of(timezone);
-            } catch (java.time.DateTimeException e) {
+            } catch (DateTimeException e) {
                 throw new IllegalArgumentException(
                         "invalid timezone for job " + descriptor.getJobCode() + ": '" + timezone + "'", e);
             }

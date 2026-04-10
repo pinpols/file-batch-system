@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.domain.value;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonRawValue;
 import com.fasterxml.jackson.annotation.JsonValue;
+import java.util.Objects;
 
 public final class JsonbString {
 
@@ -31,12 +32,12 @@ public final class JsonbString {
         if (!(other instanceof JsonbString that)) {
             return false;
         }
-        return java.util.Objects.equals(value, that.value);
+        return Objects.equals(value, that.value);
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(value);
+        return Objects.hash(value);
     }
 
     @Override

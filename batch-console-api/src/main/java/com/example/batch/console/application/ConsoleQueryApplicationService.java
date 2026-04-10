@@ -59,6 +59,7 @@ import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import com.example.batch.common.model.PageResponse;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -112,7 +113,7 @@ public interface ConsoleQueryApplicationService {
     ConsoleJobInstanceResponse jobInstance(String tenantId, Long id);
 
     /** 批量查询作业实例状态。 */
-    java.util.List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, java.util.List<String> instanceNos);
+    List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos);
 
     /** 查询作业步骤实例列表。 */
     PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request);

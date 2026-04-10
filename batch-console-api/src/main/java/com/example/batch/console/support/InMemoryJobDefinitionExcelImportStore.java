@@ -1,6 +1,7 @@
 package com.example.batch.console.support;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,7 +13,7 @@ public class InMemoryJobDefinitionExcelImportStore implements JobDefinitionExcel
     private final Map<String, JobDefinitionExcelSession> sessions = new ConcurrentHashMap<>();
 
     @Override
-    public String save(String fileName, String tenantId, java.util.List<JobDefinitionRow> rows) {
+    public String save(String fileName, String tenantId, List<JobDefinitionRow> rows) {
         String token = UUID.randomUUID().toString();
         sessions.put(token, new JobDefinitionExcelSession(fileName, tenantId, Instant.now(), rows));
         return token;

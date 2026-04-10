@@ -21,6 +21,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import static org.mockito.Mockito.mock;
 
 @SpringBootTest(
         classes = BatchTriggerApplication.class,
@@ -44,7 +45,7 @@ class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
         when(orchestratorTriggerAdapter.sendTrigger(any()))
                 .thenReturn(new LaunchResponse("inst-quartz-001", "trace-quartz-001"));
 
-        JobExecutionContext context = org.mockito.Mockito.mock(JobExecutionContext.class);
+        JobExecutionContext context = mock(JobExecutionContext.class);
         JobDataMap jobDataMap = new JobDataMap();
         jobDataMap.put(QuartzLaunchJob.TENANT_ID, "t1");
         jobDataMap.put(QuartzLaunchJob.JOB_CODE, "IMPORT_JOB");
@@ -68,7 +69,7 @@ class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
     static class TestConfig {
         @Bean
         Scheduler scheduler() {
-            return org.mockito.Mockito.mock(Scheduler.class);
+            return mock(Scheduler.class);
         }
     }
 }

@@ -20,6 +20,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 
 class ConsoleRequestContextFilterTest {
 
@@ -64,7 +66,7 @@ class ConsoleRequestContextFilterTest {
     private FilterChain noOpChain(AtomicBoolean chainCalled) {
         return new FilterChain() {
             @Override
-            public void doFilter(jakarta.servlet.ServletRequest request, jakarta.servlet.ServletResponse response) {
+            public void doFilter(ServletRequest request, ServletResponse response) {
                 chainCalled.set(true);
             }
         };

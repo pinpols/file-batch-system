@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import static org.mockito.Mockito.doThrow;
 
 /**
  * AbstractWorkerLoop 单元测试：
@@ -114,7 +115,7 @@ class AbstractWorkerLoopTest {
     @Test
     void doHeartbeat_continuesGracefullyWhenFacadeThrows() {
         loop.ensureStarted();
-        org.mockito.Mockito.doThrow(new RuntimeException("network error"))
+        doThrow(new RuntimeException("network error"))
                 .when(workerRuntimeFacade).heartbeat(any());
 
         // 异常不应向外传播
@@ -140,7 +141,7 @@ class AbstractWorkerLoopTest {
     @Test
     void shutdown_doesNotPropagateFacadeFailure() {
         loop.ensureStarted();
-        org.mockito.Mockito.doThrow(new RuntimeException("shutdown failed"))
+        doThrow(new RuntimeException("shutdown failed"))
                 .when(workerRuntimeFacade).shutdown(any());
 
         loop.shutdown();

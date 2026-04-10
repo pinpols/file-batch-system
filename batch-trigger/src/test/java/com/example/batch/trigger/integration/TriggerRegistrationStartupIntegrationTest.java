@@ -11,6 +11,7 @@ import com.example.batch.trigger.domain.TriggerRegistrationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import static org.mockito.Mockito.mock;
 
 @SpringBootTest(
         classes = BatchTriggerApplication.class,
@@ -55,7 +57,7 @@ class TriggerRegistrationStartupIntegrationTest extends AbstractIntegrationTest 
         insertCronJobDefinition("t-trigger", "JOB_B", "0 10 * * * ?");
         insertNonCronJobDefinition("t-trigger", "JOB_DISABLED");
 
-        when(scheduler.checkExists(any(org.quartz.JobKey.class))).thenReturn(false);
+        when(scheduler.checkExists(any(JobKey.class))).thenReturn(false);
         triggerRegistrationService.registerAll();
 
         verify(scheduler, times(2)).scheduleJob(any(), any());
@@ -108,7 +110,7 @@ class TriggerRegistrationStartupIntegrationTest extends AbstractIntegrationTest 
     static class TestConfig {
         @Bean
         Scheduler scheduler() {
-            return org.mockito.Mockito.mock(Scheduler.class);
+            return mock(Scheduler.class);
         }
     }
 }

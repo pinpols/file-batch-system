@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import org.springframework.util.StringUtils;
 
 /**
@@ -274,7 +275,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     // ─── 固定宽度格式化 ──────────────────────────────────────────────
 
     protected String fixedWidthLine(List<ColumnLayout> columns, int recordLength,
-                                    java.util.function.Function<ColumnLayout, String> valueMapper) {
+                                    Function<ColumnLayout, String> valueMapper) {
         StringBuilder builder = new StringBuilder();
         for (ColumnLayout column : columns) {
             builder.append(fixedWidth(valueMapper.apply(column), column));

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -68,7 +69,7 @@ public class DispatchChannelHealthService {
         if (snapshot.nextProbeAt() == null) {
             return false;
         }
-        return !java.time.Instant.now().isBefore(snapshot.nextProbeAt());
+        return !Instant.now().isBefore(snapshot.nextProbeAt());
     }
 
     public void recordDispatchOutcome(Map<String, Object> channelConfig, boolean success, String message, String evidence) {
@@ -85,9 +86,9 @@ public class DispatchChannelHealthService {
         if (success) {
             repository.upsertHealth(new DispatchChannelHealthSnapshot(
                     tenantId, channelCode, channelType, "HEALTHY", 0,
-                    java.time.Instant.now(), java.time.Instant.now(),
+                    Instant.now(), Instant.now(),
                     snapshot == null ? null : snapshot.lastFailureAt(),
-                    java.time.Instant.now().plusMillis(properties.getProbeIntervalMillis()),
+                    Instant.now().plusMillis(properties.getProbeIntervalMillis()),
                     message, evidence
             ));
             return;
@@ -97,8 +98,8 @@ public class DispatchChannelHealthService {
         String status = failures >= Math.max(1, circuitBreakerProperties.getFailureThreshold()) ? "UNHEALTHY" : "DEGRADED";
         repository.upsertHealth(new DispatchChannelHealthSnapshot(
                 tenantId, channelCode, channelType, status, failures,
-                java.time.Instant.now(), snapshot == null ? null : snapshot.lastSuccessAt(),
-                java.time.Instant.now(), java.time.Instant.now().plusMillis(backoff),
+                Instant.now(), snapshot == null ? null : snapshot.lastSuccessAt(),
+                Instant.now(), Instant.now().plusMillis(backoff),
                 message, evidence
         ));
     }
@@ -130,7 +131,7 @@ public class DispatchChannelHealthService {
             return new DispatchChannelProbeResult(false, "probe target missing tenant/channel/type", null);
         }
         DispatchChannelHealthSnapshot snapshot = repository.findHealth(tenantId, channelCode);
-        if (snapshot != null && snapshot.nextProbeAt() != null && java.time.Instant.now().isBefore(snapshot.nextProbeAt())) {
+        if (snapshot != null && snapshot.nextProbeAt() != null && Instant.now().isBefore(snapshot.nextProbeAt())) {
             return new DispatchChannelProbeResult(false, "probe deferred until backoff expires", null);
         }
         DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeChannel(channelConfig, minioStorageProperties, minioClient);

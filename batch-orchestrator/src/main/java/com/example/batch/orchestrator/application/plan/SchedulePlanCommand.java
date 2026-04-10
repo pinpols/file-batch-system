@@ -1,9 +1,11 @@
 package com.example.batch.orchestrator.application.plan;
 
+import java.util.Map;
+
 public record SchedulePlanCommand(
         String tenantId,
         String jobCode,
         String bizDate,
-        java.util.Map<String, Object> params
+        Map<String, Object> params
 ) {
 }

@@ -9,7 +9,7 @@ import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
+import OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import com.example.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;

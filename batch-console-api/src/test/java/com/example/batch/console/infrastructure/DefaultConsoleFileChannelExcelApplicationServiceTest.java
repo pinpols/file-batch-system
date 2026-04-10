@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
+import com.example.batch.testing.TestExcelFileBuilder;
 
 class DefaultConsoleFileChannelExcelApplicationServiceTest {
 
@@ -93,7 +94,7 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
 
     @Test
     void shouldUploadPreviewAndApplyChannelWorkbook() throws Exception {
-        byte[] xlsx = com.example.batch.testing.TestExcelFileBuilder.builder()
+        byte[] xlsx = TestExcelFileBuilder.builder()
                 .sheetName("file_channel_config")
                 .headers(channelHeaders())
                 .rows(List.of(validChannelRow()))
@@ -126,7 +127,7 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
 
     @Test
     void shouldMarkDuplicateChannelRowsAsInvalid() throws Exception {
-        byte[] xlsx = com.example.batch.testing.TestExcelFileBuilder.builder()
+        byte[] xlsx = TestExcelFileBuilder.builder()
                 .sheetName("file_channel_config")
                 .headers(channelHeaders())
                 .rows(List.of(validChannelRow(), validChannelRow()))

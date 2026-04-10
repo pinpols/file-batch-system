@@ -13,7 +13,7 @@ import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
+import OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import java.time.Instant;
 import java.util.concurrent.CompletableFuture;

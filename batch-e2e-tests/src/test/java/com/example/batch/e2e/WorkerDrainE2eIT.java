@@ -16,6 +16,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -120,7 +121,7 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
                         where tenant_id = ? and id = ?
                         """,
                 WORKER_CODE,
-                java.sql.Timestamp.from(Instant.now().minusSeconds(600)),
+                Timestamp.from(Instant.now().minusSeconds(600)),
                 TENANT,
                 taskId);
 

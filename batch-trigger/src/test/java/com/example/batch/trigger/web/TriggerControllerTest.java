@@ -24,12 +24,13 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.mockito.Mockito.mock;
 
 @SuppressWarnings("removal")
 class TriggerControllerTest {
 
-    private final TriggerService triggerService = org.mockito.Mockito.mock(TriggerService.class);
-    private final TriggerGracefulShutdown triggerGracefulShutdown = org.mockito.Mockito.mock(TriggerGracefulShutdown.class);
+    private final TriggerService triggerService = mock(TriggerService.class);
+    private final TriggerGracefulShutdown triggerGracefulShutdown = mock(TriggerGracefulShutdown.class);
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TriggerController(triggerService, triggerGracefulShutdown))
             .setControllerAdvice(new TriggerApiExceptionHandler())
             .setMessageConverters(new MappingJackson2HttpMessageConverter(

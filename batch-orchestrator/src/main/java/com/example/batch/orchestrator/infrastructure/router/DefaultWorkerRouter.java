@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.router;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.application.route.WorkerRouter;
 import com.example.batch.orchestrator.application.route.WorkerRoutingPolicy;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +20,7 @@ public class DefaultWorkerRouter implements WorkerRouter {
         route.setWorkerType(stepCode == null || stepCode.isBlank() ? "DEFAULT" : stepCode.toUpperCase());
         route.setPriority(5);
         route.setAvailable(true);
-        WorkerRouteModel selected = workerRoutingPolicy.select(java.util.List.of(route));
+        WorkerRouteModel selected = workerRoutingPolicy.select(List.of(route));
         return selected == null ? route : selected;
     }
 }

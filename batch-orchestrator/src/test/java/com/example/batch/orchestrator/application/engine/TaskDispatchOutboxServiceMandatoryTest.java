@@ -18,6 +18,8 @@ import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
+import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 
 @ExtendWith(MockitoExtension.class)
 class TaskDispatchOutboxServiceMandatoryTest {
@@ -54,7 +56,7 @@ class TaskDispatchOutboxServiceMandatoryTest {
 
         service.writeDispatchEvent(jobInstance, task, partition, "trace-1", "evt-key-1");
 
-        verify(outboxEventMapper).insert(org.mockito.ArgumentMatchers.any());
+        verify(outboxEventMapper).insert(any());
     }
 
     @Test
@@ -74,7 +76,7 @@ class TaskDispatchOutboxServiceMandatoryTest {
 
         service.writeDispatchEvent(jobInstance, task, null, "trace-2", "evt-key-2", RunMode.RETRY);
 
-        var captor = ArgumentCaptor.forClass(com.example.batch.orchestrator.domain.entity.OutboxEventEntity.class);
+        var captor = ArgumentCaptor.forClass(OutboxEventEntity.class);
         verify(outboxEventMapper).insert(captor.capture());
         assertThat(captor.getValue().getPayloadJson()).contains("run_mode");
     }

@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
+import com.example.batch.testing.TestExcelFileBuilder;
 
 class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
 
@@ -104,7 +105,7 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
 
     @Test
     void shouldUploadPreviewAndApplyRoutingWorkbook() throws Exception {
-        byte[] xlsx = com.example.batch.testing.TestExcelFileBuilder.builder()
+        byte[] xlsx = TestExcelFileBuilder.builder()
                 .sheetName("alert_routing_config")
                 .headers(routingHeaders())
                 .rows(List.of(validRoutingRow()))
@@ -137,7 +138,7 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
 
     @Test
     void shouldMarkDuplicateRouteCodesAsInvalid() throws Exception {
-        byte[] xlsx = com.example.batch.testing.TestExcelFileBuilder.builder()
+        byte[] xlsx = TestExcelFileBuilder.builder()
                 .sheetName("alert_routing_config")
                 .headers(routingHeaders())
                 .rows(List.of(validRoutingRow(), validRoutingRow()))

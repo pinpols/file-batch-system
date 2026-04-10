@@ -19,6 +19,7 @@ import com.example.batch.trigger.support.TriggerCalendarConfig;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -108,7 +109,7 @@ public class DefaultTriggerService implements TriggerService {
                 TriggerType.CATCH_UP,
                 pendingRequest.getRequestId(),
                 pendingRequest.getTraceId(),
-                java.util.Map.of(
+                Map.of(
                         "operationType", "CATCH_UP_APPROVAL",
                         "approvalMode", "MANUAL_APPROVAL",
                         "catchUpApproved", true,

@@ -16,10 +16,11 @@ import com.example.batch.orchestrator.controller.OrchestratorApiExceptionHandler
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.mockito.Mockito.mock;
 
 class ApprovalControllerTest {
 
-    private final ApprovalWorkflowService approvalWorkflowService = org.mockito.Mockito.mock(ApprovalWorkflowService.class);
+    private final ApprovalWorkflowService approvalWorkflowService = mock(ApprovalWorkflowService.class);
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new ApprovalController(approvalWorkflowService))
             .setControllerAdvice(new OrchestratorApiExceptionHandler())
             .build();

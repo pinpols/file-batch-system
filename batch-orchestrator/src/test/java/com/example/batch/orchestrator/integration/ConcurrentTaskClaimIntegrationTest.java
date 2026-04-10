@@ -12,6 +12,8 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
+import com.example.batch.orchestrator.domain.query.JobPartitionQuery;
+import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import com.example.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
@@ -91,13 +93,13 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
         assertThat(jobInstance).isNotNull();
 
         List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
-                new com.example.batch.orchestrator.domain.query.JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+                new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
         assertThat(tasks).hasSize(1);
         JobTaskEntity task = tasks.get(0);
         Long taskId = task.getId();
 
         List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
-                new com.example.batch.orchestrator.domain.query.JobPartitionQuery(TENANT, jobInstance.getId(), null, null));
+                new JobPartitionQuery(TENANT, jobInstance.getId(), null, null));
         assertThat(partitions).hasSize(1);
         Long partitionId = partitions.get(0).getId();
 
@@ -163,7 +165,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
         JobInstanceEntity jobInstance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
         List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
-                new com.example.batch.orchestrator.domain.query.JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+                new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
         assertThat(tasks).hasSize(1);
         JobTaskEntity task = tasks.get(0);
 

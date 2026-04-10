@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,7 +51,7 @@ public class ConsoleTenantSelfServiceController {
     @GetMapping("/usage")
     public CommonResponse<Map<String, String>> usage(@RequestParam("tenantId") String tenantId) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        Map<String, String> usageMap = new java.util.LinkedHashMap<>();
+        Map<String, String> usageMap = new LinkedHashMap<>();
         parameterService.getValue(resolved, "tenant.usage.running-jobs").ifPresent(v -> usageMap.put("runningJobs", v));
         parameterService.getValue(resolved, "tenant.usage.daily-triggers").ifPresent(v -> usageMap.put("dailyTriggers", v));
         parameterService.getValue(resolved, "tenant.usage.file-count").ifPresent(v -> usageMap.put("fileCount", v));
