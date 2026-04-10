@@ -24,6 +24,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.InputStreamResource;
@@ -82,9 +83,12 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
             assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("README");
             assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("DICT");
             assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("VALIDATION");
-            Sheet sheet = workbook.getSheetAt(0);
+            XSSFSheet sheet = (XSSFSheet) workbook.getSheetAt(0);
             Row header = sheet.getRow(0);
             assertThat(header.getCell(1).getStringCellValue()).isEqualTo("route_code");
+            assertThat(header.getCell(1).getCellComment()).isNotNull();
+            assertThat(sheet.getCTWorksheet().isSetAutoFilter()).isTrue();
+            assertThat(sheet.getDataValidations()).hasSize(2);
             assertThat(sheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("RT1");
         }
     }

@@ -27,6 +27,9 @@ public interface ConsoleJobDefinitionExcelApplicationService {
     /** 预览解析与校验结果。 */
     ConsoleJobDefinitionExcelPreviewResponse preview(String uploadToken);
 
+    /** 下载带校验问题明细的预览 workbook。 */
+    ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
+
     /** 确认导入并批量更新作业定义。 */
     ConsoleJobDefinitionExcelApplyResponse apply(String uploadToken, JobDefinitionExcelApplyRequest request);
 }

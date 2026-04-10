@@ -27,6 +27,9 @@ public interface ConsoleFileChannelExcelApplicationService {
     /** 预览解析结果。 */
     ConsoleFileChannelExcelPreviewResponse preview(String uploadToken);
 
+    /** 下载带校验问题明细的预览 workbook。 */
+    ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
+
     /** 确认导入并更新通道配置。 */
     ConsoleFileChannelExcelApplyResponse apply(String uploadToken, FileChannelExcelApplyRequest request);
 }

@@ -27,6 +27,9 @@ public interface ConsoleWorkflowExcelApplicationService {
     /** 根据 uploadToken 预览解析结果与校验问题。 */
     ConsoleWorkflowExcelPreviewResponse preview(String uploadToken);
 
+    /** 下载带校验问题明细的预览 workbook。 */
+    ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
+
     /** 将预览通过的数据写入数据库。 */
     ConsoleWorkflowExcelApplyResponse apply(String uploadToken, WorkflowExcelApplyRequest request);
 }

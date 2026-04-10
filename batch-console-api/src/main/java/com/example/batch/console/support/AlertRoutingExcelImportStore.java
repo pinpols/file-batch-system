@@ -18,6 +18,6 @@ public interface AlertRoutingExcelImportStore {
             String sheetName,
             Instant uploadedAt,
             List<Map<String, String>> rows
-    ) {
+    ) implements ConsoleSingleSheetExcelImportSupport.SingleSheetImportSession {
     }
 }

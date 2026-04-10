@@ -1,6 +1,7 @@
 package com.example.batch.console.mapper;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.console.mapper.param.ResourceQueueUpsertParam;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
@@ -23,6 +24,8 @@ public interface ResourceQueueMapper {
 
     Map<String, Object> selectByUniqueKey(@Param("tenantId") String tenantId,
                                           @Param("queueCode") String queueCode);
+
+    int upsertResourceQueue(ResourceQueueUpsertParam param);
 
     int insert(Map<String, Object> params);
 
