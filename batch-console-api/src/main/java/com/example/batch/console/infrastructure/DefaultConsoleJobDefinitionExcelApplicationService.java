@@ -26,7 +26,15 @@ import com.example.batch.console.web.response.ConsoleJobDefinitionExcelPreviewRe
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelRowIssueResponse;
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelRowResponse;
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelUploadResponse;
+import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+
+import com.example.batch.console.support.ConsoleExcelStyles;
 import java.io.ByteArrayInputStream;
+import org.apache.poi.ss.usermodel.Cell;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Instant;
@@ -40,18 +48,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.DataValidationConstraint;
 import org.apache.poi.ss.usermodel.DataValidationHelper;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddressList;
@@ -407,7 +410,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
                 writeCell(row, 18, entity.getDescription());
             }
             applyValidations(dataSheet);
-            setWidths(dataSheet);
+            setWidths(dataSheet, COLUMNS);
             createReadmeSheet(workbook);
             createDictSheet(workbook);
             createValidationSheet(workbook);
@@ -416,15 +419,6 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
             return out.toByteArray();
         } catch (IOException exception) {
             throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
-        }
-    }
-
-    private void writeHeaders(Sheet sheet, List<String> columns, CellStyle headerStyle) {
-        Row headerRow = sheet.createRow(0);
-        for (int i = 0; i < columns.size(); i++) {
-            Cell cell = headerRow.createCell(i);
-            cell.setCellValue(columns.get(i));
-            cell.setCellStyle(headerStyle);
         }
     }
 
@@ -444,15 +438,10 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
         sheet.addValidationData(validation);
     }
 
-    private void setWidths(Sheet sheet) {
-        for (int i = 0; i < COLUMNS.size(); i++) {
-            sheet.setColumnWidth(i, Math.min(12000, Math.max(18, COLUMNS.get(i).length() + 4) * 256));
-        }
-    }
-
     private void createReadmeSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("README");
         sheet.setColumnWidth(0, 16000);
+        CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
                 "job definition safe-field maintenance template",
                 "1. Only the editable fields are applied on import.",
@@ -464,16 +453,17 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
         for (int i = 0; i < lines.length; i++) {
             Row row = sheet.createRow(i);
             row.createCell(0).setCellValue(lines[i]);
+            if (i == 0) {
+                row.getCell(0).setCellStyle(titleStyle);
+            }
         }
     }
 
     private void createDictSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("DICT");
         sheet.createFreezePane(0, 1);
-        Row header = sheet.createRow(0);
-        header.createCell(0).setCellValue("field");
-        header.createCell(1).setCellValue("value");
-        header.createCell(2).setCellValue("description");
+        CellStyle dictHeaderStyle = createHeaderStyle(workbook);
+        writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
         String[][] rows = {
                 {"retry_policy", "NONE", "no retry"},
                 {"retry_policy", "FIXED", "fixed retry"},
@@ -497,44 +487,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService implements Conso
     }
 
     private void createValidationSheet(Workbook workbook) {
-        Sheet sheet = workbook.createSheet("VALIDATION");
-        sheet.createFreezePane(0, 1);
-        Row header = sheet.createRow(0);
-        header.createCell(0).setCellValue("sheet_name");
-        header.createCell(1).setCellValue("row_no");
-        header.createCell(2).setCellValue("row_key");
-        header.createCell(3).setCellValue("job_code");
-        header.createCell(4).setCellValue("error_reason");
-        sheet.setColumnWidth(0, 20 * 256);
-        sheet.setColumnWidth(1, 12 * 256);
-        sheet.setColumnWidth(2, 32 * 256);
-        sheet.setColumnWidth(3, 24 * 256);
-        sheet.setColumnWidth(4, 50 * 256);
-    }
-
-    private CellStyle createHeaderStyle(Workbook workbook) {
-        CellStyle headerStyle = workbook.createCellStyle();
-        headerStyle.setFillForegroundColor((short) 22);
-        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        headerStyle.setAlignment(HorizontalAlignment.CENTER);
-        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-        Font font = workbook.createFont();
-        font.setBold(true);
-        headerStyle.setFont(font);
-        return headerStyle;
-    }
-
-    private void writeCell(Row row, int columnIndex, Object value) {
-        Cell cell = row.createCell(columnIndex);
-        if (value == null) {
-            cell.setCellValue("");
-        } else if (value instanceof Number number) {
-            cell.setCellValue(number.doubleValue());
-        } else if (value instanceof Boolean bool) {
-            cell.setCellValue(bool);
-        } else {
-            cell.setCellValue(String.valueOf(value));
-        }
+        ConsoleExcelStyles.createValidationSheet(workbook);
     }
 
     private void logJobChange(JobDefinitionRow row, String reason, String updatedBy, String traceId, JobDefinitionEntity existing) {

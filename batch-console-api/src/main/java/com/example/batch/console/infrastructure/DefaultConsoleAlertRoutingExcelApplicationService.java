@@ -19,6 +19,11 @@ import com.example.batch.console.web.response.ConsoleAlertRoutingExcelPreviewRes
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelRowIssueResponse;
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelUploadResponse;
 import com.example.batch.console.web.response.ConsoleAlertRoutingResponse;
+import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+
+import com.example.batch.console.support.ConsoleExcelStyles;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -38,12 +43,8 @@ import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.DataValidationConstraint;
 import org.apache.poi.ss.usermodel.DataValidationHelper;
 import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddressList;
@@ -451,6 +452,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
     private void createReadmeSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("README");
         sheet.setColumnWidth(0, 16000);
+        CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
                 "alert routing config 维护模板",
                 "1. 主数据页必须在第一个 sheet。",
@@ -461,17 +463,19 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
                 "6. 导入流程必须先 upload，再 preview，最后 apply。"
         };
         for (int i = 0; i < lines.length; i++) {
-            sheet.createRow(i).createCell(0).setCellValue(lines[i]);
+            Row row = sheet.createRow(i);
+            row.createCell(0).setCellValue(lines[i]);
+            if (i == 0) {
+                row.getCell(0).setCellStyle(titleStyle);
+            }
         }
     }
 
     private void createDictSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("DICT");
         sheet.createFreezePane(0, 1);
-        Row header = sheet.createRow(0);
-        header.createCell(0).setCellValue("field");
-        header.createCell(1).setCellValue("value");
-        header.createCell(2).setCellValue("description");
+        CellStyle dictHeaderStyle = createHeaderStyle(workbook);
+        writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
         String[][] rows = {
                 {"severity", "INFO", "informational"},
                 {"severity", "WARN", "warning"},
@@ -492,29 +496,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService implements Consol
     }
 
     private void createValidationSheet(Workbook workbook) {
-        Sheet sheet = workbook.createSheet("VALIDATION");
-        sheet.createFreezePane(0, 1);
-        Row header = sheet.createRow(0);
-        header.createCell(0).setCellValue("sheet_name");
-        header.createCell(1).setCellValue("row_no");
-        header.createCell(2).setCellValue("column_name");
-        header.createCell(3).setCellValue("error_reason");
-        sheet.setColumnWidth(0, 20 * 256);
-        sheet.setColumnWidth(1, 12 * 256);
-        sheet.setColumnWidth(2, 28 * 256);
-        sheet.setColumnWidth(3, 50 * 256);
-    }
-
-    private CellStyle createHeaderStyle(Workbook workbook) {
-        CellStyle style = workbook.createCellStyle();
-        style.setFillForegroundColor((short) 22);
-        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        style.setAlignment(HorizontalAlignment.CENTER);
-        style.setVerticalAlignment(VerticalAlignment.CENTER);
-        Font font = workbook.createFont();
-        font.setBold(true);
-        style.setFont(font);
-        return style;
+        ConsoleExcelStyles.createValidationSheet(workbook);
     }
 
     private void logChange(String tenantId, RoutingRow row, String reason, String operatorId, String traceId, String action) {

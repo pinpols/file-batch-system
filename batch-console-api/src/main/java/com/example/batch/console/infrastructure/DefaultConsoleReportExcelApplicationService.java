@@ -20,6 +20,12 @@ import com.example.batch.console.web.response.ConsoleSchedulerSnapshotHistoryRes
 import com.example.batch.console.web.response.ConsoleSchedulerSnapshotResponse;
 import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
+import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.beans.BeanInfo;
@@ -35,17 +41,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.InputStreamResource;
@@ -235,24 +234,10 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
         return values;
     }
 
-    private void writeHeaders(Sheet sheet, List<String> columns, CellStyle headerStyle) {
-        Row headerRow = sheet.createRow(0);
-        for (int i = 0; i < columns.size(); i++) {
-            Cell cell = headerRow.createCell(i);
-            cell.setCellValue(columns.get(i));
-            cell.setCellStyle(headerStyle);
-        }
-    }
-
-    private void setWidths(Sheet sheet, List<String> columns) {
-        for (int i = 0; i < columns.size(); i++) {
-            sheet.setColumnWidth(i, Math.min(12000, Math.max(18, columns.get(i).length() + 4) * 256));
-        }
-    }
-
     private void createReadmeSheet(Workbook workbook, String title, String sheetName, List<String> headers) {
         Sheet sheet = workbook.createSheet("README");
         sheet.setColumnWidth(0, 16000);
+        CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
                 title + " export report",
                 "1. This workbook is export-only and is not intended for re-upload.",
@@ -263,31 +248,9 @@ public class DefaultConsoleReportExcelApplicationService implements ConsoleRepor
         for (int i = 0; i < lines.length; i++) {
             Row row = sheet.createRow(i);
             row.createCell(0).setCellValue(lines[i]);
-        }
-    }
-
-    private CellStyle createHeaderStyle(Workbook workbook) {
-        CellStyle headerStyle = workbook.createCellStyle();
-        headerStyle.setFillForegroundColor((short) 22);
-        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        headerStyle.setAlignment(HorizontalAlignment.CENTER);
-        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-        Font font = workbook.createFont();
-        font.setBold(true);
-        headerStyle.setFont(font);
-        return headerStyle;
-    }
-
-    private void writeCell(Row row, int columnIndex, Object value) {
-        Cell cell = row.createCell(columnIndex);
-        if (value == null) {
-            cell.setCellValue("");
-        } else if (value instanceof Number number) {
-            cell.setCellValue(number.doubleValue());
-        } else if (value instanceof Boolean bool) {
-            cell.setCellValue(bool);
-        } else {
-            cell.setCellValue(String.valueOf(value));
+            if (i == 0) {
+                row.getCell(0).setCellStyle(titleStyle);
+            }
         }
     }
 

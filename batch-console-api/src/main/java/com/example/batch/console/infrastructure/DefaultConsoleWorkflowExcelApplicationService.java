@@ -43,7 +43,15 @@ import com.example.batch.console.web.response.ConsoleWorkflowExcelPreviewRespons
 import com.example.batch.console.web.response.ConsoleWorkflowExcelRowIssueResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowExcelUploadResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeExcelRowResponse;
+import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+
+import com.example.batch.console.support.ConsoleExcelStyles;
 import java.io.ByteArrayInputStream;
+import org.apache.poi.ss.usermodel.Cell;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -59,18 +67,13 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.DataValidationConstraint;
 import org.apache.poi.ss.usermodel.DataValidationHelper;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddressList;
@@ -693,15 +696,6 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         return rowIndex;
     }
 
-    private void writeHeaders(Sheet sheet, List<String> columns, CellStyle headerStyle) {
-        Row headerRow = sheet.createRow(0);
-        for (int i = 0; i < columns.size(); i++) {
-            Cell cell = headerRow.createCell(i);
-            cell.setCellValue(columns.get(i));
-            cell.setCellStyle(headerStyle);
-        }
-    }
-
     private void applyValidations(Sheet definitionSheet, Sheet nodeSheet, Sheet edgeSheet) {
         addListValidation(definitionSheet, 3, WORKFLOW_TYPES.toArray(String[]::new));
         addBooleanValidation(definitionSheet, 5);
@@ -728,15 +722,10 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         }
     }
 
-    private void setWidths(Sheet sheet, List<String> columns) {
-        for (int i = 0; i < columns.size(); i++) {
-            sheet.setColumnWidth(i, Math.min(12000, Math.max(18, columns.get(i).length() + 4) * 256));
-        }
-    }
-
     private void createReadmeSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("README");
         sheet.setColumnWidth(0, 16000);
+        CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
                 "workflow definition / node / edge 维护模板",
                 "1. 主数据页必须在第一个 sheet，并按 definition / node / edge 顺序导出。",
@@ -748,16 +737,17 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         for (int i = 0; i < lines.length; i++) {
             Row row = sheet.createRow(i);
             row.createCell(0).setCellValue(lines[i]);
+            if (i == 0) {
+                row.getCell(0).setCellStyle(titleStyle);
+            }
         }
     }
 
     private void createDictSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("DICT");
         sheet.createFreezePane(0, 1);
-        Row header = sheet.createRow(0);
-        header.createCell(0).setCellValue("field");
-        header.createCell(1).setCellValue("value");
-        header.createCell(2).setCellValue("description");
+        CellStyle dictHeaderStyle = createHeaderStyle(workbook);
+        writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
         String[][] rows = {
                 {"workflow_type", "DAG", "dag workflow"},
                 {"workflow_type", "PIPELINE", "pipeline workflow"},
@@ -790,46 +780,7 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
     }
 
     private void createValidationSheet(Workbook workbook) {
-        Sheet sheet = workbook.createSheet("VALIDATION");
-        sheet.createFreezePane(0, 1);
-        Row header = sheet.createRow(0);
-        header.createCell(0).setCellValue("sheet_name");
-        header.createCell(1).setCellValue("row_no");
-        header.createCell(2).setCellValue("row_key");
-        header.createCell(3).setCellValue("workflow_code");
-        header.createCell(4).setCellValue("workflow_version");
-        header.createCell(5).setCellValue("error_reason");
-        sheet.setColumnWidth(0, 20 * 256);
-        sheet.setColumnWidth(1, 12 * 256);
-        sheet.setColumnWidth(2, 32 * 256);
-        sheet.setColumnWidth(3, 24 * 256);
-        sheet.setColumnWidth(4, 18 * 256);
-        sheet.setColumnWidth(5, 50 * 256);
-    }
-
-    private CellStyle createHeaderStyle(Workbook workbook) {
-        CellStyle headerStyle = workbook.createCellStyle();
-        headerStyle.setFillForegroundColor((short) 22);
-        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        headerStyle.setAlignment(HorizontalAlignment.CENTER);
-        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-        Font font = workbook.createFont();
-        font.setBold(true);
-        headerStyle.setFont(font);
-        return headerStyle;
-    }
-
-    private void writeCell(Row row, int columnIndex, Object value) {
-        Cell cell = row.createCell(columnIndex);
-        if (value == null) {
-            cell.setCellValue("");
-        } else if (value instanceof Number number) {
-            cell.setCellValue(number.doubleValue());
-        } else if (value instanceof Boolean bool) {
-            cell.setCellValue(bool);
-        } else {
-            cell.setCellValue(String.valueOf(value));
-        }
+        ConsoleExcelStyles.createValidationSheet(workbook);
     }
 
     private record DefinitionChangeContext(WorkflowDefinitionRow row, int nodeCount, int edgeCount,
