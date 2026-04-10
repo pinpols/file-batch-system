@@ -96,6 +96,12 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | Config modify (create / update / Excel import) | ✅ | ❌ | ✅ | ❌ |
 | Config delete / reset | ✅ | ❌ | ❌ | ❌ |
 | Ops actions (compensate / rerun / approve / dead-letter) | ✅ | ❌ | ❌ | ❌ |
+| Notification channel / rule CRUD | ✅ | ❌ | ✅ | ✅ |
+| Notification delivery log view | ✅ | ✅ | ✅ | ✅ |
+| Config approval (submit / approve / reject) | ✅ | ❌ | ❌ | ❌ |
+| Config approval detail view | ✅ | ✅ | ✅ | ❌ |
+| Config sync (export / preview / import) | ✅ | ❌ | ❌ | ❌ |
+| Config sync log view | ✅ | ❌ | ❌ | ❌ |
 | Worker management (drain / restore) | ✅ | ❌ | ✅ | ❌ |
 | Scheduler actions (pause-all / resume-all) | ✅ | ❌ | ❌ | ❌ |
 | Alert management | ✅ | ❌ | ✅ | ❌ |
@@ -196,6 +202,80 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - Do not trust role claims for security decisions on the client. They are only for routing and menu visibility.
 - Treat `401` as login/session failure and `403` as authorization failure. Do not infer authorization by inspecting response body text.
 
+## URL Design Conventions
+
+### HTTP Method Assignment
+
+| Method | Semantics | Typical usage |
+|--------|-----------|---------------|
+| `GET` | Read, never mutates state | Query, detail, list, export |
+| `POST` | Create a resource **or** trigger a command/action | Create, trigger, approve, cancel, toggle |
+| `PUT` | Idempotent full replacement of an existing resource | Update resource definition (replaces the whole record) |
+| `DELETE` | Remove a resource | Hard delete |
+
+`PATCH` is **not** used in this API. Partial updates are handled either by a dedicated `PUT` endpoint that accepts only the mutable fields, or by an action endpoint (see below).
+
+### Resource URL Naming
+
+1. **All resource paths use plural kebab-case.**  
+   `GET /api/console/job-definitions`, `GET /api/console/queries/instances`, `GET /api/console/tenants/quota`
+
+2. **Do not use singular for a resource collection**, even if the context is "my tenant" or "meta info".  
+   Correct: `/api/console/queries/…`, `/api/console/tenants/…`  
+   Wrong: `/api/console/queries/…`, `/api/console/tenant/…`
+
+3. **Exception — namespace prefixes are singular by convention.**  
+   `/api/console/meta/enums` — "meta" here is a namespace qualifier, not a collection.  
+   `/api/console/auth/login` — "auth" is a namespace, not a list of auth objects.
+
+### Action (Command) Endpoints
+
+For state-change operations that are not a simple CRUD (toggle, cancel, approve, drain, rerun, replay, etc.) use the **action suffix pattern**:
+
+```
+POST /api/console/{resources}/{id}/{action}
+```
+
+Examples:
+- `POST /api/console/job-definitions/{id}/toggle`
+- `POST /api/console/workers/{workerCode}/drain`
+- `POST /api/console/approvals/{approvalNo}/approve`
+
+Rationale: these commands are not idempotent replacements of a resource (which would be `PUT`). They represent an intent/event. GitHub API, Stripe API and similar industry APIs follow the same convention.
+
+### Batch Action Endpoints
+
+Batch operations on the same resource use the **`/batch-{action}`** path pattern (hyphenated, same level as the resource root):
+
+```
+POST /api/console/{resources}/batch-{action}
+```
+
+Examples:
+- `POST /api/console/approvals/batch-approve`
+- `POST /api/console/approvals/batch-reject`
+- `POST /api/console/job-definitions/batch-toggle`
+
+**Do not** use a path-separator style (`/batch/approve`). All batch endpoints must use the hyphenated form.
+
+### Summary Table
+
+| Pattern | Example | Correct |
+|---------|---------|---------|
+| Resource collection | `/api/console/job-definitions` | ✅ plural kebab-case |
+| Resource detail | `/api/console/job-definitions/{id}` | ✅ |
+| Create resource | `POST /api/console/job-definitions` | ✅ |
+| Update resource | `PUT /api/console/job-definitions/{id}` | ✅ full replacement |
+| Delete resource | `DELETE /api/console/job-definitions/{id}` | ✅ |
+| Action on resource | `POST /api/console/job-definitions/{id}/toggle` | ✅ verb suffix |
+| Batch action | `POST /api/console/approvals/batch-approve` | ✅ hyphenated |
+| Query namespace | `/api/console/queries/instances` | ✅ plural |
+| Meta namespace | `/api/console/meta/enums` | ✅ singular namespace exception |
+| ❌ Singular collection | `/api/console/queries/instances` | ❌ |
+| ❌ Verb path-sep batch | `POST /api/console/approvals/batch-approve` | ❌ |
+
+---
+
 ## Current Route Catalog
 
 ### Ops
@@ -269,20 +349,22 @@ Deployment note:
 
 ### Job Definitions
 
-- `GET /api/console/query/job-definitions`
+- `GET /api/console/queries/job-definitions`
 - `POST /api/console/job-definitions`
 - `GET /api/console/job-definitions/{id}`
 - `PUT /api/console/job-definitions/{id}`
 - `DELETE /api/console/job-definitions/{id}`
 - `POST /api/console/job-definitions/{id}/toggle`
 - `POST /api/console/job-definitions/{id}/copy`
+- `POST /api/console/job-definitions/{id}/clone` — clone with field overrides via `JobDefinitionCopyRequest` body (jobName, workerGroup, queueCode, scheduleExpr, retryPolicy, etc.)
 - All write operations require `ROLE_ADMIN`. Read operations allow `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
 - `toggle` uses query params `tenantId` (required) and `enabled` (required).
 - `copy` uses query params `tenantId` (required) and `newJobCode` (required); the cloned definition is created with `enabled=false`.
+- `clone` accepts a JSON body with overridable fields; unset fields inherit from the source definition.
 
 ### Workflow Definitions
 
-- `GET /api/console/query/workflow-definitions`
+- `GET /api/console/queries/workflow-definitions`
 - `POST /api/console/workflow-definitions`
 - `GET /api/console/workflow-definitions/{id}`
 - `PUT /api/console/workflow-definitions/{id}`
@@ -295,11 +377,11 @@ Deployment note:
 
 ### Compatibility Aliases
 
-- `GET /api/console/query/pipeline-definitions`
-- `GET /api/console/query/pipeline-definitions/{id}`
+- `GET /api/console/queries/pipeline-definitions`
+- `GET /api/console/queries/pipeline-definitions/{id}`
 - `GET /api/console/file-pipeline-observability`
 - `GET /api/console/file-pipeline-observability/{id}`
-- These are compatibility aliases for older callers. They return the same file pipeline list/detail payloads as `/api/console/query/file-pipelines` and `/api/console/query/file-pipelines/{id}`.
+- These are compatibility aliases for older callers. They return the same file pipeline list/detail payloads as `/api/console/queries/file-pipelines` and `/api/console/queries/file-pipelines/{id}`.
 - Delete cascades to nodes and edges.
 - `GET /api/console/workflow-definitions/events` subscribes to the workflow-definition realtime stream. It emits change signals for create, update, toggle, and delete operations using event types such as `workflow-definition-created`, `workflow-definition-updated`, `workflow-definition-toggled`, and `workflow-definition-deleted`.
 
@@ -323,7 +405,7 @@ Deployment note:
 - `GET /api/console/workers/{workerCode}/claimed-tasks`
 - `GET /api/console/workers/events`
 - `GET /api/console/workers/events` subscribes to worker registry realtime changes. It emits `worker-updated` signals after drain, force-offline, or takeover actions succeed.
-- Worker list query is served by `GET /api/console/query/workers`.
+- Worker list query is served by `GET /api/console/queries/workers`.
 
 ### Alerts
 
@@ -332,7 +414,7 @@ Deployment note:
 - `POST /api/console/alerts/{alertId}/close`
 - `GET /api/console/alerts/events`
 - `GET /api/console/alerts/events` subscribes to alert governance realtime changes. It emits `alert-updated` signals after ack, silence, or close actions succeed.
-- Alert list query is served by `GET /api/console/query/alerts`.
+- Alert list query is served by `GET /api/console/queries/alerts`.
 
 ### Job Instances and Workflow Runs
 
@@ -462,6 +544,7 @@ Deployment note:
 - `GET /api/console/dashboard/worker-load`
 - `GET /api/console/dashboard/alert-trend`
 - `GET /api/console/dashboard/sla-compliance`
+- `GET /api/console/dashboard/sla-report` — per-job SLA breakdown: avg/max duration, success/failure/breach counts
 - All endpoints require `tenantId` query param. `days` defaults to `7` where applicable.
 - `job-stats`: instance status distribution + daily execution trend.
 - `trigger-stats`: trigger type distribution + daily trend.
@@ -507,8 +590,8 @@ Deployment note:
 
 - `POST /api/console/approvals/{approvalNo}/approve`
 - `POST /api/console/approvals/{approvalNo}/reject`
-- `POST /api/console/approvals/batch/approve`
-- `POST /api/console/approvals/batch/reject`
+- `POST /api/console/approvals/batch-approve`
+- `POST /api/console/approvals/batch-reject`
 - Approval query views should use `ConsoleApprovalCommandResponse` and `ConsoleBatchApprovalResultResponse`, not raw entities.
 
 ### Config
@@ -606,12 +689,13 @@ Deployment note:
 - `POST /api/console/files/presign-upload`
 - `POST /api/console/files/{fileId}/confirm-arrival`
 - `GET /api/console/files/{fileId}/download`
+- `GET /api/console/files/{fileId}/errors/export` — export file error records as CSV (param: `tenantId`, optional `errorStage`)
 - File operation endpoints use `ConsoleFileOperationResponse`. `POST /api/console/files/presign-download` uses `ConsolePresignDownloadResponse`, where `approvalNo` and `downloadUrl` are mutually exclusive and one side may be `null` depending on whether the request goes through approval submission or direct presign execution.
 - Download success responses are raw file bytes with `Content-Disposition: attachment`; validation or state errors still return the normal JSON error envelope via the global exception handler.
 
 ### Alerts
 
-- `GET /api/console/query/alerts`
+- `GET /api/console/queries/alerts`
 - `POST /api/console/alerts/{alertId}/ack`
 - `POST /api/console/alerts/{alertId}/silence`
 - `POST /api/console/alerts/{alertId}/close`
@@ -680,6 +764,12 @@ Deployment note:
 - `POST /api/console/ops/governance` — update governance parameter
 - `POST /api/console/ops/governance/reset` — reset to default
 
+### Outbox Ops
+
+- `GET /api/console/ops/outbox/stats` — outbox event statistics (pending / failed / delivered counts)
+- `POST /api/console/ops/outbox/cleanup` — clean up delivered/expired outbox events
+- `POST /api/console/ops/outbox/republish` — republish failed outbox events
+
 ### Archive Policies
 
 - `GET /api/console/ops/archive-policies` — list archive/cleanup policies
@@ -694,9 +784,9 @@ Deployment note:
 
 ### Tenant Self-Service
 
-- `GET /api/console/tenant/quota` — tenant quota policies
-- `GET /api/console/tenant/usage` — tenant usage metrics
-- `POST /api/console/tenant/quota/request` — request quota change
+- `GET /api/console/tenants/quota` — tenant quota policies
+- `GET /api/console/tenants/usage` — tenant usage metrics
+- `POST /api/console/tenants/quota/request` — request quota change
 
 ### Self-Service Jobs
 
@@ -710,46 +800,46 @@ Deployment note:
 
 ### Queries
 
-- `GET /api/console/query/audits`
-- `GET /api/console/query/execution-logs`
-- `GET /api/console/query/alerts`
-- `GET /api/console/query/approvals`
-- `GET /api/console/query/files`
-- `GET /api/console/query/job-definitions`
-- `GET /api/console/query/outbox-retries`
-- `GET /api/console/query/outbox-deliveries`
-- `GET /api/console/query/file-pipelines`
-- `GET /api/console/query/file-pipeline-steps`
-- `GET /api/console/query/file-dispatches`
-- `GET /api/console/query/channel-receipts`
-- `GET /api/console/query/file-channels`
-- `GET /api/console/query/file-arrival-groups`
-- `GET /api/console/query/file-errors`
-- `GET /api/console/query/file-templates`
-- `GET /api/console/query/instances` — supports `sortBy=duration` and `minDurationSeconds` for slow task diagnosis
-- `GET /api/console/query/instances/{id}`
-- `GET /api/console/query/instances/batch-status` — batch query instance status by `instanceNos[]`
-- `GET /api/console/query/job-step-instances`
-- `GET /api/console/query/job-step-instances/{id}`
-- `GET /api/console/query/workflow-definitions`
-- `GET /api/console/query/workflow-nodes`
-- `GET /api/console/query/workflow-edges`
-- `GET /api/console/query/workflow-runs`
-- `GET /api/console/query/workflow-runs/{id}`
-- `GET /api/console/query/workflow-node-runs`
-- `GET /api/console/query/workflow-node-runs/{id}`
-- `GET /api/console/query/workflow-topology`
-- `GET /api/console/query/ai-audits`
-- `GET /api/console/query/dead-letters`
-- `GET /api/console/query/retries`
-- `GET /api/console/query/catch-up-approvals`
-- `GET /api/console/query/batch-days`
-- `GET /api/console/query/batch-days/{bizDate}/window`
-- `GET /api/console/query/workers`
-- `GET /api/console/query/file-channels/{channelCode}`
-- `GET /api/console/query/file-templates/{templateCode}`
-- `GET /api/console/query/files/{id}`
-- `GET /api/console/query/file-pipelines/{id}`
+- `GET /api/console/queries/audits`
+- `GET /api/console/queries/execution-logs`
+- `GET /api/console/queries/alerts`
+- `GET /api/console/queries/approvals`
+- `GET /api/console/queries/files`
+- `GET /api/console/queries/job-definitions`
+- `GET /api/console/queries/outbox-retries`
+- `GET /api/console/queries/outbox-deliveries`
+- `GET /api/console/queries/file-pipelines`
+- `GET /api/console/queries/file-pipeline-steps`
+- `GET /api/console/queries/file-dispatches`
+- `GET /api/console/queries/channel-receipts`
+- `GET /api/console/queries/file-channels`
+- `GET /api/console/queries/file-arrival-groups`
+- `GET /api/console/queries/file-errors`
+- `GET /api/console/queries/file-templates`
+- `GET /api/console/queries/instances` — supports `sortBy=duration` and `minDurationSeconds` for slow task diagnosis
+- `GET /api/console/queries/instances/{id}`
+- `GET /api/console/queries/instances/batch-status` — batch query instance status by `instanceNos[]`
+- `GET /api/console/queries/job-step-instances`
+- `GET /api/console/queries/job-step-instances/{id}`
+- `GET /api/console/queries/workflow-definitions`
+- `GET /api/console/queries/workflow-nodes`
+- `GET /api/console/queries/workflow-edges`
+- `GET /api/console/queries/workflow-runs`
+- `GET /api/console/queries/workflow-runs/{id}`
+- `GET /api/console/queries/workflow-node-runs`
+- `GET /api/console/queries/workflow-node-runs/{id}`
+- `GET /api/console/queries/workflow-topology`
+- `GET /api/console/queries/ai-audits`
+- `GET /api/console/queries/dead-letters`
+- `GET /api/console/queries/retries`
+- `GET /api/console/queries/catch-up-approvals`
+- `GET /api/console/queries/batch-days`
+- `GET /api/console/queries/batch-days/{bizDate}/window`
+- `GET /api/console/queries/workers`
+- `GET /api/console/queries/file-channels/{channelCode}`
+- `GET /api/console/queries/file-templates/{templateCode}`
+- `GET /api/console/queries/files/{id}`
+- `GET /api/console/queries/file-pipelines/{id}`
 - Query endpoints must return typed list DTOs or documented view objects. Avoid raw entity lists and anonymous maps in new query APIs.
 - `execution-logs` is a UI alias for `audits` and uses the same response shape.
 - `channel-receipts` is a receipt-focused alias of `file-dispatches`; it uses the same request fields and response DTO, but gives the frontend a stable semantic entrypoint for receipt tracking.
@@ -778,10 +868,51 @@ Deployment note:
 - Browser `EventSource` clients may authenticate with `Authorization: Bearer <jwt>` or `?token=<jwt>` when custom headers are unavailable.
 - The realtime stream currently emits `ready`, `heartbeat`, and domain event names such as `pipeline-definition-created`, `pipeline-definition-updated`, and `pipeline-definition-toggled`.
 
+### Notification Subscription Management
+
+- `GET /api/console/notifications/channels` — list notification channels
+- `GET /api/console/notifications/channels/{channelCode}` — get channel detail
+- `POST /api/console/notifications/channels` — create notification channel (EMAIL / DINGTALK / WECOM / WEBHOOK / SMS)
+- `PUT /api/console/notifications/channels/{channelCode}` — update channel
+- `DELETE /api/console/notifications/channels/{channelCode}` — delete channel
+- `POST /api/console/notifications/channels/{channelCode}/test` — send test notification
+- `GET /api/console/notifications/rules` — list subscription rules
+- `GET /api/console/notifications/rules/{ruleId}` — get rule detail
+- `POST /api/console/notifications/rules` — create subscription rule (links channel + event types + filters)
+- `PUT /api/console/notifications/rules/{ruleId}` — update rule
+- `DELETE /api/console/notifications/rules/{ruleId}` — delete rule
+- `GET /api/console/notifications/delivery-logs` — list delivery logs (param: `tenantId`, `limit`)
+- Channel CRUD and rule CRUD require `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`, or `ROLE_TENANT_USER`.
+- Delivery log view additionally allows `ROLE_AUDITOR`.
+- Channel delete requires `ROLE_ADMIN` or `ROLE_TENANT_USER`.
+- Database tables: `notification_channel`, `subscription_rule`, `notification_delivery_log` (V49 migration).
+
+### Config Approval Flow
+
+- `POST /api/console/config/releases/{releaseId}/submit-approval` — submit release for approval (changes status to PENDING_APPROVAL)
+- `GET /api/console/config/releases/{releaseId}/approval` — get approval detail for a release
+- `POST /api/console/config/approvals/{approvalId}/approve` — approve (changes release to PUBLISHED)
+- `POST /api/console/config/approvals/{approvalId}/reject` — reject (changes release back to DRAFT)
+- Submit, approve, and reject require `ROLE_ADMIN`.
+- Approval detail view allows `ROLE_ADMIN`, `ROLE_AUDITOR`, and `ROLE_CONFIG_ADMIN`.
+- State machine: `DRAFT → PENDING_APPROVAL → PUBLISHED` (approve) or `DRAFT → PENDING_APPROVAL → DRAFT` (reject).
+- Database table: `config_approval` (V49 migration). Enum `ConfigLifecycleStatus.PENDING_APPROVAL` added.
+
+### Cross-Environment Config Sync
+
+- `POST /api/console/config/sync/export` — export config bundle from source tenant/environment
+- `POST /api/console/config/sync/preview` — preview import impact without executing
+- `POST /api/console/config/sync/import` — import config bundle into target tenants
+- `GET /api/console/config/sync/logs` — list sync operation logs (param: `tenantId`, `limit`)
+- All endpoints require `ROLE_ADMIN`.
+- Export returns a `ConfigSyncBundlePayload` containing job definitions, workflow definitions, pipeline definitions, file channels, and file templates.
+- Import delegates to `ConsoleTenantConfigInitApplicationService.batchInit()` and records sync log with RUNNING → SUCCESS / PARTIAL_FAILED / FAILED status.
+- Database table: `config_sync_log` (V49 migration).
+
 ### Alert Routing / Notification Policy Status
 
-- No console OpenAPI is defined yet for alert routing or notification policy management.
-- Before adding frontend CRUD for alert routing / notification policy, the backend must first introduce persistent model, mapper/service layer, and explicit REST contract.
+- Alert routing Excel maintenance is available via the standard upload → preview → apply flow.
+- Notification subscription management is now fully implemented (see above).
 
 ## Trigger API
 
@@ -851,9 +982,9 @@ Request body:
 
 ### Tenant Self-Service
 
-- `GET /api/console/tenant/quota` — query tenant quota policies
-- `GET /api/console/tenant/usage` — query tenant usage metrics
-- `POST /api/console/tenant/quota/request` — request quota change (stored as system parameter)
+- `GET /api/console/tenants/quota` — query tenant quota policies
+- `GET /api/console/tenants/usage` — query tenant usage metrics
+- `POST /api/console/tenants/quota/request` — request quota change (stored as system parameter)
 
 ### File Upload & Arrival Confirmation
 

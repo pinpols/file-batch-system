@@ -22,9 +22,9 @@
 	</natures>
 	<linkedResources>
 		<link>
-			<name>.._batch-orchestrator_src_main_resources_db_migration</name>
+			<name>.._db_migration</name>
 			<type>2</type>
-			<location>//Users/dengchao/Downloads/file-batch-system/batch-orchestrator/src/main/resources/db/migration/</location>
+			<location>//Users/dengchao/Downloads/file-batch-system/db/migration/</location>
 		</link>
 	</linkedResources>
 	<filteredResources>

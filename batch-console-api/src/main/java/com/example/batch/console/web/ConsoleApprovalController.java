@@ -47,7 +47,7 @@ public class ConsoleApprovalController {
     }
 
     /** 批量审批通过。 */
-    @PostMapping("/batch/approve")
+    @PostMapping("/batch-approve")
     public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchApprove(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody BatchApprovalActionRequest request) {
@@ -57,7 +57,7 @@ public class ConsoleApprovalController {
     }
 
     /** 批量审批拒绝。 */
-    @PostMapping("/batch/reject")
+    @PostMapping("/batch-reject")
     public CommonResponse<List<ConsoleBatchApprovalResultResponse>> batchReject(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody BatchApprovalActionRequest request) {

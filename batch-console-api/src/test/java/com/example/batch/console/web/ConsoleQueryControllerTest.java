@@ -66,7 +66,7 @@ class ConsoleQueryControllerTest {
                         OffsetDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC))
         )));
 
-        mockMvc.perform(get("/api/console/query/approvals").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/approvals").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.items[0].approvalNo").value("appr-001"))
@@ -95,7 +95,7 @@ class ConsoleQueryControllerTest {
                 )
         )));
 
-        mockMvc.perform(get("/api/console/query/alerts").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/alerts").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.items[0].severity").value("HIGH"))
@@ -120,7 +120,7 @@ class ConsoleQueryControllerTest {
                 )
         )));
 
-        mockMvc.perform(get("/api/console/query/execution-logs").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/execution-logs").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.items[0].operationType").value("FILE_UPLOAD"));
@@ -130,7 +130,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnFileChainsPage() throws Exception {
         when(queryApplicationService.fileChains(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/files").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/files").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -139,7 +139,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnFilePipelinesPage() throws Exception {
         when(queryApplicationService.filePipelines(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/file-pipelines").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/file-pipelines").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -148,7 +148,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnLegacyPipelineDefinitionsPage() throws Exception {
         when(queryApplicationService.filePipelines(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/pipeline-definitions").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/pipeline-definitions").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -157,7 +157,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnFilePipelineStepsPage() throws Exception {
         when(queryApplicationService.filePipelineSteps(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/file-pipeline-steps"))
+        mockMvc.perform(get("/api/console/queries/file-pipeline-steps"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -166,7 +166,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnFileDispatchesPage() throws Exception {
         when(queryApplicationService.fileDispatchRecords(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/file-dispatches").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/file-dispatches").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -175,7 +175,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnFileChannelsPage() throws Exception {
         when(queryApplicationService.fileChannels(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/file-channels").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/file-channels").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -184,7 +184,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnFileArrivalGroupsPage() throws Exception {
         when(queryApplicationService.fileArrivalGroups(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/file-arrival-groups").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/file-arrival-groups").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -193,7 +193,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnFileErrorsPage() throws Exception {
         when(queryApplicationService.fileErrorRecords(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/file-errors").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/file-errors").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -202,7 +202,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnFileTemplatesPage() throws Exception {
         when(queryApplicationService.fileTemplates(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/file-templates").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/file-templates").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -211,7 +211,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnWorkflowDefinitionsPage() throws Exception {
         when(queryApplicationService.workflowDefinitions(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/workflow-definitions").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/workflow-definitions").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -220,7 +220,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnWorkflowNodesPage() throws Exception {
         when(queryApplicationService.workflowNodes(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/workflow-nodes").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/workflow-nodes").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -229,7 +229,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnWorkflowEdgesPage() throws Exception {
         when(queryApplicationService.workflowEdges(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/workflow-edges").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/workflow-edges").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -239,7 +239,7 @@ class ConsoleQueryControllerTest {
         when(queryApplicationService.workflowTopology(any())).thenReturn(
                 new ConsoleWorkflowTopologyResponse(null, List.of(), List.of(), List.of(), List.of()));
 
-        mockMvc.perform(get("/api/console/query/workflow-topology").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/workflow-topology").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.nodes").isArray())
@@ -266,7 +266,7 @@ class ConsoleQueryControllerTest {
                 Instant.EPOCH
         ));
 
-        mockMvc.perform(get("/api/console/query/pipeline-definitions/1").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/pipeline-definitions/1").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.jobCode").value("file-001"))
                 .andExpect(jsonPath("$.data.runStatus").value("SUCCESS"));
@@ -276,7 +276,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnAiAuditsPage() throws Exception {
         when(queryApplicationService.aiAuditLogs(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/ai-audits").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/ai-audits").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -285,7 +285,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnOutboxRetriesPage() throws Exception {
         when(queryApplicationService.outboxRetries(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/outbox-retries").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/outbox-retries").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -294,7 +294,7 @@ class ConsoleQueryControllerTest {
     void shouldReturnOutboxDeliveriesPage() throws Exception {
         when(queryApplicationService.outboxDeliveries(any())).thenReturn(emptyPage());
 
-        mockMvc.perform(get("/api/console/query/outbox-deliveries").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/outbox-deliveries").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(0));
     }
@@ -329,7 +329,7 @@ class ConsoleQueryControllerTest {
                 Instant.EPOCH
         ));
 
-        mockMvc.perform(get("/api/console/query/instances/11").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/instances/11").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.instanceNo").value("inst-001"))
                 .andExpect(jsonPath("$.data.instanceStatus").value("SUCCESS"));
@@ -355,7 +355,7 @@ class ConsoleQueryControllerTest {
                 Instant.EPOCH
         ));
 
-        mockMvc.perform(get("/api/console/query/job-step-instances/21").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/job-step-instances/21").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.stepCode").value("step-1"))
                 .andExpect(jsonPath("$.data.stepStatus").value("SUCCESS"));
@@ -378,7 +378,7 @@ class ConsoleQueryControllerTest {
                 Instant.EPOCH
         ));
 
-        mockMvc.perform(get("/api/console/query/workflow-runs/31").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/workflow-runs/31").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.runStatus").value("RUNNING"))
                 .andExpect(jsonPath("$.data.currentNodeCode").value("node-1"));
@@ -401,7 +401,7 @@ class ConsoleQueryControllerTest {
                 120L
         ));
 
-        mockMvc.perform(get("/api/console/query/workflow-node-runs/41").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/queries/workflow-node-runs/41").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.nodeCode").value("node-1"))
                 .andExpect(jsonPath("$.data.nodeStatus").value("SUCCESS"));
@@ -439,7 +439,7 @@ class ConsoleQueryControllerTest {
                 )
         ));
 
-        mockMvc.perform(get("/api/console/query/instances/batch-status")
+        mockMvc.perform(get("/api/console/queries/instances/batch-status")
                         .param("tenantId", "t1")
                         .param("instanceNos", "INS-001", "INS-002"))
                 .andExpect(status().isOk())

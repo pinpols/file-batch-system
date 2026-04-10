@@ -58,7 +58,7 @@ class ConsoleTenantSelfServiceControllerTest {
         when(quotaPolicyService.list("t1", null, null, 1, 100))
                 .thenReturn(new PageResponse<>(1, 1, 100, List.of(policy)));
 
-        mockMvc.perform(get("/api/console/tenant/quota").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/tenants/quota").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.items[0].policyCode").value("max-jobs"));
@@ -70,7 +70,7 @@ class ConsoleTenantSelfServiceControllerTest {
         when(parameterService.getValue("t1", "tenant.usage.daily-triggers")).thenReturn(Optional.of("120"));
         when(parameterService.getValue("t1", "tenant.usage.file-count")).thenReturn(Optional.of("42"));
 
-        mockMvc.perform(get("/api/console/tenant/usage").param("tenantId", "t1"))
+        mockMvc.perform(get("/api/console/tenants/usage").param("tenantId", "t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.runningJobs").value("5"))
