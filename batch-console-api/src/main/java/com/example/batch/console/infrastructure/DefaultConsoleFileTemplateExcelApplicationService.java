@@ -20,6 +20,11 @@ import com.example.batch.console.web.response.ConsoleFileTemplateExcelApplyRespo
 import com.example.batch.console.web.response.ConsoleFileTemplateExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleFileTemplateExcelUploadResponse;
 import com.example.batch.console.web.response.ConsoleFileTemplateResponse;
+import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+
+import com.example.batch.console.support.ConsoleExcelStyles;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -42,12 +47,8 @@ import org.apache.poi.ss.usermodel.DataValidation;
 import org.apache.poi.ss.usermodel.DataValidationConstraint;
 import org.apache.poi.ss.usermodel.DataValidationHelper;
 import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
@@ -548,6 +549,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
     private void createReadmeSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("README");
         sheet.setColumnWidth(0, 16000);
+        CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
                 "file template config 维护模板",
                 "1. 主数据页必须在第一个 sheet。",
@@ -560,16 +562,17 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
         for (int i = 0; i < lines.length; i++) {
             Row row = sheet.createRow(i);
             row.createCell(0).setCellValue(lines[i]);
+            if (i == 0) {
+                row.getCell(0).setCellStyle(titleStyle);
+            }
         }
     }
 
     private void createDictSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("DICT");
         sheet.createFreezePane(0, 1);
-        Row header = sheet.createRow(0);
-        header.createCell(0).setCellValue("field");
-        header.createCell(1).setCellValue("value");
-        header.createCell(2).setCellValue("description");
+        CellStyle dictHeaderStyle = createHeaderStyle(workbook);
+        writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
         String[][] rows = {
                 {"template_type", "IMPORT", "import template"},
                 {"template_type", "EXPORT", "export template"},
@@ -611,29 +614,7 @@ public class DefaultConsoleFileTemplateExcelApplicationService implements Consol
     }
 
     private void createValidationSheet(Workbook workbook) {
-        Sheet sheet = workbook.createSheet("VALIDATION");
-        sheet.createFreezePane(0, 1);
-        Row header = sheet.createRow(0);
-        header.createCell(0).setCellValue("sheet_name");
-        header.createCell(1).setCellValue("row_no");
-        header.createCell(2).setCellValue("column_name");
-        header.createCell(3).setCellValue("error_reason");
-        sheet.setColumnWidth(0, 20 * 256);
-        sheet.setColumnWidth(1, 12 * 256);
-        sheet.setColumnWidth(2, 28 * 256);
-        sheet.setColumnWidth(3, 50 * 256);
-    }
-
-    private CellStyle createHeaderStyle(Workbook workbook) {
-        CellStyle headerStyle = workbook.createCellStyle();
-        headerStyle.setFillForegroundColor((short) 22);
-        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        headerStyle.setAlignment(HorizontalAlignment.CENTER);
-        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-        Font font = workbook.createFont();
-        font.setBold(true);
-        headerStyle.setFont(font);
-        return headerStyle;
+        ConsoleExcelStyles.createValidationSheet(workbook);
     }
 
     private void logChange(String tenantId, TemplateRow row, String reason, String operatorId, String traceId, String action) {
