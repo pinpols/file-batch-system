@@ -75,6 +75,8 @@ tags:
     description: Resource tagging for job, workflow, file channel, and file template.
   - name: ApiKeys
     description: API key self-service creation, listing, and revocation.
+  - name: Telemetry
+    description: Frontend telemetry log collection endpoint.
   - name: Notifications
     description: Notification channel and subscription rule management, delivery logs.
   - name: Governance
@@ -6403,6 +6405,61 @@ paths:
               schema:
                 type: string
                 format: binary
+
+  # ─── Telemetry ─────────────────────────────────────────────────────────────
+  /api/console/telemetry/events:
+    post:
+      tags: [Telemetry]
+      summary: Receive frontend telemetry log entries
+      operationId: receiveTelemetryEvents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [app, events]
+              properties:
+                app:
+                  type: string
+                  maxLength: 50
+                userId:
+                  type: string
+                sessionId:
+                  type: string
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [type, name]
+                    properties:
+                      type:
+                        type: string
+                        maxLength: 20
+                        description: "Event category: route, click, api, error"
+                      name:
+                        type: string
+                        maxLength: 200
+                        description: Event name or description
+                      ts:
+                        type: string
+                        description: ISO 8601 timestamp
+                      page:
+                        type: string
+                      props:
+                        type: object
+                        additionalProperties: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
 
   # ─── Notifications ──────────────────────────────────────────────────────────
   /api/console/notifications/channels:
