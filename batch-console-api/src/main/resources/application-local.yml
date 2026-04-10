@@ -11,6 +11,8 @@ spring:
       - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
+  kafka:
+    bootstrap-servers: localhost:19092
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user

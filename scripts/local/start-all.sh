@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# =========================================================
+# =========================================================s s
 # start-all.sh - 一键启动本地联调环境
 # Notes:
 # 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及六个 Java 模块。
@@ -7,9 +7,9 @@
 # 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。
 # 4) PID 写入 logs/start-all.pids（TAB 分隔：name<TAB>pid<TAB>绝对路径 jar），日志写入 logs/app/<module>.log。
 #    Docker 容器日志通过 docker logs 查看，如需落盘可手动导出到 logs/docker/。
-# 5) 启动 Java 进程前默认删除六个模块的 logs/app/*.log（避免无限追加）；需保留则设 START_ALL_KEEP_LOGS=1。
-#    可选 START_ALL_DELETE_LOGS_OLDER_THAN_DAYS=7 删除 logs/app 下超过 N 天未改的 *.log。
-# 6) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
+# 5) 每次启动会覆盖模块日志（logs/app/<module>.log），不追加。
+# 6) 可执行 jar 统一从 build/runtime-jars/ 读取，由 build-apps.sh 产出。
+# 7) 若提示 docker: command not found：安装并启动 Docker Desktop，或保证 docker 在 PATH；
 #    本脚本会尝试常见安装路径（Homebrew、Docker.app 等）。
 # =========================================================
 set -euo pipefail
@@ -56,14 +56,10 @@ if ! docker network inspect "$APP_NETWORK_NAME" >/dev/null 2>&1; then
 fi
 
 module_jar() {
-  local module="$1"
-  local jar
-  jar="$(ls "$ROOT/$module/target/${module}"-*-exec.jar 2>/dev/null | grep -Ev 'sources|javadoc' | head -1 || true)"
-  if [[ -z "$jar" || ! -f "$jar" ]]; then
-    jar="$(ls "$ROOT/$module/target/${module}"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc|\\.original$|\\-exec\\.jar$' | head -1 || true)"
-  fi
-  if [[ -z "$jar" || ! -f "$jar" ]]; then
-    echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar（请先执行 ./scripts/local/build-apps.sh 或 BUILD=1 ./scripts/local/start-all.sh）" >&2
+  local name="$1"
+  local jar="$RUNTIME_JAR_DIR/${name}.jar"
+  if [[ ! -f "$jar" ]]; then
+    echo "ERROR: 未找到 ${jar}（请先执行 ./scripts/local/build-apps.sh 或 BUILD=1 ./scripts/local/start-all.sh）" >&2
     exit 1
   fi
   printf '%s' "$jar"
@@ -80,13 +76,10 @@ start_java() {
     return 0
   fi
 
-  local runtime_jar="$RUNTIME_JAR_DIR/${name}.jar"
-  cp -f "$jar" "$runtime_jar"
-
   # Java 25+：Netty 等会调用 System::loadLibrary；显式允许 unnamed 模块原生访问，避免启动期 WARNING
-  nohup java --enable-native-access=ALL-UNNAMED ${JAVA_OPTS:-} -jar "$runtime_jar" --spring.profiles.active=local >>"$LOG_DIR/${name}.log" 2>&1 &
+  nohup java --enable-native-access=ALL-UNNAMED ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >"$LOG_DIR/${name}.log" 2>&1 &
   local pid=$!
-  printf '%s\t%s\t%s\n' "$name" "$pid" "$runtime_jar" >>"$PID_FILE_NEW"
+  printf '%s\t%s\t%s\n' "$name" "$pid" "$jar" >>"$PID_FILE_NEW"
   echo "  已启动 ${name} pid=${pid} 运行包 build/runtime-jars/${name}.jar 日志 logs/app/${name}.log"
 }
 
@@ -199,23 +192,7 @@ wait_orchestrator_healthy() {
   exit 1
 }
 
-# 启动前清理本脚本写入的模块日志，避免单次联调日志无限变大。
-clean_local_runtime_logs() {
-  if [[ "${START_ALL_KEEP_LOGS:-0}" == "1" ]]; then
-    echo "==> 保留现有模块日志（已设 START_ALL_KEEP_LOGS=1）"
-    return 0
-  fi
-  echo "==> 删除将重启写入的模块日志（logs/app/<模块>.log）；保留请设 START_ALL_KEEP_LOGS=1"
-  local name
-  for name in orchestrator trigger console worker-import worker-export worker-dispatch; do
-    [[ -f "$LOG_DIR/${name}.log" ]] && rm -f "$LOG_DIR/${name}.log"
-  done
-  local days_raw="${START_ALL_DELETE_LOGS_OLDER_THAN_DAYS:-}"
-  if [[ -n "$days_raw" ]] && [[ "$days_raw" =~ ^[0-9]+$ ]] && (( days_raw > 0 )); then
-    echo "==> 删除 logs/app 下超过 ${days_raw} 天未修改的 *.log（不含子目录）"
-    find "$LOG_DIR" -maxdepth 1 -type f -name '*.log' -mtime +"$days_raw" -delete 2>/dev/null || true
-  fi
-}
+
 
 echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis）..."
 docker compose --env-file "$COMPOSE_ENV_FILE" up -d
@@ -226,30 +203,25 @@ wait_kafka_topics_ready
 wait_container_exited_zero batch-minio-init "MinIO bucket init"
 
 if [[ "${BUILD:-0}" == "1" ]]; then
-  echo "==> BUILD=1，执行 Maven 打包全部模块（-DskipTests）..."
-  mvn -q -Dmaven.test.skip=true \
-    -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-    -am package -T 1C
+  "$ROOT/scripts/local/build-apps.sh"
 else
   echo "==> 跳过 Maven 打包（默认行为）"
   echo "  如需先构建，请执行 ./scripts/local/build-apps.sh"
   echo "  或使用 BUILD=1 ./scripts/local/start-all.sh"
 fi
 
-clean_local_runtime_logs
-
 echo "==> 启动 Spring Boot 进程（profile=local）..."
 echo "  顺序：orchestrator -> 健康检查 UP -> trigger / console -> 三个 worker"
 
-start_java orchestrator "$(module_jar batch-orchestrator)"
+start_java orchestrator "$(module_jar orchestrator)"
 wait_orchestrator_healthy
 
-start_java trigger "$(module_jar batch-trigger)"
-start_java console "$(module_jar batch-console-api)"
+start_java trigger "$(module_jar trigger)"
+start_java console "$(module_jar console)"
 
-start_java worker-import "$(module_jar batch-worker-import)"
-start_java worker-export "$(module_jar batch-worker-export)"
-start_java worker-dispatch "$(module_jar batch-worker-dispatch)"
+start_java worker-import "$(module_jar worker-import)"
+start_java worker-export "$(module_jar worker-export)"
+start_java worker-dispatch "$(module_jar worker-dispatch)"
 
 mv "$PID_FILE_NEW" "$PID_FILE"
 trap - EXIT
