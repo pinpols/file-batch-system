@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
+import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import com.example.batch.trigger.service.TriggerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -28,7 +29,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class TriggerControllerTest {
 
     private final TriggerService triggerService = org.mockito.Mockito.mock(TriggerService.class);
-    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TriggerController(triggerService))
+    private final TriggerGracefulShutdown triggerGracefulShutdown = org.mockito.Mockito.mock(TriggerGracefulShutdown.class);
+    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TriggerController(triggerService, triggerGracefulShutdown))
             .setControllerAdvice(new TriggerApiExceptionHandler())
             .setMessageConverters(new MappingJackson2HttpMessageConverter(
                     new ObjectMapper().registerModule(new JavaTimeModule())

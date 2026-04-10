@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.orchestrator.application.service.WorkerDrainGovernanceService;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import com.example.batch.orchestrator.domain.value.JsonbString;
@@ -28,6 +29,9 @@ class WorkerDrainTimeoutSchedulerTest {
     @Mock
     private WorkerDrainGovernanceService workerDrainGovernanceService;
 
+    @Mock
+    private OrchestratorGracefulShutdown gracefulShutdown;
+
     private WorkerDrainProperties workerDrainProperties;
     private WorkerDrainTimeoutScheduler scheduler;
 
@@ -38,7 +42,8 @@ class WorkerDrainTimeoutSchedulerTest {
         scheduler = new WorkerDrainTimeoutScheduler(
                 workerRegistryRepository,
                 workerDrainGovernanceService,
-                workerDrainProperties
+                workerDrainProperties,
+                gracefulShutdown
         );
     }
 

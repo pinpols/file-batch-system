@@ -24,6 +24,7 @@ import com.example.batch.console.web.request.TenantConfigBatchInitRequest.FileTe
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
+import com.example.batch.console.web.request.ConfigSyncBundlePayload;
 import com.example.batch.console.web.request.TenantConfigCopyRequest;
 import com.example.batch.console.web.request.TenantConfigCopyRequest.ConfigType;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
@@ -60,35 +61,42 @@ public class ConsoleTenantConfigCopyService {
     public TenantConfigBatchInitResponse copy(TenantConfigCopyRequest request,
                                                String operator,
                                                String batchOperationId) {
-        String source = request.getSourceTenantId();
-        Set<ConfigType> types = request.getConfigTypes();
-        boolean allTypes = types == null || types.isEmpty();
-
         TenantConfigBatchInitRequest initRequest = new TenantConfigBatchInitRequest();
         initRequest.setTargetTenantIds(request.getTargetTenantIds());
         initRequest.setMode(request.getMode());
         initRequest.setDryRun(request.isDryRun());
-
-        if (allTypes || types.contains(ConfigType.JOB_DEFINITION)) {
-            initRequest.setJobDefinitions(readJobDefinitions(source));
-        }
-        if (allTypes || types.contains(ConfigType.WORKFLOW_DEFINITION)) {
-            initRequest.setWorkflowDefinitions(readWorkflowDefinitions(source));
-        }
-        if (allTypes || types.contains(ConfigType.PIPELINE_DEFINITION)) {
-            initRequest.setPipelineDefinitions(readPipelineDefinitions(source));
-        }
-        if (allTypes || types.contains(ConfigType.FILE_CHANNEL)) {
-            initRequest.setFileChannels(readFileChannels(source));
-        }
-        if (allTypes || types.contains(ConfigType.FILE_TEMPLATE)) {
-            initRequest.setFileTemplates(readFileTemplates(source));
-        }
+        ConfigSyncBundlePayload bundle = buildBundle(request.getSourceTenantId(), request.getConfigTypes());
+        initRequest.setJobDefinitions(bundle.getJobDefinitions());
+        initRequest.setWorkflowDefinitions(bundle.getWorkflowDefinitions());
+        initRequest.setPipelineDefinitions(bundle.getPipelineDefinitions());
+        initRequest.setFileChannels(bundle.getFileChannels());
+        initRequest.setFileTemplates(bundle.getFileTemplates());
 
         log.info("[TenantConfigCopy] source={} targets={} types={} dryRun={} batchOp={}",
-                source, request.getTargetTenantIds(), types, request.isDryRun(), batchOperationId);
+                request.getSourceTenantId(), request.getTargetTenantIds(), request.getConfigTypes(), request.isDryRun(), batchOperationId);
 
         return initService.batchInit(initRequest, operator, batchOperationId);
+    }
+
+    public ConfigSyncBundlePayload buildBundle(String sourceTenantId, Set<ConfigType> configTypes) {
+        boolean allTypes = configTypes == null || configTypes.isEmpty();
+        ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+        if (allTypes || configTypes.contains(ConfigType.JOB_DEFINITION)) {
+            bundle.setJobDefinitions(readJobDefinitions(sourceTenantId));
+        }
+        if (allTypes || configTypes.contains(ConfigType.WORKFLOW_DEFINITION)) {
+            bundle.setWorkflowDefinitions(readWorkflowDefinitions(sourceTenantId));
+        }
+        if (allTypes || configTypes.contains(ConfigType.PIPELINE_DEFINITION)) {
+            bundle.setPipelineDefinitions(readPipelineDefinitions(sourceTenantId));
+        }
+        if (allTypes || configTypes.contains(ConfigType.FILE_CHANNEL)) {
+            bundle.setFileChannels(readFileChannels(sourceTenantId));
+        }
+        if (allTypes || configTypes.contains(ConfigType.FILE_TEMPLATE)) {
+            bundle.setFileTemplates(readFileTemplates(sourceTenantId));
+        }
+        return bundle;
     }
 
     // ------------------------------------------------------------------ readers

@@ -15,6 +15,7 @@ import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -35,6 +36,7 @@ class PartitionLeaseReclaimSchedulerTest {
     private JobTaskMapper jobTaskMapper;
     private JobInstanceMapper jobInstanceMapper;
     private TaskDispatchOutboxService taskDispatchOutboxService;
+    private OrchestratorGracefulShutdown gracefulShutdown;
     private PartitionLeaseReclaimScheduler scheduler;
 
     @BeforeEach
@@ -43,6 +45,7 @@ class PartitionLeaseReclaimSchedulerTest {
         jobTaskMapper = mock(JobTaskMapper.class);
         jobInstanceMapper = mock(JobInstanceMapper.class);
         taskDispatchOutboxService = mock(TaskDispatchOutboxService.class);
+        gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
 
         PartitionLeaseProperties props = new PartitionLeaseProperties();
         props.setExpireSeconds(60L);
@@ -51,7 +54,7 @@ class PartitionLeaseReclaimSchedulerTest {
 
         scheduler = new PartitionLeaseReclaimScheduler(
                 jobPartitionMapper, jobTaskMapper, jobInstanceMapper,
-                taskDispatchOutboxService, governance);
+                taskDispatchOutboxService, governance, gracefulShutdown);
     }
 
     @Test
