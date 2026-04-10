@@ -9,7 +9,7 @@ import java.time.LocalTime;
 import java.util.Properties;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
-import JobKey;
+import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
