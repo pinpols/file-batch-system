@@ -53,6 +53,16 @@ TEST_PASSED=0
 
 MODE="default"
 declare -a EXTRA_MVN_ARGS=()
+declare -a CORE_TEST_MODULES=(
+  batch-common
+  batch-trigger
+  batch-orchestrator
+  batch-worker-core
+  batch-worker-import
+  batch-worker-export
+  batch-worker-dispatch
+  batch-console-api
+)
 
 usage() {
   cat <<'EOF'
@@ -122,6 +132,30 @@ run_mvn() {
   "${cmd[@]}"
   local ret=$?
   return $ret
+}
+
+run_module_tests() {
+  local test_selector=${1-}
+  shift || true
+
+  local overall=0
+  local module
+  for module in "$@"; do
+    printf '\n------------------------------------------------------------\n'
+    printf '== 测试模块: %s\n' "$module"
+    printf '------------------------------------------------------------\n\n'
+
+    local -a args=(test -pl "$module" -Dsurefire.failIfNoSpecifiedTests=false)
+    if [[ -n "$test_selector" ]]; then
+      args+=("-Dtest=$test_selector")
+    fi
+
+    if ! run_mvn "${args[@]}"; then
+      overall=1
+    fi
+  done
+
+  return $overall
 }
 
 record_test_result() {
@@ -252,34 +286,30 @@ esac
 cleanup_test_reports
 
 # -------------------------------------------------------------
-# mvnd 工作区解析说明
+# mvnd / 多模块测试说明
 # -------------------------------------------------------------
-# mvnd（Maven Daemon）在 test 阶段存在一个已知的工作区读取器缺陷：
-# 多模块 reactor 中，跨模块依赖有时会回退到 ~/.m2 缓存的旧版 JAR，
-# 而非使用当前 reactor 编译出的最新 target/classes。
-# 具体表现：受影响模块编译失败或测试运行时出现 NoClassDefFoundError。
+# 在单次 reactor 中直接跑所有核心模块的 test，历史上出现过：
+#   - testCompile 读取到不一致的跨模块产物
+#   - 某一个模块失败后，后续模块被连带污染
+#   - 单独执行能通过，但聚合执行时误报失败
 #
-# 受影响的"库模块"（被其他模块依赖）：
-#   batch-common      → 被 batch-orchestrator、batch-worker-core 等全部模块依赖
-#   batch-orchestrator → 被 batch-console-api 依赖
-#   batch-worker-core → 被 batch-worker-import/export/dispatch 依赖
+# 当前策略：
+#   1. 先对核心模块执行一次 clean install -DskipTests
+#   2. 再按模块逐个执行 test，避免把所有模块绑在同一个 test reactor 里
 #
-# 解决方案：在 clean test 之前先执行一次 install -DskipTests，
-# 把这三个库模块的最新 JAR 写入 ~/.m2，确保后续 reactor 编译时
-# mvnd 可以从缓存中找到正确版本。
-# e2e / all 模式已包含 clean install 全量构建，无需额外预装。
+# 这样做的目标不是“掩盖真实失败”，而是把模块隔离开，确保失败定位到
+# 真实的模块自身，而不是 Maven / mvnd 的聚合执行副作用。
 # -------------------------------------------------------------
 
 case "$MODE" in
   unit)
     banner "单元测试"
     {
-      run_mvn install -DskipTests -pl batch-common,batch-orchestrator,batch-worker-core && \
-      run_mvn clean test \
-        -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -Dtest='!*IntegrationTest,!*IT,!PartitionLeaseReclaimSchedulerTest' \
-        -Dsurefire.failIfNoSpecifiedTests=false \
-        -fae
+      run_mvn clean install \
+        -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
+        -DskipTests && \
+      run_module_tests '!*IntegrationTest,!*IT,!PartitionLeaseReclaimSchedulerTest' \
+        "${CORE_TEST_MODULES[@]}"
     } 2>&1 | tee "$LOG_UNIT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
       record_test_result "UNIT_TESTS" "PASSED"
@@ -292,12 +322,11 @@ case "$MODE" in
   it)
     banner "集成测试（*IntegrationTest / *IT）"
     {
-      run_mvn install -DskipTests -pl batch-common,batch-orchestrator,batch-worker-core && \
-      run_mvn clean test \
-        -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -Dtest='*IntegrationTest,*IT' \
-        -Dsurefire.failIfNoSpecifiedTests=false \
-        -fae
+      run_mvn clean install \
+        -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
+        -DskipTests && \
+      run_module_tests '*IntegrationTest,*IT' \
+        "${CORE_TEST_MODULES[@]}"
     } 2>&1 | tee "$LOG_IT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
       record_test_result "INTEGRATION_TESTS" "PASSED"
@@ -327,11 +356,10 @@ case "$MODE" in
   default)
     banner "单元 + 集成测试（跳过 E2E）"
     {
-      run_mvn install -DskipTests -pl batch-common,batch-orchestrator,batch-worker-core && \
-      run_mvn clean test \
-        -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -Dsurefire.failIfNoSpecifiedTests=false \
-        -fae
+      run_mvn clean install \
+        -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
+        -DskipTests && \
+      run_module_tests "" "${CORE_TEST_MODULES[@]}"
     } 2>&1 | tee "$LOG_DEFAULT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
       record_test_result "DEFAULT_TESTS" "PASSED"
@@ -346,12 +374,9 @@ case "$MODE" in
 
     {
       run_mvn clean install \
-        -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
+        -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
         -DskipTests && \
-      run_mvn test \
-        -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -Dsurefire.failIfNoSpecifiedTests=false \
-        -fae
+      run_module_tests "" "${CORE_TEST_MODULES[@]}"
     } 2>&1 | tee "$LOG_ALL_UNIT_IT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
       record_test_result "UNIT_INTEGRATION_TESTS" "PASSED"
