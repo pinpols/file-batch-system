@@ -1,6 +1,7 @@
 package com.example.batch.console.domain.entity;
 
 import lombok.Data;
+
 import java.time.Instant;
 
 @Data

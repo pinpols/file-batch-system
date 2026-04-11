@@ -1,10 +1,11 @@
 package com.example.batch.console.application;
 
+import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
-import com.example.batch.console.web.query.BatchDayQueryRequest;
-import com.example.batch.console.web.query.BatchDayWindowQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
+import com.example.batch.console.web.query.BatchDayQueryRequest;
+import com.example.batch.console.web.query.BatchDayWindowQueryRequest;
 import com.example.batch.console.web.query.ConsoleAiAuditLogQueryRequest;
 import com.example.batch.console.web.query.DeadLetterQueryRequest;
 import com.example.batch.console.web.query.FileArrivalGroupQueryRequest;
@@ -31,40 +32,38 @@ import com.example.batch.console.web.query.WorkflowRunQueryRequest;
 import com.example.batch.console.web.query.WorkflowTopologyQueryRequest;
 import com.example.batch.console.web.response.AiAuditLogResponse;
 import com.example.batch.console.web.response.ConsoleAlertEventResponse;
+import com.example.batch.console.web.response.ConsoleApprovalCommandResponse;
+import com.example.batch.console.web.response.ConsoleAuditLogResponse;
 import com.example.batch.console.web.response.ConsoleBatchDayResponse;
 import com.example.batch.console.web.response.ConsoleBatchDayWindowResponse;
 import com.example.batch.console.web.response.ConsoleDeadLetterTaskResponse;
 import com.example.batch.console.web.response.ConsoleFileArrivalGroupResponse;
+import com.example.batch.console.web.response.ConsoleFileChannelResponse;
+import com.example.batch.console.web.response.ConsoleFileDispatchRecordResponse;
 import com.example.batch.console.web.response.ConsoleFileErrorRecordResponse;
+import com.example.batch.console.web.response.ConsoleFilePipelineResponse;
+import com.example.batch.console.web.response.ConsoleFilePipelineStepResponse;
 import com.example.batch.console.web.response.ConsoleFileRecordResponse;
+import com.example.batch.console.web.response.ConsoleFileTemplateResponse;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
 import com.example.batch.console.web.response.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
-import com.example.batch.console.web.response.ConsoleApprovalCommandResponse;
-import com.example.batch.console.web.response.ConsoleAuditLogResponse;
-import com.example.batch.console.web.response.ConsoleFileChannelResponse;
-import com.example.batch.console.web.response.ConsoleFileDispatchRecordResponse;
-import com.example.batch.console.web.response.ConsoleFilePipelineResponse;
-import com.example.batch.console.web.response.ConsoleFilePipelineStepResponse;
-import com.example.batch.console.web.response.ConsoleFileTemplateResponse;
 import com.example.batch.console.web.response.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.web.response.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.web.response.ConsolePendingCatchUpResponse;
 import com.example.batch.console.web.response.ConsoleRetryScheduleResponse;
+import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowDefinitionResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
-import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
-import com.example.batch.common.model.PageResponse;
+
 import java.util.List;
 import java.util.Map;
 
-/**
- * 控制台只读查询应用服务：将 Web 查询条件转换为领域查询并返回列表或视图数据。
- */
+/** 控制台只读查询应用服务：将 Web 查询条件转换为领域查询并返回列表或视图数据。 */
 public interface ConsoleQueryApplicationService {
 
     /** 按条件分页查询审计日志。 */
@@ -80,10 +79,12 @@ public interface ConsoleQueryApplicationService {
     PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request);
 
     /** 查询文件流水线步骤运行记录。 */
-    PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(FilePipelineStepQueryRequest request);
+    PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(
+            FilePipelineStepQueryRequest request);
 
     /** 查询文件派发记录。 */
-    PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(FileDispatchRecordQueryRequest request);
+    PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(
+            FileDispatchRecordQueryRequest request);
 
     /** 查询文件通道配置。 */
     PageResponse<ConsoleFileChannelResponse> fileChannels(FileChannelQueryRequest request);
@@ -98,13 +99,16 @@ public interface ConsoleQueryApplicationService {
     PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request);
 
     /** 查询 Outbox 投递日志。 */
-    PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(OutboxDeliveryLogQueryRequest request);
+    PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(
+            OutboxDeliveryLogQueryRequest request);
 
     /** 查询文件到达组。 */
-    PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(FileArrivalGroupQueryRequest request);
+    PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(
+            FileArrivalGroupQueryRequest request);
 
     /** 查询文件错误记录。 */
-    PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(FileErrorRecordQueryRequest request);
+    PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(
+            FileErrorRecordQueryRequest request);
 
     /** 查询作业实例列表。 */
     PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request);
@@ -116,13 +120,15 @@ public interface ConsoleQueryApplicationService {
     List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos);
 
     /** 查询作业步骤实例列表。 */
-    PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request);
+    PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
+            JobStepInstanceQueryRequest request);
 
     /** 查询作业步骤实例详情。 */
     ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id);
 
     /** 查询工作流定义。 */
-    PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(WorkflowDefinitionQueryRequest request);
+    PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(
+            WorkflowDefinitionQueryRequest request);
 
     /** 查询工作流节点定义。 */
     PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request);
@@ -137,7 +143,8 @@ public interface ConsoleQueryApplicationService {
     ConsoleWorkflowRunResponse workflowRun(String tenantId, Long id);
 
     /** 查询工作流节点运行记录。 */
-    PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(WorkflowNodeRunQueryRequest request);
+    PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(
+            WorkflowNodeRunQueryRequest request);
 
     /** 查询工作流节点运行详情。 */
     ConsoleWorkflowNodeRunResponse workflowNodeRun(String tenantId, Long id);
@@ -170,7 +177,8 @@ public interface ConsoleQueryApplicationService {
     PageResponse<ConsoleBatchDayResponse> batchDays(BatchDayQueryRequest request);
 
     /** 查询批量日窗口状态。 */
-    ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request);
+    ConsoleBatchDayWindowResponse batchDayWindow(
+            String bizDate, BatchDayWindowQueryRequest request);
 
     Map<String, Object> fileChannelDetail(String tenantId, String channelCode);
 

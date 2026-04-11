@@ -12,12 +12,7 @@ public interface JobDefinitionExcelImportStore {
     void remove(String uploadToken);
 
     record JobDefinitionExcelSession(
-            String fileName,
-            String tenantId,
-            Instant uploadedAt,
-            List<JobDefinitionRow> rows
-    ) {
-    }
+            String fileName, String tenantId, Instant uploadedAt, List<JobDefinitionRow> rows) {}
 
     record JobDefinitionRow(
             int rowNo,
@@ -39,7 +34,5 @@ public interface JobDefinitionExcelImportStore {
             String paramSchema,
             String defaultParams,
             Boolean enabled,
-            String description
-    ) {
-    }
+            String description) {}
 }

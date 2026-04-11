@@ -19,6 +19,4 @@ public record ConsoleJobDefinitionExcelRowResponse(
         String paramSchema,
         String defaultParams,
         Boolean enabled,
-        String description
-) {
-}
+        String description) {}

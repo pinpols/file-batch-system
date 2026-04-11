@@ -7,13 +7,16 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import com.example.batch.orchestrator.mapper.WorkflowEdgeMapper;
-import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
+import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -25,19 +28,23 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     private final WorkflowConditionEvaluator workflowConditionEvaluator;
 
     @Override
-    public List<DagNodeResolution> resolveInitialNodes(Long workflowDefinitionId, String payloadJson) {
-        return resolveNextNodes(workflowDefinitionId, WorkflowNodeCode.START.code(), true, payloadJson);
+    public List<DagNodeResolution> resolveInitialNodes(
+            Long workflowDefinitionId, String payloadJson) {
+        return resolveNextNodes(
+                workflowDefinitionId, WorkflowNodeCode.START.code(), true, payloadJson);
     }
 
     @Override
-    public List<DagNodeResolution> resolveNextNodes(Long workflowDefinitionId,
-                                                    String currentNodeCode,
-                                                    boolean success,
-                                                    String payloadJson) {
+    public List<DagNodeResolution> resolveNextNodes(
+            Long workflowDefinitionId,
+            String currentNodeCode,
+            boolean success,
+            String payloadJson) {
         if (workflowDefinitionId == null || currentNodeCode == null || currentNodeCode.isBlank()) {
             return List.of();
         }
-        List<WorkflowEdgeEntity> outgoingEdges = workflowEdgeMapper.selectOutgoingEdges(workflowDefinitionId, currentNodeCode);
+        List<WorkflowEdgeEntity> outgoingEdges =
+                workflowEdgeMapper.selectOutgoingEdges(workflowDefinitionId, currentNodeCode);
         if (outgoingEdges == null || outgoingEdges.isEmpty()) {
             return List.of();
         }
@@ -46,12 +53,12 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             if (!matchesOutgoingEdge(edge, success, payloadJson)) {
                 continue;
             }
-            WorkflowNodeEntity nextNode = workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
-                    workflowDefinitionId,
-                    edge.getToNodeCode()
-            );
+            WorkflowNodeEntity nextNode =
+                    workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
+                            workflowDefinitionId, edge.getToNodeCode());
             if (nextNode == null) {
-                resolutions.add(new DagNodeResolution(edge.getToNodeCode(), WorkflowNodeType.END.code()));
+                resolutions.add(
+                        new DagNodeResolution(edge.getToNodeCode(), WorkflowNodeType.END.code()));
                 continue;
             }
             resolutions.add(new DagNodeResolution(nextNode.getNodeCode(), nextNode.getNodeType()));
@@ -60,22 +67,28 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     }
 
     @Override
-    public boolean isNodeReadyForDispatch(Long workflowRunId,
-                                          Long workflowDefinitionId,
-                                          String nodeCode,
-                                          String payloadJson) {
-        if (workflowRunId == null || workflowDefinitionId == null || nodeCode == null || nodeCode.isBlank()) {
+    public boolean isNodeReadyForDispatch(
+            Long workflowRunId, Long workflowDefinitionId, String nodeCode, String payloadJson) {
+        if (workflowRunId == null
+                || workflowDefinitionId == null
+                || nodeCode == null
+                || nodeCode.isBlank()) {
             return false;
         }
-        WorkflowNodeEntity currentNode = workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(workflowDefinitionId, nodeCode);
-        List<WorkflowEdgeEntity> incomingEdges = workflowEdgeMapper.selectIncomingEdges(workflowDefinitionId, nodeCode);
+        WorkflowNodeEntity currentNode =
+                workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(
+                        workflowDefinitionId, nodeCode);
+        List<WorkflowEdgeEntity> incomingEdges =
+                workflowEdgeMapper.selectIncomingEdges(workflowDefinitionId, nodeCode);
         if (incomingEdges == null || incomingEdges.isEmpty()) {
             return true;
         }
         int matchedCount = 0;
         int terminalCount = 0;
         for (WorkflowEdgeEntity edge : incomingEdges) {
-            var predecessorRun = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(workflowRunId, edge.getFromNodeCode());
+            var predecessorRun =
+                    workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+                            workflowRunId, edge.getFromNodeCode());
             if (predecessorRun == null || !isTerminal(predecessorRun.getNodeStatus())) {
                 continue;
             }
@@ -86,13 +99,15 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
         }
         JoinRule joinRule = resolveJoinRule(currentNode, incomingEdges.size());
         return switch (joinRule.joinMode()) {
-            case ALL -> terminalCount == incomingEdges.size() && matchedCount == incomingEdges.size();
+            case ALL ->
+                    terminalCount == incomingEdges.size() && matchedCount == incomingEdges.size();
             case ANY -> matchedCount >= 1;
             case N_OF -> matchedCount >= joinRule.joinThreshold();
         };
     }
 
-    private boolean matchesOutgoingEdge(WorkflowEdgeEntity edge, boolean success, String payloadJson) {
+    private boolean matchesOutgoingEdge(
+            WorkflowEdgeEntity edge, boolean success, String payloadJson) {
         String edgeType = edge.getEdgeType();
         if ("ALWAYS".equalsIgnoreCase(edgeType)) {
             return true;
@@ -104,12 +119,14 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             return !success;
         }
         if ("CONDITION".equalsIgnoreCase(edgeType)) {
-            return success && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
+            return success
+                    && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
         }
         return false;
     }
 
-    private boolean matchesIncomingEdge(WorkflowEdgeEntity edge, String predecessorStatus, String payloadJson) {
+    private boolean matchesIncomingEdge(
+            WorkflowEdgeEntity edge, String predecessorStatus, String payloadJson) {
         String edgeType = edge.getEdgeType();
         if ("ALWAYS".equalsIgnoreCase(edgeType)) {
             return isTerminal(predecessorStatus);
@@ -133,9 +150,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
                 || "SKIPPED".equalsIgnoreCase(nodeStatus);
     }
 
-    /**
-     * joinMode 写入 workflow_node.node_params，避免为 join 规则单独扩表。
-     */
+    /** joinMode 写入 workflow_node.node_params，避免为 join 规则单独扩表。 */
     @SuppressWarnings("unchecked")
     private JoinRule resolveJoinRule(WorkflowNodeEntity node, int incomingEdgeCount) {
         if (node == null || node.getNodeParams() == null || node.getNodeParams().isBlank()) {
@@ -147,7 +162,8 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
                 return new JoinRule(WorkflowJoinMode.ALL, Math.max(1, incomingEdgeCount));
             }
             Map<String, Object> params = (Map<String, Object>) nodeParamsMap;
-            WorkflowJoinMode joinMode = WorkflowJoinMode.fromCode(stringValue(params.get("joinMode")));
+            WorkflowJoinMode joinMode =
+                    WorkflowJoinMode.fromCode(stringValue(params.get("joinMode")));
             if (joinMode == WorkflowJoinMode.ALL) {
                 return new JoinRule(joinMode, Math.max(1, incomingEdgeCount));
             }
@@ -180,6 +196,5 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
         }
     }
 
-    private record JoinRule(WorkflowJoinMode joinMode, int joinThreshold) {
-    }
+    private record JoinRule(WorkflowJoinMode joinMode, int joinThreshold) {}
 }

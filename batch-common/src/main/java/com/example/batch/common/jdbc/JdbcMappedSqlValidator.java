@@ -4,15 +4,12 @@ import java.util.Collection;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-/**
- * JDBC 映射插件的白名单校验（仅允许标识符，禁止调用方传入 SQL 片段）。
- */
+/** JDBC 映射插件的白名单校验（仅允许标识符，禁止调用方传入 SQL 片段）。 */
 public final class JdbcMappedSqlValidator {
 
     private static final Pattern IDENT = Pattern.compile("^[a-z][a-z0-9_]{0,62}$");
 
-    private JdbcMappedSqlValidator() {
-    }
+    private JdbcMappedSqlValidator() {}
 
     public static String requireIdentifier(String name, String role) {
         if (name == null || name.isBlank()) {

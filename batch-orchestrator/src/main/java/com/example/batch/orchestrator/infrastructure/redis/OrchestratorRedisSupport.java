@@ -3,13 +3,16 @@ package com.example.batch.orchestrator.infrastructure.redis;
 import com.example.batch.common.redis.BatchRedisKeys;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -57,7 +60,8 @@ public class OrchestratorRedisSupport {
         return redisTemplate.opsForHash().entries(key);
     }
 
-    public Long incrementWithinWindow(String tenantId, String action, long windowStartEpochSecond, Duration ttl) {
+    public Long incrementWithinWindow(
+            String tenantId, String action, long windowStartEpochSecond, Duration ttl) {
         String key = BatchRedisKeys.rateLimit(tenantId, action, windowStartEpochSecond);
         Long value = redisTemplate.opsForValue().increment(key);
         if (value != null && value == 1L) {
@@ -67,6 +71,7 @@ public class OrchestratorRedisSupport {
     }
 
     public Long evalLong(String script, String key, String... args) {
-        return redisTemplate.execute(new DefaultRedisScript<>(script, Long.class), List.of(key), (Object[]) args);
+        return redisTemplate.execute(
+                new DefaultRedisScript<>(script, Long.class), List.of(key), (Object[]) args);
     }
 }

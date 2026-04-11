@@ -2,13 +2,10 @@ package com.example.batch.common.logging;
 
 import org.slf4j.MDC;
 
-/**
- * 基于 SLF4J MDC 的轻量封装，统一结构化日志字段写入。
- */
+/** 基于 SLF4J MDC 的轻量封装，统一结构化日志字段写入。 */
 public final class BatchMdc {
 
-    private BatchMdc() {
-    }
+    private BatchMdc() {}
 
     public static void put(String key, String value) {
         if (key == null || value == null || value.isBlank()) {

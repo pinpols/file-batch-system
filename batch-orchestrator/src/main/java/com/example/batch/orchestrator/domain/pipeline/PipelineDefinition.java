@@ -1,13 +1,13 @@
 package com.example.batch.orchestrator.domain.pipeline;
 
-import java.util.List;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * Orchestrator 侧的 pipeline 定义模型。
  *
- * <p>标准业务主键是 {@code jobCode}。
- * {@code pipelineCode} 作为兼容别名保留，供旧调用方和序列化载荷继续使用。
+ * <p>标准业务主键是 {@code jobCode}。 {@code pipelineCode} 作为兼容别名保留，供旧调用方和序列化载荷继续使用。
  */
 @Data
 public class PipelineDefinition {

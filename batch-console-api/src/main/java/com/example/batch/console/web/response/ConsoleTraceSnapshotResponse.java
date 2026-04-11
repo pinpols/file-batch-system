@@ -8,6 +8,4 @@ public record ConsoleTraceSnapshotResponse(
         List<ConsoleWorkflowRunResponse> workflowRuns,
         List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns,
         List<ConsoleFilePipelineResponse> filePipelines,
-        List<ConsoleAuditLogResponse> auditLogs
-) {
-}
+        List<ConsoleAuditLogResponse> auditLogs) {}

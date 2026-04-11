@@ -18,6 +18,4 @@ public record ConsoleResourceQueueResponse(
         Boolean enabled,
         String description,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

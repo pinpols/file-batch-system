@@ -4,11 +4,14 @@ import com.example.batch.orchestrator.application.scheduler.ResourceQueueManager
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.repository.ResourceQueueRepository;
-import java.util.Comparator;
-import java.util.List;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+
+import java.util.Comparator;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -21,7 +24,8 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
         if (request == null || !StringUtils.hasText(request.getTenantId())) {
             return null;
         }
-        List<ResourceQueueRecord> queues = resourceQueueRepository.findByTenantIdAndEnabled(request.getTenantId(), true);
+        List<ResourceQueueRecord> queues =
+                resourceQueueRepository.findByTenantIdAndEnabled(request.getTenantId(), true);
         if (queues == null || queues.isEmpty()) {
             return null;
         }
@@ -33,12 +37,22 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
         }
         return queues.stream()
                 .filter(queue -> matchesQueueType(queue, request.getWorkerType()))
-                .sorted(Comparator
-                        .comparing((ResourceQueueRecord queue) -> !"MIXED".equalsIgnoreCase(queue.queueType()))
-                        .thenComparing(queue -> normalizedWeight(queue.fairShareWeight()), Comparator.reverseOrder())
-                        .thenComparing(queue -> normalizedWeight(queue.maxRunningJobs()), Comparator.reverseOrder())
-                        .thenComparing(queue -> normalizedWeight(queue.maxRunningPartitions()), Comparator.reverseOrder())
-                        .thenComparing(ResourceQueueRecord::queueCode, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .sorted(
+                        Comparator.comparing(
+                                        (ResourceQueueRecord queue) ->
+                                                !"MIXED".equalsIgnoreCase(queue.queueType()))
+                                .thenComparing(
+                                        queue -> normalizedWeight(queue.fairShareWeight()),
+                                        Comparator.reverseOrder())
+                                .thenComparing(
+                                        queue -> normalizedWeight(queue.maxRunningJobs()),
+                                        Comparator.reverseOrder())
+                                .thenComparing(
+                                        queue -> normalizedWeight(queue.maxRunningPartitions()),
+                                        Comparator.reverseOrder())
+                                .thenComparing(
+                                        ResourceQueueRecord::queueCode,
+                                        Comparator.nullsLast(String::compareToIgnoreCase)))
                 .findFirst()
                 .orElse(null);
     }

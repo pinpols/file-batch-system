@@ -20,7 +20,8 @@ public final class BatchFileConstants {
     public static final String CONTENT_TYPE_JSON = "application/json";
     public static final String CONTENT_TYPE_OCTET_STREAM = "application/octet-stream";
     public static final String CONTENT_TYPE_CSV = "text/csv";
-    public static final String CONTENT_TYPE_EXCEL = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    public static final String CONTENT_TYPE_EXCEL =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     public static final String CONTENT_TYPE_XML = "application/xml";
     public static final String CONTENT_TYPE_TEXT_UTF8 = "text/plain; charset=UTF-8";
     public static final String CONTENT_TYPE_NDJSON = "application/x-ndjson";
@@ -31,11 +32,16 @@ public final class BatchFileConstants {
     public static final String HEALTH_PROBE_PREFIX = ".batch-health-";
     public static final String HEALTH_PROBE_SUFFIX = ".probe";
 
-    private BatchFileConstants() {
-    }
+    private BatchFileConstants() {}
 
     public static String importStagePrefix(String fileId, String workerId, String phase) {
-        return IMPORT_STAGE_PREFIX + sanitize(fileId) + "-" + sanitize(workerId) + "-" + sanitize(phase) + "-";
+        return IMPORT_STAGE_PREFIX
+                + sanitize(fileId)
+                + "-"
+                + sanitize(workerId)
+                + "-"
+                + sanitize(phase)
+                + "-";
     }
 
     public static String validatedStagePrefix(String fileId, String workerId) {
@@ -47,11 +53,27 @@ public final class BatchFileConstants {
     }
 
     public static String tempObjectName(String tenantId, String bizDate, String fileName) {
-        return TEMP_OBJECT_PREFIX + sanitize(tenantId) + "/" + sanitize(bizDate) + "/" + sanitize(fileName) + FILE_PART_SUFFIX;
+        return TEMP_OBJECT_PREFIX
+                + sanitize(tenantId)
+                + "/"
+                + sanitize(bizDate)
+                + "/"
+                + sanitize(fileName)
+                + FILE_PART_SUFFIX;
     }
 
-    public static String outboundObjectName(String bizType, String bizDate, String batchNo, String version, String fileName) {
-        return OUTBOUND_OBJECT_PREFIX + sanitize(bizType) + "/" + sanitize(bizDate) + "/" + sanitize(batchNo) + "/" + sanitize(version) + "/" + sanitize(fileName);
+    public static String outboundObjectName(
+            String bizType, String bizDate, String batchNo, String version, String fileName) {
+        return OUTBOUND_OBJECT_PREFIX
+                + sanitize(bizType)
+                + "/"
+                + sanitize(bizDate)
+                + "/"
+                + sanitize(batchNo)
+                + "/"
+                + sanitize(version)
+                + "/"
+                + sanitize(fileName);
     }
 
     public static String newHealthProbeName() {

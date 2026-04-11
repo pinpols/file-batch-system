@@ -8,6 +8,4 @@ public record ConsoleWorkflowEdgeExcelRowResponse(
         String toNodeCode,
         String edgeType,
         String conditionExpr,
-        Boolean enabled
-) {
-}
+        Boolean enabled) {}

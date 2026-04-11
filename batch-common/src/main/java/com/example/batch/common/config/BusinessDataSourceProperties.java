@@ -1,6 +1,7 @@
 package com.example.batch.common.config;
 
 import lombok.Data;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
@@ -11,5 +12,4 @@ public class BusinessDataSourceProperties {
     private String username;
     private String password;
     private String schema;
-
 }

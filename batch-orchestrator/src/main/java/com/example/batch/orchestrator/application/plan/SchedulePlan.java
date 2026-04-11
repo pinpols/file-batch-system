@@ -1,9 +1,11 @@
 package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.model.WorkerRouteModel;
+
+import lombok.Data;
+
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
 
 @Data
 public class SchedulePlan {
@@ -24,6 +26,7 @@ public class SchedulePlan {
     // Outbox 分片参数：由 OutboxPollScheduler 注入，其余调用方无需设置
     private int shardTotal = 1;
     private int shardIndex = 0;
+
     @Data
     public static class PartitionPlan {
 

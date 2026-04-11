@@ -1,22 +1,23 @@
 package com.example.batch.console.web;
 
+import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleOpsApplicationService;
 import com.example.batch.console.application.ConsoleOutboxOpsApplicationService;
-import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.service.ConsoleKafkaLagQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
 import com.example.batch.console.web.response.ConsoleOutboxCleanupResponse;
 import com.example.batch.console.web.response.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.web.response.ConsoleOutboxStatsResponse;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
-import java.util.List;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
+
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,9 +25,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 控制台运维总览 REST：租户维度运行摘要。
- */
+import java.util.List;
+import java.util.Map;
+
+/** 控制台运维总览 REST：租户维度运行摘要。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/ops")
@@ -41,7 +43,8 @@ public class ConsoleOpsController {
 
     /** 租户运维摘要。 */
     @GetMapping("/summary")
-    public CommonResponse<ConsoleOpsSummaryResponse> summary(@RequestParam @NotBlank String tenantId) {
+    public CommonResponse<ConsoleOpsSummaryResponse> summary(
+            @RequestParam @NotBlank String tenantId) {
         return responseFactory.success(opsApplicationService.summary(tenantId));
     }
 
@@ -70,8 +73,7 @@ public class ConsoleOpsController {
     /** 手动重投指定 outbox 事件（仅 FAILED / GIVE_UP 状态可重投）。 */
     @PostMapping("/outbox/republish")
     public CommonResponse<ConsoleOutboxRepublishResponse> outboxRepublish(
-            @RequestParam @NotBlank String tenantId,
-            @RequestBody @NotEmpty List<Long> ids) {
+            @RequestParam @NotBlank String tenantId, @RequestBody @NotEmpty List<Long> ids) {
         return responseFactory.success(outboxOpsService.republish(tenantId, ids));
     }
 }

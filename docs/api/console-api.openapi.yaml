@@ -85,6 +85,10 @@ tags:
     description: Data archive and cleanup policy management.
   - name: ClusterDiagnostic
     description: Cross-node consistency diagnostic endpoints.
+  - name: Tenants
+    description: Tenant registry CRUD and lifecycle management (ROLE_ADMIN).
+  - name: Users
+    description: Console user account CRUD, password reset, enable/disable (ROLE_ADMIN).
   - name: TenantSelfService
     description: Tenant quota and usage self-service.
   - name: SelfServiceJobs
@@ -5904,9 +5908,11 @@ paths:
       tags: [Config]
       summary: Batch-initialize tenant configurations
       description: >
-        Pushes job definitions, workflow definitions, pipeline definitions, file channels,
-        and file templates to one or more tenants. mode=SKIP_EXISTING (default) creates
-        missing items only; mode=UPSERT creates or updates.
+        Pushes all 10 config types to one or more tenants: job definitions, workflow definitions,
+        pipeline definitions, file channels, file templates, resource queues, batch windows,
+        business calendars, quota policies, and alert routings.
+        mode=SKIP_EXISTING (default) creates missing items only; mode=UPSERT creates or updates.
+        dryRun=true validates without writing.
       operationId: batchInitTenantConfig
       security:
         - bearerAuth: []
@@ -5960,8 +5966,9 @@ paths:
                   type: array
                   items:
                     type: string
-                    enum: [JOB_DEFINITION, WORKFLOW_DEFINITION, PIPELINE_DEFINITION, FILE_CHANNEL, FILE_TEMPLATE]
-                  description: Empty means all 5 types
+                    enum: [JOB_DEFINITION, WORKFLOW_DEFINITION, PIPELINE_DEFINITION, FILE_CHANNEL, FILE_TEMPLATE,
+                           RESOURCE_QUEUE, BATCH_WINDOW, BUSINESS_CALENDAR, QUOTA_POLICY, ALERT_ROUTING]
+                  description: Empty means all 10 types
                 mode:
                   type: string
                   enum: [SKIP_EXISTING, UPSERT]
@@ -6147,6 +6154,401 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/tenants:
+    get:
+      tags: [Tenants]
+      summary: List tenants
+      operationId: listTenants
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: Fuzzy match on tenantId or tenantName
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, SUSPENDED]
+        - name: pageNo
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated tenant list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Tenants]
+      summary: Create tenant
+      operationId: createTenant
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, tenantName]
+              properties:
+                tenantId:
+                  type: string
+                  minLength: 2
+                  maxLength: 64
+                  pattern: '^[a-z0-9][a-z0-9\-]*[a-z0-9]$'
+                  description: Lowercase alphanumeric with hyphens
+                tenantName:
+                  type: string
+                  maxLength: 256
+                description:
+                  type: string
+                  maxLength: 512
+      responses:
+        '200':
+          description: Created tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/tenants/{tenantId}:
+    get:
+      tags: [Tenants]
+      summary: Get tenant detail
+      operationId: getTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tenant detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [Tenants]
+      summary: Update tenant name / description
+      operationId: updateTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantName]
+              properties:
+                tenantName:
+                  type: string
+                  maxLength: 256
+                description:
+                  type: string
+                  maxLength: 512
+      responses:
+        '200':
+          description: Updated tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/tenants/{tenantId}/suspend:
+    post:
+      tags: [Tenants]
+      summary: Suspend tenant
+      operationId: suspendTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Suspended tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/tenants/{tenantId}/activate:
+    post:
+      tags: [Tenants]
+      summary: Activate tenant
+      operationId: activateTenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Activated tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/users:
+    get:
+      tags: [Users]
+      summary: List user accounts
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          schema:
+            type: string
+          description: Filter by tenant
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: Fuzzy match on username or displayName
+        - name: pageNo
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated user account list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    post:
+      tags: [Users]
+      summary: Create user account
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, username, password]
+              properties:
+                tenantId:
+                  type: string
+                  maxLength: 64
+                username:
+                  type: string
+                  minLength: 2
+                  maxLength: 128
+                  pattern: '^[a-zA-Z0-9][a-zA-Z0-9._\-]*$'
+                displayName:
+                  type: string
+                  maxLength: 256
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 256
+                  description: Raw password — stored as Argon2id hash, never returned
+                authoritiesCsv:
+                  type: string
+                  maxLength: 512
+                  description: Comma-separated roles, e.g. ROLE_CONFIG_ADMIN,ROLE_AUDITOR. Defaults to ROLE_USER
+      responses:
+        '200':
+          description: Created user account (no passwordHash field)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user account detail
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: User account detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    put:
+      tags: [Users]
+      summary: Update displayName and authoritiesCsv
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  maxLength: 256
+                authoritiesCsv:
+                  type: string
+                  maxLength: 512
+      responses:
+        '200':
+          description: Updated user account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+    delete:
+      tags: [Users]
+      summary: Delete user account
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+
+  /api/console/users/{id}/reset-password:
+    post:
+      tags: [Users]
+      summary: Reset user password
+      operationId: resetUserPassword
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPassword]
+              properties:
+                newPassword:
+                  type: string
+                  minLength: 8
+                  maxLength: 256
+      responses:
+        '200':
+          description: Password reset (no body)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+
+  /api/console/users/{id}/enable:
+    post:
+      tags: [Users]
+      summary: Enable user account
+      operationId: enableUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Enabled user account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/users/{id}/disable:
+    post:
+      tags: [Users]
+      summary: Disable user account
+      operationId: disableUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Disabled user account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
   /api/console/tenants/quota:
     get:
       tags: [TenantSelfService]

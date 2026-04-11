@@ -3,7 +3,6 @@ package com.example.batch.common.enums;
 import org.springframework.util.StringUtils;
 
 public enum ShardStrategy {
-
     NONE("NONE", "不分片"),
     STATIC("STATIC", "静态分片"),
     DYNAMIC("DYNAMIC", "动态分片"),

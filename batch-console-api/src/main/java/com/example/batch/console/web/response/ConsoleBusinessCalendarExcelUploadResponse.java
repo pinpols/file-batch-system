@@ -6,6 +6,4 @@ public record ConsoleBusinessCalendarExcelUploadResponse(
         String calendarSheetName,
         Integer calendarRowCount,
         String holidaySheetName,
-        Integer holidayRowCount
-) {
-}
+        Integer holidayRowCount) {}

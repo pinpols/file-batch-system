@@ -12,6 +12,4 @@ public record ConsoleFileRecordResponse(
         LocalDate bizDate,
         String traceId,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

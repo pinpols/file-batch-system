@@ -12,6 +12,4 @@ public record ConsoleOutboxDeliveryLogResponse(
         Integer deliveryAttempt,
         String errorMessage,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

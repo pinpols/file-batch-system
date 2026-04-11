@@ -2,6 +2,7 @@ package com.example.batch.common.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -25,4 +26,3 @@ public @interface ValidBizDate {
 
     Class<? extends Payload>[] payload() default {};
 }
-

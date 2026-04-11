@@ -3,7 +3,8 @@ package com.example.batch.common.plugin;
 import java.util.Map;
 
 /**
- * LOAD-stage context passed to {@link ImportLoadPlugin}. Platform fills this; plugins must not assume fixed entity types.
+ * LOAD-stage context passed to {@link ImportLoadPlugin}. Platform fills this; plugins must not
+ * assume fixed entity types.
  */
 public record ImportLoadContext(
         String tenantId,
@@ -14,6 +15,4 @@ public record ImportLoadContext(
         String batchNo,
         String bizType,
         String templateCode,
-        Map<String, Object> templateConfig
-) {
-}
+        Map<String, Object> templateConfig) {}

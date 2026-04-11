@@ -6,8 +6,18 @@ import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+
+import org.springframework.stereotype.Component;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.Executors;
@@ -15,24 +25,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.javacrumbs.shedlock.core.LockConfiguration;
-import net.javacrumbs.shedlock.core.LockingTaskExecutor;
-import org.springframework.stereotype.Component;
 
 /**
  * Outbox 轮询调度器（自适应版本）。
  *
  * <p>轮询间隔根据上一轮结果动态调整：
+ *
  * <ul>
- *   <li>有事件被处理（积压）：立即以 {@code minPollIntervalMillis} 调度下一轮，保证低延迟。</li>
- *   <li>无事件（空闲）：间隔乘以 {@code backoffMultiplier}，退避至 {@code pollIntervalMillis}
- *       上限，减少空转 DB 查询。</li>
+ *   <li>有事件被处理（积压）：立即以 {@code minPollIntervalMillis} 调度下一轮，保证低延迟。
+ *   <li>无事件（空闲）：间隔乘以 {@code backoffMultiplier}，退避至 {@code pollIntervalMillis} 上限，减少空转 DB 查询。
  * </ul>
  *
- * <p>替代原 {@code @Scheduled(fixedDelay)} 方案，通过 {@link ScheduledExecutorService}
- * 自调度实现动态间隔；分布式互斥仍由 ShedLock 保证。
+ * <p>替代原 {@code @Scheduled(fixedDelay)} 方案，通过 {@link ScheduledExecutorService} 自调度实现动态间隔；分布式互斥仍由
+ * ShedLock 保证。
  */
 @Component
 @RequiredArgsConstructor
@@ -55,16 +60,19 @@ public class OutboxPollScheduler {
 
     @PostConstruct
     public void start() {
-        executor = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "outbox-poll-scheduler");
-            t.setDaemon(true);
-            return t;
-        });
+        executor =
+                Executors.newSingleThreadScheduledExecutor(
+                        r -> {
+                            Thread t = new Thread(r, "outbox-poll-scheduler");
+                            t.setDaemon(true);
+                            return t;
+                        });
         OutboxProperties outbox = governance.outbox();
         long initialDelay = outbox.getMinPollIntervalMillis();
         currentIntervalMillis.set(initialDelay);
         executor.schedule(this::pollAndReschedule, initialDelay, TimeUnit.MILLISECONDS);
-        log.info("OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x",
+        log.info(
+                "OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x",
                 outbox.getMinPollIntervalMillis(),
                 outbox.getPollIntervalMillis(),
                 outbox.getBackoffMultiplier());
@@ -77,15 +85,14 @@ public class OutboxPollScheduler {
         }
     }
 
-    /**
-     * 供单元测试直接触发一次轮询（不走自调度循环）。
-     */
+    /** 供单元测试直接触发一次轮询（不走自调度循环）。 */
     public void poll() {
         if (!running.compareAndSet(false, true)) {
             return;
         }
         try {
-            lockingTaskExecutor.executeWithLock((LockingTaskExecutor.Task) this::doPoll, lockConfig());
+            lockingTaskExecutor.executeWithLock(
+                    (LockingTaskExecutor.Task) this::doPoll, lockConfig());
         } catch (Throwable t) {
             log.error("Outbox 轮询异常", t);
         } finally {
@@ -105,8 +112,7 @@ public class OutboxPollScheduler {
         ScheduleForwarderResult[] holder = new ScheduleForwarderResult[1];
         try {
             lockingTaskExecutor.executeWithLock(
-                    (LockingTaskExecutor.Task) () -> holder[0] = executeAdvance(),
-                    lockConfig());
+                    (LockingTaskExecutor.Task) () -> holder[0] = executeAdvance(), lockConfig());
         } catch (Throwable t) {
             log.error("Outbox 轮询异常", t);
         } finally {
@@ -139,9 +145,10 @@ public class OutboxPollScheduler {
 
     /**
      * 根据本轮结果计算下一轮调度延迟：
+     *
      * <ul>
-     *   <li>本轮有事件（busy）→ 立即以 minPollIntervalMillis 重调。</li>
-     *   <li>本轮空闲 / null → 当前间隔 × backoffMultiplier，上限 pollIntervalMillis（最大间隔）。</li>
+     *   <li>本轮有事件（busy）→ 立即以 minPollIntervalMillis 重调。
+     *   <li>本轮空闲 / null → 当前间隔 × backoffMultiplier，上限 pollIntervalMillis（最大间隔）。
      * </ul>
      */
     private void scheduleNext(ScheduleForwarderResult result) {
@@ -159,23 +166,23 @@ public class OutboxPollScheduler {
             nextDelay = Math.max(nextDelay, min);
         }
         currentIntervalMillis.set(nextDelay);
-        log.debug("Outbox 下次轮询延迟 {}ms（attempted={}）",
-                nextDelay, result == null ? "n/a" : result.attemptedEvents());
+        log.debug(
+                "Outbox 下次轮询延迟 {}ms（attempted={}）",
+                nextDelay,
+                result == null ? "n/a" : result.attemptedEvents());
 
         if (executor != null && !executor.isShutdown()) {
             executor.schedule(this::pollAndReschedule, nextDelay, TimeUnit.MILLISECONDS);
         }
     }
 
-    /**
-     * shardTotal = 1（默认）：lock name 为 "outbox_poll"，与原行为完全兼容。
-     * shardTotal > 1：每个分片独立持锁，允许多实例并行。
-     */
+    /** shardTotal = 1（默认）：lock name 为 "outbox_poll"，与原行为完全兼容。 shardTotal > 1：每个分片独立持锁，允许多实例并行。 */
     private LockConfiguration lockConfig() {
         int shardTotal = governance.outbox().getShardTotal();
-        String lockName = shardTotal > 1
-                ? "outbox_poll_shard_" + governance.outbox().getShardIndex()
-                : "outbox_poll";
+        String lockName =
+                shardTotal > 1
+                        ? "outbox_poll_shard_" + governance.outbox().getShardIndex()
+                        : "outbox_poll";
         Instant now = Instant.now();
         return new LockConfiguration(now, lockName, LOCK_AT_MOST, LOCK_AT_LEAST);
     }

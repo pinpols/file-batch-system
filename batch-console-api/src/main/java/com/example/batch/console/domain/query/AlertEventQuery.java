@@ -7,6 +7,4 @@ public record AlertEventQuery(
         String severity,
         String status,
         String alertType,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

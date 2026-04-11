@@ -1,12 +1,14 @@
 package com.example.batch.orchestrator.infrastructure.statemachine;
 
-import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.domain.statemachine.StateTransition;
-import java.lang.reflect.Method;
-import java.util.List;
+import com.example.batch.orchestrator.domain.statemachine.Stateful;
+
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+
+import java.lang.reflect.Method;
+import java.util.List;
 
 @Component
 public class DefaultStateMachine<T> implements StateMachine<T> {
@@ -15,7 +17,8 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
     public StateTransition transition(T target, String event) {
         String fromState = resolveState(target);
         String normalizedEvent = normalizeEvent(event);
-        return new StateTransition(fromState, normalizedEvent, resolveToState(fromState, normalizedEvent));
+        return new StateTransition(
+                fromState, normalizedEvent, resolveToState(fromState, normalizedEvent));
     }
 
     private String resolveState(T target) {
@@ -36,13 +39,14 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
             }
         }
         // 尚未实现 Stateful 的类型走反射兜底。
-        for (String methodName : List.of(
-                "getInstanceStatus",
-                "getPartitionStatus",
-                "getTaskStatus",
-                "getRunStatus",
-                "getNodeStatus",
-                "getStatus")) {
+        for (String methodName :
+                List.of(
+                        "getInstanceStatus",
+                        "getPartitionStatus",
+                        "getTaskStatus",
+                        "getRunStatus",
+                        "getNodeStatus",
+                        "getStatus")) {
             String status = invokeStringGetter(target, methodName);
             if (StringUtils.hasText(status)) {
                 return status;
@@ -50,7 +54,8 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
         }
         // M-1: 返回类名作为状态会静默损坏工作流状态，快速失败以暴露问题而非掩盖。
         throw new IllegalStateException(
-                "Cannot resolve status from " + target.getClass().getName()
+                "Cannot resolve status from "
+                        + target.getClass().getName()
                         + ": implement Stateful or expose a getStatus() / getXxxStatus() method");
     }
 

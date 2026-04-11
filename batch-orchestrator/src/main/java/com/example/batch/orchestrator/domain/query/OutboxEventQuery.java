@@ -11,6 +11,4 @@ public record OutboxEventQuery(
         String pendingStatus2,
         Integer batchSize,
         Integer shardTotal,
-        Integer shardIndex
-) {
-}
+        Integer shardIndex) {}

@@ -1,7 +1,7 @@
 package com.example.batch.console.infrastructure;
 
-import com.example.batch.console.application.ConsoleQueryApplicationService;
 import com.example.batch.common.model.PageResponse;
+import com.example.batch.console.application.ConsoleQueryApplicationService;
 import com.example.batch.console.web.query.AlertEventQueryRequest;
 import com.example.batch.console.web.query.ApprovalCommandQueryRequest;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
@@ -53,22 +53,22 @@ import com.example.batch.console.web.response.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.web.response.ConsoleOutboxRetryLogResponse;
 import com.example.batch.console.web.response.ConsolePendingCatchUpResponse;
 import com.example.batch.console.web.response.ConsoleRetryScheduleResponse;
+import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowDefinitionResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
-import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
-import java.util.List;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 
-/**
- * {@link ConsoleQueryApplicationService} 的门面实现：
- * 将调用委派给各领域查询子服务（Job / File / Workflow / Ops）。
- */
+import java.util.List;
+import java.util.Map;
+
+/** {@link ConsoleQueryApplicationService} 的门面实现： 将调用委派给各领域查询子服务（Job / File / Workflow / Ops）。 */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplicationService {
@@ -91,12 +91,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(OutboxRetryLogQueryRequest request) {
+    public PageResponse<ConsoleOutboxRetryLogResponse> outboxRetries(
+            OutboxRetryLogQueryRequest request) {
         return opsQueryService.outboxRetries(request);
     }
 
     @Override
-    public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(OutboxDeliveryLogQueryRequest request) {
+    public PageResponse<ConsoleOutboxDeliveryLogResponse> outboxDeliveries(
+            OutboxDeliveryLogQueryRequest request) {
         return opsQueryService.outboxDeliveries(request);
     }
 
@@ -116,7 +118,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(PendingCatchUpQueryRequest request) {
+    public PageResponse<ConsolePendingCatchUpResponse> pendingCatchUps(
+            PendingCatchUpQueryRequest request) {
         return opsQueryService.pendingCatchUps(request);
     }
 
@@ -136,12 +139,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public ConsoleBatchDayWindowResponse batchDayWindow(String bizDate, BatchDayWindowQueryRequest request) {
+    public ConsoleBatchDayWindowResponse batchDayWindow(
+            String bizDate, BatchDayWindowQueryRequest request) {
         return opsQueryService.batchDayWindow(bizDate, request);
     }
 
     @Override
-    public PageResponse<ConsoleApprovalCommandResponse> approvals(ApprovalCommandQueryRequest request) {
+    public PageResponse<ConsoleApprovalCommandResponse> approvals(
+            ApprovalCommandQueryRequest request) {
         return opsQueryService.approvals(request);
     }
 
@@ -153,17 +158,20 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request) {
+    public PageResponse<ConsoleFilePipelineResponse> filePipelines(
+            FilePipelineQueryRequest request) {
         return fileQueryService.filePipelines(request);
     }
 
     @Override
-    public PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(FilePipelineStepQueryRequest request) {
+    public PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(
+            FilePipelineStepQueryRequest request) {
         return fileQueryService.filePipelineSteps(request);
     }
 
     @Override
-    public PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(FileDispatchRecordQueryRequest request) {
+    public PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(
+            FileDispatchRecordQueryRequest request) {
         return fileQueryService.fileDispatchRecords(request);
     }
 
@@ -173,17 +181,20 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public PageResponse<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request) {
+    public PageResponse<ConsoleFileTemplateResponse> fileTemplates(
+            FileTemplateQueryRequest request) {
         return fileQueryService.fileTemplates(request);
     }
 
     @Override
-    public PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(FileArrivalGroupQueryRequest request) {
+    public PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(
+            FileArrivalGroupQueryRequest request) {
         return fileQueryService.fileArrivalGroups(request);
     }
 
     @Override
-    public PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(FileErrorRecordQueryRequest request) {
+    public PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(
+            FileErrorRecordQueryRequest request) {
         return fileQueryService.fileErrorRecords(request);
     }
 
@@ -193,7 +204,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public Map<String, Object> fileTemplateDetail(String tenantId, String templateCode, Integer version) {
+    public Map<String, Object> fileTemplateDetail(
+            String tenantId, String templateCode, Integer version) {
         return fileQueryService.fileTemplateDetail(tenantId, templateCode, version);
     }
 
@@ -210,7 +222,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     // ── Job ──────────────────────────────────────────────────────────────
 
     @Override
-    public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request) {
+    public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
+            JobDefinitionQueryRequest request) {
         return jobQueryService.jobDefinitions(request);
     }
 
@@ -225,12 +238,14 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos) {
+    public List<ConsoleJobInstanceResponse> batchInstanceStatus(
+            String tenantId, List<String> instanceNos) {
         return jobQueryService.batchInstanceStatus(tenantId, instanceNos);
     }
 
     @Override
-    public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(JobStepInstanceQueryRequest request) {
+    public PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
+            JobStepInstanceQueryRequest request) {
         return jobQueryService.jobStepInstances(request);
     }
 
@@ -242,17 +257,20 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     // ── Workflow ─────────────────────────────────────────────────────────
 
     @Override
-    public PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(WorkflowDefinitionQueryRequest request) {
+    public PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(
+            WorkflowDefinitionQueryRequest request) {
         return workflowQueryService.workflowDefinitions(request);
     }
 
     @Override
-    public PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request) {
+    public PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(
+            WorkflowNodeQueryRequest request) {
         return workflowQueryService.workflowNodes(request);
     }
 
     @Override
-    public PageResponse<ConsoleWorkflowEdgeResponse> workflowEdges(WorkflowEdgeQueryRequest request) {
+    public PageResponse<ConsoleWorkflowEdgeResponse> workflowEdges(
+            WorkflowEdgeQueryRequest request) {
         return workflowQueryService.workflowEdges(request);
     }
 
@@ -267,7 +285,8 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     }
 
     @Override
-    public PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(WorkflowNodeRunQueryRequest request) {
+    public PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(
+            WorkflowNodeRunQueryRequest request) {
         return workflowQueryService.workflowNodeRuns(request);
     }
 

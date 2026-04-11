@@ -6,39 +6,32 @@ public interface ApprovalWorkflowService {
 
     String submit(ApprovalSubmitCommand command);
 
-    ApprovalRecord approve(String tenantId, String approvalNo, String approverId, String approvalReason);
+    ApprovalRecord approve(
+            String tenantId, String approvalNo, String approverId, String approvalReason);
 
-    ApprovalRecord reject(String tenantId, String approvalNo, String approverId, String approvalReason);
+    ApprovalRecord reject(
+            String tenantId, String approvalNo, String approverId, String approvalReason);
 
     ApprovalRecord markExecuted(String tenantId, String approvalNo);
 
     ApprovalRecord get(String tenantId, String approvalNo);
 
-    record ApprovalContext(String tenantId) {
-    }
+    record ApprovalContext(String tenantId) {}
 
-    record ApprovalIdentity(
-            ApprovalContext context,
-            String approvalNo
-    ) {
-    }
+    record ApprovalIdentity(ApprovalContext context, String approvalNo) {}
 
     record ApprovalTarget(
             String approvalType,
             String actionType,
             String targetType,
             String targetId,
-            String payloadJson
-    ) {
-    }
+            String payloadJson) {}
 
     record ApprovalSource(
             String requesterId,
             String sourceTraceId,
             String sourceIdempotencyKey,
-            String approvalReason
-    ) {
-    }
+            String approvalReason) {}
 
     final class ApprovalSubmitCommand {
 
@@ -46,30 +39,21 @@ public interface ApprovalWorkflowService {
         private final ApprovalTarget target;
         private final ApprovalSource source;
 
-        private ApprovalSubmitCommand(ApprovalContext context, ApprovalTarget target, ApprovalSource source) {
+        private ApprovalSubmitCommand(
+                ApprovalContext context, ApprovalTarget target, ApprovalSource source) {
             this.context = context;
             this.target = target;
             this.source = source;
         }
 
-        public static ApprovalSubmitCommand of(String tenantId,
-                                               ApprovalTarget target,
-                                               ApprovalSource source) {
-            return new ApprovalSubmitCommand(
-                    new ApprovalContext(tenantId),
-                    target,
-                    source
-            );
+        public static ApprovalSubmitCommand of(
+                String tenantId, ApprovalTarget target, ApprovalSource source) {
+            return new ApprovalSubmitCommand(new ApprovalContext(tenantId), target, source);
         }
 
-        public static ApprovalSubmitCommand of(ApprovalContext context,
-                                               ApprovalTarget target,
-                                               ApprovalSource source) {
-            return new ApprovalSubmitCommand(
-                    context,
-                    target,
-                    source
-            );
+        public static ApprovalSubmitCommand of(
+                ApprovalContext context, ApprovalTarget target, ApprovalSource source) {
+            return new ApprovalSubmitCommand(context, target, source);
         }
 
         public String tenantId() {
@@ -117,9 +101,7 @@ public interface ApprovalWorkflowService {
             String approvalStatus,
             String approverId,
             String rejectionReason,
-            String approvalReason
-    ) {
-    }
+            String approvalReason) {}
 
     final class ApprovalRecord {
 
@@ -128,39 +110,36 @@ public interface ApprovalWorkflowService {
         private final ApprovalOutcome outcome;
         private final ApprovalSource source;
 
-        private ApprovalRecord(ApprovalIdentity identity,
-                               ApprovalTarget target,
-                               ApprovalOutcome outcome,
-                               ApprovalSource source) {
+        private ApprovalRecord(
+                ApprovalIdentity identity,
+                ApprovalTarget target,
+                ApprovalOutcome outcome,
+                ApprovalSource source) {
             this.identity = identity;
             this.target = target;
             this.outcome = outcome;
             this.source = source;
         }
 
-        public static ApprovalRecord of(String tenantId,
-                                        String approvalNo,
-                                        ApprovalTarget target,
-                                        ApprovalOutcome outcome,
-                                        ApprovalSource source) {
+        public static ApprovalRecord of(
+                String tenantId,
+                String approvalNo,
+                ApprovalTarget target,
+                ApprovalOutcome outcome,
+                ApprovalSource source) {
             return new ApprovalRecord(
                     new ApprovalIdentity(new ApprovalContext(tenantId), approvalNo),
                     target,
                     outcome,
-                    source
-            );
+                    source);
         }
 
-        public static ApprovalRecord of(ApprovalIdentity identity,
-                                        ApprovalTarget target,
-                                        ApprovalOutcome outcome,
-                                        ApprovalSource source) {
-            return new ApprovalRecord(
-                    identity,
-                    target,
-                    outcome,
-                    source
-            );
+        public static ApprovalRecord of(
+                ApprovalIdentity identity,
+                ApprovalTarget target,
+                ApprovalOutcome outcome,
+                ApprovalSource source) {
+            return new ApprovalRecord(identity, target, outcome, source);
         }
 
         @JsonProperty("tenantId")

@@ -1,7 +1,8 @@
 package com.example.batch.orchestrator.domain.pipeline;
 
-import java.util.List;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class PipelineExecutionResult {

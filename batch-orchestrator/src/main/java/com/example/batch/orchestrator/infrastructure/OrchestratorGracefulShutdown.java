@@ -1,21 +1,24 @@
 package com.example.batch.orchestrator.infrastructure;
 
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.stereotype.Component;
+
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationListener;
-import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.stereotype.Component;
 
 /**
  * Orchestrator 优雅停机状态。
  *
  * <p>用于两类场景：
+ *
  * <ul>
- *   <li>应用关闭时自动进入 drain，拒绝新 launch / 新 dispatch。</li>
- *   <li>运维手工先切 drain，再由网关摘流量。</li>
+ *   <li>应用关闭时自动进入 drain，拒绝新 launch / 新 dispatch。
+ *   <li>运维手工先切 drain，再由网关摘流量。
  * </ul>
  */
 @Slf4j

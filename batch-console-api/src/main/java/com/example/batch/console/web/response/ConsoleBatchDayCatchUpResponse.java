@@ -7,6 +7,4 @@ public record ConsoleBatchDayCatchUpResponse(
         String calendarCode,
         String bizDate,
         String catchUpPolicy,
-        List<ConsoleBatchDayCatchUpItemResponse> items
-) {
-}
+        List<ConsoleBatchDayCatchUpItemResponse> items) {}

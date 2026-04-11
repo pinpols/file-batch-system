@@ -3,17 +3,18 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.service.ConsoleClusterDiagnosticService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 跨节点一致性诊断：检查 ShedLock 租约、Worker 注册表、Outbox 状态。
- */
+import java.util.Map;
+
+/** 跨节点一致性诊断：检查 ShedLock 租约、Worker 注册表、Outbox 状态。 */
 @RestController
 @RequestMapping("/api/console/ops/cluster-diagnostic")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
@@ -29,17 +30,20 @@ public class ConsoleClusterDiagnosticController {
     }
 
     @GetMapping("/shedlock")
-    public CommonResponse<Map<String, Object>> shedLockStatus(@RequestParam("tenantId") String tenantId) {
+    public CommonResponse<Map<String, Object>> shedLockStatus(
+            @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(diagnosticService.shedLockStatus(tenantId));
     }
 
     @GetMapping("/workers")
-    public CommonResponse<Map<String, Object>> workerConsistency(@RequestParam("tenantId") String tenantId) {
+    public CommonResponse<Map<String, Object>> workerConsistency(
+            @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(diagnosticService.workerConsistency(tenantId));
     }
 
     @GetMapping("/outbox")
-    public CommonResponse<Map<String, Object>> outboxHealth(@RequestParam("tenantId") String tenantId) {
+    public CommonResponse<Map<String, Object>> outboxHealth(
+            @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(diagnosticService.outboxHealth(tenantId));
     }
 }

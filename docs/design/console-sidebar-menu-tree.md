@@ -7,7 +7,7 @@
 
 ## 角色约定
 
-- `ROLE_ADMIN`：全权限管理员
+- `ROLE_ADMIN`：全权限管理员（平台级）
 - `ROLE_AUDITOR`：只读审计角色
 - `ROLE_CONFIG_ADMIN`：配置与运维角色
 - `ROLE_TENANT_USER`：租户业务用户（可查看状态、触发作业、下载文件，不可修改配置或运维操作）
@@ -106,6 +106,76 @@
 | 元数据与公共入口 | 当前用户信息 | 已登录可见 | `/api/console/auth/me` |
 | 元数据与公共入口 | 登录换取 Token | 未登录可见 | `/api/console/auth/login` |
 
+### 7. 平台管理（仅 ROLE_ADMIN 可见）
+
+> 本分组的所有入口只对 `ROLE_ADMIN` 展示。其他角色登录后不应看到此菜单。
+
+#### 7.1 租户管理
+
+| 页面 | 可见角色 | 对应接口 | 说明 |
+|------|----------|----------|------|
+| 租户列表 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` | `GET /api/console/tenants` | 支持 keyword、status 过滤 |
+| 租户详情 | `ROLE_ADMIN` / `ROLE_CONFIG_ADMIN` | `GET /api/console/tenants/{tenantId}` | |
+| 新建租户 | `ROLE_ADMIN` | `POST /api/console/tenants` | tenantId 格式受正则约束 |
+| 编辑租户 | `ROLE_ADMIN` | `PUT /api/console/tenants/{tenantId}` | 仅 name/description 可改 |
+| 暂停租户 | `ROLE_ADMIN` | `POST /api/console/tenants/{tenantId}/suspend` | |
+| 激活租户 | `ROLE_ADMIN` | `POST /api/console/tenants/{tenantId}/activate` | |
+
+租户是平台最顶层的隔离单元。**新租户必须先在此创建，再推送配置（tenant-init），最后创建账号。**  
+`tenant-init` 的 `targetTenantIds` 不传时广播到所有 `ACTIVE` 租户。
+
+#### 7.2 账号管理
+
+| 页面 | 可见角色 | 对应接口 | 说明 |
+|------|----------|----------|------|
+| 账号列表 | `ROLE_ADMIN` | `GET /api/console/users` | 可按 tenantId / keyword 过滤 |
+| 账号详情 | `ROLE_ADMIN` | `GET /api/console/users/{id}` | 不展示密码哈希 |
+| 新建账号 | `ROLE_ADMIN` | `POST /api/console/users` | 密码 Argon2id 哈希；username 全局唯一 |
+| 编辑账号 | `ROLE_ADMIN` | `PUT /api/console/users/{id}` | 仅 displayName / authoritiesCsv |
+| 重置密码 | `ROLE_ADMIN` | `POST /api/console/users/{id}/reset-password` | |
+| 启用账号 | `ROLE_ADMIN` | `POST /api/console/users/{id}/enable` | |
+| 禁用账号 | `ROLE_ADMIN` | `POST /api/console/users/{id}/disable` | |
+| 删除账号 | `ROLE_ADMIN` | `DELETE /api/console/users/{id}` | |
+
+可用角色（authoritiesCsv 取值）：
+
+| 值 | 说明 |
+|----|------|
+| `ROLE_ADMIN` | 平台超级管理员 |
+| `ROLE_CONFIG_ADMIN` | 配置与运维管理员 |
+| `ROLE_AUDITOR` | 只读审计 |
+| `ROLE_TENANT_USER` | 租户业务用户 |
+| `ROLE_USER` | 默认最低权限 |
+
+多角色用逗号分隔，例如 `ROLE_CONFIG_ADMIN,ROLE_AUDITOR`。
+
+#### 7.3 租户配置批量初始化
+
+| 页面 | 可见角色 | 对应接口 | 说明 |
+|------|----------|----------|------|
+| 批量初始化 | `ROLE_ADMIN` | `POST /api/console/config/tenant-init` | 覆盖 10 类配置 |
+| 配置复制 | `ROLE_ADMIN` | `POST /api/console/config/tenant-copy` | 源租户配置→目标租户 |
+
+`tenant-init` 支持的 10 类配置（单次 API 调用全部推送）：
+
+| 序号 | 配置类型 | 说明 |
+|------|----------|------|
+| 1 | 作业定义 | jobDefinitions |
+| 2 | 工作流定义 | workflowDefinitions |
+| 3 | 流水线定义 | pipelineDefinitions |
+| 4 | 文件通道 | fileChannels |
+| 5 | 文件模板 | fileTemplates |
+| 6 | 资源队列 | resourceQueues |
+| 7 | 批次窗口 | batchWindows |
+| 8 | 工作日历 | businessCalendars（含假期列表） |
+| 9 | 配额策略 | quotaPolicies |
+| 10 | 告警路由 | alertRoutings |
+
+新租户标准上线流程：
+1. `POST /api/console/tenants` — 创建租户记录
+2. `POST /api/console/config/tenant-init` — 一次性推送所有配置（或用 tenant-copy 从模板租户复制）
+3. `POST /api/console/users` — 创建账号并分配角色
+
 ## 建议的前端侧边栏分组
 
 如果前端要做固定 sidebar，建议直接按下面的分组落：
@@ -116,6 +186,7 @@
 4. `调度与编排`
 5. `运维管理`
 6. `元数据`
+7. `平台管理`（仅 `ROLE_ADMIN` 可见）
 
 ## 菜单展示规则建议
 

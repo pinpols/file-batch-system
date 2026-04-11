@@ -14,6 +14,4 @@ public record ConsoleWorkflowNodeRunResponse(
         String errorMessage,
         Instant startedAt,
         Instant finishedAt,
-        Long durationMs
-) {
-}
+        Long durationMs) {}

@@ -17,6 +17,4 @@ public record ConsoleSchedulerSnapshotHistoryResponse(
         Integer groupMaxJobs,
         String quotaResetPolicy,
         Integer onlineWorkers,
-        Object detailJson
-) {
-}
+        Object detailJson) {}

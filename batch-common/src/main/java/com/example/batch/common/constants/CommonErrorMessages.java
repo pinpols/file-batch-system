@@ -13,8 +13,10 @@ public final class CommonErrorMessages {
     public static final String CONSOLE_JWT_EXPIRED = "console token expired";
     public static final String TENANT_REQUIRED = "tenant is required";
     public static final String TENANT_MISMATCH = "tenant mismatch";
-    public static final String AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER = "ai assistant requires authenticated user";
-    public static final String AI_ASSISTANT_ACCESS_NOT_GRANTED = "ai assistant access is not granted";
+    public static final String AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER =
+            "ai assistant requires authenticated user";
+    public static final String AI_ASSISTANT_ACCESS_NOT_GRANTED =
+            "ai assistant access is not granted";
     public static final String AI_ASSISTANT_NOT_CONFIGURED = "ai assistant is not configured";
     public static final String AI_ASSISTANT_DISABLED = "ai assistant is disabled";
     public static final String PROMPT_REQUIRED = "prompt is required";
@@ -22,8 +24,7 @@ public final class CommonErrorMessages {
     public static final String PROMPT_VIOLATES_SAFETY_POLICY = "prompt violates safety policy";
     public static final String PROMPT_OUT_OF_SCOPE = "prompt is outside the platform scope";
 
-    private CommonErrorMessages() {
-    }
+    private CommonErrorMessages() {}
 
     public static String fieldTooLong(String fieldName, int maxLength) {
         return fieldName + " too long (max " + maxLength + ")";
@@ -34,9 +35,11 @@ public final class CommonErrorMessages {
     }
 
     public static String invalidFormat(String fieldName, String expectedFormat) {
-        return fieldName + " format invalid" + (expectedFormat == null || expectedFormat.isBlank()
-                ? ""
-                : " (expected " + expectedFormat + ")");
+        return fieldName
+                + " format invalid"
+                + (expectedFormat == null || expectedFormat.isBlank()
+                        ? ""
+                        : " (expected " + expectedFormat + ")");
     }
 
     public static String invalidValue(String fieldName) {

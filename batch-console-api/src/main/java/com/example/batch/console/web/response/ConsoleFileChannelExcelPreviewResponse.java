@@ -10,6 +10,4 @@ public record ConsoleFileChannelExcelPreviewResponse(
         Integer validRows,
         Integer invalidRows,
         List<ConsoleFileChannelResponse> rows,
-        List<ConsoleFileChannelExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleFileChannelExcelRowIssueResponse> issues) {}

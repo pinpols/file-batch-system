@@ -3,11 +3,12 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleNotificationApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
-import java.util.List;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,9 +21,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 通知订阅管理 REST：通知渠道（EMAIL/钉钉/企微/Webhook）+ 订阅规则 + 投递日志。
- */
+import java.util.List;
+import java.util.Map;
+
+/** 通知订阅管理 REST：通知渠道（EMAIL/钉钉/企微/Webhook）+ 订阅规则 + 投递日志。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/notifications")
@@ -35,86 +37,98 @@ public class ConsoleNotificationController {
     // ── 通知渠道 ──
 
     @GetMapping("/channels")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<List<Map<String, Object>>> listChannels(@RequestParam @NotBlank String tenantId) {
+    @PreAuthorize(
+            "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN',"
+                + " 'ROLE_TENANT_USER')")
+    public CommonResponse<List<Map<String, Object>>> listChannels(
+            @RequestParam @NotBlank String tenantId) {
         return responseFactory.success(service.listChannels(tenantId));
     }
 
     @GetMapping("/channels/{channelCode}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Map<String, Object>> getChannel(@RequestParam @NotBlank String tenantId,
-                                                           @PathVariable String channelCode) {
+    @PreAuthorize(
+            "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN',"
+                + " 'ROLE_TENANT_USER')")
+    public CommonResponse<Map<String, Object>> getChannel(
+            @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
         return responseFactory.success(service.getChannel(tenantId, channelCode));
     }
 
     @PostMapping("/channels")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Void> createChannel(@RequestParam @NotBlank String tenantId,
-                                               @RequestBody Map<String, Object> params) {
+    public CommonResponse<Void> createChannel(
+            @RequestParam @NotBlank String tenantId, @RequestBody Map<String, Object> params) {
         service.createChannel(tenantId, params);
         return responseFactory.success(null);
     }
 
     @PutMapping("/channels/{channelCode}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Void> updateChannel(@RequestParam @NotBlank String tenantId,
-                                               @PathVariable String channelCode,
-                                               @RequestBody Map<String, Object> params) {
+    public CommonResponse<Void> updateChannel(
+            @RequestParam @NotBlank String tenantId,
+            @PathVariable String channelCode,
+            @RequestBody Map<String, Object> params) {
         service.updateChannel(tenantId, channelCode, params);
         return responseFactory.success(null);
     }
 
     @DeleteMapping("/channels/{channelCode}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Void> deleteChannel(@RequestParam @NotBlank String tenantId,
-                                               @PathVariable String channelCode) {
+    public CommonResponse<Void> deleteChannel(
+            @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
         service.deleteChannel(tenantId, channelCode);
         return responseFactory.success(null);
     }
 
     @PostMapping("/channels/{channelCode}/test")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Map<String, Object>> testChannel(@RequestParam @NotBlank String tenantId,
-                                                            @PathVariable String channelCode) {
+    public CommonResponse<Map<String, Object>> testChannel(
+            @RequestParam @NotBlank String tenantId, @PathVariable String channelCode) {
         return responseFactory.success(service.testChannel(tenantId, channelCode));
     }
 
     // ── 订阅规则 ──
 
     @GetMapping("/rules")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<List<Map<String, Object>>> listRules(@RequestParam @NotBlank String tenantId) {
+    @PreAuthorize(
+            "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN',"
+                + " 'ROLE_TENANT_USER')")
+    public CommonResponse<List<Map<String, Object>>> listRules(
+            @RequestParam @NotBlank String tenantId) {
         return responseFactory.success(service.listRules(tenantId));
     }
 
     @GetMapping("/rules/{ruleId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Map<String, Object>> getRule(@RequestParam @NotBlank String tenantId,
-                                                        @PathVariable Long ruleId) {
+    @PreAuthorize(
+            "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN',"
+                + " 'ROLE_TENANT_USER')")
+    public CommonResponse<Map<String, Object>> getRule(
+            @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
         return responseFactory.success(service.getRule(tenantId, ruleId));
     }
 
     @PostMapping("/rules")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Void> createRule(@RequestParam @NotBlank String tenantId,
-                                            @RequestBody Map<String, Object> params) {
+    public CommonResponse<Void> createRule(
+            @RequestParam @NotBlank String tenantId, @RequestBody Map<String, Object> params) {
         service.createRule(tenantId, params);
         return responseFactory.success(null);
     }
 
     @PutMapping("/rules/{ruleId}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Void> updateRule(@RequestParam @NotBlank String tenantId,
-                                            @PathVariable Long ruleId,
-                                            @RequestBody Map<String, Object> params) {
+    public CommonResponse<Void> updateRule(
+            @RequestParam @NotBlank String tenantId,
+            @PathVariable Long ruleId,
+            @RequestBody Map<String, Object> params) {
         service.updateRule(tenantId, ruleId, params);
         return responseFactory.success(null);
     }
 
     @DeleteMapping("/rules/{ruleId}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
-    public CommonResponse<Void> deleteRule(@RequestParam @NotBlank String tenantId,
-                                            @PathVariable Long ruleId) {
+    public CommonResponse<Void> deleteRule(
+            @RequestParam @NotBlank String tenantId, @PathVariable Long ruleId) {
         service.deleteRule(tenantId, ruleId);
         return responseFactory.success(null);
     }
@@ -122,7 +136,9 @@ public class ConsoleNotificationController {
     // ── 投递日志 ──
 
     @GetMapping("/delivery-logs")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+    @PreAuthorize(
+            "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN',"
+                + " 'ROLE_TENANT_USER')")
     public CommonResponse<List<Map<String, Object>>> deliveryLogs(
             @RequestParam @NotBlank String tenantId,
             @RequestParam(defaultValue = "100") @Positive int limit) {

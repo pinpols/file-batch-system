@@ -1,23 +1,26 @@
 package com.example.batch.console.web.request;
 
 import com.example.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+
 import lombok.Data;
 
 @Data
 public class JobDefinitionCreateRequest {
-    @ValidTenantId
-    private String tenantId;
-    @NotBlank @Size(max = 128)
+    @ValidTenantId private String tenantId;
+
+    @NotBlank
+    @Size(max = 128)
     private String jobCode;
+
     @Size(max = 256)
     private String jobName;
-    @NotBlank
-    private String jobType;
+
+    @NotBlank private String jobType;
     private String bizType;
-    @NotBlank
-    private String scheduleType;
+    @NotBlank private String scheduleType;
     private String scheduleExpr;
     private String timezone;
     private String triggerMode;

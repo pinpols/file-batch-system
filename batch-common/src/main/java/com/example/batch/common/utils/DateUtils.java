@@ -9,8 +9,7 @@ public final class DateUtils {
 
     private static final Clock CLOCK = Clock.systemDefaultZone();
 
-    private DateUtils() {
-    }
+    private DateUtils() {}
 
     public static LocalDate today() {
         return LocalDate.now(CLOCK);

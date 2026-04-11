@@ -4,14 +4,12 @@ import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.domain.TriggerStatusInfo;
 import com.example.batch.trigger.support.TriggerDescriptor;
-import java.time.DateTimeException;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.TimeZone;
-import org.quartz.CronExpression;
+
 import lombok.RequiredArgsConstructor;
+
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+
+import org.quartz.CronExpression;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.CronTrigger;
 import org.quartz.JobBuilder;
@@ -24,7 +22,13 @@ import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.stereotype.Service;
-import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+
+import java.time.DateTimeException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TimeZone;
 
 @Service
 @RequiredArgsConstructor
@@ -40,9 +44,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     @SchedulerLock(name = "trigger_register_all", lockAtMostFor = "PT15M", lockAtLeastFor = "PT10S")
     public void registerAll() {
         List<TriggerDescriptor> descriptors = triggerDefinitionLoader.loadAll();
-        descriptors.stream()
-                .filter(TriggerDescriptor::isEnabled)
-                .forEach(this::scheduleDescriptor);
+        descriptors.stream().filter(TriggerDescriptor::isEnabled).forEach(this::scheduleDescriptor);
     }
 
     @Override
@@ -110,17 +112,21 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
                     Trigger t = triggers.get(0);
                     Trigger.TriggerState state = scheduler.getTriggerState(t.getKey());
                     status = state.name();
-                    if (t.getPreviousFireTime() != null) prevFire = t.getPreviousFireTime().toInstant();
+                    if (t.getPreviousFireTime() != null)
+                        prevFire = t.getPreviousFireTime().toInstant();
                     if (t.getNextFireTime() != null) nextFire = t.getNextFireTime().toInstant();
                 }
-                result.add(new TriggerStatusInfo(
-                        tid, jc,
-                        data.getString(QuartzLaunchJob.SCHEDULE_TYPE),
-                        data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION),
-                        data.getString(QuartzLaunchJob.TIMEZONE),
-                        data.getString(QuartzLaunchJob.TRIGGER_MODE),
-                        status, prevFire, nextFire
-                ));
+                result.add(
+                        new TriggerStatusInfo(
+                                tid,
+                                jc,
+                                data.getString(QuartzLaunchJob.SCHEDULE_TYPE),
+                                data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION),
+                                data.getString(QuartzLaunchJob.TIMEZONE),
+                                data.getString(QuartzLaunchJob.TRIGGER_MODE),
+                                status,
+                                prevFire,
+                                nextFire));
             }
             return result;
         } catch (SchedulerException e) {
@@ -169,7 +175,11 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         String expression = descriptor.getScheduleExpression();
         if (!CronExpression.isValidExpression(expression)) {
             throw new IllegalArgumentException(
-                    "invalid cron expression for job " + descriptor.getJobCode() + ": '" + expression + "'");
+                    "invalid cron expression for job "
+                            + descriptor.getJobCode()
+                            + ": '"
+                            + expression
+                            + "'");
         }
         String timezone = descriptor.getTimezone();
         if (timezone != null && !timezone.isBlank()) {
@@ -177,7 +187,12 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
                 ZoneId.of(timezone);
             } catch (DateTimeException e) {
                 throw new IllegalArgumentException(
-                        "invalid timezone for job " + descriptor.getJobCode() + ": '" + timezone + "'", e);
+                        "invalid timezone for job "
+                                + descriptor.getJobCode()
+                                + ": '"
+                                + timezone
+                                + "'",
+                        e);
             }
         }
         try {
@@ -193,26 +208,32 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
             jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
             jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
 
-            JobDetail jobDetail = JobBuilder.newJob(QuartzLaunchJob.class)
-                    .withIdentity(identity, JOB_GROUP)
-                    .usingJobData(jobDataMap)
-                    .storeDurably()
-                    .build();
+            JobDetail jobDetail =
+                    JobBuilder.newJob(QuartzLaunchJob.class)
+                            .withIdentity(identity, JOB_GROUP)
+                            .usingJobData(jobDataMap)
+                            .storeDurably()
+                            .build();
 
-            CronTrigger trigger = TriggerBuilder.newTrigger()
-                    .withIdentity(identity, JOB_GROUP)
-                    .forJob(jobDetail)
-                    .withSchedule(CronScheduleBuilder.cronSchedule(descriptor.getScheduleExpression())
-                            .inTimeZone(TimeZone.getTimeZone(descriptor.getTimezone()))
-                            .withMisfireHandlingInstructionDoNothing())
-                    .build();
+            CronTrigger trigger =
+                    TriggerBuilder.newTrigger()
+                            .withIdentity(identity, JOB_GROUP)
+                            .forJob(jobDetail)
+                            .withSchedule(
+                                    CronScheduleBuilder.cronSchedule(
+                                                    descriptor.getScheduleExpression())
+                                            .inTimeZone(
+                                                    TimeZone.getTimeZone(descriptor.getTimezone()))
+                                            .withMisfireHandlingInstructionDoNothing())
+                            .build();
 
             if (scheduler.checkExists(jobDetail.getKey())) {
                 scheduler.deleteJob(jobDetail.getKey());
             }
             scheduler.scheduleJob(jobDetail, trigger);
         } catch (SchedulerException exception) {
-            throw new IllegalStateException("failed to register quartz trigger: " + descriptor.getJobCode(), exception);
+            throw new IllegalStateException(
+                    "failed to register quartz trigger: " + descriptor.getJobCode(), exception);
         }
     }
 }

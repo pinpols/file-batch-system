@@ -28,6 +28,4 @@ public record ConsoleJobInstanceResponse(
         Integer expectedDurationSeconds,
         Instant slaAlertedAt,
         Instant startedAt,
-        Instant finishedAt
-) {
-}
+        Instant finishedAt) {}

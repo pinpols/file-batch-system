@@ -15,6 +15,4 @@ public record ConsoleFileArrivalGroupResponse(
         Long triggeredCount,
         Long timeoutCount,
         Long waitingCount,
-        Instant lastUpdatedAt
-) {
-}
+        Instant lastUpdatedAt) {}

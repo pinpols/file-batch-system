@@ -9,6 +9,4 @@ public record CalendarBizDateDefinition(
         LocalTime cutoffTime,
         String holidayRollRule,
         Set<LocalDate> holidays,
-        Set<LocalDate> workdayOverrides
-) {
-}
+        Set<LocalDate> workdayOverrides) {}

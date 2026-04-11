@@ -1,8 +1,5 @@
 package com.example.batch.console.support;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -27,10 +24,14 @@ import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 /**
  * 控制台 Excel 统一样式工具：所有 Excel 导出/模板共享同一视觉风格。
- * <p>
- * 普通表头：深蓝 #1F4E78；必填表头：橙色；只读表头：灰蓝；README 标题：14pt 加粗。
+ *
+ * <p>普通表头：深蓝 #1F4E78；必填表头：橙色；只读表头：灰蓝；README 标题：14pt 加粗。
  */
 public final class ConsoleExcelStyles {
 
@@ -38,8 +39,7 @@ public final class ConsoleExcelStyles {
     private static final byte[] REQUIRED_HEADER_RGB = {(byte) 0xC6, 0x59, 0x11};
     private static final byte[] READ_ONLY_HEADER_RGB = {0x5B, 0x6B, 0x7A};
 
-    private ConsoleExcelStyles() {
-    }
+    private ConsoleExcelStyles() {}
 
     public record ColumnGuide(
             boolean required,
@@ -47,27 +47,34 @@ public final class ConsoleExcelStyles {
             String description,
             String formatHint,
             String example,
-            List<String> allowedValues
-    ) {
+            List<String> allowedValues) {
         public ColumnGuide {
             allowedValues = allowedValues == null ? List.of() : List.copyOf(allowedValues);
         }
     }
 
-    public static ColumnGuide requiredColumn(String description, String formatHint, String example, String... allowedValues) {
-        return new ColumnGuide(true, false, description, formatHint, example, List.of(allowedValues));
+    public static ColumnGuide requiredColumn(
+            String description, String formatHint, String example, String... allowedValues) {
+        return new ColumnGuide(
+                true, false, description, formatHint, example, List.of(allowedValues));
     }
 
-    public static ColumnGuide optionalColumn(String description, String formatHint, String example, String... allowedValues) {
-        return new ColumnGuide(false, false, description, formatHint, example, List.of(allowedValues));
+    public static ColumnGuide optionalColumn(
+            String description, String formatHint, String example, String... allowedValues) {
+        return new ColumnGuide(
+                false, false, description, formatHint, example, List.of(allowedValues));
     }
 
-    public static ColumnGuide readOnlyColumn(String description, String formatHint, String example, String... allowedValues) {
-        return new ColumnGuide(false, true, description, formatHint, example, List.of(allowedValues));
+    public static ColumnGuide readOnlyColumn(
+            String description, String formatHint, String example, String... allowedValues) {
+        return new ColumnGuide(
+                false, true, description, formatHint, example, List.of(allowedValues));
     }
 
-    public static ColumnGuide requiredReadOnlyColumn(String description, String formatHint, String example, String... allowedValues) {
-        return new ColumnGuide(true, true, description, formatHint, example, List.of(allowedValues));
+    public static ColumnGuide requiredReadOnlyColumn(
+            String description, String formatHint, String example, String... allowedValues) {
+        return new ColumnGuide(
+                true, true, description, formatHint, example, List.of(allowedValues));
     }
 
     /** 创建表头样式：深蓝底 + 白色加粗字 + 四边细线 + 居中。 */
@@ -102,7 +109,8 @@ public final class ConsoleExcelStyles {
         Font font = workbook.createFont();
         font.setBold(true);
         if (font instanceof XSSFFont xssfFont) {
-            xssfFont.setColor(new XSSFColor(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, null));
+            xssfFont.setColor(
+                    new XSSFColor(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}, null));
         } else {
             font.setColor(IndexedColors.WHITE.getIndex());
         }
@@ -132,13 +140,9 @@ public final class ConsoleExcelStyles {
         }
     }
 
-    /**
-     * 写面向填写的模板表头：支持自动筛选、必填/只读样式以及表头批注提示。
-     */
-    public static void writeTemplateHeaders(Sheet sheet,
-                                            List<String> columns,
-                                            Map<String, ColumnGuide> guides,
-                                            Workbook workbook) {
+    /** 写面向填写的模板表头：支持自动筛选、必填/只读样式以及表头批注提示。 */
+    public static void writeTemplateHeaders(
+            Sheet sheet, List<String> columns, Map<String, ColumnGuide> guides, Workbook workbook) {
         Row headerRow = sheet.createRow(0);
         headerRow.setHeightInPoints(28);
         Map<String, ColumnGuide> safeGuides = guides == null ? Map.of() : guides;
@@ -153,7 +157,8 @@ public final class ConsoleExcelStyles {
             ColumnGuide guide = safeGuides.get(columnName);
             Cell cell = headerRow.createCell(i);
             cell.setCellValue(columnName);
-            cell.setCellStyle(resolveTemplateHeaderStyle(guide, defaultStyle, requiredStyle, readOnlyStyle));
+            cell.setCellStyle(
+                    resolveTemplateHeaderStyle(guide, defaultStyle, requiredStyle, readOnlyStyle));
             addGuideCommentIfPresent(cell, guide, creationHelper, drawing);
         }
         if (!columns.isEmpty()) {
@@ -186,21 +191,18 @@ public final class ConsoleExcelStyles {
     /** 自适应列宽（基于表头长度）。 */
     public static void setWidths(Sheet sheet, List<String> columns) {
         for (int i = 0; i < columns.size(); i++) {
-            sheet.setColumnWidth(i, Math.min(12000, Math.max(18, columns.get(i).length() + 4) * 256));
+            sheet.setColumnWidth(
+                    i, Math.min(12000, Math.max(18, columns.get(i).length() + 4) * 256));
         }
     }
 
-    /**
-     * 添加显式下拉校验，并在 Excel 中显示填写提示。
-     */
-    public static void addDropdownValidation(Sheet sheet,
-                                             int columnIndex,
-                                             String[] values,
-                                             String promptTitle,
-                                             String promptText) {
+    /** 添加显式下拉校验，并在 Excel 中显示填写提示。 */
+    public static void addDropdownValidation(
+            Sheet sheet, int columnIndex, String[] values, String promptTitle, String promptText) {
         DataValidationHelper helper = sheet.getDataValidationHelper();
         DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
-        CellRangeAddressList addressList = new CellRangeAddressList(1, 5000, columnIndex, columnIndex);
+        CellRangeAddressList addressList =
+                new CellRangeAddressList(1, 5000, columnIndex, columnIndex);
         DataValidation validation = helper.createValidation(constraint, addressList);
         validation.setSuppressDropDownArrow(false);
         validation.setShowErrorBox(true);
@@ -214,12 +216,11 @@ public final class ConsoleExcelStyles {
         sheet.addValidationData(validation);
     }
 
-    public static void addBooleanValidation(Sheet sheet,
-                                            int[] columns,
-                                            String promptTitle,
-                                            String promptText) {
+    public static void addBooleanValidation(
+            Sheet sheet, int[] columns, String promptTitle, String promptText) {
         for (int columnIndex : columns) {
-            addDropdownValidation(sheet, columnIndex, new String[]{"TRUE", "FALSE"}, promptTitle, promptText);
+            addDropdownValidation(
+                    sheet, columnIndex, new String[] {"TRUE", "FALSE"}, promptTitle, promptText);
         }
     }
 
@@ -252,10 +253,11 @@ public final class ConsoleExcelStyles {
         sheet.setColumnWidth(3, 50 * 256);
     }
 
-    private static CellStyle resolveTemplateHeaderStyle(ColumnGuide guide,
-                                                        CellStyle defaultStyle,
-                                                        CellStyle requiredStyle,
-                                                        CellStyle readOnlyStyle) {
+    private static CellStyle resolveTemplateHeaderStyle(
+            ColumnGuide guide,
+            CellStyle defaultStyle,
+            CellStyle requiredStyle,
+            CellStyle readOnlyStyle) {
         if (guide == null) {
             return defaultStyle;
         }
@@ -268,10 +270,8 @@ public final class ConsoleExcelStyles {
         return defaultStyle;
     }
 
-    private static void addGuideCommentIfPresent(Cell cell,
-                                                 ColumnGuide guide,
-                                                 CreationHelper creationHelper,
-                                                 Drawing<?> drawing) {
+    private static void addGuideCommentIfPresent(
+            Cell cell, ColumnGuide guide, CreationHelper creationHelper, Drawing<?> drawing) {
         String commentText = buildGuideCommentText(guide);
         if (!hasText(commentText)) {
             return;

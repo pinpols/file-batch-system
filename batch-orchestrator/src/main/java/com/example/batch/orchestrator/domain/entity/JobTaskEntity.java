@@ -1,8 +1,10 @@
 package com.example.batch.orchestrator.domain.entity;
 
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
-import java.time.Instant;
+
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class JobTaskEntity implements Stateful {

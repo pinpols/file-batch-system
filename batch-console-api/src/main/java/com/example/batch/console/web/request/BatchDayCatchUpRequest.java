@@ -1,16 +1,18 @@
 package com.example.batch.console.web.request;
 
 import com.example.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.List;
+
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class BatchDayCatchUpRequest {
 
-    @ValidTenantId
-    private String tenantId;
+    @ValidTenantId private String tenantId;
 
     @NotBlank
     @Size(max = 128, message = "calendarCode too long (max 128)")

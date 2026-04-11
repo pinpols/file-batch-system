@@ -10,7 +10,8 @@ public interface LaunchAdapterService {
 
     LaunchRequest fromApiRequest(TriggerLaunchCommand command);
 
-    LaunchRequest fromScheduledTrigger(ScheduledTriggerCommand command, CalendarBizDateDefinition calendar);
+    LaunchRequest fromScheduledTrigger(
+            ScheduledTriggerCommand command, CalendarBizDateDefinition calendar);
 
     TriggerType resolveTriggerType(TriggerLaunchCommand command);
 }

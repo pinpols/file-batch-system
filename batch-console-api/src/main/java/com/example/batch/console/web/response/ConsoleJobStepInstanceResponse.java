@@ -17,6 +17,4 @@ public record ConsoleJobStepInstanceResponse(
         String errorCode,
         String errorMessage,
         Instant startedAt,
-        Instant finishedAt
-) {
-}
+        Instant finishedAt) {}

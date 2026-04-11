@@ -1,18 +1,17 @@
 package com.example.batch.console.application;
 
+import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;
-import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.OutboxDeliveryLogQueryRequest;
 import com.example.batch.console.web.query.OutboxRetryLogQueryRequest;
 import com.example.batch.console.web.query.SecretVersionQueryRequest;
 import com.example.batch.console.web.query.WorkerRegistryQueryRequest;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 
-/**
- * 控制台报表 Excel 导出应用服务：将各类查询结果汇总为可下载的 Excel 流。
- */
+/** 控制台报表 Excel 导出应用服务：将各类查询结果汇总为可下载的 Excel 流。 */
 public interface ConsoleReportExcelApplicationService {
 
     /** 导出配置发布单列表。 */
@@ -40,5 +39,6 @@ public interface ConsoleReportExcelApplicationService {
     ResponseEntity<InputStreamResource> exportOutboxRetries(OutboxRetryLogQueryRequest request);
 
     /** 导出 Outbox 投递日志。 */
-    ResponseEntity<InputStreamResource> exportOutboxDeliveries(OutboxDeliveryLogQueryRequest request);
+    ResponseEntity<InputStreamResource> exportOutboxDeliveries(
+            OutboxDeliveryLogQueryRequest request);
 }

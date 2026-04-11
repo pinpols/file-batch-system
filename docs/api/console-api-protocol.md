@@ -105,6 +105,9 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | Worker management (drain / restore) | ✅ | ❌ | ✅ | ❌ |
 | Scheduler actions (pause-all / resume-all) | ✅ | ❌ | ❌ | ❌ |
 | Alert management | ✅ | ❌ | ✅ | ❌ |
+| **Tenant management (CRUD)** | ✅ | ❌ | ❌ | ❌ |
+| **Tenant list / detail view** | ✅ | ❌ | ✅ | ❌ |
+| **User account management (CRUD)** | ✅ | ❌ | ❌ | ❌ |
 
 ### Tenant Rules
 
@@ -693,14 +696,47 @@ Deployment note:
 - `GET /api/console/reports/excel/outbox-deliveries`
 - Report Excel exports are export-only snapshots or logs. They do not accept upload / preview / apply flows.
 
+### Tenant Management
+
+- `GET /api/console/tenants` — list tenants (keyword, status filter, paginated)
+- `GET /api/console/tenants/{tenantId}` — tenant detail
+- `POST /api/console/tenants` — create tenant
+- `PUT /api/console/tenants/{tenantId}` — update tenant name / description
+- `POST /api/console/tenants/{tenantId}/suspend` — suspend tenant
+- `POST /api/console/tenants/{tenantId}/activate` — reactivate tenant
+- Tenant is the platform-level isolation unit. Must exist in `batch.tenant` before any config can be pushed.
+- `tenantId` format: `^[a-z0-9][a-z0-9\-]*[a-z0-9]$` (lowercase, alphanumeric, hyphens).
+- `status` values: `ACTIVE`, `SUSPENDED`.
+- `GET` list and detail require `ROLE_ADMIN` or `ROLE_CONFIG_ADMIN`. All write operations require `ROLE_ADMIN`.
+- Response fields: `id`, `tenantId`, `tenantName`, `status`, `description`, `createdBy`, `createdAt`, `updatedAt`.
+
+### User Account Management
+
+- `GET /api/console/users` — list accounts (tenantId filter, keyword search by username/displayName, paginated)
+- `GET /api/console/users/{id}` — account detail
+- `POST /api/console/users` — create account
+- `PUT /api/console/users/{id}` — update displayName and authoritiesCsv
+- `POST /api/console/users/{id}/reset-password` — reset password (Argon2id hash stored, raw password never persisted)
+- `POST /api/console/users/{id}/enable` — enable account
+- `POST /api/console/users/{id}/disable` — disable account
+- `DELETE /api/console/users/{id}` — delete account
+- All operations require `ROLE_ADMIN`.
+- `username` is globally unique (case-insensitive). Format: alphanumeric + `.` `_` `-`, min 2 chars.
+- `authoritiesCsv` is a comma-separated list of role names (e.g. `ROLE_CONFIG_ADMIN,ROLE_AUDITOR`); default is `ROLE_USER`.
+- Password minimum 8 characters; only the Argon2id hash is stored, raw password is discarded after hashing.
+- Response fields: `id`, `tenantId`, `username`, `displayName`, `authoritiesCsv`, `enabled`, `createdAt`, `updatedAt`. `passwordHash` is never exposed.
+- Create request fields: `tenantId` (required), `username` (required), `displayName`, `password` (required, min 8), `authoritiesCsv`.
+- The seeded default accounts (see Ops section) are `admin`, `auditor`, `config-admin`, `tenant-user` under `default-tenant`.
+
 ### Tenant Config Init
 
 - `POST /api/console/config/tenant-init`
 - Batch-initializes or updates configuration for multiple tenants in one request.
+- `targetTenantIds` is resolved from `batch.tenant WHERE status = 'ACTIVE'` when omitted (broadcast to all active tenants).
 - Supports two modes: `SKIP_EXISTING` (default, create missing only) and `UPSERT` (create or update).
 - Supports `dryRun` mode: when `true`, performs read and validation only without executing writes.
-- Pushes job definitions, workflow definitions, pipeline definitions, file channels, and file templates.
-- Response includes `batchOperationId` for audit correlation, per-tenant results with per-item details (code, action, errorMessage).
+- Covers all 10 config types: job definitions, workflow definitions, pipeline definitions, file channels, file templates, resource queues, batch windows, business calendars, quota policies, alert routings.
+- Response includes `batchOperationId` for audit correlation, per-tenant results with per-item details (code, action, errorMessage) for each of the 10 config types.
 - Requires `ROLE_ADMIN`.
 - Requires `Idempotency-Key` header.
 
@@ -708,7 +744,7 @@ Deployment note:
 
 - `POST /api/console/config/tenant-copy`
 - Reads configuration from a source tenant and pushes it to one or more target tenants.
-- Request body: `sourceTenantId`, `targetTenantIds` (max 50), optional `configTypes` (subset of `JOB_DEFINITION`, `WORKFLOW_DEFINITION`, `PIPELINE_DEFINITION`, `FILE_CHANNEL`, `FILE_TEMPLATE`; empty means all), `mode` (default `SKIP_EXISTING`), `dryRun`.
+- Request body: `sourceTenantId`, `targetTenantIds` (max 50), optional `configTypes` (subset of `JOB_DEFINITION`, `WORKFLOW_DEFINITION`, `PIPELINE_DEFINITION`, `FILE_CHANNEL`, `FILE_TEMPLATE`, `RESOURCE_QUEUE`, `BATCH_WINDOW`, `BUSINESS_CALENDAR`, `QUOTA_POLICY`, `ALERT_ROUTING`; empty means all 10), `mode` (default `SKIP_EXISTING`), `dryRun`.
 - Internally reads source tenant's configs and delegates to the tenant-init logic.
 - Response format is identical to `tenant-init`.
 - Requires `ROLE_ADMIN`.

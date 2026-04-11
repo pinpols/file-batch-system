@@ -6,6 +6,4 @@ public record ConsoleRequestMetadata(
         String tenantId,
         String operatorId,
         String idempotencyKey,
-        String clientIp
-) {
-}
+        String clientIp) {}

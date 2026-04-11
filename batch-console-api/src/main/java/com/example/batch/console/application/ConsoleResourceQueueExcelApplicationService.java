@@ -4,18 +4,19 @@ import com.example.batch.console.web.request.ResourceQueueExcelApplyRequest;
 import com.example.batch.console.web.response.ConsoleResourceQueueExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleResourceQueueExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleResourceQueueExcelUploadResponse;
-import java.io.IOException;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * 资源队列 Excel 导入导出应用服务。
- */
+import java.io.IOException;
+
+/** 资源队列 Excel 导入导出应用服务。 */
 public interface ConsoleResourceQueueExcelApplicationService {
 
     /** 导出资源队列配置为 Excel。 */
-    ResponseEntity<InputStreamResource> exportResourceQueues(String tenantId, String queueCode, String queueType, Boolean enabled);
+    ResponseEntity<InputStreamResource> exportResourceQueues(
+            String tenantId, String queueCode, String queueType, Boolean enabled);
 
     /** 下载空白模板。 */
     ResponseEntity<InputStreamResource> downloadTemplate();
@@ -30,5 +31,6 @@ public interface ConsoleResourceQueueExcelApplicationService {
     ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
 
     /** 确认导入并更新资源队列配置。 */
-    ConsoleResourceQueueExcelApplyResponse apply(String uploadToken, ResourceQueueExcelApplyRequest request);
+    ConsoleResourceQueueExcelApplyResponse apply(
+            String uploadToken, ResourceQueueExcelApplyRequest request);
 }

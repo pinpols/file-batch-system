@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure;
 
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -41,19 +42,21 @@ public class ConsoleConfigCacheInvalidationService {
         if (!StringUtils.hasText(pattern)) {
             return;
         }
-        Runnable evict = () -> {
-            var keys = redisTemplate.keys(pattern);
-            if (keys != null && !keys.isEmpty()) {
-                redisTemplate.delete(keys);
-            }
-        };
+        Runnable evict =
+                () -> {
+                    var keys = redisTemplate.keys(pattern);
+                    if (keys != null && !keys.isEmpty()) {
+                        redisTemplate.delete(keys);
+                    }
+                };
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    evict.run();
-                }
-            });
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            evict.run();
+                        }
+                    });
             return;
         }
         evict.run();
@@ -64,12 +67,13 @@ public class ConsoleConfigCacheInvalidationService {
             return;
         }
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    redisTemplate.delete(key);
-                }
-            });
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            redisTemplate.delete(key);
+                        }
+                    });
             return;
         }
         redisTemplate.delete(key);

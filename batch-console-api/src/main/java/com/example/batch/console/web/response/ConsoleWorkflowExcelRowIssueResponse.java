@@ -8,6 +8,4 @@ public record ConsoleWorkflowExcelRowIssueResponse(
         String rowKey,
         String workflowCode,
         Integer workflowVersion,
-        List<String> messages
-) {
-}
+        List<String> messages) {}

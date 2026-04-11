@@ -11,6 +11,4 @@ public record AlertEmitRequest(
         String title,
         String detailJson,
         String resourceKey,
-        String traceId
-) {
-}
+        String traceId) {}

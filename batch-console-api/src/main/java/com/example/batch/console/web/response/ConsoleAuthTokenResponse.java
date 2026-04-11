@@ -10,6 +10,4 @@ public record ConsoleAuthTokenResponse(
         Instant expiresAt,
         String username,
         String tenantId,
-        Set<String> authorities
-) {
-}
+        Set<String> authorities) {}

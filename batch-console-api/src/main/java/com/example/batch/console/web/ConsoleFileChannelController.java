@@ -7,9 +7,11 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
 import com.example.batch.console.web.request.FileChannelCreateRequest;
 import com.example.batch.console.web.request.FileChannelUpdateRequest;
+
 import jakarta.validation.Valid;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,9 +25,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 文件通道（file_channel_config）CRUD REST 接口。
- */
+import java.util.Map;
+
+/** 文件通道（file_channel_config）CRUD REST 接口。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/file-channels")
@@ -38,22 +40,24 @@ public class ConsoleFileChannelController {
     /** 分页查询文件通道列表。 */
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
-    public CommonResponse<PageResponse<Map<String, Object>>> list(@Valid @ModelAttribute FileChannelQueryRequest request) {
+    public CommonResponse<PageResponse<Map<String, Object>>> list(
+            @Valid @ModelAttribute FileChannelQueryRequest request) {
         return responseFactory.success(fileChannelApplicationService.list(request));
     }
 
     /** 获取文件通道详情。 */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
-    public CommonResponse<Map<String, Object>> get(@PathVariable Long id,
-                                                    @RequestParam("tenantId") String tenantId) {
+    public CommonResponse<Map<String, Object>> get(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(fileChannelApplicationService.get(id, tenantId));
     }
 
     /** 新建文件通道。 */
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<Map<String, Object>> create(@Valid @RequestBody FileChannelCreateRequest request) {
+    public CommonResponse<Map<String, Object>> create(
+            @Valid @RequestBody FileChannelCreateRequest request) {
         return responseFactory.success(fileChannelApplicationService.create(request));
     }
 
@@ -61,16 +65,15 @@ public class ConsoleFileChannelController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
     public CommonResponse<Map<String, Object>> update(
-            @PathVariable Long id,
-            @Valid @RequestBody FileChannelUpdateRequest request) {
+            @PathVariable Long id, @Valid @RequestBody FileChannelUpdateRequest request) {
         return responseFactory.success(fileChannelApplicationService.update(id, request));
     }
 
     /** 删除文件通道。 */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<Void> delete(@PathVariable Long id,
-                                        @RequestParam("tenantId") String tenantId) {
+    public CommonResponse<Void> delete(
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
         fileChannelApplicationService.delete(id, tenantId);
         return responseFactory.success(null);
     }
@@ -78,9 +81,10 @@ public class ConsoleFileChannelController {
     /** 启用/禁用文件通道。 */
     @PostMapping("/{id}/toggle")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<Void> toggle(@PathVariable Long id,
-                                        @RequestParam("tenantId") String tenantId,
-                                        @RequestParam("enabled") Boolean enabled) {
+    public CommonResponse<Void> toggle(
+            @PathVariable Long id,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam("enabled") Boolean enabled) {
         fileChannelApplicationService.toggle(id, tenantId, enabled);
         return responseFactory.success(null);
     }

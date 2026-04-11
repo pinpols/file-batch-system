@@ -19,6 +19,4 @@ public record ConsoleConfigReleaseResponse(
         String createdBy,
         String updatedBy,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

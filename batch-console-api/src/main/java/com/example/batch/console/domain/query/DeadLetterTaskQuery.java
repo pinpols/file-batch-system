@@ -7,6 +7,4 @@ public record DeadLetterTaskQuery(
         String sourceType,
         String replayStatus,
         String traceId,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

@@ -1,6 +1,8 @@
 package com.example.batch.orchestrator.infrastructure.file;
 
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.utils.MinioBucketSupport;
+
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
@@ -8,13 +10,15 @@ import io.minio.RemoveObjectArgs;
 import io.minio.Result;
 import io.minio.http.Method;
 import io.minio.messages.Item;
-import com.example.batch.common.utils.MinioBucketSupport;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.stereotype.Component;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
@@ -24,39 +28,41 @@ public class MinioGovernanceStorage {
     private final MinioStorageProperties properties;
     private final MinioClient minioClient;
 
-    /**
-     * 治理任务只做对象清点和清理，不在这里承载业务编排。
-     */
-    public List<StorageObjectView> listObjects(String prefix, int limit, boolean includeTemporaryObjects) {
+    /** 治理任务只做对象清点和清理，不在这里承载业务编排。 */
+    public List<StorageObjectView> listObjects(
+            String prefix, int limit, boolean includeTemporaryObjects) {
         if (!ensureBucket()) {
             return List.of();
         }
         List<StorageObjectView> objects = new ArrayList<>();
         try {
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(properties.getBucket())
-                            .prefix(prefix == null ? "" : prefix)
-                            .recursive(true)
-                            .maxKeys(limit)
-                            .build()
-            );
+            Iterable<Result<Item>> results =
+                    minioClient.listObjects(
+                            ListObjectsArgs.builder()
+                                    .bucket(properties.getBucket())
+                                    .prefix(prefix == null ? "" : prefix)
+                                    .recursive(true)
+                                    .maxKeys(limit)
+                                    .build());
             for (Result<Item> result : results) {
                 if (objects.size() >= limit) {
                     break;
                 }
                 Item item = result.get();
                 String objectName = item.objectName();
-                if (!includeTemporaryObjects && (objectName.endsWith(".part") || objectName.startsWith("tmp/"))) {
+                if (!includeTemporaryObjects
+                        && (objectName.endsWith(".part") || objectName.startsWith("tmp/"))) {
                     continue;
                 }
-                objects.add(new StorageObjectView(
-                        properties.getBucket(),
-                        objectName,
-                        item.size(),
-                        item.etag(),
-                        item.lastModified() == null ? null : item.lastModified().toInstant()
-                ));
+                objects.add(
+                        new StorageObjectView(
+                                properties.getBucket(),
+                                objectName,
+                                item.size(),
+                                item.etag(),
+                                item.lastModified() == null
+                                        ? null
+                                        : item.lastModified().toInstant()));
             }
             return objects;
         } catch (Exception exception) {
@@ -73,8 +79,7 @@ public class MinioGovernanceStorage {
                     RemoveObjectArgs.builder()
                             .bucket(properties.getBucket())
                             .object(objectName)
-                            .build()
-            );
+                            .build());
         } catch (Exception exception) {
             throw new IllegalStateException("failed to remove object: " + objectName, exception);
         }
@@ -82,7 +87,8 @@ public class MinioGovernanceStorage {
 
     public String createPresignedDownloadUrl(String bucket, String objectName, int expirySeconds) {
         try {
-            String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
+            String targetBucket =
+                    bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
             if (!ensureBucket(targetBucket)) {
                 throw new IllegalStateException("minio bucket unavailable: " + targetBucket);
             }
@@ -92,10 +98,10 @@ public class MinioGovernanceStorage {
                             .bucket(targetBucket)
                             .object(objectName)
                             .expiry(Math.max(60, expirySeconds))
-                            .build()
-            );
+                            .build());
         } catch (Exception exception) {
-            throw new IllegalStateException("failed to create presigned url for object: " + objectName, exception);
+            throw new IllegalStateException(
+                    "failed to create presigned url for object: " + objectName, exception);
         }
     }
 
@@ -108,11 +114,5 @@ public class MinioGovernanceStorage {
     }
 
     public record StorageObjectView(
-            String bucket,
-            String objectName,
-            long size,
-            String etag,
-            Instant lastModified
-    ) {
-    }
+            String bucket, String objectName, long size, String etag, Instant lastModified) {}
 }

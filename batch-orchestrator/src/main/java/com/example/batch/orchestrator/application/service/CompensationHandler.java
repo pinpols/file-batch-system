@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import com.example.batch.orchestrator.domain.entity.CompensationCommandEntity;
+
 import java.util.Map;
 
 /**
@@ -11,8 +12,9 @@ import java.util.Map;
 @FunctionalInterface
 public interface CompensationHandler {
 
-    Map<String, Object> handle(CompensationSubmitCommand command,
-                               String commandNo,
-                               String traceId,
-                               CompensationCommandEntity entity);
+    Map<String, Object> handle(
+            CompensationSubmitCommand command,
+            String commandNo,
+            String traceId,
+            CompensationCommandEntity entity);
 }

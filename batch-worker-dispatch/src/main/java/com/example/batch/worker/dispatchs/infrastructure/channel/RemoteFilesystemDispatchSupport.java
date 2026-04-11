@@ -58,9 +58,7 @@ final class RemoteFilesystemDispatchSupport {
             }
             return finishResult(command, externalRequestId, receiptCode, "uploaded via NAS", target.toString());
         } catch (Exception ex) {
-            String externalRequestId = resolveExternalRequestId(command);
-            String receiptCode = resolveReceiptCode(command, externalRequestId);
-            return new DispatchResult(false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
+            return failResult(command, ex);
         }
     }
 
@@ -93,10 +91,14 @@ final class RemoteFilesystemDispatchSupport {
             }
             return finishResult(command, externalRequestId, receiptCode, "uploaded via OSS", "oss://" + bucket + "/" + objectName);
         } catch (Exception ex) {
-            String externalRequestId = resolveExternalRequestId(command);
-            String receiptCode = resolveReceiptCode(command, externalRequestId);
-            return new DispatchResult(false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
+            return failResult(command, ex);
         }
+    }
+
+    private static DispatchResult failResult(DispatchCommand command, Exception ex) {
+        String externalRequestId = resolveExternalRequestId(command);
+        String receiptCode = resolveReceiptCode(command, externalRequestId);
+        return new DispatchResult(false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
     }
 
     static DispatchChannelProbeResult probeNas(Map<String, Object> channelConfig) {

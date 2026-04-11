@@ -1,8 +1,10 @@
 package com.example.batch.orchestrator.domain.entity;
 
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
-import java.time.Instant;
+
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class JobPartitionEntity implements Stateful {
@@ -17,10 +19,10 @@ public class JobPartitionEntity implements Stateful {
     private String workerCode;
     private Instant leaseExpireAt;
     private Long version;
-    /**
-     * 分区生命周期内的业务重试次数。
-     */
+
+    /** 分区生命周期内的业务重试次数。 */
     private Integer retryCount;
+
     private String businessKey;
     private String idempotencyKey;
     private String inputSnapshot;

@@ -1,7 +1,8 @@
 package com.example.batch.orchestrator.domain.pipeline;
 
-import java.time.OffsetDateTime;
 import lombok.Data;
+
+import java.time.OffsetDateTime;
 
 @Data
 public class StepResult {

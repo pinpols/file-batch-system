@@ -2,27 +2,32 @@ package com.example.batch.console.service;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.console.domain.entity.ResourceTagEntity;
 import com.example.batch.console.repository.ConsoleResourceTagRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class ConsoleResourceTagService {
 
-    private static final Set<String> VALID_RESOURCE_TYPES = Set.of(
-            "JOB", "WORKFLOW", "FILE_CHANNEL", "FILE_TEMPLATE");
+    private static final Set<String> VALID_RESOURCE_TYPES =
+            Set.of("JOB", "WORKFLOW", "FILE_CHANNEL", "FILE_TEMPLATE");
 
     private final ConsoleResourceTagRepository repository;
     private final ConsoleTenantGuard tenantGuard;
 
-    public List<ResourceTagEntity> listByResource(String tenantId, String resourceType, String resourceCode) {
+    public List<ResourceTagEntity> listByResource(
+            String tenantId, String resourceType, String resourceCode) {
         return repository.findByResource(
                 tenantGuard.resolveTenant(tenantId),
                 validateResourceType(resourceType),
@@ -42,8 +47,13 @@ public class ConsoleResourceTagService {
     }
 
     @Transactional
-    public void upsert(String tenantId, String resourceType, String resourceCode,
-                       String tagKey, String tagValue, String operator) {
+    public void upsert(
+            String tenantId,
+            String resourceType,
+            String resourceCode,
+            String tagKey,
+            String tagValue,
+            String operator) {
         repository.upsert(
                 tenantGuard.resolveTenant(tenantId),
                 validateResourceType(resourceType),
@@ -71,12 +81,11 @@ public class ConsoleResourceTagService {
     }
 
     private String validateResourceType(String resourceType) {
-        if (resourceType == null || resourceType.isBlank()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "resourceType is required");
-        }
+        Guard.requireText(resourceType, "resourceType is required");
         String normalized = resourceType.toUpperCase(Locale.ROOT);
         if (!VALID_RESOURCE_TYPES.contains(normalized)) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT,
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT,
                     "resourceType must be one of: " + VALID_RESOURCE_TYPES);
         }
         return normalized;

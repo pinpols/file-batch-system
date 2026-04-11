@@ -13,6 +13,4 @@ public record ConsoleBusinessCalendarExcelPreviewResponse(
         Integer validHolidayRows,
         Integer invalidHolidayRows,
         List<ConsoleCalendarHolidayResponse> holidayRows,
-        List<ConsoleBusinessCalendarExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleBusinessCalendarExcelRowIssueResponse> issues) {}

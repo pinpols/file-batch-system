@@ -10,6 +10,4 @@ public record ConsoleResourceQueueExcelPreviewResponse(
         Integer validRows,
         Integer invalidRows,
         List<ConsoleResourceQueueResponse> rows,
-        List<ConsoleResourceQueueExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleResourceQueueExcelRowIssueResponse> issues) {}

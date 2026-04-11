@@ -1,8 +1,10 @@
 package com.example.batch.console.domain.query;
 
-import java.time.Instant;
 import com.example.batch.common.model.PageRequest;
+
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class AuditLogQuery {

@@ -1,14 +1,16 @@
 package com.example.batch.console.infrastructure.realtime;
 
-import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import java.util.UUID;
 
 /**
  * 控制台实时实例标识。
  *
- * <p>用于标记 Redis Pub/Sub 中事件的来源实例，避免同一实例处理自己刚写入的广播消息时重复推送。</p>
+ * <p>用于标记 Redis Pub/Sub 中事件的来源实例，避免同一实例处理自己刚写入的广播消息时重复推送。
  */
 @Component
 @Slf4j
@@ -25,15 +27,18 @@ public class ConsoleRealtimeInstanceIdProvider {
     }
 
     private String resolveInstanceId(Environment environment) {
-        String configured = firstNonBlank(
-                environment.getProperty("batch.console.instance-id"),
-                environment.getProperty("BATCH_CONSOLE_INSTANCE_ID")
-        );
+        String configured =
+                firstNonBlank(
+                        environment.getProperty("batch.console.instance-id"),
+                        environment.getProperty("BATCH_CONSOLE_INSTANCE_ID"));
         if (configured != null) {
             return configured;
         }
         String generated = UUID.randomUUID().toString();
-        log.warn("BATCH_CONSOLE_INSTANCE_ID is not configured; generated random console realtime instance id={}", generated);
+        log.warn(
+                "BATCH_CONSOLE_INSTANCE_ID is not configured; generated random console realtime"
+                    + " instance id={}",
+                generated);
         return generated;
     }
 

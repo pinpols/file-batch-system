@@ -16,6 +16,5 @@ public final class BatchStatusConstants {
     public static final String START = "START";
     public static final String END = "END";
 
-    private BatchStatusConstants() {
-    }
+    private BatchStatusConstants() {}
 }

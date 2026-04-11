@@ -1,5 +1,10 @@
 package com.example.batch.console.infrastructure;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
+import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.model.PageResponse;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.ConsolePipelineDefinitionApplicationService;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
@@ -8,10 +13,12 @@ import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.request.PipelineDefinitionSaveRequest;
 import com.example.batch.console.web.response.PipelineDefinitionDetailResponse;
 import com.example.batch.console.web.response.PipelineDefinitionDetailResponse.StepResponse;
-import com.example.batch.common.enums.ResultCode;
-import com.example.batch.common.exception.BizException;
-import com.example.batch.common.model.PageRequest;
-import com.example.batch.common.model.PageResponse;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -21,16 +28,12 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-/**
- * {@link ConsolePipelineDefinitionApplicationService} 的默认实现。
- */
+/** {@link ConsolePipelineDefinitionApplicationService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsolePipelineDefinitionApplicationService implements ConsolePipelineDefinitionApplicationService {
+public class DefaultConsolePipelineDefinitionApplicationService
+        implements ConsolePipelineDefinitionApplicationService {
 
     private final PipelineDefinitionMapper pipelineDefinitionMapper;
     private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
@@ -38,12 +41,20 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
     private final ConsoleRealtimeDomainEventPublisher realtimeEventPublisher;
 
     @Override
-    public PageResponse<Map<String, Object>> list(String tenantId, String jobCode, String pipelineType,
-                                                   Boolean enabled, int pageNo, int pageSize) {
+    public PageResponse<Map<String, Object>> list(
+            String tenantId,
+            String jobCode,
+            String pipelineType,
+            Boolean enabled,
+            int pageNo,
+            int pageSize) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         PageRequest pageRequest = new PageRequest(pageNo, pageSize);
-        long total = pipelineDefinitionMapper.countByQuery(resolved, jobCode, pipelineType, enabled);
-        List<Map<String, Object>> items = pipelineDefinitionMapper.selectByQuery(resolved, jobCode, pipelineType, enabled, pageRequest);
+        long total =
+                pipelineDefinitionMapper.countByQuery(resolved, jobCode, pipelineType, enabled);
+        List<Map<String, Object>> items =
+                pipelineDefinitionMapper.selectByQuery(
+                        resolved, jobCode, pipelineType, enabled, pageRequest);
         return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
     }
 
@@ -81,19 +92,39 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
     @Transactional
     public PipelineDefinitionDetailResponse update(Long id, PipelineDefinitionSaveRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-        Map<String, Object> existing = pipelineDefinitionMapper.selectById(tenantId, id);
-        if (existing == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "pipeline definition not found");
-        }
+        Map<String, Object> existing =
+                Guard.requireFound(
+                        pipelineDefinitionMapper.selectById(tenantId, id),
+                        "pipeline definition not found");
         Map<String, Object> params = new HashMap<>();
         params.put("tenant_id", tenantId);
         params.put("id", id);
-        params.put("pipeline_name", request.getPipelineName() != null ? request.getPipelineName() : existing.get("pipeline_name"));
-        params.put("pipeline_type", request.getPipelineType() != null ? request.getPipelineType() : existing.get("pipeline_type"));
-        params.put("biz_type", request.getBizType() != null ? request.getBizType() : existing.get("biz_type"));
-        params.put("worker_group", request.getWorkerGroup() != null ? request.getWorkerGroup() : existing.get("worker_group"));
-        params.put("enabled", request.getEnabled() != null ? request.getEnabled() : existing.get("enabled"));
-        params.put("description", request.getDescription() != null ? request.getDescription() : existing.get("description"));
+        params.put(
+                "pipeline_name",
+                request.getPipelineName() != null
+                        ? request.getPipelineName()
+                        : existing.get("pipeline_name"));
+        params.put(
+                "pipeline_type",
+                request.getPipelineType() != null
+                        ? request.getPipelineType()
+                        : existing.get("pipeline_type"));
+        params.put(
+                "biz_type",
+                request.getBizType() != null ? request.getBizType() : existing.get("biz_type"));
+        params.put(
+                "worker_group",
+                request.getWorkerGroup() != null
+                        ? request.getWorkerGroup()
+                        : existing.get("worker_group"));
+        params.put(
+                "enabled",
+                request.getEnabled() != null ? request.getEnabled() : existing.get("enabled"));
+        params.put(
+                "description",
+                request.getDescription() != null
+                        ? request.getDescription()
+                        : existing.get("description"));
         pipelineDefinitionMapper.update(params);
 
         pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);
@@ -116,7 +147,8 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
         publishRealtimeEvent(resolved, "pipeline-definition-toggled", response);
     }
 
-    private void insertSteps(Long pipelineDefinitionId, List<PipelineDefinitionSaveRequest.StepItem> steps) {
+    private void insertSteps(
+            Long pipelineDefinitionId, List<PipelineDefinitionSaveRequest.StepItem> steps) {
         if (steps == null) {
             return;
         }
@@ -129,16 +161,21 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
             stepParams.put("step_order", step.getStepOrder() != null ? step.getStepOrder() : 0);
             stepParams.put("impl_code", step.getImplCode());
             stepParams.put("step_params", step.getStepParams());
-            stepParams.put("timeout_seconds", step.getTimeoutSeconds() != null ? step.getTimeoutSeconds() : 0);
-            stepParams.put("retry_policy", step.getRetryPolicy() != null ? step.getRetryPolicy() : "NONE");
-            stepParams.put("retry_max_count", step.getRetryMaxCount() != null ? step.getRetryMaxCount() : 0);
+            stepParams.put(
+                    "timeout_seconds",
+                    step.getTimeoutSeconds() != null ? step.getTimeoutSeconds() : 0);
+            stepParams.put(
+                    "retry_policy", step.getRetryPolicy() != null ? step.getRetryPolicy() : "NONE");
+            stepParams.put(
+                    "retry_max_count",
+                    step.getRetryMaxCount() != null ? step.getRetryMaxCount() : 0);
             stepParams.put("enabled", step.getEnabled() != null ? step.getEnabled() : true);
             pipelineStepDefinitionMapper.insert(stepParams);
         }
     }
 
-    private PipelineDefinitionDetailResponse toDetailResponse(Map<String, Object> row,
-                                                               List<Map<String, Object>> stepRows) {
+    private PipelineDefinitionDetailResponse toDetailResponse(
+            Map<String, Object> row, List<Map<String, Object>> stepRows) {
         return new PipelineDefinitionDetailResponse(
                 toLong(row.get("id")),
                 (String) row.get("tenant_id"),
@@ -152,8 +189,7 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
                 (String) row.get("description"),
                 toInstant(row.get("created_at")),
                 toInstant(row.get("updated_at")),
-                stepRows.stream().map(this::toStepResponse).toList()
-        );
+                stepRows.stream().map(this::toStepResponse).toList());
     }
 
     private StepResponse toStepResponse(Map<String, Object> row) {
@@ -171,21 +207,23 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
                 toInt(row.get("retry_max_count")),
                 (Boolean) row.get("enabled"),
                 toInstant(row.get("created_at")),
-                toInstant(row.get("updated_at"))
-        );
+                toInstant(row.get("updated_at")));
     }
 
     private PipelineDefinitionDetailResponse loadDetailResponse(String tenantId, Long id) {
-        Map<String, Object> row = pipelineDefinitionMapper.selectById(tenantId, id);
-        if (row == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "pipeline definition not found");
-        }
-        List<Map<String, Object>> stepRows = pipelineStepDefinitionMapper.selectByPipelineDefinitionId(id);
+        Map<String, Object> row =
+                Guard.requireFound(
+                        pipelineDefinitionMapper.selectById(tenantId, id),
+                        "pipeline definition not found");
+        List<Map<String, Object>> stepRows =
+                pipelineStepDefinitionMapper.selectByPipelineDefinitionId(id);
         return toDetailResponse(row, stepRows);
     }
 
-    private void publishRealtimeEvent(String tenantId, String eventType, PipelineDefinitionDetailResponse response) {
-        realtimeEventPublisher.publishChanged(tenantId, "pipeline-definitions", eventType, response);
+    private void publishRealtimeEvent(
+            String tenantId, String eventType, PipelineDefinitionDetailResponse response) {
+        realtimeEventPublisher.publishChanged(
+                tenantId, "pipeline-definitions", eventType, response);
     }
 
     private static Long toLong(Object v) {
@@ -208,11 +246,12 @@ public class DefaultConsolePipelineDefinitionApplicationService implements Conso
             try {
                 return OffsetDateTime.parse(text).toInstant();
             } catch (DateTimeParseException ignoredToo) {
-                DateTimeFormatter[] formatters = new DateTimeFormatter[] {
-                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"),
-                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"),
-                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-                };
+                DateTimeFormatter[] formatters =
+                        new DateTimeFormatter[] {
+                            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"),
+                            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"),
+                            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                        };
                 for (DateTimeFormatter formatter : formatters) {
                     try {
                         return LocalDateTime.parse(text, formatter).toInstant(ZoneOffset.UTC);

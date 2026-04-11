@@ -8,13 +8,14 @@ public record AiPromptGateResult(
         AiPromptDecision decision,
         AiPromptCategory category,
         String reason,
-        String normalizedPrompt
-) {
+        String normalizedPrompt) {
     public static AiPromptGateResult approved(AiPromptCategory category, String normalizedPrompt) {
-        return new AiPromptGateResult(true, AiPromptDecision.APPROVED, category, null, normalizedPrompt);
+        return new AiPromptGateResult(
+                true, AiPromptDecision.APPROVED, category, null, normalizedPrompt);
     }
 
-    public static AiPromptGateResult rejected(AiPromptDecision decision, AiPromptCategory category, String reason) {
+    public static AiPromptGateResult rejected(
+            AiPromptDecision decision, AiPromptCategory category, String reason) {
         return new AiPromptGateResult(false, decision, category, reason, null);
     }
 }

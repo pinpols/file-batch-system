@@ -3,9 +3,7 @@ package com.example.batch.console.application;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 通知订阅管理应用服务：通知渠道 CRUD、订阅规则 CRUD、投递日志查询。
- */
+/** 通知订阅管理应用服务：通知渠道 CRUD、订阅规则 CRUD、投递日志查询。 */
 public interface ConsoleNotificationApplicationService {
 
     // ── 通知渠道 ──

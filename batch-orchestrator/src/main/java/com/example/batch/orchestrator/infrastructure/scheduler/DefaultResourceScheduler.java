@@ -15,43 +15,34 @@ import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 @Component
 @RequiredArgsConstructor
 public class DefaultResourceScheduler implements ResourceScheduler {
 
     private record FairnessWeights(
-            Integer priority,
-            String priorityBand,
-            int tenantWeight,
-            int queueWeight
-    ) {
-    }
+            Integer priority, String priorityBand, int tenantWeight, int queueWeight) {}
 
     private record FairnessLoad(
             int tenantActiveJobs,
             int tenantActivePartitions,
             int queueActiveJobs,
-            int queueActivePartitions
-    ) {
-    }
+            int queueActivePartitions) {}
 
-    private record FairnessScoreContext(
-            FairnessWeights weights,
-            FairnessLoad load
-    ) {
-    }
+    private record FairnessScoreContext(FairnessWeights weights, FairnessLoad load) {}
 
     private final ResourceQueueManager resourceQueueManager;
     private final ConcurrencyLimiter concurrencyLimiter;
@@ -62,9 +53,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     private final JobInstanceMapper jobInstanceMapper;
     private final JobPartitionMapper jobPartitionMapper;
 
-    /**
-     * 资源调度统一收口在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。
-     */
+    /** 资源调度统一收口在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
     @Override
     public ResourceSchedulingDecision schedule(ResourceSchedulingRequest request) {
         ResourceQueueRecord queue = resourceQueueManager.resolveQueue(request);
@@ -89,8 +78,8 @@ public class DefaultResourceScheduler implements ResourceScheduler {
                     queue,
                     priority,
                     priorityBand,
-                    ResourceCheck.waitForCapacity("NO_AVAILABLE_WORKER", "no online worker matches current route")
-            );
+                    ResourceCheck.waitForCapacity(
+                            "NO_AVAILABLE_WORKER", "no online worker matches current route"));
         }
         ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
         decision.setDispatchable(true);
@@ -106,11 +95,12 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         return decision;
     }
 
-    private ResourceSchedulingDecision blockedDecision(ResourceSchedulingRequest request,
-                                                       ResourceQueueRecord queue,
-                                                       Integer priority,
-                                                       String priorityBand,
-                                                       ResourceCheck check) {
+    private ResourceSchedulingDecision blockedDecision(
+            ResourceSchedulingRequest request,
+            ResourceQueueRecord queue,
+            Integer priority,
+            String priorityBand,
+            ResourceCheck check) {
         ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
         decision.setDispatchable(false);
         decision.setFailFast(check.failFast());
@@ -127,15 +117,20 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     }
 
     private ResourceCheck checkBatchWindow(ResourceSchedulingRequest request) {
-        if (request == null || !StringUtils.hasText(request.getTenantId()) || !StringUtils.hasText(request.getWindowCode())) {
+        if (request == null
+                || !StringUtils.hasText(request.getTenantId())
+                || !StringUtils.hasText(request.getWindowCode())) {
             return ResourceCheck.allow();
         }
-        BatchWindowRecord window = configCacheService.findEnabledBatchWindow(request.getTenantId(), request.getWindowCode());
+        BatchWindowRecord window =
+                configCacheService.findEnabledBatchWindow(
+                        request.getTenantId(), request.getWindowCode());
         if (window == null || isWithinWindow(window)) {
             return ResourceCheck.allow();
         }
         if ("FAIL".equalsIgnoreCase(window.outOfWindowAction())) {
-            return ResourceCheck.reject("OUT_OF_WINDOW", "current execution time is outside batch window");
+            return ResourceCheck.reject(
+                    "OUT_OF_WINDOW", "current execution time is outside batch window");
         }
         return ResourceCheck.waitForCapacity("OUT_OF_WINDOW_WAIT", "waiting for batch window");
     }
@@ -144,9 +139,10 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         if (window == null || window.startTime() == null || window.endTime() == null) {
             return true;
         }
-        ZoneId zoneId = StringUtils.hasText(window.timezone())
-                ? ZoneId.of(window.timezone())
-                : ZoneId.systemDefault();
+        ZoneId zoneId =
+                StringUtils.hasText(window.timezone())
+                        ? ZoneId.of(window.timezone())
+                        : ZoneId.systemDefault();
         LocalTime now = ZonedDateTime.now(zoneId).toLocalTime();
         LocalTime start = window.startTime();
         LocalTime end = window.endTime();
@@ -160,18 +156,20 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         return !now.isBefore(start) && !now.isAfter(end);
     }
 
-    private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+    private String resolveWorkerGroup(
+            ResourceSchedulingRequest request, ResourceQueueRecord queue) {
         if (request != null && StringUtils.hasText(request.getWorkerGroup())) {
             return request.getWorkerGroup();
         }
         return queue == null ? null : queue.workerGroup();
     }
 
-    private void enrichFairnessScore(ResourceSchedulingRequest request,
-                                     ResourceQueueRecord queue,
-                                     Integer priority,
-                                     String priorityBand,
-                                     ResourceSchedulingDecision decision) {
+    private void enrichFairnessScore(
+            ResourceSchedulingRequest request,
+            ResourceQueueRecord queue,
+            Integer priority,
+            String priorityBand,
+            ResourceSchedulingDecision decision) {
         if (decision == null) {
             return;
         }
@@ -181,15 +179,16 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         int tenantActivePartitions = resolveTenantActivePartitions(request);
         int queueActiveJobs = resolveQueueActiveJobs(request, queue);
         int queueActivePartitions = resolveQueueActivePartitions(request, queue);
-        long fairnessScore = resolveFairnessScore(new FairnessScoreContext(
-                new FairnessWeights(priority, priorityBand, tenantWeight, queueWeight),
-                new FairnessLoad(
-                        tenantActiveJobs,
-                        tenantActivePartitions,
-                        queueActiveJobs,
-                        queueActivePartitions
-                )
-        ));
+        long fairnessScore =
+                resolveFairnessScore(
+                        new FairnessScoreContext(
+                                new FairnessWeights(
+                                        priority, priorityBand, tenantWeight, queueWeight),
+                                new FairnessLoad(
+                                        tenantActiveJobs,
+                                        tenantActivePartitions,
+                                        queueActiveJobs,
+                                        queueActivePartitions)));
         decision.setTenantWeight(tenantWeight);
         decision.setQueueWeight(queueWeight);
         decision.setTenantActiveJobs(tenantActiveJobs);
@@ -228,39 +227,64 @@ public class DefaultResourceScheduler implements ResourceScheduler {
         if (request == null || !StringUtils.hasText(request.getTenantId())) {
             return 0;
         }
-        return (int) jobPartitionMapper.countActiveByTenant(request.getTenantId(), PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), PartitionStatus.RUNNING.code(), PartitionStatus.RETRYING.code());
+        return (int)
+                jobPartitionMapper.countActiveByTenant(
+                        request.getTenantId(),
+                        PartitionStatus.WAITING.code(),
+                        PartitionStatus.READY.code(),
+                        PartitionStatus.RUNNING.code(),
+                        PartitionStatus.RETRYING.code());
     }
 
-    private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
-        if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.queueCode())) {
+    private int resolveQueueActiveJobs(
+            ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+        if (request == null
+                || !StringUtils.hasText(request.getTenantId())
+                || queue == null
+                || !StringUtils.hasText(queue.queueCode())) {
             return 0;
         }
-        return (int) jobInstanceMapper.countActiveByTenantAndQueueCode(request.getTenantId(), queue.queueCode());
+        return (int)
+                jobInstanceMapper.countActiveByTenantAndQueueCode(
+                        request.getTenantId(), queue.queueCode());
     }
 
-    private int resolveQueueActivePartitions(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
-        if (request == null || !StringUtils.hasText(request.getTenantId()) || queue == null || !StringUtils.hasText(queue.workerGroup())) {
+    private int resolveQueueActivePartitions(
+            ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+        if (request == null
+                || !StringUtils.hasText(request.getTenantId())
+                || queue == null
+                || !StringUtils.hasText(queue.workerGroup())) {
             return 0;
         }
-        return (int) jobPartitionMapper.countActiveByTenantAndWorkerGroup(CountActiveByGroupParam.builder()
-                .tenantId(request.getTenantId()).workerGroup(queue.workerGroup())
-                .waitingStatus(PartitionStatus.WAITING.code()).readyStatus(PartitionStatus.READY.code())
-                .runningStatus(PartitionStatus.RUNNING.code()).retryingStatus(PartitionStatus.RETRYING.code()).build());
+        return (int)
+                jobPartitionMapper.countActiveByTenantAndWorkerGroup(
+                        CountActiveByGroupParam.builder()
+                                .tenantId(request.getTenantId())
+                                .workerGroup(queue.workerGroup())
+                                .waitingStatus(PartitionStatus.WAITING.code())
+                                .readyStatus(PartitionStatus.READY.code())
+                                .runningStatus(PartitionStatus.RUNNING.code())
+                                .retryingStatus(PartitionStatus.RETRYING.code())
+                                .build());
     }
 
     private long resolveFairnessScore(FairnessScoreContext context) {
         FairnessWeights weights = context.weights();
         FairnessLoad load = context.load();
-        long bandWeight = switch (weights.priorityBand() == null ? "" : weights.priorityBand()) {
-            case "HIGH" -> 300L;
-            case "MEDIUM" -> 200L;
-            default -> 100L;
-        };
-        int normalizedPriority = weights.priority() == null ? 5 : Math.max(1, Math.min(weights.priority(), 9));
-        long loadPenalty = (long) load.tenantActiveJobs()
-                + load.tenantActivePartitions()
-                + load.queueActiveJobs()
-                + load.queueActivePartitions();
+        long bandWeight =
+                switch (weights.priorityBand() == null ? "" : weights.priorityBand()) {
+                    case "HIGH" -> 300L;
+                    case "MEDIUM" -> 200L;
+                    default -> 100L;
+                };
+        int normalizedPriority =
+                weights.priority() == null ? 5 : Math.max(1, Math.min(weights.priority(), 9));
+        long loadPenalty =
+                (long) load.tenantActiveJobs()
+                        + load.tenantActivePartitions()
+                        + load.queueActiveJobs()
+                        + load.queueActivePartitions();
         return bandWeight * 10_000L
                 + (long) normalizedPriority * 1_000L
                 + (long) weights.tenantWeight() * 100L

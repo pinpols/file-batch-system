@@ -1,9 +1,10 @@
 package com.example.batch.orchestrator.domain.entity;
 
-import java.time.LocalTime;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+
+import java.time.LocalTime;
 
 @Table(schema = "batch", value = "business_calendar")
 public record BusinessCalendarRecord(
@@ -18,5 +19,4 @@ public record BusinessCalendarRecord(
         @Column("cutoff_time") LocalTime cutoffTime,
         @Column("late_arrival_tolerance_min") Integer lateArrivalToleranceMin,
         @Column("sla_offset_min") Integer slaOffsetMin,
-        @Column("enabled") Boolean enabled
-) {}
+        @Column("enabled") Boolean enabled) {}

@@ -21,6 +21,4 @@ public record BatchEventMessage(
         String key,
         Instant eventTime,
         Map<String, Object> payload,
-        Map<String, Object> ext
-) {
-}
+        Map<String, Object> ext) {}

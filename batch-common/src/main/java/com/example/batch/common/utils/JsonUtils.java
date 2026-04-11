@@ -7,8 +7,7 @@ public final class JsonUtils {
 
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
-    private JsonUtils() {
-    }
+    private JsonUtils() {}
 
     public static String toJson(Object value) {
         try {

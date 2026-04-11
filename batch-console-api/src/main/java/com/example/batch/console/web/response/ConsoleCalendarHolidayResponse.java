@@ -8,6 +8,4 @@ public record ConsoleCalendarHolidayResponse(
         LocalDate bizDate,
         String dayType,
         String holidayName,
-        String description
-) {
-}
+        String description) {}

@@ -1,10 +1,6 @@
 package com.example.batch.orchestrator.domain.pipeline;
 
-public record StepOrderModel(
-        String jobCode,
-        String stepCode,
-        Integer stepOrder
-) {
+public record StepOrderModel(String jobCode, String stepCode, Integer stepOrder) {
     public String getJobCode() {
         return jobCode;
     }

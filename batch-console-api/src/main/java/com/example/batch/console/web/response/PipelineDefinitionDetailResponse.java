@@ -16,8 +16,7 @@ public record PipelineDefinitionDetailResponse(
         String description,
         Instant createdAt,
         Instant updatedAt,
-        List<StepResponse> steps
-) {
+        List<StepResponse> steps) {
     public record StepResponse(
             Long id,
             Long pipelineDefinitionId,
@@ -32,6 +31,5 @@ public record PipelineDefinitionDetailResponse(
             Integer retryMaxCount,
             Boolean enabled,
             Instant createdAt,
-            Instant updatedAt
-    ) {}
+            Instant updatedAt) {}
 }

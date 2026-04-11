@@ -12,6 +12,4 @@ public record ConsolePipelineDefinitionExcelPreviewResponse(
         Integer validStepRows,
         Integer invalidStepRows,
         List<PipelineDefinitionDetailResponse> pipelines,
-        List<ConsolePipelineDefinitionExcelRowIssueResponse> issues
-) {
-}
+        List<ConsolePipelineDefinitionExcelRowIssueResponse> issues) {}

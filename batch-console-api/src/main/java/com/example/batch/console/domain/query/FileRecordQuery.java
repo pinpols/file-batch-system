@@ -1,7 +1,8 @@
 package com.example.batch.console.domain.query;
 
-import java.time.Instant;
 import com.example.batch.common.model.PageRequest;
+
+import java.time.Instant;
 
 public record FileRecordQuery(
         String tenantId,
@@ -12,6 +13,4 @@ public record FileRecordQuery(
         String traceId,
         Instant fromTime,
         Instant toTime,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

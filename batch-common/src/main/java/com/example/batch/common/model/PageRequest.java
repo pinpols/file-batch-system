@@ -1,9 +1,6 @@
 package com.example.batch.common.model;
 
-public record PageRequest(
-        int pageNo,
-        int pageSize
-) {
+public record PageRequest(int pageNo, int pageSize) {
     public PageRequest {
         if (pageNo < 1) {
             pageNo = 1;

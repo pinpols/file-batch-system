@@ -1,7 +1,8 @@
 package com.example.batch.trigger.support;
 
-import java.time.LocalTime;
 import lombok.Data;
+
+import java.time.LocalTime;
 
 @Data
 public class TriggerCalendarConfig {

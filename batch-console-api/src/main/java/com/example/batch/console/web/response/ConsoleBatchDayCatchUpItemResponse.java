@@ -5,6 +5,4 @@ public record ConsoleBatchDayCatchUpItemResponse(
         String actionType,
         String referenceNo,
         String triggerType,
-        String requestStatus
-) {
-}
+        String requestStatus) {}

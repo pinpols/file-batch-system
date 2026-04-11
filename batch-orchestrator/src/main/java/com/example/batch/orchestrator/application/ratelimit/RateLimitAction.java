@@ -4,4 +4,3 @@ public enum RateLimitAction {
     LAUNCH,
     DISPATCH_RELEASE
 }
-

@@ -1,9 +1,10 @@
 package com.example.batch.orchestrator.application.service;
 
-import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
-import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
-import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -15,7 +16,8 @@ public interface TaskExecutionService {
 
     boolean renewTaskLease(String tenantId, Long taskId, String workerCode);
 
-    JobTaskEntity updateTaskStatus(String tenantId, Long taskId, String taskStatus, String errorCode, String errorMessage);
+    JobTaskEntity updateTaskStatus(
+            String tenantId, Long taskId, String taskStatus, String errorCode, String errorMessage);
 
     JobExecutionLogEntity appendLog(JobExecutionLogEntity log);
 
@@ -25,7 +27,8 @@ public interface TaskExecutionService {
 
     WorkflowNodeRunEntity recordNodeRunReady(Long workflowRunId, String nodeCode, String nodeType);
 
-    WorkflowNodeRunEntity recordNodeRunStart(Long workflowRunId, String nodeCode, String nodeType, Instant startedAt);
+    WorkflowNodeRunEntity recordNodeRunStart(
+            Long workflowRunId, String nodeCode, String nodeType, Instant startedAt);
 
     WorkflowNodeRunEntity recordNodeRunFinish(TaskOutcomeService.NodeRunFinishCommand command);
 

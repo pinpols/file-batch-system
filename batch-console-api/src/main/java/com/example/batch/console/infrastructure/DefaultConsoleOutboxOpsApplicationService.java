@@ -6,16 +6,20 @@ import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ConsoleOutboxCleanupResponse;
 import com.example.batch.console.web.response.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.web.response.ConsoleOutboxStatsResponse;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleOutboxOpsApplicationService implements ConsoleOutboxOpsApplicationService {
+public class DefaultConsoleOutboxOpsApplicationService
+        implements ConsoleOutboxOpsApplicationService {
 
     private final ConsoleTenantGuard tenantGuard;
     private final OutboxEventMapper outboxEventMapper;

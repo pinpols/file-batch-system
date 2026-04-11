@@ -1,12 +1,15 @@
 package com.example.batch.orchestrator.controller;
 
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/internal/orchestrator/drain")

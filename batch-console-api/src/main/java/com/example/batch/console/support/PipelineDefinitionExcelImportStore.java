@@ -6,7 +6,11 @@ import java.util.Map;
 
 public interface PipelineDefinitionExcelImportStore {
 
-    String save(String fileName, String tenantId, List<Map<String, String>> pipelineRows, List<Map<String, String>> stepRows);
+    String save(
+            String fileName,
+            String tenantId,
+            List<Map<String, String>> pipelineRows,
+            List<Map<String, String>> stepRows);
 
     ExcelImportSession get(String uploadToken);
 
@@ -17,7 +21,5 @@ public interface PipelineDefinitionExcelImportStore {
             String tenantId,
             Instant uploadedAt,
             List<Map<String, String>> pipelineRows,
-            List<Map<String, String>> stepRows
-    ) {
-    }
+            List<Map<String, String>> stepRows) {}
 }

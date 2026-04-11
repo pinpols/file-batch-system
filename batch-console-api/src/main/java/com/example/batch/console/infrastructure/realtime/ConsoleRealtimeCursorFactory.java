@@ -1,8 +1,9 @@
 package com.example.batch.console.infrastructure.realtime;
 
+import org.springframework.stereotype.Component;
+
 import java.time.Instant;
 import java.util.UUID;
-import org.springframework.stereotype.Component;
 
 @Component
 public class ConsoleRealtimeCursorFactory {

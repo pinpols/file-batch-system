@@ -12,6 +12,4 @@ public record ConsoleOutboxRetryLogResponse(
         String retryPolicy,
         Instant nextRetryAt,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

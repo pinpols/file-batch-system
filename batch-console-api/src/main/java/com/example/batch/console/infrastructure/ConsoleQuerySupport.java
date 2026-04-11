@@ -6,6 +6,7 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.support.ConsoleTenantGuard;
+
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -18,21 +19,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-/**
- * 控制台查询子服务的共享工具方法。
- */
+/** 控制台查询子服务的共享工具方法。 */
 final class ConsoleQuerySupport {
 
-    private ConsoleQuerySupport() {
-    }
+    private ConsoleQuerySupport() {}
 
-    static <S, T> PageResponse<T> page(PageRequest pageRequest, long total, List<S> rows, Function<S, T> mapper) {
+    static <S, T> PageResponse<T> page(
+            PageRequest pageRequest, long total, List<S> rows, Function<S, T> mapper) {
         return new PageResponse<>(
                 total,
                 pageRequest.pageNo(),
                 pageRequest.pageSize(),
-                rows.stream().map(mapper).toList()
-        );
+                rows.stream().map(mapper).toList());
     }
 
     static <T> T requireNotNull(T value, String message) {
@@ -53,7 +51,8 @@ final class ConsoleQuerySupport {
         try {
             return Instant.parse(value);
         } catch (DateTimeParseException exception) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must be ISO-8601 datetime");
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT, fieldName + " must be ISO-8601 datetime");
         }
     }
 
@@ -74,7 +73,8 @@ final class ConsoleQuerySupport {
         try {
             return LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant();
         } catch (DateTimeParseException exception) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT,
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT,
                     fieldName + " must be ISO-8601 datetime, yyyy-MM-dd HH:mm:ss, or yyyy-MM-dd");
         }
     }

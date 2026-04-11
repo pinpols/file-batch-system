@@ -1,17 +1,20 @@
 package com.example.batch.orchestrator.infrastructure.redis;
 
 import com.example.batch.common.redis.BatchRedisKeys;
+import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.example.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -23,10 +26,11 @@ public class FileGovernanceMetricsCacheService {
     private final FileGovernanceRepository fileGovernanceRepository;
     private final ObjectMapper objectMapper;
 
-    public Map<String, Object> load(String tenantId,
-                                    long arrivalThresholdSeconds,
-                                    long processingThresholdSeconds,
-                                    int sampleSize) {
+    public Map<String, Object> load(
+            String tenantId,
+            long arrivalThresholdSeconds,
+            long processingThresholdSeconds,
+            int sampleSize) {
         if (!StringUtils.hasText(tenantId)) {
             return Map.of();
         }
@@ -35,25 +39,35 @@ public class FileGovernanceMetricsCacheService {
         if (!cached.isEmpty()) {
             return toResponse(cached);
         }
-        Map<String, Object> computed = compute(tenantId, arrivalThresholdSeconds, processingThresholdSeconds, sampleSize);
+        Map<String, Object> computed =
+                compute(tenantId, arrivalThresholdSeconds, processingThresholdSeconds, sampleSize);
         write(tenantId, computed);
         return computed;
     }
 
-    public Map<String, Object> compute(String tenantId,
-                                       long arrivalThresholdSeconds,
-                                       long processingThresholdSeconds,
-                                       int sampleSize) {
-        long arrivalCount = fileGovernanceRepository.countArrivalDelayViolations(tenantId, arrivalThresholdSeconds);
+    public Map<String, Object> compute(
+            String tenantId,
+            long arrivalThresholdSeconds,
+            long processingThresholdSeconds,
+            int sampleSize) {
+        long arrivalCount =
+                fileGovernanceRepository.countArrivalDelayViolations(
+                        tenantId, arrivalThresholdSeconds);
         long arrivalMax = fileGovernanceRepository.maxArrivalDelaySeconds(tenantId);
-        long processingCount = fileGovernanceRepository.countProcessingDelayViolations(tenantId, processingThresholdSeconds);
+        long processingCount =
+                fileGovernanceRepository.countProcessingDelayViolations(
+                        tenantId, processingThresholdSeconds);
         long processingMax = fileGovernanceRepository.maxProcessingDelaySeconds(tenantId);
-        List<Map<String, Object>> arrivalSamples = arrivalCount > 0
-                ? fileGovernanceRepository.selectArrivalDelaySamples(tenantId, arrivalThresholdSeconds, sampleSize)
-                : List.of();
-        List<Map<String, Object>> processingSamples = processingCount > 0
-                ? fileGovernanceRepository.selectProcessingDelaySamples(tenantId, processingThresholdSeconds, sampleSize)
-                : List.of();
+        List<Map<String, Object>> arrivalSamples =
+                arrivalCount > 0
+                        ? fileGovernanceRepository.selectArrivalDelaySamples(
+                                tenantId, arrivalThresholdSeconds, sampleSize)
+                        : List.of();
+        List<Map<String, Object>> processingSamples =
+                processingCount > 0
+                        ? fileGovernanceRepository.selectProcessingDelaySamples(
+                                tenantId, processingThresholdSeconds, sampleSize)
+                        : List.of();
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("tenantId", tenantId);
         response.put("arrivalDelayViolations", arrivalCount);
@@ -76,7 +90,11 @@ public class FileGovernanceMetricsCacheService {
 
     private Map<String, Object> toResponse(Map<Object, Object> cached) {
         Map<String, Object> response = new LinkedHashMap<>();
-        cached.forEach((key, value) -> response.put(String.valueOf(key), readJson(String.valueOf(key), String.valueOf(value))));
+        cached.forEach(
+                (key, value) ->
+                        response.put(
+                                String.valueOf(key),
+                                readJson(String.valueOf(key), String.valueOf(value))));
         return response;
     }
 
@@ -84,7 +102,8 @@ public class FileGovernanceMetricsCacheService {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Failed to serialize file governance metrics field: " + key, exception);
+            throw new IllegalStateException(
+                    "Failed to serialize file governance metrics field: " + key, exception);
         }
     }
 
@@ -92,12 +111,13 @@ public class FileGovernanceMetricsCacheService {
         try {
             return switch (key) {
                 case "arrivalDelaySamples", "processingDelaySamples" ->
-                        objectMapper.readValue(value, new TypeReference<List<Map<String, Object>>>() {
-                        });
+                        objectMapper.readValue(
+                                value, new TypeReference<List<Map<String, Object>>>() {});
                 default -> objectMapper.readValue(value, Object.class);
             };
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Failed to deserialize file governance metrics field: " + key, exception);
+            throw new IllegalStateException(
+                    "Failed to deserialize file governance metrics field: " + key, exception);
         }
     }
 }

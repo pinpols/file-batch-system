@@ -1,35 +1,39 @@
 package com.example.batch.console.infrastructure;
 
+import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.ConsoleTextSanitizer;
+import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.application.ConsoleFileApplicationService;
 import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.CompensationCommandRequest;
+import com.example.batch.console.web.request.ConsoleCatchUpApprovalRequest;
 import com.example.batch.console.web.request.DeadLetterReplayRequest;
 import com.example.batch.console.web.request.PresignDownloadFileRequest;
 import com.example.batch.console.web.response.ConsoleBatchApprovalResultResponse;
 import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
-import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.common.enums.ResultCode;
-import com.example.batch.common.exception.BizException;
-import com.example.batch.common.utils.ConsoleTextSanitizer;
-import com.example.batch.common.utils.JsonUtils;
-import java.util.ArrayList;
-import java.util.List;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * {@link com.example.batch.console.application.ConsoleApprovalApplicationService} 的默认实现：
- * 编排器审批 HTTP 调用，并在涉及文件/作业联动时委托其他应用服务。
+ * {@link com.example.batch.console.application.ConsoleApprovalApplicationService} 的默认实现： 编排器审批 HTTP
+ * 调用，并在涉及文件/作业联动时委托其他应用服务。
  */
 @Service
 @RequiredArgsConstructor
@@ -51,30 +55,44 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         }
         approveRemote(tenantId, approvalNo, operatorId, reason);
         String actionType = record.getActionType();
-        String result = switch (actionType) {
-            case "COMPENSATION" -> {
-                CompensationCommandRequest request = JsonUtils.fromJson(record.getPayloadJson(), CompensationCommandRequest.class);
-                request.setApprovalId(approvalNo);
-                yield consoleJobApplicationService.compensation(request, approvalNo);
-            }
-            case "DLQ_REPLAY" -> {
-                DeadLetterReplayRequest request = JsonUtils.fromJson(record.getPayloadJson(), DeadLetterReplayRequest.class);
-                request.setApprovalId(approvalNo);
-                yield consoleJobApplicationService.replayDeadLetter(request, approvalNo);
-            }
-            case "DOWNLOAD" -> {
-                PresignDownloadFileRequest request = JsonUtils.fromJson(record.getPayloadJson(), PresignDownloadFileRequest.class);
-                request.setApprovalId(approvalNo);
-                ConsolePresignDownloadResponse downloadResponse = consoleFileApplicationService.presignDownload(request, approvalNo);
-                yield downloadResponse == null ? null : downloadResponse.downloadUrl();
-            }
-            case "CATCH_UP" -> {
-                ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(record.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
-                request.setApprovalId(approvalNo);
-                yield consoleJobApplicationService.approveCatchUp(request, approvalNo);
-            }
-            default -> throw new BizException(ResultCode.INVALID_ARGUMENT, "unsupported approval action: " + actionType);
-        };
+        String result =
+                switch (actionType) {
+                    case "COMPENSATION" -> {
+                        CompensationCommandRequest request =
+                                JsonUtils.fromJson(
+                                        record.getPayloadJson(), CompensationCommandRequest.class);
+                        request.setApprovalId(approvalNo);
+                        yield consoleJobApplicationService.compensation(request, approvalNo);
+                    }
+                    case "DLQ_REPLAY" -> {
+                        DeadLetterReplayRequest request =
+                                JsonUtils.fromJson(
+                                        record.getPayloadJson(), DeadLetterReplayRequest.class);
+                        request.setApprovalId(approvalNo);
+                        yield consoleJobApplicationService.replayDeadLetter(request, approvalNo);
+                    }
+                    case "DOWNLOAD" -> {
+                        PresignDownloadFileRequest request =
+                                JsonUtils.fromJson(
+                                        record.getPayloadJson(), PresignDownloadFileRequest.class);
+                        request.setApprovalId(approvalNo);
+                        ConsolePresignDownloadResponse downloadResponse =
+                                consoleFileApplicationService.presignDownload(request, approvalNo);
+                        yield downloadResponse == null ? null : downloadResponse.downloadUrl();
+                    }
+                    case "CATCH_UP" -> {
+                        ConsoleCatchUpApprovalRequest request =
+                                JsonUtils.fromJson(
+                                        record.getPayloadJson(),
+                                        ConsoleCatchUpApprovalRequest.class);
+                        request.setApprovalId(approvalNo);
+                        yield consoleJobApplicationService.approveCatchUp(request, approvalNo);
+                    }
+                    default ->
+                            throw new BizException(
+                                    ResultCode.INVALID_ARGUMENT,
+                                    "unsupported approval action: " + actionType);
+                };
         markExecutedRemote(tenantId, approvalNo);
         return result;
     }
@@ -86,10 +104,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     }
 
     @Override
-    public List<ConsoleBatchApprovalResultResponse> batchApprove(String tenantId,
-                                                                 List<String> approvalNos,
-                                                                           String operatorId,
-                                                                           String reason) {
+    public List<ConsoleBatchApprovalResultResponse> batchApprove(
+            String tenantId, List<String> approvalNos, String operatorId, String reason) {
         if (approvalNos == null || approvalNos.isEmpty()) {
             return List.of();
         }
@@ -99,17 +115,19 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 approve(tenantId, approvalNo, operatorId, reason);
                 results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "APPROVED"));
             } catch (Exception ex) {
-                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
+                results.add(
+                        new ConsoleBatchApprovalResultResponse(
+                                approvalNo,
+                                false,
+                                ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
             }
         }
         return List.copyOf(results);
     }
 
     @Override
-    public List<ConsoleBatchApprovalResultResponse> batchReject(String tenantId,
-                                                                List<String> approvalNos,
-                                                                          String operatorId,
-                                                                          String reason) {
+    public List<ConsoleBatchApprovalResultResponse> batchReject(
+            String tenantId, List<String> approvalNos, String operatorId, String reason) {
         if (approvalNos == null || approvalNos.isEmpty()) {
             return List.of();
         }
@@ -119,66 +137,92 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                 reject(tenantId, approvalNo, operatorId, reason);
                 results.add(new ConsoleBatchApprovalResultResponse(approvalNo, true, "REJECTED"));
             } catch (Exception ex) {
-                results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
+                results.add(
+                        new ConsoleBatchApprovalResultResponse(
+                                approvalNo,
+                                false,
+                                ConsoleTextSanitizer.safeDisplay(ex.getMessage(), 512)));
             }
         }
         return List.copyOf(results);
     }
 
     private ApprovalRecordResponse loadApproval(String tenantId, String approvalNo) {
-        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-        ApprovalRecordResponse response = restClient.get()
-                .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
-                .retrieve()
-                .body(ApprovalRecordResponse.class);
-        if (response == null || response.getRecord() == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "approval request not found");
-        }
+        RestClient restClient =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
+        ApprovalRecordResponse response =
+                restClient
+                        .get()
+                        .uri(
+                                "/internal/approvals/{approvalNo}?tenantId={tenantId}",
+                                approvalNo,
+                                tenantId)
+                        .retrieve()
+                        .body(ApprovalRecordResponse.class);
+        Guard.requireFound(response == null || response.getRecord(), "approval request not found");
         return response;
     }
 
-    private void approveRemote(String tenantId, String approvalNo, String operatorId, String reason) {
+    private void approveRemote(
+            String tenantId, String approvalNo, String operatorId, String reason) {
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-        restClient.post()
+        RestClient restClient =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
+        restClient
+                .post()
                 .uri("/internal/approvals/{approvalNo}/approve", approvalNo)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-                .body(new ApprovalActionRequest(tenantId,
-                        ConsoleTextSanitizer.safeInput(operatorId, 64),
-                        ConsoleTextSanitizer.safeInput(reason, 512)))
+                .body(
+                        new ApprovalActionRequest(
+                                tenantId,
+                                ConsoleTextSanitizer.safeInput(operatorId, 64),
+                                ConsoleTextSanitizer.safeInput(reason, 512)))
                 .retrieve()
                 .toBodilessEntity();
     }
 
-    private void rejectRemote(String tenantId, String approvalNo, String operatorId, String reason) {
+    private void rejectRemote(
+            String tenantId, String approvalNo, String operatorId, String reason) {
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-        restClient.post()
+        RestClient restClient =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
+        restClient
+                .post()
                 .uri("/internal/approvals/{approvalNo}/reject", approvalNo)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, metadata.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, metadata.traceId())
-                .body(new ApprovalActionRequest(tenantId,
-                        ConsoleTextSanitizer.safeInput(operatorId, 64),
-                        ConsoleTextSanitizer.safeInput(reason, 512)))
+                .body(
+                        new ApprovalActionRequest(
+                                tenantId,
+                                ConsoleTextSanitizer.safeInput(operatorId, 64),
+                                ConsoleTextSanitizer.safeInput(reason, 512)))
                 .retrieve()
                 .toBodilessEntity();
     }
 
     private void markExecutedRemote(String tenantId, String approvalNo) {
-        RestClient restClient = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-        restClient.post()
+        RestClient restClient =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
+        restClient
+                .post()
                 .uri("/internal/approvals/{approvalNo}/executed", approvalNo)
                 .body(new ApprovalTenantRequest(tenantId))
                 .retrieve()
                 .toBodilessEntity();
     }
 
-    private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {
-    }
+    private record ApprovalActionRequest(String tenantId, String operatorId, String reason) {}
 
-    private record ApprovalTenantRequest(String tenantId) {
-    }
+    private record ApprovalTenantRequest(String tenantId) {}
 
     @Getter
     @Setter

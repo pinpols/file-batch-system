@@ -1,14 +1,16 @@
 package com.example.batch.console.infrastructure.realtime;
 
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+
+import java.time.Instant;
 
 /**
  * 控制台实时领域事件发布器。
  *
- * <p>它只负责发 Spring 应用事件，不直接碰 SSE。</p>
+ * <p>它只负责发 Spring 应用事件，不直接碰 SSE。
  */
 @Service
 @RequiredArgsConstructor
@@ -29,16 +31,17 @@ public class ConsoleRealtimeDomainEventPublisher {
         publish(tenantId, "ops-summary", "ops-summary-refresh-requested", null, true);
     }
 
-    private void publish(String tenantId, String stream, String eventType, Object data, boolean summaryRefresh) {
+    private void publish(
+            String tenantId, String stream, String eventType, Object data, boolean summaryRefresh) {
         // 这里只发布应用内事件，真正的 SSE 分发由 bridge 在事务提交后统一处理。
-        applicationEventPublisher.publishEvent(new ConsoleRealtimeDomainEvent(
-                tenantId,
-                stream,
-                eventType,
-                cursorFactory.nextCursor(),
-                data,
-                summaryRefresh,
-                Instant.now()
-        ));
+        applicationEventPublisher.publishEvent(
+                new ConsoleRealtimeDomainEvent(
+                        tenantId,
+                        stream,
+                        eventType,
+                        cursorFactory.nextCursor(),
+                        data,
+                        summaryRefresh,
+                        Instant.now()));
     }
 }

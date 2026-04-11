@@ -17,6 +17,4 @@ public record ConsoleAlertEventResponse(
         String traceId,
         String status,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

@@ -2,6 +2,7 @@ package com.example.batch.common.validation;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -9,8 +10,8 @@ import java.time.format.ResolverStyle;
 
 public class ValidBizDateValidator implements ConstraintValidator<ValidBizDate, String> {
 
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("uuuu-MM-dd")
-            .withResolverStyle(ResolverStyle.STRICT);
+    private static final DateTimeFormatter FMT =
+            DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
 
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
@@ -26,4 +27,3 @@ public class ValidBizDateValidator implements ConstraintValidator<ValidBizDate, 
         }
     }
 }
-

@@ -6,6 +6,4 @@ public record ConsolePipelineDefinitionExcelApplyResponse(
         Integer appliedPipelines,
         Integer insertedPipelines,
         Integer updatedPipelines,
-        Integer appliedSteps
-) {
-}
+        Integer appliedSteps) {}

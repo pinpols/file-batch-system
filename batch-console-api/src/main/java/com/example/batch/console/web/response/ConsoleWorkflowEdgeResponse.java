@@ -11,6 +11,4 @@ public record ConsoleWorkflowEdgeResponse(
         String conditionExpr,
         Boolean enabled,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

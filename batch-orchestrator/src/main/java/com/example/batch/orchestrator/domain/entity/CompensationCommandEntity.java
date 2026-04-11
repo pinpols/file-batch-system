@@ -1,8 +1,9 @@
 package com.example.batch.orchestrator.domain.entity;
 
+import lombok.Data;
+
 import java.time.Instant;
 import java.time.LocalDate;
-import lombok.Data;
 
 @Data
 public class CompensationCommandEntity {

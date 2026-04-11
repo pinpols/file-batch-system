@@ -1,7 +1,8 @@
 package com.example.batch.orchestrator.domain.entity;
 
-import java.time.Instant;
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class DeadLetterTaskEntity {

@@ -6,8 +6,11 @@ import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicatio
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.web.response.WorkflowDefinitionDetailResponse;
+
 import jakarta.validation.Valid;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,10 +33,11 @@ public class ConsoleWorkflowDefinitionController {
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+    @PreAuthorize(
+            "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN',"
+                + " 'ROLE_TENANT_USER')")
     public CommonResponse<WorkflowDefinitionDetailResponse> getById(
-            @PathVariable Long id,
-            @RequestParam("tenantId") String tenantId) {
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(workflowDefinitionApplicationService.getById(id, tenantId));
     }
 
@@ -47,8 +51,7 @@ public class ConsoleWorkflowDefinitionController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<WorkflowDefinitionDetailResponse> update(
-            @PathVariable Long id,
-            @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
+            @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
         return responseFactory.success(workflowDefinitionApplicationService.update(id, request));
     }
 
@@ -65,8 +68,7 @@ public class ConsoleWorkflowDefinitionController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<String> delete(
-            @PathVariable Long id,
-            @RequestParam("tenantId") String tenantId) {
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
         workflowDefinitionApplicationService.delete(id, tenantId);
         return responseFactory.success("OK");
     }
@@ -74,8 +76,7 @@ public class ConsoleWorkflowDefinitionController {
     @PostMapping("/{id}/validate")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
     public CommonResponse<DagValidationResult> validate(
-            @PathVariable Long id,
-            @RequestParam("tenantId") String tenantId) {
+            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(workflowDefinitionApplicationService.validate(id, tenantId));
     }
 }

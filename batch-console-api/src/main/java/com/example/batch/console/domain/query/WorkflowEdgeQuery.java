@@ -10,6 +10,4 @@ public record WorkflowEdgeQuery(
         String toNodeCode,
         String edgeType,
         Boolean enabled,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

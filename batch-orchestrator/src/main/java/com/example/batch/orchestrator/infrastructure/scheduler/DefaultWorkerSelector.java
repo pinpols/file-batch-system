@@ -7,12 +7,15 @@ import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 @Component
 @RequiredArgsConstructor
@@ -21,7 +24,8 @@ public class DefaultWorkerSelector implements WorkerSelector {
     private final WorkerRegistryRepository workerRegistryRepository;
 
     @Override
-    public WorkerRouteModel select(ResourceSchedulingRequest request, ResourceQueueRecord queue, Integer priority) {
+    public WorkerRouteModel select(
+            ResourceSchedulingRequest request, ResourceQueueRecord queue, Integer priority) {
         WorkerRouteModel route = new WorkerRouteModel();
         route.setWorkerType(request == null ? null : request.getWorkerType());
         route.setPriority(priority);
@@ -31,22 +35,26 @@ public class DefaultWorkerSelector implements WorkerSelector {
             return route;
         }
         String workerGroup = resolveWorkerGroup(request, queue);
-        List<WorkerRegistryRecord> candidates = StringUtils.hasText(workerGroup)
-                ? workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
-                request.getTenantId(),
-                workerGroup,
-                WorkerRegistryStatus.ONLINE.code()
-        )
-                : workerRegistryRepository.findByTenantIdAndStatus(
-                request.getTenantId(),
-                WorkerRegistryStatus.ONLINE.code()
-        );
-        WorkerRegistryRecord selected = candidates.stream()
-                .filter(candidate -> matchesResourceTag(candidate, queue))
-                .min(Comparator
-                        .comparingInt((WorkerRegistryRecord r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
-                        .thenComparing(WorkerRegistryRecord::heartbeatAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .orElse(null);
+        List<WorkerRegistryRecord> candidates =
+                StringUtils.hasText(workerGroup)
+                        ? workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
+                                request.getTenantId(),
+                                workerGroup,
+                                WorkerRegistryStatus.ONLINE.code())
+                        : workerRegistryRepository.findByTenantIdAndStatus(
+                                request.getTenantId(), WorkerRegistryStatus.ONLINE.code());
+        WorkerRegistryRecord selected =
+                candidates.stream()
+                        .filter(candidate -> matchesResourceTag(candidate, queue))
+                        .min(
+                                Comparator.comparingInt(
+                                                (WorkerRegistryRecord r) ->
+                                                        Optional.ofNullable(r.currentLoad())
+                                                                .orElse(0))
+                                        .thenComparing(
+                                                WorkerRegistryRecord::heartbeatAt,
+                                                Comparator.nullsLast(Comparator.reverseOrder())))
+                        .orElse(null);
         if (selected == null) {
             route.setAvailable(false);
             return route;
@@ -63,7 +71,8 @@ public class DefaultWorkerSelector implements WorkerSelector {
         return queue.resourceTag().equalsIgnoreCase(candidate.resourceTag());
     }
 
-    private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
+    private String resolveWorkerGroup(
+            ResourceSchedulingRequest request, ResourceQueueRecord queue) {
         if (request != null && StringUtils.hasText(request.getWorkerGroup())) {
             return request.getWorkerGroup();
         }

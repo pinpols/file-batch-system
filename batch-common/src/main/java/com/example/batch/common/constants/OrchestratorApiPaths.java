@@ -1,9 +1,6 @@
 package com.example.batch.common.constants;
 
-/**
- * Orchestrator 内部 HTTP API 路径常量集中定义。
- * 编排侧 Controller 与 worker 侧 HTTP 客户端共用。
- */
+/** Orchestrator 内部 HTTP API 路径常量集中定义。 编排侧 Controller 与 worker 侧 HTTP 客户端共用。 */
 public final class OrchestratorApiPaths {
 
     private OrchestratorApiPaths() {}

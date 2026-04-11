@@ -1,12 +1,13 @@
 package com.example.batch.console.mapper;
 
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
+
+import java.util.Map;
 
 public interface ConfigApprovalMapper {
 
-    Map<String, Object> selectLatestByRelease(@Param("tenantId") String tenantId,
-                                               @Param("releaseId") Long releaseId);
+    Map<String, Object> selectLatestByRelease(
+            @Param("tenantId") String tenantId, @Param("releaseId") Long releaseId);
 
     Map<String, Object> selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 

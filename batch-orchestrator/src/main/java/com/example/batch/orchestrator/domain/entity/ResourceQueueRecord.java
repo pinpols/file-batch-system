@@ -22,5 +22,4 @@ public record ResourceQueueRecord(
         @Column("burst_limit") Integer burstLimit,
         @Column("quota_reset_policy") String quotaResetPolicy,
         @Column("group_shared_max_running_jobs") Integer groupSharedMaxRunningJobs,
-        @Column("enabled") Boolean enabled
-) {}
+        @Column("enabled") Boolean enabled) {}

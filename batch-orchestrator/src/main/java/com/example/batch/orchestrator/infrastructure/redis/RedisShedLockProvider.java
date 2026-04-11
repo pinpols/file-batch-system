@@ -1,22 +1,27 @@
 package com.example.batch.orchestrator.infrastructure.redis;
 
 import com.example.batch.common.redis.BatchRedisKeys;
+
+import lombok.RequiredArgsConstructor;
+
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.SimpleLock;
+
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
-import net.javacrumbs.shedlock.core.LockConfiguration;
-import net.javacrumbs.shedlock.core.LockProvider;
-import net.javacrumbs.shedlock.core.SimpleLock;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 @RequiredArgsConstructor
 public class RedisShedLockProvider implements LockProvider {
 
-    private static final String UNLOCK_SCRIPT = """
+    private static final String UNLOCK_SCRIPT =
+            """
             if redis.call('GET', KEYS[1]) == ARGV[1] then
               return redis.call('DEL', KEYS[1])
             end
@@ -38,10 +43,11 @@ public class RedisShedLockProvider implements LockProvider {
         if (!Boolean.TRUE.equals(acquired)) {
             return Optional.empty();
         }
-        return Optional.of(() -> redisTemplate.execute(
-                new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class),
-                List.of(key),
-                token
-        ));
+        return Optional.of(
+                () ->
+                        redisTemplate.execute(
+                                new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class),
+                                List.of(key),
+                                token));
     }
 }

@@ -21,6 +21,4 @@ public record ConsoleApprovalCommandResponse(
         OffsetDateTime approvedAt,
         OffsetDateTime executedAt,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
-) {
-}
+        OffsetDateTime updatedAt) {}

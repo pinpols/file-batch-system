@@ -4,14 +4,14 @@ import com.example.batch.console.web.request.BusinessCalendarExcelApplyRequest;
 import com.example.batch.console.web.response.ConsoleBusinessCalendarExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleBusinessCalendarExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleBusinessCalendarExcelUploadResponse;
-import java.io.IOException;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * 工作日历 Excel 导入导出应用服务。
- */
+import java.io.IOException;
+
+/** 工作日历 Excel 导入导出应用服务。 */
 public interface ConsoleBusinessCalendarExcelApplicationService {
 
     /** 导出工作日历配置为 Excel（含日历与假日两个 sheet）。 */
@@ -30,5 +30,6 @@ public interface ConsoleBusinessCalendarExcelApplicationService {
     ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
 
     /** 确认导入并更新日历配置。 */
-    ConsoleBusinessCalendarExcelApplyResponse apply(String uploadToken, BusinessCalendarExcelApplyRequest request);
+    ConsoleBusinessCalendarExcelApplyResponse apply(
+            String uploadToken, BusinessCalendarExcelApplyRequest request);
 }

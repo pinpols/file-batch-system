@@ -19,6 +19,4 @@ public record ConsoleFileDispatchRecordResponse(
         Instant dispatchedAt,
         Instant ackAt,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

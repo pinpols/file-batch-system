@@ -1,17 +1,16 @@
 package com.example.batch.console.support;
 
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import java.time.Duration;
-import java.util.Locale;
-import java.util.concurrent.atomic.AtomicLong;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-/**
- * 控制台单会话注册表：按租户+用户名记录当前有效的会话版本。
- */
+import java.time.Duration;
+import java.util.Locale;
+
+/** 控制台单会话注册表：按租户+用户名记录当前有效的会话版本。 */
 @Service
 public class ConsoleSessionRegistry {
 
@@ -20,7 +19,8 @@ public class ConsoleSessionRegistry {
     private final StringRedisTemplate redisTemplate;
     private final ConsoleSecurityProperties securityProperties;
 
-    public ConsoleSessionRegistry(StringRedisTemplate redisTemplate, ConsoleSecurityProperties securityProperties) {
+    public ConsoleSessionRegistry(
+            StringRedisTemplate redisTemplate, ConsoleSecurityProperties securityProperties) {
         this.redisTemplate = redisTemplate;
         this.securityProperties = securityProperties;
     }
@@ -65,10 +65,7 @@ public class ConsoleSessionRegistry {
     }
 
     private String key(String username, String tenantId) {
-        return KEY_PREFIX
-                + normalize(tenantId)
-                + ":"
-                + normalize(username);
+        return KEY_PREFIX + normalize(tenantId) + ":" + normalize(username);
     }
 
     private String normalize(String value) {

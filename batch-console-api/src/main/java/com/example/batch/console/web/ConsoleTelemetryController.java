@@ -5,9 +5,12 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.FrontendTelemetryRequest;
 import com.example.batch.console.web.request.FrontendTelemetryRequest.Event;
+
 import jakarta.validation.Valid;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.slf4j.MDC;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,9 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 前端遥测日志收集：接收前端埋点，通过 slf4j + MDC 输出结构化日志，由 Promtail 采集进 Loki。
- */
+/** 前端遥测日志收集：接收前端埋点，通过 slf4j + MDC 输出结构化日志，由 Promtail 采集进 Loki。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/telemetry")
@@ -28,7 +29,8 @@ public class ConsoleTelemetryController {
     private final ConsoleResponseFactory responseFactory;
 
     @PostMapping("/events")
-    public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryRequest request) {
+    public CommonResponse<Void> receiveEvents(
+            @RequestBody @Valid FrontendTelemetryRequest request) {
         MDC.put("frontendApp", request.app());
         if (request.userId() != null) {
             MDC.put("frontendUserId", request.userId());
@@ -40,9 +42,18 @@ public class ConsoleTelemetryController {
                 try {
                     String propsStr = event.props() != null ? JsonUtils.toJson(event.props()) : "";
                     if ("error".equals(event.type())) {
-                        log.error("[frontend:error] {} | page={} props={}", event.name(), event.page(), propsStr);
+                        log.error(
+                                "[frontend:error] {} | page={} props={}",
+                                event.name(),
+                                event.page(),
+                                propsStr);
                     } else {
-                        log.info("[frontend:{}] {} | page={} props={}", event.type(), event.name(), event.page(), propsStr);
+                        log.info(
+                                "[frontend:{}] {} | page={} props={}",
+                                event.type(),
+                                event.name(),
+                                event.page(),
+                                propsStr);
                     }
                 } finally {
                     MDC.remove("frontendEventType");

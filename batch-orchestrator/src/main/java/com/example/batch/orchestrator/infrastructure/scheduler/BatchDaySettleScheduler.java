@@ -3,42 +3,43 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
-import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
-import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.repository.BatchDayInstanceRepository;
 import com.example.batch.orchestrator.service.LaunchService;
-import com.example.batch.common.logging.AuditLogConstants;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class BatchDaySettleScheduler {
 
-    private static final List<String> TRACKED_STATUSES = List.of(
-            "CUTOFF",
-            "IN_FLIGHT"
-    );
+    private static final List<String> TRACKED_STATUSES = List.of("CUTOFF", "IN_FLIGHT");
 
     private final BatchDayInstanceRepository batchDayInstanceRepository;
     private final JobInstanceMapper jobInstanceMapper;
@@ -59,7 +60,8 @@ public class BatchDaySettleScheduler {
         if (gracefulShutdown.isDraining()) {
             return;
         }
-        List<BatchDayInstanceRecord> candidates = batchDayInstanceRepository.findByDayStatusIn(TRACKED_STATUSES);
+        List<BatchDayInstanceRecord> candidates =
+                batchDayInstanceRepository.findByDayStatusIn(TRACKED_STATUSES);
         if (candidates == null || candidates.isEmpty()) {
             return;
         }
@@ -68,11 +70,9 @@ public class BatchDaySettleScheduler {
             if (candidate == null || candidate.id() == null) {
                 continue;
             }
-            BatchDayInstanceMetrics metrics = jobInstanceMapper.selectBatchDayMetrics(
-                    candidate.tenantId(),
-                    candidate.calendarCode(),
-                    candidate.bizDate()
-            );
+            BatchDayInstanceMetrics metrics =
+                    jobInstanceMapper.selectBatchDayMetrics(
+                            candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
             if (metrics == null) {
                 continue;
             }
@@ -81,10 +81,10 @@ public class BatchDaySettleScheduler {
             long totalCount = value(metrics.getTotalCount());
             if (activeCount > 0) {
                 if (!"IN_FLIGHT".equals(candidate.dayStatus())) {
-                        BatchDayInstanceRecord from = candidate;
-                        BatchDayInstanceRecord to = candidate.withDayStatus("IN_FLIGHT", now);
-                        batchDayInstanceRepository.save(to);
-                        appendBatchDayAuditLog(from, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES", now);
+                    BatchDayInstanceRecord from = candidate;
+                    BatchDayInstanceRecord to = candidate.withDayStatus("IN_FLIGHT", now);
+                    batchDayInstanceRepository.save(to);
+                    appendBatchDayAuditLog(from, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES");
                 }
                 continue;
             }
@@ -95,18 +95,24 @@ public class BatchDaySettleScheduler {
                 BatchDayInstanceRecord from = candidate;
                 BatchDayInstanceRecord to = candidate.withSettled("FAILED", now, now);
                 batchDayInstanceRepository.save(to);
-                appendBatchDayAuditLog(from, to, "BATCH_DAY_FAILED", now);
+                appendBatchDayAuditLog(from, to, "BATCH_DAY_FAILED");
                 driveCatchUp(candidate, now);
-                log.info("batch day settled as FAILED: tenantId={}, calendarCode={}, bizDate={}",
-                        candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
+                log.info(
+                        "batch day settled as FAILED: tenantId={}, calendarCode={}, bizDate={}",
+                        candidate.tenantId(),
+                        candidate.calendarCode(),
+                        candidate.bizDate());
                 continue;
             }
             BatchDayInstanceRecord from = candidate;
             BatchDayInstanceRecord to = candidate.withSettled("SETTLED", now, now);
             batchDayInstanceRepository.save(to);
-            appendBatchDayAuditLog(from, to, "BATCH_DAY_SETTLED", now);
-            log.info("batch day settled as SETTLED: tenantId={}, calendarCode={}, bizDate={}",
-                    candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
+            appendBatchDayAuditLog(from, to, "BATCH_DAY_SETTLED");
+            log.info(
+                    "batch day settled as SETTLED: tenantId={}, calendarCode={}, bizDate={}",
+                    candidate.tenantId(),
+                    candidate.calendarCode(),
+                    candidate.bizDate());
         }
     }
 
@@ -115,27 +121,29 @@ public class BatchDaySettleScheduler {
     }
 
     private void driveCatchUp(BatchDayInstanceRecord batchDay, Instant now) {
-        BusinessCalendarRecord calendar = configCacheService.findEnabledBusinessCalendar(
-                batchDay.tenantId(),
-                batchDay.calendarCode()
-        );
-        if (calendar == null || calendar.catchUpPolicy() == null || "NONE".equalsIgnoreCase(calendar.catchUpPolicy())) {
+        BusinessCalendarRecord calendar =
+                configCacheService.findEnabledBusinessCalendar(
+                        batchDay.tenantId(), batchDay.calendarCode());
+        if (calendar == null
+                || calendar.catchUpPolicy() == null
+                || "NONE".equalsIgnoreCase(calendar.catchUpPolicy())) {
             return;
         }
-        List<JobInstanceEntity> candidates = jobInstanceMapper.selectBatchDayCatchUpCandidates(
-                batchDay.tenantId(),
-                batchDay.calendarCode(),
-                batchDay.bizDate()
-        );
+        List<JobInstanceEntity> candidates =
+                jobInstanceMapper.selectBatchDayCatchUpCandidates(
+                        batchDay.tenantId(), batchDay.calendarCode(), batchDay.bizDate());
         if (candidates == null || candidates.isEmpty()) {
             return;
         }
         for (JobInstanceEntity candidate : candidates) {
-            if (candidate == null || candidate.getJobCode() == null || candidate.getJobCode().isBlank()) {
+            if (candidate == null
+                    || candidate.getJobCode() == null
+                    || candidate.getJobCode().isBlank()) {
                 continue;
             }
             String dedupKey = buildCatchUpDedupKey(batchDay, candidate);
-            TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndDedupKey(batchDay.tenantId(), dedupKey);
+            TriggerRequestEntity existing =
+                    triggerRequestMapper.selectByTenantAndDedupKey(batchDay.tenantId(), dedupKey);
             TriggerRequestEntity request = existing;
             if (request == null) {
                 request = new TriggerRequestEntity();
@@ -150,27 +158,31 @@ public class BatchDaySettleScheduler {
                 triggerRequestMapper.insert(request);
             }
             if ("AUTO".equalsIgnoreCase(calendar.catchUpPolicy()) && isLaunchable(request)) {
-                LaunchRequest launchRequest = new LaunchRequest(
-                        request.getTenantId(),
-                        request.getJobCode(),
-                        request.getBizDate(),
-                        TriggerType.CATCH_UP,
-                        request.getRequestId(),
-                        request.getTraceId(),
-                        buildCatchUpParams(batchDay, candidate, calendar, now)
-                );
+                LaunchRequest launchRequest =
+                        new LaunchRequest(
+                                request.getTenantId(),
+                                request.getJobCode(),
+                                request.getBizDate(),
+                                TriggerType.CATCH_UP,
+                                request.getRequestId(),
+                                request.getTraceId(),
+                                buildCatchUpParams(batchDay, candidate, calendar, now));
                 LaunchResponse response = launchService.launch(launchRequest);
-                log.info("batch day catch-up launched: tenantId={}, calendarCode={}, bizDate={}, jobCode={}, requestId={}, instanceNo={}",
-                        batchDay.tenantId(), batchDay.calendarCode(), batchDay.bizDate(), candidate.getJobCode(),
-                        request.getRequestId(), response == null ? null : response.instanceNo());
+                log.info(
+                        "batch day catch-up launched: tenantId={}, calendarCode={}, bizDate={},"
+                            + " jobCode={}, requestId={}, instanceNo={}",
+                        batchDay.tenantId(),
+                        batchDay.calendarCode(),
+                        batchDay.bizDate(),
+                        candidate.getJobCode(),
+                        request.getRequestId(),
+                        response == null ? null : response.instanceNo());
             }
         }
     }
 
-    private void appendBatchDayAuditLog(BatchDayInstanceRecord from,
-                                         BatchDayInstanceRecord to,
-                                         String reasonCode,
-                                         Instant now) {
+    private void appendBatchDayAuditLog(
+            BatchDayInstanceRecord from, BatchDayInstanceRecord to, String reasonCode) {
         JobExecutionLogEntity audit = new JobExecutionLogEntity();
         audit.setTenantId(from.tenantId());
         audit.setJobInstanceId(null);
@@ -180,17 +192,29 @@ public class BatchDaySettleScheduler {
         audit.setTraceId(null);
         audit.setMessage("BATCH_DAY_INSTANCE_STATUS_CHANGED");
         audit.setDetailRef(AuditLogConstants.DETAIL_REF_BATCH_DAY_INSTANCE);
-        audit.setExtraJson(JsonUtils.toJson(new LinkedHashMap<>() {{
-            put("calendarCode", from.calendarCode());
-            put("bizDate", from.bizDate() == null ? null : from.bizDate().toString());
-            put("fromDayStatus", from.dayStatus());
-            put("toDayStatus", to.dayStatus());
-            put("reasonCode", reasonCode);
-            put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE);
-            put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
-            put("cutoffAt", to.cutoffAt() == null ? null : to.cutoffAt().toString());
-            put("settledAt", to.settledAt() == null ? null : to.settledAt().toString());
-        }}));
+        audit.setExtraJson(
+                JsonUtils.toJson(
+                        new LinkedHashMap<>() {
+                            {
+                                put("calendarCode", from.calendarCode());
+                                put(
+                                        "bizDate",
+                                        from.bizDate() == null ? null : from.bizDate().toString());
+                                put("fromDayStatus", from.dayStatus());
+                                put("toDayStatus", to.dayStatus());
+                                put("reasonCode", reasonCode);
+                                put(
+                                        "operatorId",
+                                        AuditLogConstants.OPERATOR_ID_SYSTEM_BATCH_DAY_SETTLE);
+                                put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
+                                put(
+                                        "cutoffAt",
+                                        to.cutoffAt() == null ? null : to.cutoffAt().toString());
+                                put(
+                                        "settledAt",
+                                        to.settledAt() == null ? null : to.settledAt().toString());
+                            }
+                        }));
         jobExecutionLogMapper.insert(audit);
     }
 
@@ -203,22 +227,31 @@ public class BatchDaySettleScheduler {
                 || (!"LAUNCHED".equalsIgnoreCase(status) && !"REJECTED".equalsIgnoreCase(status));
     }
 
-    private String buildCatchUpDedupKey(BatchDayInstanceRecord batchDay, JobInstanceEntity candidate) {
-        return batchDay.tenantId() + ":batch-day-catchup:" + batchDay.calendarCode() + ":" + batchDay.bizDate()
-                + ":" + candidate.getJobCode();
+    private String buildCatchUpDedupKey(
+            BatchDayInstanceRecord batchDay, JobInstanceEntity candidate) {
+        return batchDay.tenantId()
+                + ":batch-day-catchup:"
+                + batchDay.calendarCode()
+                + ":"
+                + batchDay.bizDate()
+                + ":"
+                + candidate.getJobCode();
     }
 
-    private Map<String, Object> buildCatchUpParams(BatchDayInstanceRecord batchDay,
-                                                   JobInstanceEntity candidate,
-                                                   BusinessCalendarRecord calendar,
-                                                   Instant now) {
+    private Map<String, Object> buildCatchUpParams(
+            BatchDayInstanceRecord batchDay,
+            JobInstanceEntity candidate,
+            BusinessCalendarRecord calendar,
+            Instant now) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("batchDayCatchUp", true);
         params.put("operationType", "BATCH_DAY_CATCH_UP");
         params.put("catchUpReason", "BATCH_DAY_FAILED");
         params.put("batchDayStatus", batchDay.dayStatus());
         params.put("batchDayCalendarCode", batchDay.calendarCode());
-        params.put("batchDayBizDate", batchDay.bizDate() == null ? null : batchDay.bizDate().toString());
+        params.put(
+                "batchDayBizDate",
+                batchDay.bizDate() == null ? null : batchDay.bizDate().toString());
         params.put("catchUpPolicy", calendar == null ? null : calendar.catchUpPolicy());
         params.put("catchUpRequestedAt", now.toString());
         params.put("sourceJobInstanceId", candidate == null ? null : candidate.getId());

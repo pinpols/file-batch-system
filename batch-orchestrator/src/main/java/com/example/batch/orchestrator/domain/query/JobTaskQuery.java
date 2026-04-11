@@ -7,6 +7,4 @@ public record JobTaskQuery(
         Long jobInstanceId,
         Long jobPartitionId,
         String taskStatus,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

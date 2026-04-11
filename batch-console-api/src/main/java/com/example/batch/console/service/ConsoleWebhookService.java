@@ -2,17 +2,21 @@ package com.example.batch.console.service;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -27,37 +31,82 @@ public class ConsoleWebhookService {
     }
 
     public WebhookSubscriptionEntity getSubscription(String tenantId, Long id) {
-        return subscriptionRepository.findByTenantAndId(tenantGuard.resolveTenant(tenantId), id)
-                .orElseThrow(() -> new BizException(ResultCode.NOT_FOUND, "webhook subscription not found"));
+        return subscriptionRepository
+                .findByTenantAndId(tenantGuard.resolveTenant(tenantId), id)
+                .orElseThrow(
+                        () ->
+                                new BizException(
+                                        ResultCode.NOT_FOUND, "webhook subscription not found"));
     }
 
-    public WebhookSubscriptionEntity createSubscription(String tenantId, String name, String callbackUrl,
-                                                        String eventTypes, String secret, boolean enabled, String operator) {
+    public WebhookSubscriptionEntity createSubscription(
+            String tenantId,
+            String name,
+            String callbackUrl,
+            String eventTypes,
+            String secret,
+            boolean enabled,
+            String operator) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        subscriptionRepository.findByTenantAndName(resolved, name).ifPresent(existing -> {
-            throw new BizException(ResultCode.CONFLICT, "webhook subscription already exists");
-        });
-        subscriptionRepository.insert(resolved, name, callbackUrl, normalizeEventTypes(eventTypes), secret, enabled, operator);
-        return subscriptionRepository.findByTenantAndName(resolved, name)
-                .orElseThrow(() -> new BizException(ResultCode.SYSTEM_ERROR, "webhook subscription created but not found"));
+        subscriptionRepository
+                .findByTenantAndName(resolved, name)
+                .ifPresent(
+                        existing -> {
+                            throw new BizException(
+                                    ResultCode.CONFLICT, "webhook subscription already exists");
+                        });
+        subscriptionRepository.insert(
+                resolved,
+                name,
+                callbackUrl,
+                normalizeEventTypes(eventTypes),
+                secret,
+                enabled,
+                operator);
+        return subscriptionRepository
+                .findByTenantAndName(resolved, name)
+                .orElseThrow(
+                        () ->
+                                new BizException(
+                                        ResultCode.SYSTEM_ERROR,
+                                        "webhook subscription created but not found"));
     }
 
-    public WebhookSubscriptionEntity updateSubscription(String tenantId, Long id, String callbackUrl,
-                                                        String eventTypes, String secret, boolean enabled, String operator) {
+    public WebhookSubscriptionEntity updateSubscription(
+            String tenantId,
+            Long id,
+            String callbackUrl,
+            String eventTypes,
+            String secret,
+            boolean enabled,
+            String operator) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         if (subscriptionRepository.findByTenantAndId(resolved, id).isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "webhook subscription not found");
         }
-        subscriptionRepository.update(resolved, id, callbackUrl, normalizeEventTypes(eventTypes), secret, enabled, operator);
-        return subscriptionRepository.findByTenantAndId(resolved, id)
-                .orElseThrow(() -> new BizException(ResultCode.SYSTEM_ERROR, "webhook subscription updated but not found"));
+        subscriptionRepository.update(
+                resolved,
+                id,
+                callbackUrl,
+                normalizeEventTypes(eventTypes),
+                secret,
+                enabled,
+                operator);
+        return subscriptionRepository
+                .findByTenantAndId(resolved, id)
+                .orElseThrow(
+                        () ->
+                                new BizException(
+                                        ResultCode.SYSTEM_ERROR,
+                                        "webhook subscription updated but not found"));
     }
 
     public void deleteSubscription(String tenantId, Long id) {
         subscriptionRepository.deleteByTenantAndId(tenantGuard.resolveTenant(tenantId), id);
     }
 
-    public List<WebhookDeliveryLogEntity> deliveryLogs(String tenantId, Long subscriptionId, int limit) {
+    public List<WebhookDeliveryLogEntity> deliveryLogs(
+            String tenantId, Long subscriptionId, int limit) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         if (subscriptionId != null) {
             return deliveryLogRepository.findBySubscription(resolved, subscriptionId, limit);
@@ -71,16 +120,19 @@ public class ConsoleWebhookService {
     }
 
     private String normalizeEventTypes(String eventTypes) {
-        if (eventTypes == null || eventTypes.isBlank()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "eventTypes is required");
-        }
-        String normalized = Arrays.stream(eventTypes.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .map(value -> value.toUpperCase(Locale.ROOT))
-                .distinct()
-                .reduce((left, right) -> left + "," + right)
-                .orElseThrow(() -> new BizException(ResultCode.INVALID_ARGUMENT, "eventTypes is required"));
+        Guard.requireText(eventTypes, "eventTypes is required");
+        String normalized =
+                Arrays.stream(eventTypes.split(","))
+                        .map(String::trim)
+                        .filter(value -> !value.isBlank())
+                        .map(value -> value.toUpperCase(Locale.ROOT))
+                        .distinct()
+                        .reduce((left, right) -> left + "," + right)
+                        .orElseThrow(
+                                () ->
+                                        new BizException(
+                                                ResultCode.INVALID_ARGUMENT,
+                                                "eventTypes is required"));
         if (Objects.equals(normalized, "*")) {
             return normalized;
         }

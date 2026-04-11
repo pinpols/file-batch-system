@@ -453,7 +453,7 @@ fi
 if [[ "$RUN_DEFAULT_TESTS" == true ]]; then
   run_step \
     "Reactor Default Tests (*Test / *IntegrationTest)" \
-    run_mvn test
+    run_mvn test -fae
 fi
 
 if [[ "$RUN_IT_SUITE" == true ]]; then

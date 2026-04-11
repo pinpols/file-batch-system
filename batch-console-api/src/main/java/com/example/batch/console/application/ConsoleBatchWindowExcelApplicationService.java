@@ -4,14 +4,14 @@ import com.example.batch.console.web.request.BatchWindowExcelApplyRequest;
 import com.example.batch.console.web.response.ConsoleBatchWindowExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleBatchWindowExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleBatchWindowExcelUploadResponse;
-import java.io.IOException;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * 批处理窗口 Excel 导入导出应用服务。
- */
+import java.io.IOException;
+
+/** 批处理窗口 Excel 导入导出应用服务。 */
 public interface ConsoleBatchWindowExcelApplicationService {
 
     /** 导出批处理窗口配置为 Excel。 */
@@ -30,5 +30,6 @@ public interface ConsoleBatchWindowExcelApplicationService {
     ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
 
     /** 确认导入并更新批处理窗口配置。 */
-    ConsoleBatchWindowExcelApplyResponse apply(String uploadToken, BatchWindowExcelApplyRequest request);
+    ConsoleBatchWindowExcelApplyResponse apply(
+            String uploadToken, BatchWindowExcelApplyRequest request);
 }

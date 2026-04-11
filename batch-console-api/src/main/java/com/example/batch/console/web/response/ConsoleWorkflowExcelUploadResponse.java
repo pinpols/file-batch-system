@@ -6,6 +6,4 @@ public record ConsoleWorkflowExcelUploadResponse(
         int definitionRows,
         int nodeRows,
         int edgeRows,
-        int totalRows
-) {
-}
+        int totalRows) {}

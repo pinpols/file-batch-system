@@ -1,15 +1,15 @@
 package com.example.batch.common.utils;
 
+import org.springframework.web.util.HtmlUtils;
+
 import java.text.Normalizer;
 import java.util.regex.Pattern;
-import org.springframework.web.util.HtmlUtils;
 
 public final class ConsoleTextSanitizer {
 
     private static final Pattern CONTROL_CHARS = Pattern.compile("[\\p{Cntrl}&&[^\\r\\n\\t]]");
 
-    private ConsoleTextSanitizer() {
-    }
+    private ConsoleTextSanitizer() {}
 
     public static String normalize(String value) {
         if (value == null) {

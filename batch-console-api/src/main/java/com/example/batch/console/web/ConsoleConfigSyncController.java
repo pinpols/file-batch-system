@@ -7,10 +7,11 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ConfigSyncExportRequest;
 import com.example.batch.console.web.request.ConfigSyncImportRequest;
 import com.example.batch.console.web.request.ConfigSyncPreviewRequest;
+
 import jakarta.validation.Valid;
-import java.util.List;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +21,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @Validated
@@ -53,8 +57,9 @@ public class ConsoleConfigSyncController {
     }
 
     @GetMapping("/logs")
-    public CommonResponse<List<Map<String, Object>>> logs(@RequestParam("tenantId") String tenantId,
-                                                          @RequestParam(value = "limit", defaultValue = "50") int limit) {
+    public CommonResponse<List<Map<String, Object>>> logs(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "limit", defaultValue = "50") int limit) {
         return responseFactory.success(applicationService.logs(tenantId, limit));
     }
 }

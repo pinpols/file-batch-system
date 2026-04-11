@@ -7,10 +7,13 @@ import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.repository.WorkerRegistryJdbcRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
-import java.time.Instant;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 @Service("orchestratorWorkerRegistryService")
 @RequiredArgsConstructor
@@ -22,28 +25,38 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     @Override
     @Transactional
     public WorkerRegistryRecord register(WorkerHeartbeatDto request) {
-        WorkerRegistryRecord registry = workerRegistryRepository.findFirstByTenantIdAndWorkerCode(request.tenantId(), request.workerCode());
-        String newStatus = resolveIncomingStatus(request, WorkerRegistryStatus.ONLINE.code(),
-                registry == null ? null : registry.status());
+        WorkerRegistryRecord registry =
+                workerRegistryRepository.findFirstByTenantIdAndWorkerCode(
+                        request.tenantId(), request.workerCode());
+        String newStatus =
+                resolveIncomingStatus(
+                        request,
+                        WorkerRegistryStatus.ONLINE.code(),
+                        registry == null ? null : registry.status());
         Instant heartbeatAt = firstHeartbeat(request);
-        Integer newLoad = request.currentLoad() != null ? request.currentLoad() : (registry == null ? 0 : registry.currentLoad());
-        JsonbString newTags = request.capabilityTags() != null
-                ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
-                : (registry == null ? null : registry.capabilityTags());
+        Integer newLoad =
+                request.currentLoad() != null
+                        ? request.currentLoad()
+                        : (registry == null ? 0 : registry.currentLoad());
+        JsonbString newTags =
+                request.capabilityTags() != null
+                        ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
+                        : (registry == null ? null : registry.capabilityTags());
 
         if (registry == null) {
-            registry = new WorkerRegistryRecord(
-                    null,
-                    request.tenantId(),
-                    request.workerCode(),
-                    request.workerGroup(),
-                    newTags,
-                    null,
-                    newStatus,
-                    heartbeatAt,
-                    newLoad,
-                    null,
-                    null);
+            registry =
+                    new WorkerRegistryRecord(
+                            null,
+                            request.tenantId(),
+                            request.workerCode(),
+                            request.workerGroup(),
+                            newTags,
+                            null,
+                            newStatus,
+                            heartbeatAt,
+                            newLoad,
+                            null,
+                            null);
         } else {
             registry = registry.withHeartbeat(newStatus, heartbeatAt, newLoad, newTags);
         }
@@ -56,24 +69,24 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         if (request == null) {
             return null;
         }
-        WorkerRegistryRecord registry = workerRegistryRepository.findFirstByTenantIdAndWorkerCode(request.tenantId(), workerCode);
+        WorkerRegistryRecord registry =
+                workerRegistryRepository.findFirstByTenantIdAndWorkerCode(
+                        request.tenantId(), workerCode);
         if (registry == null) {
             return register(request);
         }
         String newStatus = resolveHeartbeatStatus(request, registry.status());
         Instant heartbeatAt = firstHeartbeat(request);
-        Integer newLoad = request.currentLoad() != null ? request.currentLoad() : registry.currentLoad();
-        JsonbString newTags = request.capabilityTags() != null
-                ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
-                : registry.capabilityTags();
+        Integer newLoad =
+                request.currentLoad() != null ? request.currentLoad() : registry.currentLoad();
+        JsonbString newTags =
+                request.capabilityTags() != null
+                        ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
+                        : registry.capabilityTags();
         workerRegistryJdbcRepository.touchHeartbeat(
-                request.tenantId(),
-                workerCode,
-                newStatus,
-                heartbeatAt,
-                newLoad,
-                newTags);
-        return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(request.tenantId(), workerCode);
+                request.tenantId(), workerCode, newStatus, heartbeatAt, newLoad, newTags);
+        return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(
+                request.tenantId(), workerCode);
     }
 
     @Override
@@ -85,7 +98,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     @Override
     @Transactional
     public WorkerRegistryRecord updateStatus(String tenantId, String workerCode, String status) {
-        WorkerRegistryRecord registry = workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+        WorkerRegistryRecord registry =
+                workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
         if (registry == null) {
             return null;
         }
@@ -108,7 +122,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         return resolveIncomingStatus(request, WorkerRegistryStatus.ONLINE.code(), currentStatus);
     }
 
-    private String resolveIncomingStatus(WorkerHeartbeatDto request, String defaultStatus, String currentStatus) {
+    private String resolveIncomingStatus(
+            WorkerHeartbeatDto request, String defaultStatus, String currentStatus) {
         String requestedStatus = request == null ? null : request.status();
         if (requestedStatus == null || requestedStatus.isBlank()) {
             return defaultStatus == null || defaultStatus.isBlank() ? currentStatus : defaultStatus;

@@ -5,11 +5,12 @@ import java.util.List;
 
 public interface WorkflowExcelImportStore {
 
-    String save(String fileName,
-                String tenantId,
-                List<WorkflowDefinitionRow> definitions,
-                List<WorkflowNodeRow> nodes,
-                List<WorkflowEdgeRow> edges);
+    String save(
+            String fileName,
+            String tenantId,
+            List<WorkflowDefinitionRow> definitions,
+            List<WorkflowNodeRow> nodes,
+            List<WorkflowEdgeRow> edges);
 
     WorkflowExcelSession get(String uploadToken);
 
@@ -21,14 +22,9 @@ public interface WorkflowExcelImportStore {
             Instant uploadedAt,
             List<WorkflowDefinitionRow> definitions,
             List<WorkflowNodeRow> nodes,
-            List<WorkflowEdgeRow> edges
-    ) {
-    }
+            List<WorkflowEdgeRow> edges) {}
 
-    record WorkflowDefinitionRow(
-            WorkflowIdentity identity,
-            WorkflowDefinitionPayload payload
-    ) {
+    record WorkflowDefinitionRow(WorkflowIdentity identity, WorkflowDefinitionPayload payload) {
         public int rowNo() {
             return identity.rowNo();
         }
@@ -62,28 +58,20 @@ public interface WorkflowExcelImportStore {
         }
     }
 
-    record WorkflowIdentity(
-            int rowNo,
-            String tenantId,
-            String workflowCode
-    ) {
-    }
+    record WorkflowIdentity(int rowNo, String tenantId, String workflowCode) {}
 
     record WorkflowDefinitionPayload(
             String workflowName,
             String workflowType,
             Integer version,
             Boolean enabled,
-            String description
-    ) {
-    }
+            String description) {}
 
     record WorkflowNodeRow(
             WorkflowNodeIdentity identity,
             WorkflowNodeRelation relation,
             WorkflowNodeExecution execution,
-            WorkflowNodeRuntime runtime
-    ) {
+            WorkflowNodeRuntime runtime) {
         public int rowNo() {
             return identity.rowNo();
         }
@@ -158,38 +146,21 @@ public interface WorkflowExcelImportStore {
             String tenantId,
             String workflowCode,
             Integer workflowVersion,
-            String nodeCode
-    ) {
-    }
+            String nodeCode) {}
 
     record WorkflowNodeRelation(
-            String nodeName,
-            String nodeType,
-            String relatedJobCode,
-            String relatedPipelineCode
-    ) {
-    }
+            String nodeName, String nodeType, String relatedJobCode, String relatedPipelineCode) {}
 
-    record WorkflowNodeExecution(
-            String workerGroup,
-            String windowCode,
-            Integer nodeOrder
-    ) {
-    }
+    record WorkflowNodeExecution(String workerGroup, String windowCode, Integer nodeOrder) {}
 
     record WorkflowNodeRuntime(
             String retryPolicy,
             Integer retryMaxCount,
             Integer timeoutSeconds,
             String nodeParams,
-            Boolean enabled
-    ) {
-    }
+            Boolean enabled) {}
 
-    record WorkflowEdgeRow(
-            WorkflowEdgeIdentity identity,
-            WorkflowEdgePayload payload
-    ) {
+    record WorkflowEdgeRow(WorkflowEdgeIdentity identity, WorkflowEdgePayload payload) {
         public int rowNo() {
             return identity.rowNo();
         }
@@ -233,14 +204,7 @@ public interface WorkflowExcelImportStore {
             String workflowCode,
             Integer workflowVersion,
             String fromNodeCode,
-            String toNodeCode
-    ) {
-    }
+            String toNodeCode) {}
 
-    record WorkflowEdgePayload(
-            String edgeType,
-            String conditionExpr,
-            Boolean enabled
-    ) {
-    }
+    record WorkflowEdgePayload(String edgeType, String conditionExpr, Boolean enabled) {}
 }

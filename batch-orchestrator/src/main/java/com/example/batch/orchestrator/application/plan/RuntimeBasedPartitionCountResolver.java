@@ -2,9 +2,11 @@ package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
-import java.util.Map;
+
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+
+import java.util.Map;
 
 /**
  * 根据历史执行时长解析分区数，公式为 {@code ceil(historicalDurationSeconds / targetPartitionDurationSeconds)}。
@@ -15,16 +17,19 @@ import org.springframework.stereotype.Component;
 public class RuntimeBasedPartitionCountResolver implements PartitionCountResolver {
 
     @Override
-    public int resolve(JobDefinitionRecord jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
-        long historicalDurationSeconds = firstPositiveLong(
-                params.get("historicalAverageDurationSeconds"),
-                params.get("historicalDurationSeconds"),
-                params.get("expectedDurationSeconds")
-        );
-        int targetDurationSeconds = firstPositiveInt(
-                params.get("targetPartitionDurationSeconds"),
-                params.get("targetDurationSeconds")
-        );
+    public int resolve(
+            JobDefinitionRecord jobDefinition,
+            Map<String, Object> params,
+            ShardStrategy shardStrategy) {
+        long historicalDurationSeconds =
+                firstPositiveLong(
+                        params.get("historicalAverageDurationSeconds"),
+                        params.get("historicalDurationSeconds"),
+                        params.get("expectedDurationSeconds"));
+        int targetDurationSeconds =
+                firstPositiveInt(
+                        params.get("targetPartitionDurationSeconds"),
+                        params.get("targetDurationSeconds"));
         if (historicalDurationSeconds > 0 && targetDurationSeconds > 0) {
             return ceilDiv(historicalDurationSeconds, targetDurationSeconds);
         }

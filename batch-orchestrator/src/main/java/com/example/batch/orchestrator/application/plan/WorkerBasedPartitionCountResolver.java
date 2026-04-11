@@ -4,15 +4,18 @@ import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.Map;
+
 /**
- * 根据当前在线 Worker 数量解析分区数，公式为 {@code min(256, onlineWorkerCount × partitionFactor)}。
- * DYNAMIC 策略下 partitionFactor 默认为 {@code 2}，其他策略为 {@code 1}；无在线 Worker 时返回 {@code 0}。
+ * 根据当前在线 Worker 数量解析分区数，公式为 {@code min(256, onlineWorkerCount × partitionFactor)}。 DYNAMIC 策略下
+ * partitionFactor 默认为 {@code 2}，其他策略为 {@code 1}；无在线 Worker 时返回 {@code 0}。
  */
 @Component
 @Order(4)
@@ -22,20 +25,24 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
     private final WorkerRegistryRepository workerRegistryRepository;
 
     @Override
-    public int resolve(JobDefinitionRecord jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+    public int resolve(
+            JobDefinitionRecord jobDefinition,
+            Map<String, Object> params,
+            ShardStrategy shardStrategy) {
         long onlineWorkerCount = resolveOnlineWorkerCount(jobDefinition, params);
         if (onlineWorkerCount <= 0) {
             return 0;
         }
-        int partitionFactor = firstPositiveInt(
-                params.get("partitionFactor"),
-                params.get("workerPartitionFactor"),
-                shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1
-        );
+        int partitionFactor =
+                firstPositiveInt(
+                        params.get("partitionFactor"),
+                        params.get("workerPartitionFactor"),
+                        shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1);
         return (int) Math.min(256L, onlineWorkerCount * partitionFactor);
     }
 
-    private long resolveOnlineWorkerCount(JobDefinitionRecord jobDefinition, Map<String, Object> params) {
+    private long resolveOnlineWorkerCount(
+            JobDefinitionRecord jobDefinition, Map<String, Object> params) {
         if (jobDefinition == null || !StringUtils.hasText(jobDefinition.tenantId())) {
             return firstPositiveLong(params.get("onlineWorkerCount"), params.get("workerCount"));
         }
@@ -43,13 +50,10 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
             return workerRegistryRepository.countByTenantIdAndWorkerGroupAndStatus(
                     jobDefinition.tenantId(),
                     jobDefinition.workerGroup(),
-                    WorkerRegistryStatus.ONLINE.code()
-            );
+                    WorkerRegistryStatus.ONLINE.code());
         }
         return workerRegistryRepository.countByTenantIdAndStatus(
-                jobDefinition.tenantId(),
-                WorkerRegistryStatus.ONLINE.code()
-        );
+                jobDefinition.tenantId(), WorkerRegistryStatus.ONLINE.code());
     }
 
     private int firstPositiveInt(Object... values) {

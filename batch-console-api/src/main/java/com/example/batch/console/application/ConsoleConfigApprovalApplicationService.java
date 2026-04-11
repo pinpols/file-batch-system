@@ -2,6 +2,7 @@ package com.example.batch.console.application;
 
 import com.example.batch.console.web.request.ConfigApprovalActionRequest;
 import com.example.batch.console.web.request.ConfigReleaseApprovalSubmitRequest;
+
 import java.util.Map;
 
 public interface ConsoleConfigApprovalApplicationService {

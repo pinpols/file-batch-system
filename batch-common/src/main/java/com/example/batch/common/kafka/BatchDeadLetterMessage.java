@@ -13,12 +13,8 @@ public record BatchDeadLetterMessage(
         String deadLetterKey,
         String idempotencyKey,
         String traceId,
-        /**
-         * 记录进入死信队列时的消息投递尝试序号。
-         */
+        /** 记录进入死信队列时的消息投递尝试序号。 */
         int attemptNo,
         String deadReason,
         Instant deadAt,
-        Map<String, Object> payload
-) {
-}
+        Map<String, Object> payload) {}

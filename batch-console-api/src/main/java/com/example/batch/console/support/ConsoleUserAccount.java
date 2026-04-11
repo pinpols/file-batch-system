@@ -8,6 +8,4 @@ public record ConsoleUserAccount(
         String displayName,
         String passwordHash,
         Set<String> authorities,
-        boolean enabled
-) {
-}
+        boolean enabled) {}

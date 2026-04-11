@@ -1,11 +1,15 @@
 package com.example.batch.console.support;
 
 import com.example.batch.common.dto.ResponseMeta;
+
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Instant;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.RequestScope;
+
+import java.time.Instant;
 
 @Component
 @RequestScope
@@ -15,7 +19,8 @@ public class ConsoleRequestMetadataResolver {
     private final HttpServletRequest request;
 
     public ConsoleRequestMetadata current() {
-        Object metadata = request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
+        Object metadata =
+                request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
         if (metadata instanceof ConsoleRequestMetadata consoleRequestMetadata) {
             return consoleRequestMetadata;
         }

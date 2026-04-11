@@ -2,8 +2,10 @@ package com.example.batch.console.infrastructure.realtime;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.concurrent.atomic.AtomicInteger;
+
 import org.springframework.stereotype.Component;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class ConsoleRealtimeMetrics {
@@ -56,7 +58,8 @@ public class ConsoleRealtimeMetrics {
     }
 
     private Counter counter(String name, String stream, String eventType) {
-        return meterRegistry.counter(name, "stream", normalize(stream), "eventType", normalize(eventType));
+        return meterRegistry.counter(
+                name, "stream", normalize(stream), "eventType", normalize(eventType));
     }
 
     private String normalize(String value) {

@@ -10,6 +10,4 @@ public record ConsoleBatchWindowExcelPreviewResponse(
         Integer validRows,
         Integer invalidRows,
         List<ConsoleBatchWindowResponse> rows,
-        List<ConsoleBatchWindowExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleBatchWindowExcelRowIssueResponse> issues) {}

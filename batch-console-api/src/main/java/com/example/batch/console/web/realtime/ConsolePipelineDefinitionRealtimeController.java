@@ -2,7 +2,9 @@ package com.example.batch.console.web.realtime;
 
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeEventHub;
 import com.example.batch.console.support.ConsoleTenantGuard;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -15,7 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /**
  * 流水线定义的实时订阅入口。
  *
- * <p>保存、启停、更新后由服务层发布事件，这里只负责订阅。</p>
+ * <p>保存、启停、更新后由服务层发布事件，这里只负责订阅。
  */
 @RestController
 @Validated
@@ -28,16 +30,16 @@ public class ConsolePipelineDefinitionRealtimeController {
     private final ConsoleTenantGuard tenantGuard;
 
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter events(@RequestParam("tenantId") String tenantId,
-                             @RequestParam(value = "eventType", required = false) String eventType,
-                             @RequestParam(value = "cursor", required = false) String cursor,
-                             @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+    public SseEmitter events(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "eventType", required = false) String eventType,
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
         return realtimeEventHub.subscribe(
                 tenantGuard.resolveTenant(tenantId),
                 "pipeline-definitions",
                 eventType,
                 cursor,
-                heartbeatMillis
-        );
+                heartbeatMillis);
     }
 }

@@ -9,12 +9,11 @@ import com.example.batch.console.web.request.SecretVersionRotateRequest;
 import com.example.batch.console.web.response.ConsoleConfigChangeLogResponse;
 import com.example.batch.console.web.response.ConsoleConfigReleaseResponse;
 import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
+
 import java.util.List;
 import java.util.Map;
 
-/**
- * 控制台配置中心应用服务：配置发布单生命周期、密钥版本与变更审计查询。
- */
+/** 控制台配置中心应用服务：配置发布单生命周期、密钥版本与变更审计查询。 */
 public interface ConsoleConfigApplicationService {
 
     /** 查询配置发布单列表。 */

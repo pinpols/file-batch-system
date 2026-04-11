@@ -1,10 +1,12 @@
 package com.example.batch.orchestrator.domain.entity;
 
 import com.example.batch.orchestrator.domain.value.JsonbString;
-import java.time.Instant;
+
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+
+import java.time.Instant;
 
 @Table(schema = "batch", value = "tenant_scheduler_snapshot")
 public record TenantSchedulerSnapshotRecord(
@@ -22,5 +24,4 @@ public record TenantSchedulerSnapshotRecord(
         @Column("group_max_jobs") Integer groupMaxJobs,
         @Column("quota_reset_policy") String quotaResetPolicy,
         @Column("online_workers") Integer onlineWorkers,
-        @Column("detail_json") JsonbString detailJson
-) {}
+        @Column("detail_json") JsonbString detailJson) {}

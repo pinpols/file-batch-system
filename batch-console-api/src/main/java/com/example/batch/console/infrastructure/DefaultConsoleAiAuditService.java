@@ -5,12 +5,12 @@ import com.example.batch.console.domain.command.AiAuditCommand;
 import com.example.batch.console.domain.entity.ConsoleAiAuditLogEntity;
 import com.example.batch.console.mapper.ConsoleAiAuditLogMapper;
 import com.example.batch.console.support.ConsoleAiAuditService;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 
-/**
- * {@link com.example.batch.console.support.ConsoleAiAuditService} 的默认实现：写入 AI 审计表。
- */
+/** {@link com.example.batch.console.support.ConsoleAiAuditService} 的默认实现：写入 AI 审计表。 */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleAiAuditService implements ConsoleAiAuditService {

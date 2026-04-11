@@ -7,6 +7,4 @@ public record JobExecutionLogQuery(
         Long jobInstanceId,
         Long jobPartitionId,
         String logType,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

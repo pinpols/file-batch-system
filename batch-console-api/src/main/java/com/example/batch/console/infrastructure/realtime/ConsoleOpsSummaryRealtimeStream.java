@@ -3,7 +3,16 @@ package com.example.batch.console.infrastructure.realtime;
 import com.example.batch.console.application.ConsoleOpsApplicationService;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
+
 import jakarta.annotation.PreDestroy;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -11,16 +20,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 控制台运维摘要实时流。
  *
- * <p>负责订阅首屏摘要，并在关键写操作后推送最新快照。</p>
+ * <p>负责订阅首屏摘要，并在关键写操作后推送最新快照。
  */
 @Service
 @RequiredArgsConstructor
@@ -36,9 +40,11 @@ public class ConsoleOpsSummaryRealtimeStream {
     private final ConsoleRealtimeRedisPublisher redisPublisher;
     private final ConsoleRealtimeCursorFactory cursorFactory;
     private final ConsoleTenantGuard tenantGuard;
-    private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledRefreshes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> scheduledRefreshes =
+            new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CachedSummary> summaryCache = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new SummaryThreadFactory());
+    private final ScheduledExecutorService scheduler =
+            Executors.newSingleThreadScheduledExecutor(new SummaryThreadFactory());
 
     public void publishRefresh(String tenantId) {
         publishRefresh(tenantId, false);
@@ -46,20 +52,22 @@ public class ConsoleOpsSummaryRealtimeStream {
 
     private void publishRefresh(String tenantId, boolean force) {
         String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-        Runnable publish = () -> {
-            if (force) {
-                publishSummarySnapshot(resolvedTenantId, true);
-                return;
-            }
-            scheduleCoalescedRefresh(resolvedTenantId);
-        };
+        Runnable publish =
+                () -> {
+                    if (force) {
+                        publishSummarySnapshot(resolvedTenantId, true);
+                        return;
+                    }
+                    scheduleCoalescedRefresh(resolvedTenantId);
+                };
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    publish.run();
-                }
-            });
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            publish.run();
+                        }
+                    });
             return;
         }
         publish.run();
@@ -71,13 +79,8 @@ public class ConsoleOpsSummaryRealtimeStream {
 
     public SseEmitter subscribe(String tenantId, Long heartbeatMillis, boolean initialSnapshot) {
         String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
-        SseEmitter emitter = realtimeEventHub.subscribe(
-                resolvedTenantId,
-                STREAM,
-                null,
-                null,
-                heartbeatMillis
-        );
+        SseEmitter emitter =
+                realtimeEventHub.subscribe(resolvedTenantId, STREAM, null, null, heartbeatMillis);
         if (initialSnapshot) {
             publishRefresh(resolvedTenantId, true);
         }
@@ -95,18 +98,23 @@ public class ConsoleOpsSummaryRealtimeStream {
     }
 
     private void scheduleCoalescedRefresh(String tenantId) {
-        scheduledRefreshes.compute(tenantId, (key, existing) -> {
-            if (existing != null && !existing.isDone()) {
-                return existing;
-            }
-            return scheduler.schedule(() -> {
-                try {
-                    publishSummarySnapshot(tenantId, true);
-                } finally {
-                    scheduledRefreshes.remove(tenantId);
-                }
-            }, REFRESH_DEBOUNCE_MILLIS, TimeUnit.MILLISECONDS);
-        });
+        scheduledRefreshes.compute(
+                tenantId,
+                (key, existing) -> {
+                    if (existing != null && !existing.isDone()) {
+                        return existing;
+                    }
+                    return scheduler.schedule(
+                            () -> {
+                                try {
+                                    publishSummarySnapshot(tenantId, true);
+                                } finally {
+                                    scheduledRefreshes.remove(tenantId);
+                                }
+                            },
+                            REFRESH_DEBOUNCE_MILLIS,
+                            TimeUnit.MILLISECONDS);
+                });
     }
 
     private void publishSummarySnapshot(String tenantId, boolean forceRefresh) {
@@ -114,14 +122,14 @@ public class ConsoleOpsSummaryRealtimeStream {
         if (summary == null) {
             return;
         }
-        ConsoleSseEvent event = new ConsoleSseEvent(
-                tenantId,
-                STREAM,
-                EVENT_TYPE,
-                cursorFactory.nextCursor(),
-                summary,
-                Instant.now()
-        );
+        ConsoleSseEvent event =
+                new ConsoleSseEvent(
+                        tenantId,
+                        STREAM,
+                        EVENT_TYPE,
+                        cursorFactory.nextCursor(),
+                        summary,
+                        Instant.now());
         realtimeEventHub.publish(event);
         redisPublisher.publish(event);
     }
@@ -133,7 +141,9 @@ public class ConsoleOpsSummaryRealtimeStream {
     private ConsoleOpsSummaryResponse loadSummary(String tenantId, boolean forceRefresh) {
         long now = System.currentTimeMillis();
         CachedSummary cached = summaryCache.get(tenantId);
-        if (!forceRefresh && cached != null && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS) {
+        if (!forceRefresh
+                && cached != null
+                && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS) {
             return cached.summary();
         }
         ConsoleOpsSummaryResponse summary = opsApplicationService.summary(tenantId);
@@ -141,8 +151,7 @@ public class ConsoleOpsSummaryRealtimeStream {
         return summary;
     }
 
-    private record CachedSummary(ConsoleOpsSummaryResponse summary, long cachedAtMillis) {
-    }
+    private record CachedSummary(ConsoleOpsSummaryResponse summary, long cachedAtMillis) {}
 
     private static final class SummaryThreadFactory implements ThreadFactory {
         @Override

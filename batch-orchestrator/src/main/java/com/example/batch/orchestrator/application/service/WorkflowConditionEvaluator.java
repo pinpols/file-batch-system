@@ -1,6 +1,9 @@
 package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.utils.JsonUtils;
+
+import org.springframework.stereotype.Component;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -8,7 +11,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.springframework.stereotype.Component;
 
 @Component
 public class WorkflowConditionEvaluator {
@@ -16,10 +18,8 @@ public class WorkflowConditionEvaluator {
     private static final Object UNRESOLVED = new Object();
 
     /**
-     * 支持的最小语法：
-     * `&&` / `||` / `!` / 括号；
-     * `=` `==` `!=` `>` `>=` `<` `<=`；
-     * `in` / `not in` / `contains` / `startsWith` / `endsWith`。
+     * 支持的最小语法： `&&` / `||` / `!` / 括号； `=` `==` `!=` `>` `>=` `<` `<=`； `in` / `not in` /
+     * `contains` / `startsWith` / `endsWith`。
      */
     @SuppressWarnings("unchecked")
     public boolean matches(String conditionExpr, String payloadJson) {
@@ -66,7 +66,8 @@ public class WorkflowConditionEvaluator {
             return isTruthy(value);
         }
         String leftToken = expression.substring(0, operator.index()).trim();
-        String rightToken = expression.substring(operator.index() + operator.symbol().length()).trim();
+        String rightToken =
+                expression.substring(operator.index() + operator.symbol().length()).trim();
         Object leftValue = resolveLeftOperand(leftToken, payload);
         return switch (operator.type()) {
             case EQ -> compareEquals(leftValue, resolveRightOperand(rightToken, payload));
@@ -78,14 +79,20 @@ public class WorkflowConditionEvaluator {
             case IN -> evaluateIn(leftValue, rightToken, payload, false);
             case NOT_IN -> evaluateIn(leftValue, rightToken, payload, true);
             case CONTAINS -> evaluateContains(leftValue, resolveRightOperand(rightToken, payload));
-            case STARTS_WITH -> stringify(leftValue).startsWith(stringify(resolveRightOperand(rightToken, payload)));
-            case ENDS_WITH -> stringify(leftValue).endsWith(stringify(resolveRightOperand(rightToken, payload)));
+            case STARTS_WITH ->
+                    stringify(leftValue)
+                            .startsWith(stringify(resolveRightOperand(rightToken, payload)));
+            case ENDS_WITH ->
+                    stringify(leftValue)
+                            .endsWith(stringify(resolveRightOperand(rightToken, payload)));
         };
     }
 
-    private boolean evaluateIn(Object leftValue, String rightToken, Map<String, Object> payload, boolean negate) {
+    private boolean evaluateIn(
+            Object leftValue, String rightToken, Map<String, Object> payload, boolean negate) {
         List<Object> candidates = parseListLiteral(rightToken, payload);
-        boolean contains = candidates.stream().anyMatch(candidate -> compareEquals(leftValue, candidate));
+        boolean contains =
+                candidates.stream().anyMatch(candidate -> compareEquals(leftValue, candidate));
         return negate ? !contains : contains;
     }
 
@@ -118,26 +125,11 @@ public class WorkflowConditionEvaluator {
     }
 
     private Object resolveLeftOperand(String token, Map<String, Object> payload) {
-        String value = stripOuterParentheses(token.trim());
-        if (value.isBlank()) {
-            return null;
+        Object literal = resolveLiteralOperand(token, payload);
+        if (literal != UNRESOLVED) {
+            return literal;
         }
-        if (isQuoted(value)) {
-            return normalizeLiteral(value);
-        }
-        if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
-            return Boolean.parseBoolean(value);
-        }
-        if ("null".equalsIgnoreCase(value)) {
-            return null;
-        }
-        if (looksLikeNumber(value)) {
-            return toNumber(value);
-        }
-        if (value.startsWith("[") && value.endsWith("]")) {
-            return parseListLiteral(value, payload);
-        }
-        return readPath(payload, value);
+        return readPath(payload, stripOuterParentheses(token.trim()));
     }
 
     private Object resolveRightOperand(String token, Map<String, Object> payload) {
@@ -372,7 +364,8 @@ public class WorkflowConditionEvaluator {
 
     private String normalizeLiteral(String literal) {
         String value = literal;
-        if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+        if ((value.startsWith("\"") && value.endsWith("\""))
+                || (value.startsWith("'") && value.endsWith("'"))) {
             value = value.substring(1, value.length() - 1);
         }
         return value;
@@ -395,18 +388,18 @@ public class WorkflowConditionEvaluator {
     private record AtomicOperator(OperatorType type, String symbol, int index) {
         private static AtomicOperator find(String expression) {
             String[] orderedOperators = {
-                    " not in ",
-                    " startsWith ",
-                    " endsWith ",
-                    " contains ",
-                    ">=",
-                    "<=",
-                    "!=",
-                    "==",
-                    " in ",
-                    ">",
-                    "<",
-                    "="
+                " not in ",
+                " startsWith ",
+                " endsWith ",
+                " contains ",
+                ">=",
+                "<=",
+                "!=",
+                "==",
+                " in ",
+                ">",
+                "<",
+                "="
             };
             for (String operator : orderedOperators) {
                 int index = indexOfTopLevel(expression, operator);

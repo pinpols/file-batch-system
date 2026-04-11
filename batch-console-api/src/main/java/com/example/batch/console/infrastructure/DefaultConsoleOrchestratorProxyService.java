@@ -6,17 +6,18 @@ import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEv
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ConsoleSchedulerSnapshotHistoryResponse;
 import com.example.batch.console.web.response.ConsoleSchedulerSnapshotResponse;
-import java.util.List;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.env.Environment;
+
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-/**
- * {@link ConsoleOrchestratorProxyService} 的默认实现：通过 RestClient 转发请求到编排器内部接口。
- */
+import java.util.List;
+import java.util.Map;
+
+/** {@link ConsoleOrchestratorProxyService} 的默认实现：通过 RestClient 转发请求到编排器内部接口。 */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestratorProxyService {
@@ -30,7 +31,10 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     @Override
     public Map<String, Object> instanceAction(Long id, String tenantId, String action) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+        RestClient client =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
         return client.post()
                 .uri("/internal/instances/{id}/{action}?tenantId={tenantId}", id, action, resolved)
                 .retrieve()
@@ -40,9 +44,16 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     @Override
     public Map<String, Object> partitionAction(Long id, String tenantId, String action) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+        RestClient client =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
         return client.post()
-                .uri("/internal/instances/partitions/{id}/{action}?tenantId={tenantId}", id, action, resolved)
+                .uri(
+                        "/internal/instances/partitions/{id}/{action}?tenantId={tenantId}",
+                        id,
+                        action,
+                        resolved)
                 .retrieve()
                 .body(new ParameterizedTypeReference<Map<String, Object>>() {});
     }
@@ -50,11 +61,19 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     @Override
     public Map<String, Object> workflowRunAction(Long id, String tenantId, String action) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-        Map<String, Object> response = client.post()
-                .uri("/internal/workflow-runs/{id}/{action}?tenantId={tenantId}", id, action, resolved)
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        RestClient client =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
+        Map<String, Object> response =
+                client.post()
+                        .uri(
+                                "/internal/workflow-runs/{id}/{action}?tenantId={tenantId}",
+                                id,
+                                action,
+                                resolved)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<Map<String, Object>>() {});
         publishRefresh(resolved);
         return response;
     }
@@ -62,24 +81,36 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     @Override
     public Map<String, Object> workflowRunSkipNode(Long id, String tenantId, String nodeCode) {
         String resolved = tenantGuard.resolveTenant(tenantId);
-        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-        Map<String, Object> response = client.post()
-                .uri("/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}",
-                        id, resolved, nodeCode)
-                .retrieve()
-                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        RestClient client =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
+        Map<String, Object> response =
+                client.post()
+                        .uri(
+                                "/internal/workflow-runs/{id}/skip-node?tenantId={tenantId}&nodeCode={nodeCode}",
+                                id,
+                                resolved,
+                                nodeCode)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<Map<String, Object>>() {});
         publishRefresh(resolved);
         return response;
     }
 
     @Override
     public ConsoleSchedulerSnapshotResponse schedulerSnapshot(String tenantId) {
-        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+        RestClient client =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
         return client.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/internal/scheduler/snapshot")
-                        .queryParam("tenantId", tenantId)
-                        .build())
+                .uri(
+                        uriBuilder ->
+                                uriBuilder
+                                        .path("/internal/scheduler/snapshot")
+                                        .queryParam("tenantId", tenantId)
+                                        .build())
                 .retrieve()
                 .body(ConsoleSchedulerSnapshotResponse.class);
     }
@@ -89,16 +120,24 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     }
 
     @Override
-    public List<ConsoleSchedulerSnapshotHistoryResponse> schedulerSnapshotHistory(String tenantId, int limit) {
-        RestClient client = restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    public List<ConsoleSchedulerSnapshotHistoryResponse> schedulerSnapshotHistory(
+            String tenantId, int limit) {
+        RestClient client =
+                restClientBuilder
+                        .baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl()))
+                        .build();
         return client.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/internal/scheduler/snapshot/history")
-                        .queryParam("tenantId", tenantId)
-                        .queryParam("limit", limit)
-                        .build())
+                .uri(
+                        uriBuilder ->
+                                uriBuilder
+                                        .path("/internal/scheduler/snapshot/history")
+                                        .queryParam("tenantId", tenantId)
+                                        .queryParam("limit", limit)
+                                        .build())
                 .retrieve()
-                .body(new ParameterizedTypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {});
+                .body(
+                        new ParameterizedTypeReference<
+                                List<ConsoleSchedulerSnapshotHistoryResponse>>() {});
     }
 
     private void publishRefresh(String tenantId) {

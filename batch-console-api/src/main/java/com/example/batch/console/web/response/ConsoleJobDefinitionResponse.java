@@ -30,6 +30,4 @@ public record ConsoleJobDefinitionResponse(
         Boolean enabled,
         String description,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

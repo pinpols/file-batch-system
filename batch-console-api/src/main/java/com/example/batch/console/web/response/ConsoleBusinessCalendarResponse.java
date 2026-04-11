@@ -13,6 +13,4 @@ public record ConsoleBusinessCalendarResponse(
         Integer catchUpMaxDays,
         Boolean enabled,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

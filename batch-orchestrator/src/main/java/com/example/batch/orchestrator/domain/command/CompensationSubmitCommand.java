@@ -7,9 +7,7 @@ public record CompensationSubmitCommand(
         String compensationType,
         Long targetId,
         String targetInstanceNo,
-        /**
-         * 补偿范围对应的业务 Job 标识。
-         */
+        /** 补偿范围对应的业务 Job 标识。 */
         String jobCode,
         LocalDate bizDate,
         String batchNo,
@@ -19,6 +17,4 @@ public record CompensationSubmitCommand(
         String operatorId,
         String approvalId,
         String strategy,
-        String traceId
-) {
-}
+        String traceId) {}

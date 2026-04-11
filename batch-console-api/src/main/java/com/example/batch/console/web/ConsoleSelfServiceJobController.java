@@ -2,15 +2,18 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
+import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleSelfServiceJobService;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.CompensationParam;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.RerunParam;
-import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,9 +22,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 租户自助重跑/补偿申请：提交审批工单，由管理员审批后执行。
- */
+/** 租户自助重跑/补偿申请：提交审批工单，由管理员审批后执行。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/self-service/jobs")
@@ -38,9 +39,15 @@ public class ConsoleSelfServiceJobController {
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody SelfServiceRerunRequest request) {
         String operator = requestMetadataResolver.current().operatorId();
-        RerunParam param = new RerunParam(request.tenantId(), request.jobCode(),
-                request.bizDate(), request.targetInstanceNo(), request.reason());
-        return responseFactory.success(selfServiceJobService.requestRerun(param, operator, idempotencyKey));
+        RerunParam param =
+                new RerunParam(
+                        request.tenantId(),
+                        request.jobCode(),
+                        request.bizDate(),
+                        request.targetInstanceNo(),
+                        request.reason());
+        return responseFactory.success(
+                selfServiceJobService.requestRerun(param, operator, idempotencyKey));
     }
 
     @PostMapping("/compensation-request")
@@ -48,9 +55,16 @@ public class ConsoleSelfServiceJobController {
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody SelfServiceCompensationRequest request) {
         String operator = requestMetadataResolver.current().operatorId();
-        CompensationParam param = new CompensationParam(request.tenantId(), request.jobCode(),
-                request.bizDate(), request.compensationType(), request.targetInstanceNo(), request.reason());
-        return responseFactory.success(selfServiceJobService.requestCompensation(param, operator, idempotencyKey));
+        CompensationParam param =
+                new CompensationParam(
+                        request.tenantId(),
+                        request.jobCode(),
+                        request.bizDate(),
+                        request.compensationType(),
+                        request.targetInstanceNo(),
+                        request.reason());
+        return responseFactory.success(
+                selfServiceJobService.requestCompensation(param, operator, idempotencyKey));
     }
 
     record SelfServiceRerunRequest(
@@ -58,8 +72,7 @@ public class ConsoleSelfServiceJobController {
             @NotBlank @Size(max = 128) String jobCode,
             @NotBlank String bizDate,
             String targetInstanceNo,
-            @Size(max = 512) String reason) {
-    }
+            @Size(max = 512) String reason) {}
 
     record SelfServiceCompensationRequest(
             @NotBlank String tenantId,
@@ -67,6 +80,5 @@ public class ConsoleSelfServiceJobController {
             @NotBlank String bizDate,
             String compensationType,
             String targetInstanceNo,
-            @Size(max = 512) String reason) {
-    }
+            @Size(max = 512) String reason) {}
 }

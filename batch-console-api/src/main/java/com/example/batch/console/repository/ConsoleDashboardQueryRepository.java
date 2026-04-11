@@ -1,17 +1,20 @@
 package com.example.batch.console.repository;
 
 import com.example.batch.console.domain.ConsoleJdbcQueryAnchor;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.List;
+
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
 public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQueryAnchor, Long> {
 
-    @Query("""
+    @Query(
+            """
             SELECT instance_status AS status, count(1) AS count
               FROM batch.job_instance
              WHERE tenant_id = :tenantId
@@ -19,7 +22,8 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
             """)
     List<StatusCountView> jobStatusCounts(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT cast(created_at as date) AS day, instance_status AS status, count(1) AS count
               FROM batch.job_instance
              WHERE tenant_id = :tenantId
@@ -27,9 +31,11 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
              GROUP BY day, instance_status
              ORDER BY day
             """)
-    List<DayStatusCountView> jobDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
+    List<DayStatusCountView> jobDailyTrend(
+            @Param("tenantId") String tenantId, @Param("days") int days);
 
-    @Query("""
+    @Query(
+            """
             SELECT trigger_type AS type, count(1) AS count
               FROM batch.trigger_request
              WHERE tenant_id = :tenantId
@@ -37,7 +43,8 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
             """)
     List<TypeCountView> triggerTypeCounts(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT cast(created_at as date) AS day, count(1) AS count
               FROM batch.trigger_request
              WHERE tenant_id = :tenantId
@@ -45,9 +52,11 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
              GROUP BY day
              ORDER BY day
             """)
-    List<DayCountView> triggerDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
+    List<DayCountView> triggerDailyTrend(
+            @Param("tenantId") String tenantId, @Param("days") int days);
 
-    @Query("""
+    @Query(
+            """
             SELECT status, count(1) AS count
               FROM batch.worker_registry
              WHERE tenant_id = :tenantId
@@ -55,7 +64,8 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
             """)
     List<StatusCountView> workerStatusCounts(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT worker_group AS workerGroup, status, count(1) AS count
               FROM batch.worker_registry
              WHERE tenant_id = :tenantId
@@ -64,7 +74,8 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
             """)
     List<WorkerGroupStatusCountView> workerGroupStatusCounts(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT p.worker_code AS workerCode, count(1) AS activePartitions
               FROM batch.job_partition p
              WHERE p.tenant_id = :tenantId
@@ -75,7 +86,8 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
             """)
     List<ActivePartitionView> activePartitionsByWorker(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT severity, count(1) AS count
               FROM batch.alert_event
              WHERE tenant_id = :tenantId
@@ -83,7 +95,8 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
             """)
     List<SeverityCountView> alertSeverityCounts(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT cast(created_at as date) AS day, severity, count(1) AS count
               FROM batch.alert_event
              WHERE tenant_id = :tenantId
@@ -91,9 +104,11 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
              GROUP BY day, severity
              ORDER BY day
             """)
-    List<DaySeverityCountView> alertDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
+    List<DaySeverityCountView> alertDailyTrend(
+            @Param("tenantId") String tenantId, @Param("days") int days);
 
-    @Query("""
+    @Query(
+            """
             SELECT count(1) FILTER (WHERE deadline_at IS NOT NULL AND finished_at > deadline_at) AS breached,
                    count(1) FILTER (WHERE deadline_at IS NOT NULL AND (finished_at IS NULL OR finished_at <= deadline_at)) AS onTime,
                    count(1) FILTER (WHERE deadline_at IS NOT NULL) AS totalWithSla,
@@ -105,7 +120,8 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
             """)
     SlaStatsView slaStats(@Param("tenantId") String tenantId, @Param("days") int days);
 
-    @Query("""
+    @Query(
+            """
             SELECT cast(created_at as date) AS day,
                    count(1) FILTER (WHERE deadline_at IS NOT NULL AND finished_at > deadline_at) AS breached,
                    count(1) FILTER (WHERE deadline_at IS NOT NULL AND finished_at <= deadline_at) AS onTime
@@ -120,86 +136,108 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
 
     interface StatusCountView {
         String getStatus();
+
         Long getCount();
     }
 
     interface DayStatusCountView {
         LocalDate getDay();
+
         String getStatus();
+
         Long getCount();
     }
 
     interface TypeCountView {
         String getType();
+
         Long getCount();
     }
 
     interface DayCountView {
         LocalDate getDay();
+
         Long getCount();
     }
 
     interface WorkerGroupStatusCountView {
         String getWorkerGroup();
+
         String getStatus();
+
         Long getCount();
     }
 
     interface ActivePartitionView {
         String getWorkerCode();
+
         Long getActivePartitions();
     }
 
     interface SeverityCountView {
         String getSeverity();
+
         Long getCount();
     }
 
     interface DaySeverityCountView {
         LocalDate getDay();
+
         String getSeverity();
+
         Long getCount();
     }
 
     // ── 配置依赖分析 ──────────────────────────────────────
 
-    @Query("""
+    @Query(
+            """
             SELECT id, job_code AS code, job_name AS name
               FROM batch.job_definition
              WHERE tenant_id = :tenantId AND queue_code = :configCode
             """)
-    List<ConfigDependentView> jobsByQueueCode(@Param("tenantId") String tenantId, @Param("configCode") String configCode);
+    List<ConfigDependentView> jobsByQueueCode(
+            @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-    @Query("""
+    @Query(
+            """
             SELECT id, job_code AS code, job_name AS name
               FROM batch.job_definition
              WHERE tenant_id = :tenantId AND calendar_code = :configCode
             """)
-    List<ConfigDependentView> jobsByCalendarCode(@Param("tenantId") String tenantId, @Param("configCode") String configCode);
+    List<ConfigDependentView> jobsByCalendarCode(
+            @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-    @Query("""
+    @Query(
+            """
             SELECT id, job_code AS code, job_name AS name
               FROM batch.job_definition
              WHERE tenant_id = :tenantId AND window_code = :configCode
             """)
-    List<ConfigDependentView> jobsByWindowCode(@Param("tenantId") String tenantId, @Param("configCode") String configCode);
+    List<ConfigDependentView> jobsByWindowCode(
+            @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-    @Query("""
+    @Query(
+            """
             SELECT id, job_code AS code, job_name AS name
               FROM batch.job_definition
              WHERE tenant_id = :tenantId AND worker_group = :configCode
             """)
-    List<ConfigDependentView> jobsByWorkerGroup(@Param("tenantId") String tenantId, @Param("configCode") String configCode);
+    List<ConfigDependentView> jobsByWorkerGroup(
+            @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
     interface ConfigDependentView {
         Long getId();
+
         String getCode();
+
         String getName();
     }
 
     // ── 执行进度查询（轻量） ──────────────────────────────
 
-    @Query("""
+    @Query(
+            """
             SELECT i.id,
                    i.job_code AS jobCode,
                    i.instance_no AS instanceNo,
@@ -215,59 +253,75 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
                AND i.biz_date = CAST(:bizDate AS DATE)
              ORDER BY i.id DESC
             """)
-    List<ExecutionProgressView> executionProgress(@Param("tenantId") String tenantId,
-                                                  @Param("jobCode") String jobCode,
-                                                  @Param("bizDate") String bizDate);
+    List<ExecutionProgressView> executionProgress(
+            @Param("tenantId") String tenantId,
+            @Param("jobCode") String jobCode,
+            @Param("bizDate") String bizDate);
 
     interface ExecutionProgressView {
         Long getId();
+
         String getJobCode();
+
         String getInstanceNo();
+
         String getInstanceStatus();
+
         Integer getExpectedPartitions();
+
         Integer getSuccessPartitions();
+
         Integer getFailedPartitions();
+
         Instant getStartedAt();
+
         Instant getFinishedAt();
     }
 
     // ── 租户用量统计 ──────────────────────────────────────
 
-    @Query("""
+    @Query(
+            """
             SELECT count(1) AS count FROM batch.job_definition WHERE tenant_id = :tenantId
             """)
     Long countJobDefinitions(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT count(1) AS count FROM batch.job_instance
              WHERE tenant_id = :tenantId AND created_at >= current_date - :days
             """)
     Long countRecentJobInstances(@Param("tenantId") String tenantId, @Param("days") int days);
 
-    @Query("""
+    @Query(
+            """
             SELECT count(1) AS count FROM batch.workflow_definition WHERE tenant_id = :tenantId
             """)
     Long countWorkflowDefinitions(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT count(1) AS count FROM batch.file_record
              WHERE tenant_id = :tenantId AND created_at >= current_date - :days
             """)
     Long countRecentFiles(@Param("tenantId") String tenantId, @Param("days") int days);
 
-    @Query("""
+    @Query(
+            """
             SELECT count(1) AS count FROM batch.file_channel_config WHERE tenant_id = :tenantId
             """)
     Long countFileChannels(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT count(1) AS count FROM batch.file_template_config WHERE tenant_id = :tenantId
             """)
     Long countFileTemplates(@Param("tenantId") String tenantId);
 
     // ── SLA 报表（按 job 维度） ─────────────────────────────
 
-    @Query("""
+    @Query(
+            """
             SELECT i.job_code AS jobCode,
                    d.job_name AS jobName,
                    count(1) AS totalInstances,
@@ -286,31 +340,46 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
              GROUP BY i.job_code, d.job_name
              ORDER BY slaBreached DESC, totalInstances DESC
             """)
-    List<SlaJobReportView> slaJobReport(@Param("tenantId") String tenantId, @Param("days") int days);
+    List<SlaJobReportView> slaJobReport(
+            @Param("tenantId") String tenantId, @Param("days") int days);
 
     interface SlaJobReportView {
         String getJobCode();
+
         String getJobName();
+
         Long getTotalInstances();
+
         Long getSuccessCount();
+
         Long getFailedCount();
+
         Long getSlaBreached();
+
         Long getSlaOnTime();
+
         BigDecimal getAvgDurationSeconds();
+
         BigDecimal getMaxDurationSeconds();
+
         Long getTotalPartitions();
     }
 
     interface SlaStatsView {
         Long getBreached();
+
         Long getOnTime();
+
         Long getTotalWithSla();
+
         BigDecimal getAvgDurationSeconds();
     }
 
     interface SlaDayView {
         LocalDate getDay();
+
         Long getBreached();
+
         Long getOnTime();
     }
 }
