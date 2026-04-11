@@ -2,6 +2,8 @@ package com.example.batch.console.support;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.Guard;
+
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -10,12 +12,11 @@ import org.springframework.util.StringUtils;
 @Component
 public class ConsolePasswordHasher {
 
-    private static final Argon2PasswordEncoder ARGON2 = Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+    private static final Argon2PasswordEncoder ARGON2 =
+            Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
 
     public String encode(String rawPassword) {
-        if (!StringUtils.hasText(rawPassword)) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "raw password is required");
-        }
+        Guard.requireText(rawPassword, "raw password is required");
         return ARGON2.encode(rawPassword);
     }
 
@@ -24,7 +25,9 @@ public class ConsolePasswordHasher {
             return false;
         }
         if (!encodedPassword.startsWith("$argon2")) {
-            throw new BizException(ResultCode.SYSTEM_ERROR, "unsupported password hash format (expected Argon2id)");
+            throw new BizException(
+                    ResultCode.SYSTEM_ERROR,
+                    "unsupported password hash format (expected Argon2id)");
         }
         return ARGON2.matches(rawPassword, encodedPassword);
     }

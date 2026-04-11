@@ -1,8 +1,19 @@
 package com.example.batch.console.infrastructure;
 
+import static com.example.batch.console.support.ConsoleExcelStyles.addBooleanValidation;
+import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownValidation;
+import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
+import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
+
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.application.ConsoleWorkflowExcelApplicationService;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
@@ -18,6 +29,9 @@ import com.example.batch.console.mapper.WorkflowNodeMapper;
 import com.example.batch.console.mapper.param.WorkflowDefinitionUpsertParam;
 import com.example.batch.console.mapper.param.WorkflowEdgeUpsertParam;
 import com.example.batch.console.mapper.param.WorkflowNodeUpsertParam;
+import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
+import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
+import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
@@ -43,36 +57,11 @@ import com.example.batch.console.web.response.ConsoleWorkflowExcelPreviewRespons
 import com.example.batch.console.web.response.ConsoleWorkflowExcelRowIssueResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowExcelUploadResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeExcelRowResponse;
-import static com.example.batch.console.support.ConsoleExcelStyles.addBooleanValidation;
-import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownValidation;
-import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
-import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
-import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
-import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
-import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
-import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
-import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
-import com.example.batch.console.support.ConsoleExcelStyles;
-import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
-import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
-import java.io.ByteArrayInputStream;
-import org.apache.poi.ss.usermodel.Cell;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
+
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -90,100 +79,188 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 /**
- * {@link com.example.batch.console.application.ConsoleWorkflowExcelApplicationService} 的默认实现（POI 解析/生成与内存会话）。
+ * {@link com.example.batch.console.application.ConsoleWorkflowExcelApplicationService} 的默认实现（POI
+ * 解析/生成与内存会话）。
  */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWorkflowExcelApplicationService {
+public class DefaultConsoleWorkflowExcelApplicationService
+        implements ConsoleWorkflowExcelApplicationService {
 
     private static final String DEF_SHEET = "workflow_definition";
     private static final String NODE_SHEET = "workflow_node";
     private static final String EDGE_SHEET = "workflow_edge";
 
-    private static final List<String> DEF_COLUMNS = List.of(
-            "tenant_id",
-            "workflow_code",
-            "workflow_name",
-            "workflow_type",
-            "version",
-            "enabled",
-            "description"
-    );
-    private static final List<String> NODE_COLUMNS = List.of(
-            "tenant_id",
-            "workflow_code",
-            "workflow_version",
-            "node_code",
-            "node_name",
-            "node_type",
-            "related_job_code",
-            "related_pipeline_code",
-            "worker_group",
-            "window_code",
-            "node_order",
-            "retry_policy",
-            "retry_max_count",
-            "timeout_seconds",
-            "node_params",
-            "enabled"
-    );
-    private static final List<String> EDGE_COLUMNS = List.of(
-            "tenant_id",
-            "workflow_code",
-            "workflow_version",
-            "from_node_code",
-            "to_node_code",
-            "edge_type",
-            "condition_expr",
-            "enabled"
-    );
+    private static final List<String> DEF_COLUMNS =
+            List.of(
+                    "tenant_id",
+                    "workflow_code",
+                    "workflow_name",
+                    "workflow_type",
+                    "version",
+                    "enabled",
+                    "description");
+    private static final List<String> NODE_COLUMNS =
+            List.of(
+                    "tenant_id",
+                    "workflow_code",
+                    "workflow_version",
+                    "node_code",
+                    "node_name",
+                    "node_type",
+                    "related_job_code",
+                    "related_pipeline_code",
+                    "worker_group",
+                    "window_code",
+                    "node_order",
+                    "retry_policy",
+                    "retry_max_count",
+                    "timeout_seconds",
+                    "node_params",
+                    "enabled");
+    private static final List<String> EDGE_COLUMNS =
+            List.of(
+                    "tenant_id",
+                    "workflow_code",
+                    "workflow_version",
+                    "from_node_code",
+                    "to_node_code",
+                    "edge_type",
+                    "condition_expr",
+                    "enabled");
 
     private static final Set<String> DEF_HEADERS = Set.copyOf(DEF_COLUMNS);
     private static final Set<String> NODE_HEADERS = Set.copyOf(NODE_COLUMNS);
     private static final Set<String> EDGE_HEADERS = Set.copyOf(EDGE_COLUMNS);
-    private static final Map<String, ConsoleExcelStyles.ColumnGuide> DEF_COLUMN_GUIDES = Map.ofEntries(
-            Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
-            Map.entry("workflow_code", requiredColumn("工作流唯一编码，三个工作流 sheet 都依赖这个键。", "字符串", "WF_SETTLEMENT")),
-            Map.entry("workflow_name", requiredColumn("控制台展示的工作流名称。", "字符串", "清算工作流")),
-            Map.entry("workflow_type", requiredColumn("工作流拓扑类型。", "枚举", "DAG", "DAG", "PIPELINE", "MIXED")),
-            Map.entry("version", requiredColumn("工作流版本号，节点和边必须使用同一版本。", "整数", "1")),
-            Map.entry("enabled", optionalColumn("工作流定义是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
-            Map.entry("description", optionalColumn("面向运维人员的说明信息。", "字符串", "夜间清算编排流程"))
-    );
-    private static final Map<String, ConsoleExcelStyles.ColumnGuide> NODE_COLUMN_GUIDES = Map.ofEntries(
-            Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
-            Map.entry("workflow_code", requiredColumn("工作流编码，必须与 workflow_definition.workflow_code 一致。", "字符串", "WF_SETTLEMENT")),
-            Map.entry("workflow_version", requiredColumn("工作流版本，必须与 workflow_definition.version 一致。", "整数", "1")),
-            Map.entry("node_code", requiredColumn("工作流内唯一节点编码。", "字符串", "LOAD_SOURCE")),
-            Map.entry("node_name", requiredColumn("面向运维人员的节点名称。", "字符串", "加载源文件")),
-            Map.entry("node_type", requiredColumn("编排器识别的节点类型。", "枚举", "TASK", "TASK", "GATEWAY", "FILE_STEP", "START", "END", "JOB")),
-            Map.entry("related_job_code", optionalColumn("当该节点触发作业定义时填写。", "字符串", "JOB_IMPORT_001")),
-            Map.entry("related_pipeline_code", optionalColumn("当该节点引用 pipeline 定义时填写。", "字符串", "PIPE_IMPORT_001")),
-            Map.entry("worker_group", optionalColumn("运行时使用的执行器分组。", "字符串", "worker-general")),
-            Map.entry("window_code", optionalColumn("系统中已准备好的批量窗口编码。", "字符串", "WINDOW_NIGHT")),
-            Map.entry("node_order", optionalColumn("同层节点的建议执行顺序。", "整数", "10")),
-            Map.entry("retry_policy", optionalColumn("节点失败后的重试策略。", "枚举", "FIXED", "NONE", "FIXED", "EXPONENTIAL")),
-            Map.entry("retry_max_count", optionalColumn("最大重试次数，必须大于等于 0。", "整数", "3")),
-            Map.entry("timeout_seconds", optionalColumn("超时时间（秒），必须大于等于 0。", "整数", "1800")),
-            Map.entry("node_params", optionalColumn("节点运行参数，请保持为合法 JSON。", "JSON", "{\"mode\":\"full\"}")),
-            Map.entry("enabled", optionalColumn("节点是否启用。", "布尔值", "TRUE", "TRUE", "FALSE"))
-    );
-    private static final Map<String, ConsoleExcelStyles.ColumnGuide> EDGE_COLUMN_GUIDES = Map.ofEntries(
-            Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
-            Map.entry("workflow_code", requiredColumn("工作流编码，必须与 workflow_definition.workflow_code 一致。", "字符串", "WF_SETTLEMENT")),
-            Map.entry("workflow_version", requiredColumn("工作流版本，必须与 workflow_definition.version 一致。", "整数", "1")),
-            Map.entry("from_node_code", requiredColumn("依赖关系中的上游节点编码。", "字符串", "LOAD_SOURCE")),
-            Map.entry("to_node_code", requiredColumn("依赖关系中的下游节点编码。", "字符串", "VALIDATE_FILE")),
-            Map.entry("edge_type", requiredColumn("两个节点之间的流转类型。", "枚举", "SUCCESS", "SUCCESS", "FAILURE", "CONDITION", "ALWAYS")),
-            Map.entry("condition_expr", optionalColumn("当 edge_type 为 CONDITION 时填写条件表达式。", "表达式", "${fileReady == true}")),
-            Map.entry("enabled", optionalColumn("该依赖边是否启用。", "布尔值", "TRUE", "TRUE", "FALSE"))
-    );
+    private static final Map<String, ConsoleExcelStyles.ColumnGuide> DEF_COLUMN_GUIDES =
+            Map.ofEntries(
+                    Map.entry(
+                            "tenant_id",
+                            optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+                    Map.entry(
+                            "workflow_code",
+                            requiredColumn("工作流唯一编码，三个工作流 sheet 都依赖这个键。", "字符串", "WF_SETTLEMENT")),
+                    Map.entry("workflow_name", requiredColumn("控制台展示的工作流名称。", "字符串", "清算工作流")),
+                    Map.entry(
+                            "workflow_type",
+                            requiredColumn("工作流拓扑类型。", "枚举", "DAG", "DAG", "PIPELINE", "MIXED")),
+                    Map.entry("version", requiredColumn("工作流版本号，节点和边必须使用同一版本。", "整数", "1")),
+                    Map.entry(
+                            "enabled",
+                            optionalColumn("工作流定义是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
+                    Map.entry("description", optionalColumn("面向运维人员的说明信息。", "字符串", "夜间清算编排流程")));
+    private static final Map<String, ConsoleExcelStyles.ColumnGuide> NODE_COLUMN_GUIDES =
+            Map.ofEntries(
+                    Map.entry(
+                            "tenant_id",
+                            optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+                    Map.entry(
+                            "workflow_code",
+                            requiredColumn(
+                                    "工作流编码，必须与 workflow_definition.workflow_code 一致。",
+                                    "字符串",
+                                    "WF_SETTLEMENT")),
+                    Map.entry(
+                            "workflow_version",
+                            requiredColumn("工作流版本，必须与 workflow_definition.version 一致。", "整数", "1")),
+                    Map.entry("node_code", requiredColumn("工作流内唯一节点编码。", "字符串", "LOAD_SOURCE")),
+                    Map.entry("node_name", requiredColumn("面向运维人员的节点名称。", "字符串", "加载源文件")),
+                    Map.entry(
+                            "node_type",
+                            requiredColumn(
+                                    "编排器识别的节点类型。",
+                                    "枚举",
+                                    "TASK",
+                                    "TASK",
+                                    "GATEWAY",
+                                    "FILE_STEP",
+                                    "START",
+                                    "END",
+                                    "JOB")),
+                    Map.entry(
+                            "related_job_code",
+                            optionalColumn("当该节点触发作业定义时填写。", "字符串", "JOB_IMPORT_001")),
+                    Map.entry(
+                            "related_pipeline_code",
+                            optionalColumn("当该节点引用 pipeline 定义时填写。", "字符串", "PIPE_IMPORT_001")),
+                    Map.entry(
+                            "worker_group",
+                            optionalColumn("运行时使用的执行器分组。", "字符串", "worker-general")),
+                    Map.entry(
+                            "window_code",
+                            optionalColumn("系统中已准备好的批量窗口编码。", "字符串", "WINDOW_NIGHT")),
+                    Map.entry("node_order", optionalColumn("同层节点的建议执行顺序。", "整数", "10")),
+                    Map.entry(
+                            "retry_policy",
+                            optionalColumn(
+                                    "节点失败后的重试策略。", "枚举", "FIXED", "NONE", "FIXED", "EXPONENTIAL")),
+                    Map.entry("retry_max_count", optionalColumn("最大重试次数，必须大于等于 0。", "整数", "3")),
+                    Map.entry("timeout_seconds", optionalColumn("超时时间（秒），必须大于等于 0。", "整数", "1800")),
+                    Map.entry(
+                            "node_params",
+                            optionalColumn("节点运行参数，请保持为合法 JSON。", "JSON", "{\"mode\":\"full\"}")),
+                    Map.entry(
+                            "enabled", optionalColumn("节点是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")));
+    private static final Map<String, ConsoleExcelStyles.ColumnGuide> EDGE_COLUMN_GUIDES =
+            Map.ofEntries(
+                    Map.entry(
+                            "tenant_id",
+                            optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+                    Map.entry(
+                            "workflow_code",
+                            requiredColumn(
+                                    "工作流编码，必须与 workflow_definition.workflow_code 一致。",
+                                    "字符串",
+                                    "WF_SETTLEMENT")),
+                    Map.entry(
+                            "workflow_version",
+                            requiredColumn("工作流版本，必须与 workflow_definition.version 一致。", "整数", "1")),
+                    Map.entry(
+                            "from_node_code",
+                            requiredColumn("依赖关系中的上游节点编码。", "字符串", "LOAD_SOURCE")),
+                    Map.entry(
+                            "to_node_code",
+                            requiredColumn("依赖关系中的下游节点编码。", "字符串", "VALIDATE_FILE")),
+                    Map.entry(
+                            "edge_type",
+                            requiredColumn(
+                                    "两个节点之间的流转类型。",
+                                    "枚举",
+                                    "SUCCESS",
+                                    "SUCCESS",
+                                    "FAILURE",
+                                    "CONDITION",
+                                    "ALWAYS")),
+                    Map.entry(
+                            "condition_expr",
+                            optionalColumn(
+                                    "当 edge_type 为 CONDITION 时填写条件表达式。",
+                                    "表达式",
+                                    "${fileReady == true}")),
+                    Map.entry(
+                            "enabled",
+                            optionalColumn("该依赖边是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")));
 
     private static final Set<String> WORKFLOW_TYPES = Set.of("DAG", "PIPELINE", "MIXED");
-    private static final Set<String> NODE_TYPES = Set.of("TASK", "GATEWAY", "FILE_STEP", "START", "END", "JOB");
+    private static final Set<String> NODE_TYPES =
+            Set.of("TASK", "GATEWAY", "FILE_STEP", "START", "END", "JOB");
     private static final Set<String> RETRY_POLICIES = Set.of("NONE", "FIXED", "EXPONENTIAL");
-    private static final Set<String> EDGE_TYPES = Set.of("SUCCESS", "FAILURE", "CONDITION", "ALWAYS");
+    private static final Set<String> EDGE_TYPES =
+            Set.of("SUCCESS", "FAILURE", "CONDITION", "ALWAYS");
 
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -194,23 +271,30 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
     private final WorkflowExcelImportStore importStore;
 
     @Override
-    public ResponseEntity<InputStreamResource> exportWorkflowExcel(WorkflowDefinitionQueryRequest request) {
+    public ResponseEntity<InputStreamResource> exportWorkflowExcel(
+            WorkflowDefinitionQueryRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-        List<WorkflowDefinitionEntity> definitions = workflowDefinitionMapper.selectByQuery(new WorkflowDefinitionQuery(
-                tenantId,
-                request.getWorkflowCode(),
-                request.getWorkflowName(),
-                request.getWorkflowType(),
-                request.getVersion(),
-                request.getEnabled(),
-                null
-        ));
+        List<WorkflowDefinitionEntity> definitions =
+                workflowDefinitionMapper.selectByQuery(
+                        new WorkflowDefinitionQuery(
+                                tenantId,
+                                request.getWorkflowCode(),
+                                request.getWorkflowName(),
+                                request.getWorkflowType(),
+                                request.getVersion(),
+                                request.getEnabled(),
+                                null));
         byte[] workbookBytes = writeWorkbook(tenantId, definitions);
         InputStreamResource body = new InputStreamResource(new ByteArrayInputStream(workbookBytes));
-        String fileName = "workflow-maintenance-" + tenantId + "-" + Instant.now().toEpochMilli() + ".xlsx";
+        String fileName =
+                "workflow-maintenance-" + tenantId + "-" + Instant.now().toEpochMilli() + ".xlsx";
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(fileName).build().toString())
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(fileName).build().toString())
+                .contentType(
+                        MediaType.parseMediaType(
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(body);
     }
 
@@ -218,27 +302,38 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
     public ResponseEntity<InputStreamResource> downloadTemplate() {
         byte[] workbookBytes = writeWorkbook("template", List.of());
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename("workflow-maintenance-template.xlsx").build().toString())
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename("workflow-maintenance-template.xlsx")
+                                .build()
+                                .toString())
+                .contentType(
+                        MediaType.parseMediaType(
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
     }
 
     @Override
     public ConsoleWorkflowExcelUploadResponse upload(MultipartFile file) throws IOException {
-        if (file == null || file.isEmpty()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "file is required");
-        }
+        Guard.require(file != null && !file.isEmpty(), "file is required");
         String tenantId = tenantGuard.resolveTenant(null);
-        ParsedWorkbook workbook = parseWorkbook(file.getBytes(), tenantId, file.getOriginalFilename());
-        String uploadToken = importStore.save(workbook.fileName(), workbook.tenantId(), workbook.definitions(), workbook.nodes(), workbook.edges());
+        ParsedWorkbook workbook =
+                parseWorkbook(file.getBytes(), tenantId, file.getOriginalFilename());
+        String uploadToken =
+                importStore.save(
+                        workbook.fileName(),
+                        workbook.tenantId(),
+                        workbook.definitions(),
+                        workbook.nodes(),
+                        workbook.edges());
         return new ConsoleWorkflowExcelUploadResponse(
                 uploadToken,
                 workbook.fileName(),
                 workbook.definitions().size(),
                 workbook.nodes().size(),
                 workbook.edges().size(),
-                workbook.definitions().size() + workbook.nodes().size() + workbook.edges().size()
-        );
+                workbook.definitions().size() + workbook.nodes().size() + workbook.edges().size());
     }
 
     @Override
@@ -257,8 +352,7 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                 validationResult.definitions().stream().map(this::toResponse).toList(),
                 validationResult.nodes().stream().map(this::toResponse).toList(),
                 validationResult.edges().stream().map(this::toResponse).toList(),
-                validationResult.issues()
-        );
+                validationResult.issues());
     }
 
     @Override
@@ -267,41 +361,63 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         ValidationResult validationResult = validate(session);
         byte[] workbookBytes = writePreviewWorkbook(session, validationResult);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                        .filename(ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()))
-                        .build().toString())
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(
+                                        ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(
+                                                session.fileName()))
+                                .build()
+                                .toString())
+                .contentType(
+                        MediaType.parseMediaType(
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
     }
 
     @Override
     @Transactional
-    public ConsoleWorkflowExcelApplyResponse apply(String uploadToken, WorkflowExcelApplyRequest request) {
+    public ConsoleWorkflowExcelApplyResponse apply(
+            String uploadToken, WorkflowExcelApplyRequest request) {
         ParsedSession session = loadSession(uploadToken);
         ValidationResult validationResult = validate(session);
         if (validationResult.invalidRows() > 0) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "excel contains invalid workflow rows");
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT, "excel contains invalid workflow rows");
         }
         ConsoleRequestMetadata metadata = requestMetadataResolver.current();
         String operatorId = metadata.operatorId();
         String traceId = metadata.traceId();
 
-        Map<WorkflowKey, List<WorkflowNodeRow>> nodesByWorkflow = groupNodes(validationResult.nodes());
-        Map<WorkflowKey, List<WorkflowEdgeRow>> edgesByWorkflow = groupEdges(validationResult.edges());
+        Map<WorkflowKey, List<WorkflowNodeRow>> nodesByWorkflow =
+                groupNodes(validationResult.nodes());
+        Map<WorkflowKey, List<WorkflowEdgeRow>> edgesByWorkflow =
+                groupEdges(validationResult.edges());
 
         ApplyCounters counters = new ApplyCounters();
         for (WorkflowDefinitionRow row : validationResult.definitions()) {
             WorkflowKey key = WorkflowKey.of(row.tenantId(), row.workflowCode(), row.version());
             WorkflowDefinitionEntity existing = applyWorkflowDefinition(row, operatorId, counters);
-            WorkflowDefinitionEntity saved = workflowDefinitionMapper.selectByUniqueKey(row.tenantId(), row.workflowCode(), row.version());
+            WorkflowDefinitionEntity saved =
+                    workflowDefinitionMapper.selectByUniqueKey(
+                            row.tenantId(), row.workflowCode(), row.version());
             if (saved == null || saved.getId() == null) {
-                throw new BizException(ResultCode.SYSTEM_ERROR, "failed to resolve workflow definition id");
+                throw new BizException(
+                        ResultCode.SYSTEM_ERROR, "failed to resolve workflow definition id");
             }
             List<WorkflowNodeRow> workflowNodes = nodesByWorkflow.getOrDefault(key, List.of());
             List<WorkflowEdgeRow> workflowEdges = edgesByWorkflow.getOrDefault(key, List.of());
             applyNodes(saved.getId(), workflowNodes, counters);
             applyEdges(saved.getId(), workflowEdges, counters);
-            logDefinitionChange(new DefinitionChangeContext(row, workflowNodes.size(), workflowEdges.size(), request.getReason(), operatorId, traceId, existing == null ? "CREATE" : "PUBLISH"));
+            logDefinitionChange(
+                    new DefinitionChangeContext(
+                            row,
+                            workflowNodes.size(),
+                            workflowEdges.size(),
+                            request.getReason(),
+                            operatorId,
+                            traceId,
+                            existing == null ? "CREATE" : "PUBLISH"));
         }
 
         importStore.remove(uploadToken);
@@ -316,12 +432,14 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                 counters.insertedNodes,
                 counters.updatedNodes,
                 counters.insertedEdges,
-                counters.updatedEdges
-        );
+                counters.updatedEdges);
     }
 
-    private WorkflowDefinitionEntity applyWorkflowDefinition(WorkflowDefinitionRow row, String operatorId, ApplyCounters counters) {
-        WorkflowDefinitionEntity existing = workflowDefinitionMapper.selectByUniqueKey(row.tenantId(), row.workflowCode(), row.version());
+    private WorkflowDefinitionEntity applyWorkflowDefinition(
+            WorkflowDefinitionRow row, String operatorId, ApplyCounters counters) {
+        WorkflowDefinitionEntity existing =
+                workflowDefinitionMapper.selectByUniqueKey(
+                        row.tenantId(), row.workflowCode(), row.version());
         WorkflowDefinitionUpsertParam definitionParam = new WorkflowDefinitionUpsertParam();
         definitionParam.setTenantId(row.tenantId());
         definitionParam.setWorkflowCode(row.workflowCode());
@@ -341,9 +459,11 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         return existing;
     }
 
-    private void applyNodes(Long definitionId, List<WorkflowNodeRow> workflowNodes, ApplyCounters counters) {
+    private void applyNodes(
+            Long definitionId, List<WorkflowNodeRow> workflowNodes, ApplyCounters counters) {
         for (WorkflowNodeRow node : workflowNodes) {
-            WorkflowNodeEntity existingNode = workflowNodeMapper.selectByUniqueKey(definitionId, node.nodeCode());
+            WorkflowNodeEntity existingNode =
+                    workflowNodeMapper.selectByUniqueKey(definitionId, node.nodeCode());
             WorkflowNodeUpsertParam nodeParam = new WorkflowNodeUpsertParam();
             nodeParam.setWorkflowDefinitionId(definitionId);
             nodeParam.setNodeCode(node.nodeCode());
@@ -368,9 +488,12 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         }
     }
 
-    private void applyEdges(Long definitionId, List<WorkflowEdgeRow> workflowEdges, ApplyCounters counters) {
+    private void applyEdges(
+            Long definitionId, List<WorkflowEdgeRow> workflowEdges, ApplyCounters counters) {
         for (WorkflowEdgeRow edge : workflowEdges) {
-            WorkflowEdgeEntity existingEdge = workflowEdgeMapper.selectByUniqueKey(definitionId, edge.fromNodeCode(), edge.toNodeCode(), edge.edgeType());
+            WorkflowEdgeEntity existingEdge =
+                    workflowEdgeMapper.selectByUniqueKey(
+                            definitionId, edge.fromNodeCode(), edge.toNodeCode(), edge.edgeType());
             WorkflowEdgeUpsertParam edgeParam = new WorkflowEdgeUpsertParam();
             edgeParam.setWorkflowDefinitionId(definitionId);
             edgeParam.setFromNodeCode(edge.fromNodeCode());
@@ -397,19 +520,21 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
     }
 
     private ParsedSession loadSession(String uploadToken) {
-        WorkflowExcelSession session = importStore.get(uploadToken);
-        if (session == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "excel upload session not found");
-        }
+        WorkflowExcelSession session =
+                Guard.requireFound(importStore.get(uploadToken), "excel upload session not found");
         tenantGuard.assertTenantAllowed(session.tenantId());
-        return new ParsedSession(session.fileName(), session.tenantId(), session.uploadedAt(), session.definitions(), session.nodes(), session.edges());
+        return new ParsedSession(
+                session.fileName(),
+                session.tenantId(),
+                session.uploadedAt(),
+                session.definitions(),
+                session.nodes(),
+                session.edges());
     }
 
     private Sheet findSheet(Workbook workbook, String sheetName) {
         Sheet sheet = workbook.getSheet(sheetName);
-        if (sheet == null) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "excel sheet missing: " + sheetName);
-        }
+        Guard.require(sheet != null, "excel sheet missing: " + sheetName);
         return sheet;
     }
 
@@ -417,20 +542,18 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         List<WorkflowDefinitionRow> rows = new ArrayList<>();
         for (SheetRow rowData : readSheetRows(sheet, DEF_COLUMNS, DEF_HEADERS)) {
             Map<String, String> rowValues = rowData.values();
-            rows.add(new WorkflowDefinitionRow(
-                    new WorkflowIdentity(
-                            rowData.rowNo(),
-                            tenantOrDefault(rowValues.get("tenant_id"), tenantId),
-                            normalize(rowValues.get("workflow_code"))
-                    ),
-                    new WorkflowDefinitionPayload(
-                            normalize(rowValues.get("workflow_name")),
-                            normalizeEnum(rowValues.get("workflow_type"), WORKFLOW_TYPES),
-                            parseInteger(rowValues.get("version")),
-                            parseBoolean(rowValues.get("enabled"), true),
-                            normalize(rowValues.get("description"))
-                    )
-            ));
+            rows.add(
+                    new WorkflowDefinitionRow(
+                            new WorkflowIdentity(
+                                    rowData.rowNo(),
+                                    tenantOrDefault(rowValues.get("tenant_id"), tenantId),
+                                    normalize(rowValues.get("workflow_code"))),
+                            new WorkflowDefinitionPayload(
+                                    normalize(rowValues.get("workflow_name")),
+                                    normalizeEnum(rowValues.get("workflow_type"), WORKFLOW_TYPES),
+                                    parseInteger(rowValues.get("version")),
+                                    parseBoolean(rowValues.get("enabled"), true),
+                                    normalize(rowValues.get("description")))));
         }
         return rows;
     }
@@ -439,33 +562,29 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         List<WorkflowNodeRow> rows = new ArrayList<>();
         for (SheetRow rowData : readSheetRows(sheet, NODE_COLUMNS, NODE_HEADERS)) {
             Map<String, String> rowValues = rowData.values();
-            rows.add(new WorkflowNodeRow(
-                    new WorkflowNodeIdentity(
-                            rowData.rowNo(),
-                            tenantOrDefault(rowValues.get("tenant_id"), tenantId),
-                            normalize(rowValues.get("workflow_code")),
-                            parseInteger(rowValues.get("workflow_version")),
-                            normalize(rowValues.get("node_code"))
-                    ),
-                    new WorkflowNodeRelation(
-                            normalize(rowValues.get("node_name")),
-                            normalizeEnum(rowValues.get("node_type"), NODE_TYPES),
-                            normalize(rowValues.get("related_job_code")),
-                            normalize(rowValues.get("related_pipeline_code"))
-                    ),
-                    new WorkflowNodeExecution(
-                            normalize(rowValues.get("worker_group")),
-                            normalize(rowValues.get("window_code")),
-                            parseInteger(rowValues.get("node_order"))
-                    ),
-                    new WorkflowNodeRuntime(
-                            normalizeEnum(rowValues.get("retry_policy"), RETRY_POLICIES),
-                            parseInteger(rowValues.get("retry_max_count")),
-                            parseInteger(rowValues.get("timeout_seconds")),
-                            normalize(rowValues.get("node_params")),
-                            parseBoolean(rowValues.get("enabled"), true)
-                    )
-            ));
+            rows.add(
+                    new WorkflowNodeRow(
+                            new WorkflowNodeIdentity(
+                                    rowData.rowNo(),
+                                    tenantOrDefault(rowValues.get("tenant_id"), tenantId),
+                                    normalize(rowValues.get("workflow_code")),
+                                    parseInteger(rowValues.get("workflow_version")),
+                                    normalize(rowValues.get("node_code"))),
+                            new WorkflowNodeRelation(
+                                    normalize(rowValues.get("node_name")),
+                                    normalizeEnum(rowValues.get("node_type"), NODE_TYPES),
+                                    normalize(rowValues.get("related_job_code")),
+                                    normalize(rowValues.get("related_pipeline_code"))),
+                            new WorkflowNodeExecution(
+                                    normalize(rowValues.get("worker_group")),
+                                    normalize(rowValues.get("window_code")),
+                                    parseInteger(rowValues.get("node_order"))),
+                            new WorkflowNodeRuntime(
+                                    normalizeEnum(rowValues.get("retry_policy"), RETRY_POLICIES),
+                                    parseInteger(rowValues.get("retry_max_count")),
+                                    parseInteger(rowValues.get("timeout_seconds")),
+                                    normalize(rowValues.get("node_params")),
+                                    parseBoolean(rowValues.get("enabled"), true))));
         }
         return rows;
     }
@@ -474,35 +593,38 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         List<WorkflowEdgeRow> rows = new ArrayList<>();
         for (SheetRow rowData : readSheetRows(sheet, EDGE_COLUMNS, EDGE_HEADERS)) {
             Map<String, String> rowValues = rowData.values();
-            rows.add(new WorkflowEdgeRow(
-                    new WorkflowEdgeIdentity(
-                            rowData.rowNo(),
-                            tenantOrDefault(rowValues.get("tenant_id"), tenantId),
-                            normalize(rowValues.get("workflow_code")),
-                            parseInteger(rowValues.get("workflow_version")),
-                            normalize(rowValues.get("from_node_code")),
-                            normalize(rowValues.get("to_node_code"))
-                    ),
-                    new WorkflowEdgePayload(
-                            normalizeEnum(rowValues.get("edge_type"), EDGE_TYPES),
-                            normalize(rowValues.get("condition_expr")),
-                            parseBoolean(rowValues.get("enabled"), true)
-                    )
-            ));
+            rows.add(
+                    new WorkflowEdgeRow(
+                            new WorkflowEdgeIdentity(
+                                    rowData.rowNo(),
+                                    tenantOrDefault(rowValues.get("tenant_id"), tenantId),
+                                    normalize(rowValues.get("workflow_code")),
+                                    parseInteger(rowValues.get("workflow_version")),
+                                    normalize(rowValues.get("from_node_code")),
+                                    normalize(rowValues.get("to_node_code"))),
+                            new WorkflowEdgePayload(
+                                    normalizeEnum(rowValues.get("edge_type"), EDGE_TYPES),
+                                    normalize(rowValues.get("condition_expr")),
+                                    parseBoolean(rowValues.get("enabled"), true))));
         }
         return rows;
     }
 
-    private List<SheetRow> readSheetRows(Sheet sheet, List<String> columns, Set<String> requiredHeaders) {
+    private List<SheetRow> readSheetRows(
+            Sheet sheet, List<String> columns, Set<String> requiredHeaders) {
         DataFormatter formatter = new DataFormatter();
         Row headerRow = sheet.getRow(sheet.getFirstRowNum());
         if (headerRow == null) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "excel header row is missing for sheet: " + sheet.getSheetName());
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT,
+                    "excel header row is missing for sheet: " + sheet.getSheetName());
         }
         Map<String, Integer> headerIndex = readHeaderIndex(headerRow, formatter);
         validateHeaders(sheet.getSheetName(), headerIndex, requiredHeaders);
         List<SheetRow> rows = new ArrayList<>();
-        for (int rowIndex = headerRow.getRowNum() + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+        for (int rowIndex = headerRow.getRowNum() + 1;
+                rowIndex <= sheet.getLastRowNum();
+                rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             if (row == null || rowIsBlank(row, formatter)) {
                 continue;
@@ -520,38 +642,47 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
     private ValidationResult validate(ParsedSession session) {
         List<ConsoleWorkflowExcelRowIssueResponse> issues = new ArrayList<>();
         Set<WorkflowKey> definitionKeys = new LinkedHashSet<>();
-        List<WorkflowDefinitionRow> validDefinitions = validateWorkflowStructure(session.definitions(), definitionKeys, issues);
+        List<WorkflowDefinitionRow> validDefinitions =
+                validateWorkflowStructure(session.definitions(), definitionKeys, issues);
         List<WorkflowNodeRow> validNodes = validateNodes(session.nodes(), definitionKeys, issues);
         List<WorkflowEdgeRow> validEdges = validateEdges(session.edges(), definitionKeys, issues);
 
-        int totalRows = session.definitions().size() + session.nodes().size() + session.edges().size();
+        int totalRows =
+                session.definitions().size() + session.nodes().size() + session.edges().size();
         int validRows = validDefinitions.size() + validNodes.size() + validEdges.size();
         return ValidationResult.builder()
-                .counts(ValidationCounts.builder()
-                        .definitionRows(session.definitions().size())
-                        .nodeRows(session.nodes().size())
-                        .edgeRows(session.edges().size())
-                        .totalRows(totalRows)
-                        .validRows(validRows)
-                        .invalidRows(totalRows - validRows)
-                        .build())
-                .data(ValidationData.builder()
-                        .definitions(validDefinitions)
-                        .nodes(validNodes)
-                        .edges(validEdges)
-                        .issues(issues)
-                        .build())
+                .counts(
+                        ValidationCounts.builder()
+                                .definitionRows(session.definitions().size())
+                                .nodeRows(session.nodes().size())
+                                .edgeRows(session.edges().size())
+                                .totalRows(totalRows)
+                                .validRows(validRows)
+                                .invalidRows(totalRows - validRows)
+                                .build())
+                .data(
+                        ValidationData.builder()
+                                .definitions(validDefinitions)
+                                .nodes(validNodes)
+                                .edges(validEdges)
+                                .issues(issues)
+                                .build())
                 .build();
     }
 
-    private List<WorkflowDefinitionRow> validateWorkflowStructure(List<WorkflowDefinitionRow> definitions,
-                                                                    Set<WorkflowKey> definitionKeys,
-                                                                    List<ConsoleWorkflowExcelRowIssueResponse> issues) {
+    private List<WorkflowDefinitionRow> validateWorkflowStructure(
+            List<WorkflowDefinitionRow> definitions,
+            Set<WorkflowKey> definitionKeys,
+            List<ConsoleWorkflowExcelRowIssueResponse> issues) {
         List<WorkflowDefinitionRow> valid = new ArrayList<>();
         for (WorkflowDefinitionRow row : definitions) {
             List<String> rowIssues = new ArrayList<>();
             WorkflowKey key = WorkflowKey.of(row.tenantId(), row.workflowCode(), row.version());
-            if (!hasText(row.tenantId()) || !hasText(row.workflowCode()) || !hasText(row.workflowName()) || !hasText(row.workflowType()) || row.version() == null) {
+            if (!hasText(row.tenantId())
+                    || !hasText(row.workflowCode())
+                    || !hasText(row.workflowName())
+                    || !hasText(row.workflowType())
+                    || row.version() == null) {
                 rowIssues.add("workflow definition fields are incomplete");
             }
             if (hasText(row.workflowType()) && !WORKFLOW_TYPES.contains(row.workflowType())) {
@@ -563,24 +694,39 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
             if (rowIssues.isEmpty()) {
                 valid.add(row);
             } else {
-                issues.add(new ConsoleWorkflowExcelRowIssueResponse(DEF_SHEET, row.rowNo(), key.display(), row.workflowCode(), row.version(), List.copyOf(rowIssues)));
+                issues.add(
+                        new ConsoleWorkflowExcelRowIssueResponse(
+                                DEF_SHEET,
+                                row.rowNo(),
+                                key.display(),
+                                row.workflowCode(),
+                                row.version(),
+                                List.copyOf(rowIssues)));
             }
         }
         return valid;
     }
 
-    private List<WorkflowNodeRow> validateNodes(List<WorkflowNodeRow> nodes,
-                                                 Set<WorkflowKey> definitionKeys,
-                                                 List<ConsoleWorkflowExcelRowIssueResponse> issues) {
+    private List<WorkflowNodeRow> validateNodes(
+            List<WorkflowNodeRow> nodes,
+            Set<WorkflowKey> definitionKeys,
+            List<ConsoleWorkflowExcelRowIssueResponse> issues) {
         List<WorkflowNodeRow> valid = new ArrayList<>();
         Set<NodeKey> nodeKeys = new LinkedHashSet<>();
         for (WorkflowNodeRow row : nodes) {
             List<String> rowIssues = new ArrayList<>();
-            WorkflowKey workflowKey = WorkflowKey.of(row.tenantId(), row.workflowCode(), row.workflowVersion());
+            WorkflowKey workflowKey =
+                    WorkflowKey.of(row.tenantId(), row.workflowCode(), row.workflowVersion());
             if (!definitionKeys.contains(workflowKey)) {
-                rowIssues.add("workflow node references missing definition: " + workflowKey.display());
+                rowIssues.add(
+                        "workflow node references missing definition: " + workflowKey.display());
             }
-            if (!hasText(row.tenantId()) || !hasText(row.workflowCode()) || row.workflowVersion() == null || !hasText(row.nodeCode()) || !hasText(row.nodeName()) || !hasText(row.nodeType())) {
+            if (!hasText(row.tenantId())
+                    || !hasText(row.workflowCode())
+                    || row.workflowVersion() == null
+                    || !hasText(row.nodeCode())
+                    || !hasText(row.nodeName())
+                    || !hasText(row.nodeType())) {
                 rowIssues.add("workflow node fields are incomplete");
             }
             if (hasText(row.nodeType()) && !NODE_TYPES.contains(row.nodeType())) {
@@ -603,41 +749,65 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
             if (rowIssues.isEmpty()) {
                 valid.add(row);
             } else {
-                issues.add(new ConsoleWorkflowExcelRowIssueResponse(NODE_SHEET, row.rowNo(), nodeKey.display(), row.workflowCode(), row.workflowVersion(), List.copyOf(rowIssues)));
+                issues.add(
+                        new ConsoleWorkflowExcelRowIssueResponse(
+                                NODE_SHEET,
+                                row.rowNo(),
+                                nodeKey.display(),
+                                row.workflowCode(),
+                                row.workflowVersion(),
+                                List.copyOf(rowIssues)));
             }
         }
         return valid;
     }
 
-    private List<WorkflowEdgeRow> validateEdges(List<WorkflowEdgeRow> edges,
-                                                 Set<WorkflowKey> definitionKeys,
-                                                 List<ConsoleWorkflowExcelRowIssueResponse> issues) {
+    private List<WorkflowEdgeRow> validateEdges(
+            List<WorkflowEdgeRow> edges,
+            Set<WorkflowKey> definitionKeys,
+            List<ConsoleWorkflowExcelRowIssueResponse> issues) {
         List<WorkflowEdgeRow> valid = new ArrayList<>();
         Set<EdgeKey> edgeKeys = new LinkedHashSet<>();
         for (WorkflowEdgeRow row : edges) {
             List<String> rowIssues = new ArrayList<>();
-            WorkflowKey workflowKey = WorkflowKey.of(row.tenantId(), row.workflowCode(), row.workflowVersion());
+            WorkflowKey workflowKey =
+                    WorkflowKey.of(row.tenantId(), row.workflowCode(), row.workflowVersion());
             if (!definitionKeys.contains(workflowKey)) {
-                rowIssues.add("workflow edge references missing definition: " + workflowKey.display());
+                rowIssues.add(
+                        "workflow edge references missing definition: " + workflowKey.display());
             }
-            if (!hasText(row.tenantId()) || !hasText(row.workflowCode()) || row.workflowVersion() == null || !hasText(row.fromNodeCode()) || !hasText(row.toNodeCode()) || !hasText(row.edgeType())) {
+            if (!hasText(row.tenantId())
+                    || !hasText(row.workflowCode())
+                    || row.workflowVersion() == null
+                    || !hasText(row.fromNodeCode())
+                    || !hasText(row.toNodeCode())
+                    || !hasText(row.edgeType())) {
                 rowIssues.add("workflow edge fields are incomplete");
             }
             if (hasText(row.edgeType()) && !EDGE_TYPES.contains(row.edgeType())) {
                 rowIssues.add("edge_type must be one of " + EDGE_TYPES);
             }
-            EdgeKey edgeKey = EdgeKey.of(workflowKey, row.fromNodeCode(), row.toNodeCode(), row.edgeType());
+            EdgeKey edgeKey =
+                    EdgeKey.of(workflowKey, row.fromNodeCode(), row.toNodeCode(), row.edgeType());
             if (!edgeKeys.add(edgeKey)) {
                 rowIssues.add("duplicate workflow edge in excel: " + edgeKey.display());
             }
             if (rowIssues.isEmpty()) {
                 valid.add(row);
             } else {
-                issues.add(new ConsoleWorkflowExcelRowIssueResponse(EDGE_SHEET, row.rowNo(), edgeKey.display(), row.workflowCode(), row.workflowVersion(), List.copyOf(rowIssues)));
+                issues.add(
+                        new ConsoleWorkflowExcelRowIssueResponse(
+                                EDGE_SHEET,
+                                row.rowNo(),
+                                edgeKey.display(),
+                                row.workflowCode(),
+                                row.workflowVersion(),
+                                List.copyOf(rowIssues)));
             }
         }
         return valid;
     }
+
     private byte[] writePreviewWorkbook(ParsedSession session, ValidationResult validationResult) {
         try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
             Sheet definitionSheet = workbook.createSheet(DEF_SHEET);
@@ -704,26 +874,34 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
             createDictSheet(workbook);
             createValidationSheet(workbook);
 
-            List<WorkbookIssue> workbookIssues = validationResult.issues().stream()
-                    .flatMap(issue -> ConsoleExcelPreviewWorkbookSupport
-                            .expandIssues(issue.sheetName(), issue.rowNo(), issue.messages(), columnsForSheet(issue.sheetName()))
-                            .stream())
-                    .toList();
+            List<WorkbookIssue> workbookIssues =
+                    validationResult.issues().stream()
+                            .flatMap(
+                                    issue ->
+                                            ConsoleExcelPreviewWorkbookSupport.expandIssues(
+                                                    issue.sheetName(),
+                                                    issue.rowNo(),
+                                                    issue.messages(),
+                                                    columnsForSheet(issue.sheetName()))
+                                                    .stream())
+                            .toList();
             ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, workbookIssues);
-            ConsoleExcelPreviewWorkbookSupport.addIssueComments(definitionSheet, DEF_COLUMNS,
-                    filterIssues(workbookIssues, DEF_SHEET), 1);
-            ConsoleExcelPreviewWorkbookSupport.addIssueComments(nodeSheet, NODE_COLUMNS,
-                    filterIssues(workbookIssues, NODE_SHEET), 3);
-            ConsoleExcelPreviewWorkbookSupport.addIssueComments(edgeSheet, EDGE_COLUMNS,
-                    filterIssues(workbookIssues, EDGE_SHEET), 3);
+            ConsoleExcelPreviewWorkbookSupport.addIssueComments(
+                    definitionSheet, DEF_COLUMNS, filterIssues(workbookIssues, DEF_SHEET), 1);
+            ConsoleExcelPreviewWorkbookSupport.addIssueComments(
+                    nodeSheet, NODE_COLUMNS, filterIssues(workbookIssues, NODE_SHEET), 3);
+            ConsoleExcelPreviewWorkbookSupport.addIssueComments(
+                    edgeSheet, EDGE_COLUMNS, filterIssues(workbookIssues, EDGE_SHEET), 3);
             return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
         } catch (IOException exception) {
-            throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate preview excel workbook");
+            throw new BizException(
+                    ResultCode.SYSTEM_ERROR, "failed to generate preview excel workbook");
         }
     }
 
     private byte[] writeWorkbook(String tenantId, List<WorkflowDefinitionEntity> definitions) {
-        try (SXSSFWorkbook workbook = new SXSSFWorkbook(50); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+        try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
+                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet definitionSheet = workbook.createSheet(DEF_SHEET);
             Sheet nodeSheet = workbook.createSheet(NODE_SHEET);
             Sheet edgeSheet = workbook.createSheet(EDGE_SHEET);
@@ -771,16 +949,18 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         }
     }
 
-    private int writeNodeSheet(Sheet sheet, String tenantId, WorkflowDefinitionEntity definition, int startRowIndex) {
-        List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
-                tenantId,
-                definition.getId(),
-                definition.getWorkflowCode(),
-                null,
-                null,
-                null,
-                null
-        ));
+    private int writeNodeSheet(
+            Sheet sheet, String tenantId, WorkflowDefinitionEntity definition, int startRowIndex) {
+        List<WorkflowNodeEntity> nodes =
+                workflowNodeMapper.selectByQuery(
+                        new WorkflowNodeQuery(
+                                tenantId,
+                                definition.getId(),
+                                definition.getWorkflowCode(),
+                                null,
+                                null,
+                                null,
+                                null));
         int rowIndex = startRowIndex;
         for (WorkflowNodeEntity node : nodes) {
             Row row = sheet.createRow(rowIndex++);
@@ -804,17 +984,19 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         return rowIndex;
     }
 
-    private int writeEdgeSheet(Sheet sheet, String tenantId, WorkflowDefinitionEntity definition, int startRowIndex) {
-        List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
-                tenantId,
-                definition.getId(),
-                definition.getWorkflowCode(),
-                null,
-                null,
-                null,
-                null,
-                null
-        ));
+    private int writeEdgeSheet(
+            Sheet sheet, String tenantId, WorkflowDefinitionEntity definition, int startRowIndex) {
+        List<WorkflowEdgeEntity> edges =
+                workflowEdgeMapper.selectByQuery(
+                        new WorkflowEdgeQuery(
+                                tenantId,
+                                definition.getId(),
+                                definition.getWorkflowCode(),
+                                null,
+                                null,
+                                null,
+                                null,
+                                null));
         int rowIndex = startRowIndex;
         for (WorkflowEdgeEntity edge : edges) {
             Row row = sheet.createRow(rowIndex++);
@@ -831,13 +1013,29 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
     }
 
     private void applyValidations(Sheet definitionSheet, Sheet nodeSheet, Sheet edgeSheet) {
-        addDropdownValidation(definitionSheet, 3, WORKFLOW_TYPES.toArray(String[]::new), "workflow_type 填写提示", "请从下拉列表中选择 DAG、PIPELINE 或 MIXED。");
-        addBooleanValidation(definitionSheet, new int[]{5}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
-        addDropdownValidation(nodeSheet, 5, NODE_TYPES.toArray(String[]::new), "node_type 填写提示", "请从下拉列表中选择节点类型。");
-        addDropdownValidation(nodeSheet, 11, RETRY_POLICIES.toArray(String[]::new), "retry_policy 填写提示", "请从下拉列表中选择重试策略。");
-        addBooleanValidation(nodeSheet, new int[]{15}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
-        addDropdownValidation(edgeSheet, 5, EDGE_TYPES.toArray(String[]::new), "edge_type 填写提示", "请从下拉列表中选择边类型。");
-        addBooleanValidation(edgeSheet, new int[]{7}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        addDropdownValidation(
+                definitionSheet,
+                3,
+                WORKFLOW_TYPES.toArray(String[]::new),
+                "workflow_type 填写提示",
+                "请从下拉列表中选择 DAG、PIPELINE 或 MIXED。");
+        addBooleanValidation(definitionSheet, new int[] {5}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        addDropdownValidation(
+                nodeSheet,
+                5,
+                NODE_TYPES.toArray(String[]::new),
+                "node_type 填写提示",
+                "请从下拉列表中选择节点类型。");
+        addDropdownValidation(
+                nodeSheet,
+                11,
+                RETRY_POLICIES.toArray(String[]::new),
+                "retry_policy 填写提示",
+                "请从下拉列表中选择重试策略。");
+        addBooleanValidation(nodeSheet, new int[] {15}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
+        addDropdownValidation(
+                edgeSheet, 5, EDGE_TYPES.toArray(String[]::new), "edge_type 填写提示", "请从下拉列表中选择边类型。");
+        addBooleanValidation(edgeSheet, new int[] {7}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
     }
 
     private void createReadmeSheet(Workbook workbook) {
@@ -845,12 +1043,14 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         sheet.setColumnWidth(0, 16000);
         CellStyle titleStyle = createReadmeTitleStyle(workbook);
         String[] lines = {
-                "workflow definition / node / edge maintenance template",
-                "1. Orange headers mark required fields. Hover the header to see field rules and examples.",
-                "2. The workbook must keep the sheet order: definition, node, edge, README, DICT, VALIDATION.",
-                "3. workflow_code + version is the cross-sheet key for definitions, nodes, and edges.",
-                "4. node_params must stay valid JSON. CONDITION edges can use condition_expr.",
-                "5. Import flow is upload -> preview -> apply."
+            "workflow definition / node / edge maintenance template",
+            "1. Orange headers mark required fields. Hover the header to see field rules and"
+                + " examples.",
+            "2. The workbook must keep the sheet order: definition, node, edge, README, DICT,"
+                + " VALIDATION.",
+            "3. workflow_code + version is the cross-sheet key for definitions, nodes, and edges.",
+            "4. node_params must stay valid JSON. CONDITION edges can use condition_expr.",
+            "5. Import flow is upload -> preview -> apply."
         };
         for (int i = 0; i < lines.length; i++) {
             Row row = sheet.createRow(i);
@@ -867,24 +1067,24 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
         writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
         String[][] rows = {
-                {"workflow_type", "DAG", "dag workflow"},
-                {"workflow_type", "PIPELINE", "pipeline workflow"},
-                {"workflow_type", "MIXED", "mixed workflow"},
-                {"node_type", "TASK", "task node"},
-                {"node_type", "GATEWAY", "gateway node"},
-                {"node_type", "FILE_STEP", "file step node"},
-                {"node_type", "START", "start node"},
-                {"node_type", "END", "end node"},
-                {"node_type", "JOB", "job node"},
-                {"retry_policy", "NONE", "no retry"},
-                {"retry_policy", "FIXED", "fixed retry"},
-                {"retry_policy", "EXPONENTIAL", "exponential retry"},
-                {"edge_type", "SUCCESS", "success edge"},
-                {"edge_type", "FAILURE", "failure edge"},
-                {"edge_type", "CONDITION", "condition edge"},
-                {"edge_type", "ALWAYS", "always edge"},
-                {"enabled", "TRUE", "enabled"},
-                {"enabled", "FALSE", "disabled"}
+            {"workflow_type", "DAG", "dag workflow"},
+            {"workflow_type", "PIPELINE", "pipeline workflow"},
+            {"workflow_type", "MIXED", "mixed workflow"},
+            {"node_type", "TASK", "task node"},
+            {"node_type", "GATEWAY", "gateway node"},
+            {"node_type", "FILE_STEP", "file step node"},
+            {"node_type", "START", "start node"},
+            {"node_type", "END", "end node"},
+            {"node_type", "JOB", "job node"},
+            {"retry_policy", "NONE", "no retry"},
+            {"retry_policy", "FIXED", "fixed retry"},
+            {"retry_policy", "EXPONENTIAL", "exponential retry"},
+            {"edge_type", "SUCCESS", "success edge"},
+            {"edge_type", "FAILURE", "failure edge"},
+            {"edge_type", "CONDITION", "condition edge"},
+            {"edge_type", "ALWAYS", "always edge"},
+            {"enabled", "TRUE", "enabled"},
+            {"enabled", "FALSE", "disabled"}
         };
         for (int i = 0; i < rows.length; i++) {
             Row row = sheet.createRow(i + 1);
@@ -917,31 +1117,42 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                 .toList();
     }
 
-    private record DefinitionChangeContext(WorkflowDefinitionRow row, int nodeCount, int edgeCount,
-                                            String reason, String operatorId, String traceId, String action) {}
+    private record DefinitionChangeContext(
+            WorkflowDefinitionRow row,
+            int nodeCount,
+            int edgeCount,
+            String reason,
+            String operatorId,
+            String traceId,
+            String action) {}
 
     private void logDefinitionChange(DefinitionChangeContext ctx) {
-        configChangeLogMapper.insertConfigChangeLog(mapOf(
-                "tenantId", ctx.row().tenantId(),
-                "configType", "WORKFLOW_DEFINITION",
-                "configKey", ctx.row().workflowCode() + "#" + ctx.row().version(),
-                "versionNo", ctx.row().version(),
-                "changeAction", ctx.action(),
-                "changeResult", "SUCCESS",
-                "operatorType", "USER",
-                "operatorId", ConsoleTextSanitizer.safeInput(ctx.operatorId(), 64),
-                "traceId", ConsoleTextSanitizer.safeInput(ctx.traceId(), 128),
-                "changeSummaryJson", JsonUtils.toJson(mapOf(
-                        "reason", ConsoleTextSanitizer.safeInput(ctx.reason(), 512),
-                        "detail", mapOf(
-                                "workflowName", ctx.row().workflowName(),
-                                "workflowType", ctx.row().workflowType(),
-                                "enabled", ctx.row().enabled(),
-                                "nodeCount", ctx.nodeCount(),
-                                "edgeCount", ctx.edgeCount()
-                        )
-                ))
-        ));
+        configChangeLogMapper.insertConfigChangeLog(
+                mapOf(
+                        "tenantId", ctx.row().tenantId(),
+                        "configType", "WORKFLOW_DEFINITION",
+                        "configKey", ctx.row().workflowCode() + "#" + ctx.row().version(),
+                        "versionNo", ctx.row().version(),
+                        "changeAction", ctx.action(),
+                        "changeResult", "SUCCESS",
+                        "operatorType", "USER",
+                        "operatorId", ConsoleTextSanitizer.safeInput(ctx.operatorId(), 64),
+                        "traceId", ConsoleTextSanitizer.safeInput(ctx.traceId(), 128),
+                        "changeSummaryJson",
+                                JsonUtils.toJson(
+                                        mapOf(
+                                                "reason",
+                                                        ConsoleTextSanitizer.safeInput(
+                                                                ctx.reason(), 512),
+                                                "detail",
+                                                        mapOf(
+                                                                "workflowName",
+                                                                        ctx.row().workflowName(),
+                                                                "workflowType",
+                                                                        ctx.row().workflowType(),
+                                                                "enabled", ctx.row().enabled(),
+                                                                "nodeCount", ctx.nodeCount(),
+                                                                "edgeCount", ctx.edgeCount())))));
     }
 
     private Map<String, Object> mapOf(Object... pairs) {
@@ -967,8 +1178,7 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                 row.workflowType(),
                 row.version(),
                 row.enabled(),
-                row.description()
-        );
+                row.description());
     }
 
     private ConsoleWorkflowNodeExcelRowResponse toResponse(WorkflowNodeRow row) {
@@ -988,8 +1198,7 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                 row.retryMaxCount(),
                 row.timeoutSeconds(),
                 row.nodeParams(),
-                row.enabled()
-        );
+                row.enabled());
     }
 
     private ConsoleWorkflowEdgeExcelRowResponse toResponse(WorkflowEdgeRow row) {
@@ -1001,8 +1210,7 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
                 row.toNodeCode(),
                 row.edgeType(),
                 row.conditionExpr(),
-                row.enabled()
-        );
+                row.enabled());
     }
 
     private String normalize(String value) {
@@ -1011,7 +1219,9 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
 
     private Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
         Map<String, Integer> headers = new LinkedHashMap<>();
-        for (int cellIndex = headerRow.getFirstCellNum(); cellIndex < headerRow.getLastCellNum(); cellIndex++) {
+        for (int cellIndex = headerRow.getFirstCellNum();
+                cellIndex < headerRow.getLastCellNum();
+                cellIndex++) {
             Cell cell = headerRow.getCell(cellIndex);
             String header = normalize(formatter.formatCellValue(cell));
             if (StringUtils.hasText(header)) {
@@ -1021,11 +1231,17 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         return headers;
     }
 
-    private void validateHeaders(String sheetName, Map<String, Integer> headerIndex, Set<String> requiredHeaders) {
+    private void validateHeaders(
+            String sheetName, Map<String, Integer> headerIndex, Set<String> requiredHeaders) {
         Set<String> missing = new LinkedHashSet<>(requiredHeaders);
         missing.removeAll(headerIndex.keySet());
         if (!missing.isEmpty()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "excel header missing for sheet " + sheetName + ": " + String.join(", ", missing));
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT,
+                    "excel header missing for sheet "
+                            + sheetName
+                            + ": "
+                            + String.join(", ", missing));
         }
     }
 
@@ -1092,26 +1308,35 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         return defaultValue;
     }
 
-    private ParsedWorkbook parseWorkbook(byte[] bytes, String tenantId, String originalFileName) throws IOException {
+    private ParsedWorkbook parseWorkbook(byte[] bytes, String tenantId, String originalFileName)
+            throws IOException {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
             if (workbook.getNumberOfSheets() == 0) {
                 throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
             }
-            List<WorkflowDefinitionRow> definitions = parseDefinitionSheet(findSheet(workbook, DEF_SHEET), tenantId);
+            List<WorkflowDefinitionRow> definitions =
+                    parseDefinitionSheet(findSheet(workbook, DEF_SHEET), tenantId);
             List<WorkflowNodeRow> nodes = parseNodeSheet(findSheet(workbook, NODE_SHEET), tenantId);
             List<WorkflowEdgeRow> edges = parseEdgeSheet(findSheet(workbook, EDGE_SHEET), tenantId);
-            return new ParsedWorkbook(fileNameOrDefault(originalFileName), tenantId, definitions, nodes, edges);
+            return new ParsedWorkbook(
+                    fileNameOrDefault(originalFileName), tenantId, definitions, nodes, edges);
         } catch (BizException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "failed to read excel workbook: " + exception.getMessage());
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT,
+                    "failed to read excel workbook: " + exception.getMessage());
         }
     }
 
     private Map<WorkflowKey, List<WorkflowNodeRow>> groupNodes(List<WorkflowNodeRow> rows) {
         Map<WorkflowKey, List<WorkflowNodeRow>> grouped = new LinkedHashMap<>();
         for (WorkflowNodeRow row : rows) {
-            grouped.computeIfAbsent(WorkflowKey.of(row.tenantId(), row.workflowCode(), row.workflowVersion()), key -> new ArrayList<>()).add(row);
+            grouped.computeIfAbsent(
+                            WorkflowKey.of(
+                                    row.tenantId(), row.workflowCode(), row.workflowVersion()),
+                            key -> new ArrayList<>())
+                    .add(row);
         }
         return grouped;
     }
@@ -1119,20 +1344,32 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
     private Map<WorkflowKey, List<WorkflowEdgeRow>> groupEdges(List<WorkflowEdgeRow> rows) {
         Map<WorkflowKey, List<WorkflowEdgeRow>> grouped = new LinkedHashMap<>();
         for (WorkflowEdgeRow row : rows) {
-            grouped.computeIfAbsent(WorkflowKey.of(row.tenantId(), row.workflowCode(), row.workflowVersion()), key -> new ArrayList<>()).add(row);
+            grouped.computeIfAbsent(
+                            WorkflowKey.of(
+                                    row.tenantId(), row.workflowCode(), row.workflowVersion()),
+                            key -> new ArrayList<>())
+                    .add(row);
         }
         return grouped;
     }
 
-    private record ParsedWorkbook(String fileName, String tenantId, List<WorkflowDefinitionRow> definitions, List<WorkflowNodeRow> nodes, List<WorkflowEdgeRow> edges) {
-    }
+    private record ParsedWorkbook(
+            String fileName,
+            String tenantId,
+            List<WorkflowDefinitionRow> definitions,
+            List<WorkflowNodeRow> nodes,
+            List<WorkflowEdgeRow> edges) {}
 
-    private record ParsedSession(String fileName, String tenantId, Instant uploadedAt, List<WorkflowDefinitionRow> definitions, List<WorkflowNodeRow> nodes, List<WorkflowEdgeRow> edges) {
-    }
+    private record ParsedSession(
+            String fileName,
+            String tenantId,
+            Instant uploadedAt,
+            List<WorkflowDefinitionRow> definitions,
+            List<WorkflowNodeRow> nodes,
+            List<WorkflowEdgeRow> edges) {}
 
     @Builder
-    private record ValidationResult(ValidationCounts counts,
-                                    ValidationData data) {
+    private record ValidationResult(ValidationCounts counts, ValidationData data) {
         int definitionRows() {
             return counts.definitionRows();
         }
@@ -1175,20 +1412,20 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
     }
 
     @Builder
-    private record ValidationCounts(int definitionRows,
-                                    int nodeRows,
-                                    int edgeRows,
-                                    int totalRows,
-                                    int validRows,
-                                    int invalidRows) {
-    }
+    private record ValidationCounts(
+            int definitionRows,
+            int nodeRows,
+            int edgeRows,
+            int totalRows,
+            int validRows,
+            int invalidRows) {}
 
     @Builder
-    private record ValidationData(List<WorkflowDefinitionRow> definitions,
-                                  List<WorkflowNodeRow> nodes,
-                                  List<WorkflowEdgeRow> edges,
-                                  List<ConsoleWorkflowExcelRowIssueResponse> issues) {
-    }
+    private record ValidationData(
+            List<WorkflowDefinitionRow> definitions,
+            List<WorkflowNodeRow> nodes,
+            List<WorkflowEdgeRow> edges,
+            List<ConsoleWorkflowExcelRowIssueResponse> issues) {}
 
     private record WorkflowKey(String tenantId, String workflowCode, Integer version) {
         static WorkflowKey of(String tenantId, String workflowCode, Integer version) {
@@ -1210,16 +1447,24 @@ public class DefaultConsoleWorkflowExcelApplicationService implements ConsoleWor
         }
     }
 
-    private record EdgeKey(WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
-        static EdgeKey of(WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
+    private record EdgeKey(
+            WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
+        static EdgeKey of(
+                WorkflowKey workflowKey, String fromNodeCode, String toNodeCode, String edgeType) {
             return new EdgeKey(workflowKey, fromNodeCode, toNodeCode, edgeType);
         }
 
         String display() {
-            return workflowKey.display() + "/" + fromNodeCode + "->" + toNodeCode + "(" + edgeType + ")";
+            return workflowKey.display()
+                    + "/"
+                    + fromNodeCode
+                    + "->"
+                    + toNodeCode
+                    + "("
+                    + edgeType
+                    + ")";
         }
     }
 
-    private record SheetRow(int rowNo, Map<String, String> values) {
-    }
+    private record SheetRow(int rowNo, Map<String, String> values) {}
 }

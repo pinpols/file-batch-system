@@ -9,9 +9,11 @@ import com.example.batch.console.web.request.WorkflowExcelApplyRequest;
 import com.example.batch.console.web.response.ConsoleWorkflowExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowExcelUploadResponse;
+
 import jakarta.validation.Valid;
-import java.io.IOException;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,9 +30,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * 工作流定义 Excel 导入导出 REST：导出、上传、预览、确认落库。
- */
+import java.io.IOException;
+
+/** 工作流定义 Excel 导入导出 REST：导出、上传、预览、确认落库。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/config/workflows/excel")
@@ -43,7 +45,8 @@ public class ConsoleWorkflowExcelController {
     /** 导出工作流 Excel。 */
     @GetMapping("/export")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
-    public ResponseEntity<InputStreamResource> export(@Valid @ModelAttribute WorkflowDefinitionQueryRequest request) {
+    public ResponseEntity<InputStreamResource> export(
+            @Valid @ModelAttribute WorkflowDefinitionQueryRequest request) {
         return applicationService.exportWorkflowExcel(request);
     }
 
@@ -57,14 +60,16 @@ public class ConsoleWorkflowExcelController {
     /** 上传 Excel，返回临时 uploadToken。 */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<ConsoleWorkflowExcelUploadResponse> upload(@RequestParam("file") MultipartFile file) throws IOException {
+    public CommonResponse<ConsoleWorkflowExcelUploadResponse> upload(
+            @RequestParam("file") MultipartFile file) throws IOException {
         return responseFactory.success(applicationService.upload(file));
     }
 
     /** 预览上传会话解析结果。 */
     @GetMapping("/preview/{uploadToken}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<ConsoleWorkflowExcelPreviewResponse> preview(@PathVariable String uploadToken) {
+    public CommonResponse<ConsoleWorkflowExcelPreviewResponse> preview(
+            @PathVariable String uploadToken) {
         return responseFactory.success(applicationService.preview(uploadToken));
     }
 
@@ -78,9 +83,10 @@ public class ConsoleWorkflowExcelController {
     /** 确认导入并写入数据库。 */
     @PostMapping("/apply/{uploadToken}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<ConsoleWorkflowExcelApplyResponse> apply(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-                                                                    @PathVariable String uploadToken,
-                                                                    @Valid @RequestBody WorkflowExcelApplyRequest request) {
+    public CommonResponse<ConsoleWorkflowExcelApplyResponse> apply(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String uploadToken,
+            @Valid @RequestBody WorkflowExcelApplyRequest request) {
         return responseFactory.success(applicationService.apply(uploadToken, request));
     }
 }

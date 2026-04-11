@@ -14,23 +14,25 @@ import com.example.batch.console.web.request.ConfigSyncExportRequest;
 import com.example.batch.console.web.request.ConfigSyncImportRequest;
 import com.example.batch.console.web.request.ConfigSyncPreviewRequest;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest;
-import com.example.batch.console.web.request.TenantConfigCopyRequest;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfigSyncApplicationService {
+public class DefaultConsoleConfigSyncApplicationService
+        implements ConsoleConfigSyncApplicationService {
 
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleTenantConfigCopyService tenantConfigCopyService;
@@ -42,28 +44,28 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
     @Override
     public Map<String, Object> export(ConfigSyncExportRequest request) {
         String tenantId = tenantGuard.resolveTenant(request.getSourceTenantId());
-        ConfigSyncBundlePayload bundle = tenantConfigCopyService.buildBundle(tenantId, request.getConfigTypes());
+        ConfigSyncBundlePayload bundle =
+                tenantConfigCopyService.buildBundle(tenantId, request.getConfigTypes());
         return mapOf(
                 "sourceTenantId", tenantId,
                 "sourceEnv", request.getSourceEnv(),
                 "targetEnv", request.getTargetEnv(),
                 "summary", summarize(bundle),
-                "bundle", bundle
-        );
+                "bundle", bundle);
     }
 
     @Override
     public Map<String, Object> preview(ConfigSyncPreviewRequest request) {
         String sourceTenantId = tenantGuard.resolveTenant(request.getSourceTenantId());
         String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-        ConfigSyncBundlePayload bundle = tenantConfigCopyService.buildBundle(sourceTenantId, request.getConfigTypes());
+        ConfigSyncBundlePayload bundle =
+                tenantConfigCopyService.buildBundle(sourceTenantId, request.getConfigTypes());
         return mapOf(
                 "tenantId", tenantId,
                 "sourceTenantId", sourceTenantId,
                 "sourceEnv", request.getSourceEnv(),
                 "targetEnv", request.getTargetEnv(),
-                "summary", summarize(bundle)
-        );
+                "summary", summarize(bundle));
     }
 
     @Override
@@ -80,13 +82,14 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
             if (operator == null || operator.isBlank()) {
                 operator = "system";
             }
-            TenantConfigBatchInitResponse response = initApplicationService.batchInit(initRequest, operator, UUID.randomUUID().toString());
+            TenantConfigBatchInitResponse response =
+                    initApplicationService.batchInit(
+                            initRequest, operator, UUID.randomUUID().toString());
             updateLog(logId, tenantId, response);
             return mapOf(
                     "syncLogId", logId,
                     "summary", summarize(request.getBundle()),
-                    "result", response
-            );
+                    "result", response);
         } catch (RuntimeException ex) {
             markLogFailed(tenantId, logId, totalCount(request.getBundle()), ex.getMessage());
             throw ex;
@@ -95,41 +98,64 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
 
     @Override
     public List<Map<String, Object>> logs(String tenantId, int limit) {
-        return configSyncLogMapper.selectByTenant(tenantGuard.resolveTenant(tenantId), Math.min(Math.max(limit, 1), 200));
+        return configSyncLogMapper.selectByTenant(
+                tenantGuard.resolveTenant(tenantId), Math.min(Math.max(limit, 1), 200));
     }
 
     private void markLogFailed(String tenantId, Long logId, int failedItems, String errorMessage) {
         TransactionTemplate tt = new TransactionTemplate(transactionManager);
         tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        tt.executeWithoutResult(status -> configSyncLogMapper.updateResult(mapOf(
-                "tenantId", tenantId,
-                "id", logId,
-                "syncStatus", "FAILED",
-                "successItems", 0,
-                "failedItems", failedItems,
-                "skippedItems", 0,
-                "detailJson", JsonUtils.toJson(mapOf("error", errorMessage))
-        )));
+        tt.executeWithoutResult(
+                status ->
+                        configSyncLogMapper.updateResult(
+                                mapOf(
+                                        "tenantId",
+                                        tenantId,
+                                        "id",
+                                        logId,
+                                        "syncStatus",
+                                        "FAILED",
+                                        "successItems",
+                                        0,
+                                        "failedItems",
+                                        failedItems,
+                                        "skippedItems",
+                                        0,
+                                        "detailJson",
+                                        JsonUtils.toJson(mapOf("error", errorMessage)))));
     }
 
-    private Long createLog(String tenantId, ConfigSyncImportRequest request, ConfigSyncBundlePayload bundle) {
+    private Long createLog(
+            String tenantId, ConfigSyncImportRequest request, ConfigSyncBundlePayload bundle) {
         Map<String, Integer> summary = summarize(bundle);
         int totalItems = summary.values().stream().mapToInt(Integer::intValue).sum();
         String operator = metadataResolver.current().operatorId();
-        Map<String, Object> params = mapOf(
-                "tenantId", tenantId,
-                "syncDirection", "IMPORT",
-                "sourceEnv", request.getSourceEnv(),
-                "targetEnv", request.getTargetEnv(),
-                "configTypes", String.join(",", summary.keySet()),
-                "totalItems", totalItems,
-                "successItems", 0,
-                "failedItems", 0,
-                "skippedItems", 0,
-                "syncStatus", "RUNNING",
-                "detailJson", JsonUtils.toJson(mapOf("summary", summary, "dryRun", request.isDryRun())),
-                "operatorId", operator
-        );
+        Map<String, Object> params =
+                mapOf(
+                        "tenantId",
+                        tenantId,
+                        "syncDirection",
+                        "IMPORT",
+                        "sourceEnv",
+                        request.getSourceEnv(),
+                        "targetEnv",
+                        request.getTargetEnv(),
+                        "configTypes",
+                        String.join(",", summary.keySet()),
+                        "totalItems",
+                        totalItems,
+                        "successItems",
+                        0,
+                        "failedItems",
+                        0,
+                        "skippedItems",
+                        0,
+                        "syncStatus",
+                        "RUNNING",
+                        "detailJson",
+                        JsonUtils.toJson(mapOf("summary", summary, "dryRun", request.isDryRun())),
+                        "operatorId",
+                        operator);
         configSyncLogMapper.insert(params);
         return longValue(params.get("id"));
     }
@@ -138,15 +164,15 @@ public class DefaultConsoleConfigSyncApplicationService implements ConsoleConfig
         int total = response.totalTenants();
         int success = response.successTenants();
         int failed = response.failureTenants();
-        configSyncLogMapper.updateResult(mapOf(
-                "tenantId", tenantId,
-                "id", logId,
-                "syncStatus", failed > 0 ? "PARTIAL_FAILED" : "SUCCESS",
-                "successItems", success,
-                "failedItems", failed,
-                "skippedItems", Math.max(total - success - failed, 0),
-                "detailJson", JsonUtils.toJson(response)
-        ));
+        configSyncLogMapper.updateResult(
+                mapOf(
+                        "tenantId", tenantId,
+                        "id", logId,
+                        "syncStatus", failed > 0 ? "PARTIAL_FAILED" : "SUCCESS",
+                        "successItems", success,
+                        "failedItems", failed,
+                        "skippedItems", Math.max(total - success - failed, 0),
+                        "detailJson", JsonUtils.toJson(response)));
     }
 
     private TenantConfigBatchInitRequest toInitRequest(ConfigSyncImportRequest request) {

@@ -1,9 +1,10 @@
 package com.example.batch.orchestrator.domain.entity;
 
-import java.util.Map;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+
+import java.util.Map;
 
 @Table(schema = "batch", value = "job_definition")
 public record JobDefinitionRecord(
@@ -32,5 +33,4 @@ public record JobDefinitionRecord(
         @Column("default_params") Map<String, Object> defaultParams,
         @Column("version") Integer version,
         @Column("enabled") Boolean enabled,
-        @Column("description") String description
-) {}
+        @Column("description") String description) {}

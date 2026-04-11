@@ -1,6 +1,9 @@
 package com.example.batch.trigger.service;
 
 import com.example.batch.trigger.support.CalendarBizDateDefinition;
+
+import org.springframework.stereotype.Component;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -8,7 +11,6 @@ import java.time.ZoneId;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
-import org.springframework.stereotype.Component;
 
 @Component
 public class CalendarBizDateResolver {
@@ -16,7 +18,8 @@ public class CalendarBizDateResolver {
     private static final LocalTime DEFAULT_CUTOFF_TIME = LocalTime.of(6, 0);
     private static final int MAX_WORKDAY_SEARCH_DAYS = 365;
 
-    public LocalDate resolve(Instant fireTime, ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
+    public LocalDate resolve(
+            Instant fireTime, ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
         Objects.requireNonNull(fireTime, "fireTime");
         ZoneId zoneId = resolveZoneId(fallbackZoneId, calendar);
         if (calendar == null) {
@@ -24,7 +27,10 @@ public class CalendarBizDateResolver {
         }
         LocalDate localDate = fireTime.atZone(zoneId).toLocalDate();
         LocalTime localTime = fireTime.atZone(zoneId).toLocalTime();
-        LocalDate rawBizDate = localTime.isBefore(resolveCutoffTime(calendar)) ? localDate.minusDays(1) : localDate;
+        LocalDate rawBizDate =
+                localTime.isBefore(resolveCutoffTime(calendar))
+                        ? localDate.minusDays(1)
+                        : localDate;
         return adjustForHoliday(rawBizDate, calendar);
     }
 
@@ -61,7 +67,10 @@ public class CalendarBizDateResolver {
             candidate = candidate.minusDays(1);
         }
         throw new IllegalStateException(
-                "No workday found within " + MAX_WORKDAY_SEARCH_DAYS + " days before " + date
+                "No workday found within "
+                        + MAX_WORKDAY_SEARCH_DAYS
+                        + " days before "
+                        + date
                         + " — calendar may have all days marked as holidays");
     }
 
@@ -74,7 +83,10 @@ public class CalendarBizDateResolver {
             candidate = candidate.plusDays(1);
         }
         throw new IllegalStateException(
-                "No workday found within " + MAX_WORKDAY_SEARCH_DAYS + " days after " + date
+                "No workday found within "
+                        + MAX_WORKDAY_SEARCH_DAYS
+                        + " days after "
+                        + date
                         + " — calendar may have all days marked as holidays");
     }
 

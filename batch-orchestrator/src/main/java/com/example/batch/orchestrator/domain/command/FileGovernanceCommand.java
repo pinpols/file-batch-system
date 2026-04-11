@@ -7,6 +7,4 @@ public record FileGovernanceCommand(
         String operatorId,
         String traceId,
         String reason,
-        String approvalId
-) {
-}
+        String approvalId) {}

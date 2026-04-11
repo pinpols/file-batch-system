@@ -6,6 +6,4 @@ public record ConsoleBatchDaySummaryResponse(
         Integer successJobCount,
         Integer failedJobCount,
         Integer inFlightJobCount,
-        Integer catchupCount
-) {
-}
+        Integer catchupCount) {}

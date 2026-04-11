@@ -2,8 +2,7 @@ package com.example.batch.common.redis;
 
 public final class BatchRedisKeys {
 
-    private BatchRedisKeys() {
-    }
+    private BatchRedisKeys() {}
 
     public static String rateLimit(String tenantId, String action, long windowStartEpochSecond) {
         return "ratelimit:%s:%s:%d".formatted(safe(tenantId), safe(action), windowStartEpochSecond);

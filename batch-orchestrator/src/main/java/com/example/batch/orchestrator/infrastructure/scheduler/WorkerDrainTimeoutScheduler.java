@@ -6,13 +6,17 @@ import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
-import java.time.Instant;
-import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -34,13 +38,15 @@ public class WorkerDrainTimeoutScheduler {
             return;
         }
         Instant now = Instant.now();
-        List<WorkerRegistryRecord> draining = workerRegistryRepository.findByStatus(WorkerRegistryStatus.DRAINING.code());
+        List<WorkerRegistryRecord> draining =
+                workerRegistryRepository.findByStatus(WorkerRegistryStatus.DRAINING.code());
         for (WorkerRegistryRecord worker : draining) {
             if (worker == null || worker.drainDeadlineAt() == null) {
                 continue;
             }
             if (!worker.drainDeadlineAt().isAfter(now)) {
-                workerDrainGovernanceService.takeoverAfterDrainTimeout(worker.tenantId(), worker.workerCode());
+                workerDrainGovernanceService.takeoverAfterDrainTimeout(
+                        worker.tenantId(), worker.workerCode());
             }
         }
     }

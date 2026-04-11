@@ -1,14 +1,17 @@
 package com.example.batch.console.repository;
 
 import com.example.batch.console.domain.ConsoleUserAccountEntity;
-import java.util.Optional;
+
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
+
 public interface ConsoleUserAccountRepository extends Repository<ConsoleUserAccountEntity, Long> {
 
-    @Query("""
+    @Query(
+            """
             SELECT id,
                    tenant_id,
                    username,

@@ -15,6 +15,4 @@ public record ConsoleFileErrorRecordResponse(
         Boolean skipped,
         String skipAction,
         String rawRecord,
-        Instant createdAt
-) {
-}
+        Instant createdAt) {}

@@ -1,19 +1,25 @@
 package com.example.batch.console.web.request;
 
 import com.example.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.List;
+
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class WorkflowDefinitionSaveRequest {
-    @ValidTenantId
-    private String tenantId;
-    @NotBlank @Size(max = 128)
+    @ValidTenantId private String tenantId;
+
+    @NotBlank
+    @Size(max = 128)
     private String workflowCode;
+
     @Size(max = 256)
     private String workflowName;
+
     private String workflowType;
     private Boolean enabled;
     private List<NodeItem> nodes;

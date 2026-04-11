@@ -7,6 +7,4 @@ public record ConsoleWorkflowTopologyResponse(
         List<ConsoleWorkflowNodeResponse> nodes,
         List<ConsoleWorkflowEdgeResponse> edges,
         List<ConsoleWorkflowRunResponse> workflowRuns,
-        List<ConsoleWorkflowNodeRunResponse> nodeRuns
-) {
-}
+        List<ConsoleWorkflowNodeRunResponse> nodeRuns) {}

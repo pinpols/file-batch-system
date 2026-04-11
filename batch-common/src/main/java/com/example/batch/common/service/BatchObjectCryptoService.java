@@ -2,6 +2,9 @@ package com.example.batch.common.service;
 
 import com.example.batch.common.config.BatchKmsProperties;
 import com.example.batch.common.config.BatchSecurityProperties;
+
+import org.springframework.util.StringUtils;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -10,19 +13,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
+
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import org.springframework.util.StringUtils;
 
 public class BatchObjectCryptoService {
 
@@ -35,7 +38,8 @@ public class BatchObjectCryptoService {
     private final BatchSecurityProperties securityProperties;
     private final BatchKmsProperties kmsProperties;
 
-    public BatchObjectCryptoService(BatchSecurityProperties securityProperties, BatchKmsProperties kmsProperties) {
+    public BatchObjectCryptoService(
+            BatchSecurityProperties securityProperties, BatchKmsProperties kmsProperties) {
         this.securityProperties = securityProperties;
         this.kmsProperties = kmsProperties;
     }
@@ -45,7 +49,8 @@ public class BatchObjectCryptoService {
     }
 
     public boolean shouldEncrypt(Map<String, Object> security) {
-        return !securityProperties.isTestingOpen() && truthy(security == null ? null : security.get("content_encryption_enabled"));
+        return !securityProperties.isTestingOpen()
+                && truthy(security == null ? null : security.get("content_encryption_enabled"));
     }
 
     public String resolveKeyRef(Map<String, Object> security) {
@@ -89,7 +94,10 @@ public class BatchObjectCryptoService {
             byte[] iv = new byte[GCM_IV_BYTES];
             SECURE_RANDOM.nextBytes(iv);
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(resolveKeyBytes(keyRef), "AES"), new GCMParameterSpec(GCM_TAG_BITS, iv));
+            cipher.init(
+                    Cipher.ENCRYPT_MODE,
+                    new SecretKeySpec(resolveKeyBytes(keyRef), "AES"),
+                    new GCMParameterSpec(GCM_TAG_BITS, iv));
             DataOutputStream dataOutput = new DataOutputStream(encryptedOutput);
             dataOutput.write(MAGIC);
             dataOutput.writeByte(VERSION);
@@ -97,7 +105,8 @@ public class BatchObjectCryptoService {
             dataOutput.writeByte(iv.length);
             dataOutput.write(iv);
             dataOutput.flush();
-            try (CipherOutputStream cipherOutput = new CipherOutputStream(encryptedOutput, cipher)) {
+            try (CipherOutputStream cipherOutput =
+                    new CipherOutputStream(encryptedOutput, cipher)) {
                 plainInput.transferTo(cipherOutput);
             }
         } catch (Exception exception) {
@@ -110,7 +119,7 @@ public class BatchObjectCryptoService {
             throw new IllegalArgumentException("source and target are required");
         }
         try (InputStream inputStream = Files.newInputStream(source);
-             OutputStream outputStream = Files.newOutputStream(target)) {
+                OutputStream outputStream = Files.newOutputStream(target)) {
             encrypt(inputStream, outputStream, keyRef);
             return target;
         } catch (IOException exception) {
@@ -140,7 +149,10 @@ public class BatchObjectCryptoService {
             int ivLength = dataInputStream.readUnsignedByte();
             byte[] iv = dataInputStream.readNBytes(ivLength);
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(resolveKeyBytes(keyRef), "AES"), new GCMParameterSpec(GCM_TAG_BITS, iv));
+            cipher.init(
+                    Cipher.DECRYPT_MODE,
+                    new SecretKeySpec(resolveKeyBytes(keyRef), "AES"),
+                    new GCMParameterSpec(GCM_TAG_BITS, iv));
             return new CipherInputStream(pushbackInputStream, cipher);
         } catch (Exception exception) {
             throw new IllegalStateException("failed to open decrypted stream", exception);
@@ -151,7 +163,8 @@ public class BatchObjectCryptoService {
         String resolvedKeyRef = normalizedKeyRef(keyRef);
         String base64 = kmsProperties.getKeys().get(resolvedKeyRef);
         if (!StringUtils.hasText(base64)) {
-            throw new IllegalStateException("missing kms key material for keyRef=" + resolvedKeyRef);
+            throw new IllegalStateException(
+                    "missing kms key material for keyRef=" + resolvedKeyRef);
         }
         return Base64.getDecoder().decode(base64);
     }

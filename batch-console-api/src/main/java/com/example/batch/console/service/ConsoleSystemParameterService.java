@@ -3,14 +3,17 @@ package com.example.batch.console.service;
 import com.example.batch.console.domain.entity.SystemParameterEntity;
 import com.example.batch.console.repository.ConsoleSystemParameterRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
-import java.time.Duration;
-import java.util.List;
-import java.util.Optional;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -37,12 +40,18 @@ public class ConsoleSystemParameterService {
             return Optional.of(cached);
         }
         Optional<SystemParameterEntity> entity = repository.findByTenantAndKey(resolved, paramKey);
-        entity.ifPresent(e -> redisTemplate.opsForValue().set(cacheKey, e.getParamValue(), CACHE_TTL));
+        entity.ifPresent(
+                e -> redisTemplate.opsForValue().set(cacheKey, e.getParamValue(), CACHE_TTL));
         return entity.map(SystemParameterEntity::getParamValue);
     }
 
     @Transactional
-    public void upsert(String tenantId, String paramKey, String paramValue, String description, String operator) {
+    public void upsert(
+            String tenantId,
+            String paramKey,
+            String paramValue,
+            String description,
+            String operator) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         repository.upsert(resolved, paramKey, paramValue, description, operator);
         redisTemplate.delete(cacheKey(resolved, paramKey));

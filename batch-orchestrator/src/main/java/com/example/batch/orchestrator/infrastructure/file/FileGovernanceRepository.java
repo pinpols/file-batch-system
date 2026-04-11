@@ -7,33 +7,26 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.orchestrator.mapper.FileGovernanceMapper;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Repository;
+import org.springframework.util.StringUtils;
+
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import com.example.batch.orchestrator.mapper.FileGovernanceMapper;
-import org.springframework.stereotype.Repository;
-import org.springframework.util.StringUtils;
 
 @Repository
 @RequiredArgsConstructor
 public class FileGovernanceRepository {
 
     public record FileIdentity(
-            String tenantId,
-            String fileCategory,
-            String fileName,
-            String fileFormatType
-    ) {
-    }
+            String tenantId, String fileCategory, String fileName, String fileFormatType) {}
 
-    public record FileStorage(
-            String storageType,
-            String storagePath,
-            String storageBucket
-    ) {
-    }
+    public record FileStorage(String storageType, String storagePath, String storageBucket) {}
 
     public record ReconciledFileRecordCommand(
             FileIdentity identity,
@@ -42,15 +35,9 @@ public class FileGovernanceRepository {
             String sourceType,
             String fileStatus,
             String traceId,
-            Object metadata
-    ) {
-    }
+            Object metadata) {}
 
-    public record FileAuditActor(
-            String operatorType,
-            String operatorId
-    ) {
-    }
+    public record FileAuditActor(String operatorType, String operatorId) {}
 
     public record FileAuditCommand(
             String tenantId,
@@ -59,9 +46,7 @@ public class FileGovernanceRepository {
             String operationResult,
             FileAuditActor actor,
             String traceId,
-            Object detailSummary
-    ) {
-    }
+            Object detailSummary) {}
 
     private final FileGovernanceMapper fileGovernanceMapper;
 
@@ -69,7 +54,9 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return Map.of();
         }
-        Map<String, Object> fileRecord = fileGovernanceMapper.selectFileRecord(params("tenantId", tenantId, "fileId", fileId));
+        Map<String, Object> fileRecord =
+                fileGovernanceMapper.selectFileRecord(
+                        params("tenantId", tenantId, "fileId", fileId));
         return fileRecord == null ? Map.of() : fileRecord;
     }
 
@@ -77,7 +64,9 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return Map.of();
         }
-        Map<String, Object> security = fileGovernanceMapper.selectFileTemplateSecurity(params("tenantId", tenantId, "fileId", fileId));
+        Map<String, Object> security =
+                fileGovernanceMapper.selectFileTemplateSecurity(
+                        params("tenantId", tenantId, "fileId", fileId));
         return security == null ? Map.of() : security;
     }
 
@@ -85,13 +74,14 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return 0L;
         }
-        Long count = fileGovernanceMapper.countActivePipelineInstances(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "createdStatus", FileDispatchRunStatus.CREATED.code(),
-                "runningStatus", FileDispatchRunStatus.RUNNING.code(),
-                "compensatingStatus", FileDispatchRunStatus.COMPENSATING.code()
-        ));
+        Long count =
+                fileGovernanceMapper.countActivePipelineInstances(
+                        params(
+                                "tenantId", tenantId,
+                                "fileId", fileId,
+                                "createdStatus", FileDispatchRunStatus.CREATED.code(),
+                                "runningStatus", FileDispatchRunStatus.RUNNING.code(),
+                                "compensatingStatus", FileDispatchRunStatus.COMPENSATING.code()));
         return count == null ? 0L : count;
     }
 
@@ -99,23 +89,25 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return 0L;
         }
-        Long count = fileGovernanceMapper.countPendingDispatchRecords(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "dispatchCreatedStatus", FileDispatchStatus.CREATED.name(),
-                "dispatchSentStatus", FileDispatchStatus.SENT.name(),
-                "receiptPendingStatus", FileReceiptStatus.PENDING.name()
-        ));
+        Long count =
+                fileGovernanceMapper.countPendingDispatchRecords(
+                        params(
+                                "tenantId", tenantId,
+                                "fileId", fileId,
+                                "dispatchCreatedStatus", FileDispatchStatus.CREATED.name(),
+                                "dispatchSentStatus", FileDispatchStatus.SENT.name(),
+                                "receiptPendingStatus", FileReceiptStatus.PENDING.name()));
         return count == null ? 0L : count;
     }
 
-    public Map<String, Object> loadLatestDispatchRecord(String tenantId, Long fileId, String channelCode) {
+    public Map<String, Object> loadLatestDispatchRecord(
+            String tenantId, Long fileId, String channelCode) {
         if (!StringUtils.hasText(tenantId) || fileId == null) {
             return Map.of();
         }
-        Map<String, Object> dispatchRecord = fileGovernanceMapper.selectLatestDispatchRecord(
-                params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode)
-        );
+        Map<String, Object> dispatchRecord =
+                fileGovernanceMapper.selectLatestDispatchRecord(
+                        params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode));
         return dispatchRecord == null ? Map.of() : dispatchRecord;
     }
 
@@ -123,26 +115,27 @@ public class FileGovernanceRepository {
         if (pipelineInstanceId == null) {
             return null;
         }
-        return fileGovernanceMapper.selectRelatedJobInstanceId(params("pipelineInstanceId", pipelineInstanceId));
+        return fileGovernanceMapper.selectRelatedJobInstanceId(
+                params("pipelineInstanceId", pipelineInstanceId));
     }
 
     public void resetDispatchRecordForRedispatch(String tenantId, Long dispatchRecordId) {
         if (!StringUtils.hasText(tenantId) || dispatchRecordId == null) {
             return;
         }
-        fileGovernanceMapper.resetDispatchRecordForRedispatch(params(
-                "tenantId", tenantId,
-                "dispatchRecordId", dispatchRecordId,
-                "dispatchCreatedStatus", FileDispatchStatus.CREATED.name()
-        ));
+        fileGovernanceMapper.resetDispatchRecordForRedispatch(
+                params(
+                        "tenantId", tenantId,
+                        "dispatchRecordId", dispatchRecordId,
+                        "dispatchCreatedStatus", FileDispatchStatus.CREATED.name()));
     }
 
     public List<Map<String, Object>> selectArchivedFilesForCleanup(Instant cutoff, int limit) {
-        return fileGovernanceMapper.selectArchivedFilesForCleanup(params(
-                "cutoff", cutoff,
-                "limit", limit,
-                "archivedStatus", FileDispatchRunStatus.ARCHIVED.code()
-        ));
+        return fileGovernanceMapper.selectArchivedFilesForCleanup(
+                params(
+                        "cutoff", cutoff,
+                        "limit", limit,
+                        "archivedStatus", FileDispatchRunStatus.ARCHIVED.code()));
     }
 
     public List<Map<String, Object>> selectArrivalGovernanceCandidates(int limit) {
@@ -152,29 +145,33 @@ public class FileGovernanceRepository {
         return fileGovernanceMapper.selectArrivalGovernanceCandidates(params("limit", limit));
     }
 
-    public List<Map<String, Object>> selectArrivalGroupSummaries(String tenantId, String fileGroupCode, String arrivalState) {
-        return fileGovernanceMapper.selectArrivalGroupSummaries(params(
-                "tenantId", tenantId,
-                "fileGroupCode", fileGroupCode,
-                "arrivalState", arrivalState
-        ));
+    public List<Map<String, Object>> selectArrivalGroupSummaries(
+            String tenantId, String fileGroupCode, String arrivalState) {
+        return fileGovernanceMapper.selectArrivalGroupSummaries(
+                params(
+                        "tenantId", tenantId,
+                        "fileGroupCode", fileGroupCode,
+                        "arrivalState", arrivalState));
     }
 
-    public List<Map<String, Object>> selectArrivalGroupFiles(String tenantId, String fileGroupCode) {
+    public List<Map<String, Object>> selectArrivalGroupFiles(
+            String tenantId, String fileGroupCode) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileGroupCode)) {
             return List.of();
         }
-        return fileGovernanceMapper.selectArrivalGroupFiles(params("tenantId", tenantId, "fileGroupCode", fileGroupCode));
+        return fileGovernanceMapper.selectArrivalGroupFiles(
+                params("tenantId", tenantId, "fileGroupCode", fileGroupCode));
     }
 
     public long countArrivalDelayViolations(String tenantId, long thresholdSeconds) {
         if (!StringUtils.hasText(tenantId)) {
             return 0L;
         }
-        Long count = fileGovernanceMapper.countArrivalDelayViolations(params(
-                "tenantId", tenantId,
-                "thresholdSeconds", thresholdSeconds
-        ));
+        Long count =
+                fileGovernanceMapper.countArrivalDelayViolations(
+                        params(
+                                "tenantId", tenantId,
+                                "thresholdSeconds", thresholdSeconds));
         return count == null ? 0L : count;
     }
 
@@ -182,30 +179,33 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId)) {
             return 0L;
         }
-        Long maxDelay = fileGovernanceMapper.selectMaxArrivalDelaySeconds(params("tenantId", tenantId));
+        Long maxDelay =
+                fileGovernanceMapper.selectMaxArrivalDelaySeconds(params("tenantId", tenantId));
         return maxDelay == null ? 0L : maxDelay;
     }
 
-    public List<Map<String, Object>> selectArrivalDelaySamples(String tenantId, long thresholdSeconds, int limit) {
+    public List<Map<String, Object>> selectArrivalDelaySamples(
+            String tenantId, long thresholdSeconds, int limit) {
         if (!StringUtils.hasText(tenantId)) {
             return List.of();
         }
-        return fileGovernanceMapper.selectArrivalDelaySamples(params(
-                "tenantId", tenantId,
-                "thresholdSeconds", thresholdSeconds,
-                "limit", limit
-        ));
+        return fileGovernanceMapper.selectArrivalDelaySamples(
+                params(
+                        "tenantId", tenantId,
+                        "thresholdSeconds", thresholdSeconds,
+                        "limit", limit));
     }
 
     public long countProcessingDelayViolations(String tenantId, long thresholdSeconds) {
         if (!StringUtils.hasText(tenantId)) {
             return 0L;
         }
-        Long count = fileGovernanceMapper.countProcessingDelayViolations(params(
-                "tenantId", tenantId,
-                "thresholdSeconds", thresholdSeconds,
-                "runningStatus", FileDispatchRunStatus.RUNNING.code()
-        ));
+        Long count =
+                fileGovernanceMapper.countProcessingDelayViolations(
+                        params(
+                                "tenantId", tenantId,
+                                "thresholdSeconds", thresholdSeconds,
+                                "runningStatus", FileDispatchRunStatus.RUNNING.code()));
         return count == null ? 0L : count;
     }
 
@@ -213,52 +213,63 @@ public class FileGovernanceRepository {
         if (!StringUtils.hasText(tenantId)) {
             return 0L;
         }
-        Long maxDelay = fileGovernanceMapper.selectMaxProcessingDelaySeconds(params(
-                "tenantId", tenantId,
-                "runningStatus", FileDispatchRunStatus.RUNNING.code()
-        ));
+        Long maxDelay =
+                fileGovernanceMapper.selectMaxProcessingDelaySeconds(
+                        params(
+                                "tenantId",
+                                tenantId,
+                                "runningStatus",
+                                FileDispatchRunStatus.RUNNING.code()));
         return maxDelay == null ? 0L : maxDelay;
     }
 
-    public List<Map<String, Object>> selectProcessingDelaySamples(String tenantId, long thresholdSeconds, int limit) {
+    public List<Map<String, Object>> selectProcessingDelaySamples(
+            String tenantId, long thresholdSeconds, int limit) {
         if (!StringUtils.hasText(tenantId)) {
             return List.of();
         }
-        return fileGovernanceMapper.selectProcessingDelaySamples(params(
-                "tenantId", tenantId,
-                "thresholdSeconds", thresholdSeconds,
-                "limit", limit,
-                "runningStatus", FileDispatchRunStatus.RUNNING.code()
-        ));
+        return fileGovernanceMapper.selectProcessingDelaySamples(
+                params(
+                        "tenantId", tenantId,
+                        "thresholdSeconds", thresholdSeconds,
+                        "limit", limit,
+                        "runningStatus", FileDispatchRunStatus.RUNNING.code()));
     }
 
-    public boolean existsFileRecordByStoragePath(String tenantId, String storageBucket, String storagePath) {
+    public boolean existsFileRecordByStoragePath(
+            String tenantId, String storageBucket, String storagePath) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(storagePath)) {
             return false;
         }
-        Long count = fileGovernanceMapper.countFileRecordByStoragePath(
-                params("tenantId", tenantId, "storageBucket", storageBucket, "storagePath", storagePath)
-        );
+        Long count =
+                fileGovernanceMapper.countFileRecordByStoragePath(
+                        params(
+                                "tenantId",
+                                tenantId,
+                                "storageBucket",
+                                storageBucket,
+                                "storagePath",
+                                storagePath));
         return count != null && count > 0;
     }
 
     public Long createReconciledFileRecord(ReconciledFileRecordCommand command) {
-        Map<String, Object> params = params(
-                "tenantId", command.identity().tenantId(),
-                "fileCategory", command.identity().fileCategory(),
-                "fileName", command.identity().fileName(),
-                "fileExt", resolveFileExt(command.identity().fileName()),
-                "fileFormatType", command.identity().fileFormatType(),
-                "mimeType", resolveMimeType(command.identity().fileFormatType()),
-                "fileSizeBytes", Math.max(command.fileSizeBytes(), 0L),
-                "storageType", command.storage().storageType(),
-                "storagePath", command.storage().storagePath(),
-                "storageBucket", command.storage().storageBucket(),
-                "sourceType", command.sourceType(),
-                "fileStatus", command.fileStatus(),
-                "traceId", command.traceId(),
-                "metadataJson", toJson(command.metadata())
-        );
+        Map<String, Object> params =
+                params(
+                        "tenantId", command.identity().tenantId(),
+                        "fileCategory", command.identity().fileCategory(),
+                        "fileName", command.identity().fileName(),
+                        "fileExt", resolveFileExt(command.identity().fileName()),
+                        "fileFormatType", command.identity().fileFormatType(),
+                        "mimeType", resolveMimeType(command.identity().fileFormatType()),
+                        "fileSizeBytes", Math.max(command.fileSizeBytes(), 0L),
+                        "storageType", command.storage().storageType(),
+                        "storagePath", command.storage().storagePath(),
+                        "storageBucket", command.storage().storageBucket(),
+                        "sourceType", command.sourceType(),
+                        "fileStatus", command.fileStatus(),
+                        "traceId", command.traceId(),
+                        "metadataJson", toJson(command.metadata()));
         fileGovernanceMapper.insertReconciledFileRecord(params);
         return toLong(params.get("id"));
     }
@@ -268,14 +279,27 @@ public class FileGovernanceRepository {
         if (fileRecord.isEmpty()) {
             return;
         }
-        String currentStatus = fileRecord.get("file_status") == null ? null : String.valueOf(fileRecord.get("file_status"));
+        String currentStatus =
+                fileRecord.get("file_status") == null
+                        ? null
+                        : String.valueOf(fileRecord.get("file_status"));
         FileStateMachine.assertTransition(currentStatus, nextStatus);
-        int updated = fileGovernanceMapper.updateFileStatus(
-                params("tenantId", tenantId, "fileId", fileId,
-                        "currentStatus", currentStatus, "nextStatus", nextStatus, "metadataJson", toJson(metadata))
-        );
+        int updated =
+                fileGovernanceMapper.updateFileStatus(
+                        params(
+                                "tenantId",
+                                tenantId,
+                                "fileId",
+                                fileId,
+                                "currentStatus",
+                                currentStatus,
+                                "nextStatus",
+                                nextStatus,
+                                "metadataJson",
+                                toJson(metadata)));
         if (updated <= 0) {
-            throw new BizException(ResultCode.STATE_CONFLICT,
+            throw new BizException(
+                    ResultCode.STATE_CONFLICT,
                     "file status changed concurrently, expected " + currentStatus);
         }
     }
@@ -285,8 +309,7 @@ public class FileGovernanceRepository {
             return;
         }
         fileGovernanceMapper.updateFileMetadata(
-                params("tenantId", tenantId, "fileId", fileId, "metadataJson", toJson(metadata))
-        );
+                params("tenantId", tenantId, "fileId", fileId, "metadataJson", toJson(metadata)));
     }
 
     public void appendAudit(FileAuditCommand command) {
@@ -297,22 +320,25 @@ public class FileGovernanceRepository {
                 || !StringUtils.hasText(command.operationResult())) {
             return;
         }
-        fileGovernanceMapper.insertFileAuditLog(params(
-                "tenantId", command.tenantId(),
-                "fileId", command.fileId(),
-                "operationType", command.operationType(),
-                "operationResult", command.operationResult(),
-                "operatorType", defaultText(command.actor() == null ? null : command.actor().operatorType(), "API"),
-                "operatorId", command.actor() == null ? null : command.actor().operatorId(),
-                "traceId", command.traceId(),
-                "detailSummaryJson", toJson(command.detailSummary())
-        ));
+        fileGovernanceMapper.insertFileAuditLog(
+                params(
+                        "tenantId", command.tenantId(),
+                        "fileId", command.fileId(),
+                        "operationType", command.operationType(),
+                        "operationResult", command.operationResult(),
+                        "operatorType",
+                                defaultText(
+                                        command.actor() == null
+                                                ? null
+                                                : command.actor().operatorType(),
+                                        "API"),
+                        "operatorId", command.actor() == null ? null : command.actor().operatorId(),
+                        "traceId", command.traceId(),
+                        "detailSummaryJson", toJson(command.detailSummary())));
     }
 
-    public Map<String, Object> operationDetail(String currentStatus,
-                                               String nextStatus,
-                                               String operatorId,
-                                               String reason) {
+    public Map<String, Object> operationDetail(
+            String currentStatus, String nextStatus, String operatorId, String reason) {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("currentStatus", currentStatus);
         detail.put("nextStatus", nextStatus);

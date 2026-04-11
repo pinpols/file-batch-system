@@ -1,16 +1,19 @@
 package com.example.batch.console.service;
 
-import com.example.batch.common.enums.AiPromptCategory;
-import com.example.batch.console.support.AiPromptGateResult;
-import com.example.batch.common.enums.AiPromptDecision;
 import com.example.batch.common.constants.CommonErrorMessages;
-import com.example.batch.common.exception.BizException;
+import com.example.batch.common.enums.AiPromptCategory;
+import com.example.batch.common.enums.AiPromptDecision;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.console.config.ConsoleAiProperties;
-import java.util.Locale;
+import com.example.batch.console.support.AiPromptGateResult;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -26,10 +29,12 @@ public class ConsoleAiPromptGuard {
                     CommonErrorMessages.AI_ASSISTANT_DISABLED);
         }
         if (!StringUtils.hasText(prompt)) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_REQUIRED);
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_REQUIRED);
         }
         if (prompt.length() > properties.getMaxPromptLength()) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_TOO_LONG);
+            throw new BizException(
+                    ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_TOO_LONG);
         }
         String normalized = prompt.trim();
         String lower = normalized.toLowerCase(Locale.ROOT);
@@ -38,8 +43,7 @@ public class ConsoleAiPromptGuard {
                 return AiPromptGateResult.rejected(
                         AiPromptDecision.REJECTED_SAFETY,
                         AiPromptCategory.OUT_OF_SCOPE,
-                        CommonErrorMessages.PROMPT_VIOLATES_SAFETY_POLICY
-                );
+                        CommonErrorMessages.PROMPT_VIOLATES_SAFETY_POLICY);
             }
         }
         for (String keyword : properties.getDomainKeywords()) {
@@ -50,8 +54,7 @@ public class ConsoleAiPromptGuard {
         return AiPromptGateResult.rejected(
                 AiPromptDecision.REJECTED_SCOPE,
                 AiPromptCategory.OUT_OF_SCOPE,
-                CommonErrorMessages.PROMPT_OUT_OF_SCOPE
-        );
+                CommonErrorMessages.PROMPT_OUT_OF_SCOPE);
     }
 
     private boolean contains(String normalized, String lower, String keyword) {
@@ -64,17 +67,30 @@ public class ConsoleAiPromptGuard {
 
     private AiPromptCategory resolveCategory(String keyword) {
         String normalized = keyword.toLowerCase(Locale.ROOT);
-        if (normalized.contains("file") || normalized.contains("文件") || normalized.contains("archive")
-                || normalized.contains("dispatch") || normalized.contains("reconcile") || normalized.contains("归档")
+        if (normalized.contains("file")
+                || normalized.contains("文件")
+                || normalized.contains("archive")
+                || normalized.contains("dispatch")
+                || normalized.contains("reconcile")
+                || normalized.contains("归档")
                 || normalized.contains("重分发")) {
             return AiPromptCategory.FILE_GOVERNANCE;
         }
-        if (normalized.contains("workflow") || normalized.contains("dag") || normalized.contains("节点") || normalized.contains("工作流")) {
+        if (normalized.contains("workflow")
+                || normalized.contains("dag")
+                || normalized.contains("节点")
+                || normalized.contains("工作流")) {
             return AiPromptCategory.WORKFLOW;
         }
-        if (normalized.contains("worker") || normalized.contains("trigger") || normalized.contains("orchestrator")
-                || normalized.contains("job") || normalized.contains("partition") || normalized.contains("task")
-                || normalized.contains("调度") || normalized.contains("实例") || normalized.contains("分片")) {
+        if (normalized.contains("worker")
+                || normalized.contains("trigger")
+                || normalized.contains("orchestrator")
+                || normalized.contains("job")
+                || normalized.contains("partition")
+                || normalized.contains("task")
+                || normalized.contains("调度")
+                || normalized.contains("实例")
+                || normalized.contains("分片")) {
             return AiPromptCategory.PLATFORM;
         }
         return AiPromptCategory.OPERATIONS;

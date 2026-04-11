@@ -1,6 +1,7 @@
 package com.example.batch.console.web.request;
 
 import jakarta.validation.constraints.Size;
+
 import lombok.Data;
 
 @Data

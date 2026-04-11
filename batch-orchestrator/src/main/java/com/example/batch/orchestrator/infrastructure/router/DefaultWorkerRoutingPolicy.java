@@ -2,9 +2,11 @@ package com.example.batch.orchestrator.infrastructure.router;
 
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.application.route.WorkerRoutingPolicy;
+
+import org.springframework.stereotype.Component;
+
 import java.util.Comparator;
 import java.util.List;
-import org.springframework.stereotype.Component;
 
 @Component
 public class DefaultWorkerRoutingPolicy implements WorkerRoutingPolicy {
@@ -16,7 +18,12 @@ public class DefaultWorkerRoutingPolicy implements WorkerRoutingPolicy {
         }
         return candidates.stream()
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getAvailable()))
-                .max(Comparator.comparingInt(candidate -> candidate.getPriority() == null ? 0 : candidate.getPriority()))
+                .max(
+                        Comparator.comparingInt(
+                                candidate ->
+                                        candidate.getPriority() == null
+                                                ? 0
+                                                : candidate.getPriority()))
                 .orElse(candidates.get(0));
     }
 }

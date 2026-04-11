@@ -1,8 +1,9 @@
 package com.example.batch.common.persistence.entity;
 
+import lombok.Data;
+
 import java.time.Instant;
 import java.time.LocalDate;
-import lombok.Data;
 
 @Data
 public class TriggerRequestEntity {

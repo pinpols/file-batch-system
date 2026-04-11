@@ -5,6 +5,4 @@ public record ConsoleFileChannelExcelApplyResponse(
         String tenantId,
         Integer appliedRows,
         Integer insertedRows,
-        Integer updatedRows
-) {
-}
+        Integer updatedRows) {}

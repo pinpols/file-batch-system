@@ -5,13 +5,16 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowDefinitionRecord;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 
 @Service
@@ -26,38 +29,40 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     public LaunchLoadResult load(LaunchRequest request) {
         validate(request);
 
-        TriggerRequestEntity triggerRequest = triggerRequestMapper.selectByTenantAndRequestId(
-                request.tenantId(), request.requestId());
-        if (triggerRequest == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "trigger request not found");
-        }
+        TriggerRequestEntity triggerRequest =
+                Guard.requireFound(
+                        triggerRequestMapper.selectByTenantAndRequestId(
+                                request.tenantId(), request.requestId()),
+                        "trigger request not found");
 
-        JobDefinitionRecord jobDefinition = configCacheService
-                .findEnabledJobDefinition(request.tenantId(), request.jobCode());
+        JobDefinitionRecord jobDefinition =
+                configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
         if (jobDefinition == null) {
-            triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
-                    BatchStatusConstants.REJECTED, null);
+            triggerRequestMapper.updateAcceptance(
+                    request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
             throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
         }
 
-        WorkflowDefinitionRecord workflowDefinition = configCacheService
-                .findEnabledWorkflowDefinition(request.tenantId(), request.jobCode());
+        WorkflowDefinitionRecord workflowDefinition =
+                configCacheService.findEnabledWorkflowDefinition(
+                        request.tenantId(), request.jobCode());
         if (workflowDefinition == null) {
-            triggerRequestMapper.updateAcceptance(request.tenantId(), request.requestId(),
-                    BatchStatusConstants.REJECTED, null);
-            throw new BizException(ResultCode.NOT_FOUND, "workflow definition not found for job code");
+            triggerRequestMapper.updateAcceptance(
+                    request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
+            throw new BizException(
+                    ResultCode.NOT_FOUND, "workflow definition not found for job code");
         }
 
-        JobInstanceEntity existingInstance = jobInstanceMapper.selectByTenantAndDedupKey(
-                request.tenantId(), triggerRequest.getDedupKey());
+        JobInstanceEntity existingInstance =
+                jobInstanceMapper.selectByTenantAndDedupKey(
+                        request.tenantId(), triggerRequest.getDedupKey());
 
-        return new LaunchLoadResult(triggerRequest, jobDefinition, workflowDefinition, existingInstance);
+        return new LaunchLoadResult(
+                triggerRequest, jobDefinition, workflowDefinition, existingInstance);
     }
 
     private void validate(LaunchRequest request) {
-        if (request == null) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "launch request is required");
-        }
+        Guard.require(request != null, "launch request is required");
         if (request.tenantId() == null || request.tenantId().isBlank()) {
             throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
         }

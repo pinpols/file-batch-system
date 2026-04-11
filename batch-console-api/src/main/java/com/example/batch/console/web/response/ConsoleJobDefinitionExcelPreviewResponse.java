@@ -9,6 +9,4 @@ public record ConsoleJobDefinitionExcelPreviewResponse(
         int validRows,
         int invalidRows,
         List<ConsoleJobDefinitionExcelRowResponse> rows,
-        List<ConsoleJobDefinitionExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleJobDefinitionExcelRowIssueResponse> issues) {}

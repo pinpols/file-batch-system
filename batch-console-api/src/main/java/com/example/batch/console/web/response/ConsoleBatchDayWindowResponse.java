@@ -12,6 +12,4 @@ public record ConsoleBatchDayWindowResponse(
         Instant currentSystemTime,
         Long timeUntilCutoffSeconds,
         Instant lateArrivalWindowClosesAt,
-        List<ConsoleBatchDaySummaryResponse> jobs
-) {
-}
+        List<ConsoleBatchDaySummaryResponse> jobs) {}

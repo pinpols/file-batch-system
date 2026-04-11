@@ -10,6 +10,4 @@ public record ConsoleTenantQuotaPolicyExcelPreviewResponse(
         Integer validRows,
         Integer invalidRows,
         List<ConsoleTenantQuotaPolicyResponse> rows,
-        List<ConsoleTenantQuotaPolicyExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleTenantQuotaPolicyExcelRowIssueResponse> issues) {}

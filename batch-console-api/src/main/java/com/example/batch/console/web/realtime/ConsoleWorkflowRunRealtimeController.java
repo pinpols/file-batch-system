@@ -2,7 +2,9 @@ package com.example.batch.console.web.realtime;
 
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeEventHub;
 import com.example.batch.console.support.ConsoleTenantGuard;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -23,10 +25,16 @@ public class ConsoleWorkflowRunRealtimeController {
     private final ConsoleTenantGuard tenantGuard;
 
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter events(@RequestParam("tenantId") String tenantId,
-                             @RequestParam(value = "eventType", required = false) String eventType,
-                             @RequestParam(value = "cursor", required = false) String cursor,
-                             @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
-        return realtimeEventHub.subscribe(tenantGuard.resolveTenant(tenantId), "workflow-runs", eventType, cursor, heartbeatMillis);
+    public SseEmitter events(
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(value = "eventType", required = false) String eventType,
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+        return realtimeEventHub.subscribe(
+                tenantGuard.resolveTenant(tenantId),
+                "workflow-runs",
+                eventType,
+                cursor,
+                heartbeatMillis);
     }
 }

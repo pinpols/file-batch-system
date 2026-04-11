@@ -1,14 +1,5 @@
 package com.example.batch.console.support;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.ss.usermodel.Comment;
@@ -19,17 +10,21 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-/**
- * 预览阶段使用的 Excel 辅助能力：
- * 生成带 VALIDATION 明细与数据单元格批注的可继续回灌 workbook。
- */
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+
+/** 预览阶段使用的 Excel 辅助能力： 生成带 VALIDATION 明细与数据单元格批注的可继续回灌 workbook。 */
 public final class ConsoleExcelPreviewWorkbookSupport {
 
-    private ConsoleExcelPreviewWorkbookSupport() {
-    }
+    private ConsoleExcelPreviewWorkbookSupport() {}
 
-    public record WorkbookIssue(String sheetName, int rowNo, String columnName, String message) {
-    }
+    public record WorkbookIssue(String sheetName, int rowNo, String columnName, String message) {}
 
     public static Workbook createWorkbook() {
         return new XSSFWorkbook();
@@ -42,10 +37,8 @@ public final class ConsoleExcelPreviewWorkbookSupport {
         }
     }
 
-    public static List<WorkbookIssue> expandIssues(String sheetName,
-                                                   Integer rowNo,
-                                                   List<String> messages,
-                                                   List<String> knownColumns) {
+    public static List<WorkbookIssue> expandIssues(
+            String sheetName, Integer rowNo, List<String> messages, List<String> knownColumns) {
         if (rowNo == null || messages == null || messages.isEmpty()) {
             return List.of();
         }
@@ -83,10 +76,11 @@ public final class ConsoleExcelPreviewWorkbookSupport {
         }
     }
 
-    public static void addIssueComments(Sheet sheet,
-                                        List<String> columns,
-                                        List<WorkbookIssue> issues,
-                                        int fallbackColumnIndex) {
+    public static void addIssueComments(
+            Sheet sheet,
+            List<String> columns,
+            List<WorkbookIssue> issues,
+            int fallbackColumnIndex) {
         if (issues == null || issues.isEmpty()) {
             return;
         }
@@ -126,7 +120,10 @@ public final class ConsoleExcelPreviewWorkbookSupport {
     }
 
     public static String previewWorkbookFileName(String originalFileName) {
-        String baseName = (originalFileName == null || originalFileName.isBlank()) ? "excel-preview.xlsx" : originalFileName.trim();
+        String baseName =
+                (originalFileName == null || originalFileName.isBlank())
+                        ? "excel-preview.xlsx"
+                        : originalFileName.trim();
         if (baseName.endsWith(".xlsx")) {
             return baseName.substring(0, baseName.length() - 5) + "-preview.xlsx";
         }
@@ -136,7 +133,9 @@ public final class ConsoleExcelPreviewWorkbookSupport {
     private static List<String> findMatchedColumns(String message, List<String> knownColumns) {
         List<String> matches = new ArrayList<>();
         for (String column : sortByLengthDesc(knownColumns)) {
-            Pattern pattern = Pattern.compile("(^|[^A-Za-z0-9_])" + Pattern.quote(column) + "([^A-Za-z0-9_]|$)");
+            Pattern pattern =
+                    Pattern.compile(
+                            "(^|[^A-Za-z0-9_])" + Pattern.quote(column) + "([^A-Za-z0-9_]|$)");
             if (pattern.matcher(message).find()) {
                 matches.add(column);
             }
@@ -150,7 +149,8 @@ public final class ConsoleExcelPreviewWorkbookSupport {
         return sorted;
     }
 
-    private static int resolveColumnIndex(String columnName, List<String> columns, int fallbackColumnIndex) {
+    private static int resolveColumnIndex(
+            String columnName, List<String> columns, int fallbackColumnIndex) {
         if (columnName != null) {
             int matched = columns.indexOf(columnName);
             if (matched >= 0) {

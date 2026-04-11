@@ -15,6 +15,4 @@ public record WorkflowDefinitionDetailResponse(
         Instant createdAt,
         Instant updatedAt,
         List<ConsoleWorkflowNodeResponse> nodes,
-        List<ConsoleWorkflowEdgeResponse> edges
-) {
-}
+        List<ConsoleWorkflowEdgeResponse> edges) {}

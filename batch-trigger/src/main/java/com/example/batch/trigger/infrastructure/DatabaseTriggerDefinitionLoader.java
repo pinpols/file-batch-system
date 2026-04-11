@@ -3,9 +3,12 @@ package com.example.batch.trigger.infrastructure;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.mapper.TriggerDefinitionMapper;
 import com.example.batch.trigger.support.TriggerDescriptor;
-import java.util.List;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor

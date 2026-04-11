@@ -5,14 +5,14 @@ import com.example.batch.console.web.request.AlertRoutingExcelApplyRequest;
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelUploadResponse;
-import java.io.IOException;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * 告警路由 Excel 导入导出应用服务。
- */
+import java.io.IOException;
+
+/** 告警路由 Excel 导入导出应用服务。 */
 public interface ConsoleAlertRoutingExcelApplicationService {
 
     /** 导出告警路由配置为 Excel。 */
@@ -31,5 +31,6 @@ public interface ConsoleAlertRoutingExcelApplicationService {
     ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
 
     /** 确认导入并更新告警路由配置。 */
-    ConsoleAlertRoutingExcelApplyResponse apply(String uploadToken, AlertRoutingExcelApplyRequest request);
+    ConsoleAlertRoutingExcelApplyResponse apply(
+            String uploadToken, AlertRoutingExcelApplyRequest request);
 }

@@ -1,7 +1,8 @@
 package com.example.batch.console.domain.entity;
 
-import java.time.Instant;
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class ConfigChangeLogEntity {

@@ -1,7 +1,8 @@
 package com.example.batch.console.web.response;
 
-import java.time.Instant;
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class AiAuditLogResponse {

@@ -12,6 +12,4 @@ public record ConsoleWorkflowDefinitionResponse(
         Boolean enabled,
         String description,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

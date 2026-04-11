@@ -15,6 +15,4 @@ public record ConsoleFileChannelResponse(
         Integer timeoutSeconds,
         Boolean enabled,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

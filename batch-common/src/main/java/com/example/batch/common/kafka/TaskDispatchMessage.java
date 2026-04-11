@@ -19,6 +19,4 @@ public record TaskDispatchMessage(
         String payload,
         String traceId,
         String idempotencyKey,
-        Instant dispatchAt
-) {
-}
+        Instant dispatchAt) {}

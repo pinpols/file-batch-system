@@ -6,9 +6,11 @@ import com.example.batch.console.application.ConsoleConfigApprovalApplicationSer
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ConfigApprovalActionRequest;
 import com.example.batch.console.web.request.ConfigReleaseApprovalSubmitRequest;
+
 import jakarta.validation.Valid;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 @RestController
 @Validated
@@ -40,8 +44,8 @@ public class ConsoleConfigApprovalController {
 
     @GetMapping("/releases/{releaseId}/approval")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<Map<String, Object>> approvalDetail(@PathVariable Long releaseId,
-                                                              @RequestParam("tenantId") String tenantId) {
+    public CommonResponse<Map<String, Object>> approvalDetail(
+            @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(applicationService.detail(tenantId, releaseId));
     }
 

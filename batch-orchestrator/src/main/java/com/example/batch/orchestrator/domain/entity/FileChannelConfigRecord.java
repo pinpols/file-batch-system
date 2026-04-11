@@ -11,5 +11,4 @@ public record FileChannelConfigRecord(
         @Column("channel_code") String channelCode,
         @Column("channel_name") String channelName,
         @Column("channel_type") String channelType,
-        @Column("enabled") Boolean enabled
-) {}
+        @Column("enabled") Boolean enabled) {}

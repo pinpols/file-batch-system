@@ -1,7 +1,8 @@
 package com.example.batch.trigger.support;
 
-import java.time.LocalDate;
 import lombok.Data;
+
+import java.time.LocalDate;
 
 @Data
 public class CalendarHolidayRule {

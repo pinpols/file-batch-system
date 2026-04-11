@@ -1,24 +1,22 @@
 package com.example.batch.common.context;
 
 import com.example.batch.common.enums.RunMode;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * 统一运行模式意图，使 launch/retry/recover/compensate 流程都写入相同的规范键到 payload 和执行上下文。
- */
+/** 统一运行模式意图，使 launch/retry/recover/compensate 流程都写入相同的规范键到 payload 和执行上下文。 */
 public final class RunModeSupport {
 
     public static final String RUN_MODE = "run_mode";
-    /**
-     * 兼容旧版 JSON payload 保留的遗留别名。
-     */
+
+    /** 兼容旧版 JSON payload 保留的遗留别名。 */
     public static final String LEGACY_RUN_MODE = "runMode";
 
-    private RunModeSupport() {
-    }
+    private RunModeSupport() {}
 
-    public static Map<String, Object> copyWithDefault(Map<String, Object> source, RunMode defaultMode) {
+    public static Map<String, Object> copyWithDefault(
+            Map<String, Object> source, RunMode defaultMode) {
         Map<String, Object> copy = new LinkedHashMap<>();
         if (source != null) {
             copy.putAll(source);
@@ -55,8 +53,6 @@ public final class RunModeSupport {
         if (value == null) {
             return null;
         }
-        return RunMode.fromCode(String.valueOf(value))
-                .map(RunMode::code)
-                .orElse(null);
+        return RunMode.fromCode(String.valueOf(value)).map(RunMode::code).orElse(null);
     }
 }

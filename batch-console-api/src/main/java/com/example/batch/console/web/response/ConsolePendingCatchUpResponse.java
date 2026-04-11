@@ -12,6 +12,4 @@ public record ConsolePendingCatchUpResponse(
         String requestStatus,
         String traceId,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

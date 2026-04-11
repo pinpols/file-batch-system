@@ -1,11 +1,10 @@
 package com.example.batch.console.application;
 
 import com.example.batch.console.web.response.ConsoleBatchApprovalResultResponse;
+
 import java.util.List;
 
-/**
- * 控制台审批应用服务：单条审批通过/拒绝及批量审批。
- */
+/** 控制台审批应用服务：单条审批通过/拒绝及批量审批。 */
 public interface ConsoleApprovalApplicationService {
 
     /** 审批通过指定审批单。 */
@@ -15,14 +14,10 @@ public interface ConsoleApprovalApplicationService {
     String reject(String tenantId, String approvalNo, String operatorId, String reason);
 
     /** 批量审批通过，返回每条结果。 */
-    List<ConsoleBatchApprovalResultResponse> batchApprove(String tenantId,
-                                                                    List<String> approvalNos,
-                                                                    String operatorId,
-                                                                    String reason);
+    List<ConsoleBatchApprovalResultResponse> batchApprove(
+            String tenantId, List<String> approvalNos, String operatorId, String reason);
 
     /** 批量审批拒绝，返回每条结果。 */
-    List<ConsoleBatchApprovalResultResponse> batchReject(String tenantId,
-                                                                   List<String> approvalNos,
-                                                                   String operatorId,
-                                                                   String reason);
+    List<ConsoleBatchApprovalResultResponse> batchReject(
+            String tenantId, List<String> approvalNos, String operatorId, String reason);
 }

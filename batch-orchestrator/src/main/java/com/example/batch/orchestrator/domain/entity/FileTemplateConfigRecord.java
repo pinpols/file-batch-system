@@ -13,5 +13,4 @@ public record FileTemplateConfigRecord(
         @Column("template_type") String templateType,
         @Column("biz_type") String bizType,
         @Column("enabled") Boolean enabled,
-        @Column("version") Integer version
-) {}
+        @Column("version") Integer version) {}

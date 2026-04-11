@@ -16,6 +16,4 @@ public record ConsoleWorkflowNodeExcelRowResponse(
         Integer retryMaxCount,
         Integer timeoutSeconds,
         String nodeParams,
-        Boolean enabled
-) {
-}
+        Boolean enabled) {}

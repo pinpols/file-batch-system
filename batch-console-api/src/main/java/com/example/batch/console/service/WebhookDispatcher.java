@@ -4,7 +4,17 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
+
 import jakarta.annotation.PreDestroy;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
@@ -13,19 +23,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Webhook 异步分发器。
  *
- * <p>MVP 版本：进程内异步线程池 + 最多 3 次重试；每次尝试都落 delivery log。</p>
+ * <p>MVP 版本：进程内异步线程池 + 最多 3 次重试；每次尝试都落 delivery log。
  */
 @Slf4j
 @Service
@@ -37,18 +42,22 @@ public class WebhookDispatcher {
     private final ConsoleWebhookService webhookService;
     private final ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
     private final RestClient.Builder restClientBuilder;
-    private final ExecutorService executor = Executors.newFixedThreadPool(4, runnable -> {
-        Thread thread = new Thread(runnable, "console-webhook-dispatch");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ExecutorService executor =
+            Executors.newFixedThreadPool(
+                    4,
+                    runnable -> {
+                        Thread thread = new Thread(runnable, "console-webhook-dispatch");
+                        thread.setDaemon(true);
+                        return thread;
+                    });
 
-    public void dispatchAsync(String tenantId,
-                              String eventType,
-                              String stream,
-                              String cursor,
-                              Object data,
-                              Instant emittedAt) {
+    public void dispatchAsync(
+            String tenantId,
+            String eventType,
+            String stream,
+            String cursor,
+            Object data,
+            Instant emittedAt) {
         executor.submit(() -> dispatch(tenantId, eventType, stream, cursor, data, emittedAt));
     }
 
@@ -57,36 +66,41 @@ public class WebhookDispatcher {
         executor.shutdown();
     }
 
-    private void dispatch(String tenantId,
-                          String eventType,
-                          String stream,
-                          String cursor,
-                          Object data,
-                          Instant emittedAt) {
-        List<WebhookSubscriptionEntity> subscriptions = webhookService.findEnabledSubscriptions(tenantId);
+    private void dispatch(
+            String tenantId,
+            String eventType,
+            String stream,
+            String cursor,
+            Object data,
+            Instant emittedAt) {
+        List<WebhookSubscriptionEntity> subscriptions =
+                webhookService.findEnabledSubscriptions(tenantId);
         if (subscriptions == null || subscriptions.isEmpty()) {
             return;
         }
-        WebhookEventPayload payload = new WebhookEventPayload(
-                tenantId,
-                normalizeEventType(eventType),
-                stream,
-                cursor,
-                emittedAt == null ? Instant.now() : emittedAt,
-                data
-        );
+        WebhookEventPayload payload =
+                new WebhookEventPayload(
+                        tenantId,
+                        normalizeEventType(eventType),
+                        stream,
+                        cursor,
+                        emittedAt == null ? Instant.now() : emittedAt,
+                        data);
         String payloadJson = JsonUtils.toJson(payload);
         for (WebhookSubscriptionEntity subscription : subscriptions) {
-            if (subscription == null || subscription.getId() == null || !matches(subscription.getEventTypes(), payload.eventType())) {
+            if (subscription == null
+                    || subscription.getId() == null
+                    || !matches(subscription.getEventTypes(), payload.eventType())) {
                 continue;
             }
             deliverWithRetry(subscription, payload, payloadJson);
         }
     }
 
-    private void deliverWithRetry(WebhookSubscriptionEntity subscription,
-                                  WebhookEventPayload payload,
-                                  String payloadJson) {
+    private void deliverWithRetry(
+            WebhookSubscriptionEntity subscription,
+            WebhookEventPayload payload,
+            String payloadJson) {
         long backoffMillis = 250L;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             Integer httpStatus = null;
@@ -108,7 +122,14 @@ public class WebhookDispatcher {
             }
 
             String deliveryStatus = attempt >= MAX_ATTEMPTS ? "EXHAUSTED" : "FAILED";
-            insertLog(subscription, payload, payloadJson, httpStatus, responseBody, deliveryStatus, attempt);
+            insertLog(
+                    subscription,
+                    payload,
+                    payloadJson,
+                    httpStatus,
+                    responseBody,
+                    deliveryStatus,
+                    attempt);
             if (attempt < MAX_ATTEMPTS) {
                 sleep(backoffMillis);
                 backoffMillis *= 2;
@@ -116,31 +137,34 @@ public class WebhookDispatcher {
         }
     }
 
-    private void deliver(WebhookSubscriptionEntity subscription,
-                         WebhookEventPayload payload,
-                         String payloadJson) {
+    private void deliver(
+            WebhookSubscriptionEntity subscription,
+            WebhookEventPayload payload,
+            String payloadJson) {
         RestClient client = restClientBuilder.build();
-        RestClient.RequestBodySpec spec = client.post()
-                .uri(subscription.getCallbackUrl())
-                .contentType(MediaType.APPLICATION_JSON)
-                .header("X-Batch-Tenant-Id", payload.tenantId())
-                .header("X-Batch-Event-Type", payload.eventType())
-                .header("X-Batch-Event-Stream", payload.stream() == null ? "" : payload.stream());
+        RestClient.RequestBodySpec spec =
+                client.post()
+                        .uri(subscription.getCallbackUrl())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Batch-Tenant-Id", payload.tenantId())
+                        .header("X-Batch-Event-Type", payload.eventType())
+                        .header(
+                                "X-Batch-Event-Stream",
+                                payload.stream() == null ? "" : payload.stream());
         if (subscription.getSecret() != null && !subscription.getSecret().isBlank()) {
             spec = spec.header("X-Batch-Signature", sign(payloadJson, subscription.getSecret()));
         }
-        spec.body(payloadJson)
-                .retrieve()
-                .toBodilessEntity();
+        spec.body(payloadJson).retrieve().toBodilessEntity();
     }
 
-    private void insertLog(WebhookSubscriptionEntity subscription,
-                           WebhookEventPayload payload,
-                           String payloadJson,
-                           Integer httpStatus,
-                           String responseBody,
-                           String deliveryStatus,
-                           int attempt) {
+    private void insertLog(
+            WebhookSubscriptionEntity subscription,
+            WebhookEventPayload payload,
+            String payloadJson,
+            Integer httpStatus,
+            String responseBody,
+            String deliveryStatus,
+            int attempt) {
         deliveryLogRepository.insert(
                 payload.tenantId(),
                 subscription.getId(),
@@ -149,8 +173,7 @@ public class WebhookDispatcher {
                 httpStatus,
                 responseBody,
                 deliveryStatus,
-                attempt
-        );
+                attempt);
     }
 
     private boolean matches(String configuredEventTypes, String eventType) {
@@ -194,11 +217,11 @@ public class WebhookDispatcher {
         }
     }
 
-    private record WebhookEventPayload(String tenantId,
-                                       String eventType,
-                                       String stream,
-                                       String cursor,
-                                       Instant emittedAt,
-                                       Object data) {
-    }
+    private record WebhookEventPayload(
+            String tenantId,
+            String eventType,
+            String stream,
+            String cursor,
+            Instant emittedAt,
+            Object data) {}
 }

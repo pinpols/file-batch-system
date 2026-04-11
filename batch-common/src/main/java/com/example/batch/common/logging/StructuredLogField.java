@@ -1,8 +1,6 @@
 package com.example.batch.common.logging;
 
-/**
- * 用于 JSON 日志传输（Loki/ELK）和跨服务关联的规范 MDC 键。
- */
+/** 用于 JSON 日志传输（Loki/ELK）和跨服务关联的规范 MDC 键。 */
 public final class StructuredLogField {
 
     public static final String SERVICE = "service";
@@ -17,6 +15,5 @@ public final class StructuredLogField {
     public static final String STAGE = "stage";
     public static final String FILE_ID = "fileId";
 
-    private StructuredLogField() {
-    }
+    private StructuredLogField() {}
 }

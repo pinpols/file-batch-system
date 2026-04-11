@@ -14,6 +14,4 @@ public record ConsoleWorkflowExcelPreviewResponse(
         List<ConsoleWorkflowDefinitionExcelRowResponse> definitions,
         List<ConsoleWorkflowNodeExcelRowResponse> nodes,
         List<ConsoleWorkflowEdgeExcelRowResponse> edges,
-        List<ConsoleWorkflowExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleWorkflowExcelRowIssueResponse> issues) {}

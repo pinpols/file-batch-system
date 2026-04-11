@@ -6,7 +6,11 @@ import java.util.Map;
 
 public interface BusinessCalendarExcelImportStore {
 
-    String save(String fileName, String tenantId, List<Map<String, String>> calendarRows, List<Map<String, String>> holidayRows);
+    String save(
+            String fileName,
+            String tenantId,
+            List<Map<String, String>> calendarRows,
+            List<Map<String, String>> holidayRows);
 
     ExcelImportSession get(String uploadToken);
 
@@ -17,7 +21,5 @@ public interface BusinessCalendarExcelImportStore {
             String tenantId,
             Instant uploadedAt,
             List<Map<String, String>> calendarRows,
-            List<Map<String, String>> holidayRows
-    ) {
-    }
+            List<Map<String, String>> holidayRows) {}
 }

@@ -1,13 +1,16 @@
 package com.example.batch.console.web;
 
+import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleTriggerProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.common.dto.CommonResponse;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
+
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @Validated
@@ -20,7 +23,9 @@ public class ConsoleSchedulerController {
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping("/status")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+    @PreAuthorize(
+            "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN',"
+                + " 'ROLE_TENANT_USER')")
     public CommonResponse<Map<String, String>> status() {
         return responseFactory.success(triggerProxyService.schedulerStatus());
     }

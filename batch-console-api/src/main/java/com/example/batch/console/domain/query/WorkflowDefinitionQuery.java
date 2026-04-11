@@ -9,6 +9,4 @@ public record WorkflowDefinitionQuery(
         String workflowType,
         Integer version,
         Boolean enabled,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

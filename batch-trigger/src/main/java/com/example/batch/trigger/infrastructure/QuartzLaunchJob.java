@@ -4,18 +4,21 @@ import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.config.TriggerRuntimeProperties;
-import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.MisfireHandler;
+import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.service.TriggerService;
 import com.example.batch.trigger.support.TriggerDescriptor;
-import java.time.Duration;
-import java.time.Instant;
+
 import lombok.RequiredArgsConstructor;
+
 import org.quartz.Job;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.time.Instant;
 
 @Component
 @RequiredArgsConstructor
@@ -53,30 +56,32 @@ public class QuartzLaunchJob implements Job {
         Instant actualFireTime = context.getFireTime().toInstant();
         if (requiresManualApproval(descriptor, scheduledFireTime, actualFireTime)) {
             misfireHandler.handle(descriptor.getTenantId() + ":" + descriptor.getJobCode());
-            triggerService.createPendingCatchUp(new ScheduledTriggerCommand(
-                    descriptor,
-                    scheduledFireTime,
-                    TriggerType.CATCH_UP,
-                    IdGenerator.newBusinessNo("quartz"),
-                    IdGenerator.newTraceId()
-            ));
+            triggerService.createPendingCatchUp(
+                    new ScheduledTriggerCommand(
+                            descriptor,
+                            scheduledFireTime,
+                            TriggerType.CATCH_UP,
+                            IdGenerator.newBusinessNo("quartz"),
+                            IdGenerator.newTraceId()));
             return;
         }
         TriggerType triggerType = resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
-        triggerService.launchScheduled(new ScheduledTriggerCommand(
-                descriptor,
-                scheduledFireTime,
-                triggerType,
-                IdGenerator.newBusinessNo("quartz"),
-                IdGenerator.newTraceId()
-        ));
+        triggerService.launchScheduled(
+                new ScheduledTriggerCommand(
+                        descriptor,
+                        scheduledFireTime,
+                        triggerType,
+                        IdGenerator.newBusinessNo("quartz"),
+                        IdGenerator.newTraceId()));
     }
 
-    private TriggerType resolveTriggerType(TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
+    private TriggerType resolveTriggerType(
+            TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
         if (scheduledFireTime == null || actualFireTime == null) {
             return TriggerType.SCHEDULED;
         }
-        long driftSeconds = Math.max(0L, actualFireTime.getEpochSecond() - scheduledFireTime.getEpochSecond());
+        long driftSeconds =
+                Math.max(0L, actualFireTime.getEpochSecond() - scheduledFireTime.getEpochSecond());
         if (driftSeconds >= triggerRuntimeProperties.getMisfireCatchUpThresholdSeconds()) {
             misfireHandler.handle(descriptor.getTenantId() + ":" + descriptor.getJobCode());
             return resolveCatchUpPolicy(descriptor, scheduledFireTime, actualFireTime);
@@ -84,12 +89,12 @@ public class QuartzLaunchJob implements Job {
         return TriggerType.SCHEDULED;
     }
 
-    /**
-     * Misfire 是否转为 catch-up 由 business_calendar 控制，不再只依赖固定时间阈值。
-     */
-    private TriggerType resolveCatchUpPolicy(TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
+    /** Misfire 是否转为 catch-up 由 business_calendar 控制，不再只依赖固定时间阈值。 */
+    private TriggerType resolveCatchUpPolicy(
+            TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
         CatchUpPolicyType catchUpPolicy = CatchUpPolicyType.fromCode(descriptor.getCatchUpPolicy());
-        if (catchUpPolicy == CatchUpPolicyType.NONE || catchUpPolicy == CatchUpPolicyType.MANUAL_APPROVAL) {
+        if (catchUpPolicy == CatchUpPolicyType.NONE
+                || catchUpPolicy == CatchUpPolicyType.MANUAL_APPROVAL) {
             return TriggerType.SCHEDULED;
         }
         long maxDays = descriptor.getCatchUpMaxDays() == null ? 0L : descriptor.getCatchUpMaxDays();
@@ -100,7 +105,8 @@ public class QuartzLaunchJob implements Job {
         return driftDays <= maxDays ? TriggerType.CATCH_UP : TriggerType.SCHEDULED;
     }
 
-    private boolean requiresManualApproval(TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
+    private boolean requiresManualApproval(
+            TriggerDescriptor descriptor, Instant scheduledFireTime, Instant actualFireTime) {
         if (scheduledFireTime == null || actualFireTime == null) {
             return false;
         }
@@ -108,7 +114,8 @@ public class QuartzLaunchJob implements Job {
         if (catchUpPolicy != CatchUpPolicyType.MANUAL_APPROVAL) {
             return false;
         }
-        long driftSeconds = Math.max(0L, actualFireTime.getEpochSecond() - scheduledFireTime.getEpochSecond());
+        long driftSeconds =
+                Math.max(0L, actualFireTime.getEpochSecond() - scheduledFireTime.getEpochSecond());
         if (driftSeconds < triggerRuntimeProperties.getMisfireCatchUpThresholdSeconds()) {
             return false;
         }

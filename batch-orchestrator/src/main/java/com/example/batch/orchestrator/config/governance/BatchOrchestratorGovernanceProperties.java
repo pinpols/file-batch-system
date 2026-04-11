@@ -9,12 +9,12 @@ import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
 
-/**
- * Orchestrator 治理配置聚合类，将分散的 {@code @ConfigurationProperties} 统一组合，减少重复注入点。
- */
+/** Orchestrator 治理配置聚合类，将分散的 {@code @ConfigurationProperties} 统一组合，减少重复注入点。 */
 @Component
 @RequiredArgsConstructor
 public class BatchOrchestratorGovernanceProperties {
@@ -65,4 +65,3 @@ public class BatchOrchestratorGovernanceProperties {
         return mqTopics;
     }
 }
-

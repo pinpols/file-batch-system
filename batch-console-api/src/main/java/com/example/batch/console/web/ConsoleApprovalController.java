@@ -1,26 +1,28 @@
 package com.example.batch.console.web;
 
+import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ApprovalActionRequest;
 import com.example.batch.console.web.response.ConsoleBatchApprovalResultResponse;
-import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.common.dto.CommonResponse;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
-import java.util.List;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 控制台审批 REST：单条通过/拒绝与批量审批。
- */
+import java.util.List;
+
+/** 控制台审批 REST：单条通过/拒绝与批量审批。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/approvals")
@@ -32,18 +34,30 @@ public class ConsoleApprovalController {
 
     /** 审批通过。 */
     @PostMapping("/{approvalNo}/approve")
-    public CommonResponse<String> approve(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-                                          @PathVariable String approvalNo,
-                                          @Valid @RequestBody ApprovalActionRequest request) {
-        return responseFactory.success(approvalApplicationService.approve(request.getTenantId(), approvalNo, request.getOperatorId(), request.getReason()));
+    public CommonResponse<String> approve(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String approvalNo,
+            @Valid @RequestBody ApprovalActionRequest request) {
+        return responseFactory.success(
+                approvalApplicationService.approve(
+                        request.getTenantId(),
+                        approvalNo,
+                        request.getOperatorId(),
+                        request.getReason()));
     }
 
     /** 审批拒绝。 */
     @PostMapping("/{approvalNo}/reject")
-    public CommonResponse<String> reject(@RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-                                         @PathVariable String approvalNo,
-                                         @Valid @RequestBody ApprovalActionRequest request) {
-        return responseFactory.success(approvalApplicationService.reject(request.getTenantId(), approvalNo, request.getOperatorId(), request.getReason()));
+    public CommonResponse<String> reject(
+            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+            @PathVariable String approvalNo,
+            @Valid @RequestBody ApprovalActionRequest request) {
+        return responseFactory.success(
+                approvalApplicationService.reject(
+                        request.getTenantId(),
+                        approvalNo,
+                        request.getOperatorId(),
+                        request.getReason()));
     }
 
     /** 批量审批通过。 */
@@ -52,8 +66,11 @@ public class ConsoleApprovalController {
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody BatchApprovalActionRequest request) {
         return responseFactory.success(
-                approvalApplicationService.batchApprove(request.tenantId(), request.approvalNos(), request.operatorId(), request.reason())
-        );
+                approvalApplicationService.batchApprove(
+                        request.tenantId(),
+                        request.approvalNos(),
+                        request.operatorId(),
+                        request.reason()));
     }
 
     /** 批量审批拒绝。 */
@@ -62,13 +79,16 @@ public class ConsoleApprovalController {
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody BatchApprovalActionRequest request) {
         return responseFactory.success(
-                approvalApplicationService.batchReject(request.tenantId(), request.approvalNos(), request.operatorId(), request.reason())
-        );
+                approvalApplicationService.batchReject(
+                        request.tenantId(),
+                        request.approvalNos(),
+                        request.operatorId(),
+                        request.reason()));
     }
 
-    public record BatchApprovalActionRequest(String tenantId,
-                                             @NotEmpty List<String> approvalNos,
-                                             String operatorId,
-                                             String reason) {
-    }
+    public record BatchApprovalActionRequest(
+            String tenantId,
+            @NotEmpty List<String> approvalNos,
+            String operatorId,
+            String reason) {}
 }

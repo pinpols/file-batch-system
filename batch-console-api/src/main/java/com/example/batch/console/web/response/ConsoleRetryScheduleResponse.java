@@ -16,6 +16,4 @@ public record ConsoleRetryScheduleResponse(
         String lastErrorCode,
         String lastErrorMessage,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

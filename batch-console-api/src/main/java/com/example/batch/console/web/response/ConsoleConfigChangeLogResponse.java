@@ -14,6 +14,4 @@ public record ConsoleConfigChangeLogResponse(
         String operatorId,
         String traceId,
         String changeSummaryJson,
-        Instant createdAt
-) {
-}
+        Instant createdAt) {}

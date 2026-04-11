@@ -11,6 +11,4 @@ public record JobDefinitionQuery(
         String queueCode,
         String scheduleType,
         Boolean enabled,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

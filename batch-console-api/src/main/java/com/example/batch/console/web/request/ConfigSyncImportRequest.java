@@ -4,8 +4,10 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
-import java.util.List;
+
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class ConfigSyncImportRequest {
@@ -26,10 +28,10 @@ public class ConfigSyncImportRequest {
     @Size(max = 50)
     private List<@Size(min = 1, max = 64) String> targetTenantIds;
 
-    private TenantConfigBatchInitRequest.InitMode mode = TenantConfigBatchInitRequest.InitMode.SKIP_EXISTING;
+    private TenantConfigBatchInitRequest.InitMode mode =
+            TenantConfigBatchInitRequest.InitMode.SKIP_EXISTING;
 
     private boolean dryRun;
 
-    @Valid
-    private ConfigSyncBundlePayload bundle;
+    @Valid private ConfigSyncBundlePayload bundle;
 }

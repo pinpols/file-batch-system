@@ -18,6 +18,4 @@ public record ConsoleBatchDayResponse(
         Integer inFlightJobCount,
         Integer lateCount,
         Integer catchupCount,
-        List<ConsoleBatchDaySummaryResponse> catchupSummary
-) {
-}
+        List<ConsoleBatchDaySummaryResponse> catchupSummary) {}

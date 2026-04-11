@@ -13,6 +13,4 @@ public record ConsoleTenantQuotaPolicyResponse(
         Boolean enabled,
         String description,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

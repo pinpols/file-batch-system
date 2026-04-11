@@ -7,7 +7,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * 控制台实时事件桥接器。
  *
- * <p>它把 service 层发布的领域事件转换成 SSE 推送或摘要刷新。</p>
+ * <p>它把 service 层发布的领域事件转换成 SSE 推送或摘要刷新。
  */
 @Service
 public class ConsoleRealtimeEventBridge {
@@ -16,9 +16,10 @@ public class ConsoleRealtimeEventBridge {
     private final ConsoleRealtimeRedisPublisher redisPublisher;
     private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
 
-    public ConsoleRealtimeEventBridge(ConsoleRealtimeEventHub realtimeEventHub,
-                                      ConsoleRealtimeRedisPublisher redisPublisher,
-                                      ConsoleOpsSummaryRealtimeStream summaryRealtimeStream) {
+    public ConsoleRealtimeEventBridge(
+            ConsoleRealtimeEventHub realtimeEventHub,
+            ConsoleRealtimeRedisPublisher redisPublisher,
+            ConsoleOpsSummaryRealtimeStream summaryRealtimeStream) {
         this.realtimeEventHub = realtimeEventHub;
         this.redisPublisher = redisPublisher;
         this.summaryRealtimeStream = summaryRealtimeStream;
@@ -35,14 +36,14 @@ public class ConsoleRealtimeEventBridge {
             return;
         }
         // 其余 domain event 在这里先直发本机 SSE，再同步写入 Redis Pub/Sub。
-        ConsoleSseEvent sseEvent = new ConsoleSseEvent(
-                event.tenantId(),
-                event.stream(),
-                event.eventType(),
-                event.cursor(),
-                event.data(),
-                event.emittedAt()
-        );
+        ConsoleSseEvent sseEvent =
+                new ConsoleSseEvent(
+                        event.tenantId(),
+                        event.stream(),
+                        event.eventType(),
+                        event.cursor(),
+                        event.data(),
+                        event.emittedAt());
         realtimeEventHub.publish(sseEvent);
         redisPublisher.publish(sseEvent);
     }

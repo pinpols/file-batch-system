@@ -1,15 +1,18 @@
 package com.example.batch.console.web.request;
 
 import com.example.batch.common.validation.ValidTenantId;
+
 import jakarta.validation.constraints.Size;
+
 import lombok.Data;
 
 @Data
 public class JobDefinitionUpdateRequest {
-    @ValidTenantId
-    private String tenantId;
+    @ValidTenantId private String tenantId;
+
     @Size(max = 256)
     private String jobName;
+
     private String bizType;
     private String scheduleType;
     private String scheduleExpr;

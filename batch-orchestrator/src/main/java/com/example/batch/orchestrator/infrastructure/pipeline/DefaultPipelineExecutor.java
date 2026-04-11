@@ -10,12 +10,15 @@ import com.example.batch.orchestrator.domain.pipeline.Step;
 import com.example.batch.orchestrator.domain.pipeline.StepDefinition;
 import com.example.batch.orchestrator.domain.pipeline.StepRegistry;
 import com.example.batch.orchestrator.domain.pipeline.StepResult;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Component;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
@@ -29,17 +32,27 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
         PipelineDefinition definition = context.getPipelineDefinition();
         List<StepResult> results = new ArrayList<>();
         if (definition == null || definition.getSteps() == null) {
-            return emptyResult(context, results);
+            return emptyResult();
         }
         definition.getSteps().stream()
                 .filter(step -> Boolean.TRUE.equals(step.getEnabled()))
-                .sorted(Comparator.comparing(step -> step.getStepOrder() == null ? Integer.MAX_VALUE : step.getStepOrder()))
-                .forEach(stepDefinition -> results.add(executeStep(context, definition, stepDefinition)));
+                .sorted(
+                        Comparator.comparing(
+                                step ->
+                                        step.getStepOrder() == null
+                                                ? Integer.MAX_VALUE
+                                                : step.getStepOrder()))
+                .forEach(
+                        stepDefinition ->
+                                results.add(executeStep(context, definition, stepDefinition)));
         context.setStepResults(results);
         return emptyResult(context, results);
     }
 
-    private StepResult executeStep(ExecutionContext context, PipelineDefinition definition, StepDefinition stepDefinition) {
+    private StepResult executeStep(
+            ExecutionContext context,
+            PipelineDefinition definition,
+            StepDefinition stepDefinition) {
         WorkerRouteModel workerRouteModel = resolveWorkerRoute(context, definition, stepDefinition);
         Optional<Step> step = stepRegistry.find(stepDefinition.getStepCode());
         if (step.isEmpty()) {
@@ -48,10 +61,17 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
         return step.get().execute(context, workerRouteModel);
     }
 
-    private WorkerRouteModel resolveWorkerRoute(ExecutionContext context, PipelineDefinition definition, StepDefinition stepDefinition) {
+    private WorkerRouteModel resolveWorkerRoute(
+            ExecutionContext context,
+            PipelineDefinition definition,
+            StepDefinition stepDefinition) {
         WorkerRouteModel route = context.getDefaultWorkerRoute();
         if (route == null) {
-            route = workerRouter.route(context.getTenantId(), definition.getJobCode(), stepDefinition.getStepCode());
+            route =
+                    workerRouter.route(
+                            context.getTenantId(),
+                            definition.getJobCode(),
+                            stepDefinition.getStepCode());
         }
         if (route == null) {
             route = new WorkerRouteModel();
@@ -77,8 +97,7 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
         return target;
     }
 
-    private PipelineExecutionResult emptyResult(ExecutionContext context, List<StepResult> results) {
-        PipelineExecutionResult result = new PipelineExecutionResult();
-        return result;
+    private PipelineExecutionResult emptyResult() {
+        return new PipelineExecutionResult();
     }
 }

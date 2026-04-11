@@ -11,6 +11,4 @@ public record ConsoleWorkflowExcelApplyResponse(
         int insertedNodes,
         int updatedNodes,
         int insertedEdges,
-        int updatedEdges
-) {
-}
+        int updatedEdges) {}

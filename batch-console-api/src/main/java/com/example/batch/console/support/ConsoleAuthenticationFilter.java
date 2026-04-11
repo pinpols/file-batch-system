@@ -1,19 +1,16 @@
 package com.example.batch.console.support;
 
-import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.stream.Collectors;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -21,6 +18,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -32,9 +35,9 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
     private final ConsoleSecurityResponseWriter responseWriter;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
         try {
             boolean demoOpen = batchSecurityProperties.isDemoOpen();
             if (!properties.isEnabled() && !batchSecurityProperties.isTestingOpen() && !demoOpen) {
@@ -46,14 +49,17 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
                 // Demo 模式下：无需携带 token/legacy header，默认以 admin 权限放行，便于前端联调。
                 String username = resolveUsername(request);
                 String tenantId = resolveTenant(request);
-                Set<SimpleGrantedAuthority> authorities = properties.getDefaultAuthorities().stream()
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toCollection(LinkedHashSet::new));
-                ConsolePrincipal principal = new ConsolePrincipal(
-                        username,
-                        tenantId,
-                        authorities.stream().map(SimpleGrantedAuthority::getAuthority).collect(Collectors.toCollection(LinkedHashSet::new))
-                );
+                Set<SimpleGrantedAuthority> authorities =
+                        properties.getDefaultAuthorities().stream()
+                                .map(SimpleGrantedAuthority::new)
+                                .collect(Collectors.toCollection(LinkedHashSet::new));
+                ConsolePrincipal principal =
+                        new ConsolePrincipal(
+                                username,
+                                tenantId,
+                                authorities.stream()
+                                        .map(SimpleGrantedAuthority::getAuthority)
+                                        .collect(Collectors.toCollection(LinkedHashSet::new)));
                 setAuthentication(principal, "demo-open");
                 filterChain.doFilter(request, response);
                 return;
@@ -67,31 +73,46 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
                     filterChain.doFilter(request, response);
                     return;
                 } catch (Exception exception) {
-                    responseWriter.write(response, HttpStatus.UNAUTHORIZED, com.example.batch.common.enums.ResultCode.UNAUTHORIZED, CommonErrorMessages.INVALID_CONSOLE_JWT);
+                    responseWriter.write(
+                            response,
+                            HttpStatus.UNAUTHORIZED,
+                            com.example.batch.common.enums.ResultCode.UNAUTHORIZED,
+                            CommonErrorMessages.INVALID_CONSOLE_JWT);
                     return;
                 }
             }
 
             String sharedToken = request.getHeader(properties.getTokenHeader());
             if (properties.isLegacyHeaderAuthEnabled() && StringUtils.hasText(sharedToken)) {
-                if (!batchSecurityProperties.isTestingOpen() && !sharedToken.equals(properties.getSharedSecret())) {
-                    responseWriter.write(response, HttpStatus.UNAUTHORIZED, com.example.batch.common.enums.ResultCode.UNAUTHORIZED, CommonErrorMessages.INVALID_CONSOLE_TOKEN);
+                if (!batchSecurityProperties.isTestingOpen()
+                        && !sharedToken.equals(properties.getSharedSecret())) {
+                    responseWriter.write(
+                            response,
+                            HttpStatus.UNAUTHORIZED,
+                            com.example.batch.common.enums.ResultCode.UNAUTHORIZED,
+                            CommonErrorMessages.INVALID_CONSOLE_TOKEN);
                     return;
                 }
                 try {
                     String username = resolveUsername(request);
                     String tenantId = resolveTenant(request);
                     Set<SimpleGrantedAuthority> authorities = resolveAuthorities(request);
-                    ConsolePrincipal principal = new ConsolePrincipal(
-                            username,
-                            tenantId,
-                            authorities.stream().map(SimpleGrantedAuthority::getAuthority).collect(Collectors.toCollection(LinkedHashSet::new))
-                    );
+                    ConsolePrincipal principal =
+                            new ConsolePrincipal(
+                                    username,
+                                    tenantId,
+                                    authorities.stream()
+                                            .map(SimpleGrantedAuthority::getAuthority)
+                                            .collect(Collectors.toCollection(LinkedHashSet::new)));
                     setAuthentication(principal, sharedToken);
                     filterChain.doFilter(request, response);
                     return;
                 } catch (IllegalArgumentException exception) {
-                    responseWriter.write(response, HttpStatus.FORBIDDEN, com.example.batch.common.enums.ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
+                    responseWriter.write(
+                            response,
+                            HttpStatus.FORBIDDEN,
+                            com.example.batch.common.enums.ResultCode.FORBIDDEN,
+                            CommonErrorMessages.TENANT_MISMATCH);
                     return;
                 }
             } else if (StringUtils.hasText(sharedToken)) {
@@ -104,14 +125,20 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
                     String username = resolveUsername(request);
                     String tenantId = resolveTenant(request);
                     Set<SimpleGrantedAuthority> authorities = resolveAuthorities(request);
-                    ConsolePrincipal principal = new ConsolePrincipal(
-                            username,
-                            tenantId,
-                            authorities.stream().map(SimpleGrantedAuthority::getAuthority).collect(Collectors.toCollection(LinkedHashSet::new))
-                    );
+                    ConsolePrincipal principal =
+                            new ConsolePrincipal(
+                                    username,
+                                    tenantId,
+                                    authorities.stream()
+                                            .map(SimpleGrantedAuthority::getAuthority)
+                                            .collect(Collectors.toCollection(LinkedHashSet::new)));
                     setAuthentication(principal, "testing-open");
                 } catch (IllegalArgumentException exception) {
-                    responseWriter.write(response, HttpStatus.FORBIDDEN, com.example.batch.common.enums.ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
+                    responseWriter.write(
+                            response,
+                            HttpStatus.FORBIDDEN,
+                            com.example.batch.common.enums.ResultCode.FORBIDDEN,
+                            CommonErrorMessages.TENANT_MISMATCH);
                     return;
                 }
             }
@@ -127,8 +154,9 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(
                         principal,
                         credentials,
-                        principal.authorities().stream().map(SimpleGrantedAuthority::new).collect(Collectors.toCollection(LinkedHashSet::new))
-                );
+                        principal.authorities().stream()
+                                .map(SimpleGrantedAuthority::new)
+                                .collect(Collectors.toCollection(LinkedHashSet::new)));
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
@@ -144,7 +172,10 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
     private String resolveUsername(HttpServletRequest request) {
         String username = request.getHeader(properties.getUserHeader());
         if (!StringUtils.hasText(username)) {
-            username = batchSecurityProperties.isTestingOpen() ? "testing-console-user" : "console-user";
+            username =
+                    batchSecurityProperties.isTestingOpen()
+                            ? "testing-console-user"
+                            : "console-user";
         }
         return username;
     }
@@ -154,7 +185,8 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
         if (!StringUtils.hasText(tenantId)) {
             tenantId = properties.getDefaultTenantId();
         }
-        if (!properties.getAllowedTenants().isEmpty() && !properties.getAllowedTenants().contains(tenantId)) {
+        if (!properties.getAllowedTenants().isEmpty()
+                && !properties.getAllowedTenants().contains(tenantId)) {
             throw new IllegalArgumentException("tenant not allowed");
         }
         return tenantId;

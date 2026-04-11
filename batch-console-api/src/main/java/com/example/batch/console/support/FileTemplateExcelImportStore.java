@@ -17,7 +17,6 @@ public interface FileTemplateExcelImportStore {
             String tenantId,
             String sheetName,
             Instant uploadedAt,
-            List<Map<String, String>> rows
-    ) implements ConsoleSingleSheetExcelImportSupport.SingleSheetImportSession {
-    }
+            List<Map<String, String>> rows)
+            implements ConsoleSingleSheetExcelImportSupport.SingleSheetImportSession {}
 }

@@ -250,7 +250,8 @@ case "$MODE" in
       run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
         -Dtest='!*IntegrationTest,!*IT,!PartitionLeaseReclaimSchedulerTest' \
-        -Dsurefire.failIfNoSpecifiedTests=false
+        -Dsurefire.failIfNoSpecifiedTests=false \
+        -fae
     } 2>&1 | tee "$LOG_UNIT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
       record_test_result "UNIT_TESTS" "PASSED"
@@ -266,7 +267,8 @@ case "$MODE" in
       run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
         -Dtest='*IntegrationTest,*IT' \
-        -Dsurefire.failIfNoSpecifiedTests=false
+        -Dsurefire.failIfNoSpecifiedTests=false \
+        -fae
     } 2>&1 | tee "$LOG_IT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
       record_test_result "INTEGRATION_TESTS" "PASSED"
@@ -298,7 +300,8 @@ case "$MODE" in
     {
       run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -Dsurefire.failIfNoSpecifiedTests=false
+        -Dsurefire.failIfNoSpecifiedTests=false \
+        -fae
     } 2>&1 | tee "$LOG_DEFAULT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
       record_test_result "DEFAULT_TESTS" "PASSED"
@@ -317,7 +320,8 @@ case "$MODE" in
         -DskipTests && \
       run_mvn test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -Dsurefire.failIfNoSpecifiedTests=false
+        -Dsurefire.failIfNoSpecifiedTests=false \
+        -fae
     } 2>&1 | tee "$LOG_ALL_UNIT_IT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
       record_test_result "UNIT_INTEGRATION_TESTS" "PASSED"

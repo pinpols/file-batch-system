@@ -1,4 +1,3 @@
 package com.example.batch.common.context;
 
-public record TenantContext(String tenantId) {
-}
+public record TenantContext(String tenantId) {}

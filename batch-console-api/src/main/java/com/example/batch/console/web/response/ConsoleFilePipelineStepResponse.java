@@ -16,6 +16,4 @@ public record ConsoleFilePipelineStepResponse(
         Integer retryCount,
         Long durationMs,
         Instant startedAt,
-        Instant finishedAt
-) {
-}
+        Instant finishedAt) {}

@@ -12,6 +12,4 @@ public record ConsoleOpsSummaryResponse(
         long drainingWorkers,
         long offlineWorkers,
         long outboxRetryBacklog,
-        long outboxDeliveryFailures
-) {
-}
+        long outboxDeliveryFailures) {}

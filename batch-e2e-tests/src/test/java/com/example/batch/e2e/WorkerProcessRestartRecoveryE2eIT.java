@@ -1,4 +1,4 @@
-package com.example.batch.orchestrator.integration;
+package com.example.batch.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,20 +35,37 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
-import java.util.Comparator;
+import org.springframework.test.context.ActiveProfiles;
 
+/**
+ * Worker 进程重启恢复 E2E 测试：验证 Dispatch Worker 进程重启后，
+ * 重新注册并恢复消费 Kafka 派发消息，完成文件分发任务。
+ *
+ * <p>测试流程：启动 worker1 → 杀掉 worker1 → 启动 worker2（同 consumer group）→
+ * 等待 Kafka rebalance 完成 → 触发 job → 等待任务成功。
+ */
 @SpringBootTest(
         classes = BatchOrchestratorApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
+                "spring.autoconfigure.exclude="
+                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration,"
+                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration,"
+                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration,"
+                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration,"
+                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration,"
+                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration",
                 "batch.sla.enabled=false",
                 "batch.worker.drain.enabled=false",
                 "batch.file-governance.latency.enabled=false",
@@ -64,7 +82,9 @@ import java.util.Comparator;
                 "batch.resource-scheduler.quota-reset-scan-interval-millis=600000",
                 "batch.scheduler.snapshot-persist-enabled=false"
         })
-class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTest {
+@ActiveProfiles({"test", "e2e"})
+@Tag("e2e")
+class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
     private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
     private static final String JAVA_BIN = Path.of(System.getProperty("java.home"), "bin", "java").toString();
@@ -122,6 +142,10 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
             worker2 = startDispatchWorker(tenantId, workerCode, consumerGroupId, worker2Log);
             awaitLogContains(worker2Log, "Started BatchWorkerDispatchApplication");
             awaitWorkerOnlineInRegistry(tenantId, workerCode);
+            // Kafka Consumer Group Rebalance 在 Worker 注册后还需要额外时间完成分区分配。
+            // 必须等到 consumer group 进入 STABLE 状态后再触发 job，否则 dispatch 消息
+            // 到达时 worker 尚未被分配分区，导致任务停留在 READY 状态直到超时。
+            awaitKafkaConsumerGroupStable(consumerGroupId);
 
             Map<String, Object> params = new LinkedHashMap<>();
             params.put("fileId", String.valueOf(fileId));
@@ -162,6 +186,20 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
         } finally {
             stopProcess(worker1);
             stopProcess(worker2);
+        }
+    }
+
+    private void awaitKafkaConsumerGroupStable(String consumerGroupId) {
+        Map<String, Object> config = Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
+        try (AdminClient adminClient = AdminClient.create(config)) {
+            await().atMost(Duration.ofSeconds(60)).pollInterval(Duration.ofMillis(500)).untilAsserted(() -> {
+                Map<String, ConsumerGroupDescription> descriptions =
+                        adminClient.describeConsumerGroups(List.of(consumerGroupId)).all().get(10, TimeUnit.SECONDS);
+                ConsumerGroupDescription desc = descriptions.get(consumerGroupId);
+                assertThat(desc).isNotNull();
+                assertThat(desc.state()).isEqualTo(ConsumerGroupState.STABLE);
+                assertThat(desc.members()).isNotEmpty();
+            });
         }
     }
 
@@ -370,8 +408,8 @@ class WorkerProcessRestartRecoveryIntegrationTest extends AbstractIntegrationTes
 
     private void awaitLogContains(Path logFile, String expectedText) {
         await().atMost(Duration.ofSeconds(WORKER_START_TIMEOUT_SECONDS)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
-            String content = Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
-            assertThat(content).contains(expectedText);
+            String logContent = Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
+            assertThat(logContent).contains(expectedText);
         });
     }
 

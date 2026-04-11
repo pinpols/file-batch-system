@@ -1,6 +1,7 @@
 package com.example.batch.console.domain.query;
 
 import com.example.batch.common.model.PageRequest;
+
 import lombok.Data;
 
 @Data

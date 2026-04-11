@@ -1,4 +1,3 @@
 package com.example.batch.common.context;
 
-public record TraceContext(String traceId) {
-}
+public record TraceContext(String traceId) {}

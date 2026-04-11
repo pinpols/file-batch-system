@@ -7,8 +7,7 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table(schema = "batch", name = "console_user_account")
 public class ConsoleUserAccountEntity {
 
-    @Id
-    private Long id;
+    @Id private Long id;
 
     @Column("tenant_id")
     private String tenantId;

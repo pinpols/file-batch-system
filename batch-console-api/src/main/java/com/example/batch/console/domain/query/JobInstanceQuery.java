@@ -1,7 +1,8 @@
 package com.example.batch.console.domain.query;
 
-import java.time.Instant;
 import com.example.batch.common.model.PageRequest;
+
+import java.time.Instant;
 
 public record JobInstanceQuery(
         String tenantId,
@@ -14,6 +15,4 @@ public record JobInstanceQuery(
         Instant startedTo,
         String sortBy,
         Integer minDurationSeconds,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

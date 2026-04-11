@@ -1,8 +1,10 @@
 package com.example.batch.orchestrator.domain.entity;
 
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
-import java.time.Instant;
+
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class JobStepInstanceEntity implements Stateful {
@@ -15,10 +17,10 @@ public class JobStepInstanceEntity implements Stateful {
     private String stepCode;
     private String stepType;
     private String stepStatus;
-    /**
-     * 步骤生命周期内的业务重试次数。
-     */
+
+    /** 步骤生命周期内的业务重试次数。 */
     private Integer retryCount;
+
     private Long relatedFileId;
     private String resultSummary;
     private String errorCode;

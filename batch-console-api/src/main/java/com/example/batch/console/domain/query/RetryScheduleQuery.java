@@ -7,6 +7,4 @@ public record RetryScheduleQuery(
         String relatedType,
         String retryPolicy,
         String retryStatus,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

@@ -1,9 +1,11 @@
 package com.example.batch.console.service;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
 
 /** 封装控制台统一响应体，自动填充 requestId / traceId 等 {@link com.example.batch.common.dto.ResponseMeta}。 */

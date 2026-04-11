@@ -7,6 +7,4 @@ public record ConsoleWorkflowDefinitionExcelRowResponse(
         String workflowType,
         Integer version,
         Boolean enabled,
-        String description
-) {
-}
+        String description) {}

@@ -2,9 +2,7 @@ package com.example.batch.console.infrastructure.realtime;
 
 import java.time.Instant;
 
-/**
- * Redis Pub/Sub 中存放的控制台实时事件包。
- */
+/** Redis Pub/Sub 中存放的控制台实时事件包。 */
 public record ConsoleRealtimeStreamEnvelope(
         String originInstanceId,
         String tenantId,
@@ -13,6 +11,4 @@ public record ConsoleRealtimeStreamEnvelope(
         String cursor,
         boolean summaryRefresh,
         String dataJson,
-        Instant emittedAt
-) {
-}
+        Instant emittedAt) {}

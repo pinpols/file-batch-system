@@ -19,6 +19,4 @@ public record ConsoleWorkflowNodeResponse(
         String nodeParams,
         Boolean enabled,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

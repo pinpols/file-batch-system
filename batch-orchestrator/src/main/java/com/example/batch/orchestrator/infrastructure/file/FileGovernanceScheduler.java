@@ -2,8 +2,17 @@ package com.example.batch.orchestrator.infrastructure.file;
 
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.file.MinioGovernanceStorage.StorageObjectView;
+import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
+
 import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.annotation.PostConstruct;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.stereotype.Service;
+
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -14,40 +23,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import com.example.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
-import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-/**
- * 共享文件治理实现。具体的 @Scheduled 包装类委托到此处，
- * 使每个任务可以独立演进，避免将无关的扫描耦合到同一个调度器 Bean 中。
- */
+/** 共享文件治理实现。具体的 @Scheduled 包装类委托到此处， 使每个任务可以独立演进，避免将无关的扫描耦合到同一个调度器 Bean 中。 */
 public class FileGovernanceScheduler {
 
-    private record ArrivalGroupUpdateState(
-            String arrivalState,
-            String reason,
-            Instant now
-    ) {
-    }
+    private record ArrivalGroupUpdateState(String arrivalState, String reason, Instant now) {}
 
     private record ArrivalGroupUpdateFiles(
             List<Map<String, Object>> groupFiles,
             Set<String> requiredFiles,
-            Set<String> missingFiles
-    ) {
-    }
+            Set<String> missingFiles) {}
 
     private record ArrivalGroupUpdateContext(
-            ArrivalGroupKey key,
-            ArrivalGroupUpdateState state,
-            ArrivalGroupUpdateFiles files
-    ) {
-    }
+            ArrivalGroupKey key, ArrivalGroupUpdateState state, ArrivalGroupUpdateFiles files) {}
 
     private final FileGovernanceRepository fileGovernanceRepository;
     private final MinioGovernanceStorage minioGovernanceStorage;
@@ -69,24 +60,24 @@ public class FileGovernanceScheduler {
         meterRegistry.gauge("batch.file.arrival.group.waiting.count", arrivalGroupWaitingCount);
         meterRegistry.gauge("batch.file.arrival.group.triggered.count", arrivalGroupTriggeredCount);
         meterRegistry.gauge("batch.file.arrival.group.timeout.count", arrivalGroupTimeoutCount);
-        meterRegistry.gauge("batch.pipeline.processing.delay.violations", processingDelayViolations);
-        meterRegistry.gauge("batch.pipeline.processing.delay.max.seconds", processingDelayMaxSeconds);
+        meterRegistry.gauge(
+                "batch.pipeline.processing.delay.violations", processingDelayViolations);
+        meterRegistry.gauge(
+                "batch.pipeline.processing.delay.max.seconds", processingDelayMaxSeconds);
     }
 
-    /**
-     * 文件治理指标由中心定时收口，先保证延迟可见，再谈更复杂的告警策略。
-     */
+    /** 文件治理指标由中心定时收口，先保证延迟可见，再谈更复杂的告警策略。 */
     public void collectLatencyMetrics() {
         if (!properties.getLatency().isEnabled()) {
             return;
         }
         String tenantId = properties.getReconcile().getDefaultTenantId();
-        Map<String, Object> metrics = metricsCacheService.compute(
-                tenantId,
-                properties.getLatency().getArrivalDelayThresholdSeconds(),
-                properties.getLatency().getProcessingDelayThresholdSeconds(),
-                properties.getLatency().getSampleSize()
-        );
+        Map<String, Object> metrics =
+                metricsCacheService.compute(
+                        tenantId,
+                        properties.getLatency().getArrivalDelayThresholdSeconds(),
+                        properties.getLatency().getProcessingDelayThresholdSeconds(),
+                        properties.getLatency().getSampleSize());
         long arrivalCount = asLong(metrics.get("arrivalDelayViolations"));
         long arrivalMax = asLong(metrics.get("maxArrivalDelaySeconds"));
         long processingCount = asLong(metrics.get("processingDelayViolations"));
@@ -99,15 +90,27 @@ public class FileGovernanceScheduler {
 
         if (arrivalCount > 0) {
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> samples = (List<Map<String, Object>>) metrics.getOrDefault("arrivalDelaySamples", List.of());
-            log.warn("file arrival delay violations detected: count={}, maxDelaySeconds={}, samples={}",
-                    arrivalCount, arrivalMax, samples);
+            List<Map<String, Object>> samples =
+                    (List<Map<String, Object>>)
+                            metrics.getOrDefault("arrivalDelaySamples", List.of());
+            log.warn(
+                    "file arrival delay violations detected: count={}, maxDelaySeconds={},"
+                        + " samples={}",
+                    arrivalCount,
+                    arrivalMax,
+                    samples);
         }
         if (processingCount > 0) {
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> samples = (List<Map<String, Object>>) metrics.getOrDefault("processingDelaySamples", List.of());
-            log.warn("pipeline processing delay violations detected: count={}, maxDelaySeconds={}, samples={}",
-                    processingCount, processingMax, samples);
+            List<Map<String, Object>> samples =
+                    (List<Map<String, Object>>)
+                            metrics.getOrDefault("processingDelaySamples", List.of());
+            log.warn(
+                    "pipeline processing delay violations detected: count={}, maxDelaySeconds={},"
+                        + " samples={}",
+                    processingCount,
+                    processingMax,
+                    samples);
         }
     }
 
@@ -116,8 +119,7 @@ public class FileGovernanceScheduler {
                 tenantId,
                 properties.getLatency().getArrivalDelayThresholdSeconds(),
                 properties.getLatency().getProcessingDelayThresholdSeconds(),
-                properties.getLatency().getSampleSize()
-        );
+                properties.getLatency().getSampleSize());
     }
 
     private long asLong(Object value) {
@@ -134,9 +136,9 @@ public class FileGovernanceScheduler {
         if (!properties.getArrival().isEnabled()) {
             return;
         }
-        List<Map<String, Object>> candidates = fileGovernanceRepository.selectArrivalGovernanceCandidates(
-                properties.getArrival().getBatchSize()
-        );
+        List<Map<String, Object>> candidates =
+                fileGovernanceRepository.selectArrivalGovernanceCandidates(
+                        properties.getArrival().getBatchSize());
         Map<ArrivalGroupKey, List<Map<String, Object>>> grouped = new HashMap<>();
         for (Map<String, Object> candidate : candidates) {
             ArrivalGroupKey key = ArrivalGroupKey.from(candidate);
@@ -150,16 +152,17 @@ public class FileGovernanceScheduler {
         long timeoutGroups = 0L;
         Instant now = Instant.now();
         for (Map.Entry<ArrivalGroupKey, List<Map<String, Object>>> entry : grouped.entrySet()) {
-            ArrivalGroupDecision decision = evaluateArrivalGroup(entry.getKey(), entry.getValue(), now);
+            ArrivalGroupDecision decision =
+                    evaluateArrivalGroup(entry.getKey(), entry.getValue(), now);
             if (decision == null || decision.state() == null) {
                 continue;
             }
             switch (decision.state()) {
-                case "WAITING_ARRIVAL", "WAITING_FILE_GROUP", "WAITING_MANUAL_CONFIRM" -> waitingGroups++;
+                case "WAITING_ARRIVAL", "WAITING_FILE_GROUP", "WAITING_MANUAL_CONFIRM" ->
+                        waitingGroups++;
                 case "TRIGGERED" -> triggeredGroups++;
                 case "TIMEOUT" -> timeoutGroups++;
-                default -> {
-                }
+                default -> {}
             }
         }
         arrivalGroupWaitingCount.set(waitingGroups);
@@ -171,11 +174,11 @@ public class FileGovernanceScheduler {
         if (!properties.getArchive().isEnabled()) {
             return;
         }
-        Instant cutoff = Instant.now().minus(properties.getArchive().getRetentionDays(), ChronoUnit.DAYS);
-        List<Map<String, Object>> files = fileGovernanceRepository.selectArchivedFilesForCleanup(
-                cutoff,
-                properties.getArchive().getCleanupBatchSize()
-        );
+        Instant cutoff =
+                Instant.now().minus(properties.getArchive().getRetentionDays(), ChronoUnit.DAYS);
+        List<Map<String, Object>> files =
+                fileGovernanceRepository.selectArchivedFilesForCleanup(
+                        cutoff, properties.getArchive().getCleanupBatchSize());
         for (Map<String, Object> fileRecord : files) {
             cleanupArchivedFile(fileRecord);
         }
@@ -185,11 +188,11 @@ public class FileGovernanceScheduler {
         if (!properties.getReconcile().isEnabled()) {
             return;
         }
-        List<StorageObjectView> objects = minioGovernanceStorage.listObjects(
-                properties.getReconcile().getPrefix(),
-                properties.getReconcile().getBatchSize(),
-                properties.getReconcile().isIncludeTemporaryObjects()
-        );
+        List<StorageObjectView> objects =
+                minioGovernanceStorage.listObjects(
+                        properties.getReconcile().getPrefix(),
+                        properties.getReconcile().getBatchSize(),
+                        properties.getReconcile().isIncludeTemporaryObjects());
         for (StorageObjectView object : objects) {
             reconcileObject(object);
         }
@@ -214,89 +217,94 @@ public class FileGovernanceScheduler {
             Map<String, Object> cleanupMetadata = new LinkedHashMap<>();
             cleanupMetadata.put("cleanupAt", Instant.now().toString());
             cleanupMetadata.put("cleanupReason", "ARCHIVE_RETENTION_EXPIRED");
-            fileGovernanceRepository.updateFileStatus(
-                    tenantId,
-                    fileId,
-                    "DELETED",
-                    cleanupMetadata
-            );
+            fileGovernanceRepository.updateFileStatus(tenantId, fileId, "DELETED", cleanupMetadata);
             Map<String, Object> auditDetail = new LinkedHashMap<>();
             auditDetail.put("storagePath", storagePath);
             auditDetail.put("storageType", storageType);
-            fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-                    tenantId,
-                    fileId,
-                    "CLEANUP",
-                    "SUCCESS",
-                    new FileGovernanceRepository.FileAuditActor("SYSTEM", "file-governance-scheduler"),
-                    "cleanup-" + fileId,
-                    auditDetail
-            ));
+            fileGovernanceRepository.appendAudit(
+                    new FileGovernanceRepository.FileAuditCommand(
+                            tenantId,
+                            fileId,
+                            "CLEANUP",
+                            "SUCCESS",
+                            new FileGovernanceRepository.FileAuditActor(
+                                    "SYSTEM", "file-governance-scheduler"),
+                            "cleanup-" + fileId,
+                            auditDetail));
         } catch (Exception exception) {
             Map<String, Object> auditDetail = new LinkedHashMap<>();
             auditDetail.put("storagePath", storagePath);
             auditDetail.put("errorMessage", exception.getMessage());
-            fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-                    tenantId,
+            fileGovernanceRepository.appendAudit(
+                    new FileGovernanceRepository.FileAuditCommand(
+                            tenantId,
+                            fileId,
+                            "CLEANUP",
+                            "FAILED",
+                            new FileGovernanceRepository.FileAuditActor(
+                                    "SYSTEM", "file-governance-scheduler"),
+                            "cleanup-" + fileId,
+                            auditDetail));
+            log.warn(
+                    "archived file cleanup failed: fileId={}, error={}",
                     fileId,
-                    "CLEANUP",
-                    "FAILED",
-                    new FileGovernanceRepository.FileAuditActor("SYSTEM", "file-governance-scheduler"),
-                    "cleanup-" + fileId,
-                    auditDetail
-            ));
-            log.warn("archived file cleanup failed: fileId={}, error={}", fileId, exception.getMessage(), exception);
+                    exception.getMessage(),
+                    exception);
         }
     }
 
     private void reconcileObject(StorageObjectView object) {
-        if (object == null || object.objectName() == null || object.objectName().endsWith(".done")) {
+        if (object == null
+                || object.objectName() == null
+                || object.objectName().endsWith(".done")) {
             return;
         }
         String tenantId = properties.getReconcile().getDefaultTenantId();
-        if (fileGovernanceRepository.existsFileRecordByStoragePath(tenantId, object.bucket(), object.objectName())) {
+        if (fileGovernanceRepository.existsFileRecordByStoragePath(
+                tenantId, object.bucket(), object.objectName())) {
             return;
         }
-        String fileName = object.objectName().contains("/")
-                ? object.objectName().substring(object.objectName().lastIndexOf('/') + 1)
-                : object.objectName();
+        String fileName =
+                object.objectName().contains("/")
+                        ? object.objectName().substring(object.objectName().lastIndexOf('/') + 1)
+                        : object.objectName();
         String fileCategory = resolveFileCategory(object.objectName());
         String fileStatus = resolveFileStatus(fileCategory);
         String traceId = "reconcile-" + sanitizeTrace(fileName);
-        Long fileId = fileGovernanceRepository.createReconciledFileRecord(new FileGovernanceRepository.ReconciledFileRecordCommand(
-                new FileGovernanceRepository.FileIdentity(
+        Long fileId =
+                fileGovernanceRepository.createReconciledFileRecord(
+                        new FileGovernanceRepository.ReconciledFileRecordCommand(
+                                new FileGovernanceRepository.FileIdentity(
+                                        tenantId,
+                                        fileCategory,
+                                        fileName,
+                                        resolveFileFormatType(fileName)),
+                                object.size(),
+                                new FileGovernanceRepository.FileStorage(
+                                        "S3", object.objectName(), object.bucket()),
+                                "SYSTEM",
+                                fileStatus,
+                                traceId,
+                                buildReconcileMetadata(object)));
+        fileGovernanceRepository.appendAudit(
+                new FileGovernanceRepository.FileAuditCommand(
                         tenantId,
-                        fileCategory,
-                        fileName,
-                        resolveFileFormatType(fileName)
-                ),
-                object.size(),
-                new FileGovernanceRepository.FileStorage(
-                        "S3",
-                        object.objectName(),
-                        object.bucket()
-                ),
-                "SYSTEM",
-                fileStatus,
-                traceId,
-                buildReconcileMetadata(object)
-        ));
-        fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-                tenantId,
-                fileId,
-                "RECONCILE_REGISTER",
-                "SUCCESS",
-                new FileGovernanceRepository.FileAuditActor("SYSTEM", "file-governance-scheduler"),
-                traceId,
-                Map.of("bucket", object.bucket(), "storagePath", object.objectName())
-        ));
+                        fileId,
+                        "RECONCILE_REGISTER",
+                        "SUCCESS",
+                        new FileGovernanceRepository.FileAuditActor(
+                                "SYSTEM", "file-governance-scheduler"),
+                        traceId,
+                        Map.of("bucket", object.bucket(), "storagePath", object.objectName())));
     }
 
-    private ArrivalGroupDecision evaluateArrivalGroup(ArrivalGroupKey key, List<Map<String, Object>> groupFiles, Instant now) {
+    private ArrivalGroupDecision evaluateArrivalGroup(
+            ArrivalGroupKey key, List<Map<String, Object>> groupFiles, Instant now) {
         if (groupFiles == null || groupFiles.isEmpty()) {
             return new ArrivalGroupDecision(null);
         }
-        Set<String> requiredFiles = parseRequiredFileSet(text(groupFiles.get(0).get("required_file_set")));
+        Set<String> requiredFiles =
+                parseRequiredFileSet(text(groupFiles.get(0).get("required_file_set")));
         Set<String> arrivedFiles = new HashSet<>();
         for (Map<String, Object> file : groupFiles) {
             String fileName = text(file.get("file_name"));
@@ -306,49 +314,75 @@ public class FileGovernanceScheduler {
         }
         Set<String> missingFiles = new HashSet<>(requiredFiles);
         missingFiles.removeAll(arrivedFiles);
-        Instant latestTolerableTime = parseInstant(text(groupFiles.get(0).get("latest_tolerable_time")));
-        boolean triggerOnComplete = parseBoolean(text(groupFiles.get(0).get("trigger_on_complete")), properties.getArrival().isTriggerOnComplete());
-        String timeoutAction = defaultText(text(groupFiles.get(0).get("arrival_timeout_action")), properties.getArrival().getDefaultTimeoutAction());
+        Instant latestTolerableTime =
+                parseInstant(text(groupFiles.get(0).get("latest_tolerable_time")));
+        boolean triggerOnComplete =
+                parseBoolean(
+                        text(groupFiles.get(0).get("trigger_on_complete")),
+                        properties.getArrival().isTriggerOnComplete());
+        String timeoutAction =
+                defaultText(
+                        text(groupFiles.get(0).get("arrival_timeout_action")),
+                        properties.getArrival().getDefaultTimeoutAction());
         boolean timedOut = latestTolerableTime != null && now.isAfter(latestTolerableTime);
         if (timedOut) {
             if ("MANUAL_CONFIRM".equalsIgnoreCase(timeoutAction)) {
-                updateGroupState(new ArrivalGroupUpdateContext(
-                        key,
-                        new ArrivalGroupUpdateState("WAITING_MANUAL_CONFIRM", "TIMEOUT_WAITING_MANUAL_CONFIRM", now),
-                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+                updateGroupState(
+                        new ArrivalGroupUpdateContext(
+                                key,
+                                new ArrivalGroupUpdateState(
+                                        "WAITING_MANUAL_CONFIRM",
+                                        "TIMEOUT_WAITING_MANUAL_CONFIRM",
+                                        now),
+                                new ArrivalGroupUpdateFiles(
+                                        groupFiles, requiredFiles, missingFiles)));
                 return new ArrivalGroupDecision("WAITING_MANUAL_CONFIRM");
             }
-            if ("BLOCK_DOWNSTREAM".equalsIgnoreCase(timeoutAction) || "BLOCK".equalsIgnoreCase(timeoutAction)) {
-                updateGroupState(new ArrivalGroupUpdateContext(
-                        key,
-                        new ArrivalGroupUpdateState("TIMEOUT", "LATEST_TOLERABLE_TIME_EXCEEDED", now),
-                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+            if ("BLOCK_DOWNSTREAM".equalsIgnoreCase(timeoutAction)
+                    || "BLOCK".equalsIgnoreCase(timeoutAction)) {
+                updateGroupState(
+                        new ArrivalGroupUpdateContext(
+                                key,
+                                new ArrivalGroupUpdateState(
+                                        "TIMEOUT", "LATEST_TOLERABLE_TIME_EXCEEDED", now),
+                                new ArrivalGroupUpdateFiles(
+                                        groupFiles, requiredFiles, missingFiles)));
                 return new ArrivalGroupDecision("TIMEOUT");
             }
-            updateGroupState(new ArrivalGroupUpdateContext(
-                    key,
-                    new ArrivalGroupUpdateState("TRIGGERED", "TIMEOUT_OVERRIDE_" + timeoutAction, now),
-                    new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+            updateGroupState(
+                    new ArrivalGroupUpdateContext(
+                            key,
+                            new ArrivalGroupUpdateState(
+                                    "TRIGGERED", "TIMEOUT_OVERRIDE_" + timeoutAction, now),
+                            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
             return new ArrivalGroupDecision("TRIGGERED");
         }
         if (!requiredFiles.isEmpty() && missingFiles.isEmpty()) {
             if (triggerOnComplete) {
-                updateGroupState(new ArrivalGroupUpdateContext(
-                        key,
-                        new ArrivalGroupUpdateState("TRIGGERED", "ALL_FILES_ARRIVED", now),
-                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+                updateGroupState(
+                        new ArrivalGroupUpdateContext(
+                                key,
+                                new ArrivalGroupUpdateState("TRIGGERED", "ALL_FILES_ARRIVED", now),
+                                new ArrivalGroupUpdateFiles(
+                                        groupFiles, requiredFiles, missingFiles)));
                 return new ArrivalGroupDecision("TRIGGERED");
             }
-            updateGroupState(new ArrivalGroupUpdateContext(
-                    key,
-                    new ArrivalGroupUpdateState("WAITING_MANUAL_CONFIRM", "COMPLETE_WAITING_MANUAL_CONFIRM", now),
-                    new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+            updateGroupState(
+                    new ArrivalGroupUpdateContext(
+                            key,
+                            new ArrivalGroupUpdateState(
+                                    "WAITING_MANUAL_CONFIRM",
+                                    "COMPLETE_WAITING_MANUAL_CONFIRM",
+                                    now),
+                            new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
             return new ArrivalGroupDecision("WAITING_MANUAL_CONFIRM");
         }
-        updateGroupState(new ArrivalGroupUpdateContext(
-                key,
-                new ArrivalGroupUpdateState("WAITING_ARRIVAL", "WAITING_REQUIRED_FILES", now),
-                new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
+        updateGroupState(
+                new ArrivalGroupUpdateContext(
+                        key,
+                        new ArrivalGroupUpdateState(
+                                "WAITING_ARRIVAL", "WAITING_REQUIRED_FILES", now),
+                        new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
         return new ArrivalGroupDecision("WAITING_ARRIVAL");
     }
 
@@ -377,17 +411,20 @@ public class FileGovernanceScheduler {
                 continue;
             }
             fileGovernanceRepository.updateFileMetadata(tenantId, fileId, metadata);
-            fileGovernanceRepository.appendAudit(new FileGovernanceRepository.FileAuditCommand(
-                    tenantId,
-                    fileId,
-                    "ARRIVAL_GROUP_" + context.state().arrivalState(),
-                    "SUCCESS",
-                    new FileGovernanceRepository.FileAuditActor("SYSTEM", "file-governance-scheduler"),
-                    "arrival-group-" + context.key().fileGroupCode(),
-                    metadata
-            ));
+            fileGovernanceRepository.appendAudit(
+                    new FileGovernanceRepository.FileAuditCommand(
+                            tenantId,
+                            fileId,
+                            "ARRIVAL_GROUP_" + context.state().arrivalState(),
+                            "SUCCESS",
+                            new FileGovernanceRepository.FileAuditActor(
+                                    "SYSTEM", "file-governance-scheduler"),
+                            "arrival-group-" + context.key().fileGroupCode(),
+                            metadata));
         }
-        log.info("file arrival group updated: tenantId={}, fileGroupCode={}, state={}, reason={}, arrivedCount={}, requiredCount={}, missingCount={}",
+        log.info(
+                "file arrival group updated: tenantId={}, fileGroupCode={}, state={}, reason={},"
+                    + " arrivedCount={}, requiredCount={}, missingCount={}",
                 context.key().tenantId(),
                 context.key().fileGroupCode(),
                 context.state().arrivalState(),
@@ -495,11 +532,12 @@ public class FileGovernanceScheduler {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    private record ArrivalGroupKey(String tenantId,
-                                   String fileGroupCode,
-                                   String waitFileGroupMode,
-                                   String requiredFileSet,
-                                   String arrivalTimeoutAction) {
+    private record ArrivalGroupKey(
+            String tenantId,
+            String fileGroupCode,
+            String waitFileGroupMode,
+            String requiredFileSet,
+            String arrivalTimeoutAction) {
 
         static ArrivalGroupKey from(Map<String, Object> candidate) {
             if (candidate == null) {
@@ -507,7 +545,10 @@ public class FileGovernanceScheduler {
             }
             String tenantId = textValue(candidate.get("tenant_id"));
             String fileGroupCode = textValue(candidate.get("file_group_code"));
-            if (tenantId == null || tenantId.isBlank() || fileGroupCode == null || fileGroupCode.isBlank()) {
+            if (tenantId == null
+                    || tenantId.isBlank()
+                    || fileGroupCode == null
+                    || fileGroupCode.isBlank()) {
                 return null;
             }
             return new ArrivalGroupKey(
@@ -515,8 +556,8 @@ public class FileGovernanceScheduler {
                     fileGroupCode,
                     defaultString(textValue(candidate.get("wait_file_group_mode")), "ALL_OF"),
                     defaultString(textValue(candidate.get("required_file_set")), ""),
-                    defaultString(textValue(candidate.get("arrival_timeout_action")), "MANUAL_CONFIRM")
-            );
+                    defaultString(
+                            textValue(candidate.get("arrival_timeout_action")), "MANUAL_CONFIRM"));
         }
 
         private static String textValue(Object value) {
@@ -528,6 +569,5 @@ public class FileGovernanceScheduler {
         }
     }
 
-    private record ArrivalGroupDecision(String state) {
-    }
+    private record ArrivalGroupDecision(String state) {}
 }

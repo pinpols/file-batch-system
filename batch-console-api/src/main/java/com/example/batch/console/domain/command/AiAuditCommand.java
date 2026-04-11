@@ -16,6 +16,4 @@ public record AiAuditCommand(
         String responseHash,
         String responsePreview,
         String refusalReason,
-        Instant createdAt
-) {
-}
+        Instant createdAt) {}

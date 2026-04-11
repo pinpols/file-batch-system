@@ -1,18 +1,20 @@
 package com.example.batch.orchestrator.config;
 
-import java.sql.JDBCType;
-import java.util.List;
-import java.util.Map;
+import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.postgresql.util.PGobject;
-import com.example.batch.orchestrator.domain.value.JsonbString;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.ReadingConverter;
 import org.springframework.data.convert.WritingConverter;
 import org.springframework.data.jdbc.core.mapping.JdbcValue;
 import org.springframework.data.jdbc.repository.config.AbstractJdbcConfiguration;
+
+import java.sql.JDBCType;
+import java.util.List;
+import java.util.Map;
 
 @Configuration
 public class WorkerRegistryJdbcConfiguration extends AbstractJdbcConfiguration {
@@ -22,8 +24,7 @@ public class WorkerRegistryJdbcConfiguration extends AbstractJdbcConfiguration {
         return List.of(
                 new JsonbStringToJdbcValueConverter(),
                 new JsonbToStringConverter(),
-                new JsonbToMapConverter()
-        );
+                new JsonbToMapConverter());
     }
 
     @WritingConverter
@@ -39,8 +40,7 @@ public class WorkerRegistryJdbcConfiguration extends AbstractJdbcConfiguration {
     }
 
     @ReadingConverter
-    static class
-    JsonbToStringConverter implements Converter<PGobject, JsonbString> {
+    static class JsonbToStringConverter implements Converter<PGobject, JsonbString> {
 
         @Override
         public JsonbString convert(PGobject source) {
@@ -62,7 +62,8 @@ public class WorkerRegistryJdbcConfiguration extends AbstractJdbcConfiguration {
             try {
                 return MAPPER.readValue(source.getValue(), MAP_TYPE);
             } catch (Exception e) {
-                throw new IllegalArgumentException("Failed to parse jsonb to Map: " + source.getValue(), e);
+                throw new IllegalArgumentException(
+                        "Failed to parse jsonb to Map: " + source.getValue(), e);
             }
         }
     }

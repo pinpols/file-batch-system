@@ -15,6 +15,4 @@ public record ConsoleDeadLetterTaskResponse(
         String lastReplayResult,
         String traceId,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

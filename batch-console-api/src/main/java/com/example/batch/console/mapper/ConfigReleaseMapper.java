@@ -2,6 +2,7 @@ package com.example.batch.console.mapper;
 
 import com.example.batch.console.domain.entity.ConfigReleaseEntity;
 import com.example.batch.console.domain.query.ConfigReleaseQuery;
+
 import java.util.List;
 import java.util.Map;
 

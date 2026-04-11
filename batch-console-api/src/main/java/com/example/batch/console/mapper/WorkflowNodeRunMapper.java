@@ -2,8 +2,10 @@ package com.example.batch.console.mapper;
 
 import com.example.batch.console.domain.entity.WorkflowNodeRunEntity;
 import com.example.batch.console.domain.query.WorkflowNodeRunQuery;
-import java.util.List;
+
 import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
 
 public interface WorkflowNodeRunMapper {
 

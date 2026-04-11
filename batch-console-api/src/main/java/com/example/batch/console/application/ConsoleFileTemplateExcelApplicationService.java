@@ -5,14 +5,14 @@ import com.example.batch.console.web.request.FileTemplateExcelApplyRequest;
 import com.example.batch.console.web.response.ConsoleFileTemplateExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleFileTemplateExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleFileTemplateExcelUploadResponse;
-import java.io.IOException;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * 文件模板 Excel 导入导出应用服务。
- */
+import java.io.IOException;
+
+/** 文件模板 Excel 导入导出应用服务。 */
 public interface ConsoleFileTemplateExcelApplicationService {
 
     /** 导出文件模板配置为 Excel。 */
@@ -31,5 +31,6 @@ public interface ConsoleFileTemplateExcelApplicationService {
     ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
 
     /** 确认导入并更新模板配置。 */
-    ConsoleFileTemplateExcelApplyResponse apply(String uploadToken, FileTemplateExcelApplyRequest request);
+    ConsoleFileTemplateExcelApplyResponse apply(
+            String uploadToken, FileTemplateExcelApplyRequest request);
 }

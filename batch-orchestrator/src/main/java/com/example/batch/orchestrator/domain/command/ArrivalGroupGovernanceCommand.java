@@ -7,6 +7,4 @@ public record ArrivalGroupGovernanceCommand(
         String operatorId,
         String traceId,
         String reason,
-        Long extendWaitSeconds
-) {
-}
+        Long extendWaitSeconds) {}

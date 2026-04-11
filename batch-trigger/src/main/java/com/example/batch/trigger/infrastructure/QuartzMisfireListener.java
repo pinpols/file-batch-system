@@ -1,7 +1,9 @@
 package com.example.batch.trigger.infrastructure;
 
 import com.example.batch.trigger.domain.MisfireHandler;
+
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
 
 @Component

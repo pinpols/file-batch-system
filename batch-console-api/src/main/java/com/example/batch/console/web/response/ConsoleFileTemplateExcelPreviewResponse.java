@@ -10,6 +10,4 @@ public record ConsoleFileTemplateExcelPreviewResponse(
         Integer validRows,
         Integer invalidRows,
         List<ConsoleFileTemplateResponse> rows,
-        List<ConsoleExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleExcelRowIssueResponse> issues) {}

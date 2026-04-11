@@ -6,18 +6,22 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.IdGenerator;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import lombok.RequiredArgsConstructor;
+
+import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
@@ -31,27 +35,34 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
     private final ConsoleSecurityResponseWriter responseWriter;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
-        String requestId = firstNonBlank(request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER), IdGenerator.newBusinessNo("req"));
-        String traceId = firstNonBlank(request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
+    protected void doFilterInternal(
+            HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        String requestId =
+                firstNonBlank(
+                        request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER),
+                        IdGenerator.newBusinessNo("req"));
+        String traceId =
+                firstNonBlank(
+                        request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER),
+                        IdGenerator.newTraceId());
         String operatorId = request.getHeader(CommonConstants.DEFAULT_OPERATOR_ID_HEADER);
         String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
-        String clientIp = firstNonBlank(request.getHeader(CommonConstants.DEFAULT_FORWARDED_FOR_HEADER), request.getRemoteAddr());
-        String tenantId = resolveTenantId(request, response, request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER));
+        String clientIp =
+                firstNonBlank(
+                        request.getHeader(CommonConstants.DEFAULT_FORWARDED_FOR_HEADER),
+                        request.getRemoteAddr());
+        String tenantId =
+                resolveTenantId(
+                        response,
+                        request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER));
         if (tenantId == null && response.isCommitted()) {
             return;
         }
 
-        ConsoleRequestMetadata metadata = new ConsoleRequestMetadata(
-                requestId,
-                traceId,
-                tenantId,
-                operatorId,
-                idempotencyKey,
-                clientIp
-        );
+        ConsoleRequestMetadata metadata =
+                new ConsoleRequestMetadata(
+                        requestId, traceId, tenantId, operatorId, idempotencyKey, clientIp);
         request.setAttribute(REQUEST_METADATA_ATTRIBUTE, metadata);
         response.setHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestId);
         response.setHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId);
@@ -68,14 +79,22 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
         }
     }
 
-    private String resolveTenantId(HttpServletRequest request, HttpServletResponse response, String requestedTenantId) {
+    private String resolveTenantId(HttpServletResponse response, String requestedTenantId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
-            if (requestedTenantId != null && !requestedTenantId.isBlank() && !requestedTenantId.equals(principal.tenantId())) {
+        if (authentication != null
+                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+            if (requestedTenantId != null
+                    && !requestedTenantId.isBlank()
+                    && !requestedTenantId.equals(principal.tenantId())) {
                 try {
-                    responseWriter.write(response, HttpStatus.FORBIDDEN, ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
+                    responseWriter.write(
+                            response,
+                            HttpStatus.FORBIDDEN,
+                            ResultCode.FORBIDDEN,
+                            CommonErrorMessages.TENANT_MISMATCH);
                 } catch (IOException exception) {
-                    throw new IllegalStateException("failed to write tenant mismatch response", exception);
+                    throw new IllegalStateException(
+                            "failed to write tenant mismatch response", exception);
                 }
                 return null;
             }

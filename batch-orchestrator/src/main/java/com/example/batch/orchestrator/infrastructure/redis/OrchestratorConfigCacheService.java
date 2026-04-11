@@ -11,10 +11,13 @@ import com.example.batch.orchestrator.repository.BusinessCalendarRepository;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
-import java.time.Duration;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
@@ -38,14 +41,17 @@ public class OrchestratorConfigCacheService {
         if (cached != null) {
             return cached;
         }
-        JobDefinitionRecord loaded = jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(tenantId, jobCode, true);
+        JobDefinitionRecord loaded =
+                jobDefinitionRepository.findFirstByTenantIdAndJobCodeAndEnabled(
+                        tenantId, jobCode, true);
         if (loaded != null) {
             redis.setJson(key, loaded, CONFIG_CACHE_TTL);
         }
         return loaded;
     }
 
-    public WorkflowDefinitionRecord findEnabledWorkflowDefinition(String tenantId, String workflowCode) {
+    public WorkflowDefinitionRecord findEnabledWorkflowDefinition(
+            String tenantId, String workflowCode) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(workflowCode)) {
             return null;
         }
@@ -54,15 +60,17 @@ public class OrchestratorConfigCacheService {
         if (cached != null) {
             return cached;
         }
-        WorkflowDefinitionRecord loaded = workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(
-                tenantId, workflowCode, true);
+        WorkflowDefinitionRecord loaded =
+                workflowDefinitionRepository.findFirstByTenantIdAndWorkflowCodeAndEnabled(
+                        tenantId, workflowCode, true);
         if (loaded != null) {
             redis.setJson(key, loaded, CONFIG_CACHE_TTL);
         }
         return loaded;
     }
 
-    public BusinessCalendarRecord findEnabledBusinessCalendar(String tenantId, String calendarCode) {
+    public BusinessCalendarRecord findEnabledBusinessCalendar(
+            String tenantId, String calendarCode) {
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(calendarCode)) {
             return null;
         }
@@ -71,8 +79,9 @@ public class OrchestratorConfigCacheService {
         if (cached != null) {
             return cached;
         }
-        BusinessCalendarRecord loaded = businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
-                tenantId, calendarCode, true);
+        BusinessCalendarRecord loaded =
+                businessCalendarRepository.findFirstByTenantIdAndCalendarCodeAndEnabled(
+                        tenantId, calendarCode, true);
         if (loaded != null) {
             redis.setJson(key, loaded, CONFIG_CACHE_TTL);
         }
@@ -88,9 +97,10 @@ public class OrchestratorConfigCacheService {
         if (cached != null) {
             return cached;
         }
-        BatchWindowRecord loaded = batchWindowRepository
-                .findFirstByTenantIdAndWindowCodeAndEnabled(tenantId, windowCode, true)
-                .orElse(null);
+        BatchWindowRecord loaded =
+                batchWindowRepository
+                        .findFirstByTenantIdAndWindowCodeAndEnabled(tenantId, windowCode, true)
+                        .orElse(null);
         if (loaded != null) {
             redis.setJson(key, loaded, CONFIG_CACHE_TTL);
         }
@@ -106,9 +116,8 @@ public class OrchestratorConfigCacheService {
         if (cached != null) {
             return cached;
         }
-        TenantQuotaPolicyRecord loaded = tenantQuotaPolicyRepository
-                .findFirstEnabledByTenantId(tenantId, true)
-                .orElse(null);
+        TenantQuotaPolicyRecord loaded =
+                tenantQuotaPolicyRepository.findFirstEnabledByTenantId(tenantId, true).orElse(null);
         if (loaded != null) {
             redis.setJson(key, loaded, CONFIG_CACHE_TTL);
         }

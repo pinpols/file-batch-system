@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.domain.scheduler;
 
 import com.example.batch.common.model.WorkerRouteModel;
+
 import lombok.Data;
 
 @Data

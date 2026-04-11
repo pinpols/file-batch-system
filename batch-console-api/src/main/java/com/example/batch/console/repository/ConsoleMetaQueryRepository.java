@@ -1,14 +1,17 @@
 package com.example.batch.console.repository;
 
 import com.example.batch.console.domain.ConsoleJdbcQueryAnchor;
-import java.util.List;
+
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryAnchor, Long> {
 
-    @Query("""
+    @Query(
+            """
             SELECT queue_code AS code, queue_code AS label
               FROM batch.resource_queue
              WHERE tenant_id = :tenantId
@@ -17,7 +20,8 @@ public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryA
             """)
     List<SimpleOptionView> queueOptions(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT calendar_code AS code, calendar_code AS label
               FROM batch.business_calendar
              WHERE tenant_id = :tenantId
@@ -26,7 +30,8 @@ public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryA
             """)
     List<SimpleOptionView> calendarOptions(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT window_code AS code, window_code AS label
               FROM batch.batch_window
              WHERE tenant_id = :tenantId
@@ -35,7 +40,8 @@ public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryA
             """)
     List<SimpleOptionView> windowOptions(@Param("tenantId") String tenantId);
 
-    @Query("""
+    @Query(
+            """
             SELECT DISTINCT worker_group AS code, worker_group AS label
               FROM batch.worker_registry
              WHERE tenant_id = :tenantId
@@ -46,6 +52,7 @@ public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryA
 
     interface SimpleOptionView {
         String getCode();
+
         String getLabel();
     }
 }

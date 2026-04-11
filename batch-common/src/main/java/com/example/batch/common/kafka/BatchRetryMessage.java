@@ -13,13 +13,9 @@ public record BatchRetryMessage(
         String retryKey,
         String idempotencyKey,
         String traceId,
-        /**
-         * 消息投递尝试序号，用于重试调度，与数据库侧业务重试计数器不同。
-         */
+        /** 消息投递尝试序号，用于重试调度，与数据库侧业务重试计数器不同。 */
         int attemptNo,
         int maxAttempts,
         Instant nextRetryAt,
         String retryReason,
-        Map<String, Object> payload
-) {
-}
+        Map<String, Object> payload) {}

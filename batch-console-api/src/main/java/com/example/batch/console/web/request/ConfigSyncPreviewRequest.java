@@ -2,8 +2,10 @@ package com.example.batch.console.web.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.Set;
+
 import lombok.Data;
+
+import java.util.Set;
 
 @Data
 public class ConfigSyncPreviewRequest {

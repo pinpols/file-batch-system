@@ -1,5 +1,8 @@
 package com.example.batch.console.infrastructure;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
@@ -17,8 +20,12 @@ import com.example.batch.console.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.web.response.ConsoleWorkflowEdgeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.web.response.WorkflowDefinitionDetailResponse;
-import com.example.batch.common.enums.ResultCode;
-import com.example.batch.common.exception.BizException;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -27,16 +34,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-/**
- * {@link ConsoleWorkflowDefinitionApplicationService} 的默认实现。
- */
+/** {@link ConsoleWorkflowDefinitionApplicationService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-public class DefaultConsoleWorkflowDefinitionApplicationService implements ConsoleWorkflowDefinitionApplicationService {
+public class DefaultConsoleWorkflowDefinitionApplicationService
+        implements ConsoleWorkflowDefinitionApplicationService {
 
     private final WorkflowDefinitionMapper definitionMapper;
     private final WorkflowNodeMapper nodeMapper;
@@ -48,14 +51,18 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
     @Override
     public WorkflowDefinitionDetailResponse getById(Long id, String tenantId) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-        WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
-        if (def == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "Workflow definition not found: " + id);
-        }
-        List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(
-                new WorkflowNodeQuery(resolvedTenant, def.getId(), null, null, null, null, null));
-        List<WorkflowEdgeEntity> edges = edgeMapper.selectByQuery(
-                new WorkflowEdgeQuery(resolvedTenant, def.getId(), null, null, null, null, null, null));
+        WorkflowDefinitionEntity def =
+                Guard.requireFound(
+                        definitionMapper.selectById(resolvedTenant, id),
+                        "Workflow definition not found: " + id);
+        List<WorkflowNodeEntity> nodes =
+                nodeMapper.selectByQuery(
+                        new WorkflowNodeQuery(
+                                resolvedTenant, def.getId(), null, null, null, null, null));
+        List<WorkflowEdgeEntity> edges =
+                edgeMapper.selectByQuery(
+                        new WorkflowEdgeQuery(
+                                resolvedTenant, def.getId(), null, null, null, null, null, null));
         return toDetailResponse(def, nodes, edges);
     }
 
@@ -64,10 +71,11 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
     public WorkflowDefinitionDetailResponse create(WorkflowDefinitionSaveRequest request) {
         String resolvedTenant = tenantGuard.resolveTenant(request.getTenantId());
 
-        WorkflowDefinitionEntity existing = definitionMapper.selectByUniqueKey(
-                resolvedTenant, request.getWorkflowCode(), 1);
+        WorkflowDefinitionEntity existing =
+                definitionMapper.selectByUniqueKey(resolvedTenant, request.getWorkflowCode(), 1);
         if (existing != null) {
-            throw new BizException(ResultCode.CONFLICT,
+            throw new BizException(
+                    ResultCode.CONFLICT,
                     "Workflow definition already exists: " + request.getWorkflowCode());
         }
 
@@ -92,13 +100,14 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
     public WorkflowDefinitionDetailResponse update(Long id, WorkflowDefinitionSaveRequest request) {
         String resolvedTenant = tenantGuard.resolveTenant(request.getTenantId());
 
-        WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
-        if (def == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "Workflow definition not found: " + id);
-        }
+        WorkflowDefinitionEntity def =
+                Guard.requireFound(
+                        definitionMapper.selectById(resolvedTenant, id),
+                        "Workflow definition not found: " + id);
 
         definitionMapper.updateWorkflowDefinition(
-                resolvedTenant, id,
+                resolvedTenant,
+                id,
                 request.getWorkflowName(),
                 request.getWorkflowType(),
                 request.getEnabled());
@@ -131,10 +140,10 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
     public void delete(Long id, String tenantId) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
 
-        WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
-        if (def == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "Workflow definition not found: " + id);
-        }
+        WorkflowDefinitionEntity def =
+                Guard.requireFound(
+                        definitionMapper.selectById(resolvedTenant, id),
+                        "Workflow definition not found: " + id);
 
         nodeMapper.deleteByWorkflowDefinitionId(id);
         edgeMapper.deleteByWorkflowDefinitionId(id);
@@ -146,15 +155,19 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
     @Override
     public DagValidationResult validate(Long id, String tenantId) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-        WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
-        if (def == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "Workflow definition not found: " + id);
-        }
+        WorkflowDefinitionEntity def =
+                Guard.requireFound(
+                        definitionMapper.selectById(resolvedTenant, id),
+                        "Workflow definition not found: " + id);
 
-        List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(
-                new WorkflowNodeQuery(resolvedTenant, def.getId(), null, null, null, null, null));
-        List<WorkflowEdgeEntity> edges = edgeMapper.selectByQuery(
-                new WorkflowEdgeQuery(resolvedTenant, def.getId(), null, null, null, null, null, null));
+        List<WorkflowNodeEntity> nodes =
+                nodeMapper.selectByQuery(
+                        new WorkflowNodeQuery(
+                                resolvedTenant, def.getId(), null, null, null, null, null));
+        List<WorkflowEdgeEntity> edges =
+                edgeMapper.selectByQuery(
+                        new WorkflowEdgeQuery(
+                                resolvedTenant, def.getId(), null, null, null, null, null, null));
 
         List<String> errors = validateDag(nodes, edges);
         return new DagValidationResult(errors.isEmpty(), errors);
@@ -199,10 +212,12 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
 
     private WorkflowDefinitionDetailResponse loadDetail(String tenantId, Long id) {
         WorkflowDefinitionEntity def = definitionMapper.selectById(tenantId, id);
-        List<WorkflowNodeEntity> nodes = nodeMapper.selectByQuery(
-                new WorkflowNodeQuery(tenantId, id, null, null, null, null, null));
-        List<WorkflowEdgeEntity> edges = edgeMapper.selectByQuery(
-                new WorkflowEdgeQuery(tenantId, id, null, null, null, null, null, null));
+        List<WorkflowNodeEntity> nodes =
+                nodeMapper.selectByQuery(
+                        new WorkflowNodeQuery(tenantId, id, null, null, null, null, null));
+        List<WorkflowEdgeEntity> edges =
+                edgeMapper.selectByQuery(
+                        new WorkflowEdgeQuery(tenantId, id, null, null, null, null, null, null));
         return toDetailResponse(def, nodes, edges);
     }
 
@@ -211,30 +226,56 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
             List<WorkflowNodeEntity> nodes,
             List<WorkflowEdgeEntity> edges) {
         return new WorkflowDefinitionDetailResponse(
-                def.getId(), def.getTenantId(), def.getWorkflowCode(), def.getWorkflowName(),
-                def.getWorkflowType(), def.getVersion(), def.getEnabled(),
-                def.getDescription(), def.getCreatedAt(), def.getUpdatedAt(),
+                def.getId(),
+                def.getTenantId(),
+                def.getWorkflowCode(),
+                def.getWorkflowName(),
+                def.getWorkflowType(),
+                def.getVersion(),
+                def.getEnabled(),
+                def.getDescription(),
+                def.getCreatedAt(),
+                def.getUpdatedAt(),
                 nodes.stream().map(this::toNodeResponse).toList(),
                 edges.stream().map(this::toEdgeResponse).toList());
     }
 
     private ConsoleWorkflowNodeResponse toNodeResponse(WorkflowNodeEntity n) {
         return new ConsoleWorkflowNodeResponse(
-                n.getId(), n.getWorkflowDefinitionId(), n.getNodeCode(), n.getNodeName(),
-                n.getNodeType(), n.getRelatedJobCode(), n.getRelatedPipelineCode(),
-                n.getWorkerGroup(), n.getWindowCode(), n.getNodeOrder(),
-                n.getRetryPolicy(), n.getRetryMaxCount(), n.getTimeoutSeconds(),
-                n.getNodeParams(), n.getEnabled(), n.getCreatedAt(), n.getUpdatedAt());
+                n.getId(),
+                n.getWorkflowDefinitionId(),
+                n.getNodeCode(),
+                n.getNodeName(),
+                n.getNodeType(),
+                n.getRelatedJobCode(),
+                n.getRelatedPipelineCode(),
+                n.getWorkerGroup(),
+                n.getWindowCode(),
+                n.getNodeOrder(),
+                n.getRetryPolicy(),
+                n.getRetryMaxCount(),
+                n.getTimeoutSeconds(),
+                n.getNodeParams(),
+                n.getEnabled(),
+                n.getCreatedAt(),
+                n.getUpdatedAt());
     }
 
     private ConsoleWorkflowEdgeResponse toEdgeResponse(WorkflowEdgeEntity e) {
         return new ConsoleWorkflowEdgeResponse(
-                e.getId(), e.getWorkflowDefinitionId(), e.getFromNodeCode(), e.getToNodeCode(),
-                e.getEdgeType(), e.getConditionExpr(), e.getEnabled(),
-                e.getCreatedAt(), e.getUpdatedAt());
+                e.getId(),
+                e.getWorkflowDefinitionId(),
+                e.getFromNodeCode(),
+                e.getToNodeCode(),
+                e.getEdgeType(),
+                e.getConditionExpr(),
+                e.getEnabled(),
+                e.getCreatedAt(),
+                e.getUpdatedAt());
     }
 
-    private List<String> validateDag(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
+    private List<String> validateDag(
+            List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
         List<String> errors = new ArrayList<>();
         Set<String> nodeCodes = new HashSet<>();
         List<String> startNodes = new ArrayList<>();
@@ -258,9 +299,12 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         return errors;
     }
 
-    private void validateNodeReferences(List<String> errors, Set<String> nodeCodes,
-                                         List<String> startNodes, List<String> endNodes,
-                                         List<WorkflowEdgeEntity> edges) {
+    private void validateNodeReferences(
+            List<String> errors,
+            Set<String> nodeCodes,
+            List<String> startNodes,
+            List<String> endNodes,
+            List<WorkflowEdgeEntity> edges) {
         if (startNodes.isEmpty()) {
             errors.add("Missing START node");
         } else if (startNodes.size() > 1) {
@@ -327,9 +371,13 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         }
     }
 
-    private void validateReachability(List<String> errors, List<WorkflowNodeEntity> nodes,
-                                       Set<String> nodeCodes, List<String> startNodes,
-                                       List<String> endNodes, DagAdjacency dag) {
+    private void validateReachability(
+            List<String> errors,
+            List<WorkflowNodeEntity> nodes,
+            Set<String> nodeCodes,
+            List<String> startNodes,
+            List<String> endNodes,
+            DagAdjacency dag) {
         if (startNodes.size() == 1) {
             String startCode = startNodes.get(0);
             Set<String> reachableFromStart = new HashSet<>();
@@ -355,10 +403,10 @@ public class DefaultConsoleWorkflowDefinitionApplicationService implements Conso
         }
     }
 
-    private record DagAdjacency(Map<String, List<String>> adj,
-                                 Map<String, List<String>> reverseAdj,
-                                 Map<String, Integer> inDegree) {
-    }
+    private record DagAdjacency(
+            Map<String, List<String>> adj,
+            Map<String, List<String>> reverseAdj,
+            Map<String, Integer> inDegree) {}
 
     private void bfs(String start, Map<String, List<String>> adj, Set<String> visited) {
         Deque<String> queue = new ArrayDeque<>();

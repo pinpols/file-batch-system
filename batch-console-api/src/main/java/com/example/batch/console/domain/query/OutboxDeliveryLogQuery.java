@@ -7,6 +7,4 @@ public record OutboxDeliveryLogQuery(
         String deliveryStatus,
         String eventType,
         String eventKey,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

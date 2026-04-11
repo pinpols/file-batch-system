@@ -4,19 +4,23 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.Guard;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.repository.WorkerRegistryJdbcRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
-import java.time.Instant;
-import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.time.Instant;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -31,20 +35,22 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
     @Override
     @Transactional
-    public WorkerRegistryRecord startDrain(String tenantId, String workerCode, Integer timeoutSeconds) {
+    public WorkerRegistryRecord startDrain(
+            String tenantId, String workerCode, Integer timeoutSeconds) {
         validateTenant(tenantId);
-        if (!StringUtils.hasText(workerCode)) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "workerCode is required");
-        }
+        Guard.requireText(workerCode, "workerCode is required");
         WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
         if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
             throw new BizException(ResultCode.STATE_CONFLICT, "worker is decommissioned");
         }
-        int seconds = timeoutSeconds != null && timeoutSeconds > 0
-                ? timeoutSeconds
-                : workerDrainProperties.getDefaultTimeoutSeconds();
+        int seconds =
+                timeoutSeconds != null && timeoutSeconds > 0
+                        ? timeoutSeconds
+                        : workerDrainProperties.getDefaultTimeoutSeconds();
         Instant now = Instant.now();
-        registry = registry.withDrain(WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(seconds), now);
+        registry =
+                registry.withDrain(
+                        WorkerRegistryStatus.DRAINING.code(), now, now.plusSeconds(seconds), now);
         return workerRegistryRepository.save(registry);
     }
 
@@ -73,11 +79,13 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     @Transactional(readOnly = true)
     public List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode) {
         validateTenant(tenantId);
-        if (!StringUtils.hasText(workerCode)) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "workerCode is required");
-        }
-        return jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode,
-                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code());
+        Guard.requireText(workerCode, "workerCode is required");
+        return jobTaskMapper.selectActiveByAssignedWorker(
+                tenantId,
+                workerCode,
+                TaskStatus.RUNNING.code(),
+                TaskStatus.READY.code(),
+                TaskStatus.CREATED.code());
     }
 
     @Override
@@ -86,28 +94,34 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
         if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(workerCode)) {
             return;
         }
-        WorkerRegistryRecord registry = workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+        WorkerRegistryRecord registry =
+                workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
         if (registry == null || !WorkerRegistryStatus.DRAINING.code().equals(registry.status())) {
             return;
         }
-        log.warn("drain deadline exceeded, taking over tasks: tenantId={}, workerCode={}", tenantId, workerCode);
+        log.warn(
+                "drain deadline exceeded, taking over tasks: tenantId={}, workerCode={}",
+                tenantId,
+                workerCode);
         takeoverTasks(tenantId, workerCode);
         markDecommissioned(tenantId, workerCode);
     }
 
     private void takeoverTasks(String tenantId, String workerCode) {
-        List<JobTaskEntity> tasks = jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode,
-                TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code());
+        List<JobTaskEntity> tasks =
+                jobTaskMapper.selectActiveByAssignedWorker(
+                        tenantId,
+                        workerCode,
+                        TaskStatus.RUNNING.code(),
+                        TaskStatus.READY.code(),
+                        TaskStatus.CREATED.code());
         for (JobTaskEntity task : tasks) {
             if (task == null || task.getId() == null) {
                 continue;
             }
             try {
                 retryGovernanceService.reclaimTask(
-                        tenantId,
-                        task.getId(),
-                        tenantId + ":drain-takeover:" + task.getId()
-                );
+                        tenantId, task.getId(), tenantId + ":drain-takeover:" + task.getId());
             } catch (RuntimeException ex) {
                 log.warn("drain takeover failed for taskId={}: {}", task.getId(), ex.getMessage());
             }
@@ -121,16 +135,12 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     }
 
     private WorkerRegistryRecord requireRegistry(String tenantId, String workerCode) {
-        WorkerRegistryRecord registry = workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
-        if (registry == null) {
-            throw new BizException(ResultCode.NOT_FOUND, "worker not registered");
-        }
-        return registry;
+        return Guard.requireFound(
+                workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode),
+                "worker not registered");
     }
 
     private void validateTenant(String tenantId) {
-        if (!StringUtils.hasText(tenantId)) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
-        }
+        Guard.requireText(tenantId, "tenantId is required");
     }
 }

@@ -12,5 +12,4 @@ public record WorkflowDefinitionRecord(
         @Column("workflow_name") String workflowName,
         @Column("workflow_type") String workflowType,
         @Column("version") Integer version,
-        @Column("enabled") Boolean enabled
-) {}
+        @Column("enabled") Boolean enabled) {}

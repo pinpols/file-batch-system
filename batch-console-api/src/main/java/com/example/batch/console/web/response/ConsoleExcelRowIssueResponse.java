@@ -7,6 +7,4 @@ public record ConsoleExcelRowIssueResponse(
         String rowKey,
         String templateCode,
         Integer version,
-        List<String> messages
-) {
-}
+        List<String> messages) {}

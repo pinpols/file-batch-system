@@ -6,6 +6,4 @@ public record TaskOutcomeCommand(
         boolean success,
         String resultSummary,
         String errorCode,
-        String errorMessage
-) {
-}
+        String errorMessage) {}

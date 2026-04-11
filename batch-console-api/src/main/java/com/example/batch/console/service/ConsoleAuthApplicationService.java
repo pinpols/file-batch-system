@@ -9,13 +9,16 @@ import com.example.batch.console.support.ConsoleSessionRegistry;
 import com.example.batch.console.web.request.ConsoleLoginRequest;
 import com.example.batch.console.web.response.ConsoleAuthProfileResponse;
 import com.example.batch.console.web.response.ConsoleAuthTokenResponse;
-import java.util.LinkedHashSet;
-import java.util.Set;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -35,37 +38,41 @@ public class ConsoleAuthApplicationService {
         String username = username(authentication);
         String tenantId = tenantId(authentication);
         long sessionVersion = sessionRegistry.nextSessionVersion(username, tenantId);
-        return jwtService.issueToken(username, tenantId, authorities(authentication), sessionVersion);
+        return jwtService.issueToken(
+                username, tenantId, authorities(authentication), sessionVersion);
     }
 
     public ConsoleAuthProfileResponse profile(Authentication authentication) {
         return new ConsoleAuthProfileResponse(
-                username(authentication),
-                tenantId(authentication),
-                authorities(authentication)
-        );
+                username(authentication), tenantId(authentication), authorities(authentication));
     }
 
     private String username(Authentication authentication) {
-        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+        if (authentication != null
+                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
             return principal.username();
         }
-        if (authentication != null && authentication.getPrincipal() instanceof UserDetails userDetails) {
+        if (authentication != null
+                && authentication.getPrincipal() instanceof UserDetails userDetails) {
             return userDetails.getUsername();
         }
         return authentication == null ? null : authentication.getName();
     }
 
     private String tenantId(Authentication authentication) {
-        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+        if (authentication != null
+                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
             return principal.tenantId();
         }
         String resolved = requestMetadataResolver.current().tenantId();
-        return resolved == null || resolved.isBlank() ? securityProperties.getDefaultTenantId() : resolved;
+        return resolved == null || resolved.isBlank()
+                ? securityProperties.getDefaultTenantId()
+                : resolved;
     }
 
     private Set<String> authorities(Authentication authentication) {
-        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+        if (authentication != null
+                && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
             return principal.authorities();
         }
         Set<String> resolved = new LinkedHashSet<>();

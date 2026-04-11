@@ -4,16 +4,19 @@ import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.web.request.CalendarSaveRequest;
 import com.example.batch.console.web.request.HolidayImportRequest;
 import com.example.batch.console.web.request.HolidaySaveRequest;
+
 import java.util.List;
 import java.util.Map;
 
-/**
- * 业务日历应用服务：管理日历及节假日的 CRUD 操作。
- */
+/** 业务日历应用服务：管理日历及节假日的 CRUD 操作。 */
 public interface ConsoleCalendarApplicationService {
 
-    PageResponse<Map<String, Object>> list(String tenantId, String calendarCode, Boolean enabled,
-                                           Integer pageNo, Integer pageSize);
+    PageResponse<Map<String, Object>> list(
+            String tenantId,
+            String calendarCode,
+            Boolean enabled,
+            Integer pageNo,
+            Integer pageSize);
 
     Map<String, Object> create(CalendarSaveRequest request);
 

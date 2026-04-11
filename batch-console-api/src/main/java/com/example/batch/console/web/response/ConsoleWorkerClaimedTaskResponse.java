@@ -18,6 +18,4 @@ public record ConsoleWorkerClaimedTaskResponse(
         Instant startedAt,
         Instant finishedAt,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

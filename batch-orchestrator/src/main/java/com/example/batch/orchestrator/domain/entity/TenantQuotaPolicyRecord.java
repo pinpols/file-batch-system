@@ -18,5 +18,4 @@ public record TenantQuotaPolicyRecord(
         @Column("partition_burst_limit") Integer partitionBurstLimit,
         @Column("quota_reset_policy") String quotaResetPolicy,
         @Column("group_shared_max_running_jobs") Integer groupSharedMaxRunningJobs,
-        @Column("enabled") Boolean enabled
-) {}
+        @Column("enabled") Boolean enabled) {}

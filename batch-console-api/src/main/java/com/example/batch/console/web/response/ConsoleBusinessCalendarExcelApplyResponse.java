@@ -6,6 +6,4 @@ public record ConsoleBusinessCalendarExcelApplyResponse(
         Integer appliedCalendarRows,
         Integer insertedCalendars,
         Integer updatedCalendars,
-        Integer appliedHolidayRows
-) {
-}
+        Integer appliedHolidayRows) {}

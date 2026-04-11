@@ -3,32 +3,34 @@ package com.example.batch.orchestrator;
 import com.example.batch.common.config.BatchJsonAutoConfiguration;
 import com.example.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import com.example.batch.common.config.BatchStartupSelfCheckAutoConfiguration;
-import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
-import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
-import java.util.HashMap;
-import java.util.Map;
+
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
+import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @SpringBootApplication(
         scanBasePackages = "com.example.batch",
         exclude = {DataRedisRepositoriesAutoConfiguration.class})
 @ImportAutoConfiguration({
-        BatchJsonAutoConfiguration.class,
-        BatchObjectCryptoAutoConfiguration.class,
-        BatchStartupSelfCheckAutoConfiguration.class,
-        RestClientAutoConfiguration.class
+    BatchJsonAutoConfiguration.class,
+    BatchObjectCryptoAutoConfiguration.class,
+    BatchStartupSelfCheckAutoConfiguration.class,
+    RestClientAutoConfiguration.class
 })
 @MapperScan("com.example.batch.orchestrator.mapper")
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
@@ -52,7 +54,8 @@ public class BatchOrchestratorApplication {
     }
 
     @Bean
-    public KafkaTemplate<String, String> kafkaTemplate(ProducerFactory<String, String> producerFactory) {
+    public KafkaTemplate<String, String> kafkaTemplate(
+            ProducerFactory<String, String> producerFactory) {
         return new KafkaTemplate<>(producerFactory);
     }
 }

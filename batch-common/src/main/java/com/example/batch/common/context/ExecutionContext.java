@@ -10,6 +10,4 @@ public record ExecutionContext(
         String jobCode,
         String instanceNo,
         Instant startedAt,
-        Map<String, Object> attributes
-) {
-}
+        Map<String, Object> attributes) {}

@@ -8,6 +8,4 @@ public record FileErrorRecordQuery(
         String errorStage,
         String errorCode,
         Boolean skipped,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

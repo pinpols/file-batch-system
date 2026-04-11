@@ -1,7 +1,8 @@
 package com.example.batch.console.domain.entity;
 
-import java.time.OffsetDateTime;
 import lombok.Data;
+
+import java.time.OffsetDateTime;
 
 @Data
 public class ApprovalCommandEntity {
@@ -26,4 +27,3 @@ public class ApprovalCommandEntity {
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }
-

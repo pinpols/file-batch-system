@@ -3,21 +3,24 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.service.ConsoleMetaQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
+
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+import java.util.Map;
+
 @RestController
 @Validated
 @RequestMapping("/api/console/meta")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+@PreAuthorize(
+        "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
 public class ConsoleMetaController {
 
@@ -45,10 +48,12 @@ public class ConsoleMetaController {
     }
 
     @GetMapping("/worker-groups")
-    public CommonResponse<List<SimpleOption>> workerGroups(@RequestParam("tenantId") String tenantId) {
+    public CommonResponse<List<SimpleOption>> workerGroups(
+            @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(queryService.workerGroups(tenantId));
     }
 
     public record EnumItem(String code, String label) {}
+
     public record SimpleOption(String code, String label) {}
 }

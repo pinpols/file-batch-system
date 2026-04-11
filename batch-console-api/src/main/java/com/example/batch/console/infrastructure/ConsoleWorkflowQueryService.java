@@ -28,13 +28,14 @@ import com.example.batch.console.web.response.ConsoleWorkflowNodeResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowNodeRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowRunResponse;
 import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
-import java.util.List;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 
-/**
- * 工作流相关查询子服务。
- */
+import java.util.List;
+
+/** 工作流相关查询子服务。 */
 @Service
 @RequiredArgsConstructor
 class ConsoleWorkflowQueryService {
@@ -42,173 +43,193 @@ class ConsoleWorkflowQueryService {
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleWorkflowQueryMappers workflowMappers;
 
-    PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(WorkflowDefinitionQueryRequest request) {
+    PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(
+            WorkflowDefinitionQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<WorkflowDefinitionEntity> rows = workflowMappers.workflowDefinitionMapper.selectByQuery(new WorkflowDefinitionQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getWorkflowCode(),
-                request.getWorkflowName(),
-                request.getWorkflowType(),
-                request.getVersion(),
-                request.getEnabled(),
-                pageRequest
-        ));
-        long total = workflowMappers.workflowDefinitionMapper.countByQuery(new WorkflowDefinitionQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getWorkflowCode(),
-                request.getWorkflowName(),
-                request.getWorkflowType(),
-                request.getVersion(),
-                request.getEnabled(),
-                pageRequest
-        ));
+        List<WorkflowDefinitionEntity> rows =
+                workflowMappers.workflowDefinitionMapper.selectByQuery(
+                        new WorkflowDefinitionQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getWorkflowCode(),
+                                request.getWorkflowName(),
+                                request.getWorkflowType(),
+                                request.getVersion(),
+                                request.getEnabled(),
+                                pageRequest));
+        long total =
+                workflowMappers.workflowDefinitionMapper.countByQuery(
+                        new WorkflowDefinitionQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getWorkflowCode(),
+                                request.getWorkflowName(),
+                                request.getWorkflowType(),
+                                request.getVersion(),
+                                request.getEnabled(),
+                                pageRequest));
         return page(pageRequest, total, rows, this::toWorkflowDefinitionResponse);
     }
 
     PageResponse<ConsoleWorkflowNodeResponse> workflowNodes(WorkflowNodeQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<WorkflowNodeEntity> rows = workflowMappers.workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getWorkflowDefinitionId(),
-                request.getWorkflowCode(),
-                request.getNodeCode(),
-                request.getNodeType(),
-                request.getEnabled(),
-                pageRequest
-        ));
-        long total = workflowMappers.workflowNodeMapper.countByQuery(new WorkflowNodeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getWorkflowDefinitionId(),
-                request.getWorkflowCode(),
-                request.getNodeCode(),
-                request.getNodeType(),
-                request.getEnabled(),
-                pageRequest
-        ));
+        List<WorkflowNodeEntity> rows =
+                workflowMappers.workflowNodeMapper.selectByQuery(
+                        new WorkflowNodeQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getWorkflowDefinitionId(),
+                                request.getWorkflowCode(),
+                                request.getNodeCode(),
+                                request.getNodeType(),
+                                request.getEnabled(),
+                                pageRequest));
+        long total =
+                workflowMappers.workflowNodeMapper.countByQuery(
+                        new WorkflowNodeQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getWorkflowDefinitionId(),
+                                request.getWorkflowCode(),
+                                request.getNodeCode(),
+                                request.getNodeType(),
+                                request.getEnabled(),
+                                pageRequest));
         return page(pageRequest, total, rows, this::toWorkflowNodeResponse);
     }
 
     PageResponse<ConsoleWorkflowEdgeResponse> workflowEdges(WorkflowEdgeQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<WorkflowEdgeEntity> rows = workflowMappers.workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getWorkflowDefinitionId(),
-                request.getWorkflowCode(),
-                request.getFromNodeCode(),
-                request.getToNodeCode(),
-                request.getEdgeType(),
-                request.getEnabled(),
-                pageRequest
-        ));
-        long total = workflowMappers.workflowEdgeMapper.countByQuery(new WorkflowEdgeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getWorkflowDefinitionId(),
-                request.getWorkflowCode(),
-                request.getFromNodeCode(),
-                request.getToNodeCode(),
-                request.getEdgeType(),
-                request.getEnabled(),
-                pageRequest
-        ));
+        List<WorkflowEdgeEntity> rows =
+                workflowMappers.workflowEdgeMapper.selectByQuery(
+                        new WorkflowEdgeQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getWorkflowDefinitionId(),
+                                request.getWorkflowCode(),
+                                request.getFromNodeCode(),
+                                request.getToNodeCode(),
+                                request.getEdgeType(),
+                                request.getEnabled(),
+                                pageRequest));
+        long total =
+                workflowMappers.workflowEdgeMapper.countByQuery(
+                        new WorkflowEdgeQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getWorkflowDefinitionId(),
+                                request.getWorkflowCode(),
+                                request.getFromNodeCode(),
+                                request.getToNodeCode(),
+                                request.getEdgeType(),
+                                request.getEnabled(),
+                                pageRequest));
         return page(pageRequest, total, rows, this::toWorkflowEdgeResponse);
     }
 
     PageResponse<ConsoleWorkflowRunResponse> workflowRuns(WorkflowRunQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        WorkflowRunQuery query = new WorkflowRunQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getWorkflowDefinitionId(),
-                request.getRelatedJobInstanceId(),
-                request.getRunStatus(),
-                request.getCurrentNodeCode(),
-                request.getTraceId(),
-                pageRequest
-        );
+        WorkflowRunQuery query =
+                new WorkflowRunQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getWorkflowDefinitionId(),
+                        request.getRelatedJobInstanceId(),
+                        request.getRunStatus(),
+                        request.getCurrentNodeCode(),
+                        request.getTraceId(),
+                        pageRequest);
         List<WorkflowRunEntity> rows = workflowMappers.workflowRunMapper.selectByQuery(query);
         long total = workflowMappers.workflowRunMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toWorkflowRunResponse);
     }
 
     ConsoleWorkflowRunResponse workflowRun(String tenantId, Long id) {
-        WorkflowRunEntity entity = workflowMappers.workflowRunMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
+        WorkflowRunEntity entity =
+                workflowMappers.workflowRunMapper.selectById(
+                        resolveTenant(tenantGuard, tenantId), id);
         return toWorkflowRunResponse(requireNotNull(entity, "workflow run not found"));
     }
 
-    PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(WorkflowNodeRunQueryRequest request) {
+    PageResponse<ConsoleWorkflowNodeRunResponse> workflowNodeRuns(
+            WorkflowNodeRunQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        WorkflowNodeRunQuery query = new WorkflowNodeRunQuery(
-                request.getWorkflowRunId(),
-                request.getNodeCode(),
-                request.getNodeStatus(),
-                pageRequest
-        );
-        List<WorkflowNodeRunEntity> rows = workflowMappers.workflowNodeRunMapper.selectByQuery(query);
+        WorkflowNodeRunQuery query =
+                new WorkflowNodeRunQuery(
+                        request.getWorkflowRunId(),
+                        request.getNodeCode(),
+                        request.getNodeStatus(),
+                        pageRequest);
+        List<WorkflowNodeRunEntity> rows =
+                workflowMappers.workflowNodeRunMapper.selectByQuery(query);
         long total = workflowMappers.workflowNodeRunMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toWorkflowNodeRunResponse);
     }
 
     ConsoleWorkflowNodeRunResponse workflowNodeRun(String tenantId, Long id) {
-        WorkflowNodeRunEntity entity = workflowMappers.workflowNodeRunMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
+        WorkflowNodeRunEntity entity =
+                workflowMappers.workflowNodeRunMapper.selectById(
+                        resolveTenant(tenantGuard, tenantId), id);
         return toWorkflowNodeRunResponse(requireNotNull(entity, "workflow node run not found"));
     }
 
     ConsoleWorkflowTopologyResponse workflowTopology(WorkflowTopologyQueryRequest request) {
-        WorkflowDefinitionQuery definitionQuery = new WorkflowDefinitionQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getWorkflowCode(),
-                null,
-                null,
-                request.getVersion(),
-                true,
-                null
-        );
-        List<WorkflowDefinitionEntity> definitions = workflowMappers.workflowDefinitionMapper.selectByQuery(definitionQuery);
-        WorkflowDefinitionEntity selectedDefinition = definitions.isEmpty() ? null : definitions.get(0);
+        WorkflowDefinitionQuery definitionQuery =
+                new WorkflowDefinitionQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getWorkflowCode(),
+                        null,
+                        null,
+                        request.getVersion(),
+                        true,
+                        null);
+        List<WorkflowDefinitionEntity> definitions =
+                workflowMappers.workflowDefinitionMapper.selectByQuery(definitionQuery);
+        WorkflowDefinitionEntity selectedDefinition =
+                definitions.isEmpty() ? null : definitions.get(0);
         if (selectedDefinition == null) {
-            return new ConsoleWorkflowTopologyResponse(null, List.of(), List.of(), List.of(), List.of());
+            return new ConsoleWorkflowTopologyResponse(
+                    null, List.of(), List.of(), List.of(), List.of());
         }
-        List<WorkflowNodeEntity> nodes = workflowMappers.workflowNodeMapper.selectByQuery(new WorkflowNodeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                selectedDefinition.getId(),
-                null,
-                null,
-                null,
-                true,
-                null
-        ));
-        List<WorkflowEdgeEntity> edges = workflowMappers.workflowEdgeMapper.selectByQuery(new WorkflowEdgeQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                selectedDefinition.getId(),
-                null,
-                null,
-                null,
-                null,
-                true,
-                null
-        ));
+        List<WorkflowNodeEntity> nodes =
+                workflowMappers.workflowNodeMapper.selectByQuery(
+                        new WorkflowNodeQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                selectedDefinition.getId(),
+                                null,
+                                null,
+                                null,
+                                true,
+                                null));
+        List<WorkflowEdgeEntity> edges =
+                workflowMappers.workflowEdgeMapper.selectByQuery(
+                        new WorkflowEdgeQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                selectedDefinition.getId(),
+                                null,
+                                null,
+                                null,
+                                null,
+                                true,
+                                null));
         List<WorkflowRunEntity> workflowRuns = List.of();
         List<WorkflowNodeRunEntity> nodeRuns = List.of();
         if (request.getWorkflowRunId() != null) {
-            WorkflowRunEntity run = workflowMappers.workflowRunMapper.selectByQuery(new WorkflowRunQuery(
-                    resolveTenant(tenantGuard, request.getTenantId()),
-                    selectedDefinition.getId(),
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-            )).stream()
-                    .filter(item -> request.getWorkflowRunId().equals(item.getId()))
-                    .findFirst()
-                    .orElse(null);
+            WorkflowRunEntity run =
+                    workflowMappers
+                            .workflowRunMapper
+                            .selectByQuery(
+                                    new WorkflowRunQuery(
+                                            resolveTenant(tenantGuard, request.getTenantId()),
+                                            selectedDefinition.getId(),
+                                            null,
+                                            null,
+                                            null,
+                                            null,
+                                            null))
+                            .stream()
+                            .filter(item -> request.getWorkflowRunId().equals(item.getId()))
+                            .findFirst()
+                            .orElse(null);
             if (run != null) {
                 workflowRuns = List.of(run);
-                nodeRuns = workflowMappers.workflowNodeRunMapper.selectByQuery(new WorkflowNodeRunQuery(
-                        request.getWorkflowRunId(),
-                        null,
-                        null,
-                        null
-                ));
+                nodeRuns =
+                        workflowMappers.workflowNodeRunMapper.selectByQuery(
+                                new WorkflowNodeRunQuery(
+                                        request.getWorkflowRunId(), null, null, null));
             }
         }
         return new ConsoleWorkflowTopologyResponse(
@@ -216,11 +237,11 @@ class ConsoleWorkflowQueryService {
                 nodes.stream().map(this::toWorkflowNodeResponse).toList(),
                 edges.stream().map(this::toWorkflowEdgeResponse).toList(),
                 workflowRuns.stream().map(this::toWorkflowRunResponse).toList(),
-                nodeRuns.stream().map(this::toWorkflowNodeRunResponse).toList()
-        );
+                nodeRuns.stream().map(this::toWorkflowNodeRunResponse).toList());
     }
 
-    private ConsoleWorkflowDefinitionResponse toWorkflowDefinitionResponse(WorkflowDefinitionEntity entity) {
+    private ConsoleWorkflowDefinitionResponse toWorkflowDefinitionResponse(
+            WorkflowDefinitionEntity entity) {
         return new ConsoleWorkflowDefinitionResponse(
                 entity.getId(),
                 display(entity.getTenantId()),
@@ -231,8 +252,7 @@ class ConsoleWorkflowQueryService {
                 entity.getEnabled(),
                 display(entity.getDescription()),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
+                entity.getUpdatedAt());
     }
 
     private ConsoleWorkflowNodeResponse toWorkflowNodeResponse(WorkflowNodeEntity entity) {
@@ -253,8 +273,7 @@ class ConsoleWorkflowQueryService {
                 display(entity.getNodeParams()),
                 entity.getEnabled(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
+                entity.getUpdatedAt());
     }
 
     private ConsoleWorkflowEdgeResponse toWorkflowEdgeResponse(WorkflowEdgeEntity entity) {
@@ -267,8 +286,7 @@ class ConsoleWorkflowQueryService {
                 display(entity.getConditionExpr()),
                 entity.getEnabled(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
+                entity.getUpdatedAt());
     }
 
     private ConsoleWorkflowRunResponse toWorkflowRunResponse(WorkflowRunEntity entity) {
@@ -284,8 +302,7 @@ class ConsoleWorkflowQueryService {
                 entity.getStartedAt(),
                 entity.getFinishedAt(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
+                entity.getUpdatedAt());
     }
 
     private ConsoleWorkflowNodeRunResponse toWorkflowNodeRunResponse(WorkflowNodeRunEntity entity) {
@@ -301,7 +318,6 @@ class ConsoleWorkflowQueryService {
                 display(entity.getErrorMessage()),
                 entity.getStartedAt(),
                 entity.getFinishedAt(),
-                entity.getDurationMs()
-        );
+                entity.getDurationMs());
     }
 }

@@ -1,9 +1,10 @@
 package com.example.batch.orchestrator.domain.entity;
 
-import java.time.LocalTime;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+
+import java.time.LocalTime;
 
 @Table(schema = "batch", value = "batch_window")
 public record BatchWindowRecord(
@@ -17,5 +18,4 @@ public record BatchWindowRecord(
         @Column("end_strategy") String endStrategy,
         @Column("out_of_window_action") String outOfWindowAction,
         @Column("allow_cross_day") Boolean allowCrossDay,
-        @Column("enabled") Boolean enabled
-) {}
+        @Column("enabled") Boolean enabled) {}

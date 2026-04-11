@@ -3,12 +3,16 @@ package com.example.batch.console.support;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+
+import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
@@ -16,7 +20,9 @@ public class ConsoleSecurityResponseWriter {
 
     private final ObjectMapper objectMapper;
 
-    public void write(HttpServletResponse response, HttpStatus status, ResultCode code, String message) throws IOException {
+    public void write(
+            HttpServletResponse response, HttpStatus status, ResultCode code, String message)
+            throws IOException {
         if (response.isCommitted()) {
             return;
         }

@@ -10,36 +10,52 @@ import com.example.batch.console.domain.query.JobDefinitionQuery;
 import com.example.batch.console.domain.query.WorkflowDefinitionQuery;
 import com.example.batch.console.domain.query.WorkflowEdgeQuery;
 import com.example.batch.console.domain.query.WorkflowNodeQuery;
+import com.example.batch.console.mapper.AlertRoutingConfigMapper;
+import com.example.batch.console.mapper.BatchWindowMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
+import com.example.batch.console.mapper.CalendarHolidayMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
+import com.example.batch.console.mapper.ResourceQueueMapper;
+import com.example.batch.console.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.mapper.WorkflowNodeMapper;
+import com.example.batch.console.web.request.ConfigSyncBundlePayload;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest;
+import com.example.batch.console.web.request.TenantConfigBatchInitRequest.AlertRoutingSpec;
+import com.example.batch.console.web.request.TenantConfigBatchInitRequest.BatchWindowSpec;
+import com.example.batch.console.web.request.TenantConfigBatchInitRequest.BusinessCalendarSpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.FileChannelSpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.FileTemplateSpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
+import com.example.batch.console.web.request.TenantConfigBatchInitRequest.ResourceQueueSpec;
+import com.example.batch.console.web.request.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
-import com.example.batch.console.web.request.ConfigSyncBundlePayload;
 import com.example.batch.console.web.request.TenantConfigCopyRequest;
 import com.example.batch.console.web.request.TenantConfigCopyRequest.ConfigType;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.stereotype.Service;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * 跨租户配置复制服务。
- * <p>
- * 从源租户读取配置，转换为 Spec 列表，然后委托给 batch-init 逻辑执行。
+ *
+ * <p>从源租户读取配置，转换为 Spec 列表，然后委托给 batch-init 逻辑执行。
  */
 @Slf4j
 @Service
@@ -47,6 +63,28 @@ import org.springframework.stereotype.Service;
 public class ConsoleTenantConfigCopyService {
 
     private static final int MAX_PAGE_SIZE = 5000;
+
+    /**
+     * 单条配置类型的传输描述符。
+     *
+     * <p>将"从源租户读取 → 写入 bundle → 写入 initRequest"三个步骤封装为一个对象， 消除 buildBundle / copy 中重复的 if-block
+     * 和逐字段 setter。
+     */
+    private record ConfigTypeTransfer<T>(
+            ConfigType type,
+            Function<String, List<T>> reader,
+            BiConsumer<ConfigSyncBundlePayload, List<T>> bundleSetter,
+            Function<ConfigSyncBundlePayload, List<T>> bundleGetter,
+            BiConsumer<TenantConfigBatchInitRequest, List<T>> requestSetter) {
+        void fillBundle(String tenantId, ConfigSyncBundlePayload bundle) {
+            bundleSetter.accept(bundle, reader.apply(tenantId));
+        }
+
+        void transferToRequest(
+                ConfigSyncBundlePayload bundle, TenantConfigBatchInitRequest request) {
+            requestSetter.accept(request, bundleGetter.apply(bundle));
+        }
+    }
 
     private final JobDefinitionMapper jobDefinitionMapper;
     private final WorkflowDefinitionMapper workflowDefinitionMapper;
@@ -56,24 +94,32 @@ public class ConsoleTenantConfigCopyService {
     private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
     private final FileChannelConfigMapper fileChannelConfigMapper;
     private final FileTemplateConfigMapper fileTemplateConfigMapper;
+    private final ResourceQueueMapper resourceQueueMapper;
+    private final BatchWindowMapper batchWindowMapper;
+    private final BusinessCalendarMapper businessCalendarMapper;
+    private final CalendarHolidayMapper calendarHolidayMapper;
+    private final TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+    private final AlertRoutingConfigMapper alertRoutingConfigMapper;
     private final ConsoleTenantConfigInitApplicationService initService;
 
-    public TenantConfigBatchInitResponse copy(TenantConfigCopyRequest request,
-                                               String operator,
-                                               String batchOperationId) {
+    public TenantConfigBatchInitResponse copy(
+            TenantConfigCopyRequest request, String operator, String batchOperationId) {
         TenantConfigBatchInitRequest initRequest = new TenantConfigBatchInitRequest();
         initRequest.setTargetTenantIds(request.getTargetTenantIds());
         initRequest.setMode(request.getMode());
         initRequest.setDryRun(request.isDryRun());
-        ConfigSyncBundlePayload bundle = buildBundle(request.getSourceTenantId(), request.getConfigTypes());
-        initRequest.setJobDefinitions(bundle.getJobDefinitions());
-        initRequest.setWorkflowDefinitions(bundle.getWorkflowDefinitions());
-        initRequest.setPipelineDefinitions(bundle.getPipelineDefinitions());
-        initRequest.setFileChannels(bundle.getFileChannels());
-        initRequest.setFileTemplates(bundle.getFileTemplates());
 
-        log.info("[TenantConfigCopy] source={} targets={} types={} dryRun={} batchOp={}",
-                request.getSourceTenantId(), request.getTargetTenantIds(), request.getConfigTypes(), request.isDryRun(), batchOperationId);
+        ConfigSyncBundlePayload bundle =
+                buildBundle(request.getSourceTenantId(), request.getConfigTypes());
+        typeTransfers().forEach(t -> t.transferToRequest(bundle, initRequest));
+
+        log.info(
+                "[TenantConfigCopy] source={} targets={} types={} dryRun={} batchOp={}",
+                request.getSourceTenantId(),
+                request.getTargetTenantIds(),
+                request.getConfigTypes(),
+                request.isDryRun(),
+                batchOperationId);
 
         return initService.batchInit(initRequest, operator, batchOperationId);
     }
@@ -81,30 +127,93 @@ public class ConsoleTenantConfigCopyService {
     public ConfigSyncBundlePayload buildBundle(String sourceTenantId, Set<ConfigType> configTypes) {
         boolean allTypes = configTypes == null || configTypes.isEmpty();
         ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
-        if (allTypes || configTypes.contains(ConfigType.JOB_DEFINITION)) {
-            bundle.setJobDefinitions(readJobDefinitions(sourceTenantId));
-        }
-        if (allTypes || configTypes.contains(ConfigType.WORKFLOW_DEFINITION)) {
-            bundle.setWorkflowDefinitions(readWorkflowDefinitions(sourceTenantId));
-        }
-        if (allTypes || configTypes.contains(ConfigType.PIPELINE_DEFINITION)) {
-            bundle.setPipelineDefinitions(readPipelineDefinitions(sourceTenantId));
-        }
-        if (allTypes || configTypes.contains(ConfigType.FILE_CHANNEL)) {
-            bundle.setFileChannels(readFileChannels(sourceTenantId));
-        }
-        if (allTypes || configTypes.contains(ConfigType.FILE_TEMPLATE)) {
-            bundle.setFileTemplates(readFileTemplates(sourceTenantId));
+        for (ConfigTypeTransfer<?> t : typeTransfers()) {
+            if (allTypes || configTypes.contains(t.type())) {
+                t.fillBundle(sourceTenantId, bundle);
+            }
         }
         return bundle;
+    }
+
+    /** 构建 10 条传输描述符。每次按需创建；方法引用是懒求值，不会在此处调用 mapper。 */
+    private List<ConfigTypeTransfer<?>> typeTransfers() {
+        return List.of(
+                new ConfigTypeTransfer<>(
+                        ConfigType.JOB_DEFINITION,
+                        this::readJobDefinitions,
+                        ConfigSyncBundlePayload::setJobDefinitions,
+                        ConfigSyncBundlePayload::getJobDefinitions,
+                        TenantConfigBatchInitRequest::setJobDefinitions),
+                new ConfigTypeTransfer<>(
+                        ConfigType.WORKFLOW_DEFINITION,
+                        this::readWorkflowDefinitions,
+                        ConfigSyncBundlePayload::setWorkflowDefinitions,
+                        ConfigSyncBundlePayload::getWorkflowDefinitions,
+                        TenantConfigBatchInitRequest::setWorkflowDefinitions),
+                new ConfigTypeTransfer<>(
+                        ConfigType.PIPELINE_DEFINITION,
+                        this::readPipelineDefinitions,
+                        ConfigSyncBundlePayload::setPipelineDefinitions,
+                        ConfigSyncBundlePayload::getPipelineDefinitions,
+                        TenantConfigBatchInitRequest::setPipelineDefinitions),
+                new ConfigTypeTransfer<>(
+                        ConfigType.FILE_CHANNEL,
+                        this::readFileChannels,
+                        ConfigSyncBundlePayload::setFileChannels,
+                        ConfigSyncBundlePayload::getFileChannels,
+                        TenantConfigBatchInitRequest::setFileChannels),
+                new ConfigTypeTransfer<>(
+                        ConfigType.FILE_TEMPLATE,
+                        this::readFileTemplates,
+                        ConfigSyncBundlePayload::setFileTemplates,
+                        ConfigSyncBundlePayload::getFileTemplates,
+                        TenantConfigBatchInitRequest::setFileTemplates),
+                new ConfigTypeTransfer<>(
+                        ConfigType.RESOURCE_QUEUE,
+                        this::readResourceQueues,
+                        ConfigSyncBundlePayload::setResourceQueues,
+                        ConfigSyncBundlePayload::getResourceQueues,
+                        TenantConfigBatchInitRequest::setResourceQueues),
+                new ConfigTypeTransfer<>(
+                        ConfigType.BATCH_WINDOW,
+                        this::readBatchWindows,
+                        ConfigSyncBundlePayload::setBatchWindows,
+                        ConfigSyncBundlePayload::getBatchWindows,
+                        TenantConfigBatchInitRequest::setBatchWindows),
+                new ConfigTypeTransfer<>(
+                        ConfigType.BUSINESS_CALENDAR,
+                        this::readBusinessCalendars,
+                        ConfigSyncBundlePayload::setBusinessCalendars,
+                        ConfigSyncBundlePayload::getBusinessCalendars,
+                        TenantConfigBatchInitRequest::setBusinessCalendars),
+                new ConfigTypeTransfer<>(
+                        ConfigType.QUOTA_POLICY,
+                        this::readQuotaPolicies,
+                        ConfigSyncBundlePayload::setQuotaPolicies,
+                        ConfigSyncBundlePayload::getQuotaPolicies,
+                        TenantConfigBatchInitRequest::setQuotaPolicies),
+                new ConfigTypeTransfer<>(
+                        ConfigType.ALERT_ROUTING,
+                        this::readAlertRoutings,
+                        ConfigSyncBundlePayload::setAlertRoutings,
+                        ConfigSyncBundlePayload::getAlertRoutings,
+                        TenantConfigBatchInitRequest::setAlertRoutings));
     }
 
     // ------------------------------------------------------------------ readers
 
     private List<JobDefinitionSpec> readJobDefinitions(String tenantId) {
-        JobDefinitionQuery query = new JobDefinitionQuery(
-                tenantId, null, null, null, null, null, null, null,
-                new PageRequest(1, MAX_PAGE_SIZE));
+        JobDefinitionQuery query =
+                new JobDefinitionQuery(
+                        tenantId,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        new PageRequest(1, MAX_PAGE_SIZE));
         List<JobDefinitionEntity> entities = jobDefinitionMapper.selectByQuery(query);
         List<JobDefinitionSpec> specs = new ArrayList<>(entities.size());
         for (JobDefinitionEntity e : entities) {
@@ -138,9 +247,9 @@ public class ConsoleTenantConfigCopyService {
     }
 
     private List<WorkflowDefinitionSpec> readWorkflowDefinitions(String tenantId) {
-        WorkflowDefinitionQuery query = new WorkflowDefinitionQuery(
-                tenantId, null, null, null, null, null,
-                new PageRequest(1, MAX_PAGE_SIZE));
+        WorkflowDefinitionQuery query =
+                new WorkflowDefinitionQuery(
+                        tenantId, null, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
         List<WorkflowDefinitionEntity> entities = workflowDefinitionMapper.selectByQuery(query);
         List<WorkflowDefinitionSpec> specs = new ArrayList<>(entities.size());
         for (WorkflowDefinitionEntity e : entities) {
@@ -151,9 +260,15 @@ public class ConsoleTenantConfigCopyService {
             s.setEnabled(e.getEnabled());
 
             // nodes
-            WorkflowNodeQuery nodeQuery = new WorkflowNodeQuery(
-                    null, e.getId(), null, null, null, null,
-                    new PageRequest(1, MAX_PAGE_SIZE));
+            WorkflowNodeQuery nodeQuery =
+                    new WorkflowNodeQuery(
+                            null,
+                            e.getId(),
+                            null,
+                            null,
+                            null,
+                            null,
+                            new PageRequest(1, MAX_PAGE_SIZE));
             List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(nodeQuery);
             List<WorkflowDefinitionSpec.NodeSpec> nodeSpecs = new ArrayList<>(nodes.size());
             for (WorkflowNodeEntity n : nodes) {
@@ -176,9 +291,16 @@ public class ConsoleTenantConfigCopyService {
             s.setNodes(nodeSpecs);
 
             // edges
-            WorkflowEdgeQuery edgeQuery = new WorkflowEdgeQuery(
-                    null, e.getId(), null, null, null, null, null,
-                    new PageRequest(1, MAX_PAGE_SIZE));
+            WorkflowEdgeQuery edgeQuery =
+                    new WorkflowEdgeQuery(
+                            null,
+                            e.getId(),
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            new PageRequest(1, MAX_PAGE_SIZE));
             List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(edgeQuery);
             List<WorkflowDefinitionSpec.EdgeSpec> edgeSpecs = new ArrayList<>(edges.size());
             for (WorkflowEdgeEntity edge : edges) {
@@ -198,9 +320,9 @@ public class ConsoleTenantConfigCopyService {
     }
 
     private List<PipelineDefinitionSpec> readPipelineDefinitions(String tenantId) {
-        List<Map<String, Object>> entities = pipelineDefinitionMapper.selectByQuery(
-                tenantId, null, null, null,
-                new PageRequest(1, MAX_PAGE_SIZE));
+        List<Map<String, Object>> entities =
+                pipelineDefinitionMapper.selectByQuery(
+                        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
         List<PipelineDefinitionSpec> specs = new ArrayList<>(entities.size());
         for (Map<String, Object> e : entities) {
             PipelineDefinitionSpec s = new PipelineDefinitionSpec();
@@ -214,7 +336,8 @@ public class ConsoleTenantConfigCopyService {
 
             Long defId = num(e, "id");
             if (defId != null) {
-                List<Map<String, Object>> steps = pipelineStepDefinitionMapper.selectByPipelineDefinitionId(defId);
+                List<Map<String, Object>> steps =
+                        pipelineStepDefinitionMapper.selectByPipelineDefinitionId(defId);
                 if (steps != null && !steps.isEmpty()) {
                     List<PipelineDefinitionSpec.StepSpec> stepSpecs = new ArrayList<>(steps.size());
                     for (Map<String, Object> step : steps) {
@@ -240,9 +363,9 @@ public class ConsoleTenantConfigCopyService {
     }
 
     private List<FileChannelSpec> readFileChannels(String tenantId) {
-        List<Map<String, Object>> entities = fileChannelConfigMapper.selectByQuery(
-                tenantId, null, null, null,
-                new PageRequest(1, MAX_PAGE_SIZE));
+        List<Map<String, Object>> entities =
+                fileChannelConfigMapper.selectByQuery(
+                        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
         List<FileChannelSpec> specs = new ArrayList<>(entities.size());
         for (Map<String, Object> e : entities) {
             FileChannelSpec s = new FileChannelSpec();
@@ -261,9 +384,16 @@ public class ConsoleTenantConfigCopyService {
     }
 
     private List<FileTemplateSpec> readFileTemplates(String tenantId) {
-        List<Map<String, Object>> entities = fileTemplateConfigMapper.selectByQuery(
-                tenantId, null, null, null, null, null, null,
-                new PageRequest(1, MAX_PAGE_SIZE));
+        List<Map<String, Object>> entities =
+                fileTemplateConfigMapper.selectByQuery(
+                        tenantId,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        new PageRequest(1, MAX_PAGE_SIZE));
         List<FileTemplateSpec> specs = new ArrayList<>(entities.size());
         for (Map<String, Object> e : entities) {
             FileTemplateSpec s = new FileTemplateSpec();
@@ -307,6 +437,127 @@ public class ConsoleTenantConfigCopyService {
             s.setEnabled(bool(e, "enabled"));
             s.setVersion(intVal(e, "version"));
             s.setDescription(str(e, "description"));
+            specs.add(s);
+        }
+        return specs;
+    }
+
+    private List<ResourceQueueSpec> readResourceQueues(String tenantId) {
+        List<Map<String, Object>> rows =
+                resourceQueueMapper.selectByQuery(
+                        tenantId, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        List<ResourceQueueSpec> specs = new ArrayList<>(rows.size());
+        for (Map<String, Object> r : rows) {
+            ResourceQueueSpec s = new ResourceQueueSpec();
+            s.setQueueCode(str(r, "queue_code"));
+            s.setQueueName(str(r, "queue_name"));
+            s.setQueueType(str(r, "queue_type"));
+            s.setMaxRunningJobs(intVal(r, "max_running_jobs"));
+            s.setMaxRunningPartitions(intVal(r, "max_running_partitions"));
+            s.setMaxQps(intVal(r, "max_qps"));
+            s.setWorkerGroup(str(r, "worker_group"));
+            s.setResourceTag(str(r, "resource_tag"));
+            s.setPriorityPolicy(str(r, "priority_policy"));
+            s.setFairShareWeight(intVal(r, "fair_share_weight"));
+            s.setEnabled(bool(r, "enabled"));
+            s.setDescription(str(r, "description"));
+            specs.add(s);
+        }
+        return specs;
+    }
+
+    private List<BatchWindowSpec> readBatchWindows(String tenantId) {
+        List<Map<String, Object>> rows =
+                batchWindowMapper.selectByQuery(
+                        tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        List<BatchWindowSpec> specs = new ArrayList<>(rows.size());
+        for (Map<String, Object> r : rows) {
+            BatchWindowSpec s = new BatchWindowSpec();
+            s.setWindowCode(str(r, "window_code"));
+            s.setWindowName(str(r, "window_name"));
+            s.setTimezone(str(r, "timezone"));
+            s.setStartTime(str(r, "start_time"));
+            s.setEndTime(str(r, "end_time"));
+            s.setEndStrategy(str(r, "end_strategy"));
+            s.setOutOfWindowAction(str(r, "out_of_window_action"));
+            s.setAllowCrossDay(bool(r, "allow_cross_day"));
+            s.setEnabled(bool(r, "enabled"));
+            s.setDescription(str(r, "description"));
+            specs.add(s);
+        }
+        return specs;
+    }
+
+    private List<BusinessCalendarSpec> readBusinessCalendars(String tenantId) {
+        List<Map<String, Object>> rows =
+                businessCalendarMapper.selectByQuery(
+                        tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        List<BusinessCalendarSpec> specs = new ArrayList<>(rows.size());
+        for (Map<String, Object> r : rows) {
+            BusinessCalendarSpec s = new BusinessCalendarSpec();
+            s.setCalendarCode(str(r, "calendar_code"));
+            s.setCalendarName(str(r, "calendar_name"));
+            s.setTimezone(str(r, "timezone"));
+            s.setHolidayRollRule(str(r, "holiday_roll_rule"));
+            s.setCatchUpPolicy(str(r, "catch_up_policy"));
+            s.setCatchUpMaxDays(intVal(r, "catch_up_max_days"));
+            s.setEnabled(bool(r, "enabled"));
+            Long calendarId = num(r, "id");
+            if (calendarId != null) {
+                List<Map<String, Object>> holidays =
+                        calendarHolidayMapper.selectByCalendarId(calendarId);
+                if (holidays != null && !holidays.isEmpty()) {
+                    List<String> dates = new ArrayList<>(holidays.size());
+                    for (Map<String, Object> h : holidays) {
+                        String d = str(h, "holiday_date");
+                        if (d != null) dates.add(d);
+                    }
+                    s.setHolidays(dates);
+                }
+            }
+            specs.add(s);
+        }
+        return specs;
+    }
+
+    private List<TenantQuotaPolicySpec> readQuotaPolicies(String tenantId) {
+        List<Map<String, Object>> rows =
+                tenantQuotaPolicyMapper.selectByQuery(
+                        tenantId, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        List<TenantQuotaPolicySpec> specs = new ArrayList<>(rows.size());
+        for (Map<String, Object> r : rows) {
+            TenantQuotaPolicySpec s = new TenantQuotaPolicySpec();
+            s.setPolicyCode(str(r, "policy_code"));
+            s.setMaxRunningJobsPerTenant(intVal(r, "max_running_jobs_per_tenant"));
+            s.setMaxPartitionsPerTenant(intVal(r, "max_partitions_per_tenant"));
+            s.setMaxQpsPerTenant(intVal(r, "max_qps_per_tenant"));
+            s.setFairShareWeight(intVal(r, "fair_share_weight"));
+            s.setEnabled(bool(r, "enabled"));
+            s.setDescription(str(r, "description"));
+            specs.add(s);
+        }
+        return specs;
+    }
+
+    private List<AlertRoutingSpec> readAlertRoutings(String tenantId) {
+        List<Map<String, Object>> rows =
+                alertRoutingConfigMapper.selectByQuery(
+                        tenantId, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        List<AlertRoutingSpec> specs = new ArrayList<>(rows.size());
+        for (Map<String, Object> r : rows) {
+            AlertRoutingSpec s = new AlertRoutingSpec();
+            s.setRouteCode(str(r, "route_code"));
+            s.setRouteName(str(r, "route_name"));
+            s.setTeam(str(r, "team"));
+            s.setAlertGroup(str(r, "alert_group"));
+            s.setSeverity(str(r, "severity"));
+            s.setReceiver(str(r, "receiver"));
+            s.setGroupBy(str(r, "group_by"));
+            s.setGroupWaitSeconds(intVal(r, "group_wait_seconds"));
+            s.setGroupIntervalSeconds(intVal(r, "group_interval_seconds"));
+            s.setRepeatIntervalSeconds(intVal(r, "repeat_interval_seconds"));
+            s.setEnabled(bool(r, "enabled"));
+            s.setDescription(str(r, "description"));
             specs.add(s);
         }
         return specs;

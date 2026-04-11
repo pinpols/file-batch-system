@@ -9,6 +9,4 @@ public record TaskMessage(
         String partitionKey,
         String taskType,
         String traceId,
-        Map<String, Object> payload
-) {
-}
+        Map<String, Object> payload) {}

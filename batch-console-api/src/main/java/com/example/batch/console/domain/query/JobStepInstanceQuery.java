@@ -8,6 +8,4 @@ public record JobStepInstanceQuery(
         Long jobPartitionId,
         String stepCode,
         String stepStatus,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

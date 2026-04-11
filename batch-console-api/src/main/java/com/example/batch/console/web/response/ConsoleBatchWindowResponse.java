@@ -16,6 +16,4 @@ public record ConsoleBatchWindowResponse(
         Boolean enabled,
         String description,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

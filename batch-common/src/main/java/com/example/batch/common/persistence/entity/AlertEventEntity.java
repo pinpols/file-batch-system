@@ -1,7 +1,8 @@
 package com.example.batch.common.persistence.entity;
 
-import java.time.Instant;
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class AlertEventEntity {

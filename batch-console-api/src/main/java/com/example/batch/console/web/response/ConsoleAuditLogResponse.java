@@ -13,6 +13,4 @@ public record ConsoleAuditLogResponse(
         String traceId,
         String evidenceRef,
         String detailSummary,
-        Instant createdAt
-) {
-}
+        Instant createdAt) {}

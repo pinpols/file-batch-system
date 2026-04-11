@@ -11,8 +11,7 @@ public final class BatchTopics {
     public static final String OUTBOX_EVENT = "batch.outbox.event";
     public static final String WORKER_HEARTBEAT = "batch.worker.heartbeat";
 
-    private BatchTopics() {
-    }
+    private BatchTopics() {}
 
     public static String directDispatchTopic(String baseTopic, String workerId) {
         if (baseTopic == null || workerId == null || workerId.isBlank()) {

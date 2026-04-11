@@ -3,7 +3,9 @@ package com.example.batch.trigger.infrastructure;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -15,7 +17,8 @@ public class HttpOrchestratorTriggerAdapter implements OrchestratorTriggerAdapte
 
     @Override
     public LaunchResponse sendTrigger(LaunchRequest request) {
-        return orchestratorRestClient.post()
+        return orchestratorRestClient
+                .post()
                 .uri("/internal/orchestrator/launch")
                 .body(request)
                 .retrieve()

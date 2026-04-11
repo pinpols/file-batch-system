@@ -5,8 +5,7 @@ import java.nio.file.Path;
 /** D-5: 路径清洗工具，防止路径遍历攻击。所有外部输入的文件路径必须经过此类校验。 */
 public final class PathSanitizer {
 
-    private PathSanitizer() {
-    }
+    private PathSanitizer() {}
 
     /** 校验并规范化路径，拒绝包含 {@code ..} 的遍历尝试。 */
     public static Path sanitize(String rawPath) {
@@ -25,7 +24,10 @@ public final class PathSanitizer {
         Path normalizedBase = baseDir.toAbsolutePath().normalize();
         if (!normalized.startsWith(normalizedBase)) {
             throw new SecurityException(
-                    "path escapes allowed base directory: path=" + normalized + ", baseDir=" + normalizedBase);
+                    "path escapes allowed base directory: path="
+                            + normalized
+                            + ", baseDir="
+                            + normalizedBase);
         }
         return normalized;
     }

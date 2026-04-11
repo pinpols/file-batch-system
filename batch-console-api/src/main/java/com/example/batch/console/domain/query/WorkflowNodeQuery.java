@@ -9,6 +9,4 @@ public record WorkflowNodeQuery(
         String nodeCode,
         String nodeType,
         Boolean enabled,
-        PageRequest pageRequest
-) {
-}
+        PageRequest pageRequest) {}

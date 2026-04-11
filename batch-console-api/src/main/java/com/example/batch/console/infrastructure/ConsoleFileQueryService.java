@@ -32,15 +32,16 @@ import com.example.batch.console.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.web.response.ConsoleFilePipelineStepResponse;
 import com.example.batch.console.web.response.ConsoleFileRecordResponse;
 import com.example.batch.console.web.response.ConsoleFileTemplateResponse;
-import java.util.List;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-/**
- * 文件相关查询子服务。
- */
+import java.util.List;
+import java.util.Map;
+
+/** 文件相关查询子服务。 */
 @Service
 @RequiredArgsConstructor
 class ConsoleFileQueryService {
@@ -51,17 +52,19 @@ class ConsoleFileQueryService {
 
     PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        FileRecordQuery query = new FileRecordQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getBizType() == null || request.getBizType().isBlank() ? request.getPipelineType() : request.getBizType(),
-                request.getFileStatus(),
-                parseLong(request.getFileId(), "fileId"),
-                request.getFileName(),
-                request.getTraceId(),
-                parseInstant(request.getFromTime(), "fromTime"),
-                parseInstant(request.getToTime(), "toTime"),
-                pageRequest
-        );
+        FileRecordQuery query =
+                new FileRecordQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getBizType() == null || request.getBizType().isBlank()
+                                ? request.getPipelineType()
+                                : request.getBizType(),
+                        request.getFileStatus(),
+                        parseLong(request.getFileId(), "fileId"),
+                        request.getFileName(),
+                        request.getTraceId(),
+                        parseInstant(request.getFromTime(), "fromTime"),
+                        parseInstant(request.getToTime(), "toTime"),
+                        pageRequest);
         List<FileRecordEntity> rows = fileMappers.fileRecordMapper.selectByQuery(query);
         long total = fileMappers.fileRecordMapper.countByQuery(query);
         return page(pageRequest, total, rows, this::toFileRecordResponse);
@@ -69,160 +72,170 @@ class ConsoleFileQueryService {
 
     PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = fileMappers.filePipelineMapper.selectByQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getFileId(),
-                request.getPipelineInstanceId(),
-                request.getPipelineType(),
-                request.getRunStatus(),
-                request.getTraceId(),
-                parseInstant(request.getFromTime(), "fromTime"),
-                parseInstant(request.getToTime(), "toTime"),
-                pageRequest
-        );
-        long total = fileMappers.filePipelineMapper.countByQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getFileId(),
-                request.getPipelineInstanceId(),
-                request.getPipelineType(),
-                request.getRunStatus(),
-                request.getTraceId(),
-                parseInstant(request.getFromTime(), "fromTime"),
-                parseInstant(request.getToTime(), "toTime")
-        );
+        List<Map<String, Object>> rows =
+                fileMappers.filePipelineMapper.selectByQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getFileId(),
+                        request.getPipelineInstanceId(),
+                        request.getPipelineType(),
+                        request.getRunStatus(),
+                        request.getTraceId(),
+                        parseInstant(request.getFromTime(), "fromTime"),
+                        parseInstant(request.getToTime(), "toTime"),
+                        pageRequest);
+        long total =
+                fileMappers.filePipelineMapper.countByQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getFileId(),
+                        request.getPipelineInstanceId(),
+                        request.getPipelineType(),
+                        request.getRunStatus(),
+                        request.getTraceId(),
+                        parseInstant(request.getFromTime(), "fromTime"),
+                        parseInstant(request.getToTime(), "toTime"));
         return page(pageRequest, total, rows, this::toFilePipelineResponse);
     }
 
-    PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(FilePipelineStepQueryRequest request) {
+    PageResponse<ConsoleFilePipelineStepResponse> filePipelineSteps(
+            FilePipelineStepQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = fileMappers.filePipelineStepRunMapper.selectByQuery(
-                request.getPipelineInstanceId(),
-                request.getStepCode(),
-                request.getStageCode(),
-                request.getStepStatus(),
-                pageRequest
-        );
-        long total = fileMappers.filePipelineStepRunMapper.countByQuery(
-                request.getPipelineInstanceId(),
-                request.getStepCode(),
-                request.getStageCode(),
-                request.getStepStatus()
-        );
+        List<Map<String, Object>> rows =
+                fileMappers.filePipelineStepRunMapper.selectByQuery(
+                        request.getPipelineInstanceId(),
+                        request.getStepCode(),
+                        request.getStageCode(),
+                        request.getStepStatus(),
+                        pageRequest);
+        long total =
+                fileMappers.filePipelineStepRunMapper.countByQuery(
+                        request.getPipelineInstanceId(),
+                        request.getStepCode(),
+                        request.getStageCode(),
+                        request.getStepStatus());
         return page(pageRequest, total, rows, this::toFilePipelineStepResponse);
     }
 
-    PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(FileDispatchRecordQueryRequest request) {
+    PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(
+            FileDispatchRecordQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = fileMappers.fileDispatchRecordMapper.selectByQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getFileId(),
-                request.getChannelCode(),
-                request.getDispatchStatus(),
-                request.getReceiptStatus(),
-                parseInstant(request.getFromTime(), "fromTime"),
-                parseInstant(request.getToTime(), "toTime"),
-                pageRequest
-        );
-        long total = fileMappers.fileDispatchRecordMapper.countByQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getFileId(),
-                request.getChannelCode(),
-                request.getDispatchStatus(),
-                request.getReceiptStatus(),
-                parseInstant(request.getFromTime(), "fromTime"),
-                parseInstant(request.getToTime(), "toTime")
-        );
+        List<Map<String, Object>> rows =
+                fileMappers.fileDispatchRecordMapper.selectByQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getFileId(),
+                        request.getChannelCode(),
+                        request.getDispatchStatus(),
+                        request.getReceiptStatus(),
+                        parseInstant(request.getFromTime(), "fromTime"),
+                        parseInstant(request.getToTime(), "toTime"),
+                        pageRequest);
+        long total =
+                fileMappers.fileDispatchRecordMapper.countByQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getFileId(),
+                        request.getChannelCode(),
+                        request.getDispatchStatus(),
+                        request.getReceiptStatus(),
+                        parseInstant(request.getFromTime(), "fromTime"),
+                        parseInstant(request.getToTime(), "toTime"));
         return page(pageRequest, total, rows, this::toFileDispatchRecordResponse);
     }
 
     PageResponse<ConsoleFileChannelResponse> fileChannels(FileChannelQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = fileMappers.fileChannelConfigMapper.selectByQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getChannelCode(),
-                request.getChannelType(),
-                request.getEnabled(),
-                pageRequest
-        );
-        long total = fileMappers.fileChannelConfigMapper.countByQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getChannelCode(),
-                request.getChannelType(),
-                request.getEnabled()
-        );
+        List<Map<String, Object>> rows =
+                fileMappers.fileChannelConfigMapper.selectByQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getChannelCode(),
+                        request.getChannelType(),
+                        request.getEnabled(),
+                        pageRequest);
+        long total =
+                fileMappers.fileChannelConfigMapper.countByQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getChannelCode(),
+                        request.getChannelType(),
+                        request.getEnabled());
         return page(pageRequest, total, rows, this::toFileChannelResponse);
     }
 
     PageResponse<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<Map<String, Object>> rows = fileMappers.fileTemplateConfigMapper.selectByQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getKeyword(),
-                request.getTemplateCode(),
-                request.getTemplateName(),
-                request.getTemplateType(),
-                request.getBizType(),
-                request.getEnabled(),
-                pageRequest
-        );
-        long total = fileMappers.fileTemplateConfigMapper.countByQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getKeyword(),
-                request.getTemplateCode(),
-                request.getTemplateName(),
-                request.getTemplateType(),
-                request.getBizType(),
-                request.getEnabled()
-        );
+        List<Map<String, Object>> rows =
+                fileMappers.fileTemplateConfigMapper.selectByQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getKeyword(),
+                        request.getTemplateCode(),
+                        request.getTemplateName(),
+                        request.getTemplateType(),
+                        request.getBizType(),
+                        request.getEnabled(),
+                        pageRequest);
+        long total =
+                fileMappers.fileTemplateConfigMapper.countByQuery(
+                        resolveTenant(tenantGuard, request.getTenantId()),
+                        request.getKeyword(),
+                        request.getTemplateCode(),
+                        request.getTemplateName(),
+                        request.getTemplateType(),
+                        request.getBizType(),
+                        request.getEnabled());
         return page(pageRequest, total, rows, this::toFileTemplateResponse);
     }
 
-    PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(FileArrivalGroupQueryRequest request) {
+    PageResponse<ConsoleFileArrivalGroupResponse> fileArrivalGroups(
+            FileArrivalGroupQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<FileArrivalGroupEntity> rows = fileMappers.fileArrivalGroupMapper.selectByQuery(new FileArrivalGroupQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getFileGroupCode(),
-                request.getArrivalState(),
-                null,
-                null,
-                pageRequest
-        ));
-        long total = fileMappers.fileArrivalGroupMapper.countByQuery(new FileArrivalGroupQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getFileGroupCode(),
-                request.getArrivalState(),
-                null,
-                null,
-                pageRequest
-        ));
+        List<FileArrivalGroupEntity> rows =
+                fileMappers.fileArrivalGroupMapper.selectByQuery(
+                        new FileArrivalGroupQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getFileGroupCode(),
+                                request.getArrivalState(),
+                                null,
+                                null,
+                                pageRequest));
+        long total =
+                fileMappers.fileArrivalGroupMapper.countByQuery(
+                        new FileArrivalGroupQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getFileGroupCode(),
+                                request.getArrivalState(),
+                                null,
+                                null,
+                                pageRequest));
         return page(pageRequest, total, rows, this::toFileArrivalGroupResponse);
     }
 
-    PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(FileErrorRecordQueryRequest request) {
+    PageResponse<ConsoleFileErrorRecordResponse> fileErrorRecords(
+            FileErrorRecordQueryRequest request) {
         PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        List<FileErrorRecordEntity> rows = fileMappers.fileErrorRecordMapper.selectByQuery(new FileErrorRecordQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getFileId(),
-                request.getErrorStage(),
-                request.getErrorCode(),
-                request.getSkipped(),
-                pageRequest
-        ));
-        applyErrorLineMasking(resolveTenant(tenantGuard, request.getTenantId()), request.getFileId(), rows);
-        long total = fileMappers.fileErrorRecordMapper.countByQuery(new FileErrorRecordQuery(
-                resolveTenant(tenantGuard, request.getTenantId()),
-                request.getFileId(),
-                request.getErrorStage(),
-                request.getErrorCode(),
-                request.getSkipped(),
-                pageRequest
-        ));
+        List<FileErrorRecordEntity> rows =
+                fileMappers.fileErrorRecordMapper.selectByQuery(
+                        new FileErrorRecordQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getFileId(),
+                                request.getErrorStage(),
+                                request.getErrorCode(),
+                                request.getSkipped(),
+                                pageRequest));
+        applyErrorLineMasking(
+                resolveTenant(tenantGuard, request.getTenantId()), request.getFileId(), rows);
+        long total =
+                fileMappers.fileErrorRecordMapper.countByQuery(
+                        new FileErrorRecordQuery(
+                                resolveTenant(tenantGuard, request.getTenantId()),
+                                request.getFileId(),
+                                request.getErrorStage(),
+                                request.getErrorCode(),
+                                request.getSkipped(),
+                                pageRequest));
         return page(pageRequest, total, rows, this::toFileErrorRecordResponse);
     }
 
     Map<String, Object> fileChannelDetail(String tenantId, String channelCode) {
         String resolved = resolveTenant(tenantGuard, tenantId);
-        Map<String, Object> row = fileMappers.fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode);
+        Map<String, Object> row =
+                fileMappers.fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode);
         if (row == null || row.isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "file channel not found: " + channelCode);
         }
@@ -232,16 +245,19 @@ class ConsoleFileQueryService {
     Map<String, Object> fileTemplateDetail(String tenantId, String templateCode, Integer version) {
         String resolved = resolveTenant(tenantGuard, tenantId);
         Integer ver = version != null ? version : 1;
-        Map<String, Object> row = fileMappers.fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver);
+        Map<String, Object> row =
+                fileMappers.fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver);
         if (row == null || row.isEmpty()) {
-            throw new BizException(ResultCode.NOT_FOUND, "file template not found: " + templateCode);
+            throw new BizException(
+                    ResultCode.NOT_FOUND, "file template not found: " + templateCode);
         }
         return row;
     }
 
     Map<String, Object> fileRecordDetail(String tenantId, Long fileId) {
         String resolved = resolveTenant(tenantGuard, tenantId);
-        Map<String, Object> row = fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
+        Map<String, Object> row =
+                fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
         if (row == null || row.isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "file record not found: " + fileId);
         }
@@ -251,8 +267,9 @@ class ConsoleFileQueryService {
     ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {
         String resolved = resolveTenant(tenantGuard, tenantId);
         PageRequest pageSingle = new PageRequest(1, 1);
-        List<Map<String, Object>> rows = fileMappers.filePipelineMapper.selectByQuery(
-                resolved, null, id, null, null, null, null, null, pageSingle);
+        List<Map<String, Object>> rows =
+                fileMappers.filePipelineMapper.selectByQuery(
+                        resolved, null, id, null, null, null, null, null, pageSingle);
         if (rows.isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "pipeline instance not found: " + id);
         }
@@ -269,22 +286,34 @@ class ConsoleFileQueryService {
         return "true".equalsIgnoreCase(String.valueOf(value));
     }
 
-    private void applyErrorLineMasking(String tenantId, Long fileId, List<FileErrorRecordEntity> rows) {
-        if (batchSecurityProperties.isTestingOpen() || rows == null || rows.isEmpty() || fileId == null || !StringUtils.hasText(tenantId)) {
+    private void applyErrorLineMasking(
+            String tenantId, Long fileId, List<FileErrorRecordEntity> rows) {
+        if (batchSecurityProperties.isTestingOpen()
+                || rows == null
+                || rows.isEmpty()
+                || fileId == null
+                || !StringUtils.hasText(tenantId)) {
             return;
         }
-        String templateCode = fileMappers.fileRecordMapper.selectTemplateCodeByFileId(tenantId, fileId);
+        String templateCode =
+                fileMappers.fileRecordMapper.selectTemplateCodeByFileId(tenantId, fileId);
         if (!StringUtils.hasText(templateCode)) {
             return;
         }
-        Map<String, Object> sec = fileMappers.fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, templateCode);
+        Map<String, Object> sec =
+                fileMappers.fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(
+                        tenantId, templateCode);
         if (sec == null || !truthy(sec.get("error_line_masking_enabled"))) {
             return;
         }
-        String ruleSet = sec.get("masking_rule_set") == null ? null : String.valueOf(sec.get("masking_rule_set"));
+        String ruleSet =
+                sec.get("masking_rule_set") == null
+                        ? null
+                        : String.valueOf(sec.get("masking_rule_set"));
         for (FileErrorRecordEntity row : rows) {
             if (row.getErrorMessage() != null) {
-                row.setErrorMessage(ContentMaskingUtils.maskPlainText(row.getErrorMessage(), ruleSet));
+                row.setErrorMessage(
+                        ContentMaskingUtils.maskPlainText(row.getErrorMessage(), ruleSet));
             }
             if (row.getRawRecord() != null) {
                 row.setRawRecord(ContentMaskingUtils.maskPlainText(row.getRawRecord(), ruleSet));
@@ -302,8 +331,7 @@ class ConsoleFileQueryService {
                 entity.getBizDate(),
                 display(entity.getTraceId()),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
+                entity.getUpdatedAt());
     }
 
     ConsoleFilePipelineResponse toFilePipelineResponse(Map<String, Object> row) {
@@ -322,8 +350,7 @@ class ConsoleFileQueryService {
                 instantValue(row, "started_at"),
                 instantValue(row, "finished_at"),
                 instantValue(row, "created_at"),
-                instantValue(row, "updated_at")
-        );
+                instantValue(row, "updated_at"));
     }
 
     private ConsoleFilePipelineStepResponse toFilePipelineStepResponse(Map<String, Object> row) {
@@ -341,11 +368,11 @@ class ConsoleFileQueryService {
                 intValue(row, "retry_count"),
                 longValue(row, "duration_ms"),
                 instantValue(row, "started_at"),
-                instantValue(row, "finished_at")
-        );
+                instantValue(row, "finished_at"));
     }
 
-    private ConsoleFileDispatchRecordResponse toFileDispatchRecordResponse(Map<String, Object> row) {
+    private ConsoleFileDispatchRecordResponse toFileDispatchRecordResponse(
+            Map<String, Object> row) {
         return new ConsoleFileDispatchRecordResponse(
                 longValue(row, "id"),
                 stringValue(row, "tenant_id"),
@@ -363,8 +390,7 @@ class ConsoleFileQueryService {
                 instantValue(row, "dispatched_at"),
                 instantValue(row, "ack_at"),
                 instantValue(row, "created_at"),
-                instantValue(row, "updated_at")
-        );
+                instantValue(row, "updated_at"));
     }
 
     private ConsoleFileChannelResponse toFileChannelResponse(Map<String, Object> row) {
@@ -381,8 +407,7 @@ class ConsoleFileQueryService {
                 intValue(row, "timeout_seconds"),
                 booleanValue(row, "enabled"),
                 instantValue(row, "created_at"),
-                instantValue(row, "updated_at")
-        );
+                instantValue(row, "updated_at"));
     }
 
     private ConsoleFileTemplateResponse toFileTemplateResponse(Map<String, Object> row) {
@@ -432,11 +457,11 @@ class ConsoleFileQueryService {
                 stringValue(row, "created_by"),
                 stringValue(row, "updated_by"),
                 instantValue(row, "created_at"),
-                instantValue(row, "updated_at")
-        );
+                instantValue(row, "updated_at"));
     }
 
-    private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(FileArrivalGroupEntity entity) {
+    private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(
+            FileArrivalGroupEntity entity) {
         return new ConsoleFileArrivalGroupResponse(
                 display(entity.getTenantId()),
                 display(entity.getFileGroupCode()),
@@ -450,8 +475,7 @@ class ConsoleFileQueryService {
                 entity.getTriggeredCount(),
                 entity.getTimeoutCount(),
                 entity.getWaitingCount(),
-                entity.getLastUpdatedAt()
-        );
+                entity.getLastUpdatedAt());
     }
 
     private ConsoleFileErrorRecordResponse toFileErrorRecordResponse(FileErrorRecordEntity entity) {
@@ -468,7 +492,6 @@ class ConsoleFileQueryService {
                 entity.getSkipped(),
                 display(entity.getSkipAction()),
                 display(entity.getRawRecord()),
-                entity.getCreatedAt()
-        );
+                entity.getCreatedAt());
     }
 }

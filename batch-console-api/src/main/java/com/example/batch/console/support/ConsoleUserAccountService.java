@@ -2,17 +2,17 @@ package com.example.batch.console.support;
 
 import com.example.batch.console.domain.ConsoleUserAccountEntity;
 import com.example.batch.console.repository.ConsoleUserAccountRepository;
+
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
-/**
- * 控制台账号查询：通过 Spring Data JDBC 从平台库读取账号、密码哈希和角色列表。
- */
+/** 控制台账号查询：通过 Spring Data JDBC 从平台库读取账号、密码哈希和角色列表。 */
 @Service
 public class ConsoleUserAccountService {
 
@@ -22,12 +22,9 @@ public class ConsoleUserAccountService {
         this.repository = repository;
     }
 
-    /**
-     * 按用户名全局查找账号（用户名全局唯一，租户从账号记录中获取）。
-     */
+    /** 按用户名全局查找账号（用户名全局唯一，租户从账号记录中获取）。 */
     public Optional<ConsoleUserAccount> findByUsername(String username) {
-        return repository.findByUsernameIgnoreCase(username)
-                .map(this::toAccount);
+        return repository.findByUsernameIgnoreCase(username).map(this::toAccount);
     }
 
     private ConsoleUserAccount toAccount(ConsoleUserAccountEntity entity) {
@@ -37,8 +34,7 @@ public class ConsoleUserAccountService {
                 entity.getDisplayName(),
                 entity.getPasswordHash(),
                 parseAuthorities(entity.getAuthoritiesCsv()),
-                entity.isEnabled()
-        );
+                entity.isEnabled());
     }
 
     private Set<String> parseAuthorities(String raw) {

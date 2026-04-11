@@ -1,14 +1,8 @@
 package com.example.batch.console.service;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
@@ -19,9 +13,15 @@ import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Service;
 
-/**
- * Kafka consumer group lag 查询服务：利用 KafkaAdmin 获取消费积压信息。
- */
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+/** Kafka consumer group lag 查询服务：利用 KafkaAdmin 获取消费积压信息。 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -38,7 +38,9 @@ public class ConsoleKafkaLagQueryService {
             var groups = admin.listConsumerGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
             for (ConsumerGroupListing group : groups) {
                 String groupId = group.groupId();
-                if (groupIdFilter != null && !groupIdFilter.isEmpty() && !groupId.contains(groupIdFilter)) {
+                if (groupIdFilter != null
+                        && !groupIdFilter.isEmpty()
+                        && !groupId.contains(groupIdFilter)) {
                     continue;
                 }
                 if (!groupId.startsWith("batch")) {
@@ -67,7 +69,9 @@ public class ConsoleKafkaLagQueryService {
             throws InterruptedException, ExecutionException, TimeoutException {
         ListConsumerGroupOffsetsResult offsetsResult = admin.listConsumerGroupOffsets(groupId);
         Map<TopicPartition, OffsetAndMetadata> committedOffsets =
-                offsetsResult.partitionsToOffsetAndMetadata().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                offsetsResult
+                        .partitionsToOffsetAndMetadata()
+                        .get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
         // Query end offsets for the same partitions
         Map<TopicPartition, OffsetSpec> endOffsetRequests = new LinkedHashMap<>();
@@ -79,7 +83,11 @@ public class ConsoleKafkaLagQueryService {
         for (var entry : committedOffsets.entrySet()) {
             TopicPartition tp = entry.getKey();
             long committed = entry.getValue().offset();
-            long endOffset = endOffsetsResult.partitionResult(tp).get(TIMEOUT_SECONDS, TimeUnit.SECONDS).offset();
+            long endOffset =
+                    endOffsetsResult
+                            .partitionResult(tp)
+                            .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                            .offset();
             long lag = Math.max(0, endOffset - committed);
             totalLag += lag;
             if (lag > 0) {

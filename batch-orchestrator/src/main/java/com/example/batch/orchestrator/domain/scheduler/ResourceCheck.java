@@ -1,11 +1,7 @@
 package com.example.batch.orchestrator.domain.scheduler;
 
 public record ResourceCheck(
-        boolean allowed,
-        boolean failFast,
-        String reasonCode,
-        String reasonMessage
-) {
+        boolean allowed, boolean failFast, String reasonCode, String reasonMessage) {
     public static ResourceCheck allow() {
         return new ResourceCheck(true, false, null, null);
     }

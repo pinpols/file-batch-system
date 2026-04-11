@@ -17,6 +17,4 @@ public record ConsoleFilePipelineResponse(
         Instant startedAt,
         Instant finishedAt,
         Instant createdAt,
-        Instant updatedAt
-) {
-}
+        Instant updatedAt) {}

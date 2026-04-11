@@ -1,7 +1,8 @@
 package com.example.batch.orchestrator.domain.entity;
 
-import java.time.Instant;
 import lombok.Data;
+
+import java.time.Instant;
 
 @Data
 public class OutboxEventEntity {
@@ -14,12 +15,14 @@ public class OutboxEventEntity {
     private String eventKey;
     private String payloadJson;
     private String publishStatus;
+
     /**
      * outbox 投递尝试序号。
      *
      * <p>它与运行时实体上保存的业务重试计数是不同的概念。
      */
     private Integer publishAttempt;
+
     private Instant nextPublishAt;
     private String traceId;
     private Instant createdAt;

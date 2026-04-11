@@ -10,6 +10,4 @@ public record AiChatCommand(
         String operatorId,
         String prompt,
         Map<String, Object> context,
-        String idempotencyKey
-) {
-}
+        String idempotencyKey) {}

@@ -5,12 +5,15 @@ import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +38,8 @@ public class DefaultTaskCreationService implements TaskCreationService {
         if (task == null || task.getId() == null) {
             return;
         }
-        JobStepInstanceEntity existing = jobStepInstanceMapper.selectByJobTaskId(task.getTenantId(), task.getId());
+        JobStepInstanceEntity existing =
+                jobStepInstanceMapper.selectByJobTaskId(task.getTenantId(), task.getId());
         if (existing != null) {
             return;
         }
@@ -54,7 +58,8 @@ public class DefaultTaskCreationService implements TaskCreationService {
     }
 
     private String resolveStepCode(JobTaskEntity task) {
-        String workflowNodeCode = payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeCode");
+        String workflowNodeCode =
+                payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeCode");
         if (workflowNodeCode != null && !workflowNodeCode.isBlank()) {
             return workflowNodeCode;
         }
@@ -66,7 +71,8 @@ public class DefaultTaskCreationService implements TaskCreationService {
     }
 
     private String resolveStepType(JobTaskEntity task) {
-        String workflowNodeType = payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeType");
+        String workflowNodeType =
+                payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeType");
         if (workflowNodeType != null && !workflowNodeType.isBlank()) {
             return workflowNodeType;
         }
@@ -77,13 +83,15 @@ public class DefaultTaskCreationService implements TaskCreationService {
         return firstPositiveLong(
                 payloadLongValue(task == null ? null : task.getTaskPayload(), "relatedFileId"),
                 payloadLongValue(task == null ? null : task.getTaskPayload(), "fileId"),
-                payloadLongValue(task == null ? null : task.getTaskPayload(), "sourceFileId")
-        );
+                payloadLongValue(task == null ? null : task.getTaskPayload(), "sourceFileId"));
     }
 
     @SuppressWarnings("unchecked")
     private String payloadStringValue(String payloadJson, String fieldName) {
-        if (payloadJson == null || payloadJson.isBlank() || fieldName == null || fieldName.isBlank()) {
+        if (payloadJson == null
+                || payloadJson.isBlank()
+                || fieldName == null
+                || fieldName.isBlank()) {
             return null;
         }
         try {
@@ -100,7 +108,10 @@ public class DefaultTaskCreationService implements TaskCreationService {
 
     @SuppressWarnings("unchecked")
     private Long payloadLongValue(String payloadJson, String fieldName) {
-        if (payloadJson == null || payloadJson.isBlank() || fieldName == null || fieldName.isBlank()) {
+        if (payloadJson == null
+                || payloadJson.isBlank()
+                || fieldName == null
+                || fieldName.isBlank()) {
             return null;
         }
         try {

@@ -10,6 +10,4 @@ public record ConsoleAlertRoutingExcelPreviewResponse(
         Integer validRows,
         Integer invalidRows,
         List<ConsoleAlertRoutingResponse> rows,
-        List<ConsoleAlertRoutingExcelRowIssueResponse> issues
-) {
-}
+        List<ConsoleAlertRoutingExcelRowIssueResponse> issues) {}

@@ -8,8 +8,7 @@ public record SchedulerSnapshotResponse(
         String tenantId,
         List<PolicySnapshot> policies,
         List<QueueSnapshot> queues,
-        List<WorkerLoadSnapshot> workers
-) {
+        List<WorkerLoadSnapshot> workers) {
     public record PolicySnapshot(
             String policyCode,
             String fairShareGroup,
@@ -27,9 +26,7 @@ public record SchedulerSnapshotResponse(
             long activePartitions,
             long groupActiveJobs,
             int effectiveTenantJobCap,
-            int effectiveTenantPartitionCap
-    ) {
-    }
+            int effectiveTenantPartitionCap) {}
 
     public record QueueSnapshot(
             String queueCode,
@@ -44,16 +41,12 @@ public record SchedulerSnapshotResponse(
             Instant quotaResetWindowStartedAt,
             Instant quotaResetWindowExpiresAt,
             Integer groupSharedMaxRunningJobs,
-            long activeJobs
-    ) {
-    }
+            long activeJobs) {}
 
     public record WorkerLoadSnapshot(
             String workerCode,
             String workerGroup,
             Integer currentLoad,
             Instant heartbeatAt,
-            String status
-    ) {
-    }
+            String status) {}
 }

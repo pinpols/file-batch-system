@@ -1,20 +1,20 @@
 package com.example.batch.console.support;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.constants.CommonErrorMessages;
-import com.example.batch.common.config.BatchSecurityProperties;
-import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
-import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.console.service.ConsoleResponseFactory;
+
 import jakarta.validation.ConstraintViolationException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
@@ -25,6 +25,10 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 @RequiredArgsConstructor
@@ -49,38 +53,52 @@ public class ConsoleApiExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<?> handleMethodArgumentNotValidException(MethodArgumentNotValidException exception) {
+    public ResponseEntity<?> handleMethodArgumentNotValidException(
+            MethodArgumentNotValidException exception) {
         log.warn("console validation exception", exception);
-        String message = exception.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining("; "));
+        String message =
+                exception.getBindingResult().getFieldErrors().stream()
+                        .map(FieldError::getDefaultMessage)
+                        .collect(Collectors.joining("; "));
         return ResponseEntity.badRequest()
-                .body(responseFactory.failure(ResultCode.VALIDATION_ERROR,
-                        message.isBlank() ? CommonErrorMessages.VALIDATION_FAILED : message));
+                .body(
+                        responseFactory.failure(
+                                ResultCode.VALIDATION_ERROR,
+                                message.isBlank()
+                                        ? CommonErrorMessages.VALIDATION_FAILED
+                                        : message));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<?> handleConstraintViolationException(ConstraintViolationException exception) {
+    public ResponseEntity<?> handleConstraintViolationException(
+            ConstraintViolationException exception) {
         log.warn("console constraint violation exception", exception);
         return ResponseEntity.badRequest()
                 .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, exception.getMessage()));
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
-    public ResponseEntity<?> handleMissingRequestHeaderException(MissingRequestHeaderException exception) {
+    public ResponseEntity<?> handleMissingRequestHeaderException(
+            MissingRequestHeaderException exception) {
         log.warn("console missing request header exception", exception);
-        ResultCode code = CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
-                ? ResultCode.MISSING_IDEMPOTENCY_KEY
-                : ResultCode.INVALID_ARGUMENT;
+        ResultCode code =
+                CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(
+                                exception.getHeaderName())
+                        ? ResultCode.MISSING_IDEMPOTENCY_KEY
+                        : ResultCode.INVALID_ARGUMENT;
         return ResponseEntity.badRequest()
-                .body(responseFactory.failure(code,
-                        CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
-                                ? CommonErrorMessages.MISSING_IDEMPOTENCY_KEY
-                                : CommonErrorMessages.INVALID_ARGUMENT));
+                .body(
+                        responseFactory.failure(
+                                code,
+                                CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(
+                                                exception.getHeaderName())
+                                        ? CommonErrorMessages.MISSING_IDEMPOTENCY_KEY
+                                        : CommonErrorMessages.INVALID_ARGUMENT));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<?> handleMethodNotSupported(HttpRequestMethodNotSupportedException exception) {
+    public ResponseEntity<?> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException exception) {
         log.warn("console method not supported", exception);
         return ResponseEntity.status(405)
                 .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
@@ -90,34 +108,44 @@ public class ConsoleApiExceptionHandler {
     public ResponseEntity<?> handleAccessDenied(Exception exception) {
         log.warn("console access denied", exception);
         return ResponseEntity.status(ResultCode.FORBIDDEN.httpStatus())
-                .body(responseFactory.failure(ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED));
+                .body(
+                        responseFactory.failure(
+                                ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED));
     }
 
     /**
-     * Console 作为 BFF 调用下游（orchestrator/trigger）时，RestClient 会直接抛出异常。
-     * 这里尽量把下游返回的 {@link CommonResponse} 语义透传给前端，避免一律降级成 SYSTEM_ERROR。
+     * Console 作为 BFF 调用下游（orchestrator/trigger）时，RestClient 会直接抛出异常。 这里尽量把下游返回的 {@link
+     * CommonResponse} 语义透传给前端，避免一律降级成 SYSTEM_ERROR。
      */
     @ExceptionHandler(RestClientResponseException.class)
     public ResponseEntity<?> handleDownstreamRestError(RestClientResponseException exception) {
         String body = exception.getResponseBodyAsString();
-        log.warn("console downstream rest error: status={}, body={}", exception.getStatusCode().value(), body);
+        log.warn(
+                "console downstream rest error: status={}, body={}",
+                exception.getStatusCode().value(),
+                body);
         try {
             CommonResponse<?> downstream = JsonUtils.fromJson(body, CommonResponse.class);
             if (downstream != null && downstream.code() != null) {
                 // 以业务 code 为准，HTTP status 使用 code.httpStatus()（更稳定、跨服务一致）
                 return ResponseEntity.status(downstream.code().httpStatus())
-                        .body(responseFactory.failure(downstream.code(),
-                                downstream.message() == null || downstream.message().isBlank()
-                                        ? downstream.code().defaultMessage()
-                                        : downstream.message()));
+                        .body(
+                                responseFactory.failure(
+                                        downstream.code(),
+                                        downstream.message() == null
+                                                        || downstream.message().isBlank()
+                                                ? downstream.code().defaultMessage()
+                                                : downstream.message()));
             }
         } catch (RuntimeException ignored) {
             // 继续执行
         }
         // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），避免前端只看到 500
         return ResponseEntity.status(exception.getStatusCode())
-                .body(responseFactory.failure(ResultCode.SYSTEM_ERROR,
-                        body == null || body.isBlank() ? exception.getMessage() : body));
+                .body(
+                        responseFactory.failure(
+                                ResultCode.SYSTEM_ERROR,
+                                body == null || body.isBlank() ? exception.getMessage() : body));
     }
 
     @ExceptionHandler(Exception.class)
@@ -137,6 +165,8 @@ public class ConsoleApiExceptionHandler {
         }
         log.error("console unexpected exception", exception);
         return ResponseEntity.internalServerError()
-                .body(responseFactory.failure(ResultCode.SYSTEM_ERROR, CommonErrorMessages.SYSTEM_ERROR));
+                .body(
+                        responseFactory.failure(
+                                ResultCode.SYSTEM_ERROR, CommonErrorMessages.SYSTEM_ERROR));
     }
 }

@@ -1,8 +1,9 @@
 package com.example.batch.trigger.support;
 
+import lombok.Data;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
-import lombok.Data;
 
 @Data
 public class BatchDayCutoffCandidate {

@@ -2,7 +2,9 @@ package com.example.batch.orchestrator.controller;
 
 import com.example.batch.orchestrator.application.service.TaskControllerApplicationService;
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,6 +33,5 @@ public class TaskController {
         taskControllerApplicationService.renew(taskId, request);
     }
 
-    public record TaskClaimRequest(String tenantId, String workerId) {
-    }
+    public record TaskClaimRequest(String tenantId, String workerId) {}
 }
