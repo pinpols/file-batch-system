@@ -246,12 +246,12 @@ public class ConsoleDashboardQueryService {
         ConsoleDashboardQueryRepository.SlaStatsView stats = repository.slaStats(resolved, days);
         result.put(
                 "breached",
-                stats == null || stats.getBreached() == null ? 0L : stats.getBreached());
-        result.put("onTime", stats == null || stats.getOnTime() == null ? 0L : stats.getOnTime());
+                stats == null || stats.breached() == null ? 0L : stats.breached());
+        result.put("onTime", stats == null || stats.onTime() == null ? 0L : stats.onTime());
         result.put(
                 "totalWithSla",
-                stats == null || stats.getTotalWithSla() == null ? 0L : stats.getTotalWithSla());
-        result.put("avgDurationSeconds", stats == null ? null : stats.getAvgDurationSeconds());
+                stats == null || stats.totalWithSla() == null ? 0L : stats.totalWithSla());
+        result.put("avgDurationSeconds", stats == null ? null : stats.avgDurationSeconds());
         result.put(
                 "dailyTrend",
                 repository.slaDailyTrend(resolved, days).stream()

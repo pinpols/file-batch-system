@@ -67,6 +67,19 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 
 所有常用操作通过根目录 `Makefile` 统一入口，`make help` 查看全部 target。
 
+> **mvnd 注意事项**
+>
+> 本项目本地测试脚本使用 mvnd（Maven Daemon v1.0.5）。mvnd 存在一个已知的工作区读取器缺陷：
+> `test` 阶段无法正确从 reactor 解析跨模块依赖，会回退到 `~/.m2` 的旧版 JAR，
+> 导致编译失败或测试运行时出现 `NoClassDefFoundError`。
+>
+> `run-tests.sh`（`--unit` / `--it` / `--default`）通过在 `clean test` 前执行
+> `install -DskipTests -pl batch-common,batch-orchestrator,batch-worker-core`
+> 将最新 JAR 写入 `~/.m2` 来规避此问题。
+> `--e2e` 和 `--all` 模式已包含全量 `clean install`，不受影响。
+>
+> 若切换至标准 `mvn`，可移除该预装步骤。
+
 ### 本地环境
 
 ```bash
