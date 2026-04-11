@@ -3,18 +3,10 @@ package com.example.batch.e2e.apps;
 import com.example.batch.common.config.BatchJsonAutoConfiguration;
 import com.example.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
-import com.example.batch.e2e.apps.E2eDispatchApplication;
-import com.example.batch.e2e.apps.E2eExportApplication;
-import com.example.batch.e2e.apps.E2eImportApplication;
-import com.example.batch.worker.dispatchs.BatchWorkerDispatchApplication;
-import com.example.batch.worker.exports.BatchWorkerExportApplication;
-import com.example.batch.worker.dispatchs.infrastructure.DispatchStepExecutionAdapter;
-import com.example.batch.worker.exports.infrastructure.ExportStepExecutionAdapter;
-import com.example.batch.e2e.config.E2eImportWorkerDataSourceConfiguration;
 import com.example.batch.e2e.config.E2ePlatformDataSourceConfiguration;
 import com.example.batch.e2e.config.E2ePlatformMybatisConfiguration;
 import com.example.batch.e2e.config.E2eShedLockConfiguration;
-import com.example.batch.worker.imports.BatchWorkerImportApplication;
+import com.example.batch.e2e.config.E2eKafkaProducerConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -29,6 +21,11 @@ import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+/**
+ * Orchestrator-only e2e application context.
+ * Scans only the orchestrator package to avoid conflicts with worker modules on the test classpath.
+ * Used by tests that launch worker processes externally (e.g. WorkerProcessRestartRecoveryE2eIT).
+ */
 @Configuration
 @EnableAutoConfiguration(exclude = {
         com.example.batch.common.logging.HttpRequestMdcAutoConfiguration.class,
@@ -46,32 +43,20 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableKafka
 @EnableJdbcRepositories(basePackages = "com.example.batch.orchestrator.repository")
 @Import({
-    E2ePlatformDataSourceConfiguration.class,
-    E2eImportWorkerDataSourceConfiguration.class,
-    E2ePlatformMybatisConfiguration.class,
-    E2eShedLockConfiguration.class
+        E2ePlatformDataSourceConfiguration.class,
+        E2ePlatformMybatisConfiguration.class,
+        E2eShedLockConfiguration.class,
+        E2eKafkaProducerConfiguration.class
 })
 @ComponentScan(
         basePackages = {
                 "com.example.batch.e2e.support",
-                "com.example.batch.orchestrator",
-                "com.example.batch.worker.core",
-                "com.example.batch.worker.imports"
+                "com.example.batch.orchestrator"
         },
         excludeFilters = {
                 @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchOrchestratorApplication.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eImportApplication.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eExportApplication.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eDispatchApplication.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.worker.imports.config.PlatformDataSourceConfiguration.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.worker.imports.config.BusinessDataSourceConfiguration.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.worker.imports.config.ShedLockConfiguration.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerImportApplication.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerExportApplication.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = BatchWorkerDispatchApplication.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = ExportStepExecutionAdapter.class),
-                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = DispatchStepExecutionAdapter.class)
+                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = E2eOrchestratorApplication.class),
+                @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class)
         }
 )
 @ImportAutoConfiguration({
@@ -82,10 +67,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @ConfigurationPropertiesScan(basePackages = "com.example.batch")
 @MapperScan(basePackages = "com.example.batch.orchestrator.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
-@MapperScan(basePackages = "com.example.batch.worker.core.mapper", sqlSessionFactoryRef = "sqlSessionFactory")
-public class E2eImportApplication {
+public class E2eOrchestratorApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(E2eImportApplication.class, args);
+        SpringApplication.run(E2eOrchestratorApplication.class, args);
     }
 }
