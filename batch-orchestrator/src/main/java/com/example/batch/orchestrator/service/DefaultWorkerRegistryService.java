@@ -5,7 +5,8 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.value.JsonbString;
-import com.example.batch.orchestrator.repository.WorkerRegistryJdbcRepository;
+import com.example.batch.orchestrator.mapper.TouchHeartbeatParam;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,7 @@ import java.time.Instant;
 public class DefaultWorkerRegistryService implements WorkerRegistryServerService {
 
     private final WorkerRegistryRepository workerRegistryRepository;
-    private final WorkerRegistryJdbcRepository workerRegistryJdbcRepository;
+    private final WorkerRegistryMapper workerRegistryMapper;
 
     @Override
     @Transactional
@@ -83,8 +84,15 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
                 request.capabilityTags() != null
                         ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
                         : registry.capabilityTags();
-        workerRegistryJdbcRepository.touchHeartbeat(
-                request.tenantId(), workerCode, newStatus, heartbeatAt, newLoad, newTags);
+        workerRegistryMapper.touchHeartbeat(
+                TouchHeartbeatParam.builder()
+                        .tenantId(request.tenantId())
+                        .workerCode(workerCode)
+                        .nextStatus(newStatus)
+                        .heartbeatAt(heartbeatAt)
+                        .currentLoad(newLoad)
+                        .capabilityTags(newTags == null ? null : newTags.getValue())
+                        .build());
         return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(
                 request.tenantId(), workerCode);
     }
