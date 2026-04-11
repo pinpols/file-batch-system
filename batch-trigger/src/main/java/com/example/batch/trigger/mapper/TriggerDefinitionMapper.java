@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface TriggerDefinitionMapper {
 
-    List<TriggerDescriptor> selectAllCronDefinitions();
+    List<TriggerDescriptor> selectAllScheduledDefinitions();
 
     TriggerDescriptor selectByJobCode(String tenantId, String jobCode);
 }

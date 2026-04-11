@@ -58,10 +58,9 @@ class ConsoleAuthenticationFilterTest {
     }
 
     @Test
-    void filter_passesThroughWhenAuthDisabledAndNotTestingOrDemo() throws Exception {
+    void filter_passesThroughWhenAuthDisabledAndNotTestingOpen() throws Exception {
         properties.setEnabled(false);
         batchProperties.setTestingOpen(false);
-        batchProperties.setDemoOpen(false);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -74,8 +73,8 @@ class ConsoleAuthenticationFilterTest {
     }
 
     @Test
-    void filter_setsDemoAuthAndContinuesWhenDemoOpen() throws Exception {
-        batchProperties.setDemoOpen(true);
+    void filter_setsTestingAuthAndContinuesWhenTestingOpen() throws Exception {
+        batchProperties.setTestingOpen(true);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(properties.getTenantHeader(), "t1");

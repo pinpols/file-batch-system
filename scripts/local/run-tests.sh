@@ -255,6 +255,7 @@ case "$MODE" in
   unit)
     banner "单元测试"
     {
+      run_mvn install -DskipTests -pl batch-common,batch-orchestrator,batch-worker-core && \
       run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
         -Dtest='!*IntegrationTest,!*IT,!PartitionLeaseReclaimSchedulerTest' \
@@ -272,6 +273,7 @@ case "$MODE" in
   it)
     banner "集成测试（*IntegrationTest / *IT）"
     {
+      run_mvn install -DskipTests -pl batch-common,batch-orchestrator,batch-worker-core && \
       run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
         -Dtest='*IntegrationTest,*IT' \
@@ -306,6 +308,7 @@ case "$MODE" in
   default)
     banner "单元 + 集成测试（跳过 E2E）"
     {
+      run_mvn install -DskipTests -pl batch-common,batch-orchestrator,batch-worker-core && \
       run_mvn clean test \
         -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
         -Dsurefire.failIfNoSpecifiedTests=false \

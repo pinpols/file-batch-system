@@ -18,6 +18,7 @@ import org.quartz.JobDetail;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
+import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.matchers.GroupMatcher;
@@ -169,9 +170,16 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     }
 
     private void scheduleDescriptor(TriggerDescriptor descriptor) {
-        if (!"CRON".equalsIgnoreCase(descriptor.getScheduleType())) {
-            return;
+        String scheduleType = descriptor.getScheduleType();
+        if ("CRON".equalsIgnoreCase(scheduleType)) {
+            scheduleCronDescriptor(descriptor);
+        } else if ("FIXED_RATE".equalsIgnoreCase(scheduleType)) {
+            scheduleFixedRateDescriptor(descriptor);
         }
+        // EVENT / MANUAL: 无 Quartz 注册，静默跳过
+    }
+
+    private void scheduleCronDescriptor(TriggerDescriptor descriptor) {
         String expression = descriptor.getScheduleExpression();
         if (!CronExpression.isValidExpression(expression)) {
             throw new IllegalArgumentException(
@@ -195,45 +203,93 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
                         e);
             }
         }
+        String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
+        JobDetail jobDetail = buildJobDetail(descriptor);
+        CronTrigger trigger =
+                TriggerBuilder.newTrigger()
+                        .withIdentity(identity, JOB_GROUP)
+                        .forJob(jobDetail)
+                        .withSchedule(
+                                CronScheduleBuilder.cronSchedule(expression)
+                                        .inTimeZone(TimeZone.getTimeZone(timezone))
+                                        .withMisfireHandlingInstructionDoNothing())
+                        .build();
+        scheduleWithReplace(jobDetail, trigger);
+    }
+
+    private void scheduleFixedRateDescriptor(TriggerDescriptor descriptor) {
+        int intervalSeconds = parseFixedRateIntervalSeconds(descriptor);
+        String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
+        JobDetail jobDetail = buildJobDetail(descriptor);
+        Trigger trigger =
+                TriggerBuilder.newTrigger()
+                        .withIdentity(identity, JOB_GROUP)
+                        .forJob(jobDetail)
+                        .withSchedule(
+                                SimpleScheduleBuilder.simpleSchedule()
+                                        .withIntervalInSeconds(intervalSeconds)
+                                        .repeatForever()
+                                        .withMisfireHandlingInstructionNextWithExistingCount())
+                        .build();
+        scheduleWithReplace(jobDetail, trigger);
+    }
+
+    private JobDetail buildJobDetail(TriggerDescriptor descriptor) {
+        String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
+        JobDataMap jobDataMap = new JobDataMap();
+        jobDataMap.put(QuartzLaunchJob.TENANT_ID, descriptor.getTenantId());
+        jobDataMap.put(QuartzLaunchJob.JOB_CODE, descriptor.getJobCode());
+        jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, descriptor.getScheduleType());
+        jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, descriptor.getScheduleExpression());
+        jobDataMap.put(QuartzLaunchJob.TIMEZONE, descriptor.getTimezone());
+        jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, descriptor.getTriggerMode());
+        jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, descriptor.getCalendarCode());
+        jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
+        jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
+        return JobBuilder.newJob(QuartzLaunchJob.class)
+                .withIdentity(identity, JOB_GROUP)
+                .usingJobData(jobDataMap)
+                .storeDurably()
+                .build();
+    }
+
+    private void scheduleWithReplace(JobDetail jobDetail, Trigger trigger) {
         try {
-            String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
-            JobDataMap jobDataMap = new JobDataMap();
-            jobDataMap.put(QuartzLaunchJob.TENANT_ID, descriptor.getTenantId());
-            jobDataMap.put(QuartzLaunchJob.JOB_CODE, descriptor.getJobCode());
-            jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, descriptor.getScheduleType());
-            jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, descriptor.getScheduleExpression());
-            jobDataMap.put(QuartzLaunchJob.TIMEZONE, descriptor.getTimezone());
-            jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, descriptor.getTriggerMode());
-            jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, descriptor.getCalendarCode());
-            jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
-            jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
-
-            JobDetail jobDetail =
-                    JobBuilder.newJob(QuartzLaunchJob.class)
-                            .withIdentity(identity, JOB_GROUP)
-                            .usingJobData(jobDataMap)
-                            .storeDurably()
-                            .build();
-
-            CronTrigger trigger =
-                    TriggerBuilder.newTrigger()
-                            .withIdentity(identity, JOB_GROUP)
-                            .forJob(jobDetail)
-                            .withSchedule(
-                                    CronScheduleBuilder.cronSchedule(
-                                                    descriptor.getScheduleExpression())
-                                            .inTimeZone(
-                                                    TimeZone.getTimeZone(descriptor.getTimezone()))
-                                            .withMisfireHandlingInstructionDoNothing())
-                            .build();
-
             if (scheduler.checkExists(jobDetail.getKey())) {
                 scheduler.deleteJob(jobDetail.getKey());
             }
             scheduler.scheduleJob(jobDetail, trigger);
-        } catch (SchedulerException exception) {
+        } catch (SchedulerException e) {
             throw new IllegalStateException(
-                    "failed to register quartz trigger: " + descriptor.getJobCode(), exception);
+                    "failed to register quartz trigger: " + jobDetail.getKey().getName(), e);
         }
+    }
+
+    private int parseFixedRateIntervalSeconds(TriggerDescriptor descriptor) {
+        String expression = descriptor.getScheduleExpression();
+        if (expression == null || expression.isBlank()) {
+            throw new IllegalArgumentException(
+                    "FIXED_RATE schedule_expr must be a positive integer (seconds) for job: "
+                            + descriptor.getJobCode());
+        }
+        int seconds;
+        try {
+            seconds = Integer.parseInt(expression.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    "FIXED_RATE schedule_expr must be a positive integer (seconds) for job: "
+                            + descriptor.getJobCode()
+                            + ", got: '"
+                            + expression
+                            + "'");
+        }
+        if (seconds <= 0) {
+            throw new IllegalArgumentException(
+                    "FIXED_RATE interval must be > 0 for job: "
+                            + descriptor.getJobCode()
+                            + ", got: "
+                            + seconds);
+        }
+        return seconds;
     }
 }

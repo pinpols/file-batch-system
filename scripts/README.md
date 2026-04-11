@@ -17,7 +17,7 @@
 - `scripts/ci/run-staging-live-smoke.sh`：staging live rollout / rollback smoke 的便捷入口
 - `scripts/ci/security-scan.sh`：本地 / CI 安全扫描一键入口，编排 `gitleaks` / `dependency-check` / `semgrep` / `trivy` / `ZAP`
 - `scripts/ci/check-console-openapi-paths.py`：Console OpenAPI 与 `Console*Controller` 路由一致性检查（CI 与本地均可运行，详见 [scripts/ci/README.md](ci/README.md)）
-- `scripts/local/run-e2e-tests.sh`：本地运行 `batch-e2e-tests`
+- `scripts/local/run-tests.sh --e2e`：本地运行 E2E 测试（`batch-e2e-tests`）
 - `scripts/ops/inspect-all.sh`：本地巡检总入口
 
 ## 使用建议

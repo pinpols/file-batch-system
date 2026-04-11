@@ -116,8 +116,8 @@ class ConsoleSecurityConfigurationTest {
     }
 
     @Test
-    void shouldAuthenticateAsAdminInDemoModeWithoutToken() throws Exception {
-        batchSecurityProperties.setDemoOpen(true);
+    void shouldAuthenticateAsAdminInTestingOpenModeWithoutToken() throws Exception {
+        batchSecurityProperties.setTestingOpen(true);
         MockHttpServletRequest request = baseRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicBoolean chainCalled = new AtomicBoolean(false);

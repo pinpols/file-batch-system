@@ -27,7 +27,7 @@
         jd.enabled
     </sql>
 
-    <select id="selectAllCronDefinitions" resultMap="TriggerDescriptorResultMap">
+    <select id="selectAllScheduledDefinitions" resultMap="TriggerDescriptorResultMap">
         select
         <include refid="TriggerDefinitionBaseColumns"/>
         from batch.job_definition jd
@@ -36,7 +36,7 @@
          and bc.calendar_code = jd.calendar_code
          and bc.enabled = true
         where jd.enabled = true
-          and jd.schedule_type = 'CRON'
+          and jd.schedule_type in ('CRON', 'FIXED_RATE')
           and jd.trigger_mode in ('SCHEDULED', 'MIXED')
         order by jd.tenant_id, jd.job_code
     </select>

@@ -14,7 +14,6 @@
   - `--e2e`：仅 E2E 测试（`*E2eIT`）
   - `--all`：单元 + 集成 + E2E 全量
   - `-- <mvn args>`：透传 Maven 参数
-- `run-e2e-tests.sh`：直接运行全部 E2E 测试
 - `docker-path.sh`：工具函数，确保 docker 在 PATH 中（供其他脚本 source）
 
 ## 运行前提
