@@ -3,7 +3,6 @@ package com.example.batch.orchestrator.application.service;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import com.example.batch.common.enums.CompensationCommandStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import com.example.batch.orchestrator.mapper.CompensationCommandMapper;

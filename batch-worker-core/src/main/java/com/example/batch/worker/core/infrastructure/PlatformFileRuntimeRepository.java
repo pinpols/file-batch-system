@@ -1,6 +1,5 @@
 package com.example.batch.worker.core.infrastructure;
 
-import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;

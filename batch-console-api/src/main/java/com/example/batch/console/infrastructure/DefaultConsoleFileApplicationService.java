@@ -301,7 +301,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
                                 tenantId)
                         .retrieve()
                         .body(ApprovalRecordResponse.class);
-        Guard.requireFound(response == null || response.getRecord(), "approval request not found");
+        Guard.requireFound(response == null || response.getRecord() == null, "approval request not found");
         String status = response.getRecord().getApprovalStatus();
         if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
             throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");

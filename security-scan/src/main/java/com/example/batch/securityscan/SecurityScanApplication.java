@@ -1,7 +1,5 @@
 package com.example.batch.securityscan;
 
-import java.util.Arrays;
-
 public final class SecurityScanApplication {
 
     private SecurityScanApplication() {

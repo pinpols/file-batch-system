@@ -13,8 +13,6 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -210,7 +210,7 @@ public class DefaultConsoleFileDownloadApplicationService
                                 tenantId)
                         .retrieve()
                         .body(ApprovalRecordResponse.class);
-        Guard.requireFound(response == null || response.record(), "approval request not found");
+        Guard.requireFound(response == null || response.record() == null, "approval request not found");
         String status = response.record().approvalStatus();
         if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
             throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");

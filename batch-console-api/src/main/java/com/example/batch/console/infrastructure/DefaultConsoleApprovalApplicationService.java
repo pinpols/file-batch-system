@@ -161,7 +161,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
                                 tenantId)
                         .retrieve()
                         .body(ApprovalRecordResponse.class);
-        Guard.requireFound(response == null || response.getRecord(), "approval request not found");
+        Guard.requireFound(response == null || response.getRecord() == null, "approval request not found");
         return response;
     }
 

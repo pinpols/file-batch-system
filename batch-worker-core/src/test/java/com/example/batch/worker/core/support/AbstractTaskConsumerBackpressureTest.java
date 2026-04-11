@@ -12,7 +12,6 @@ import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
-import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;

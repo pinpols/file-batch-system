@@ -8,8 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.common.enums.DeadLetterReplayStatus;
-import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;

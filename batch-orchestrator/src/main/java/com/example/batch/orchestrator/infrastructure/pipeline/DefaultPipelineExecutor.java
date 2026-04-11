@@ -46,7 +46,9 @@ public class DefaultPipelineExecutor implements PipelineExecutor {
                         stepDefinition ->
                                 results.add(executeStep(context, definition, stepDefinition)));
         context.setStepResults(results);
-        return emptyResult(context, results);
+        PipelineExecutionResult result = new PipelineExecutionResult();
+        result.setStepResults(results);
+        return result;
     }
 
     private StepResult executeStep(
