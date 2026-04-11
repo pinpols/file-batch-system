@@ -2,6 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
+  x-last-updated: "2026-04-11"
+  x-changelog:
+    - date: "2026-04-11"
+      summary: "添加 x-last-updated 和 x-changelog 标识，便于快速定位文档更新时间"
   description: >
     Frontend-facing contract for the batch console.
     This file is the machine-readable source of truth for UI integration,
