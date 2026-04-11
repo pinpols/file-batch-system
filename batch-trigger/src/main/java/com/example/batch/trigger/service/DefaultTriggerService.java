@@ -22,7 +22,9 @@ import com.example.batch.trigger.support.TriggerCalendarConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
@@ -178,6 +180,19 @@ public class DefaultTriggerService implements TriggerService {
             triggerRequestMapper.updateRequestStatus(
                     launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
             return response;
+        } catch (HttpClientErrorException e) {
+            triggerRequestMapper.updateRequestStatus(
+                    launchRequest.tenantId(), launchRequest.requestId(), "REJECTED");
+            if (e.getStatusCode() == HttpStatusCode.valueOf(404)) {
+                log.warn(
+                        "trigger skipped: orchestrator rejected job [{}] tenant [{}] — {}",
+                        launchRequest.jobCode(),
+                        launchRequest.tenantId(),
+                        e.getResponseBodyAsString());
+                return null;
+            }
+            throw new SystemException(
+                    ResultCode.SYSTEM_ERROR, "failed to forward trigger request", e);
         } catch (Exception exception) {
             triggerRequestMapper.updateRequestStatus(
                     launchRequest.tenantId(), launchRequest.requestId(), "REJECTED");
