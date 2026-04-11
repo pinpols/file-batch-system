@@ -5,6 +5,7 @@ import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.application.ConsoleFileTemplateApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
+import com.example.batch.console.web.request.EnabledPatchRequest;
 import com.example.batch.console.web.request.FileTemplateCreateRequest;
 import com.example.batch.console.web.request.FileTemplateUpdateRequest;
 
@@ -14,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -69,23 +70,12 @@ public class ConsoleFileTemplateController {
         return responseFactory.success(fileTemplateApplicationService.update(id, request));
     }
 
-    /** 删除文件模板。 */
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<Void> delete(
-            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-        fileTemplateApplicationService.delete(id, tenantId);
-        return responseFactory.success(null);
-    }
-
     /** 启用/禁用文件模板。 */
-    @PostMapping("/{id}/toggle")
+    @PatchMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<Void> toggle(
-            @PathVariable Long id,
-            @RequestParam("tenantId") String tenantId,
-            @RequestParam("enabled") Boolean enabled) {
-        fileTemplateApplicationService.toggle(id, tenantId, enabled);
+    public CommonResponse<Void> patch(
+            @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        fileTemplateApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
         return responseFactory.success(null);
     }
 }

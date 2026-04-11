@@ -26,8 +26,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -150,19 +148,6 @@ public class ConsoleApiExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleException(Exception exception) {
-        if (batchSecurityProperties.isDemoOpen()) {
-            StringWriter sw = new StringWriter();
-            exception.printStackTrace(new PrintWriter(sw));
-            // 防止堆栈过长影响前端联调展示；截断后仍保留关键顶部异常信息。
-            String stack = sw.toString();
-            int maxLen = 4000;
-            if (stack.length() > maxLen) {
-                stack = stack.substring(0, maxLen) + "...(truncated)";
-            }
-            log.error("console unexpected exception (demo-open)", exception);
-            return ResponseEntity.internalServerError()
-                    .body(responseFactory.failure(ResultCode.SYSTEM_ERROR, stack));
-        }
         log.error("console unexpected exception", exception);
         return ResponseEntity.internalServerError()
                 .body(

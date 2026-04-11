@@ -21,6 +21,7 @@ import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.mapper.BusinessCalendarMapper;
+import com.example.batch.trigger.mapper.TenantStatusMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.support.TriggerDescriptor;
 import java.time.Instant;
@@ -48,6 +49,8 @@ class DefaultTriggerServiceTest {
     @Mock
     private BusinessCalendarMapper businessCalendarMapper;
     @Mock
+    private TenantStatusMapper tenantStatusMapper;
+    @Mock
     private PlatformTransactionManager transactionManager;
     @Mock
     private TransactionStatus transactionStatus;
@@ -57,11 +60,13 @@ class DefaultTriggerServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(transactionManager.getTransaction(any())).thenReturn(transactionStatus);
+        lenient().when(tenantStatusMapper.selectStatus(any())).thenReturn("ACTIVE");
         service = new DefaultTriggerService(
                 launchAdapterService,
                 orchestratorTriggerAdapter,
                 triggerRequestMapper,
                 businessCalendarMapper,
+                tenantStatusMapper,
                 transactionManager
         );
     }
@@ -210,6 +215,35 @@ class DefaultTriggerServiceTest {
         assertThat(response.traceId()).isEqualTo("trace-skip");
         verify(triggerRequestMapper, never()).insert(any());
         verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+    }
+
+    @Test
+    void launch_suspendedTenant_throwsBizException() {
+        when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
+
+        assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(validRequest(), "idem-susp", "req-susp", "trace-susp")))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("suspended");
+
+        verify(triggerRequestMapper, never()).insert(any());
+        verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+    }
+
+    @Test
+    void launchScheduled_suspendedTenant_throwsBizException() {
+        when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
+
+        ScheduledTriggerCommand command = new ScheduledTriggerCommand(
+                scheduledDescriptor(),
+                Instant.parse("2026-03-28T18:00:00Z"),
+                TriggerType.SCHEDULED,
+                "req-susp",
+                "trace-susp"
+        );
+
+        assertThatThrownBy(() -> service.launchScheduled(command))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("suspended");
     }
 
     private TriggerLaunchRequest validRequest() {

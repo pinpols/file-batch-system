@@ -29,5 +29,5 @@ public class JobDefinitionQueryRequest extends PageQueryRequest {
     @Size(max = 64, message = "scheduleType too long (max 64)")
     private String scheduleType;
 
-    private Boolean enabled;
+    private Boolean enabled = true;
 }

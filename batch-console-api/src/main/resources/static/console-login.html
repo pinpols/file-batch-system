@@ -167,15 +167,15 @@
       <div class="accounts">
         <div class="account">
           <strong>admin</strong>
-          <span>tenant: default-tenant | roles: ROLE_ADMIN, ROLE_AUDITOR, ROLE_CONFIG_ADMIN</span>
+          <span>tenant: system | roles: ROLE_ADMIN</span>
         </div>
         <div class="account">
           <strong>auditor</strong>
-          <span>tenant: default-tenant | roles: ROLE_AUDITOR</span>
+          <span>tenant: system | roles: ROLE_AUDITOR</span>
         </div>
         <div class="account">
           <strong>config-admin</strong>
-          <span>tenant: default-tenant | roles: ROLE_CONFIG_ADMIN</span>
+          <span>tenant: system | roles: ROLE_CONFIG_ADMIN</span>
         </div>
       </div>
     </section>
@@ -185,7 +185,7 @@
       <form id="login-form">
         <label>用户名<input id="username" autocomplete="username" value="admin" required></label>
         <label>密码<input id="password" type="password" autocomplete="current-password" required></label>
-        <label>租户（可选）<input id="tenantId" placeholder="default-tenant"></label>
+        <label>租户（可选）<input id="tenantId" placeholder="tenant-id"></label>
         <button id="submit" type="submit">登录并获取 Token</button>
       </form>
       <div class="error" id="error"></div>

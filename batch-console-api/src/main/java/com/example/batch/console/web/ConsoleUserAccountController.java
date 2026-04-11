@@ -1,28 +1,24 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.common.enums.ResultCode;
-import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsolePasswordHasher;
-import com.example.batch.console.support.ConsolePrincipal;
+import com.example.batch.console.support.ConsoleRoles;
+import com.example.batch.console.support.ConsoleSessionRegistry;
 import com.example.batch.console.web.response.ConsoleUserAccountResponse;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +41,7 @@ public class ConsoleUserAccountController {
 
     private final ConsoleUserAccountMapper userAccountMapper;
     private final ConsolePasswordHasher passwordHasher;
+    private final ConsoleSessionRegistry sessionRegistry;
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping
@@ -66,27 +63,6 @@ public class ConsoleUserAccountController {
         return responseFactory.success(toResponse(assertExists(id)));
     }
 
-    @PostMapping
-    public CommonResponse<ConsoleUserAccountResponse> create(
-            @Validated @RequestBody CreateUserRequest request, Authentication authentication) {
-        if (userAccountMapper.selectByUsername(request.getUsername()) != null) {
-            throw new BizException(
-                    ResultCode.CONFLICT, "username already exists: " + request.getUsername());
-        }
-        String passwordHash = passwordHasher.encode(request.getPassword());
-        String authoritiesCsv = normalizeAuthorities(request.getAuthoritiesCsv());
-        String operator = resolveOperator(authentication);
-        userAccountMapper.insert(
-                request.getTenantId(),
-                request.getUsername(),
-                request.getDisplayName(),
-                passwordHash,
-                authoritiesCsv,
-                operator);
-        Map<String, Object> created = userAccountMapper.selectByUsername(request.getUsername());
-        return responseFactory.success(toResponse(created));
-    }
-
     @PutMapping("/{id}")
     public CommonResponse<ConsoleUserAccountResponse> update(
             @PathVariable long id, @Validated @RequestBody UpdateUserRequest request) {
@@ -99,8 +75,9 @@ public class ConsoleUserAccountController {
     @PostMapping("/{id}/reset-password")
     public CommonResponse<Void> resetPassword(
             @PathVariable long id, @Validated @RequestBody ResetPasswordRequest request) {
-        assertExists(id);
+        Map<String, Object> account = assertExists(id);
         userAccountMapper.updatePasswordHash(id, passwordHasher.encode(request.getNewPassword()));
+        sessionRegistry.invalidateSession(str(account, "username"), str(account, "tenant_id"));
         return responseFactory.success(null);
     }
 
@@ -113,16 +90,10 @@ public class ConsoleUserAccountController {
 
     @PostMapping("/{id}/disable")
     public CommonResponse<ConsoleUserAccountResponse> disable(@PathVariable long id) {
-        assertExists(id);
+        Map<String, Object> account = assertExists(id);
         userAccountMapper.updateEnabled(id, false);
+        sessionRegistry.invalidateSession(str(account, "username"), str(account, "tenant_id"));
         return responseFactory.success(toResponse(userAccountMapper.selectById(id)));
-    }
-
-    @DeleteMapping("/{id}")
-    public CommonResponse<Void> delete(@PathVariable long id) {
-        assertExists(id);
-        userAccountMapper.deleteById(id);
-        return responseFactory.success(null);
     }
 
     // ── internal ──
@@ -149,44 +120,11 @@ public class ConsoleUserAccountController {
         return v == null ? null : String.valueOf(v);
     }
 
-    private String resolveOperator(Authentication authentication) {
-        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal p) {
-            return p.username();
-        }
-        return authentication != null ? authentication.getName() : "system";
-    }
-
     private String normalizeAuthorities(String raw) {
         if (raw == null || raw.isBlank()) {
-            return "ROLE_USER";
+            return ConsoleRoles.USER;
         }
         return raw.trim().toUpperCase();
-    }
-
-    @Data
-    public static class CreateUserRequest {
-        @NotBlank
-        @Size(max = 64)
-        private String tenantId;
-
-        @NotBlank
-        @Size(min = 2, max = 128)
-        @Pattern(
-                regexp = "^[a-zA-Z0-9][a-zA-Z0-9._\\-]*$",
-                message =
-                        "username must start with alphanumeric and contain only letters, digits,"
-                            + " '.', '_', '-'")
-        private String username;
-
-        @Size(max = 256)
-        private String displayName;
-
-        @NotBlank
-        @Size(min = 8, max = 256)
-        private String password;
-
-        @Size(max = 512)
-        private String authoritiesCsv;
     }
 
     @Data

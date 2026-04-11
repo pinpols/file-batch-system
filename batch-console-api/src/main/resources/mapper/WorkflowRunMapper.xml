@@ -76,4 +76,12 @@
             and trace_id = #{traceId}
         </if>
     </select>
+
+    <select id="countByStatuses" resultType="long">
+        select count(*)
+          from batch.workflow_run
+         where tenant_id = #{tenantId}
+           and run_status in
+        <foreach collection="statuses" item="s" open="(" close=")" separator=",">#{s}</foreach>
+    </select>
 </mapper>

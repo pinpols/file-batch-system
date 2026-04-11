@@ -5,7 +5,17 @@ info:
   x-last-updated: "2026-04-11"
   x-changelog:
     - date: "2026-04-11"
-      summary: "添加 x-last-updated 和 x-changelog 标识，便于快速定位文档更新时间"
+      summary: "POST /api/console/files/delete 改为 DELETE /api/console/files/{fileId}，请求体拆为 path/query 参数，统一物理删除走 DELETE 方法"
+    - date: "2026-04-11"
+      summary: "软删除改 PATCH：POST /{id}/toggle + POST /batch-toggle 统一改为 PATCH /{id}（body: EnabledPatchRequest）和 PATCH /batch（body: BatchEnabledPatchRequest），移除旧 toggle/batch-toggle 路径"
+    - date: "2026-04-11"
+      summary: "移除 DELETE job-definitions/{id}、workflow-definitions/{id}、file-channels/{id}、file-templates/{id}；软删除统一走 PATCH /{id}，DELETE 仅保留于物理删除场景"
+    - date: "2026-04-11"
+      summary: "新增 POST /api/console/tenants/batch 批量建租户端点（共享密码+用户名前缀，单事务）"
+    - date: "2026-04-11"
+      summary: "POST /api/console/tenants 新增必填字段 username/password，建租户时同步创建 ROLE_TENANT_USER 操作账号"
+    - date: "2026-04-11"
+      summary: "补齐 5 个新域（BatchWindow/BusinessCalendar/PipelineDefinition/TenantQuotaPolicy/ResourceQueue）的 Excel Upload/Preview/Apply CommonResponse 包装、ApplyRequest 及全部 inner Response/RowIssue/domain schema（共 47 个），消除所有悬空 $ref；添加 x-last-updated 和 x-changelog 标识"
   description: >
     Frontend-facing contract for the batch console.
     This file is the machine-readable source of truth for UI integration,
@@ -2982,19 +2992,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileOperationResponse'
-  /api/console/files/delete:
-    post:
+  /api/console/files/{fileId}:
+    delete:
       tags: [Files]
-      summary: Delete a file
+      summary: Delete a file record (physical delete)
       operationId: deleteFile
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeleteFileRequest'
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: reason
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 512
       responses:
         '200':
           description: Delete result
@@ -3338,6 +3359,13 @@ paths:
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
         - $ref: '#/components/parameters/JobCodeFilter'
+        - name: enabled
+          in: query
+          required: false
+          description: Filter by enabled status. Defaults to true (only enabled records returned unless overridden).
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: Job definition list
@@ -3560,8 +3588,13 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - name: enabled
+          in: query
+          required: false
+          description: Filter by enabled status. Defaults to true (only enabled records returned unless overridden).
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: File channel list
@@ -3614,8 +3647,13 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - name: enabled
+          in: query
+          required: false
+          description: Filter by enabled status. Defaults to true (only enabled records returned unless overridden).
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: File template list
@@ -3729,6 +3767,13 @@ paths:
           description: Filter by workflow code (partial match)
           schema:
             type: string
+        - name: enabled
+          in: query
+          required: false
+          description: Filter by enabled status. Defaults to true (only enabled records returned unless overridden).
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: Workflow definition list
@@ -4076,63 +4121,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
-    delete:
-      tags: [JobDefinitions]
-      summary: Delete job definition
-      operationId: deleteJobDefinition
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseString'
-  /api/console/job-definitions/{id}/toggle:
-    post:
+    patch:
       tags: [JobDefinitions]
       summary: Enable or disable job definition
-      operationId: toggleJobDefinition
+      operationId: patchJobDefinition
       security:
         - bearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: id
           in: path
           required: true
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseVoid'
   /api/console/job-definitions/{id}/copy:
     post:
       tags: [JobDefinitions]
@@ -4165,37 +4179,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseLong'
-  /api/console/job-definitions/batch-toggle:
-    post:
+  /api/console/job-definitions/batch:
+    patch:
       tags: [JobDefinitions]
       summary: Batch enable or disable job definitions
-      operationId: batchToggleJobDefinitions
+      operationId: batchPatchJobDefinitions
       security:
         - bearerAuth: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: array
-              items:
-                type: integer
-                format: int64
-              maxItems: 200
+              $ref: '#/components/schemas/BatchEnabledPatchRequest'
       responses:
         '200':
-          description: Number of toggled definitions
+          description: Number of patched definitions
           content:
             application/json:
               schema:
@@ -4304,63 +4303,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
-    delete:
-      tags: [WorkflowDefinitions]
-      summary: Delete workflow definition
-      operationId: deleteWorkflowDefinition
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseString'
-  /api/console/workflow-definitions/{id}/toggle:
-    post:
+    patch:
       tags: [WorkflowDefinitions]
       summary: Enable or disable workflow definition
-      operationId: toggleWorkflowDefinition
+      operationId: patchWorkflowDefinition
       security:
         - bearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: id
           in: path
           required: true
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseVoid'
   /api/console/workflow-definitions/{id}/validate:
     post:
       tags: [WorkflowDefinitions]
@@ -6229,8 +6197,10 @@ paths:
         - name: enabled
           in: query
           required: false
+          description: Filter by enabled status. Defaults to true (only enabled records returned unless overridden).
           schema:
             type: boolean
+            default: true
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
       responses:
@@ -6314,63 +6284,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
-    delete:
-      tags: [FileChannels]
-      summary: Delete file channel
-      operationId: deleteFileChannel
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseString'
-  /api/console/file-channels/{id}/toggle:
-    post:
+    patch:
       tags: [FileChannels]
       summary: Enable or disable file channel
-      operationId: toggleFileChannel
+      operationId: patchFileChannel
       security:
         - bearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: id
           in: path
           required: true
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseVoid'
 
   # ─── P3: File Templates CRUD ──────────────────────────────────────────────────
   /api/console/file-templates:
@@ -6399,8 +6338,10 @@ paths:
         - name: enabled
           in: query
           required: false
+          description: Filter by enabled status. Defaults to true (only enabled records returned unless overridden).
           schema:
             type: boolean
+            default: true
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
       responses:
@@ -6484,64 +6425,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
-    delete:
-      tags: [FileTemplates]
-      summary: Delete file template
-      operationId: deleteFileTemplate
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseString'
-  /api/console/file-templates/{id}/toggle:
-    post:
+    patch:
       tags: [FileTemplates]
       summary: Enable or disable file template
-      operationId: toggleFileTemplate
+      operationId: patchFileTemplate
       security:
         - bearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: id
           in: path
           required: true
           schema:
             type: integer
             format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: true
-          schema:
-            type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
-
+                $ref: '#/components/schemas/CommonResponseVoid'
   # ─── P4: Jobs — task/partition replay ────────────────────────────────────────
   /api/console/jobs/tasks/replay:
     post:
@@ -6886,7 +6795,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [tenantId, tenantName]
+              required: [tenantId, tenantName, username, password]
               properties:
                 tenantId:
                   type: string
@@ -6900,9 +6809,83 @@ paths:
                 description:
                   type: string
                   maxLength: 512
+                username:
+                  type: string
+                  minLength: 2
+                  maxLength: 128
+                  pattern: '^[a-zA-Z0-9][a-zA-Z0-9._\-]*$'
+                  description: Initial operator account username (ROLE_TENANT_USER)
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 256
+                  description: Initial operator account password (Argon2id hashed on server)
       responses:
         '200':
           description: Created tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+
+  /api/console/tenants/batch:
+    post:
+      tags: [Tenants]
+      summary: Batch create tenants
+      description: |
+        批量创建租户，每个租户自动绑定一个 ROLE_TENANT_USER 操作账号。
+        账号用户名 = `usernamePrefix` + `tenantId`，所有租户共享同一初始密码。
+        全部操作在单事务内完成，任意冲突均回滚。
+      operationId: batchCreateTenants
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenants, password]
+              properties:
+                tenants:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [tenantId, tenantName]
+                    properties:
+                      tenantId:
+                        type: string
+                        minLength: 2
+                        maxLength: 64
+                        pattern: '^[a-z0-9][a-z0-9\-]*[a-z0-9]$'
+                      tenantName:
+                        type: string
+                        maxLength: 256
+                      description:
+                        type: string
+                        maxLength: 512
+                usernamePrefix:
+                  type: string
+                  maxLength: 32
+                  pattern: '^[a-zA-Z0-9][a-zA-Z0-9._\-]*$'
+                  default: "op-"
+                  description: 账号用户名前缀，最终用户名为 {prefix}{tenantId}
+                password:
+                  type: string
+                  minLength: 12
+                  maxLength: 256
+                  description: 批量初始密码（≥12位高强度），首次登录后应立即修改
+      responses:
+        '200':
+          description: List of created tenants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+        '409':
+          description: Conflict — tenantId or username already exists
           content:
             application/json:
               schema:
@@ -7039,47 +7022,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-    post:
-      tags: [Users]
-      summary: Create user account
-      operationId: createUser
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [tenantId, username, password]
-              properties:
-                tenantId:
-                  type: string
-                  maxLength: 64
-                username:
-                  type: string
-                  minLength: 2
-                  maxLength: 128
-                  pattern: '^[a-zA-Z0-9][a-zA-Z0-9._\-]*$'
-                displayName:
-                  type: string
-                  maxLength: 256
-                password:
-                  type: string
-                  minLength: 8
-                  maxLength: 256
-                  description: Raw password — stored as Argon2id hash, never returned
-                authoritiesCsv:
-                  type: string
-                  maxLength: 512
-                  description: Comma-separated roles, e.g. ROLE_CONFIG_ADMIN,ROLE_AUDITOR. Defaults to ROLE_USER
-      responses:
-        '200':
-          description: Created user account (no passwordHash field)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseObject'
 
   /api/console/users/{id}:
     get:
@@ -7135,26 +7077,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-    delete:
-      tags: [Users]
-      summary: Delete user account
-      operationId: deleteUser
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: Deleted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseVoid'
 
   /api/console/users/{id}/reset-password:
     post:
@@ -8137,6 +8059,34 @@ components:
               type: object
               nullable: true
               description: Always null for void responses.
+    EnabledPatchRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+          description: Tenant identifier.
+        enabled:
+          type: boolean
+          description: Target enabled state.
+      required: [tenantId, enabled]
+    BatchEnabledPatchRequest:
+      type: object
+      properties:
+        tenantId:
+          type: string
+          description: Tenant identifier.
+        enabled:
+          type: boolean
+          description: Target enabled state.
+        ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          minItems: 1
+          maxItems: 200
+          description: IDs of records to patch.
+      required: [tenantId, enabled, ids]
     PageRequest:
       type: object
       properties:
@@ -8712,6 +8662,111 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/ConsoleAlertRoutingExcelApplyResponse'
+    CommonResponseConsoleBatchWindowExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBatchWindowExcelUploadResponse'
+    CommonResponseConsoleBatchWindowExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBatchWindowExcelPreviewResponse'
+    CommonResponseConsoleBatchWindowExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBatchWindowExcelApplyResponse'
+    CommonResponseConsoleBusinessCalendarExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBusinessCalendarExcelUploadResponse'
+    CommonResponseConsoleBusinessCalendarExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBusinessCalendarExcelPreviewResponse'
+    CommonResponseConsoleBusinessCalendarExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBusinessCalendarExcelApplyResponse'
+    CommonResponseConsolePipelineDefinitionExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsolePipelineDefinitionExcelUploadResponse'
+    CommonResponseConsolePipelineDefinitionExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsolePipelineDefinitionExcelPreviewResponse'
+    CommonResponseConsolePipelineDefinitionExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsolePipelineDefinitionExcelApplyResponse'
+    CommonResponseConsoleTenantQuotaPolicyExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleTenantQuotaPolicyExcelUploadResponse'
+    CommonResponseConsoleTenantQuotaPolicyExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleTenantQuotaPolicyExcelPreviewResponse'
+    CommonResponseConsoleTenantQuotaPolicyExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleTenantQuotaPolicyExcelApplyResponse'
+    CommonResponseConsoleResourceQueueExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleResourceQueueExcelUploadResponse'
+    CommonResponseConsoleResourceQueueExcelPreview:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleResourceQueueExcelPreviewResponse'
+    CommonResponseConsoleResourceQueueExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleResourceQueueExcelApplyResponse'
     CommonResponseAiAuditLogList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -9001,6 +9056,36 @@ components:
           type: string
       required: []
     AlertRoutingExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    BatchWindowExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    BusinessCalendarExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    PipelineDefinitionExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    TenantQuotaPolicyExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required: []
+    ResourceQueueExcelApplyRequest:
       type: object
       properties:
         reason:
@@ -11503,3 +11588,627 @@ components:
           items:
             type: string
       required: [rowNo, routeCode, messages]
+    ConsoleBatchWindowResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        windowCode:
+          type: string
+        windowName:
+          type: string
+        timezone:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        endStrategy:
+          type: string
+        outOfWindowAction:
+          type: string
+        allowCrossDay:
+          type: boolean
+        enabled:
+          type: boolean
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, windowCode, windowName, timezone, startTime, endTime, endStrategy, outOfWindowAction, allowCrossDay, enabled, createdAt, updatedAt]
+    ConsoleBatchWindowExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        rowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, sheetName, rowCount]
+    ConsoleBatchWindowExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleBatchWindowResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleBatchWindowExcelRowIssueResponse'
+      required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
+    ConsoleBatchWindowExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedRows:
+          type: integer
+          format: int32
+        insertedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+    ConsoleBatchWindowExcelRowIssueResponse:
+      type: object
+      properties:
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        windowCode:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [rowNo, windowCode, messages]
+    ConsoleBusinessCalendarResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        calendarCode:
+          type: string
+        calendarName:
+          type: string
+        timezone:
+          type: string
+        holidayRollRule:
+          type: string
+        catchUpPolicy:
+          type: string
+        catchUpMaxDays:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, calendarCode, calendarName, timezone, holidayRollRule, catchUpPolicy, enabled, createdAt, updatedAt]
+    ConsoleCalendarHolidayResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        calendarCode:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        dayType:
+          type: string
+        holidayName:
+          type: string
+        description:
+          type: string
+      required: [id, calendarCode, bizDate, dayType]
+    ConsoleBusinessCalendarExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        calendarSheetName:
+          type: string
+        calendarRowCount:
+          type: integer
+          format: int32
+        holidaySheetName:
+          type: string
+        holidayRowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, calendarSheetName, calendarRowCount, holidaySheetName, holidayRowCount]
+    ConsoleBusinessCalendarExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        totalCalendarRows:
+          type: integer
+          format: int32
+        validCalendarRows:
+          type: integer
+          format: int32
+        invalidCalendarRows:
+          type: integer
+          format: int32
+        calendarRows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleBusinessCalendarResponse'
+        totalHolidayRows:
+          type: integer
+          format: int32
+        validHolidayRows:
+          type: integer
+          format: int32
+        invalidHolidayRows:
+          type: integer
+          format: int32
+        holidayRows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleCalendarHolidayResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleBusinessCalendarExcelRowIssueResponse'
+      required: [uploadToken, fileName, totalCalendarRows, validCalendarRows, invalidCalendarRows, calendarRows, totalHolidayRows, validHolidayRows, invalidHolidayRows, holidayRows, issues]
+    ConsoleBusinessCalendarExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedCalendarRows:
+          type: integer
+          format: int32
+        insertedCalendars:
+          type: integer
+          format: int32
+        updatedCalendars:
+          type: integer
+          format: int32
+        appliedHolidayRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedCalendarRows, insertedCalendars, updatedCalendars, appliedHolidayRows]
+    ConsoleBusinessCalendarExcelRowIssueResponse:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [sheetName, rowNo, messages]
+    PipelineDefinitionStepResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        pipelineDefinitionId:
+          type: integer
+          format: int64
+        stepCode:
+          type: string
+        stepName:
+          type: string
+        stageCode:
+          type: string
+        stepOrder:
+          type: integer
+          format: int32
+        implCode:
+          type: string
+        stepParams:
+          type: string
+        timeoutSeconds:
+          type: integer
+          format: int32
+        retryPolicy:
+          type: string
+        retryMaxCount:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, pipelineDefinitionId, stepCode, stepName, stageCode, stepOrder, implCode, enabled, createdAt, updatedAt]
+    PipelineDefinitionDetailResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        jobCode:
+          type: string
+        pipelineName:
+          type: string
+        pipelineType:
+          type: string
+        bizType:
+          type: string
+        workerGroup:
+          type: string
+        version:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineDefinitionStepResponse'
+      required: [id, tenantId, jobCode, pipelineName, pipelineType, enabled, createdAt, updatedAt, steps]
+    ConsolePipelineDefinitionExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        pipelineRowCount:
+          type: integer
+          format: int32
+        stepRowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, pipelineRowCount, stepRowCount]
+    ConsolePipelineDefinitionExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        totalPipelineRows:
+          type: integer
+          format: int32
+        validPipelineRows:
+          type: integer
+          format: int32
+        invalidPipelineRows:
+          type: integer
+          format: int32
+        totalStepRows:
+          type: integer
+          format: int32
+        validStepRows:
+          type: integer
+          format: int32
+        invalidStepRows:
+          type: integer
+          format: int32
+        pipelines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PipelineDefinitionDetailResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsolePipelineDefinitionExcelRowIssueResponse'
+      required: [uploadToken, fileName, totalPipelineRows, validPipelineRows, invalidPipelineRows, totalStepRows, validStepRows, invalidStepRows, pipelines, issues]
+    ConsolePipelineDefinitionExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedPipelines:
+          type: integer
+          format: int32
+        insertedPipelines:
+          type: integer
+          format: int32
+        updatedPipelines:
+          type: integer
+          format: int32
+        appliedSteps:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedPipelines, insertedPipelines, updatedPipelines, appliedSteps]
+    ConsolePipelineDefinitionExcelRowIssueResponse:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [sheetName, rowNo, messages]
+    ConsoleTenantQuotaPolicyResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        policyCode:
+          type: string
+        maxRunningJobsPerTenant:
+          type: integer
+          format: int32
+        maxPartitionsPerTenant:
+          type: integer
+          format: int32
+        maxQpsPerTenant:
+          type: integer
+          format: int32
+        fairShareWeight:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, policyCode, enabled, createdAt, updatedAt]
+    ConsoleTenantQuotaPolicyExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        rowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, sheetName, rowCount]
+    ConsoleTenantQuotaPolicyExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleTenantQuotaPolicyResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleTenantQuotaPolicyExcelRowIssueResponse'
+      required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
+    ConsoleTenantQuotaPolicyExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedRows:
+          type: integer
+          format: int32
+        insertedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+    ConsoleTenantQuotaPolicyExcelRowIssueResponse:
+      type: object
+      properties:
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        policyCode:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [rowNo, policyCode, messages]
+    ConsoleResourceQueueResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        queueCode:
+          type: string
+        queueName:
+          type: string
+        queueType:
+          type: string
+        maxRunningJobs:
+          type: integer
+          format: int32
+        maxRunningPartitions:
+          type: integer
+          format: int32
+        maxQps:
+          type: integer
+          format: int32
+        workerGroup:
+          type: string
+        resourceTag:
+          type: string
+        priorityPolicy:
+          type: string
+        fairShareWeight:
+          type: integer
+          format: int32
+        enabled:
+          type: boolean
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, queueCode, queueName, queueType, enabled, createdAt, updatedAt]
+    ConsoleResourceQueueExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        rowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, sheetName, rowCount]
+    ConsoleResourceQueueExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleResourceQueueResponse'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleResourceQueueExcelRowIssueResponse'
+      required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
+    ConsoleResourceQueueExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedRows:
+          type: integer
+          format: int32
+        insertedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+    ConsoleResourceQueueExcelRowIssueResponse:
+      type: object
+      properties:
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        queueCode:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [rowNo, queueCode, messages]

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+
 @SuppressWarnings("unchecked")
 class ConsoleSessionRegistryTest {
 
@@ -46,5 +47,19 @@ class ConsoleSessionRegistryTest {
 
         assertThat(registry.isCurrentSession("alice", "tenant-a", 5L)).isTrue();
         assertThat(registry.isCurrentSession("alice", "tenant-a", 4L)).isFalse();
+    }
+
+    @Test
+    void invalidateSession_deletesRedisKey_makingExistingJwtInvalid() {
+        registry.invalidateSession("alice", "tenant-a");
+
+        verify(redisTemplate).delete("batch:console:auth:session:tenant-a:alice");
+    }
+
+    @Test
+    void invalidateSession_afterDeletion_isCurrentSessionReturnsFalse() {
+        when(valueOperations.get("batch:console:auth:session:tenant-a:alice")).thenReturn(null);
+
+        assertThat(registry.isCurrentSession("alice", "tenant-a", 1L)).isFalse();
     }
 }

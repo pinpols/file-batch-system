@@ -167,19 +167,6 @@ public class DefaultConsoleJobDefinitionApplicationService
     }
 
     @Override
-    public void delete(Long id, String tenantId) {
-        String resolved = tenantGuard.resolveTenant(tenantId);
-        JobDefinitionEntity existing =
-                Guard.requireFound(
-                        jobDefinitionMapper.selectById(resolved, id), "job definition not found");
-        int rows = jobDefinitionMapper.deleteByTenantAndId(resolved, id);
-        if (rows == 0) {
-            throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
-        }
-        cacheInvalidationService.evictJobDefinition(resolved, existing.getJobCode());
-    }
-
-    @Override
     public ConsoleJobDefinitionResponse copy(Long id, String tenantId, String newJobCode) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode);

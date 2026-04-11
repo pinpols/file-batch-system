@@ -136,23 +136,6 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     }
 
     @Override
-    @Transactional
-    public void delete(Long id, String tenantId) {
-        String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-
-        WorkflowDefinitionEntity def =
-                Guard.requireFound(
-                        definitionMapper.selectById(resolvedTenant, id),
-                        "Workflow definition not found: " + id);
-
-        nodeMapper.deleteByWorkflowDefinitionId(id);
-        edgeMapper.deleteByWorkflowDefinitionId(id);
-        definitionMapper.deleteByTenantAndId(resolvedTenant, id);
-        cacheInvalidationService.evictWorkflowDefinition(resolvedTenant, def.getWorkflowCode());
-        publishRefresh(resolvedTenant, "workflow-definition-deleted");
-    }
-
-    @Override
     public DagValidationResult validate(Long id, String tenantId) {
         String resolvedTenant = tenantGuard.resolveTenant(tenantId);
         WorkflowDefinitionEntity def =

@@ -49,11 +49,10 @@ batch:
       role-header: ${BATCH_CONSOLE_ROLE_HEADER:X-Console-Roles}
       # Token header 名称（会话/签名 token）
       token-header: ${BATCH_CONSOLE_TOKEN_HEADER:X-Console-Token}
-      # 默认租户（未显式传入时使用）
-      default-tenant-id: ${BATCH_CONSOLE_DEFAULT_TENANT_ID:default-tenant}
-      # 允许访问的租户列表（白名单）
-      allowed-tenants:
-        - ${BATCH_CONSOLE_ALLOWED_TENANT:default-tenant}
+      # 默认租户（未显式传入时使用；留空表示不设默认值，请求必须携带 X-Tenant-Id header）
+      default-tenant-id: ${BATCH_CONSOLE_DEFAULT_TENANT_ID:}
+      # 允许访问的租户白名单（空列表表示不限制；生产建议通过 BATCH_CONSOLE_ALLOWED_TENANTS 显式指定）
+      allowed-tenants: ${BATCH_CONSOLE_ALLOWED_TENANTS:}
       # 默认授权列表（未显式传入 roles 时使用）
       default-authorities:
         - ROLE_ADMIN

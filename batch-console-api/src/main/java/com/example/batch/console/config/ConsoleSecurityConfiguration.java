@@ -4,6 +4,7 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.console.support.ConsoleAuthenticationFilter;
+import com.example.batch.console.support.ConsoleRoles;
 import com.example.batch.console.support.ConsoleRateLimitFilter;
 import com.example.batch.console.support.ConsoleSecurityHeadersWriter;
 import com.example.batch.console.support.ConsoleSecurityResponseWriter;
@@ -73,7 +74,7 @@ public class ConsoleSecurityConfiguration {
                                                 "/favicon.ico")
                                         .permitAll()
                                         .requestMatchers("/actuator/loggers/**")
-                                        .hasAuthority("ROLE_ADMIN")
+                                        .hasAuthority(ConsoleRoles.ADMIN)
                                         .anyRequest()
                                         .authenticated())
                 .addFilterBefore(consoleRateLimitFilter, UsernamePasswordAuthenticationFilter.class)

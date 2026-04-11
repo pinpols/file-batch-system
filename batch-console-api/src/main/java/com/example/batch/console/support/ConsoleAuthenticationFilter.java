@@ -39,28 +39,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
             HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
-            boolean demoOpen = batchSecurityProperties.isDemoOpen();
-            if (!properties.isEnabled() && !batchSecurityProperties.isTestingOpen() && !demoOpen) {
-                filterChain.doFilter(request, response);
-                return;
-            }
-
-            if (demoOpen) {
-                // Demo 模式下：无需携带 token/legacy header，默认以 admin 权限放行，便于前端联调。
-                String username = resolveUsername(request);
-                String tenantId = resolveTenant(request);
-                Set<SimpleGrantedAuthority> authorities =
-                        properties.getDefaultAuthorities().stream()
-                                .map(SimpleGrantedAuthority::new)
-                                .collect(Collectors.toCollection(LinkedHashSet::new));
-                ConsolePrincipal principal =
-                        new ConsolePrincipal(
-                                username,
-                                tenantId,
-                                authorities.stream()
-                                        .map(SimpleGrantedAuthority::getAuthority)
-                                        .collect(Collectors.toCollection(LinkedHashSet::new)));
-                setAuthentication(principal, "demo-open");
+            if (!properties.isEnabled() && !batchSecurityProperties.isTestingOpen()) {
                 filterChain.doFilter(request, response);
                 return;
             }

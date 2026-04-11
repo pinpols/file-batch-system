@@ -2,6 +2,7 @@ package com.example.batch.console.service;
 
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.support.ConsoleJwtService;
+import com.example.batch.console.support.ConsoleRoles;
 import com.example.batch.console.support.ConsoleLoginService;
 import com.example.batch.console.support.ConsolePrincipal;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -81,7 +82,7 @@ public class ConsoleAuthApplicationService {
                 resolved.add(grantedAuthority.getAuthority());
             }
         }
-        if (resolved.isEmpty() || resolved.contains("ROLE_USER")) {
+        if (resolved.isEmpty() || resolved.contains(ConsoleRoles.USER)) {
             resolved.clear();
             resolved.addAll(securityProperties.getDefaultAuthorities());
         }

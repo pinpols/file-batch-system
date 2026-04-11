@@ -1,18 +1,19 @@
 package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.common.enums.ResultCode;
-import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
-import com.example.batch.common.utils.Guard;
-import com.example.batch.console.mapper.TenantMapper;
-import com.example.batch.console.mapper.param.TenantUpsertParam;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.service.ConsoleTenantApplicationService;
+import com.example.batch.console.service.ConsoleTenantApplicationService.BatchCreateTenantCommand;
+import com.example.batch.console.service.ConsoleTenantApplicationService.CreateTenantCommand;
+import com.example.batch.console.service.ConsoleTenantApplicationService.TenantSpec;
 import com.example.batch.console.support.ConsolePrincipal;
 import com.example.batch.console.web.response.ConsoleTenantResponse;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -32,7 +33,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 租户管理 REST 端点。
@@ -45,7 +45,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ConsoleTenantController {
 
-    private final TenantMapper tenantMapper;
+    private final ConsoleTenantApplicationService tenantService;
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping
@@ -55,89 +55,68 @@ public class ConsoleTenantController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
-        PageRequest pageRequest = new PageRequest(pageNo, pageSize);
-        List<Map<String, Object>> rows = tenantMapper.selectByQuery(keyword, status, pageRequest);
-        long total = tenantMapper.countByQuery(keyword, status);
-        List<ConsoleTenantResponse> items = rows.stream().map(this::toResponse).toList();
-        return responseFactory.success(new PageResponse<>(total, pageNo, pageSize, items));
+        return responseFactory.success(
+                tenantService.listTenants(keyword, status, new PageRequest(pageNo, pageSize)));
     }
 
     @GetMapping("/{tenantId}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
     public CommonResponse<ConsoleTenantResponse> get(@PathVariable String tenantId) {
-        Map<String, Object> row =
-                Guard.requireFound(
-                        tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId);
-        return responseFactory.success(toResponse(row));
+        return responseFactory.success(tenantService.getTenant(tenantId));
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<ConsoleTenantResponse> create(
             @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
-        if (tenantMapper.selectByTenantId(request.getTenantId()) != null) {
-            throw new BizException(
-                    ResultCode.CONFLICT, "tenant already exists: " + request.getTenantId());
-        }
-        TenantUpsertParam param = new TenantUpsertParam();
-        param.setTenantId(request.getTenantId());
-        param.setTenantName(request.getTenantName());
-        param.setStatus("ACTIVE");
-        param.setDescription(request.getDescription());
-        param.setCreatedBy(resolveOperator(authentication));
-        tenantMapper.insert(param);
         return responseFactory.success(
-                toResponse(tenantMapper.selectByTenantId(request.getTenantId())));
+                tenantService.createTenant(new CreateTenantCommand(
+                        request.getTenantId(),
+                        request.getTenantName(),
+                        request.getDescription(),
+                        request.getUsername(),
+                        request.getPassword(),
+                        resolveOperator(authentication))));
+    }
+
+    @PostMapping("/batch")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public CommonResponse<List<ConsoleTenantResponse>> batchCreate(
+            @Validated @RequestBody BatchCreateTenantRequest request,
+            Authentication authentication) {
+        List<TenantSpec> specs = request.getTenants().stream()
+                .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
+                .toList();
+        return responseFactory.success(
+                tenantService.batchCreateTenants(new BatchCreateTenantCommand(
+                        specs,
+                        request.getUsernamePrefix(),
+                        request.getPassword(),
+                        resolveOperator(authentication))));
     }
 
     @PutMapping("/{tenantId}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<ConsoleTenantResponse> update(
             @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
-        assertExists(tenantId);
-        tenantMapper.update(tenantId, request.getTenantName(), request.getDescription());
-        return responseFactory.success(toResponse(tenantMapper.selectByTenantId(tenantId)));
+        return responseFactory.success(
+                tenantService.updateTenant(
+                        tenantId, request.getTenantName(), request.getDescription()));
     }
 
     @PostMapping("/{tenantId}/suspend")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<ConsoleTenantResponse> suspend(@PathVariable String tenantId) {
-        assertExists(tenantId);
-        tenantMapper.updateStatus(tenantId, "SUSPENDED");
-        return responseFactory.success(toResponse(tenantMapper.selectByTenantId(tenantId)));
+        return responseFactory.success(tenantService.suspendTenant(tenantId));
     }
 
     @PostMapping("/{tenantId}/activate")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<ConsoleTenantResponse> activate(@PathVariable String tenantId) {
-        assertExists(tenantId);
-        tenantMapper.updateStatus(tenantId, "ACTIVE");
-        return responseFactory.success(toResponse(tenantMapper.selectByTenantId(tenantId)));
+        return responseFactory.success(tenantService.activateTenant(tenantId));
     }
 
     // ── internal ──
-
-    private void assertExists(String tenantId) {
-        Guard.requireFound(
-                tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId);
-    }
-
-    private ConsoleTenantResponse toResponse(Map<String, Object> row) {
-        return new ConsoleTenantResponse(
-                row.get("id") instanceof Number n ? n.longValue() : null,
-                str(row, "tenant_id"),
-                str(row, "tenant_name"),
-                str(row, "status"),
-                str(row, "description"),
-                str(row, "created_by"),
-                str(row, "created_at"),
-                str(row, "updated_at"));
-    }
-
-    private String str(Map<String, Object> row, String key) {
-        Object v = row.get(key);
-        return v == null ? null : String.valueOf(v);
-    }
 
     private String resolveOperator(Authentication authentication) {
         if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal p) {
@@ -161,10 +140,60 @@ public class ConsoleTenantController {
 
         @Size(max = 512)
         private String description;
+
+        @NotBlank
+        @Size(min = 2, max = 128)
+        @Pattern(
+                regexp = "^[a-zA-Z0-9][a-zA-Z0-9._\\-]*$",
+                message =
+                        "username must start with alphanumeric and contain only letters, digits,"
+                            + " '.', '_', '-'")
+        private String username;
+
+        @NotBlank
+        @Size(min = 8, max = 256)
+        private String password;
     }
 
     @Data
     public static class UpdateTenantRequest {
+        @NotBlank
+        @Size(max = 256)
+        private String tenantName;
+
+        @Size(max = 512)
+        private String description;
+    }
+
+    @Data
+    public static class BatchCreateTenantRequest {
+        @NotEmpty
+        @Size(max = 50, message = "tenants must not exceed 50")
+        @Valid
+        private List<TenantSpecRequest> tenants;
+
+        /** 账号用户名前缀，最终用户名为 {prefix}{tenantId}，默认 op- */
+        @Size(max = 32)
+        @Pattern(
+                regexp = "^[a-zA-Z0-9][a-zA-Z0-9._\\-]*$",
+                message = "usernamePrefix must start with alphanumeric")
+        private String usernamePrefix = "op-";
+
+        /** 批量初始密码（高强度，≥12位），首次登录后应立即修改。 */
+        @NotBlank
+        @Size(min = 12, max = 256)
+        private String password;
+    }
+
+    @Data
+    public static class TenantSpecRequest {
+        @NotBlank
+        @Size(min = 2, max = 64)
+        @Pattern(
+                regexp = "^[a-z0-9][a-z0-9\\-]*[a-z0-9]$",
+                message = "tenant_id must be lowercase alphanumeric with hyphens")
+        private String tenantId;
+
         @NotBlank
         @Size(max = 256)
         private String tenantName;

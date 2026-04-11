@@ -30,4 +30,7 @@ public interface FilePipelineMapper {
             @Param("traceId") String traceId,
             @Param("fromTime") Instant fromTime,
             @Param("toTime") Instant toTime);
+
+    long countByStatuses(
+            @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 }
