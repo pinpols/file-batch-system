@@ -17,8 +17,6 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
-import org.springframework.scheduling.annotation.EnableScheduling;
-
 @SpringBootApplication(
         scanBasePackages = {"com.example.batch.console", "com.example.batch.common"},
         exclude = {
@@ -41,7 +39,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableJdbcRepositories(basePackages = "com.example.batch.console.repository")
 @ConfigurationPropertiesScan(
         basePackages = {"com.example.batch.console", "com.example.batch.common"})
-@EnableScheduling
 public class BatchConsoleApiApplication {
 
     public static void main(String[] args) {

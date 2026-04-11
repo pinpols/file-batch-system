@@ -126,7 +126,7 @@ _legacy_module_for_runtime() {
 
 _kill_from_pid_lines_for_names() {
   local line n matched
-  for line in "${PID_FILE_LINES[@]}"; do
+  for line in "${PID_FILE_LINES[@]+"${PID_FILE_LINES[@]}"}"; do
     _parse_pid_line "$line"
     matched=0
     for n in "$@"; do
@@ -247,17 +247,27 @@ _residual_force_all
 
 # ── 端口残留检查 ──────────────────────────────────────────
 _check_port_residual() {
-  local -A name_ports=(
-    [orchestrator]="${BATCH_ORCHESTRATOR_PORT:-18082}"
-    [trigger]="${BATCH_TRIGGER_PORT:-18081}"
-    [console]="${BATCH_CONSOLE_PORT:-18080}"
-    [worker-import]="${BATCH_WORKER_IMPORT_PORT:-18083}"
-    [worker-export]="${BATCH_WORKER_EXPORT_PORT:-18084}"
-    [worker-dispatch]="${BATCH_WORKER_DISPATCH_PORT:-18085}"
+  local names=(
+    "orchestrator"
+    "trigger"
+    "console"
+    "worker-import"
+    "worker-export"
+    "worker-dispatch"
+  )
+  local ports=(
+    "${BATCH_ORCHESTRATOR_PORT:-18082}"
+    "${BATCH_TRIGGER_PORT:-18081}"
+    "${BATCH_CONSOLE_PORT:-18080}"
+    "${BATCH_WORKER_IMPORT_PORT:-18083}"
+    "${BATCH_WORKER_EXPORT_PORT:-18084}"
+    "${BATCH_WORKER_DISPATCH_PORT:-18085}"
   )
   local residuals=()
-  for name in "${!name_ports[@]}"; do
-    local port="${name_ports[$name]}"
+  local i
+  for ((i = 0; i < ${#names[@]}; i++)); do
+    local name="${names[$i]}"
+    local port="${ports[$i]}"
     local pid
     pid=$(lsof -ti tcp:"$port" 2>/dev/null | head -1 || true)
     if [[ -n "$pid" ]]; then
@@ -267,7 +277,7 @@ _check_port_residual() {
   if (( ${#residuals[@]} > 0 )); then
     echo ""
     echo "WARNING: 以下端口仍有进程残留，可能需要手动处理：" >&2
-    for msg in "${residuals[@]}"; do
+    for msg in "${residuals[@]+"${residuals[@]}"}"; do
       echo "$msg" >&2
     done
     echo "  可执行: lsof -ti tcp:<port> | xargs kill -9" >&2
