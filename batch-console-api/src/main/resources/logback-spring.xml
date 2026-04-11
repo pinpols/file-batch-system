@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 继承 Spring Boot 默认配置（控制台输出、日志级别等保持不变） -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- 前端遥测专属文件 appender -->
+    <springProfile name="local">
+        <appender name="FRONTEND_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/app/frontend.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/app/frontend.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>7</maxHistory>
+            </rollingPolicy>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{frontendApp}][%X{frontendUserId}][%X{frontendPage}] %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <!-- ConsoleTelemetryController 的日志同时写控制台和前端专属文件 -->
+        <logger name="com.example.batch.console.web.ConsoleTelemetryController"
+                level="INFO" additivity="true">
+            <appender-ref ref="FRONTEND_FILE"/>
+        </logger>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
