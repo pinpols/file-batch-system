@@ -251,6 +251,25 @@ esac
 
 cleanup_test_reports
 
+# -------------------------------------------------------------
+# mvnd 工作区解析说明
+# -------------------------------------------------------------
+# mvnd（Maven Daemon）在 test 阶段存在一个已知的工作区读取器缺陷：
+# 多模块 reactor 中，跨模块依赖有时会回退到 ~/.m2 缓存的旧版 JAR，
+# 而非使用当前 reactor 编译出的最新 target/classes。
+# 具体表现：受影响模块编译失败或测试运行时出现 NoClassDefFoundError。
+#
+# 受影响的"库模块"（被其他模块依赖）：
+#   batch-common      → 被 batch-orchestrator、batch-worker-core 等全部模块依赖
+#   batch-orchestrator → 被 batch-console-api 依赖
+#   batch-worker-core → 被 batch-worker-import/export/dispatch 依赖
+#
+# 解决方案：在 clean test 之前先执行一次 install -DskipTests，
+# 把这三个库模块的最新 JAR 写入 ~/.m2，确保后续 reactor 编译时
+# mvnd 可以从缓存中找到正确版本。
+# e2e / all 模式已包含 clean install 全量构建，无需额外预装。
+# -------------------------------------------------------------
+
 case "$MODE" in
   unit)
     banner "单元测试"

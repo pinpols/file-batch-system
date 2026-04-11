@@ -365,15 +365,7 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
         Long getTotalPartitions();
     }
 
-    interface SlaStatsView {
-        Long getBreached();
-
-        Long getOnTime();
-
-        Long getTotalWithSla();
-
-        BigDecimal getAvgDurationSeconds();
-    }
+    record SlaStatsView(Long breached, Long onTime, Long totalWithSla, BigDecimal avgDurationSeconds) {}
 
     interface SlaDayView {
         LocalDate getDay();

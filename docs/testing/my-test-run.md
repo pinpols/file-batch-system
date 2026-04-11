@@ -175,3 +175,16 @@ security-scan:  SecurityScanOptionsTest, SecurityScanOrchestratorTest
 
 ## 待办
 - [ ] 修复 4 个 E2E ConditionTimeout 失败（ImportPipelineE2eIT / MultiTenantConcurrentE2eIT / OutboxForwarderE2eIT / OutboxForwarderRetryE2eIT）
+
+---
+
+## 2026-04-11 补充修复记录
+
+### 已修复
+
+| 问题 | 受影响测试 | 根因 | 修复 |
+|------|-----------|------|------|
+| 全部 14 个 E2E 失败 `InvalidUrlException: Bad authority` | `*E2eIT`（全量） | `HttpWorkerRegistryClient.resolveBaseUrl()` 返回含 `${local.server.port}` 字面量的 URL | 注入 `Environment`，检测 `${` 后回退读取 `local.server.port` |
+| dispatch 单元测试 `NoClassDefFoundError` | `*DispatchStepTest`、`DefaultDispatchStageExecutorTest` | mvnd 加载旧版 `batch-worker-core` JAR，缺少 `StageExecutionResult`、`FileAuditParam$FileAuditParamBuilder` | `run-tests.sh` 预装 `batch-worker-core` |
+| `batch-console-api` 集成测试全量失败 | 全部 9 个 `*IntegrationTest` | mvnd 加载旧版 `batch-orchestrator` JAR，`batch-console-api` 编译产物不完整 | `run-tests.sh` 预装 `batch-orchestrator` |
+| `batch-worker-export` 集成测试失败 | `BatchWorkerExportApplicationIntegrationTest`、`MinioExportStorageIntegrationTest` | `AbstractPipelineStepExecutionAdapter` 不在旧版 `batch-worker-core` JAR 中 | 同上，预装 `batch-worker-core` |
