@@ -2,10 +2,8 @@ package com.example.batch.console.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -13,11 +11,17 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
+import com.example.batch.console.mapper.AlertRoutingConfigMapper;
+import com.example.batch.console.mapper.BatchWindowMapper;
+import com.example.batch.console.mapper.BusinessCalendarMapper;
+import com.example.batch.console.mapper.CalendarHolidayMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
+import com.example.batch.console.mapper.ResourceQueueMapper;
+import com.example.batch.console.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.mapper.WorkflowNodeMapper;
@@ -26,10 +30,8 @@ import com.example.batch.console.web.request.TenantConfigBatchInitRequest.FileCh
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.FileTemplateSpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.InitMode;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.JobDefinitionSpec;
-import com.example.batch.console.web.request.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +57,12 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     @Mock private PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
     @Mock private FileChannelConfigMapper fileChannelConfigMapper;
     @Mock private FileTemplateConfigMapper fileTemplateConfigMapper;
+    @Mock private ResourceQueueMapper resourceQueueMapper;
+    @Mock private BatchWindowMapper batchWindowMapper;
+    @Mock private BusinessCalendarMapper businessCalendarMapper;
+    @Mock private CalendarHolidayMapper calendarHolidayMapper;
+    @Mock private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
+    @Mock private AlertRoutingConfigMapper alertRoutingConfigMapper;
 
     private DefaultConsoleTenantConfigInitApplicationService service;
 
@@ -63,7 +71,9 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
         service = new DefaultConsoleTenantConfigInitApplicationService(
                 jobDefinitionMapper, workflowDefinitionMapper, workflowNodeMapper, workflowEdgeMapper,
                 pipelineDefinitionMapper, pipelineStepDefinitionMapper,
-                fileChannelConfigMapper, fileTemplateConfigMapper);
+                fileChannelConfigMapper, fileTemplateConfigMapper,
+                resourceQueueMapper, batchWindowMapper, businessCalendarMapper, calendarHolidayMapper,
+                tenantQuotaPolicyMapper, alertRoutingConfigMapper);
     }
 
     // ------------------------------------------------------------------ job definitions

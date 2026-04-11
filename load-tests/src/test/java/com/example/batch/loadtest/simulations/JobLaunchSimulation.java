@@ -2,14 +2,12 @@ package com.example.batch.loadtest.simulations;
 
 import com.example.batch.loadtest.GatlingConfig;
 import io.gatling.javaapi.core.ChainBuilder;
-import io.gatling.javaapi.core.FeederBuilder;
 import io.gatling.javaapi.core.ScenarioBuilder;
 import io.gatling.javaapi.core.Simulation;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
 import static io.gatling.javaapi.core.CoreDsl.*;

@@ -3,7 +3,6 @@ package com.example.batch.worker.dispatchs.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,7 +12,6 @@ import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
 import com.example.batch.worker.dispatchs.domain.DispatchPayload;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
-import com.example.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;

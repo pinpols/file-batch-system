@@ -8,7 +8,6 @@ import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.console.support.ConsoleSecurityResponseWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;

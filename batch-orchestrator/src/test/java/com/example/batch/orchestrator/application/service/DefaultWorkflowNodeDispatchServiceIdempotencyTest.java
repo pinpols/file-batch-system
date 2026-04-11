@@ -1,6 +1,5 @@
 package com.example.batch.orchestrator.application.service;
 
-import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.plan.SchedulePlanBuilder;
@@ -23,10 +22,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;

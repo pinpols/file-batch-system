@@ -2,7 +2,6 @@ package com.example.batch.worker.dispatchs.infrastructure;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
