@@ -253,18 +253,35 @@ _clear_occupied_ports() {
 echo "==> 检查应用端口占用..."
 _clear_occupied_ports
 
+# ── 轻量启动开关 ───────────────────────────────────────────
+# START_CONSOLE=0   跳过 console-api（不需要前端 BFF 时）
+# START_TRIGGER=0   跳过 trigger（不需要定时触发器时）
+# START_WORKERS=0   跳过全部 worker（只调 orchestrator / console 接口时）
+# WORKERS=import,export   只启动指定 worker，逗号分隔（默认全启）
+START_CONSOLE="${START_CONSOLE:-1}"
+START_TRIGGER="${START_TRIGGER:-1}"
+START_WORKERS="${START_WORKERS:-1}"
+WORKERS="${WORKERS:-import,export,dispatch}"
+
 echo "==> 启动 Spring Boot 进程（profile=local）..."
-echo "  顺序：orchestrator -> 健康检查 UP -> trigger / console -> 三个 worker"
+echo "  顺序：orchestrator -> 健康检查 UP -> trigger / console -> worker(s)"
+echo "  START_CONSOLE=${START_CONSOLE}  START_TRIGGER=${START_TRIGGER}  START_WORKERS=${START_WORKERS}  WORKERS=${WORKERS}"
 
 start_java orchestrator "$(module_jar orchestrator)"
 wait_orchestrator_healthy
 
-start_java trigger "$(module_jar trigger)"
-start_java console "$(module_jar console)"
+[[ "${START_TRIGGER}" == "1" ]] && start_java trigger "$(module_jar trigger)"
+[[ "${START_CONSOLE}" == "1" ]] && start_java console "$(module_jar console)"
 
-start_java worker-import "$(module_jar worker-import)"
-start_java worker-export "$(module_jar worker-export)"
-start_java worker-dispatch "$(module_jar worker-dispatch)"
+if [[ "${START_WORKERS}" == "1" ]]; then
+  local_ifs="$IFS"
+  IFS=','
+  for w in $WORKERS; do
+    w="${w// /}"   # trim spaces
+    [[ -n "$w" ]] && start_java "worker-${w}" "$(module_jar "worker-${w}")"
+  done
+  IFS="$local_ifs"
+fi
 
 mv "$PID_FILE_NEW" "$PID_FILE"
 trap - EXIT
@@ -279,21 +296,34 @@ echo "停止请执行: ./scripts/local/stop-all.sh"
 # 健康检查：等待所有 Spring Boot 应用均 UP
 # 总超时 3 分钟；每 5 秒轮询一次；已 UP 的不再重复探测
 # ─────────────────────────────────────────────
+_port_for_app() {
+  case "$1" in
+    orchestrator)   echo "${BATCH_ORCHESTRATOR_PORT:-18082}" ;;
+    trigger)        echo "${BATCH_TRIGGER_PORT:-18081}" ;;
+    console)        echo "${BATCH_CONSOLE_PORT:-18080}" ;;
+    worker-import)  echo "${BATCH_WORKER_IMPORT_PORT:-18083}" ;;
+    worker-export)  echo "${BATCH_WORKER_EXPORT_PORT:-18084}" ;;
+    worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-18085}" ;;
+  esac
+}
+
+_mark_up() {   # _mark_up "name" → appends to $up_list
+  up_list="${up_list} $1 "
+}
+
+_is_up() {    # _is_up "name" → true if already marked
+  [[ "$up_list" == *" $1 "* ]]
+}
+
 wait_all_apps_healthy() {
-  local -A ports=(
-    [orchestrator]="${BATCH_ORCHESTRATOR_PORT:-18082}"
-    [trigger]="${BATCH_TRIGGER_PORT:-18081}"
-    [console]="${BATCH_CONSOLE_PORT:-18080}"
-    [worker-import]="${BATCH_WORKER_IMPORT_PORT:-18083}"
-    [worker-export]="${BATCH_WORKER_EXPORT_PORT:-18084}"
-    [worker-dispatch]="${BATCH_WORKER_DISPATCH_PORT:-18085}"
-  )
+  # 兼容 Bash 3.2（macOS 系统 bash 不支持 local -A 关联数组）
+  # $1: 空格分隔的待检模块列表（由调用方按实际启动的模块传入）
+  local check_list="$1"
   local timeout="${APP_HEALTH_WAIT_SEC:-300}"
   local interval=5
   local deadline=$(( $(date +%s) + timeout ))
-
-  # 已经通过 wait_orchestrator_healthy 确认了 orchestrator，先标记
-  local -A up=([orchestrator]=1)
+  # 空格包围，用于 _is_up 字符串匹配；orchestrator 已由 wait_orchestrator_healthy 确认
+  local up_list=" orchestrator "
 
   echo ""
   echo "==> 健康检查：等待所有 Spring Boot 应用 UP（最多 ${timeout}s，可通过 APP_HEALTH_WAIT_SEC 覆盖）..."
@@ -306,14 +336,14 @@ wait_all_apps_healthy() {
     fi
 
     local all_up=true
-    for name in orchestrator trigger console worker-import worker-export worker-dispatch; do
-      [[ "${up[$name]+_}" ]] && continue   # 已 UP，跳过
-
-      local port="${ports[$name]}"
-      local url="http://127.0.0.1:${port}/actuator/health"
+    local name port url
+    for name in $check_list; do
+      _is_up "$name" && continue   # 已 UP，跳过
+      port="$(_port_for_app "$name")"
+      url="http://127.0.0.1:${port}/actuator/health"
       if curl -sf --connect-timeout 2 --max-time 5 "$url" 2>/dev/null \
           | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
-        up[$name]=1
+        _mark_up "$name"
         printf '  ✓ %-18s UP  (port %s)\n' "$name" "$port"
       else
         all_up=false
@@ -333,9 +363,10 @@ wait_all_apps_healthy() {
   # 超时后打印汇总
   echo ""
   echo "  ┌──────────────────── 健康检查结果（超时 ${timeout}s）────────────────────┐"
-  for name in orchestrator trigger console worker-import worker-export worker-dispatch; do
-    local port="${ports[$name]}"
-    if [[ "${up[$name]+_}" ]]; then
+  local name port
+  for name in $check_list; do
+    port="$(_port_for_app "$name")"
+    if _is_up "$name"; then
       printf '  │  ✓ %-18s UP      (port %s)\n' "$name" "$port"
     else
       printf '  │  ✗ %-18s 未就绪  (port %s)  → 查看 logs/app/%s.log\n' "$name" "$port" "$name"
@@ -346,4 +377,22 @@ wait_all_apps_healthy() {
   return 1
 }
 
-wait_all_apps_healthy || true
+# 根据实际启动的模块构建待检列表
+_build_check_list() {
+  local list="orchestrator"
+  [[ "${START_TRIGGER}" == "1" ]] && list="$list trigger"
+  [[ "${START_CONSOLE}" == "1" ]] && list="$list console"
+  if [[ "${START_WORKERS}" == "1" ]]; then
+    local w
+    local saved_ifs="$IFS"
+    IFS=','
+    for w in $WORKERS; do
+      w="${w// /}"
+      [[ -n "$w" ]] && list="$list worker-${w}"
+    done
+    IFS="$saved_ifs"
+  fi
+  echo "$list"
+}
+
+wait_all_apps_healthy "$(_build_check_list)" || true

@@ -105,11 +105,6 @@
             <version>5.4.0</version>
         </dependency>
         <dependency>
-            <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>${springdoc.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
         </dependency>
@@ -187,59 +182,6 @@
                     <scope>runtime</scope>
                 </dependency>
             </dependencies>
-        </profile>
-        <profile>
-            <id>openapi-codegen</id>
-            <build>
-                <plugins>
-                    <!-- 1. 启动应用导出 OpenAPI spec -->
-                    <plugin>
-                        <groupId>org.springdoc</groupId>
-                        <artifactId>springdoc-openapi-maven-plugin</artifactId>
-                        <version>1.4</version>
-                        <executions>
-                            <execution>
-                                <id>generate-openapi-spec</id>
-                                <phase>integration-test</phase>
-                                <goals>
-                                    <goal>generate</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                        <configuration>
-                            <apiDocsUrl>http://localhost:8080/api/v3/api-docs</apiDocsUrl>
-                            <outputDir>${project.build.directory}</outputDir>
-                            <outputFileName>openapi.json</outputFileName>
-                        </configuration>
-                    </plugin>
-                    <!-- 2. 生成 TypeScript 客户端 -->
-                    <plugin>
-                        <groupId>org.openapitools</groupId>
-                        <artifactId>openapi-generator-maven-plugin</artifactId>
-                        <version>7.13.0</version>
-                        <executions>
-                            <execution>
-                                <id>generate-typescript-client</id>
-                                <phase>post-integration-test</phase>
-                                <goals>
-                                    <goal>generate</goal>
-                                </goals>
-                                <configuration>
-                                    <inputSpec>${project.build.directory}/openapi.json</inputSpec>
-                                    <generatorName>typescript-fetch</generatorName>
-                                    <output>${project.build.directory}/generated-sdk/typescript</output>
-                                    <configOptions>
-                                        <npmName>@example/batch-console-client</npmName>
-                                        <npmVersion>${project.version}</npmVersion>
-                                        <supportsES6>true</supportsES6>
-                                        <typescriptThreePlus>true</typescriptThreePlus>
-                                    </configOptions>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
         </profile>
     </profiles>
 

@@ -72,11 +72,6 @@ public class ConsoleSecurityConfiguration {
                                                 "/console-login.html",
                                                 "/favicon.ico")
                                         .permitAll()
-                                        .requestMatchers(
-                                                "/api/v3/api-docs/**",
-                                                "/api/swagger-ui/**",
-                                                "/api/swagger-ui.html")
-                                        .permitAll()
                                         .requestMatchers("/actuator/loggers/**")
                                         .hasAuthority("ROLE_ADMIN")
                                         .anyRequest()

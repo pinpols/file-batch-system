@@ -28,14 +28,6 @@ spring:
           # 默认模型（Console 内置 AI 功能使用；也会被 batch.console.ai.model 覆盖）
           model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
 
-springdoc:
-  api-docs:
-    path: /api/v3/api-docs
-  swagger-ui:
-    path: /api/swagger-ui.html
-    tags-sorter: alpha
-    operations-sorter: alpha
-
 mybatis:
   # MyBatis domain 别名包（用于 mapper XML 简化类型引用）
   type-aliases-package: com.example.batch.console.domain
