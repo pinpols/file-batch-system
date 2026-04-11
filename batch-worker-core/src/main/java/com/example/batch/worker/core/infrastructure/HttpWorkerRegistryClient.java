@@ -7,6 +7,7 @@ import com.example.batch.common.enums.WorkerRegistryStatus;
 import java.time.Instant;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -18,6 +19,7 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     private final OrchestratorWorkerClientProperties properties;
     private final RestClient.Builder builder;
+    private final Environment environment;
     private RestClient restClient;
 
     @Override
@@ -72,8 +74,12 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     private String resolveBaseUrl() {
         String configuredBaseUrl = properties.getBaseUrl();
-        if (StringUtils.hasText(configuredBaseUrl)) {
+        if (StringUtils.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
             return configuredBaseUrl;
+        }
+        String localPort = environment.getProperty("local.server.port");
+        if (StringUtils.hasText(localPort)) {
+            return "http://127.0.0.1:" + localPort;
         }
         throw new IllegalStateException("batch.orchestrator.base-url is required but not configured");
     }

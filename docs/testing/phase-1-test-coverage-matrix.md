@@ -83,7 +83,7 @@
 | 主题 | 当前证据 | 现状 | 结论 |
 |---|---|---|---|
 | 根 reactor | 根 `pom.xml` 已纳入 8 个业务模块 + `batch-e2e-tests` | `load-tests` 不在 reactor 内 | 完整回归不会自动覆盖压测 |
-| E2E 执行入口 | `scripts/local/run-e2e-tests.sh` + `scripts/ci/run-full-regression.sh` | 本地 E2E 与完整回归入口都已存在 | 可以承担本地和 CI/staging 两类场景 |
+| E2E 执行入口 | `scripts/local/run-tests.sh --e2e` + `scripts/ci/run-full-regression.sh` | 本地 E2E 与完整回归入口都已存在 | 可以承担本地和 CI/staging 两类场景 |
 | 巡检/自愈 | `inspect-*.sh`、`heal-*.sh` 已存在 | 偏运维辅助，不是测试报告 | 可作为 Phase 3 演练资产 |
 | 部署产物 | `helm/batch-platform/`、`helm/values-prod.yaml`、`scripts/ci/run-full-regression.sh --with-deploy-smoke` | 静态 deploy smoke 已自动化，live rollout/readiness 逻辑已具备 | 仍缺真实 staging 实跑与回滚验证 |
 | 部署验证 | `scripts/ci/run-full-regression.sh --with-deployment-verification`、`docs/testing/deployment-verification-report.md` | 升级 / 回滚执行链路已接入 | 仍缺真实 staging 留档和 `--atomic` 失败观测 |

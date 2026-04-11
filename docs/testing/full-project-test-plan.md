@@ -23,7 +23,7 @@ Phase 2 P0 回归范围见：`docs/testing/phase-2-functional-regression.md`
 
 - 单元测试、集成测试、E2E 的分层策略文档：`docs/testing/test-strategy.md`
 - 三条主链路与失败分支的 E2E 覆盖分析：`docs/testing/e2e-three-flows-coverage.md`
-- 本地 E2E 执行脚本：`scripts/local/run-e2e-tests.sh`
+- 本地 E2E 执行脚本：`scripts/local/run-tests.sh --e2e`
 - 统一回归入口：`scripts/ci/run-full-regression.sh`
 - 门禁与 staging 说明：`docs/testing/release-gate.md`
 - 压测模块与容量基线文档：`load-tests/`、`docs/testing/load-test-capacity-baseline.md`

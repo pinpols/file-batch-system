@@ -1,6 +1,7 @@
 package com.example.batch.trigger.integration;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,6 +45,7 @@ class TriggerRegistrationStartupIntegrationTest extends AbstractIntegrationTest 
     @BeforeEach
     void setUp() {
         jdbcTemplate.update("delete from batch.job_definition where tenant_id = ?", "t-trigger");
+        reset(scheduler);  // Spring singleton mock — 每个测试前重置调用计数
     }
 
     @AfterEach
@@ -55,11 +57,24 @@ class TriggerRegistrationStartupIntegrationTest extends AbstractIntegrationTest 
     void shouldRegisterAllEnabledCronDefinitionsIntoQuartz() throws Exception {
         insertCronJobDefinition("t-trigger", "JOB_A", "0 0/5 * * * ?");
         insertCronJobDefinition("t-trigger", "JOB_B", "0 10 * * * ?");
-        insertNonCronJobDefinition("t-trigger", "JOB_DISABLED");
+        insertManualJobDefinition("t-trigger", "JOB_MANUAL");
 
         when(scheduler.checkExists(any(JobKey.class))).thenReturn(false);
         triggerRegistrationService.registerAll();
 
+        verify(scheduler, times(2)).scheduleJob(any(), any());
+    }
+
+    @Test
+    void shouldRegisterFixedRateDefinitionsAlongWithCron() throws Exception {
+        insertCronJobDefinition("t-trigger", "JOB_CRON", "0 0/5 * * * ?");
+        insertFixedRateJobDefinition("t-trigger", "JOB_FR", "120");
+        insertManualJobDefinition("t-trigger", "JOB_MANUAL");
+
+        when(scheduler.checkExists(any(JobKey.class))).thenReturn(false);
+        triggerRegistrationService.registerAll();
+
+        // CRON + FIXED_RATE の 2 件、MANUAL はスキップ
         verify(scheduler, times(2)).scheduleJob(any(), any());
     }
 
@@ -72,20 +87,25 @@ class TriggerRegistrationStartupIntegrationTest extends AbstractIntegrationTest 
                     priority, enabled
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                tenantId,
-                jobCode,
-                jobCode,
-                "GENERAL",
-                "CRON",
-                cronExpr,
-                "UTC",
-                "SCHEDULED",
-                5,
-                true
-        );
+                tenantId, jobCode, jobCode, "GENERAL",
+                "CRON", cronExpr, "UTC", "SCHEDULED", 5, true);
     }
 
-    private void insertNonCronJobDefinition(String tenantId, String jobCode) {
+    private void insertFixedRateJobDefinition(
+            String tenantId, String jobCode, String intervalSeconds) {
+        jdbcTemplate.update(
+                """
+                insert into batch.job_definition (
+                    tenant_id, job_code, job_name, job_type,
+                    schedule_type, schedule_expr, timezone, trigger_mode,
+                    priority, enabled
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                tenantId, jobCode, jobCode, "GENERAL",
+                "FIXED_RATE", intervalSeconds, "UTC", "SCHEDULED", 5, true);
+    }
+
+    private void insertManualJobDefinition(String tenantId, String jobCode) {
         jdbcTemplate.update(
                 """
                 insert into batch.job_definition (
@@ -94,16 +114,8 @@ class TriggerRegistrationStartupIntegrationTest extends AbstractIntegrationTest 
                     priority, enabled
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                tenantId,
-                jobCode,
-                jobCode,
-                "GENERAL",
-                "MANUAL",
-                "UTC",
-                "SCHEDULED",
-                5,
-                true
-        );
+                tenantId, jobCode, jobCode, "GENERAL",
+                "MANUAL", "UTC", "SCHEDULED", 5, true);
     }
 
     @TestConfiguration(proxyBeanMethods = false)

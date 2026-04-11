@@ -18,7 +18,7 @@ public class DatabaseTriggerDefinitionLoader implements TriggerDefinitionLoader 
 
     @Override
     public List<TriggerDescriptor> loadAll() {
-        return triggerDefinitionMapper.selectAllCronDefinitions();
+        return triggerDefinitionMapper.selectAllScheduledDefinitions();
     }
 
     @Override

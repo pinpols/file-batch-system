@@ -3,12 +3,11 @@ package com.example.batch.console.web;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -74,22 +73,22 @@ class ConsoleFileTemplateControllerTest {
 
     @Test
     void shouldReturn200WhenToggleTemplate() throws Exception {
-        doNothing().when(applicationService).toggle(anyLong(), anyString(), any());
-
-        mockMvc.perform(post("/api/console/file-templates/1/toggle")
-                        .param("tenantId", "t1")
-                        .param("enabled", "true"))
+        mockMvc.perform(patch("/api/console/file-templates/1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"tenantId\":\"t1\",\"enabled\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"));
     }
 
     @Test
-    void shouldReturn200WhenDeleteTemplate() throws Exception {
-        doNothing().when(applicationService).delete(anyLong(), anyString());
+    void shouldReturn400WhenToggleTemplateMissingTenantId() throws Exception {
+        mockMvc.perform(patch("/api/console/file-templates/1")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"enabled\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        mockMvc.perform(delete("/api/console/file-templates/1").param("tenantId", "t1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"));
+        verifyNoInteractions(applicationService);
     }
 
     @Test

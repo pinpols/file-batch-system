@@ -1,15 +1,19 @@
 package com.example.batch.trigger.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.support.TriggerDescriptor;
+
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,14 +24,14 @@ import org.quartz.CronTrigger;
 import org.quartz.JobDetail;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
+import org.quartz.SimpleTrigger;
+import org.quartz.Trigger;
 
 @ExtendWith(MockitoExtension.class)
 class TriggerSchedulerFacadeTest {
 
-    @Mock
-    private TriggerDefinitionLoader triggerDefinitionLoader;
-    @Mock
-    private Scheduler scheduler;
+    @Mock private TriggerDefinitionLoader triggerDefinitionLoader;
+    @Mock private Scheduler scheduler;
 
     private TriggerSchedulerFacade facade;
 
@@ -36,13 +40,15 @@ class TriggerSchedulerFacadeTest {
         facade = new TriggerSchedulerFacade(triggerDefinitionLoader, scheduler);
     }
 
+    // ─── CRON ────────────────────────────────────────────────────────────────────
+
     @Test
     void shouldScheduleEnabledCronDefinitionsWithCatchUpMetadata() throws Exception {
-        when(triggerDefinitionLoader.loadAll()).thenReturn(List.of(
-                descriptor("t1", "JOB_CRON", "CRON", true),
-                descriptor("t1", "JOB_MANUAL", "MANUAL", true),
-                descriptor("t1", "JOB_DISABLED", "CRON", false)
-        ));
+        when(triggerDefinitionLoader.loadAll())
+                .thenReturn(
+                        List.of(
+                                cronDescriptor("t1", "JOB_CRON", true),
+                                cronDescriptor("t1", "JOB_DISABLED", false)));
 
         facade.registerAll();
 
@@ -63,9 +69,9 @@ class TriggerSchedulerFacadeTest {
     }
 
     @Test
-    void shouldDeleteExistingQuartzJobBeforeRescheduling() throws Exception {
-        TriggerDescriptor descriptor = descriptor("t1", "JOB_REPLACE", "CRON", true);
-        when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_REPLACE")).thenReturn(descriptor);
+    void shouldDeleteExistingQuartzJobBeforeReschedulingCron() throws Exception {
+        when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_REPLACE"))
+                .thenReturn(cronDescriptor("t1", "JOB_REPLACE", true));
         when(scheduler.checkExists(any(JobKey.class))).thenReturn(true);
 
         facade.registerByJobCode("t1", "JOB_REPLACE");
@@ -76,18 +82,163 @@ class TriggerSchedulerFacadeTest {
         inOrder.verify(scheduler).scheduleJob(any(JobDetail.class), any(CronTrigger.class));
     }
 
-    private TriggerDescriptor descriptor(String tenantId, String jobCode, String scheduleType, boolean enabled) {
-        TriggerDescriptor descriptor = new TriggerDescriptor();
-        descriptor.setTenantId(tenantId);
-        descriptor.setJobCode(jobCode);
-        descriptor.setScheduleType(scheduleType);
-        descriptor.setScheduleExpression("0 0 1 * * ?");
-        descriptor.setTimezone("UTC");
-        descriptor.setTriggerMode("SCHEDULED");
-        descriptor.setCalendarCode("BIZ_CAL");
-        descriptor.setCatchUpPolicy(CatchUpPolicyType.AUTO.code());
-        descriptor.setCatchUpMaxDays(3);
-        descriptor.setEnabled(enabled);
-        return descriptor;
+    @Test
+    void shouldThrowOnInvalidCronExpression() {
+        TriggerDescriptor descriptor = cronDescriptor("t1", "BAD_CRON", true);
+        descriptor.setScheduleExpression("not-a-cron");
+        when(triggerDefinitionLoader.loadByJobCode("t1", "BAD_CRON")).thenReturn(descriptor);
+
+        assertThatThrownBy(() -> facade.registerByJobCode("t1", "BAD_CRON"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid cron expression");
+    }
+
+    // ─── FIXED_RATE ───────────────────────────────────────────────────────────────
+
+    @Test
+    void shouldScheduleFixedRateDefinitionWithSimpleTrigger() throws Exception {
+        when(triggerDefinitionLoader.loadAll())
+                .thenReturn(List.of(fixedRateDescriptor("t1", "JOB_FIXED", "300", true)));
+
+        facade.registerAll();
+
+        ArgumentCaptor<JobDetail> jobDetailCaptor = ArgumentCaptor.forClass(JobDetail.class);
+        ArgumentCaptor<Trigger> triggerCaptor = ArgumentCaptor.forClass(Trigger.class);
+        verify(scheduler).scheduleJob(jobDetailCaptor.capture(), triggerCaptor.capture());
+
+        JobDetail jobDetail = jobDetailCaptor.getValue();
+        assertThat(jobDetail.getKey().getName()).isEqualTo("t1:JOB_FIXED");
+        assertThat(jobDetail.getJobDataMap())
+                .containsEntry(QuartzLaunchJob.SCHEDULE_TYPE, "FIXED_RATE")
+                .containsEntry(QuartzLaunchJob.SCHEDULE_EXPRESSION, "300");
+
+        Trigger trigger = triggerCaptor.getValue();
+        assertThat(trigger).isInstanceOf(SimpleTrigger.class);
+        SimpleTrigger simpleTrigger = (SimpleTrigger) trigger;
+        assertThat(simpleTrigger.getRepeatInterval()).isEqualTo(300_000L); // ms
+        assertThat(simpleTrigger.getRepeatCount()).isEqualTo(SimpleTrigger.REPEAT_INDEFINITELY);
+        assertThat(simpleTrigger.getMisfireInstruction())
+                .isEqualTo(SimpleTrigger.MISFIRE_INSTRUCTION_RESCHEDULE_NEXT_WITH_EXISTING_COUNT);
+    }
+
+    @Test
+    void shouldDeleteExistingQuartzJobBeforeReschedulingFixedRate() throws Exception {
+        when(triggerDefinitionLoader.loadByJobCode("t1", "JOB_FR"))
+                .thenReturn(fixedRateDescriptor("t1", "JOB_FR", "60", true));
+        when(scheduler.checkExists(any(JobKey.class))).thenReturn(true);
+
+        facade.registerByJobCode("t1", "JOB_FR");
+
+        var inOrder = inOrder(scheduler);
+        inOrder.verify(scheduler).checkExists(any(JobKey.class));
+        inOrder.verify(scheduler).deleteJob(any());
+        inOrder.verify(scheduler).scheduleJob(any(JobDetail.class), any(SimpleTrigger.class));
+    }
+
+    @Test
+    void shouldThrowOnNonNumericFixedRateExpression() {
+        TriggerDescriptor descriptor = fixedRateDescriptor("t1", "BAD_FR", "not-a-number", true);
+        when(triggerDefinitionLoader.loadByJobCode("t1", "BAD_FR")).thenReturn(descriptor);
+
+        assertThatThrownBy(() -> facade.registerByJobCode("t1", "BAD_FR"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("FIXED_RATE schedule_expr must be a positive integer");
+    }
+
+    @Test
+    void shouldThrowOnZeroFixedRateInterval() {
+        TriggerDescriptor descriptor = fixedRateDescriptor("t1", "ZERO_FR", "0", true);
+        when(triggerDefinitionLoader.loadByJobCode("t1", "ZERO_FR")).thenReturn(descriptor);
+
+        assertThatThrownBy(() -> facade.registerByJobCode("t1", "ZERO_FR"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("FIXED_RATE interval must be > 0");
+    }
+
+    @Test
+    void shouldThrowOnNegativeFixedRateInterval() {
+        TriggerDescriptor descriptor = fixedRateDescriptor("t1", "NEG_FR", "-10", true);
+        when(triggerDefinitionLoader.loadByJobCode("t1", "NEG_FR")).thenReturn(descriptor);
+
+        assertThatThrownBy(() -> facade.registerByJobCode("t1", "NEG_FR"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("FIXED_RATE interval must be > 0");
+    }
+
+    @Test
+    void shouldThrowOnBlankFixedRateExpression() {
+        TriggerDescriptor descriptor = fixedRateDescriptor("t1", "BLANK_FR", "  ", true);
+        when(triggerDefinitionLoader.loadByJobCode("t1", "BLANK_FR")).thenReturn(descriptor);
+
+        assertThatThrownBy(() -> facade.registerByJobCode("t1", "BLANK_FR"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("FIXED_RATE schedule_expr must be a positive integer");
+    }
+
+    // ─── 跳过非 scheduled 类型 ─────────────────────────────────────────────────────
+
+    @Test
+    void shouldSilentlySkipManualAndEventScheduleTypes() throws Exception {
+        when(triggerDefinitionLoader.loadAll())
+                .thenReturn(
+                        List.of(
+                                manualDescriptor("t1", "JOB_MANUAL"),
+                                eventDescriptor("t1", "JOB_EVENT")));
+
+        facade.registerAll();
+
+        verify(scheduler, never()).scheduleJob(any(), any());
+    }
+
+    // ─── helpers ──────────────────────────────────────────────────────────────────
+
+    private TriggerDescriptor cronDescriptor(
+            String tenantId, String jobCode, boolean enabled) {
+        TriggerDescriptor d = new TriggerDescriptor();
+        d.setTenantId(tenantId);
+        d.setJobCode(jobCode);
+        d.setScheduleType("CRON");
+        d.setScheduleExpression("0 0 1 * * ?");
+        d.setTimezone("UTC");
+        d.setTriggerMode("SCHEDULED");
+        d.setCalendarCode("BIZ_CAL");
+        d.setCatchUpPolicy(CatchUpPolicyType.AUTO.code());
+        d.setCatchUpMaxDays(3);
+        d.setEnabled(enabled);
+        return d;
+    }
+
+    private TriggerDescriptor fixedRateDescriptor(
+            String tenantId, String jobCode, String intervalSeconds, boolean enabled) {
+        TriggerDescriptor d = new TriggerDescriptor();
+        d.setTenantId(tenantId);
+        d.setJobCode(jobCode);
+        d.setScheduleType("FIXED_RATE");
+        d.setScheduleExpression(intervalSeconds);
+        d.setTimezone("UTC");
+        d.setTriggerMode("SCHEDULED");
+        d.setCalendarCode(null);
+        d.setCatchUpPolicy(CatchUpPolicyType.NONE.code());
+        d.setCatchUpMaxDays(0);
+        d.setEnabled(enabled);
+        return d;
+    }
+
+    private TriggerDescriptor manualDescriptor(String tenantId, String jobCode) {
+        TriggerDescriptor d = new TriggerDescriptor();
+        d.setTenantId(tenantId);
+        d.setJobCode(jobCode);
+        d.setScheduleType("MANUAL");
+        d.setEnabled(true);
+        return d;
+    }
+
+    private TriggerDescriptor eventDescriptor(String tenantId, String jobCode) {
+        TriggerDescriptor d = new TriggerDescriptor();
+        d.setTenantId(tenantId);
+        d.setJobCode(jobCode);
+        d.setScheduleType("EVENT");
+        d.setEnabled(true);
+        return d;
     }
 }

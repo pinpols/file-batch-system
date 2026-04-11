@@ -46,7 +46,7 @@ test-it:
 
 # E2E 测试
 test-e2e:
-	bash scripts/local/run-e2e-tests.sh
+	bash scripts/local/run-tests.sh --e2e
 
 ## ── 测试数据 ──────────────────────────────────────────────────────────────────
 
