@@ -87,9 +87,9 @@
                     <include>V*.sql</include>
                 </includes>
             </testResource>
-            <!-- 业务库 DDL：单源 docs/sql/business/create_biz_tables.sql（非 Flyway） -->
+            <!-- 业务库 DDL：单源 scripts/db/business/create_biz_tables.sql（非 Flyway） -->
             <testResource>
-                <directory>${project.basedir}/../docs/sql/business</directory>
+                <directory>${project.basedir}/../scripts/db/business</directory>
                 <targetPath>sql</targetPath>
                 <includes>
                     <include>create_biz_tables.sql</include>

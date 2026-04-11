@@ -9,7 +9,6 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.utils.JsonUtils;
-import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
@@ -55,16 +54,9 @@ import org.springframework.test.context.ActiveProfiles;
  * 等待 Kafka rebalance 完成 → 触发 job → 等待任务成功。
  */
 @SpringBootTest(
-        classes = BatchOrchestratorApplication.class,
+        classes = com.example.batch.e2e.apps.E2eOrchestratorApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "spring.autoconfigure.exclude="
-                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration,"
-                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration,"
-                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration,"
-                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration,"
-                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration,"
-                        + "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration",
                 "batch.sla.enabled=false",
                 "batch.worker.drain.enabled=false",
                 "batch.file-governance.latency.enabled=false",

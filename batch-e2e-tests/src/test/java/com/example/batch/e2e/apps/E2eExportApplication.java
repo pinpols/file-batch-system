@@ -38,6 +38,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration.class,
         org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration.class,
         org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration.class,
+        org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration.class,
+        org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration.class,
+        org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration.class,
+        org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration.class,
 })
 @EnableKafka
 @EnableJdbcRepositories(basePackages = "com.example.batch.orchestrator.repository")

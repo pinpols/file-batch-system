@@ -98,7 +98,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
 
         long deadLetterId = seedReplayGraph(seed, initialTraceId, params);
 
-        JsonNode deadLetters = getConsoleJson("/api/console/query/dead-letters?tenantId=t1&traceId=" + encode(initialTraceId) + "&pageNo=1&pageSize=10");
+        JsonNode deadLetters = getConsoleJson("/api/console/queries/dead-letters?tenantId=t1&traceId=" + encode(initialTraceId) + "&pageNo=1&pageSize=10");
         JsonNode deadLetter = firstItem(deadLetters);
         String deadLetterTraceId = deadLetter.path("traceId").asText();
         assertThat(deadLetterId).isPositive();
@@ -115,7 +115,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
                         """.formatted(deadLetterId, APPROVAL_OPERATOR),
                 idempotencyKey("dead-letter-replay")));
 
-        JsonNode pendingApprovals = getConsoleJson("/api/console/query/approvals?tenantId=t1&approvalNo="
+        JsonNode pendingApprovals = getConsoleJson("/api/console/queries/approvals?tenantId=t1&approvalNo="
                 + encode(replayApprovalNo) + "&approvalStatus=PENDING&pageNo=1&pageSize=10");
         JsonNode pendingApproval = firstItem(pendingApprovals);
         assertThat(pendingApproval.path("approvalNo").asText()).isEqualTo(replayApprovalNo);
@@ -137,7 +137,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(2)).untilAsserted(() -> {
             e2eOutboxPublishSupport.publishAllPending(TENANT);
             JsonNode completedDeadLetter = findItemById(
-                    getConsoleJson("/api/console/query/dead-letters?tenantId=t1&traceId=" + encode(deadLetterTraceId) + "&pageNo=1&pageSize=10"),
+                    getConsoleJson("/api/console/queries/dead-letters?tenantId=t1&traceId=" + encode(deadLetterTraceId) + "&pageNo=1&pageSize=10"),
                     deadLetterId);
             assertThat(completedDeadLetter.path("replayStatus").asText()).isEqualTo("SUCCESS");
             assertThat(completedDeadLetter.path("replayCount").asInt()).isEqualTo(1);

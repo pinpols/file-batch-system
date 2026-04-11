@@ -142,7 +142,7 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
 
         assertThatThrownBy(() -> service.upload(file))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("excel header missing");
+                .hasMessageContaining("excel missing required headers");
     }
 
     private List<String> templateHeaders() {
