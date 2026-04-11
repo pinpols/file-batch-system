@@ -106,7 +106,9 @@ banner() {
 }
 
 run_mvn() {
-  local -a cmd=(mvn -T "$MAVEN_THREADS" --no-transfer-progress "$@")
+  local mvn_bin
+  mvn_bin=$(command -v mvnd 2>/dev/null || command -v mvn)
+  local -a cmd=("$mvn_bin" -T "$MAVEN_THREADS" --no-transfer-progress "$@")
   if (( ${#EXTRA_MVN_ARGS[@]} > 0 )); then
     cmd+=("${EXTRA_MVN_ARGS[@]}")
   fi

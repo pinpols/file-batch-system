@@ -245,6 +245,39 @@ _residual_force_all
 
 [[ -f "$PID_FILE" ]] && rm -f "$PID_FILE"
 
+# ── 端口残留检查 ──────────────────────────────────────────
+_check_port_residual() {
+  local -A name_ports=(
+    [orchestrator]="${BATCH_ORCHESTRATOR_PORT:-18082}"
+    [trigger]="${BATCH_TRIGGER_PORT:-18081}"
+    [console]="${BATCH_CONSOLE_PORT:-18080}"
+    [worker-import]="${BATCH_WORKER_IMPORT_PORT:-18083}"
+    [worker-export]="${BATCH_WORKER_EXPORT_PORT:-18084}"
+    [worker-dispatch]="${BATCH_WORKER_DISPATCH_PORT:-18085}"
+  )
+  local residuals=()
+  for name in "${!name_ports[@]}"; do
+    local port="${name_ports[$name]}"
+    local pid
+    pid=$(lsof -ti tcp:"$port" 2>/dev/null | head -1 || true)
+    if [[ -n "$pid" ]]; then
+      residuals+=("  ✗ ${name} 端口 ${port} 仍被 pid=${pid} 占用")
+    fi
+  done
+  if (( ${#residuals[@]} > 0 )); then
+    echo ""
+    echo "WARNING: 以下端口仍有进程残留，可能需要手动处理：" >&2
+    for msg in "${residuals[@]}"; do
+      echo "$msg" >&2
+    done
+    echo "  可执行: lsof -ti tcp:<port> | xargs kill -9" >&2
+  else
+    echo "  端口检查通过，所有应用端口已释放。"
+  fi
+}
+
+_check_port_residual
+
 if [[ "${STOP_DOCKER:-}" == "1" ]]; then
   echo "==> Docker Compose 停止（STOP_DOCKER=1，保持环境不删除）..."
   _LOCAL_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

@@ -2,6 +2,8 @@ server:
   port: 18084
 
 spring:
+  main:
+    lazy-initialization: true
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user

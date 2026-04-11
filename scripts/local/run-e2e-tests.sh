@@ -20,7 +20,8 @@ LOG_FILE="$LOG_DIR/run-e2e-tests.log"
 
 mkdir -p "$LOG_DIR"
 
-mvn -pl batch-e2e-tests -am test \
+MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
+"$MVN" -pl batch-e2e-tests -am test \
   --no-transfer-progress \
   -Dsurefire.failIfNoSpecifiedTests=false \
   "$@" 2>&1 | tee "$LOG_FILE"

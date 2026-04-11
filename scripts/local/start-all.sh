@@ -210,6 +210,39 @@ else
   echo "  或使用 BUILD=1 ./scripts/local/start-all.sh"
 fi
 
+# ── 启动前端口占用检查：有残留进程则清理，避免 Address already in use ──
+_clear_occupied_ports() {
+  local -A name_ports=(
+    [orchestrator]="${BATCH_ORCHESTRATOR_PORT:-18082}"
+    [trigger]="${BATCH_TRIGGER_PORT:-18081}"
+    [console]="${BATCH_CONSOLE_PORT:-18080}"
+    [worker-import]="${BATCH_WORKER_IMPORT_PORT:-18083}"
+    [worker-export]="${BATCH_WORKER_EXPORT_PORT:-18084}"
+    [worker-dispatch]="${BATCH_WORKER_DISPATCH_PORT:-18085}"
+  )
+  local found=0
+  for name in "${!name_ports[@]}"; do
+    local port="${name_ports[$name]}"
+    local pids
+    pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
+    [[ -z "$pids" ]] && continue
+    echo "  端口 ${port} (${name}) 被占用，清理残留进程..."
+    while IFS= read -r pid; do
+      [[ -z "$pid" ]] && continue
+      echo "    kill -9 pid=${pid}"
+      kill -9 "$pid" 2>/dev/null || true
+      ((found += 1)) || true
+    done <<<"$pids"
+  done
+  if (( found > 0 )); then
+    echo "  已清理 ${found} 个残留进程，等待端口释放..."
+    sleep 2
+  fi
+}
+
+echo "==> 检查应用端口占用..."
+_clear_occupied_ports
+
 echo "==> 启动 Spring Boot 进程（profile=local）..."
 echo "  顺序：orchestrator -> 健康检查 UP -> trigger / console -> 三个 worker"
 
@@ -231,3 +264,76 @@ echo "全部进程已在后台运行。端口（默认）："
 echo "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | dispatch 18085"
 echo "  Kafka 19092 | MinIO 19000 | Redis 16379（宿主机映射）"
 echo "停止请执行: ./scripts/local/stop-all.sh"
+
+# ─────────────────────────────────────────────
+# 健康检查：等待所有 Spring Boot 应用均 UP
+# 总超时 3 分钟；每 5 秒轮询一次；已 UP 的不再重复探测
+# ─────────────────────────────────────────────
+wait_all_apps_healthy() {
+  local -A ports=(
+    [orchestrator]="${BATCH_ORCHESTRATOR_PORT:-18082}"
+    [trigger]="${BATCH_TRIGGER_PORT:-18081}"
+    [console]="${BATCH_CONSOLE_PORT:-18080}"
+    [worker-import]="${BATCH_WORKER_IMPORT_PORT:-18083}"
+    [worker-export]="${BATCH_WORKER_EXPORT_PORT:-18084}"
+    [worker-dispatch]="${BATCH_WORKER_DISPATCH_PORT:-18085}"
+  )
+  local timeout="${APP_HEALTH_WAIT_SEC:-300}"
+  local interval=5
+  local deadline=$(( $(date +%s) + timeout ))
+
+  # 已经通过 wait_orchestrator_healthy 确认了 orchestrator，先标记
+  local -A up=([orchestrator]=1)
+
+  echo ""
+  echo "==> 健康检查：等待所有 Spring Boot 应用 UP（最多 ${timeout}s，可通过 APP_HEALTH_WAIT_SEC 覆盖）..."
+
+  while true; do
+    local now
+    now=$(date +%s)
+    if (( now >= deadline )); then
+      break
+    fi
+
+    local all_up=true
+    for name in orchestrator trigger console worker-import worker-export worker-dispatch; do
+      [[ "${up[$name]+_}" ]] && continue   # 已 UP，跳过
+
+      local port="${ports[$name]}"
+      local url="http://127.0.0.1:${port}/actuator/health"
+      if curl -sf --connect-timeout 2 --max-time 5 "$url" 2>/dev/null \
+          | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+        up[$name]=1
+        printf '  ✓ %-18s UP  (port %s)\n' "$name" "$port"
+      else
+        all_up=false
+      fi
+    done
+
+    if [[ "$all_up" == "true" ]]; then
+      echo ""
+      echo "  所有应用均已 UP，本地环境启动完成。"
+      return 0
+    fi
+
+    local remaining=$(( deadline - $(date +%s) ))
+    (( remaining > 0 )) && sleep $interval
+  done
+
+  # 超时后打印汇总
+  echo ""
+  echo "  ┌──────────────────── 健康检查结果（超时 ${timeout}s）────────────────────┐"
+  for name in orchestrator trigger console worker-import worker-export worker-dispatch; do
+    local port="${ports[$name]}"
+    if [[ "${up[$name]+_}" ]]; then
+      printf '  │  ✓ %-18s UP      (port %s)\n' "$name" "$port"
+    else
+      printf '  │  ✗ %-18s 未就绪  (port %s)  → 查看 logs/app/%s.log\n' "$name" "$port" "$name"
+    fi
+  done
+  echo "  └──────────────────────────────────────────────────────────────────────┘"
+  echo "WARNING: 部分应用未在超时时间内就绪，请检查上方日志路径。" >&2
+  return 1
+}
+
+wait_all_apps_healthy || true

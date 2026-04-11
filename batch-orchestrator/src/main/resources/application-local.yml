@@ -5,11 +5,17 @@ server:
   port: 18082
 
 spring:
+  main:
+    lazy-initialization: true
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user
     password: batch_pass_123
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # 本地联调：降低启动时连接创建数，减少与其他模块抢连接
+      minimum-idle: 2
+      maximum-pool-size: 10
   kafka:
     bootstrap-servers: localhost:19092
   flyway:

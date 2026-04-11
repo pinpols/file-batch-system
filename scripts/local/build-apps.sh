@@ -14,7 +14,11 @@ RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 mkdir -p "$RUNTIME_JAR_DIR"
 
 echo "==> Maven 打包应用模块（clean package -Dmaven.test.skip=true）..."
-mvn -q -Dmaven.test.skip=true \
+MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
+"$MVN" -q -Dmaven.test.skip=true \
+  -Dcyclonedx.skip=true \
+  -Dlicense.skip=true \
+  -Dmaven.javadoc.skip=true \
   -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
   -am clean package -T 1C
 
