@@ -13,6 +13,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | 2026-04-11 | 移除 `DELETE job-definitions/{id}`、`workflow-definitions/{id}`、`file-channels/{id}`、`file-templates/{id}`；软删除统一走 `PATCH /{id}`，`DELETE` 仅保留于物理删除场景 |
 | 2026-04-11 | 删除 `DELETE /api/console/users/{id}`：账号不可物理删除，停用走 disable，彻底下线走租户 suspend |
 | 2026-04-11 | 删除 `POST /api/console/users`（独立创建账号）：每个租户仅一个运营账号，由建租户接口统一创建，后续通过 `PUT /api/console/users/{id}` 调整权限 |
+| 2026-04-12 | 补齐 OpenAPI 缺失接口 `GET /api/console/config/file-templates/excel/preview/{uploadToken}/workbook`；修正 18 处 CRUD 创建/更新/复制响应体错误类型（`CommonResponseLong`/`CommonResponseString` → `CommonResponseObject`）；协议正文同步 PATCH 改造、移除已删除的 user create/delete 和 POST files/delete 接口描述 |
 | 2026-04-11 | 新增 `POST /api/console/tenants/batch` 批量建租户端点，共享密码（≥12位）+ 用户名前缀（默认 `op-`），单事务 |
 | 2026-04-11 | `POST /api/console/tenants` 新增必填字段 `username`/`password`，建租户时同步创建 `ROLE_TENANT_USER` 操作账号 |
 | 2026-04-11 | 补齐 5 个新域（BatchWindow/BusinessCalendar/PipelineDefinition/TenantQuotaPolicy/ResourceQueue）Excel Upload/Preview/Apply 全套 schema（共 47 个），消除所有悬空 $ref；添加 Changelog 标识 |
@@ -230,7 +231,12 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | `PUT` | Idempotent full replacement of an existing resource | Update resource definition (replaces the whole record) |
 | `DELETE` | Remove a resource | Hard delete |
 
-`PATCH` is **not** used in this API. Partial updates are handled either by a dedicated `PUT` endpoint that accepts only the mutable fields, or by an action endpoint (see below).
+`PATCH` is used exclusively for **enable/disable** operations:
+- `PATCH /{id}` — single resource toggle, body: `EnabledPatchRequest { tenantId, enabled }`
+- `PATCH /batch` — batch toggle (up to 200 ids), body: `BatchEnabledPatchRequest`
+
+Currently applies to: `job-definitions`, `workflow-definitions`, `file-channels`, `file-templates`.  
+All other partial updates are handled by a dedicated `PUT` endpoint or an action endpoint (see below).
 
 ### Resource URL Naming
 
@@ -370,13 +376,11 @@ Deployment note:
 - `POST /api/console/job-definitions`
 - `GET /api/console/job-definitions/{id}`
 - `PUT /api/console/job-definitions/{id}`
-- `DELETE /api/console/job-definitions/{id}`
-- `POST /api/console/job-definitions/{id}/toggle`
-- `POST /api/console/job-definitions/batch-toggle` — batch enable/disable up to 200 job definitions; query params `tenantId` + `enabled`, body is `List<Long>` of ids
+- `PATCH /api/console/job-definitions/{id}` — enable/disable; body: `EnabledPatchRequest { tenantId, enabled }`
+- `PATCH /api/console/job-definitions/batch` — batch enable/disable up to 200; body: `BatchEnabledPatchRequest`
 - `POST /api/console/job-definitions/{id}/copy`
 - `POST /api/console/job-definitions/{id}/clone` — clone with field overrides via `JobDefinitionCopyRequest` body (jobName, workerGroup, queueCode, scheduleExpr, retryPolicy, etc.)
 - All write operations require `ROLE_ADMIN`. Read operations allow `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.
-- `toggle` uses query params `tenantId` (required) and `enabled` (required).
 - `copy` uses query params `tenantId` (required) and `newJobCode` (required); the cloned definition is created with `enabled=false`.
 - `clone` accepts a JSON body with overridable fields; unset fields inherit from the source definition.
 
@@ -386,8 +390,7 @@ Deployment note:
 - `POST /api/console/workflow-definitions`
 - `GET /api/console/workflow-definitions/{id}`
 - `PUT /api/console/workflow-definitions/{id}`
-- `DELETE /api/console/workflow-definitions/{id}`
-- `POST /api/console/workflow-definitions/{id}/toggle`
+- `PATCH /api/console/workflow-definitions/{id}` — enable/disable; body: `EnabledPatchRequest { tenantId, enabled }`
 - `POST /api/console/workflow-definitions/{id}/validate`
 - `GET /api/console/workflow-definitions/events`
 - Create and update are transactional: definition, nodes, and edges are persisted or replaced atomically.
@@ -579,8 +582,7 @@ Deployment note:
 - `POST /api/console/file-channels`
 - `GET /api/console/file-channels/{id}`
 - `PUT /api/console/file-channels/{id}`
-- `POST /api/console/file-channels/{id}/toggle`
-- `DELETE /api/console/file-channels/{id}`
+- `PATCH /api/console/file-channels/{id}` — enable/disable; body: `EnabledPatchRequest { tenantId, enabled }`
 - Read requires `ROLE_ADMIN`, `ROLE_CONFIG_ADMIN`, or `ROLE_AUDITOR`. Write requires `ROLE_CONFIG_ADMIN` or above. Delete requires `ROLE_ADMIN`.
 
 ### File Templates
@@ -589,8 +591,7 @@ Deployment note:
 - `POST /api/console/file-templates`
 - `GET /api/console/file-templates/{id}`
 - `PUT /api/console/file-templates/{id}`
-- `POST /api/console/file-templates/{id}/toggle`
-- `DELETE /api/console/file-templates/{id}`
+- `PATCH /api/console/file-templates/{id}` — enable/disable; body: `EnabledPatchRequest { tenantId, enabled }`
 - Same permission rules as File Channels.
 
 ### Jobs
@@ -728,12 +729,10 @@ Deployment note:
 
 - `GET /api/console/users` — list accounts (tenantId filter, keyword search by username/displayName, paginated)
 - `GET /api/console/users/{id}` — account detail
-- `POST /api/console/users` — create account
 - `PUT /api/console/users/{id}` — update displayName and authoritiesCsv
 - `POST /api/console/users/{id}/reset-password` — reset password (Argon2id hash stored, raw password never persisted)
 - `POST /api/console/users/{id}/enable` — enable account
 - `POST /api/console/users/{id}/disable` — disable account
-- `DELETE /api/console/users/{id}` — delete account
 - All operations require `ROLE_ADMIN`.
 - `username` is globally unique (case-insensitive). Format: alphanumeric + `.` `_` `-`, min 2 chars.
 - `authoritiesCsv` is a comma-separated list of role names (e.g. `ROLE_CONFIG_ADMIN,ROLE_AUDITOR`); default is `ROLE_USER`.
@@ -777,7 +776,7 @@ Deployment note:
 ### Files
 
 - `POST /api/console/files/archive`
-- `POST /api/console/files/delete`
+- `DELETE /api/console/files/{fileId}` — delete a file record
 - `POST /api/console/files/redispatch`
 - `POST /api/console/files/presign-download`
 - `POST /api/console/files/arrival-groups/action`

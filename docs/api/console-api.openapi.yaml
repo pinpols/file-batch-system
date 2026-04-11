@@ -1554,6 +1554,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFileTemplateExcelPreview'
+  /api/console/config/file-templates/excel/preview/{uploadToken}/workbook:
+    get:
+      tags: [Config]
+      summary: Download preview workbook with validation annotations
+      operationId: downloadFileTemplatePreviewWorkbook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Excel workbook binary
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /api/console/config/file-templates/excel/apply/{uploadToken}:
     post:
       tags: [Config]
@@ -4067,7 +4088,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/job-definitions/{id}:
     get:
       tags: [JobDefinitions]
@@ -4120,7 +4141,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
     patch:
       tags: [JobDefinitions]
       summary: Enable or disable job definition
@@ -4178,7 +4199,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/job-definitions/batch:
     patch:
       tags: [JobDefinitions]
@@ -4693,7 +4714,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queues/{id}:
     put:
       tags: [Queues]
@@ -4721,7 +4742,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queues/{id}/toggle:
     post:
       tags: [Queues]
@@ -4808,7 +4829,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/batch-windows/{id}:
     put:
       tags: [BatchWindows]
@@ -4836,7 +4857,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/batch-windows/{id}/toggle:
     post:
       tags: [BatchWindows]
@@ -4923,7 +4944,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/calendars/{id}:
     put:
       tags: [Calendars]
@@ -4951,7 +4972,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/calendars/{id}/toggle:
     post:
       tags: [Calendars]
@@ -5070,7 +5091,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
     delete:
       tags: [Calendars]
       summary: Delete a single holiday
@@ -5605,7 +5626,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/quota-policies/{id}:
     put:
       tags: [QuotaPolicies]
@@ -5633,7 +5654,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/quota-policies/{id}/toggle:
     post:
       tags: [QuotaPolicies]
@@ -5725,7 +5746,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/pipeline-definitions/{id}:
     get:
       tags: [PipelineDefinitions]
@@ -5778,7 +5799,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/pipeline-definitions/{id}/toggle:
     post:
       tags: [PipelineDefinitions]
@@ -6230,7 +6251,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/file-channels/{id}:
     get:
       tags: [FileChannels]
@@ -6283,7 +6304,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
     patch:
       tags: [FileChannels]
       summary: Enable or disable file channel
@@ -6371,7 +6392,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseLong'
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/file-templates/{id}:
     get:
       tags: [FileTemplates]
@@ -6424,7 +6445,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseString'
+                $ref: '#/components/schemas/CommonResponseObject'
     patch:
       tags: [FileTemplates]
       summary: Enable or disable file template
