@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 9am on monday"],
+  "labels": ["dependencies"],
+  "assignees": ["idengzhao"],
+  "packageRules": [
+    {
+      "matchManagers": ["maven"],
+      "groupName": "Maven patch updates",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "matchManagers": ["maven"],
+      "groupName": "Maven minor/major updates",
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": false
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "automerge": true
+    },
+    {
+      "matchPackageNames": ["org.springframework.boot:spring-boot-starter-parent"],
+      "automerge": false,
+      "reviewers": ["idengzhao"]
+    }
+  ]
+}

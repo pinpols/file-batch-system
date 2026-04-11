@@ -92,6 +92,10 @@ trap on_error ERR
 
 run_step "Dependency boundary checks" python3 scripts/ci/check-dependency-boundaries.py
 
+run_step "PMD — code conventions" run_mvn pmd:check -fae || true
+
+run_step "Spotless — code formatting" run_mvn spotless:check -fae || true
+
 resolve_docker_bin() {
   if command -v docker >/dev/null 2>&1; then
     command -v docker
@@ -454,6 +458,7 @@ if [[ "$RUN_DEFAULT_TESTS" == true ]]; then
   run_step \
     "Reactor Default Tests (*Test / *IntegrationTest)" \
     run_mvn test -fae
+  run_step "Coverage gate" run_mvn jacoco:check -fae || true
 fi
 
 if [[ "$RUN_IT_SUITE" == true ]]; then

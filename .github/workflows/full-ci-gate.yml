@@ -33,6 +33,34 @@ jobs:
         run: |
           bash scripts/ci/run-full-regression.sh
 
+      - name: Security scan — secrets
+        continue-on-error: true
+        shell: bash
+        run: bash scripts/ci/security-scan.sh -- --mode=secret
+
+      - name: Security scan — dependencies
+        continue-on-error: true
+        shell: bash
+        run: bash scripts/ci/security-scan.sh --skip-build -- --mode=deps
+
+      - name: Lint Dockerfile
+        continue-on-error: true
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile.app
+          failure-threshold: warning
+
+      - name: Container security scan — Trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: '0'
+          severity: CRITICAL,HIGH
+          scanners: vuln,config
+
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@v4
