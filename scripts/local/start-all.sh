@@ -212,17 +212,27 @@ fi
 
 # ── 启动前端口占用检查：有残留进程则清理，避免 Address already in use ──
 _clear_occupied_ports() {
-  local -A name_ports=(
-    [orchestrator]="${BATCH_ORCHESTRATOR_PORT:-18082}"
-    [trigger]="${BATCH_TRIGGER_PORT:-18081}"
-    [console]="${BATCH_CONSOLE_PORT:-18080}"
-    [worker-import]="${BATCH_WORKER_IMPORT_PORT:-18083}"
-    [worker-export]="${BATCH_WORKER_EXPORT_PORT:-18084}"
-    [worker-dispatch]="${BATCH_WORKER_DISPATCH_PORT:-18085}"
+  local names=(
+    "orchestrator"
+    "trigger"
+    "console"
+    "worker-import"
+    "worker-export"
+    "worker-dispatch"
+  )
+  local ports=(
+    "${BATCH_ORCHESTRATOR_PORT:-18082}"
+    "${BATCH_TRIGGER_PORT:-18081}"
+    "${BATCH_CONSOLE_PORT:-18080}"
+    "${BATCH_WORKER_IMPORT_PORT:-18083}"
+    "${BATCH_WORKER_EXPORT_PORT:-18084}"
+    "${BATCH_WORKER_DISPATCH_PORT:-18085}"
   )
   local found=0
-  for name in "${!name_ports[@]}"; do
-    local port="${name_ports[$name]}"
+  local i
+  for ((i = 0; i < ${#names[@]}; i++)); do
+    local name="${names[$i]}"
+    local port="${ports[$i]}"
     local pids
     pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
     [[ -z "$pids" ]] && continue

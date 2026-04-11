@@ -14,7 +14,14 @@ RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 mkdir -p "$RUNTIME_JAR_DIR"
 
 echo "==> Maven 打包应用模块（clean package -Dmaven.test.skip=true）..."
-MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
+# 优先使用 mvnd（Maven Daemon），没装则降级到 mvn
+_MVND_BIN="${HOME}/.local/bin/mvnd"
+if [[ -x "$_MVND_BIN" ]]; then
+  export MVND_HOME="${HOME}/.local/share/maven-mvnd-1.0.5-darwin-aarch64"
+  MVN="$_MVND_BIN"
+else
+  MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
+fi
 "$MVN" -q -Dmaven.test.skip=true \
   -Dcyclonedx.skip=true \
   -Dlicense.skip=true \

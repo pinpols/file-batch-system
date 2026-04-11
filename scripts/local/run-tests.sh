@@ -107,7 +107,13 @@ banner() {
 
 run_mvn() {
   local mvn_bin
-  mvn_bin=$(command -v mvnd 2>/dev/null || command -v mvn)
+  local _mvnd_bin="${HOME}/.local/bin/mvnd"
+  if [[ -x "$_mvnd_bin" ]]; then
+    export MVND_HOME="${HOME}/.local/share/maven-mvnd-1.0.5-darwin-aarch64"
+    mvn_bin="$_mvnd_bin"
+  else
+    mvn_bin=$(command -v mvnd 2>/dev/null || command -v mvn)
+  fi
   local -a cmd=("$mvn_bin" -T "$MAVEN_THREADS" --no-transfer-progress "$@")
   if (( ${#EXTRA_MVN_ARGS[@]} > 0 )); then
     cmd+=("${EXTRA_MVN_ARGS[@]}")

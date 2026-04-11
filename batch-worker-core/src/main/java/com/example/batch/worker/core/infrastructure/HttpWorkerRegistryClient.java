@@ -11,7 +11,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
-import org.springframework.core.env.Environment;
 
 @Component
 @RequiredArgsConstructor
@@ -19,7 +18,6 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     private final OrchestratorWorkerClientProperties properties;
     private final RestClient.Builder builder;
-    private final Environment environment;
     private RestClient restClient;
 
     @Override
@@ -74,14 +72,10 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     private String resolveBaseUrl() {
         String configuredBaseUrl = properties.getBaseUrl();
-        if (StringUtils.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
+        if (StringUtils.hasText(configuredBaseUrl)) {
             return configuredBaseUrl;
         }
-        String localPort = environment.getProperty("local.server.port");
-        if (StringUtils.hasText(localPort)) {
-            return "http://127.0.0.1:" + localPort;
-        }
-        throw new IllegalStateException("Unable to resolve batch.orchestrator.base-url for worker registry client");
+        throw new IllegalStateException("batch.orchestrator.base-url is required but not configured");
     }
 
     private WorkerHeartbeatDto toHeartbeatDto(WorkerRegistration registration) {
