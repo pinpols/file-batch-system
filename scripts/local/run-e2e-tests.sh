@@ -20,7 +20,13 @@ LOG_FILE="$LOG_DIR/run-e2e-tests.log"
 
 mkdir -p "$LOG_DIR"
 
-MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
+_MVND_BIN="${HOME}/.local/bin/mvnd"
+if [[ -x "$_MVND_BIN" ]]; then
+  export MVND_HOME="${HOME}/.local/share/maven-mvnd-1.0.5-darwin-aarch64"
+  MVN="$_MVND_BIN"
+else
+  MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
+fi
 "$MVN" -pl batch-e2e-tests -am test \
   --no-transfer-progress \
   -Dsurefire.failIfNoSpecifiedTests=false \
