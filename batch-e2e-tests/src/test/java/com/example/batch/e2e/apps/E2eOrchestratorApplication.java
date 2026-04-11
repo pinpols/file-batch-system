@@ -39,6 +39,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration.class,
         org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration.class,
         org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration.class,
+        org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration.class,
 })
 @EnableKafka
 @EnableJdbcRepositories(basePackages = "com.example.batch.orchestrator.repository")

@@ -144,7 +144,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
         });
 
         JsonNode executedApproval = firstItem(getConsoleJson(
-                "/api/console/query/approvals?tenantId=t1&approvalNo=" + encode(replayApprovalNo) + "&pageNo=1&pageSize=10"));
+                "/api/console/queries/approvals?tenantId=t1&approvalNo=" + encode(replayApprovalNo) + "&pageNo=1&pageSize=10"));
         assertThat(executedApproval.path("approvalStatus").asText()).isEqualTo("EXECUTED");
     }
 
