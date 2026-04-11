@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.dispatchs.mapper.DispatchChannelHealthMapper">
+
+    <select id="findEnabledProbeChannels" resultType="map">
+        select *
+          from batch.file_channel_config
+         where enabled = true
+           and channel_type in
+               <foreach item="t" collection="types" open="(" separator="," close=")">
+                   #{t}
+               </foreach>
+         order by tenant_id, channel_code
+         limit #{limit}
+    </select>
+
+    <select id="findHealth" resultType="map">
+        select *
+          from batch.file_channel_health
+         where tenant_id   = #{tenantId}
+           and channel_code = #{channelCode}
+    </select>
+
+    <insert id="upsertHealth" parameterType="map">
+        insert into batch.file_channel_health (
+            tenant_id, channel_code, channel_type, health_status, consecutive_failures,
+            last_probe_at, last_success_at, last_failure_at, next_probe_at,
+            probe_message, probe_evidence, updated_at
+        ) values (
+            #{tenantId}, #{channelCode}, #{channelType}, #{healthStatus}, #{consecutiveFailures},
+            #{lastProbeAt}, #{lastSuccessAt}, #{lastFailureAt}, #{nextProbeAt},
+            #{probeMessage}, #{probeEvidence}, current_timestamp
+        )
+        on conflict (tenant_id, channel_code) do update set
+            channel_type          = excluded.channel_type,
+            health_status         = excluded.health_status,
+            consecutive_failures  = excluded.consecutive_failures,
+            last_probe_at         = excluded.last_probe_at,
+            last_success_at       = excluded.last_success_at,
+            last_failure_at       = excluded.last_failure_at,
+            next_probe_at         = excluded.next_probe_at,
+            probe_message         = excluded.probe_message,
+            probe_evidence        = excluded.probe_evidence,
+            updated_at            = current_timestamp
+    </insert>
+
+</mapper>

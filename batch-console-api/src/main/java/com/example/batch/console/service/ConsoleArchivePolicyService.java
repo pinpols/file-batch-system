@@ -27,7 +27,7 @@ public class ConsoleArchivePolicyService {
                     "file_record",
                     "audit_log",
                     "outbox_event",
-                    "outbox_delivery_log",
+                    "event_delivery_log",
                     "webhook_delivery_log");
 
     private final ConsoleArchivePolicyRepository repository;

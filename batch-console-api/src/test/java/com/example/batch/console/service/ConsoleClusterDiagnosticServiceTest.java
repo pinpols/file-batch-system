@@ -1,8 +1,6 @@
 package com.example.batch.console.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -10,17 +8,18 @@ import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.WorkerRegistryMapper;
+import com.example.batch.console.repository.ConsoleClusterDiagnosticRepository;
+import com.example.batch.console.repository.ConsoleClusterDiagnosticRepository.DeliveryStatusCountView;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 class ConsoleClusterDiagnosticServiceTest {
 
     private ConsoleTenantGuard tenantGuard;
-    private JdbcTemplate jdbcTemplate;
+    private ConsoleClusterDiagnosticRepository diagnosticRepository;
     private WorkerRegistryMapper workerRegistryMapper;
     private JobInstanceMapper jobInstanceMapper;
     private ConsoleClusterDiagnosticService service;
@@ -28,10 +27,11 @@ class ConsoleClusterDiagnosticServiceTest {
     @BeforeEach
     void setUp() {
         tenantGuard = mock(ConsoleTenantGuard.class);
-        jdbcTemplate = mock(JdbcTemplate.class);
+        diagnosticRepository = mock(ConsoleClusterDiagnosticRepository.class);
         workerRegistryMapper = mock(WorkerRegistryMapper.class);
         jobInstanceMapper = mock(JobInstanceMapper.class);
-        service = new ConsoleClusterDiagnosticService(tenantGuard, jdbcTemplate, workerRegistryMapper, jobInstanceMapper);
+        service = new ConsoleClusterDiagnosticService(
+                tenantGuard, diagnosticRepository, workerRegistryMapper, jobInstanceMapper);
     }
 
     @Test
@@ -64,14 +64,12 @@ class ConsoleClusterDiagnosticServiceTest {
         assertThat(result.get("healthy")).isEqualTo(false);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     void shouldReturnOutboxHealthyWhenPendingLow() {
         when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-        when(jdbcTemplate.queryForList(any(String.class), eq("tenant-a")))
-                .thenReturn(List.of(Map.of("delivery_status", "SUCCESS", "cnt", 100)));
-        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), eq("tenant-a")))
-                .thenReturn(50L);
+        DeliveryStatusCountView view = deliveryView("SUCCESS", 100L);
+        when(diagnosticRepository.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
+        when(diagnosticRepository.countPendingOutboxEvents("tenant-a")).thenReturn(50L);
 
         Map<String, Object> result = service.outboxHealth("tenant-a");
 
@@ -79,18 +77,23 @@ class ConsoleClusterDiagnosticServiceTest {
         assertThat(result.get("healthy")).isEqualTo(true);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     void shouldReturnOutboxUnhealthyWhenPendingHigh() {
         when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-        when(jdbcTemplate.queryForList(any(String.class), eq("tenant-a")))
-                .thenReturn(List.of(Map.of("delivery_status", "FAILED", "cnt", 500)));
-        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), eq("tenant-a")))
-                .thenReturn(1500L);
+        DeliveryStatusCountView view = deliveryView("FAILED", 500L);
+        when(diagnosticRepository.eventDeliveryStatusCounts("tenant-a")).thenReturn(List.of(view));
+        when(diagnosticRepository.countPendingOutboxEvents("tenant-a")).thenReturn(1500L);
 
         Map<String, Object> result = service.outboxHealth("tenant-a");
 
         assertThat(result.get("pendingEvents")).isEqualTo(1500L);
         assertThat(result.get("healthy")).isEqualTo(false);
+    }
+
+    private static DeliveryStatusCountView deliveryView(String status, long cnt) {
+        return new DeliveryStatusCountView() {
+            @Override public String getDeliveryStatus() { return status; }
+            @Override public Long getCnt() { return cnt; }
+        };
     }
 }

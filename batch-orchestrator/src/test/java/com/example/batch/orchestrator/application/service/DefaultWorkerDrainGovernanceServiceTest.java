@@ -19,7 +19,7 @@ import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.repository.WorkerRegistryJdbcRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import java.util.List;
@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 class DefaultWorkerDrainGovernanceServiceTest {
 
     private WorkerRegistryRepository workerRegistryRepository;
-    private WorkerRegistryJdbcRepository workerRegistryJdbcRepository;
+    private WorkerRegistryMapper workerRegistryMapper;
     private JobTaskMapper jobTaskMapper;
     private RetryGovernanceService retryGovernanceService;
     private WorkerDrainProperties drainProperties;
@@ -38,13 +38,13 @@ class DefaultWorkerDrainGovernanceServiceTest {
     @BeforeEach
     void setUp() {
         workerRegistryRepository = mock(WorkerRegistryRepository.class);
-        workerRegistryJdbcRepository = mock(WorkerRegistryJdbcRepository.class);
+        workerRegistryMapper = mock(WorkerRegistryMapper.class);
         jobTaskMapper = mock(JobTaskMapper.class);
         retryGovernanceService = mock(RetryGovernanceService.class);
         drainProperties = new WorkerDrainProperties();
         drainProperties.setDefaultTimeoutSeconds(300);
         service = new DefaultWorkerDrainGovernanceService(
-                workerRegistryRepository, workerRegistryJdbcRepository, jobTaskMapper, retryGovernanceService, drainProperties);
+                workerRegistryRepository, workerRegistryMapper, jobTaskMapper, retryGovernanceService, drainProperties);
     }
 
     // ── startDrain ────────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
                 .thenReturn(registry)
                 .thenReturn(registry)
                 .thenReturn(decommissioned);
-        when(workerRegistryJdbcRepository.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
+        when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
 
         JobTaskEntity task = new JobTaskEntity();
         task.setId(100L);
@@ -150,7 +150,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
                 .thenReturn(registry)
                 .thenReturn(registry)
                 .thenReturn(decommissioned);
-        when(workerRegistryJdbcRepository.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
+        when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
         when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
                 TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of());
 
@@ -224,13 +224,13 @@ class DefaultWorkerDrainGovernanceServiceTest {
         when(workerRegistryRepository.findFirstByTenantIdAndWorkerCode("t1", "w1"))
                 .thenReturn(registry)
                 .thenReturn(registry);
-        when(workerRegistryJdbcRepository.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
+        when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
         when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1",
                 TaskStatus.RUNNING.code(), TaskStatus.READY.code(), TaskStatus.CREATED.code())).thenReturn(List.of());
 
         service.takeoverAfterDrainTimeout("t1", "w1");
 
-        verify(workerRegistryJdbcRepository).markDecommissioned(eq("t1"), eq("w1"), any());
+        verify(workerRegistryMapper).markDecommissioned(eq("t1"), eq("w1"), any());
     }
 
     @Test
@@ -242,7 +242,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
                 .thenReturn(registry)
                 .thenReturn(registry)
                 .thenReturn(decommissioned);
-        when(workerRegistryJdbcRepository.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
+        when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
 
         JobTaskEntity task1 = new JobTaskEntity();
         task1.setId(301L);

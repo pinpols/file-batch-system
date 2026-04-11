@@ -9,7 +9,7 @@ import com.example.batch.orchestrator.config.WorkerDrainProperties;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
-import com.example.batch.orchestrator.repository.WorkerRegistryJdbcRepository;
+import com.example.batch.orchestrator.mapper.WorkerRegistryMapper;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -28,7 +28,7 @@ import java.util.List;
 public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanceService {
 
     private final WorkerRegistryRepository workerRegistryRepository;
-    private final WorkerRegistryJdbcRepository workerRegistryJdbcRepository;
+    private final WorkerRegistryMapper workerRegistryMapper;
     private final JobTaskMapper jobTaskMapper;
     private final RetryGovernanceService retryGovernanceService;
     private final WorkerDrainProperties workerDrainProperties;
@@ -130,7 +130,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
 
     private WorkerRegistryRecord markDecommissioned(String tenantId, String workerCode) {
         requireRegistry(tenantId, workerCode);
-        workerRegistryJdbcRepository.markDecommissioned(tenantId, workerCode, Instant.now());
+        workerRegistryMapper.markDecommissioned(tenantId, workerCode, Instant.now());
         return workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
     }
 

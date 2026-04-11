@@ -1,16 +1,18 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import com.example.batch.worker.dispatchs.mapper.DispatchChannelHealthMapper;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.JdbcTemplate;
+
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
+
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 分发渠道健康状态持久化仓库。
@@ -19,65 +21,34 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class DispatchChannelHealthRepository {
 
-    private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper;
+    private final DispatchChannelHealthMapper mapper;
 
     public List<Map<String, Object>> findEnabledProbeChannels(List<String> types, int limit) {
         if (types == null || types.isEmpty()) {
             return List.of();
         }
-        List<Object> args = new ArrayList<>(types);
-        String inClause = String.join(",", types.stream().map(ignored -> "?").toList());
-        String sql = """
-                select *
-                from batch.file_channel_config
-                where enabled = true
-                  and channel_type in (%s)
-                order by tenant_id, channel_code
-                limit ?
-                """.formatted(inClause);
-        args.add(limit);
-        return jdbcTemplate.queryForList(sql, args.toArray());
+        return mapper.findEnabledProbeChannels(types, limit);
     }
 
     public DispatchChannelHealthSnapshot findHealth(String tenantId, String channelCode) {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                """
-                        select *
-                        from batch.file_channel_health
-                        where tenant_id = ? and channel_code = ?
-                        """,
-                tenantId, channelCode
-        );
-        if (rows.isEmpty()) {
-            return null;
-        }
-        return toSnapshot(rows.get(0));
+        Map<String, Object> row = mapper.findHealth(tenantId, channelCode);
+        return row == null ? null : toSnapshot(row);
     }
 
     public void upsertHealth(DispatchChannelHealthSnapshot s) {
-        jdbcTemplate.update("""
-                        insert into batch.file_channel_health (
-                            tenant_id, channel_code, channel_type, health_status, consecutive_failures,
-                            last_probe_at, last_success_at, last_failure_at, next_probe_at,
-                            probe_message, probe_evidence, updated_at
-                        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp)
-                        on conflict (tenant_id, channel_code) do update set
-                            channel_type = excluded.channel_type,
-                            health_status = excluded.health_status,
-                            consecutive_failures = excluded.consecutive_failures,
-                            last_probe_at = excluded.last_probe_at,
-                            last_success_at = excluded.last_success_at,
-                            last_failure_at = excluded.last_failure_at,
-                            next_probe_at = excluded.next_probe_at,
-                            probe_message = excluded.probe_message,
-                            probe_evidence = excluded.probe_evidence,
-                            updated_at = current_timestamp
-                        """,
-                s.tenantId(), s.channelCode(), s.channelType(), s.healthStatus(), s.consecutiveFailures(),
-                toTimestamp(s.lastProbeAt()), toTimestamp(s.lastSuccessAt()), toTimestamp(s.lastFailureAt()),
-                toTimestamp(s.nextProbeAt()), s.probeMessage(), s.probeEvidence()
-        );
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", s.tenantId());
+        params.put("channelCode", s.channelCode());
+        params.put("channelType", s.channelType());
+        params.put("healthStatus", s.healthStatus());
+        params.put("consecutiveFailures", s.consecutiveFailures());
+        params.put("lastProbeAt", toTimestamp(s.lastProbeAt()));
+        params.put("lastSuccessAt", toTimestamp(s.lastSuccessAt()));
+        params.put("lastFailureAt", toTimestamp(s.lastFailureAt()));
+        params.put("nextProbeAt", toTimestamp(s.nextProbeAt()));
+        params.put("probeMessage", s.probeMessage());
+        params.put("probeEvidence", s.probeEvidence());
+        mapper.upsertHealth(params);
     }
 
     private DispatchChannelHealthSnapshot toSnapshot(Map<String, Object> row) {
@@ -92,8 +63,7 @@ public class DispatchChannelHealthRepository {
                 instantValue(row.get("last_failure_at")),
                 instantValue(row.get("next_probe_at")),
                 stringValue(row.get("probe_message")),
-                stringValue(row.get("probe_evidence"))
-        );
+                stringValue(row.get("probe_evidence")));
     }
 
     private Timestamp toTimestamp(Instant instant) {
@@ -116,10 +86,7 @@ public class DispatchChannelHealthRepository {
             return 0;
         }
         String text = String.valueOf(value).trim();
-        if (text.isEmpty()) {
-            return 0;
-        }
-        return Integer.parseInt(text);
+        return text.isEmpty() ? 0 : Integer.parseInt(text);
     }
 
     private Instant instantValue(Object value) {
@@ -133,9 +100,6 @@ public class DispatchChannelHealthRepository {
             return null;
         }
         String text = String.valueOf(value).trim();
-        if (text.isEmpty()) {
-            return null;
-        }
-        return Instant.parse(text);
+        return text.isEmpty() ? null : Instant.parse(text);
     }
 }
