@@ -4,6 +4,7 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicationService;
 import com.example.batch.console.application.ConsoleWorkflowDefinitionApplicationService.DagValidationResult;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.web.request.EnabledPatchRequest;
 import com.example.batch.console.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.web.response.WorkflowDefinitionDetailResponse;
 
@@ -13,8 +14,8 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -55,22 +56,14 @@ public class ConsoleWorkflowDefinitionController {
         return responseFactory.success(workflowDefinitionApplicationService.update(id, request));
     }
 
-    @PostMapping("/{id}/toggle")
+    /** 启用/禁用工作流定义。 */
+    @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<String> toggleEnabled(
-            @PathVariable Long id,
-            @RequestParam("tenantId") String tenantId,
-            @RequestParam("enabled") Boolean enabled) {
-        workflowDefinitionApplicationService.toggleEnabled(id, tenantId, enabled);
-        return responseFactory.success("OK");
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<String> delete(
-            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-        workflowDefinitionApplicationService.delete(id, tenantId);
-        return responseFactory.success("OK");
+    public CommonResponse<Void> patch(
+            @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        workflowDefinitionApplicationService.toggleEnabled(
+                id, request.getTenantId(), request.getEnabled());
+        return responseFactory.success(null);
     }
 
     @PostMapping("/{id}/validate")

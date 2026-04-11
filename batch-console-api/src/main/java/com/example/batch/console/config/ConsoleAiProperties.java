@@ -4,6 +4,8 @@ import lombok.Data;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import com.example.batch.console.support.ConsoleRoles;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,7 +19,7 @@ public class ConsoleAiProperties {
     private int maxResponseLength = 3000;
     private List<String> allowedUsers = new ArrayList<>(List.of("admin"));
     private List<String> allowedAuthorities =
-            new ArrayList<>(List.of("ROLE_ADMIN", "ROLE_AUDITOR"));
+            new ArrayList<>(List.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR));
     private List<String> domainKeywords =
             new ArrayList<>(
                     List.of(

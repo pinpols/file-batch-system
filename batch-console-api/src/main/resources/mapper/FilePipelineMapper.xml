@@ -73,4 +73,12 @@
             and created_at &lt;= #{toTime}
         </if>
     </select>
+
+    <select id="countByStatuses" resultType="long">
+        select count(*)
+          from batch.pipeline_instance
+         where tenant_id = #{tenantId}
+           and run_status in
+        <foreach collection="statuses" item="s" open="(" close=")" separator=",">#{s}</foreach>
+    </select>
 </mapper>

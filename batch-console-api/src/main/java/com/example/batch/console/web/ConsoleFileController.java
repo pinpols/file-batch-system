@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -45,11 +46,17 @@ public class ConsoleFileController {
         return responseFactory.success(applicationService.archive(request, idempotencyKey));
     }
 
-    /** 删除文件记录。 */
-    @PostMapping("/delete")
+    /** 删除文件记录（物理删除）。 */
+    @DeleteMapping("/{fileId}")
     public CommonResponse<ConsoleFileOperationResponse> delete(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-            @Valid @RequestBody DeleteFileRequest request) {
+            @PathVariable Long fileId,
+            @RequestParam("tenantId") String tenantId,
+            @RequestParam(required = false) String reason) {
+        DeleteFileRequest request = new DeleteFileRequest();
+        request.setFileId(fileId);
+        request.setTenantId(tenantId);
+        request.setReason(reason);
         return responseFactory.success(applicationService.delete(request, idempotencyKey));
     }
 

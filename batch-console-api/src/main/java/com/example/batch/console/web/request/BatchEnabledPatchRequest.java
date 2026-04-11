@@ -1,0 +1,24 @@
+package com.example.batch.console.web.request;
+
+import com.example.batch.common.validation.ValidTenantId;
+
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import lombok.Data;
+
+import java.util.List;
+
+/** 批量启用/禁用状态局部更新请求。 */
+@Data
+public class BatchEnabledPatchRequest {
+
+    @ValidTenantId private String tenantId;
+
+    @NotNull private Boolean enabled;
+
+    @NotEmpty
+    @Size(max = 200)
+    private List<Long> ids;
+}

@@ -51,6 +51,11 @@ public class ConsoleSessionRegistry {
         }
     }
 
+    /** 使指定用户的当前会话立即失效（删除 Redis key，已有 JWT 在下次请求时失败）。 */
+    public void invalidateSession(String username, String tenantId) {
+        redisTemplate.delete(key(username, tenantId));
+    }
+
     public boolean isCurrentSession(String username, String tenantId, long sessionVersion) {
         if (!securityProperties.isSingleSessionEnabled()) {
             return true;

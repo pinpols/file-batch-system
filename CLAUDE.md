@@ -30,6 +30,19 @@
 - `SpecHandler<T,E>` 模式（见 DefaultConsoleTenantConfigInitApplicationService）：同一"查找→跳过/更新/创建"循环在多个方法中重复时，提取为带 `of()` / `upsertable()` 工厂的 handler 接口，由公共 `applySpecs()` 模板驱动。
 - `CompensationHandler` 模式（见 DefaultCompensationService）：按字符串类型分派多个独立方法时，用 `Map<String, Handler>` 替代 if-chain，在构造期或静态块中一次性注册所有分支。
 
+## API 文档同步约束
+
+**凡修改 `batch-console-api` 控制层，必须同步更新 API 文档。**
+
+触发条件（满足任意一条即须更新）：
+- 新增、删除或重命名 Controller 方法 / 路由路径
+- 修改请求参数、请求体字段或响应体字段（含新增/删除/重命名/类型变更）
+- 新增或修改 Request / Response 类（含 record）
+
+必须同步更新的文件：
+- `docs/api/console-api.openapi.yaml`：补齐对应 path、schema 定义，确保无悬空 `$ref`
+- `docs/api/console-api-protocol.md`：在 Changelog 表追加一行，填写日期和变更摘要
+
 ## 架构硬约束
 
 - 任务分发主链：`DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT`

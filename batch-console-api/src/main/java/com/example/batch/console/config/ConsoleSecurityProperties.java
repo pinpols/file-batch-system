@@ -4,6 +4,8 @@ import lombok.Data;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import com.example.batch.console.support.ConsoleRoles;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,10 +20,10 @@ public class ConsoleSecurityProperties {
     private String userHeader = "X-Console-User";
     private String roleHeader = "X-Console-Roles";
     private String tokenHeader = "X-Console-Token";
-    private String defaultTenantId = "default-tenant";
-    private List<String> allowedTenants = new ArrayList<>(List.of("default-tenant"));
+    private String defaultTenantId = "";
+    private List<String> allowedTenants = new ArrayList<>();
     private List<String> defaultAuthorities =
-            new ArrayList<>(List.of("ROLE_ADMIN", "ROLE_AUDITOR", "ROLE_CONFIG_ADMIN"));
+            new ArrayList<>(List.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR, ConsoleRoles.CONFIG_ADMIN));
     private boolean legacyHeaderAuthEnabled = true;
     private boolean singleSessionEnabled = true;
     private String jwtIssuer = "batch-console-api";

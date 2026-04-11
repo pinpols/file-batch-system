@@ -110,10 +110,8 @@ logging:
 batch:
   # 安全 / KMS（orchestrator + worker + console 共用）
   security:
-    # 测试/演示模式开关：开启后可放宽部分校验（按实现约定）
+    # 测试模式开关：开启后可放宽部分校验（按实现约定）
     testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
-    # demo 模式：控制台以 admin 身份放开权限，并在控制台异常响应中包含堆栈信息（便于前端联调）。
-    demo-open: ${BATCH_SECURITY_DEMO_OPEN:false}
     kms:
       # 默认密钥引用（key ref）
       default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}

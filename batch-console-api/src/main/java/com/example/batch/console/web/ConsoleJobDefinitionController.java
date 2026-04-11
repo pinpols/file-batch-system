@@ -3,22 +3,20 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleJobDefinitionApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.web.request.BatchEnabledPatchRequest;
+import com.example.batch.console.web.request.EnabledPatchRequest;
 import com.example.batch.console.web.request.JobDefinitionCopyRequest;
 import com.example.batch.console.web.request.JobDefinitionCreateRequest;
 import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Size;
 
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @Validated
@@ -51,30 +49,20 @@ public class ConsoleJobDefinitionController {
         return responseFactory.success(jobDefinitionApplicationService.update(id, request));
     }
 
-    @PostMapping("/{id}/toggle")
-    public CommonResponse<Void> toggle(
-            @PathVariable Long id,
-            @RequestParam("tenantId") String tenantId,
-            @RequestParam("enabled") Boolean enabled) {
-        jobDefinitionApplicationService.toggle(id, tenantId, enabled);
+    /** 启用/禁用作业定义。 */
+    @PatchMapping("/{id}")
+    public CommonResponse<Void> patch(
+            @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+        jobDefinitionApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
         return responseFactory.success(null);
     }
 
-    /** 批量启停作业定义。 */
-    @PostMapping("/batch-toggle")
-    public CommonResponse<Integer> batchToggle(
-            @RequestParam("tenantId") String tenantId,
-            @RequestParam("enabled") Boolean enabled,
-            @RequestBody @NotEmpty @Size(max = 200) List<Long> ids) {
+    /** 批量启用/禁用作业定义。 */
+    @PatchMapping("/batch")
+    public CommonResponse<Integer> batchPatch(@Valid @RequestBody BatchEnabledPatchRequest request) {
         return responseFactory.success(
-                jobDefinitionApplicationService.batchToggle(tenantId, ids, enabled));
-    }
-
-    @DeleteMapping("/{id}")
-    public CommonResponse<Void> delete(
-            @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-        jobDefinitionApplicationService.delete(id, tenantId);
-        return responseFactory.success(null);
+                jobDefinitionApplicationService.batchToggle(
+                        request.getTenantId(), request.getIds(), request.getEnabled()));
     }
 
     @PostMapping("/{id}/copy")

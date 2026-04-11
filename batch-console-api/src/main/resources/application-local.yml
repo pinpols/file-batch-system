@@ -61,9 +61,8 @@ batch:
       user-header: X-Console-User
       role-header: X-Console-Roles
       token-header: X-Console-Token
-      default-tenant-id: default-tenant
-      allowed-tenants:
-        - default-tenant
+      default-tenant-id: ""
+      allowed-tenants: []
       default-authorities:
         - ROLE_ADMIN
         - ROLE_AUDITOR

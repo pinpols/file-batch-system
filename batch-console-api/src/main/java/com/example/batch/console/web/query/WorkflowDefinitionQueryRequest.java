@@ -10,5 +10,5 @@ public class WorkflowDefinitionQueryRequest extends PageQueryRequest {
     private String workflowName;
     private String workflowType;
     private Integer version;
-    private Boolean enabled;
+    private Boolean enabled = true;
 }

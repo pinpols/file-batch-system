@@ -18,7 +18,5 @@ public interface ConsoleFileChannelApplicationService {
 
     Map<String, Object> update(Long id, FileChannelUpdateRequest request);
 
-    void delete(Long id, String tenantId);
-
     void toggle(Long id, String tenantId, Boolean enabled);
 }

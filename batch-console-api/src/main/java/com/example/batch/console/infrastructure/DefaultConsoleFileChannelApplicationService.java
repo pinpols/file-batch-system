@@ -147,15 +147,6 @@ public class DefaultConsoleFileChannelApplicationService
     }
 
     @Override
-    public void delete(Long id, String tenantId) {
-        String resolved = tenantGuard.resolveTenant(tenantId);
-        int rows = mapper.deleteById(resolved, id);
-        if (rows == 0) {
-            throw new BizException(ResultCode.NOT_FOUND, "file channel not found: " + id);
-        }
-    }
-
-    @Override
     public void toggle(Long id, String tenantId, Boolean enabled) {
         String resolved = tenantGuard.resolveTenant(tenantId);
         int rows = mapper.toggleEnabled(resolved, id, enabled);

@@ -1,6 +1,6 @@
 .PHONY: dev-build dev-start dev-stop dev-restart
 .PHONY: test test-unit test-it test-e2e
-.PHONY: data-demo data-demo-reset data-system data-kafka data-minio
+.PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
 .PHONY: ops-inspect ops-heal-stuck ops-heal-dead ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate
 .PHONY: ci ci-pr ci-module
@@ -49,14 +49,6 @@ test-e2e:
 	bash scripts/local/run-e2e-tests.sh
 
 ## ── 测试数据 ──────────────────────────────────────────────────────────────────
-
-# 导入 Console 演示数据
-data-demo:
-	bash scripts/data/load-console-demo.sh
-
-# 清空并重新导入演示数据
-data-demo-reset:
-	bash scripts/data/load-console-demo.sh --reset
 
 # 导入系统测试数据
 data-system:

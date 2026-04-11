@@ -8,5 +8,5 @@ public class FileChannelQueryRequest extends PageQueryRequest {
     private String tenantId;
     private String channelCode;
     private String channelType;
-    private Boolean enabled;
+    private Boolean enabled = true;
 }

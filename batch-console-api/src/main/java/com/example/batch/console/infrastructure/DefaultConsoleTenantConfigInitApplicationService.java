@@ -397,7 +397,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
         param.setWorkflowName(spec.getWorkflowName());
         param.setWorkflowType(spec.getWorkflowType());
         param.setVersion(1);
-        param.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : true);
+        param.setEnabled(spec.getEnabled() != null && spec.getEnabled());
         param.setCreatedBy(operator);
         param.setUpdatedBy(operator);
         workflowDefinitionMapper.upsertWorkflowDefinition(param);
@@ -488,7 +488,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
         params.put("biz_type", spec.getBizType());
         params.put("worker_group", spec.getWorkerGroup());
         params.put("version", 1);
-        params.put("enabled", spec.getEnabled() != null ? spec.getEnabled() : true);
+        params.put("enabled", spec.getEnabled() != null && spec.getEnabled());
         params.put("description", spec.getDescription());
         pipelineDefinitionMapper.insert(params);
         Long defId = ((Number) params.get("id")).longValue();

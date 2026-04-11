@@ -14,4 +14,7 @@ public interface WorkflowRunMapper {
     WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
     long countByQuery(WorkflowRunQuery query);
+
+    long countByStatuses(
+            @Param("tenantId") String tenantId, @Param("statuses") List<String> statuses);
 }

@@ -16,8 +16,6 @@ public interface ConsoleWorkflowDefinitionApplicationService {
 
     void toggleEnabled(Long id, String tenantId, Boolean enabled);
 
-    void delete(Long id, String tenantId);
-
     DagValidationResult validate(Long id, String tenantId);
 
     record DagValidationResult(boolean valid, List<String> errors) {}

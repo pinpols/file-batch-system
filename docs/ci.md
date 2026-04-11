@@ -115,8 +115,6 @@ make scan-dast          # DAST（需本地服务已启动）
 ### 测试数据 / 数据库
 
 ```bash
-make data-demo          # 导入演示数据
-make data-demo-reset    # 清空并重新导入
 make data-system        # 系统测试数据
 make data-kafka         # 初始化 Kafka topics
 make data-minio         # 初始化 MinIO buckets

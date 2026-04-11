@@ -13,6 +13,7 @@ import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.mapper.BusinessCalendarMapper;
+import com.example.batch.trigger.mapper.TenantStatusMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.support.CalendarBizDateDefinition;
 import com.example.batch.trigger.support.CalendarHolidayRule;
@@ -44,17 +45,20 @@ public class DefaultTriggerService implements TriggerService {
     private final OrchestratorTriggerAdapter orchestratorTriggerAdapter;
     private final TriggerRequestMapper triggerRequestMapper;
     private final BusinessCalendarMapper businessCalendarMapper;
+    private final TenantStatusMapper tenantStatusMapper;
     private final PlatformTransactionManager transactionManager;
 
     @Override
     public LaunchResponse launch(TriggerLaunchCommand command) {
         validateRequest(command);
+        assertTenantActive(command.request().getTenantId());
         LaunchRequest launchRequest = launchAdapterService.fromApiRequest(command);
         return persistAndForward(launchRequest, command.idempotencyKey());
     }
 
     @Override
     public LaunchResponse launchScheduled(ScheduledTriggerCommand command) {
+        assertTenantActive(command.descriptor().getTenantId());
         LaunchRequest launchRequest =
                 launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
         if (launchRequest.bizDate() == null) {
@@ -67,6 +71,7 @@ public class DefaultTriggerService implements TriggerService {
     @Override
     @Transactional
     public LaunchResponse createPendingCatchUp(ScheduledTriggerCommand command) {
+        assertTenantActive(command.descriptor().getTenantId());
         LaunchRequest launchRequest =
                 launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
         if (launchRequest.bizDate() == null) {
@@ -80,6 +85,7 @@ public class DefaultTriggerService implements TriggerService {
     @Transactional
     public LaunchResponse approvePendingCatchUp(PendingCatchUpApprovalCommand command) {
         validatePendingApproval(command);
+        assertTenantActive(command.getTenantId());
         TriggerRequestEntity pendingRequest =
                 triggerRequestMapper.selectByTenantAndRequestId(
                         command.getTenantId(), command.getRequestId());
@@ -270,6 +276,14 @@ public class DefaultTriggerService implements TriggerService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void assertTenantActive(String tenantId) {
+        String status = tenantStatusMapper.selectStatus(tenantId);
+        if ("SUSPENDED".equals(status)) {
+            throw new BizException(ResultCode.BUSINESS_ERROR,
+                    "tenant is suspended, triggers are not allowed: " + tenantId);
+        }
     }
 
     private void validateRequest(TriggerLaunchCommand command) {

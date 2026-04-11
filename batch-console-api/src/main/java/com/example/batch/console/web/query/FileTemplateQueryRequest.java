@@ -11,5 +11,5 @@ public class FileTemplateQueryRequest extends PageQueryRequest {
     private String templateName;
     private String templateType;
     private String bizType;
-    private Boolean enabled;
+    private Boolean enabled = true;
 }
