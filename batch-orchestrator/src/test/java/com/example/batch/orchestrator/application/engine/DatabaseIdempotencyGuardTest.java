@@ -1,5 +1,8 @@
 package com.example.batch.orchestrator.application.engine;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
 import com.example.batch.common.service.IdempotencyGuard;
 import com.example.batch.orchestrator.infrastructure.idempotency.DatabaseIdempotencyGuard;
 import com.example.batch.orchestrator.mapper.IdempotencyRecordMapper;
@@ -9,54 +12,50 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 class DatabaseIdempotencyGuardTest {
 
-    @Mock
-    private IdempotencyRecordMapper mapper;
+  @Mock private IdempotencyRecordMapper mapper;
 
-    private DatabaseIdempotencyGuard guard;
+  private DatabaseIdempotencyGuard guard;
 
-    @BeforeEach
-    void setUp() {
-        guard = new DatabaseIdempotencyGuard(mapper);
-    }
+  @BeforeEach
+  void setUp() {
+    guard = new DatabaseIdempotencyGuard(mapper);
+  }
 
-    @Test
-    void executeOnce_firstExecution_runsActionAndReturnsResult() {
-        when(mapper.insertIfAbsent("t1", "key-1", null)).thenReturn(1);
+  @Test
+  void executeOnce_firstExecution_runsActionAndReturnsResult() {
+    when(mapper.insertIfAbsent("t1", "key-1", null)).thenReturn(1);
 
-        String result = guard.executeOnce("t1", "key-1", () -> "result-payload");
+    String result = guard.executeOnce("t1", "key-1", () -> "result-payload");
 
-        assertThat(result).isEqualTo("result-payload");
-        verify(mapper).insertIfAbsent("t1", "key-1", null);
-        verifyNoMoreInteractions(mapper);
-    }
+    assertThat(result).isEqualTo("result-payload");
+    verify(mapper).insertIfAbsent("t1", "key-1", null);
+    verifyNoMoreInteractions(mapper);
+  }
 
-    @Test
-    void executeOnce_duplicateKey_returnsStoredResultWithoutReexecuting() {
-        when(mapper.insertIfAbsent("t1", "key-dup", null)).thenReturn(0);
-        when(mapper.selectResultByKey("t1", "key-dup")).thenReturn("stored-result");
+  @Test
+  void executeOnce_duplicateKey_returnsStoredResultWithoutReexecuting() {
+    when(mapper.insertIfAbsent("t1", "key-dup", null)).thenReturn(0);
+    when(mapper.selectResultByKey("t1", "key-dup")).thenReturn("stored-result");
 
-        IdempotencyGuard.IdempotentAction action = mock(IdempotencyGuard.IdempotentAction.class);
-        String result = guard.executeOnce("t1", "key-dup", action);
+    IdempotencyGuard.IdempotentAction action = mock(IdempotencyGuard.IdempotentAction.class);
+    String result = guard.executeOnce("t1", "key-dup", action);
 
-        assertThat(result).isEqualTo("stored-result");
-        verify(action, never()).execute();
-    }
+    assertThat(result).isEqualTo("stored-result");
+    verify(action, never()).execute();
+  }
 
-    @Test
-    void isAlreadyExecuted_keyExists_returnsTrue() {
-        when(mapper.selectResultByKey("t1", "existing-key")).thenReturn("some-result");
-        assertThat(guard.isAlreadyExecuted("t1", "existing-key")).isTrue();
-    }
+  @Test
+  void isAlreadyExecuted_keyExists_returnsTrue() {
+    when(mapper.selectResultByKey("t1", "existing-key")).thenReturn("some-result");
+    assertThat(guard.isAlreadyExecuted("t1", "existing-key")).isTrue();
+  }
 
-    @Test
-    void isAlreadyExecuted_keyAbsent_returnsFalse() {
-        when(mapper.selectResultByKey("t1", "missing-key")).thenReturn(null);
-        assertThat(guard.isAlreadyExecuted("t1", "missing-key")).isFalse();
-    }
+  @Test
+  void isAlreadyExecuted_keyAbsent_returnsFalse() {
+    when(mapper.selectResultByKey("t1", "missing-key")).thenReturn(null);
+    assertThat(guard.isAlreadyExecuted("t1", "missing-key")).isFalse();
+  }
 }

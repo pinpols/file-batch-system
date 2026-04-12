@@ -2,6 +2,7 @@ package com.example.batch.console.web.realtime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -21,36 +22,43 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import static org.mockito.Mockito.mock;
 
 class ConsolePipelineDefinitionRealtimeControllerTest {
 
-    private final ConsoleRealtimeEventHub realtimeEventHub = mock(ConsoleRealtimeEventHub.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
-    private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
-    private MockMvc mockMvc;
+  private final ConsoleRealtimeEventHub realtimeEventHub = mock(ConsoleRealtimeEventHub.class);
+  private final ConsoleRequestMetadataResolver requestMetadataResolver =
+      mock(ConsoleRequestMetadataResolver.class);
+  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+  @BeforeEach
+  void setUp() {
+    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+    ConsoleApiExceptionHandler exceptionHandler =
+        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
 
-        when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
-        when(tenantGuard.resolveTenant(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
-                .thenReturn(new SseEmitter());
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+    when(tenantGuard.resolveTenant(anyString()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+    when(realtimeEventHub.subscribe(anyString(), anyString(), any(), any(), any()))
+        .thenReturn(new SseEmitter());
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new ConsolePipelineDefinitionRealtimeController(realtimeEventHub, tenantGuard))
-                .setControllerAdvice(exceptionHandler)
-                .build();
-    }
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new ConsolePipelineDefinitionRealtimeController(realtimeEventHub, tenantGuard))
+            .setControllerAdvice(exceptionHandler)
+            .build();
+  }
 
-    @Test
-    void shouldExposeDomainRealtimeStreamOnPipelineDefinitionsController() throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/console/pipeline-definitions/events").param("tenantId", "t1"))
-                .andExpect(request().asyncStarted())
-                .andReturn();
+  @Test
+  void shouldExposeDomainRealtimeStreamOnPipelineDefinitionsController() throws Exception {
+    MvcResult result =
+        mockMvc
+            .perform(get("/api/console/pipeline-definitions/events").param("tenantId", "t1"))
+            .andExpect(request().asyncStarted())
+            .andReturn();
 
-        verify(realtimeEventHub).subscribe("t1", "pipeline-definitions", null, null, null);
-    }
+    verify(realtimeEventHub).subscribe("t1", "pipeline-definitions", null, null, null);
+  }
 }

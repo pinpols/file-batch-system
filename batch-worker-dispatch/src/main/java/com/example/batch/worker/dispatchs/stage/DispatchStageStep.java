@@ -6,19 +6,19 @@ import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 
 public interface DispatchStageStep {
 
-    DispatchStage stage();
+  DispatchStage stage();
 
-    default String stepCode() {
-        return "DISPATCH_" + stage().name();
-    }
+  default String stepCode() {
+    return "DISPATCH_" + stage().name();
+  }
 
-    default String stepName() {
-        return stepCode();
-    }
+  default String stepName() {
+    return stepCode();
+  }
 
-    default String implCode() {
-        return stepCode();
-    }
+  default String implCode() {
+    return stepCode();
+  }
 
-    DispatchStageResult execute(DispatchJobContext context);
+  DispatchStageResult execute(DispatchJobContext context);
 }

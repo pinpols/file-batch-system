@@ -22,16 +22,13 @@ import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.MarkRunningParam;
 import com.example.batch.orchestrator.mapper.UpdateTaskStatusParam;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
-
+import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
-
-import java.time.Instant;
-import java.util.List;
 
 /**
  * Worker 认领（claim）与租约（lease）治理。
@@ -56,217 +53,208 @@ import java.util.List;
 @Slf4j
 public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
-    private final JobTaskMapper jobTaskMapper;
-    private final JobPartitionMapper jobPartitionMapper;
-    private final JobStepInstanceMapper jobStepInstanceMapper;
-    private final JobExecutionLogMapper jobExecutionLogMapper;
-    private final WorkerRegistryRepository workerRegistryRepository;
-    private final PartitionLeaseProperties partitionLeaseProperties;
+  private final JobTaskMapper jobTaskMapper;
+  private final JobPartitionMapper jobPartitionMapper;
+  private final JobStepInstanceMapper jobStepInstanceMapper;
+  private final JobExecutionLogMapper jobExecutionLogMapper;
+  private final WorkerRegistryRepository workerRegistryRepository;
+  private final PartitionLeaseProperties partitionLeaseProperties;
 
-    @Override
-    @Transactional
-    public JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode) {
-        // 入口语义：如果不可认领（worker 不在线/组不匹配/状态不允许），返回 current（由 controller 转换为 409/404）。
-        JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
-        if (current == null) {
-            return null;
-        }
-        if (!isWorkerClaimable(tenantId, workerCode, current)) {
-            return current;
-        }
-        int updated =
-                jobTaskMapper.assignWorker(
-                        AssignWorkerParam.builder()
-                                .tenantId(tenantId)
-                                .id(taskId)
-                                .assignedWorkerCode(workerCode)
-                                .taskStatus(TaskStatus.RUNNING.code())
-                                .readyStatus(TaskStatus.READY.code())
-                                .expectedVersion(current.getVersion())
-                                .build());
-        if (updated <= 0) {
-            return jobTaskMapper.selectById(tenantId, taskId);
-        }
-        if (current.getJobPartitionId() != null) {
-            // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
-            JobPartitionEntity partition =
-                    jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
-            if (partition == null) {
-                // 这里回滚而不是抛异常：语义上属于并发/状态漂移（可重试），不应该把 worker 侧认领请求打成”系统故障”。
-                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                return jobTaskMapper.selectById(tenantId, taskId);
-            }
-            int claimed =
-                    jobPartitionMapper.claimPartition(
-                            ClaimPartitionParam.builder()
-                                    .tenantId(tenantId)
-                                    .id(current.getJobPartitionId())
-                                    .workerCode(workerCode)
-                                    .leaseExpireAt(
-                                            Instant.now()
-                                                    .plusSeconds(
-                                                            partitionLeaseProperties
-                                                                    .getExpireSeconds()))
-                                    .fromStatus(PartitionStatus.READY.code())
-                                    .toStatus(PartitionStatus.RUNNING.code())
-                                    .expectedVersion(partition.getVersion())
-                                    .build());
-            if (claimed <= 0) {
-                // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
-                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                return jobTaskMapper.selectById(tenantId, taskId);
-            }
-        }
-        JobStepInstanceEntity stepInstance =
-                jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
-        if (stepInstance != null
-                && jobStepInstanceMapper.markRunning(
-                                MarkRunningParam.builder()
-                                        .tenantId(tenantId)
-                                        .id(stepInstance.getId())
-                                        .startedAt(Instant.now())
-                                        .expectedVersion(stepInstance.getVersion())
-                                        .runningStatus(StepInstanceStatus.RUNNING.code())
-                                        .createdStatus(StepInstanceStatus.CREATED.code())
-                                        .waitingStatus(StepInstanceStatus.WAITING.code())
-                                        .readyStatus(StepInstanceStatus.READY.code())
-                                        .retryingStatus(StepInstanceStatus.RETRYING.code())
-                                        .build())
-                        <= 0) {
-            throw new BizException(ResultCode.STATE_CONFLICT, "job step instance claim conflict");
-        }
+  @Override
+  @Transactional
+  public JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode) {
+    // 入口语义：如果不可认领（worker 不在线/组不匹配/状态不允许），返回 current（由 controller 转换为 409/404）。
+    JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
+    if (current == null) {
+      return null;
+    }
+    if (!isWorkerClaimable(tenantId, workerCode, current)) {
+      return current;
+    }
+    int updated =
+        jobTaskMapper.assignWorker(
+            AssignWorkerParam.builder()
+                .tenantId(tenantId)
+                .id(taskId)
+                .assignedWorkerCode(workerCode)
+                .taskStatus(TaskStatus.RUNNING.code())
+                .readyStatus(TaskStatus.READY.code())
+                .expectedVersion(current.getVersion())
+                .build());
+    if (updated <= 0) {
+      return jobTaskMapper.selectById(tenantId, taskId);
+    }
+    if (current.getJobPartitionId() != null) {
+      // task 与 partition 的 lease 绑定在一起：task 进入 RUNNING 后必须成功 claim partition，否则认为状态不一致。
+      JobPartitionEntity partition =
+          jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
+      if (partition == null) {
+        // 这里回滚而不是抛异常：语义上属于并发/状态漂移（可重试），不应该把 worker 侧认领请求打成”系统故障”。
+        TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
         return jobTaskMapper.selectById(tenantId, taskId);
-    }
-
-    @Override
-    @Transactional
-    public boolean renewTaskLease(String tenantId, Long taskId, String workerCode) {
-        // 续租语义：只有 RUNNING 且 worker 匹配时允许续租；失败由 controller 统一转成 409。
-        JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
-        if (current == null || current.getJobPartitionId() == null) {
-            return false;
-        }
-        if (!TaskStatus.RUNNING.code().equals(current.getTaskStatus())) {
-            return false;
-        }
-        if (workerCode == null || !workerCode.equals(current.getAssignedWorkerCode())) {
-            return false;
-        }
-        return jobPartitionMapper.renewLease(
-                        tenantId,
-                        current.getJobPartitionId(),
-                        workerCode,
-                        Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
-                > 0;
-    }
-
-    @Override
-    @Transactional
-    public JobTaskEntity updateTaskStatus(
-            String tenantId,
-            Long taskId,
-            String taskStatus,
-            String errorCode,
-            String errorMessage) {
-        JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
-        if (current == null) {
-            return null;
-        }
-        jobTaskMapper.updateStatus(
-                UpdateTaskStatusParam.builder()
-                        .tenantId(tenantId)
-                        .id(taskId)
-                        .taskStatus(taskStatus)
-                        .resultSummary(null)
-                        .errorCode(errorCode)
-                        .errorMessage(errorMessage)
-                        .terminalStatus1(TaskStatus.SUCCESS.code())
-                        .terminalStatus2(TaskStatus.FAILED.code())
-                        .terminalStatus3(TaskStatus.CANCELLED.code())
-                        .terminalStatus4(TaskStatus.TERMINATED.code())
-                        .expectedVersion(current.getVersion())
-                        .build());
+      }
+      int claimed =
+          jobPartitionMapper.claimPartition(
+              ClaimPartitionParam.builder()
+                  .tenantId(tenantId)
+                  .id(current.getJobPartitionId())
+                  .workerCode(workerCode)
+                  .leaseExpireAt(
+                      Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+                  .fromStatus(PartitionStatus.READY.code())
+                  .toStatus(PartitionStatus.RUNNING.code())
+                  .expectedVersion(partition.getVersion())
+                  .build());
+      if (claimed <= 0) {
+        // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
+        TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
         return jobTaskMapper.selectById(tenantId, taskId);
+      }
     }
+    JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
+    if (stepInstance != null
+        && jobStepInstanceMapper.markRunning(
+                MarkRunningParam.builder()
+                    .tenantId(tenantId)
+                    .id(stepInstance.getId())
+                    .startedAt(Instant.now())
+                    .expectedVersion(stepInstance.getVersion())
+                    .runningStatus(StepInstanceStatus.RUNNING.code())
+                    .createdStatus(StepInstanceStatus.CREATED.code())
+                    .waitingStatus(StepInstanceStatus.WAITING.code())
+                    .readyStatus(StepInstanceStatus.READY.code())
+                    .retryingStatus(StepInstanceStatus.RETRYING.code())
+                    .build())
+            <= 0) {
+      throw new BizException(ResultCode.STATE_CONFLICT, "job step instance claim conflict");
+    }
+    return jobTaskMapper.selectById(tenantId, taskId);
+  }
 
-    @Override
-    @Transactional
-    public JobExecutionLogEntity appendLog(JobExecutionLogEntity log) {
-        jobExecutionLogMapper.insert(log);
-        return log;
+  @Override
+  @Transactional
+  public boolean renewTaskLease(String tenantId, Long taskId, String workerCode) {
+    // 续租语义：只有 RUNNING 且 worker 匹配时允许续租；失败由 controller 统一转成 409。
+    JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
+    if (current == null || current.getJobPartitionId() == null) {
+      return false;
     }
+    if (!TaskStatus.RUNNING.code().equals(current.getTaskStatus())) {
+      return false;
+    }
+    if (workerCode == null || !workerCode.equals(current.getAssignedWorkerCode())) {
+      return false;
+    }
+    return jobPartitionMapper.renewLease(
+            tenantId,
+            current.getJobPartitionId(),
+            workerCode,
+            Instant.now().plusSeconds(partitionLeaseProperties.getExpireSeconds()))
+        > 0;
+  }
 
-    @Override
-    public List<JobExecutionLogEntity> listLogs(
-            String tenantId, Long jobInstanceId, Long jobPartitionId) {
-        return jobExecutionLogMapper.selectByQuery(
-                new JobExecutionLogQuery(tenantId, jobInstanceId, jobPartitionId, null, null));
+  @Override
+  @Transactional
+  public JobTaskEntity updateTaskStatus(
+      String tenantId, Long taskId, String taskStatus, String errorCode, String errorMessage) {
+    JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
+    if (current == null) {
+      return null;
     }
+    jobTaskMapper.updateStatus(
+        UpdateTaskStatusParam.builder()
+            .tenantId(tenantId)
+            .id(taskId)
+            .taskStatus(taskStatus)
+            .resultSummary(null)
+            .errorCode(errorCode)
+            .errorMessage(errorMessage)
+            .terminalStatus1(TaskStatus.SUCCESS.code())
+            .terminalStatus2(TaskStatus.FAILED.code())
+            .terminalStatus3(TaskStatus.CANCELLED.code())
+            .terminalStatus4(TaskStatus.TERMINATED.code())
+            .expectedVersion(current.getVersion())
+            .build());
+    return jobTaskMapper.selectById(tenantId, taskId);
+  }
 
-    @Override
-    @Transactional
-    public JobTaskEntity markRunning(String tenantId, Long taskId, Instant startedAt) {
-        JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
-        if (current == null) {
-            return null;
-        }
-        current.setStartedAt(startedAt);
-        current.setTaskStatus(TaskStatus.RUNNING.code());
-        jobTaskMapper.updateStatus(
-                UpdateTaskStatusParam.builder()
-                        .tenantId(tenantId)
-                        .id(taskId)
-                        .taskStatus(TaskStatus.RUNNING.code())
-                        .resultSummary(null)
-                        .errorCode(null)
-                        .errorMessage(null)
-                        .terminalStatus1(TaskStatus.SUCCESS.code())
-                        .terminalStatus2(TaskStatus.FAILED.code())
-                        .terminalStatus3(TaskStatus.CANCELLED.code())
-                        .terminalStatus4(TaskStatus.TERMINATED.code())
-                        .expectedVersion(current.getVersion())
-                        .build());
-        JobStepInstanceEntity stepInstance =
-                jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
-        if (stepInstance != null
-                && jobStepInstanceMapper.markRunning(
-                                MarkRunningParam.builder()
-                                        .tenantId(tenantId)
-                                        .id(stepInstance.getId())
-                                        .startedAt(startedAt)
-                                        .expectedVersion(stepInstance.getVersion())
-                                        .runningStatus(StepInstanceStatus.RUNNING.code())
-                                        .createdStatus(StepInstanceStatus.CREATED.code())
-                                        .waitingStatus(StepInstanceStatus.WAITING.code())
-                                        .readyStatus(StepInstanceStatus.READY.code())
-                                        .retryingStatus(StepInstanceStatus.RETRYING.code())
-                                        .build())
-                        <= 0) {
-            throw new BizException(ResultCode.STATE_CONFLICT, "job step instance running conflict");
-        }
-        return jobTaskMapper.selectById(tenantId, taskId);
-    }
+  @Override
+  @Transactional
+  public JobExecutionLogEntity appendLog(JobExecutionLogEntity log) {
+    jobExecutionLogMapper.insert(log);
+    return log;
+  }
 
-    private boolean isWorkerClaimable(String tenantId, String workerCode, JobTaskEntity task) {
-        if (workerCode == null || workerCode.isBlank()) {
-            return false;
-        }
-        WorkerRegistryRecord workerRegistry =
-                workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
-        if (workerRegistry == null
-                || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
-            return false;
-        }
-        if (task == null || task.getJobPartitionId() == null) {
-            return true;
-        }
-        JobPartitionEntity partition =
-                jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
-        if (partition == null
-                || partition.getWorkerGroup() == null
-                || partition.getWorkerGroup().isBlank()) {
-            return true;
-        }
-        return partition.getWorkerGroup().equalsIgnoreCase(workerRegistry.workerGroup());
+  @Override
+  public List<JobExecutionLogEntity> listLogs(
+      String tenantId, Long jobInstanceId, Long jobPartitionId) {
+    return jobExecutionLogMapper.selectByQuery(
+        new JobExecutionLogQuery(tenantId, jobInstanceId, jobPartitionId, null, null));
+  }
+
+  @Override
+  @Transactional
+  public JobTaskEntity markRunning(String tenantId, Long taskId, Instant startedAt) {
+    JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
+    if (current == null) {
+      return null;
     }
+    current.setStartedAt(startedAt);
+    current.setTaskStatus(TaskStatus.RUNNING.code());
+    jobTaskMapper.updateStatus(
+        UpdateTaskStatusParam.builder()
+            .tenantId(tenantId)
+            .id(taskId)
+            .taskStatus(TaskStatus.RUNNING.code())
+            .resultSummary(null)
+            .errorCode(null)
+            .errorMessage(null)
+            .terminalStatus1(TaskStatus.SUCCESS.code())
+            .terminalStatus2(TaskStatus.FAILED.code())
+            .terminalStatus3(TaskStatus.CANCELLED.code())
+            .terminalStatus4(TaskStatus.TERMINATED.code())
+            .expectedVersion(current.getVersion())
+            .build());
+    JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
+    if (stepInstance != null
+        && jobStepInstanceMapper.markRunning(
+                MarkRunningParam.builder()
+                    .tenantId(tenantId)
+                    .id(stepInstance.getId())
+                    .startedAt(startedAt)
+                    .expectedVersion(stepInstance.getVersion())
+                    .runningStatus(StepInstanceStatus.RUNNING.code())
+                    .createdStatus(StepInstanceStatus.CREATED.code())
+                    .waitingStatus(StepInstanceStatus.WAITING.code())
+                    .readyStatus(StepInstanceStatus.READY.code())
+                    .retryingStatus(StepInstanceStatus.RETRYING.code())
+                    .build())
+            <= 0) {
+      throw new BizException(ResultCode.STATE_CONFLICT, "job step instance running conflict");
+    }
+    return jobTaskMapper.selectById(tenantId, taskId);
+  }
+
+  private boolean isWorkerClaimable(String tenantId, String workerCode, JobTaskEntity task) {
+    if (workerCode == null || workerCode.isBlank()) {
+      return false;
+    }
+    WorkerRegistryRecord workerRegistry =
+        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+    if (workerRegistry == null
+        || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
+      return false;
+    }
+    if (task == null || task.getJobPartitionId() == null) {
+      return true;
+    }
+    JobPartitionEntity partition =
+        jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
+    if (partition == null
+        || partition.getWorkerGroup() == null
+        || partition.getWorkerGroup().isBlank()) {
+      return true;
+    }
+    return partition.getWorkerGroup().equalsIgnoreCase(workerRegistry.workerGroup());
+  }
 }

@@ -21,184 +21,197 @@ import org.springframework.util.StringUtils;
  * Worker 生命周期模板（所有 worker 通用骨架）。
  *
  * <p>使用方式：
+ *
  * <ul>
- *   <li>子类只提供差异化配置：{@link #workerConfiguration()} / {@link #workerGroup()} / {@link #workerPort()}</li>
- *   <li>子类用一个很薄的 {@code @Scheduled} 方法定期调用 {@link #doHeartbeat()}（避免在抽象类里硬编码配置 key）</li>
+ *   <li>子类只提供差异化配置：{@link #workerConfiguration()} / {@link #workerGroup()} / {@link #workerPort()}
+ *   <li>子类用一个很薄的 {@code @Scheduled} 方法定期调用 {@link #doHeartbeat()}（避免在抽象类里硬编码配置 key）
  * </ul>
  *
  * <p>该模板负责：
+ *
  * <ul>
- *   <li>应用启动后自动注册（{@link #onReady()}）</li>
- *   <li>周期心跳（{@link #doHeartbeat()}）</li>
- *   <li>优雅下线（{@link #onShutdown()}）</li>
+ *   <li>应用启动后自动注册（{@link #onReady()}）
+ *   <li>周期心跳（{@link #doHeartbeat()}）
+ *   <li>优雅下线（{@link #onShutdown()}）
  * </ul>
  */
 @Slf4j
 public abstract class AbstractWorkerLoop {
 
-    private final WorkerRuntimeFacade workerRuntimeFacade;
-    private final AtomicBoolean started = new AtomicBoolean(false);
-    private volatile WorkerRegistration registration;
+  private final WorkerRuntimeFacade workerRuntimeFacade;
+  private final AtomicBoolean started = new AtomicBoolean(false);
+  private volatile WorkerRegistration registration;
 
-    @Value("${batch.worker.registry.fail-fast-on-startup:true}")
-    private boolean failFastOnStartup;
+  @Value("${batch.worker.registry.fail-fast-on-startup:true}")
+  private boolean failFastOnStartup;
 
-    protected AbstractWorkerLoop(WorkerRuntimeFacade workerRuntimeFacade) {
-        this.workerRuntimeFacade = workerRuntimeFacade;
+  protected AbstractWorkerLoop(WorkerRuntimeFacade workerRuntimeFacade) {
+    this.workerRuntimeFacade = workerRuntimeFacade;
+  }
+
+  /** Worker 配置（topic、tenantId、workerType 等）。 */
+  protected abstract WorkerConfiguration workerConfiguration();
+
+  /** worker 逻辑分组，如 {@code import}/{@code export}/{@code dispatch}。 */
+  protected abstract String workerGroup();
+
+  /** worker 对外端口（用于注册元数据；E2E 合并进程时通常为 orchestrator 端口）。 */
+  protected abstract int workerPort();
+
+  @EventListener(ApplicationReadyEvent.class)
+  public void onReady() {
+    try {
+      ensureStarted();
+    } catch (Exception ex) {
+      if (failFastOnStartup) {
+        throw ex;
+      }
+      log.warn(
+          "{} worker register-on-startup failed; will retry on heartbeat. reason={}",
+          workerGroup(),
+          summarizeRegistrationFailure(ex));
     }
+  }
 
-    /** Worker 配置（topic、tenantId、workerType 等）。 */
-    protected abstract WorkerConfiguration workerConfiguration();
-
-    /** worker 逻辑分组，如 {@code import}/{@code export}/{@code dispatch}。 */
-    protected abstract String workerGroup();
-
-    /** worker 对外端口（用于注册元数据；E2E 合并进程时通常为 orchestrator 端口）。 */
-    protected abstract int workerPort();
-
-    @EventListener(ApplicationReadyEvent.class)
-    public void onReady() {
-        try {
-            ensureStarted();
-        } catch (Exception ex) {
-            if (failFastOnStartup) {
-                throw ex;
-            }
-            log.warn("{} worker register-on-startup failed; will retry on heartbeat. reason={}",
-                    workerGroup(), summarizeRegistrationFailure(ex));
-        }
+  /**
+   * 由子类的 {@code @Scheduled} 方法调用。
+   *
+   * <p>把 {@code @Scheduled} 放在子类，是为了避免在抽象层硬编码配置 key（各 worker 的心跳间隔配置可能不同）。
+   */
+  protected void doHeartbeat() {
+    WorkerRegistration current;
+    try {
+      current = ensureStarted();
+    } catch (Exception ex) {
+      log.warn(
+          "{} worker start/register failed; will retry on next heartbeat. cause={}",
+          workerGroup(),
+          ex.getMessage());
+      return;
     }
-
-    /**
-     * 由子类的 {@code @Scheduled} 方法调用。
-     * <p>把 {@code @Scheduled} 放在子类，是为了避免在抽象层硬编码配置 key（各 worker 的心跳间隔配置可能不同）。
-     */
-    protected void doHeartbeat() {
-        WorkerRegistration current;
-        try {
-            current = ensureStarted();
-        } catch (Exception ex) {
-            log.warn("{} worker start/register failed; will retry on next heartbeat. cause={}",
-                    workerGroup(), ex.getMessage());
-            return;
-        }
-        try {
-            workerRuntimeFacade.heartbeat(current.getWorkerId());
-        } catch (Exception ex) {
-            log.warn("{} worker heartbeat unavailable: {} ({})",
-                    workerGroup(), ex.getMessage(), ex.getClass().getSimpleName());
-        }
+    try {
+      workerRuntimeFacade.heartbeat(current.getWorkerId());
+    } catch (Exception ex) {
+      log.warn(
+          "{} worker heartbeat unavailable: {} ({})",
+          workerGroup(),
+          ex.getMessage(),
+          ex.getClass().getSimpleName());
     }
+  }
 
-    /**
-     * 幂等启动：首次调用注册 worker，后续调用直接返回注册信息；双重检查加锁保证线程安全。
-     */
-    public WorkerRegistration ensureStarted() {
-        if (started.get()) {
-            return registration;
-        }
-        synchronized (this) {
-            if (started.get()) {
-                return registration;
-            }
-            WorkerConfiguration cfg = workerConfiguration();
-            WorkerRegistration workerRegistration = new WorkerRegistration();
-            workerRegistration.setWorkerId(buildWorkerId(cfg));
-            workerRegistration.setTenantId(cfg.tenantId());
-            workerRegistration.setWorkerType(cfg.workerType());
-            workerRegistration.setWorkerGroup(workerGroup());
-            workerRegistration.setHost(resolveHostName());
-            workerRegistration.setPort(workerPort());
-            workerRegistration.setActive(Boolean.TRUE);
-            workerRegistration.setRegisteredAt(OffsetDateTime.now());
-            workerRegistration.setLastHeartbeatAt(OffsetDateTime.now());
-            registration = workerRuntimeFacade.start(workerRegistration);
-            started.set(true);
-            log.info("{} worker started: workerId={}, tenantId={}",
-                    workerGroup(), registration.getWorkerId(), registration.getTenantId());
-            return registration;
-        }
+  /** 幂等启动：首次调用注册 worker，后续调用直接返回注册信息；双重检查加锁保证线程安全。 */
+  public WorkerRegistration ensureStarted() {
+    if (started.get()) {
+      return registration;
     }
+    synchronized (this) {
+      if (started.get()) {
+        return registration;
+      }
+      WorkerConfiguration cfg = workerConfiguration();
+      WorkerRegistration workerRegistration = new WorkerRegistration();
+      workerRegistration.setWorkerId(buildWorkerId(cfg));
+      workerRegistration.setTenantId(cfg.tenantId());
+      workerRegistration.setWorkerType(cfg.workerType());
+      workerRegistration.setWorkerGroup(workerGroup());
+      workerRegistration.setHost(resolveHostName());
+      workerRegistration.setPort(workerPort());
+      workerRegistration.setActive(Boolean.TRUE);
+      workerRegistration.setRegisteredAt(OffsetDateTime.now());
+      workerRegistration.setLastHeartbeatAt(OffsetDateTime.now());
+      registration = workerRuntimeFacade.start(workerRegistration);
+      started.set(true);
+      log.info(
+          "{} worker started: workerId={}, tenantId={}",
+          workerGroup(),
+          registration.getWorkerId(),
+          registration.getTenantId());
+      return registration;
+    }
+  }
 
-    @PreDestroy
-    public void shutdown() {
-        if (registration != null) {
-            try {
-                workerRuntimeFacade.shutdown(registration.getWorkerId());
-            } catch (Exception ex) {
-                log.warn("{} worker shutdown signal failed: {} ({})",
-                        workerGroup(), ex.getMessage(), ex.getClass().getSimpleName());
-            }
-        }
+  @PreDestroy
+  public void shutdown() {
+    if (registration != null) {
+      try {
+        workerRuntimeFacade.shutdown(registration.getWorkerId());
+      } catch (Exception ex) {
+        log.warn(
+            "{} worker shutdown signal failed: {} ({})",
+            workerGroup(),
+            ex.getMessage(),
+            ex.getClass().getSimpleName());
+      }
     }
+  }
 
-    private String buildWorkerId(WorkerConfiguration cfg) {
-        if (StringUtils.hasText(cfg.workerCode())) {
-            return cfg.workerCode();
-        }
-        if (StringUtils.hasText(cfg.workerType())) {
-            return cfg.workerType().toLowerCase() + "-" + UUID.randomUUID();
-        }
-        return workerGroup() + "-" + UUID.randomUUID();
+  private String buildWorkerId(WorkerConfiguration cfg) {
+    if (StringUtils.hasText(cfg.workerCode())) {
+      return cfg.workerCode();
     }
+    if (StringUtils.hasText(cfg.workerType())) {
+      return cfg.workerType().toLowerCase() + "-" + UUID.randomUUID();
+    }
+    return workerGroup() + "-" + UUID.randomUUID();
+  }
 
-    private String resolveHostName() {
-        try {
-            return InetAddress.getLocalHost().getHostName();
-        } catch (UnknownHostException ex) {
-            return "localhost";
-        }
+  private String resolveHostName() {
+    try {
+      return InetAddress.getLocalHost().getHostName();
+    } catch (UnknownHostException ex) {
+      return "localhost";
     }
+  }
 
-    /**
-     * 单行日志用：{@link Exception#getMessage()} 常为 null（如 RestClient I/O 失败），沿 cause 链拼可读摘要，不打堆栈。
-     */
-    private static String summarizeRegistrationFailure(Throwable ex) {
-        if (ex == null) {
-            return "unknown";
-        }
-        String top = ex.getMessage();
-        if (StringUtils.hasText(top)) {
-            Throwable root = ex;
-            while (root.getCause() != null) {
-                root = root.getCause();
-            }
-            if (root != ex) {
-                String rm = root.getMessage();
-                String rootPart = StringUtils.hasText(rm)
-                        ? root.getClass().getSimpleName() + ": " + rm
-                        : root.getClass().getSimpleName();
-                return top + " [" + rootPart + "]" + registrationFailureHint(ex);
-            }
-            return top + registrationFailureHint(ex);
-        }
-        StringBuilder sb = new StringBuilder();
-        for (Throwable t = ex; t != null && sb.length() < 500; t = t.getCause()) {
-            if (sb.length() > 0) {
-                sb.append(" <- ");
-            }
-            sb.append(t.getClass().getSimpleName());
-            String m = t.getMessage();
-            if (StringUtils.hasText(m)) {
-                sb.append(": ").append(m);
-            }
-        }
-        String core = sb.length() > 0 ? sb.toString() : ex.getClass().getSimpleName();
-        return core + registrationFailureHint(ex);
+  /** 单行日志用：{@link Exception#getMessage()} 常为 null（如 RestClient I/O 失败），沿 cause 链拼可读摘要，不打堆栈。 */
+  private static String summarizeRegistrationFailure(Throwable ex) {
+    if (ex == null) {
+      return "unknown";
     }
+    String top = ex.getMessage();
+    if (StringUtils.hasText(top)) {
+      Throwable root = ex;
+      while (root.getCause() != null) {
+        root = root.getCause();
+      }
+      if (root != ex) {
+        String rm = root.getMessage();
+        String rootPart =
+            StringUtils.hasText(rm)
+                ? root.getClass().getSimpleName() + ": " + rm
+                : root.getClass().getSimpleName();
+        return top + " [" + rootPart + "]" + registrationFailureHint(ex);
+      }
+      return top + registrationFailureHint(ex);
+    }
+    StringBuilder sb = new StringBuilder();
+    for (Throwable t = ex; t != null && sb.length() < 500; t = t.getCause()) {
+      if (sb.length() > 0) {
+        sb.append(" <- ");
+      }
+      sb.append(t.getClass().getSimpleName());
+      String m = t.getMessage();
+      if (StringUtils.hasText(m)) {
+        sb.append(": ").append(m);
+      }
+    }
+    String core = sb.length() > 0 ? sb.toString() : ex.getClass().getSimpleName();
+    return core + registrationFailureHint(ex);
+  }
 
-    private static String registrationFailureHint(Throwable ex) {
-        for (Throwable t = ex; t != null; t = t.getCause()) {
-            if (t instanceof ConnectException) {
-                return "；原因：无法连上 Orchestrator（未启动、端口错误或未监听）";
-            }
-            if (t instanceof ClosedChannelException) {
-                return "；原因：连接在建立过程中被关闭";
-            }
-            if (t instanceof UnknownHostException) {
-                return "；原因：主机名无法解析";
-            }
-        }
-        return "";
+  private static String registrationFailureHint(Throwable ex) {
+    for (Throwable t = ex; t != null; t = t.getCause()) {
+      if (t instanceof ConnectException) {
+        return "；原因：无法连上 Orchestrator（未启动、端口错误或未监听）";
+      }
+      if (t instanceof ClosedChannelException) {
+        return "；原因：连接在建立过程中被关闭";
+      }
+      if (t instanceof UnknownHostException) {
+        return "；原因：主机名无法解析";
+      }
     }
+    return "";
+  }
 }

@@ -13,9 +13,7 @@ import com.example.batch.console.mapper.ConsoleUserAccountMapper;
 import com.example.batch.console.service.ConsoleUserAccountService;
 import com.example.batch.console.support.ConsolePasswordHasher;
 import com.example.batch.console.support.ConsoleSessionRegistry;
-
 import java.util.Map;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,91 +23,91 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleUserAccountControllerTest {
 
-    @Mock private ConsoleUserAccountMapper userAccountMapper;
-    @Mock private ConsolePasswordHasher passwordHasher;
-    @Mock private ConsoleSessionRegistry sessionRegistry;
+  @Mock private ConsoleUserAccountMapper userAccountMapper;
+  @Mock private ConsolePasswordHasher passwordHasher;
+  @Mock private ConsoleSessionRegistry sessionRegistry;
 
-    private ConsoleUserAccountService service;
+  private ConsoleUserAccountService service;
 
-    private static final Map<String, Object> ACCOUNT = Map.of(
-            "id", 42L,
-            "tenant_id", "tenant-a",
-            "username", "user-a",
-            "display_name", "User A",
-            "authorities_csv", "ROLE_TENANT_USER",
-            "enabled", true,
-            "created_at", "2026-01-01T00:00:00",
-            "updated_at", "2026-01-01T00:00:00"
-    );
+  private static final Map<String, Object> ACCOUNT =
+      Map.of(
+          "id", 42L,
+          "tenant_id", "tenant-a",
+          "username", "user-a",
+          "display_name", "User A",
+          "authorities_csv", "ROLE_TENANT_USER",
+          "enabled", true,
+          "created_at", "2026-01-01T00:00:00",
+          "updated_at", "2026-01-01T00:00:00");
 
-    private static final Map<String, Object> DISABLED_ACCOUNT = Map.of(
-            "id", 42L,
-            "tenant_id", "tenant-a",
-            "username", "user-a",
-            "display_name", "User A",
-            "authorities_csv", "ROLE_TENANT_USER",
-            "enabled", false,
-            "created_at", "2026-01-01T00:00:00",
-            "updated_at", "2026-01-01T00:00:00"
-    );
+  private static final Map<String, Object> DISABLED_ACCOUNT =
+      Map.of(
+          "id", 42L,
+          "tenant_id", "tenant-a",
+          "username", "user-a",
+          "display_name", "User A",
+          "authorities_csv", "ROLE_TENANT_USER",
+          "enabled", false,
+          "created_at", "2026-01-01T00:00:00",
+          "updated_at", "2026-01-01T00:00:00");
 
-    @BeforeEach
-    void setUp() {
-        service = new ConsoleUserAccountService(userAccountMapper, passwordHasher, sessionRegistry);
-    }
+  @BeforeEach
+  void setUp() {
+    service = new ConsoleUserAccountService(userAccountMapper, passwordHasher, sessionRegistry);
+  }
 
-    @Test
-    void disable_invalidatesSession() {
-        when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT, DISABLED_ACCOUNT);
+  @Test
+  void disable_invalidatesSession() {
+    when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT, DISABLED_ACCOUNT);
 
-        service.disable(42L);
+    service.disable(42L);
 
-        verify(userAccountMapper).updateEnabled(42L, false);
-        verify(sessionRegistry).invalidateSession("user-a", "tenant-a");
-    }
+    verify(userAccountMapper).updateEnabled(42L, false);
+    verify(sessionRegistry).invalidateSession("user-a", "tenant-a");
+  }
 
-    @Test
-    void disable_nonExistentAccount_throwsBizException() {
-        when(userAccountMapper.selectById(99L)).thenReturn(null);
+  @Test
+  void disable_nonExistentAccount_throwsBizException() {
+    when(userAccountMapper.selectById(99L)).thenReturn(null);
 
-        assertThatThrownBy(() -> service.disable(99L))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("user account not found");
+    assertThatThrownBy(() -> service.disable(99L))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("user account not found");
 
-        verify(userAccountMapper, never()).updateEnabled(anyLong(), any(Boolean.class));
-        verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
-    }
+    verify(userAccountMapper, never()).updateEnabled(anyLong(), any(Boolean.class));
+    verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
+  }
 
-    @Test
-    void resetPassword_invalidatesSession() {
-        when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT);
-        when(passwordHasher.encode("newSecurePass")).thenReturn("$argon2id$...");
+  @Test
+  void resetPassword_invalidatesSession() {
+    when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT);
+    when(passwordHasher.encode("newSecurePass")).thenReturn("$argon2id$...");
 
-        service.resetPassword(42L, "newSecurePass");
+    service.resetPassword(42L, "newSecurePass");
 
-        verify(userAccountMapper).updatePasswordHash(42L, "$argon2id$...");
-        verify(sessionRegistry).invalidateSession("user-a", "tenant-a");
-    }
+    verify(userAccountMapper).updatePasswordHash(42L, "$argon2id$...");
+    verify(sessionRegistry).invalidateSession("user-a", "tenant-a");
+  }
 
-    @Test
-    void resetPassword_nonExistentAccount_throwsBizException() {
-        when(userAccountMapper.selectById(99L)).thenReturn(null);
+  @Test
+  void resetPassword_nonExistentAccount_throwsBizException() {
+    when(userAccountMapper.selectById(99L)).thenReturn(null);
 
-        assertThatThrownBy(() -> service.resetPassword(99L, "newSecurePass"))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("user account not found");
+    assertThatThrownBy(() -> service.resetPassword(99L, "newSecurePass"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("user account not found");
 
-        verify(userAccountMapper, never()).updatePasswordHash(anyLong(), anyString());
-        verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
-    }
+    verify(userAccountMapper, never()).updatePasswordHash(anyLong(), anyString());
+    verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
+  }
 
-    @Test
-    void enable_doesNotInvalidateSession() {
-        when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT);
+  @Test
+  void enable_doesNotInvalidateSession() {
+    when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT);
 
-        service.enable(42L);
+    service.enable(42L);
 
-        verify(userAccountMapper).updateEnabled(42L, true);
-        verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
-    }
+    verify(userAccountMapper).updateEnabled(42L, true);
+    verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
+  }
 }

@@ -1,9 +1,7 @@
 package com.example.batch.console.config;
 
 import com.example.batch.console.support.ConsoleIdempotencyInterceptor;
-
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -13,11 +11,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class ConsoleWebMvcConfiguration implements WebMvcConfigurer {
 
-    private final ConsoleIdempotencyInterceptor idempotencyInterceptor;
+  private final ConsoleIdempotencyInterceptor idempotencyInterceptor;
 
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(idempotencyInterceptor)
-                .addPathPatterns("/api/console/**");
-    }
+  @Override
+  public void addInterceptors(InterceptorRegistry registry) {
+    registry.addInterceptor(idempotencyInterceptor).addPathPatterns("/api/console/**");
+  }
 }

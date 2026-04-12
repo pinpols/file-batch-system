@@ -6,69 +6,71 @@ import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import com.example.batch.worker.core.support.AbstractTaskConsumer;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import com.example.batch.worker.exports.config.ExportWorkerConfiguration;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
-/**
- * 导出任务 Kafka 消费者，监听导出任务 topic 并驱动任务执行。
- */
+/** 导出任务 Kafka 消费者，监听导出任务 topic 并驱动任务执行。 */
 @Service
 public class ExportTaskConsumer extends AbstractTaskConsumer {
 
-    private final ExportWorkerLoop workerLoop;
-    private final ExportWorkerConfiguration configuration;
-    private final TaskDispatchExecutor taskDispatchExecutor;
-    private final DeadLetterPublisher deadLetterPublisher;
+  private final ExportWorkerLoop workerLoop;
+  private final ExportWorkerConfiguration configuration;
+  private final TaskDispatchExecutor taskDispatchExecutor;
+  private final DeadLetterPublisher deadLetterPublisher;
 
-    public ExportTaskConsumer(ExportWorkerLoop workerLoop,
-                             ExportWorkerConfiguration configuration,
-                             TaskDispatchExecutor taskDispatchExecutor,
-                             KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-                             DeadLetterPublisher deadLetterPublisher) {
-        super(kafkaListenerEndpointRegistry);
-        this.workerLoop = workerLoop;
-        this.configuration = configuration;
-        this.taskDispatchExecutor = taskDispatchExecutor;
-        this.deadLetterPublisher = deadLetterPublisher;
-    }
+  public ExportTaskConsumer(
+      ExportWorkerLoop workerLoop,
+      ExportWorkerConfiguration configuration,
+      TaskDispatchExecutor taskDispatchExecutor,
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+      DeadLetterPublisher deadLetterPublisher) {
+    super(kafkaListenerEndpointRegistry);
+    this.workerLoop = workerLoop;
+    this.configuration = configuration;
+    this.taskDispatchExecutor = taskDispatchExecutor;
+    this.deadLetterPublisher = deadLetterPublisher;
+  }
 
-    @Override
-    protected AbstractWorkerLoop workerLoop() {
-        return workerLoop;
-    }
+  @Override
+  protected AbstractWorkerLoop workerLoop() {
+    return workerLoop;
+  }
 
-    @Override
-    protected WorkerConfiguration workerConfiguration() {
-        return configuration;
-    }
+  @Override
+  protected WorkerConfiguration workerConfiguration() {
+    return configuration;
+  }
 
-    @Override
-    protected TaskDispatchExecutor taskDispatchExecutor() {
-        return taskDispatchExecutor;
-    }
+  @Override
+  protected TaskDispatchExecutor taskDispatchExecutor() {
+    return taskDispatchExecutor;
+  }
 
-    @Override
-    protected DeadLetterPublisher deadLetterPublisher() {
-        return deadLetterPublisher;
-    }
+  @Override
+  protected DeadLetterPublisher deadLetterPublisher() {
+    return deadLetterPublisher;
+  }
 
-    @Override
-    protected String listenerId() {
-        return "export-task-consumer";
-    }
+  @Override
+  protected String listenerId() {
+    return "export-task-consumer";
+  }
 
-    /**
-     * 消费 Kafka 消息并执行导出任务，成功处理后手动 ACK。
-     *
-     * @param payload         消息内容
-     * @param acknowledgment  手动确认句柄
-     */
-    @KafkaListener(id = "export-task-consumer", topics = "#{__listener.topics()}", groupId = "#{__listener.consumerGroupId()}")
-    public void consume(String payload, Acknowledgment acknowledgment) {
-        if (doConsume(payload)) {
-            acknowledgment.acknowledge();
-        }
+  /**
+   * 消费 Kafka 消息并执行导出任务，成功处理后手动 ACK。
+   *
+   * @param payload 消息内容
+   * @param acknowledgment 手动确认句柄
+   */
+  @KafkaListener(
+      id = "export-task-consumer",
+      topics = "#{__listener.topics()}",
+      groupId = "#{__listener.consumerGroupId()}")
+  public void consume(String payload, Acknowledgment acknowledgment) {
+    if (doConsume(payload)) {
+      acknowledgment.acknowledge();
     }
+  }
 }

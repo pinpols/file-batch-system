@@ -19,57 +19,55 @@ import org.junit.jupiter.api.Test;
 
 class DefaultConsoleOutboxOpsApplicationServiceTest {
 
-    private ConsoleTenantGuard tenantGuard;
-    private OutboxEventMapper outboxEventMapper;
-    private DefaultConsoleOutboxOpsApplicationService service;
+  private ConsoleTenantGuard tenantGuard;
+  private OutboxEventMapper outboxEventMapper;
+  private DefaultConsoleOutboxOpsApplicationService service;
 
-    @BeforeEach
-    void setUp() {
-        tenantGuard = mock(ConsoleTenantGuard.class);
-        outboxEventMapper = mock(OutboxEventMapper.class);
-        service = new DefaultConsoleOutboxOpsApplicationService(tenantGuard, outboxEventMapper);
-    }
+  @BeforeEach
+  void setUp() {
+    tenantGuard = mock(ConsoleTenantGuard.class);
+    outboxEventMapper = mock(OutboxEventMapper.class);
+    service = new DefaultConsoleOutboxOpsApplicationService(tenantGuard, outboxEventMapper);
+  }
 
-    @Test
-    void shouldReturnStats() {
-        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-        List<Map<String, Object>> breakdown = List.of(
-                Map.of("status", "NEW", "count", 10),
-                Map.of("status", "PUBLISHED", "count", 50)
-        );
-        when(outboxEventMapper.statsByStatus("tenant-a")).thenReturn(breakdown);
+  @Test
+  void shouldReturnStats() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    List<Map<String, Object>> breakdown =
+        List.of(Map.of("status", "NEW", "count", 10), Map.of("status", "PUBLISHED", "count", 50));
+    when(outboxEventMapper.statsByStatus("tenant-a")).thenReturn(breakdown);
 
-        ConsoleOutboxStatsResponse response = service.stats("tenant-a");
+    ConsoleOutboxStatsResponse response = service.stats("tenant-a");
 
-        assertThat(response.tenantId()).isEqualTo("tenant-a");
-        assertThat(response.statusBreakdown()).hasSize(2);
-    }
+    assertThat(response.tenantId()).isEqualTo("tenant-a");
+    assertThat(response.statusBreakdown()).hasSize(2);
+  }
 
-    @Test
-    void shouldCleanupOldEvents() {
-        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-        when(outboxEventMapper.deletePublishedBefore(eq("tenant-a"), any(Instant.class))).thenReturn(5);
-        when(outboxEventMapper.deleteGiveUpBefore(eq("tenant-a"), any(Instant.class))).thenReturn(3);
+  @Test
+  void shouldCleanupOldEvents() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    when(outboxEventMapper.deletePublishedBefore(eq("tenant-a"), any(Instant.class))).thenReturn(5);
+    when(outboxEventMapper.deleteGiveUpBefore(eq("tenant-a"), any(Instant.class))).thenReturn(3);
 
-        ConsoleOutboxCleanupResponse response = service.cleanup("tenant-a", 30);
+    ConsoleOutboxCleanupResponse response = service.cleanup("tenant-a", 30);
 
-        assertThat(response.tenantId()).isEqualTo("tenant-a");
-        assertThat(response.retainDays()).isEqualTo(30);
-        assertThat(response.deletedPublished()).isEqualTo(5);
-        assertThat(response.deletedGiveUp()).isEqualTo(3);
-        assertThat(response.totalDeleted()).isEqualTo(8);
-    }
+    assertThat(response.tenantId()).isEqualTo("tenant-a");
+    assertThat(response.retainDays()).isEqualTo(30);
+    assertThat(response.deletedPublished()).isEqualTo(5);
+    assertThat(response.deletedGiveUp()).isEqualTo(3);
+    assertThat(response.totalDeleted()).isEqualTo(8);
+  }
 
-    @Test
-    void shouldRepublishEvents() {
-        when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-        List<Long> ids = List.of(1L, 2L, 3L);
-        when(outboxEventMapper.resetToNew("tenant-a", ids, List.of("FAILED", "GIVE_UP"))).thenReturn(2);
+  @Test
+  void shouldRepublishEvents() {
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    List<Long> ids = List.of(1L, 2L, 3L);
+    when(outboxEventMapper.resetToNew("tenant-a", ids, List.of("FAILED", "GIVE_UP"))).thenReturn(2);
 
-        ConsoleOutboxRepublishResponse response = service.republish("tenant-a", ids);
+    ConsoleOutboxRepublishResponse response = service.republish("tenant-a", ids);
 
-        assertThat(response.tenantId()).isEqualTo("tenant-a");
-        assertThat(response.requestedCount()).isEqualTo(3);
-        assertThat(response.resetCount()).isEqualTo(2);
-    }
+    assertThat(response.tenantId()).isEqualTo("tenant-a");
+    assertThat(response.requestedCount()).isEqualTo(3);
+    assertThat(response.resetCount()).isEqualTo(2);
+  }
 }

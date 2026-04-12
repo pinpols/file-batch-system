@@ -10,10 +10,10 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
-import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,56 +25,60 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class OutboxPollSchedulerTest {
 
-    @Mock
-    private DefaultScheduleForwarder scheduleForwarder;
+  @Mock private DefaultScheduleForwarder scheduleForwarder;
 
-    @Mock
-    private OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
+  @Mock private OutboxPublishCircuitBreaker outboxPublishCircuitBreaker;
 
-    @Mock
-    private BatchOrchestratorGovernanceProperties governance;
+  @Mock private BatchOrchestratorGovernanceProperties governance;
 
-    @Mock
-    private LockingTaskExecutor lockingTaskExecutor;
+  @Mock private LockingTaskExecutor lockingTaskExecutor;
 
-    @Mock
-    private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
 
-    private OutboxPollScheduler scheduler;
+  private OutboxPollScheduler scheduler;
 
-    @BeforeEach
-    void setUp() throws Throwable {
-        when(governance.outbox()).thenReturn(new OutboxProperties());
-        doAnswer(inv -> {
-            inv.getArgument(0, LockingTaskExecutor.Task.class).call();
-            return null;
-        }).when(lockingTaskExecutor).executeWithLock(any(LockingTaskExecutor.Task.class), any());
-        scheduler = new OutboxPollScheduler(scheduleForwarder, outboxPublishCircuitBreaker, governance, lockingTaskExecutor, gracefulShutdown);
-        // 不调用 start()，避免后台线程干扰单元测试
-    }
+  @BeforeEach
+  void setUp() throws Throwable {
+    when(governance.outbox()).thenReturn(new OutboxProperties());
+    doAnswer(
+            inv -> {
+              inv.getArgument(0, LockingTaskExecutor.Task.class).call();
+              return null;
+            })
+        .when(lockingTaskExecutor)
+        .executeWithLock(any(LockingTaskExecutor.Task.class), any());
+    scheduler =
+        new OutboxPollScheduler(
+            scheduleForwarder,
+            outboxPublishCircuitBreaker,
+            governance,
+            lockingTaskExecutor,
+            gracefulShutdown);
+    // 不调用 start()，避免后台线程干扰单元测试
+  }
 
-    @Test
-    void shouldAdvanceAndUpdateCircuitBreakerWhenAllowed() {
-        when(outboxPublishCircuitBreaker.allowNow()).thenReturn(true);
-        when(scheduleForwarder.advance(any())).thenReturn(ScheduleForwarderResult.of(3, 2, 1));
+  @Test
+  void shouldAdvanceAndUpdateCircuitBreakerWhenAllowed() {
+    when(outboxPublishCircuitBreaker.allowNow()).thenReturn(true);
+    when(scheduleForwarder.advance(any())).thenReturn(ScheduleForwarderResult.of(3, 2, 1));
 
-        scheduler.poll();
+    scheduler.poll();
 
-        ArgumentCaptor<SchedulePlan> planCaptor = ArgumentCaptor.forClass(SchedulePlan.class);
-        verify(scheduleForwarder).advance(planCaptor.capture());
-        assertThat(planCaptor.getValue()).isNotNull();
-        verify(outboxPublishCircuitBreaker).onAdvanceResult(1);
-    }
+    ArgumentCaptor<SchedulePlan> planCaptor = ArgumentCaptor.forClass(SchedulePlan.class);
+    verify(scheduleForwarder).advance(planCaptor.capture());
+    assertThat(planCaptor.getValue()).isNotNull();
+    verify(outboxPublishCircuitBreaker).onAdvanceResult(1);
+  }
 
-    @Test
-    void shouldSkipAdvanceWhenCircuitBreakerDeniesPolling() {
-        when(outboxPublishCircuitBreaker.allowNow()).thenReturn(false);
+  @Test
+  void shouldSkipAdvanceWhenCircuitBreakerDeniesPolling() {
+    when(outboxPublishCircuitBreaker.allowNow()).thenReturn(false);
 
-        scheduler.poll();
+    scheduler.poll();
 
-        verify(scheduleForwarder, never()).advance(any());
-        verify(outboxPublishCircuitBreaker, never()).onAdvanceResult(anyInt());
-    }
+    verify(scheduleForwarder, never()).advance(any());
+    verify(outboxPublishCircuitBreaker, never()).onAdvanceResult(anyInt());
+  }
 
-    // 自适应间隔行为通过 OutboxForwarderE2eIT 验证
+  // 自适应间隔行为通过 OutboxForwarderE2eIT 验证
 }

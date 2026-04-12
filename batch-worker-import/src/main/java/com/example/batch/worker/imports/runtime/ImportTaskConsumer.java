@@ -6,60 +6,64 @@ import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import com.example.batch.worker.core.support.AbstractTaskConsumer;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ImportTaskConsumer extends AbstractTaskConsumer {
 
-    private final ImportWorkerLoop workerLoop;
-    private final ImportWorkerConfiguration configuration;
-    private final TaskDispatchExecutor taskDispatchExecutor;
-    private final DeadLetterPublisher deadLetterPublisher;
+  private final ImportWorkerLoop workerLoop;
+  private final ImportWorkerConfiguration configuration;
+  private final TaskDispatchExecutor taskDispatchExecutor;
+  private final DeadLetterPublisher deadLetterPublisher;
 
-    public ImportTaskConsumer(ImportWorkerLoop workerLoop,
-                             ImportWorkerConfiguration configuration,
-                             TaskDispatchExecutor taskDispatchExecutor,
-                             KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-                             DeadLetterPublisher deadLetterPublisher) {
-        super(kafkaListenerEndpointRegistry);
-        this.workerLoop = workerLoop;
-        this.configuration = configuration;
-        this.taskDispatchExecutor = taskDispatchExecutor;
-        this.deadLetterPublisher = deadLetterPublisher;
-    }
+  public ImportTaskConsumer(
+      ImportWorkerLoop workerLoop,
+      ImportWorkerConfiguration configuration,
+      TaskDispatchExecutor taskDispatchExecutor,
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+      DeadLetterPublisher deadLetterPublisher) {
+    super(kafkaListenerEndpointRegistry);
+    this.workerLoop = workerLoop;
+    this.configuration = configuration;
+    this.taskDispatchExecutor = taskDispatchExecutor;
+    this.deadLetterPublisher = deadLetterPublisher;
+  }
 
-    @Override
-    protected AbstractWorkerLoop workerLoop() {
-        return workerLoop;
-    }
+  @Override
+  protected AbstractWorkerLoop workerLoop() {
+    return workerLoop;
+  }
 
-    @Override
-    protected WorkerConfiguration workerConfiguration() {
-        return configuration;
-    }
+  @Override
+  protected WorkerConfiguration workerConfiguration() {
+    return configuration;
+  }
 
-    @Override
-    protected TaskDispatchExecutor taskDispatchExecutor() {
-        return taskDispatchExecutor;
-    }
+  @Override
+  protected TaskDispatchExecutor taskDispatchExecutor() {
+    return taskDispatchExecutor;
+  }
 
-    @Override
-    protected DeadLetterPublisher deadLetterPublisher() {
-        return deadLetterPublisher;
-    }
+  @Override
+  protected DeadLetterPublisher deadLetterPublisher() {
+    return deadLetterPublisher;
+  }
 
-    @Override
-    protected String listenerId() {
-        return "import-task-consumer";
-    }
+  @Override
+  protected String listenerId() {
+    return "import-task-consumer";
+  }
 
-    @KafkaListener(id = "import-task-consumer", topics = "#{__listener.topics()}", groupId = "#{__listener.consumerGroupId()}")
-    public void consume(String payload, Acknowledgment acknowledgment) {
-        if (doConsume(payload)) {
-            acknowledgment.acknowledge();
-        }
+  @KafkaListener(
+      id = "import-task-consumer",
+      topics = "#{__listener.topics()}",
+      groupId = "#{__listener.consumerGroupId()}")
+  public void consume(String payload, Acknowledgment acknowledgment) {
+    if (doConsume(payload)) {
+      acknowledgment.acknowledge();
     }
+  }
 }

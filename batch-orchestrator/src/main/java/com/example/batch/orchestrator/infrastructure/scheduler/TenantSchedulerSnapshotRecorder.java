@@ -10,11 +10,8 @@ import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdow
 import com.example.batch.orchestrator.repository.TenantQuotaPolicyRepository;
 import com.example.batch.orchestrator.repository.TenantSchedulerSnapshotRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
-
 import lombok.RequiredArgsConstructor;
-
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -24,53 +21,53 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantSchedulerSnapshotRecorder {
 
-    private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
-    private final TenantSchedulerSnapshotService snapshotService;
-    private final TenantSchedulerSnapshotRepository snapshotRepository;
-    private final WorkerRegistryRepository workerRegistryRepository;
-    private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
+  private final TenantSchedulerSnapshotService snapshotService;
+  private final TenantSchedulerSnapshotRepository snapshotRepository;
+  private final WorkerRegistryRepository workerRegistryRepository;
+  private final OrchestratorGracefulShutdown gracefulShutdown;
 
-    @Value("${batch.scheduler.snapshot-persist-enabled:true}")
-    private boolean persistEnabled;
+  @Value("${batch.scheduler.snapshot-persist-enabled:true}")
+  private boolean persistEnabled;
 
-    @Scheduled(fixedDelayString = "${batch.scheduler.snapshot-persist-ms:120000}")
-    @SchedulerLock(
-            name = "tenant_scheduler_snapshot",
-            lockAtMostFor = "PT5M",
-            lockAtLeastFor = "PT1M")
-    public void persist() {
-        if (gracefulShutdown.isDraining()) {
-            return;
-        }
-        if (!persistEnabled) {
-            return;
-        }
-        for (String tenantId : tenantQuotaPolicyRepository.findDistinctTenantIdsEnabled()) {
-            SchedulerSnapshotResponse snap = snapshotService.buildLive(tenantId);
-            if (snap.policies().isEmpty()) {
-                continue;
-            }
-            SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
-            TenantSchedulerSnapshotRecord row =
-                    new TenantSchedulerSnapshotRecord(
-                            null,
-                            tenantId,
-                            snap.generatedAt(),
-                            p.fairShareGroup(),
-                            p.policyCode(),
-                            (int) Math.min(Integer.MAX_VALUE, p.activeJobs()),
-                            (int) Math.min(Integer.MAX_VALUE, p.activePartitions()),
-                            p.maxRunningJobsPerTenant(),
-                            p.burstLimit(),
-                            p.effectiveTenantJobCap(),
-                            (int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()),
-                            p.groupSharedMaxRunningJobs(),
-                            p.quotaResetPolicy(),
-                            (int)
-                                    workerRegistryRepository.countByTenantIdAndStatus(
-                                            tenantId, WorkerRegistryStatus.ONLINE.code()),
-                            JsonbString.of(JsonUtils.toJson(snap)));
-            snapshotRepository.save(row);
-        }
+  @Scheduled(fixedDelayString = "${batch.scheduler.snapshot-persist-ms:120000}")
+  @SchedulerLock(
+      name = "tenant_scheduler_snapshot",
+      lockAtMostFor = "PT5M",
+      lockAtLeastFor = "PT1M")
+  public void persist() {
+    if (gracefulShutdown.isDraining()) {
+      return;
     }
+    if (!persistEnabled) {
+      return;
+    }
+    for (String tenantId : tenantQuotaPolicyRepository.findDistinctTenantIdsEnabled()) {
+      SchedulerSnapshotResponse snap = snapshotService.buildLive(tenantId);
+      if (snap.policies().isEmpty()) {
+        continue;
+      }
+      SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
+      TenantSchedulerSnapshotRecord row =
+          new TenantSchedulerSnapshotRecord(
+              null,
+              tenantId,
+              snap.generatedAt(),
+              p.fairShareGroup(),
+              p.policyCode(),
+              (int) Math.min(Integer.MAX_VALUE, p.activeJobs()),
+              (int) Math.min(Integer.MAX_VALUE, p.activePartitions()),
+              p.maxRunningJobsPerTenant(),
+              p.burstLimit(),
+              p.effectiveTenantJobCap(),
+              (int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()),
+              p.groupSharedMaxRunningJobs(),
+              p.quotaResetPolicy(),
+              (int)
+                  workerRegistryRepository.countByTenantIdAndStatus(
+                      tenantId, WorkerRegistryStatus.ONLINE.code()),
+              JsonbString.of(JsonUtils.toJson(snap)));
+      snapshotRepository.save(row);
+    }
+  }
 }

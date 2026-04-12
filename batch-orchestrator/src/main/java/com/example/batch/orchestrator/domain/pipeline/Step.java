@@ -4,7 +4,7 @@ import com.example.batch.common.model.WorkerRouteModel;
 
 public interface Step {
 
-    String stepCode();
+  String stepCode();
 
-    StepResult execute(ExecutionContext context, WorkerRouteModel workerRouteModel);
+  StepResult execute(ExecutionContext context, WorkerRouteModel workerRouteModel);
 }

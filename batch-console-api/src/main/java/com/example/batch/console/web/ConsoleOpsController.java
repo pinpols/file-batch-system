@@ -9,13 +9,12 @@ import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
 import com.example.batch.console.web.response.ConsoleOutboxCleanupResponse;
 import com.example.batch.console.web.response.ConsoleOutboxRepublishResponse;
 import com.example.batch.console.web.response.ConsoleOutboxStatsResponse;
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
-
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,9 +24,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-import java.util.Map;
-
 /** 控制台运维总览 REST：租户维度运行摘要。 */
 @RestController
 @Validated
@@ -36,44 +32,44 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ConsoleOpsController {
 
-    private final ConsoleOpsApplicationService opsApplicationService;
-    private final ConsoleOutboxOpsApplicationService outboxOpsService;
-    private final ConsoleResponseFactory responseFactory;
-    private final ConsoleKafkaLagQueryService kafkaLagQueryService;
+  private final ConsoleOpsApplicationService opsApplicationService;
+  private final ConsoleOutboxOpsApplicationService outboxOpsService;
+  private final ConsoleResponseFactory responseFactory;
+  private final ConsoleKafkaLagQueryService kafkaLagQueryService;
 
-    /** 租户运维摘要。 */
-    @GetMapping("/summary")
-    public CommonResponse<ConsoleOpsSummaryResponse> summary(
-            @RequestParam @NotBlank String tenantId) {
-        return responseFactory.success(opsApplicationService.summary(tenantId));
-    }
+  /** 租户运维摘要。 */
+  @GetMapping("/summary")
+  public CommonResponse<ConsoleOpsSummaryResponse> summary(
+      @RequestParam @NotBlank String tenantId) {
+    return responseFactory.success(opsApplicationService.summary(tenantId));
+  }
 
-    /** Kafka consumer group 积压查询。 */
-    @GetMapping("/kafka-lag")
-    public CommonResponse<List<Map<String, Object>>> kafkaConsumerLag(
-            @RequestParam(value = "groupId", required = false) String groupId) {
-        return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId));
-    }
+  /** Kafka consumer group 积压查询。 */
+  @GetMapping("/kafka-lag")
+  public CommonResponse<List<Map<String, Object>>> kafkaConsumerLag(
+      @RequestParam(value = "groupId", required = false) String groupId) {
+    return responseFactory.success(kafkaLagQueryService.consumerGroupLags(groupId));
+  }
 
-    /** Outbox 积压统计（按 publish_status 分组）。 */
-    @GetMapping("/outbox/stats")
-    public CommonResponse<ConsoleOutboxStatsResponse> outboxStats(
-            @RequestParam @NotBlank String tenantId) {
-        return responseFactory.success(outboxOpsService.stats(tenantId));
-    }
+  /** Outbox 积压统计（按 publish_status 分组）。 */
+  @GetMapping("/outbox/stats")
+  public CommonResponse<ConsoleOutboxStatsResponse> outboxStats(
+      @RequestParam @NotBlank String tenantId) {
+    return responseFactory.success(outboxOpsService.stats(tenantId));
+  }
 
-    /** 清理已发布 / 已放弃的 outbox 事件（保留最近 retainDays 天）。 */
-    @PostMapping("/outbox/cleanup")
-    public CommonResponse<ConsoleOutboxCleanupResponse> outboxCleanup(
-            @RequestParam @NotBlank String tenantId,
-            @RequestParam(defaultValue = "7") @Positive int retainDays) {
-        return responseFactory.success(outboxOpsService.cleanup(tenantId, retainDays));
-    }
+  /** 清理已发布 / 已放弃的 outbox 事件（保留最近 retainDays 天）。 */
+  @PostMapping("/outbox/cleanup")
+  public CommonResponse<ConsoleOutboxCleanupResponse> outboxCleanup(
+      @RequestParam @NotBlank String tenantId,
+      @RequestParam(defaultValue = "7") @Positive int retainDays) {
+    return responseFactory.success(outboxOpsService.cleanup(tenantId, retainDays));
+  }
 
-    /** 手动重投指定 outbox 事件（仅 FAILED / GIVE_UP 状态可重投）。 */
-    @PostMapping("/outbox/republish")
-    public CommonResponse<ConsoleOutboxRepublishResponse> outboxRepublish(
-            @RequestParam @NotBlank String tenantId, @RequestBody @NotEmpty List<Long> ids) {
-        return responseFactory.success(outboxOpsService.republish(tenantId, ids));
-    }
+  /** 手动重投指定 outbox 事件（仅 FAILED / GIVE_UP 状态可重投）。 */
+  @PostMapping("/outbox/republish")
+  public CommonResponse<ConsoleOutboxRepublishResponse> outboxRepublish(
+      @RequestParam @NotBlank String tenantId, @RequestBody @NotEmpty List<Long> ids) {
+    return responseFactory.success(outboxOpsService.republish(tenantId, ids));
+  }
 }

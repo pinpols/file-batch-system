@@ -19,105 +19,110 @@ import java.util.Map;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
-/**
- * 分发 pipeline 的步骤执行适配器，负责构建上下文并驱动各阶段执行。
- */
+/** 分发 pipeline 的步骤执行适配器，负责构建上下文并驱动各阶段执行。 */
 @Primary
 @Component
-public class DispatchStepExecutionAdapter extends AbstractPipelineStepExecutionAdapter<DispatchJobContext, DispatchStageResult> {
+public class DispatchStepExecutionAdapter
+    extends AbstractPipelineStepExecutionAdapter<DispatchJobContext, DispatchStageResult> {
 
-    private final DispatchStageExecutor dispatchStageExecutor;
-    private final ObjectMapper objectMapper;
+  private final DispatchStageExecutor dispatchStageExecutor;
+  private final ObjectMapper objectMapper;
 
-    public DispatchStepExecutionAdapter(DispatchStageExecutor dispatchStageExecutor,
-                                        ObjectMapper objectMapper,
-                                        PlatformFileRuntimeRepository runtimeRepository) {
-        super(runtimeRepository);
-        this.dispatchStageExecutor = dispatchStageExecutor;
-        this.objectMapper = objectMapper;
+  public DispatchStepExecutionAdapter(
+      DispatchStageExecutor dispatchStageExecutor,
+      ObjectMapper objectMapper,
+      PlatformFileRuntimeRepository runtimeRepository) {
+    super(runtimeRepository);
+    this.dispatchStageExecutor = dispatchStageExecutor;
+    this.objectMapper = objectMapper;
+  }
+
+  @Override
+  protected String pipelineType() {
+    return DispatchWorkerType.DISPATCH;
+  }
+
+  @Override
+  protected String pipelineDescription() {
+    return "分发 pipeline";
+  }
+
+  @Override
+  protected List<PipelineStepTemplate> defaultPipelineSteps() {
+    return dispatchStageExecutor.defaultStepDefinitions();
+  }
+
+  @Override
+  protected String initialStage() {
+    return DispatchStage.PREPARE.name();
+  }
+
+  @Override
+  protected DispatchJobContext buildContext(
+      StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId(request.tenantId());
+    context.setJobCode(String.valueOf(contextMap.getOrDefault("jobCode", request.jobCode())));
+    context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
+    context.setDispatchId(
+        String.valueOf(
+            contextMap.getOrDefault("taskId", contextMap.getOrDefault("dispatchId", ""))));
+    context.setWorkerId(request.workerId());
+    context.setRawPayload(String.valueOf(contextMap.getOrDefault("payload", "")));
+    context.setAttributes(contextMap);
+    Object dispatchPayload = contextMap.get("dispatchPayload");
+    if (dispatchPayload == null
+        && context.getRawPayload() != null
+        && !context.getRawPayload().isBlank()) {
+      dispatchPayload = objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
+      context.getAttributes().put("dispatchPayload", dispatchPayload);
     }
+    return context;
+  }
 
-    @Override
-    protected String pipelineType() {
-        return DispatchWorkerType.DISPATCH;
-    }
+  @Override
+  protected List<DispatchStageResult> executeStages(DispatchJobContext context) {
+    return dispatchStageExecutor.execute(context);
+  }
 
-    @Override
-    protected String pipelineDescription() {
-        return "分发 pipeline";
-    }
+  @Override
+  protected boolean isSuccess(DispatchStageResult result) {
+    return result != null && result.success();
+  }
 
-    @Override
-    protected List<PipelineStepTemplate> defaultPipelineSteps() {
-        return dispatchStageExecutor.defaultStepDefinitions();
-    }
+  @Override
+  protected String resultStage(DispatchStageResult result) {
+    return result.stage().name();
+  }
 
-    @Override
-    protected String initialStage() {
-        return DispatchStage.PREPARE.name();
-    }
+  @Override
+  protected String resultCode(DispatchStageResult result) {
+    return result.code();
+  }
 
-    @Override
-    protected DispatchJobContext buildContext(StepExecutionRequest request,
-                                              Map<String, Object> contextMap,
-                                              Long fileId) throws Exception {
-        DispatchJobContext context = new DispatchJobContext();
-        context.setTenantId(request.tenantId());
-        context.setJobCode(String.valueOf(contextMap.getOrDefault("jobCode", request.jobCode())));
-        context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
-        context.setDispatchId(String.valueOf(contextMap.getOrDefault("taskId", contextMap.getOrDefault("dispatchId", ""))));
-        context.setWorkerId(request.workerId());
-        context.setRawPayload(String.valueOf(contextMap.getOrDefault("payload", "")));
-        context.setAttributes(contextMap);
-        Object dispatchPayload = contextMap.get("dispatchPayload");
-        if (dispatchPayload == null && context.getRawPayload() != null && !context.getRawPayload().isBlank()) {
-            dispatchPayload = objectMapper.readValue(context.getRawPayload(), DispatchPayload.class);
-            context.getAttributes().put("dispatchPayload", dispatchPayload);
-        }
-        return context;
-    }
+  @Override
+  protected String resultMessage(DispatchStageResult result) {
+    return result.message();
+  }
 
-    @Override
-    protected List<DispatchStageResult> executeStages(DispatchJobContext context) {
-        return dispatchStageExecutor.execute(context);
-    }
+  @Override
+  protected StepExecutionResponse buildSuccessResponse(
+      DispatchJobContext context,
+      List<DispatchStageResult> results,
+      Map<String, Object> attributes) {
+    return new StepExecutionResponse(true, "SUCCESS", "分发阶段执行完毕");
+  }
 
-    @Override
-    protected boolean isSuccess(DispatchStageResult result) {
-        return result != null && result.success();
+  @Override
+  protected void handlePipelineFailure(
+      Map<String, Object> attributes, String errorCode, String errorMessage) {
+    Long fileId = runtimeRepository().toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+    if (fileId == null) {
+      return;
     }
-
-    @Override
-    protected String resultStage(DispatchStageResult result) {
-        return result.stage().name();
-    }
-
-    @Override
-    protected String resultCode(DispatchStageResult result) {
-        return result.code();
-    }
-
-    @Override
-    protected String resultMessage(DispatchStageResult result) {
-        return result.message();
-    }
-
-    @Override
-    protected StepExecutionResponse buildSuccessResponse(DispatchJobContext context,
-                                                         List<DispatchStageResult> results,
-                                                         Map<String, Object> attributes) {
-        return new StepExecutionResponse(true, "SUCCESS", "分发阶段执行完毕");
-    }
-
-    @Override
-    protected void handlePipelineFailure(Map<String, Object> attributes, String errorCode, String errorMessage) {
-        Long fileId = runtimeRepository().toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-        if (fileId == null) {
-            return;
-        }
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("errorCode", errorCode);
-        metadata.put("errorMessage", errorMessage);
-        runtimeRepository().updateFileStatus(fileId, "FAILED", metadata);
-    }
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("errorCode", errorCode);
+    metadata.put("errorMessage", errorMessage);
+    runtimeRepository().updateFileStatus(fileId, "FAILED", metadata);
+  }
 }

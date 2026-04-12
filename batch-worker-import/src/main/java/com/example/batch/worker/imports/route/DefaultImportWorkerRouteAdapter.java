@@ -7,11 +7,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultImportWorkerRouteAdapter implements ImportWorkerRouteAdapter {
 
-    @Override
-    public WorkerRouteModel buildDefaultRoute() {
-        WorkerRouteModel model = new WorkerRouteModel();
-        model.setWorkerType(ImportWorkerType.IMPORT);
-        model.setAvailable(Boolean.TRUE);
-        return model;
-    }
+  @Override
+  public WorkerRouteModel buildDefaultRoute() {
+    WorkerRouteModel model = new WorkerRouteModel();
+    model.setWorkerType(ImportWorkerType.IMPORT);
+    model.setAvailable(Boolean.TRUE);
+    return model;
+  }
 }

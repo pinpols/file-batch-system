@@ -4,5 +4,5 @@ import java.util.Optional;
 
 public interface StepRegistry {
 
-    Optional<Step> find(String stepCode);
+  Optional<Step> find(String stepCode);
 }

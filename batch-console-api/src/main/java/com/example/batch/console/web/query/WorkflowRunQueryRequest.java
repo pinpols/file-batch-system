@@ -5,10 +5,10 @@ import lombok.Data;
 @Data
 public class WorkflowRunQueryRequest extends PageQueryRequest {
 
-    private String tenantId;
-    private Long workflowDefinitionId;
-    private Long relatedJobInstanceId;
-    private String runStatus;
-    private String currentNodeCode;
-    private String traceId;
+  private String tenantId;
+  private Long workflowDefinitionId;
+  private Long relatedJobInstanceId;
+  private String runStatus;
+  private String currentNodeCode;
+  private String traceId;
 }

@@ -5,7 +5,6 @@ import jakarta.validation.Payload;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -26,9 +25,9 @@ import java.lang.annotation.Target;
 @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", message = "tenantId format invalid")
 public @interface ValidTenantId {
 
-    String message() default "tenantId invalid";
+  String message() default "tenantId invalid";
 
-    Class<?>[] groups() default {};
+  Class<?>[] groups() default {};
 
-    Class<? extends Payload>[] payload() default {};
+  Class<? extends Payload>[] payload() default {};
 }

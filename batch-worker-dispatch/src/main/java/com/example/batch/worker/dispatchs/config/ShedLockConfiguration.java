@@ -8,18 +8,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * ShedLock 分布式调度锁配置。
- */
+/** ShedLock 分布式调度锁配置。 */
 @Configuration
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
 public class ShedLockConfiguration {
 
-    @Value("${batch.shedlock.auto-create:false}")
-    private boolean autoCreateTable;
+  @Value("${batch.shedlock.auto-create:false}")
+  private boolean autoCreateTable;
 
-    @Bean
-    public LockProvider lockProvider(DataSource dataSource) {
-        return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
-    }
+  @Bean
+  public LockProvider lockProvider(DataSource dataSource) {
+    return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, autoCreateTable);
+  }
 }

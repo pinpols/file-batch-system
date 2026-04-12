@@ -10,13 +10,13 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table(schema = "batch", name = "job_instance")
 public final class ConsoleJdbcQueryAnchor {
 
-    @Id private Long id;
+  @Id private Long id;
 
-    public Long getId() {
-        return id;
-    }
+  public Long getId() {
+    return id;
+  }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+  public void setId(Long id) {
+    this.id = id;
+  }
 }

@@ -10,147 +10,151 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
-/**
- * 文件分发数据仓库，封装分发记录、渠道配置的增删改查操作。
- */
+/** 文件分发数据仓库，封装分发记录、渠道配置的增删改查操作。 */
 @Repository
 @RequiredArgsConstructor
 public class FileDispatchRepository {
 
-    private static final int MAX_DISPATCH_BATCH_SIZE = 500;
+  private static final int MAX_DISPATCH_BATCH_SIZE = 500;
 
-    private final FileDispatchMapper fileDispatchMapper;
+  private final FileDispatchMapper fileDispatchMapper;
 
-    public Map<String, Object> loadFile(String tenantId, String fileId) {
-        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileId)) {
-            return Map.of();
-        }
-        return loadFile(tenantId, Long.valueOf(fileId));
+  public Map<String, Object> loadFile(String tenantId, String fileId) {
+    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileId)) {
+      return Map.of();
     }
+    return loadFile(tenantId, Long.valueOf(fileId));
+  }
 
-    public Map<String, Object> loadFile(String tenantId, Long fileId) {
-        if (!StringUtils.hasText(tenantId) || fileId == null) {
-            return Map.of();
-        }
-        Map<String, Object> fileRecord = fileDispatchMapper.selectFileRecord(params("tenantId", tenantId, "fileId", fileId));
-        return fileRecord == null ? Map.of() : fileRecord;
+  public Map<String, Object> loadFile(String tenantId, Long fileId) {
+    if (!StringUtils.hasText(tenantId) || fileId == null) {
+      return Map.of();
     }
+    Map<String, Object> fileRecord =
+        fileDispatchMapper.selectFileRecord(params("tenantId", tenantId, "fileId", fileId));
+    return fileRecord == null ? Map.of() : fileRecord;
+  }
 
-    public Map<String, Object> loadChannel(String tenantId, String channelCode) {
-        if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(channelCode)) {
-            return Map.of();
-        }
-        Map<String, Object> channelConfig = fileDispatchMapper.selectChannelConfig(
-                params("tenantId", tenantId, "channelCode", channelCode)
-        );
-        return channelConfig == null ? Map.of() : channelConfig;
+  public Map<String, Object> loadChannel(String tenantId, String channelCode) {
+    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(channelCode)) {
+      return Map.of();
     }
+    Map<String, Object> channelConfig =
+        fileDispatchMapper.selectChannelConfig(
+            params("tenantId", tenantId, "channelCode", channelCode));
+    return channelConfig == null ? Map.of() : channelConfig;
+  }
 
-    public Map<String, Object> loadLatestDispatchRecord(String tenantId, Long fileId, String channelCode) {
-        if (!StringUtils.hasText(tenantId) || fileId == null || !StringUtils.hasText(channelCode)) {
-            return Map.of();
-        }
-        Map<String, Object> dispatchRecord = fileDispatchMapper.selectLatestDispatchRecord(
-                params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode)
-        );
-        return dispatchRecord == null ? Map.of() : dispatchRecord;
+  public Map<String, Object> loadLatestDispatchRecord(
+      String tenantId, Long fileId, String channelCode) {
+    if (!StringUtils.hasText(tenantId) || fileId == null || !StringUtils.hasText(channelCode)) {
+      return Map.of();
     }
+    Map<String, Object> dispatchRecord =
+        fileDispatchMapper.selectLatestDispatchRecord(
+            params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode));
+    return dispatchRecord == null ? Map.of() : dispatchRecord;
+  }
 
-    public record InsertDispatchParam(String tenantId,
-                                      Long fileId,
-                                      Long pipelineInstanceId,
-                                      String channelCode,
-                                      String dispatchTarget,
-                                      String receiptCode,
-                                      String receiptStatus,
-                                      String externalRequestId) {
-    }
+  public record InsertDispatchParam(
+      String tenantId,
+      Long fileId,
+      Long pipelineInstanceId,
+      String channelCode,
+      String dispatchTarget,
+      String receiptCode,
+      String receiptStatus,
+      String externalRequestId) {}
 
-    public int insertDispatchRecord(InsertDispatchParam p) {
-        return fileDispatchMapper.insertDispatchRecord(params(
-                "tenantId", p.tenantId(),
-                "fileId", p.fileId(),
-                "pipelineInstanceId", p.pipelineInstanceId(),
-                "channelCode", p.channelCode(),
-                "dispatchTarget", p.dispatchTarget(),
-                "dispatchStatus", FileDispatchStatus.CREATED.name(),
-                "receiptCode", p.receiptCode(),
-                "receiptStatus", p.receiptStatus(),
-                "externalRequestId", p.externalRequestId()
-        ));
-    }
+  public int insertDispatchRecord(InsertDispatchParam p) {
+    return fileDispatchMapper.insertDispatchRecord(
+        params(
+            "tenantId", p.tenantId(),
+            "fileId", p.fileId(),
+            "pipelineInstanceId", p.pipelineInstanceId(),
+            "channelCode", p.channelCode(),
+            "dispatchTarget", p.dispatchTarget(),
+            "dispatchStatus", FileDispatchStatus.CREATED.name(),
+            "receiptCode", p.receiptCode(),
+            "receiptStatus", p.receiptStatus(),
+            "externalRequestId", p.externalRequestId()));
+  }
 
-    public int incrementAttempt(String tenantId, Long fileId, String channelCode) {
-        return fileDispatchMapper.incrementAttempt(params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode));
-    }
+  public int incrementAttempt(String tenantId, Long fileId, String channelCode) {
+    return fileDispatchMapper.incrementAttempt(
+        params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode));
+  }
 
-    public int markSent(String tenantId,
-                        Long fileId,
-                        String channelCode,
-                        String externalRequestId,
-                        String receiptCode,
-                        String receiptStatus) {
-        return fileDispatchMapper.markSent(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "channelCode", channelCode,
-                "dispatchStatus", FileDispatchStatus.SENT.name(),
-                "externalRequestId", externalRequestId,
-                "receiptCode", receiptCode,
-                "receiptStatus", receiptStatus
-        ));
-    }
+  public int markSent(
+      String tenantId,
+      Long fileId,
+      String channelCode,
+      String externalRequestId,
+      String receiptCode,
+      String receiptStatus) {
+    return fileDispatchMapper.markSent(
+        params(
+            "tenantId", tenantId,
+            "fileId", fileId,
+            "channelCode", channelCode,
+            "dispatchStatus", FileDispatchStatus.SENT.name(),
+            "externalRequestId", externalRequestId,
+            "receiptCode", receiptCode,
+            "receiptStatus", receiptStatus));
+  }
 
-    public int markAcked(String tenantId, Long fileId, String channelCode, String receiptCode) {
-        return fileDispatchMapper.markAcked(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "channelCode", channelCode,
-                "dispatchStatus", FileDispatchStatus.ACKED.name(),
-                "receiptStatus", FileReceiptStatus.SUCCESS.name(),
-                "receiptCode", receiptCode
-        ));
-    }
+  public int markAcked(String tenantId, Long fileId, String channelCode, String receiptCode) {
+    return fileDispatchMapper.markAcked(
+        params(
+            "tenantId", tenantId,
+            "fileId", fileId,
+            "channelCode", channelCode,
+            "dispatchStatus", FileDispatchStatus.ACKED.name(),
+            "receiptStatus", FileReceiptStatus.SUCCESS.name(),
+            "receiptCode", receiptCode));
+  }
 
-    public int markFailed(String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
-        return fileDispatchMapper.markFailed(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "channelCode", channelCode,
-                "dispatchStatus", FileDispatchStatus.FAILED.name(),
-                "receiptStatus", FileReceiptStatus.FAILED.name(),
-                "errorCode", errorCode,
-                "errorMessage", errorMessage
-        ));
-    }
+  public int markFailed(
+      String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
+    return fileDispatchMapper.markFailed(
+        params(
+            "tenantId", tenantId,
+            "fileId", fileId,
+            "channelCode", channelCode,
+            "dispatchStatus", FileDispatchStatus.FAILED.name(),
+            "receiptStatus", FileReceiptStatus.FAILED.name(),
+            "errorCode", errorCode,
+            "errorMessage", errorMessage));
+  }
 
-    public int markCompensated(String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
-        return fileDispatchMapper.markCompensated(params(
-                "tenantId", tenantId,
-                "fileId", fileId,
-                "channelCode", channelCode,
-                "dispatchStatus", FileDispatchStatus.COMPENSATED.name(),
-                "receiptStatusSuccess", FileReceiptStatus.SUCCESS.name(),
-                "receiptStatusFailed", FileReceiptStatus.FAILED.name(),
-                "errorCode", errorCode,
-                "errorMessage", errorMessage
-        ));
-    }
+  public int markCompensated(
+      String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
+    return fileDispatchMapper.markCompensated(
+        params(
+            "tenantId", tenantId,
+            "fileId", fileId,
+            "channelCode", channelCode,
+            "dispatchStatus", FileDispatchStatus.COMPENSATED.name(),
+            "receiptStatusSuccess", FileReceiptStatus.SUCCESS.name(),
+            "receiptStatusFailed", FileReceiptStatus.FAILED.name(),
+            "errorCode", errorCode,
+            "errorMessage", errorMessage));
+  }
 
-    public List<Map<String, Object>> listPendingReceiptPolls(int limit) {
-        int safe = Math.max(1, Math.min(limit, MAX_DISPATCH_BATCH_SIZE));
-        return fileDispatchMapper.listPendingReceiptPolls(params(
-                "limit", safe,
-                "dispatchStatus", FileDispatchStatus.SENT.name(),
-                "receiptStatus", FileReceiptStatus.PENDING.name()
-        ));
-    }
+  public List<Map<String, Object>> listPendingReceiptPolls(int limit) {
+    int safe = Math.max(1, Math.min(limit, MAX_DISPATCH_BATCH_SIZE));
+    return fileDispatchMapper.listPendingReceiptPolls(
+        params(
+            "limit", safe,
+            "dispatchStatus", FileDispatchStatus.SENT.name(),
+            "receiptStatus", FileReceiptStatus.PENDING.name()));
+  }
 
-    private Map<String, Object> params(Object... pairs) {
-        Map<String, Object> values = new LinkedHashMap<>();
-        for (int index = 0; index < pairs.length; index += 2) {
-            values.put(String.valueOf(pairs[index]), pairs[index + 1]);
-        }
-        return values;
+  private Map<String, Object> params(Object... pairs) {
+    Map<String, Object> values = new LinkedHashMap<>();
+    for (int index = 0; index < pairs.length; index += 2) {
+      values.put(String.valueOf(pairs[index]), pairs[index + 1]);
     }
+    return values;
+  }
 }

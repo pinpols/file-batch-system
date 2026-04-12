@@ -4,5 +4,5 @@ import com.example.batch.orchestrator.application.plan.SchedulePlan;
 
 public interface WorkflowOrchestrationService {
 
-    void submit(SchedulePlan plan);
+  void submit(SchedulePlan plan);
 }

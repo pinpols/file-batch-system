@@ -3,28 +3,25 @@ package com.example.batch.orchestrator.infrastructure.router;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.application.route.WorkerRouter;
 import com.example.batch.orchestrator.application.route.WorkerRoutingPolicy;
-
-import lombok.RequiredArgsConstructor;
-
-import org.springframework.stereotype.Component;
-
 import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
 public class DefaultWorkerRouter implements WorkerRouter {
 
-    private final WorkerRoutingPolicy workerRoutingPolicy;
+  private final WorkerRoutingPolicy workerRoutingPolicy;
 
-    @Override
-    public WorkerRouteModel route(String tenantId, String jobCode, String stepCode) {
-        WorkerRouteModel route = new WorkerRouteModel();
-        route.setWorkerCode(tenantId + ":" + jobCode + ":" + stepCode);
-        route.setWorkerType(
-                stepCode == null || stepCode.isBlank() ? "DEFAULT" : stepCode.toUpperCase());
-        route.setPriority(5);
-        route.setAvailable(true);
-        WorkerRouteModel selected = workerRoutingPolicy.select(List.of(route));
-        return selected == null ? route : selected;
-    }
+  @Override
+  public WorkerRouteModel route(String tenantId, String jobCode, String stepCode) {
+    WorkerRouteModel route = new WorkerRouteModel();
+    route.setWorkerCode(tenantId + ":" + jobCode + ":" + stepCode);
+    route.setWorkerType(
+        stepCode == null || stepCode.isBlank() ? "DEFAULT" : stepCode.toUpperCase());
+    route.setPriority(5);
+    route.setAvailable(true);
+    WorkerRouteModel selected = workerRoutingPolicy.select(List.of(route));
+    return selected == null ? route : selected;
+  }
 }

@@ -5,11 +5,11 @@ import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 
 public interface WorkerRegistryServerService {
 
-    WorkerRegistryRecord register(WorkerHeartbeatDto request);
+  WorkerRegistryRecord register(WorkerHeartbeatDto request);
 
-    WorkerRegistryRecord heartbeat(String workerCode, WorkerHeartbeatDto request);
+  WorkerRegistryRecord heartbeat(String workerCode, WorkerHeartbeatDto request);
 
-    void deactivate(String tenantId, String workerCode);
+  void deactivate(String tenantId, String workerCode);
 
-    WorkerRegistryRecord updateStatus(String tenantId, String workerCode, String status);
+  WorkerRegistryRecord updateStatus(String tenantId, String workerCode, String status);
 }

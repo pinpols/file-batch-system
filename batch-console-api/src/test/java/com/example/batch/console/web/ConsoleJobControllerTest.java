@@ -2,6 +2,7 @@ package com.example.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -10,104 +11,121 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.ResponseMeta;
-import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.console.application.ConsoleJobApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-import static org.mockito.Mockito.mock;
 
 class ConsoleJobControllerTest {
 
-    private final ConsoleJobApplicationService applicationService = mock(ConsoleJobApplicationService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
-    private MockMvc mockMvc;
+  private final ConsoleJobApplicationService applicationService =
+      mock(ConsoleJobApplicationService.class);
+  private final ConsoleRequestMetadataResolver requestMetadataResolver =
+      mock(ConsoleRequestMetadataResolver.class);
+  private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+  @BeforeEach
+  void setUp() {
+    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+    ConsoleApiExceptionHandler exceptionHandler =
+        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
 
-        when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
 
-        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-        validator.afterPropertiesSet();
+    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+    validator.afterPropertiesSet();
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleJobController(applicationService, responseFactory))
-                .setControllerAdvice(exceptionHandler)
-                .setValidator(validator)
-                .build();
-    }
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new ConsoleJobController(applicationService, responseFactory))
+            .setControllerAdvice(exceptionHandler)
+            .setValidator(validator)
+            .build();
+  }
 
-    @Test
-    void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
-        mockMvc.perform(post("/api/console/jobs/trigger")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
+  @Test
+  void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/console/jobs/trigger")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}
+                    """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
 
-        verifyNoInteractions(applicationService);
-    }
+    verifyNoInteractions(applicationService);
+  }
 
-    @Test
-    void shouldTriggerAndReturnCommonResponseOnSuccess() throws Exception {
-        when(applicationService.trigger(any(), anyString())).thenReturn("OK");
+  @Test
+  void shouldTriggerAndReturnCommonResponseOnSuccess() throws Exception {
+    when(applicationService.trigger(any(), anyString())).thenReturn("OK");
 
-        mockMvc.perform(post("/api/console/jobs/trigger")
-                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data").value("OK"));
-    }
+    mockMvc
+        .perform(
+            post("/api/console/jobs/trigger")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data").value("OK"));
+  }
 
-    @Test
-    void shouldAllowDryRunWithoutIdempotencyHeader() throws Exception {
-        when(applicationService.dryRunTrigger(any())).thenReturn(Map.of("dryRun", true, "valid", true));
+  @Test
+  void shouldAllowDryRunWithoutIdempotencyHeader() throws Exception {
+    when(applicationService.dryRunTrigger(any())).thenReturn(Map.of("dryRun", true, "valid", true));
 
-        mockMvc.perform(post("/api/console/jobs/trigger")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27","dryRun":true}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.dryRun").value(true))
-                .andExpect(jsonPath("$.data.valid").value(true));
+    mockMvc
+        .perform(
+            post("/api/console/jobs/trigger")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27","dryRun":true}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.dryRun").value(true))
+        .andExpect(jsonPath("$.data.valid").value(true));
 
-        verify(applicationService).dryRunTrigger(any());
-    }
+    verify(applicationService).dryRunTrigger(any());
+  }
 
-    @Test
-    void shouldBatchTriggerJobs() throws Exception {
-        when(applicationService.batchTrigger(any(), anyString()))
-                .thenReturn(List.of(Map.of("index", 0, "status", "SUCCESS", "instanceNo", "INS-1")));
+  @Test
+  void shouldBatchTriggerJobs() throws Exception {
+    when(applicationService.batchTrigger(any(), anyString()))
+        .thenReturn(List.of(Map.of("index", 0, "status", "SUCCESS", "instanceNo", "INS-1")));
 
-        mockMvc.perform(post("/api/console/jobs/batch-trigger")
-                        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-batch-001")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                [{"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}]
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data[0].status").value("SUCCESS"))
-                .andExpect(jsonPath("$.data[0].instanceNo").value("INS-1"));
-    }
+    mockMvc
+        .perform(
+            post("/api/console/jobs/batch-trigger")
+                .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-batch-001")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    [{"tenantId":"t1","jobCode":"IMPORT_JOB","bizDate":"2026-03-27"}]
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data[0].status").value("SUCCESS"))
+        .andExpect(jsonPath("$.data[0].instanceNo").value("INS-1"));
+  }
 }

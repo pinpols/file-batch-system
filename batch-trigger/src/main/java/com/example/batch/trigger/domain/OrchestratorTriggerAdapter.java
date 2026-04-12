@@ -5,5 +5,5 @@ import com.example.batch.common.dto.LaunchResponse;
 
 public interface OrchestratorTriggerAdapter {
 
-    LaunchResponse sendTrigger(LaunchRequest request);
+  LaunchResponse sendTrigger(LaunchRequest request);
 }

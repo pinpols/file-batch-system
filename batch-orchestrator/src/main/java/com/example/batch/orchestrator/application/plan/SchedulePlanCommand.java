@@ -3,4 +3,4 @@ package com.example.batch.orchestrator.application.plan;
 import java.util.Map;
 
 public record SchedulePlanCommand(
-        String tenantId, String jobCode, String bizDate, Map<String, Object> params) {}
+    String tenantId, String jobCode, String bizDate, Map<String, Object> params) {}

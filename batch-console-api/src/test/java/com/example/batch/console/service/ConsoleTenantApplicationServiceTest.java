@@ -14,10 +14,8 @@ import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.TenantMapper;
 import com.example.batch.console.mapper.WorkflowRunMapper;
 import com.example.batch.console.support.ConsolePasswordHasher;
-
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,109 +25,109 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ConsoleTenantApplicationServiceTest {
 
-    @Mock private TenantMapper tenantMapper;
-    @Mock private ConsoleUserAccountMapper userAccountMapper;
-    @Mock private ConsolePasswordHasher passwordHasher;
-    @Mock private JobInstanceMapper jobInstanceMapper;
-    @Mock private FilePipelineMapper filePipelineMapper;
-    @Mock private WorkflowRunMapper workflowRunMapper;
+  @Mock private TenantMapper tenantMapper;
+  @Mock private ConsoleUserAccountMapper userAccountMapper;
+  @Mock private ConsolePasswordHasher passwordHasher;
+  @Mock private JobInstanceMapper jobInstanceMapper;
+  @Mock private FilePipelineMapper filePipelineMapper;
+  @Mock private WorkflowRunMapper workflowRunMapper;
 
-    private ConsoleTenantApplicationService service;
+  private ConsoleTenantApplicationService service;
 
-    private static final Map<String, Object> ACTIVE_TENANT = Map.of(
-            "id", 1L,
-            "tenant_id", "tenant-a",
-            "tenant_name", "Tenant A",
-            "status", "ACTIVE",
-            "description", "",
-            "created_by", "admin",
-            "created_at", "2026-01-01T00:00:00",
-            "updated_at", "2026-01-01T00:00:00"
-    );
+  private static final Map<String, Object> ACTIVE_TENANT =
+      Map.of(
+          "id", 1L,
+          "tenant_id", "tenant-a",
+          "tenant_name", "Tenant A",
+          "status", "ACTIVE",
+          "description", "",
+          "created_by", "admin",
+          "created_at", "2026-01-01T00:00:00",
+          "updated_at", "2026-01-01T00:00:00");
 
-    @BeforeEach
-    void setUp() {
-        service = new ConsoleTenantApplicationService(
-                tenantMapper,
-                userAccountMapper,
-                passwordHasher,
-                jobInstanceMapper,
-                filePipelineMapper,
-                workflowRunMapper
-        );
-    }
+  @BeforeEach
+  void setUp() {
+    service =
+        new ConsoleTenantApplicationService(
+            tenantMapper,
+            userAccountMapper,
+            passwordHasher,
+            jobInstanceMapper,
+            filePipelineMapper,
+            workflowRunMapper);
+  }
 
-    @Test
-    void suspendTenant_withActiveJobInstances_throwsBizException() {
-        when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
-        when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(2L);
-        when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
-        when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+  @Test
+  void suspendTenant_withActiveJobInstances_throwsBizException() {
+    when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+    when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(2L);
+    when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
 
-        assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("cannot suspend tenant with active instances")
-                .hasMessageContaining("jobs=2");
+    assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("cannot suspend tenant with active instances")
+        .hasMessageContaining("jobs=2");
 
-        verify(tenantMapper, never()).updateStatus(any(), any());
-    }
+    verify(tenantMapper, never()).updateStatus(any(), any());
+  }
 
-    @Test
-    void suspendTenant_withActivePipelineInstances_throwsBizException() {
-        when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
-        when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
-        when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(3L);
-        when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+  @Test
+  void suspendTenant_withActivePipelineInstances_throwsBizException() {
+    when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+    when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(3L);
+    when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
 
-        assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("pipelines=3");
+    assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("pipelines=3");
 
-        verify(tenantMapper, never()).updateStatus(any(), any());
-    }
+    verify(tenantMapper, never()).updateStatus(any(), any());
+  }
 
-    @Test
-    void suspendTenant_withActiveWorkflowRuns_throwsBizException() {
-        when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
-        when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
-        when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
-        when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(1L);
+  @Test
+  void suspendTenant_withActiveWorkflowRuns_throwsBizException() {
+    when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+    when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(1L);
 
-        assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("workflows=1");
+    assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("workflows=1");
 
-        verify(tenantMapper, never()).updateStatus(any(), any());
-    }
+    verify(tenantMapper, never()).updateStatus(any(), any());
+  }
 
-    @Test
-    void suspendTenant_noActiveInstances_proceedsSuspend() {
-        when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
-        when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
-        when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
-        when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+  @Test
+  void suspendTenant_noActiveInstances_proceedsSuspend() {
+    when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+    when(jobInstanceMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(filePipelineMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
+    when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
 
-        service.suspendTenant("tenant-a");
+    service.suspendTenant("tenant-a");
 
-        verify(tenantMapper).updateStatus("tenant-a", "SUSPENDED");
-    }
+    verify(tenantMapper).updateStatus("tenant-a", "SUSPENDED");
+  }
 
-    @Test
-    void suspendTenant_countsCorrectActiveStatuses() {
-        List<String> expectedJobStatuses =
-                List.of("CREATED", "WAITING", "READY", "RUNNING", "PARTIAL_FAILED");
-        List<String> expectedPipelineStatuses = List.of("CREATED", "RUNNING", "COMPENSATING");
-        List<String> expectedWorkflowStatuses = List.of("CREATED", "RUNNING");
+  @Test
+  void suspendTenant_countsCorrectActiveStatuses() {
+    List<String> expectedJobStatuses =
+        List.of("CREATED", "WAITING", "READY", "RUNNING", "PARTIAL_FAILED");
+    List<String> expectedPipelineStatuses = List.of("CREATED", "RUNNING", "COMPENSATING");
+    List<String> expectedWorkflowStatuses = List.of("CREATED", "RUNNING");
 
-        when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
-        when(jobInstanceMapper.countByStatuses("tenant-a", expectedJobStatuses)).thenReturn(0L);
-        when(filePipelineMapper.countByStatuses("tenant-a", expectedPipelineStatuses)).thenReturn(0L);
-        when(workflowRunMapper.countByStatuses("tenant-a", expectedWorkflowStatuses)).thenReturn(0L);
+    when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
+    when(jobInstanceMapper.countByStatuses("tenant-a", expectedJobStatuses)).thenReturn(0L);
+    when(filePipelineMapper.countByStatuses("tenant-a", expectedPipelineStatuses)).thenReturn(0L);
+    when(workflowRunMapper.countByStatuses("tenant-a", expectedWorkflowStatuses)).thenReturn(0L);
 
-        service.suspendTenant("tenant-a");
+    service.suspendTenant("tenant-a");
 
-        verify(jobInstanceMapper).countByStatuses("tenant-a", expectedJobStatuses);
-        verify(filePipelineMapper).countByStatuses("tenant-a", expectedPipelineStatuses);
-        verify(workflowRunMapper).countByStatuses("tenant-a", expectedWorkflowStatuses);
-    }
+    verify(jobInstanceMapper).countByStatuses("tenant-a", expectedJobStatuses);
+    verify(filePipelineMapper).countByStatuses("tenant-a", expectedPipelineStatuses);
+    verify(workflowRunMapper).countByStatuses("tenant-a", expectedWorkflowStatuses);
+  }
 }

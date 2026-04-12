@@ -2,6 +2,7 @@ package com.example.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -26,77 +27,88 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-import static org.mockito.Mockito.mock;
 
 class ConsoleApiKeyControllerTest {
 
-    private final ConsoleApiKeyService apiKeyService = mock(ConsoleApiKeyService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
-    private MockMvc mockMvc;
+  private final ConsoleApiKeyService apiKeyService = mock(ConsoleApiKeyService.class);
+  private final ConsoleRequestMetadataResolver requestMetadataResolver =
+      mock(ConsoleRequestMetadataResolver.class);
+  private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+  @BeforeEach
+  void setUp() {
+    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+    ConsoleApiExceptionHandler exceptionHandler =
+        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
 
-        when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
-        when(requestMetadataResolver.current()).thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
 
-        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-        validator.afterPropertiesSet();
+    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+    validator.afterPropertiesSet();
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleApiKeyController(apiKeyService, responseFactory, requestMetadataResolver))
-                .setControllerAdvice(exceptionHandler)
-                .setValidator(validator)
-                .build();
-    }
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new ConsoleApiKeyController(
+                    apiKeyService, responseFactory, requestMetadataResolver))
+            .setControllerAdvice(exceptionHandler)
+            .setValidator(validator)
+            .build();
+  }
 
-    @Test
-    void shouldListApiKeys() throws Exception {
-        ApiKeyEntity entity = new ApiKeyEntity();
-        entity.setId(1L);
-        entity.setTenantId("t1");
-        entity.setKeyName("my-key");
-        entity.setKeyPrefix("bk_abcde");
-        entity.setEnabled(true);
-        when(apiKeyService.list("t1")).thenReturn(List.of(entity));
+  @Test
+  void shouldListApiKeys() throws Exception {
+    ApiKeyEntity entity = new ApiKeyEntity();
+    entity.setId(1L);
+    entity.setTenantId("t1");
+    entity.setKeyName("my-key");
+    entity.setKeyPrefix("bk_abcde");
+    entity.setEnabled(true);
+    when(apiKeyService.list("t1")).thenReturn(List.of(entity));
 
-        mockMvc.perform(get("/api/console/api-keys").param("tenantId", "t1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data[0].keyName").value("my-key"))
-                .andExpect(jsonPath("$.data[0].keyPrefix").value("bk_abcde"));
-    }
+    mockMvc
+        .perform(get("/api/console/api-keys").param("tenantId", "t1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data[0].keyName").value("my-key"))
+        .andExpect(jsonPath("$.data[0].keyPrefix").value("bk_abcde"));
+  }
 
-    @Test
-    void shouldCreateApiKey() throws Exception {
-        ApiKeyEntity entity = new ApiKeyEntity();
-        entity.setId(1L);
-        entity.setKeyName("my-key");
-        entity.setKeyPrefix("bk_abcde");
-        entity.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z"));
-        when(apiKeyService.create(anyString(), anyString(), any(), any(), anyString()))
-                .thenReturn(new ConsoleApiKeyService.CreateResult(entity, "bk_raw_secret_key"));
+  @Test
+  void shouldCreateApiKey() throws Exception {
+    ApiKeyEntity entity = new ApiKeyEntity();
+    entity.setId(1L);
+    entity.setKeyName("my-key");
+    entity.setKeyPrefix("bk_abcde");
+    entity.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z"));
+    when(apiKeyService.create(anyString(), anyString(), any(), any(), anyString()))
+        .thenReturn(new ConsoleApiKeyService.CreateResult(entity, "bk_raw_secret_key"));
 
-        mockMvc.perform(post("/api/console/api-keys")
-                        .param("tenantId", "t1")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"keyName":"my-key","scopes":"read,write"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.keyName").value("my-key"))
-                .andExpect(jsonPath("$.data.rawKey").value("bk_raw_secret_key"));
-    }
+    mockMvc
+        .perform(
+            post("/api/console/api-keys")
+                .param("tenantId", "t1")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {"keyName":"my-key","scopes":"read,write"}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.keyName").value("my-key"))
+        .andExpect(jsonPath("$.data.rawKey").value("bk_raw_secret_key"));
+  }
 
-    @Test
-    void shouldRevokeApiKey() throws Exception {
-        mockMvc.perform(delete("/api/console/api-keys/1")
-                        .param("tenantId", "t1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"));
+  @Test
+  void shouldRevokeApiKey() throws Exception {
+    mockMvc
+        .perform(delete("/api/console/api-keys/1").param("tenantId", "t1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-        verify(apiKeyService).revoke("t1", 1L, "operator-1");
-    }
+    verify(apiKeyService).revoke("t1", 1L, "operator-1");
+  }
 }

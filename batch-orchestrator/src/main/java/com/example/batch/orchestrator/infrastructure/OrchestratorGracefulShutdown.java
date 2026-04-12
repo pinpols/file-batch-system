@@ -1,15 +1,13 @@
 package com.example.batch.orchestrator.infrastructure;
 
-import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.context.ApplicationListener;
-import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.stereotype.Component;
-
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.stereotype.Component;
 
 /**
  * Orchestrator 优雅停机状态。
@@ -25,40 +23,40 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 public class OrchestratorGracefulShutdown implements ApplicationListener<ContextClosedEvent> {
 
-    private final AtomicBoolean draining = new AtomicBoolean(false);
-    private volatile Instant drainingSince;
-    private volatile String reason;
+  private final AtomicBoolean draining = new AtomicBoolean(false);
+  private volatile Instant drainingSince;
+  private volatile String reason;
 
-    @Override
-    public void onApplicationEvent(ContextClosedEvent event) {
-        startDraining("context-closed");
-    }
+  @Override
+  public void onApplicationEvent(ContextClosedEvent event) {
+    startDraining("context-closed");
+  }
 
-    public void startDraining(String source) {
-        if (draining.compareAndSet(false, true)) {
-            drainingSince = Instant.now();
-            reason = source;
-            log.info("Orchestrator graceful shutdown initiated: draining=true, source={}", source);
-        }
+  public void startDraining(String source) {
+    if (draining.compareAndSet(false, true)) {
+      drainingSince = Instant.now();
+      reason = source;
+      log.info("Orchestrator graceful shutdown initiated: draining=true, source={}", source);
     }
+  }
 
-    public void stopDraining(String source) {
-        if (draining.compareAndSet(true, false)) {
-            log.info("Orchestrator drain cancelled: source={}", source);
-        }
-        drainingSince = null;
-        reason = source;
+  public void stopDraining(String source) {
+    if (draining.compareAndSet(true, false)) {
+      log.info("Orchestrator drain cancelled: source={}", source);
     }
+    drainingSince = null;
+    reason = source;
+  }
 
-    public boolean isDraining() {
-        return draining.get();
-    }
+  public boolean isDraining() {
+    return draining.get();
+  }
 
-    public Map<String, Object> status() {
-        Map<String, Object> status = new LinkedHashMap<>();
-        status.put("draining", draining.get());
-        status.put("drainingSince", drainingSince);
-        status.put("reason", reason);
-        return status;
-    }
+  public Map<String, Object> status() {
+    Map<String, Object> status = new LinkedHashMap<>();
+    status.put("draining", draining.get());
+    status.put("drainingSince", drainingSince);
+    status.put("reason", reason);
+    return status;
+  }
 }

@@ -1,12 +1,10 @@
 package com.example.batch.orchestrator.domain.pipeline;
 
 import com.example.batch.common.model.WorkerRouteModel;
-
-import lombok.Data;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Data;
 
 /**
  * Orchestrator 侧的工作流执行上下文。
@@ -16,20 +14,20 @@ import java.util.Map;
 @Data
 public class ExecutionContext {
 
-    private String tenantId;
-    private String jobCode;
-    private String bizDate;
-    private String traceId;
-    private PipelineDefinition pipelineDefinition;
-    private Map<String, Object> attributes = new LinkedHashMap<>();
-    private List<StepResult> stepResults;
-    private WorkerRouteModel defaultWorkerRoute;
+  private String tenantId;
+  private String jobCode;
+  private String bizDate;
+  private String traceId;
+  private PipelineDefinition pipelineDefinition;
+  private Map<String, Object> attributes = new LinkedHashMap<>();
+  private List<StepResult> stepResults;
+  private WorkerRouteModel defaultWorkerRoute;
 
-    public String getPipelineCode() {
-        return jobCode;
-    }
+  public String getPipelineCode() {
+    return jobCode;
+  }
 
-    public void setPipelineCode(String pipelineCode) {
-        this.jobCode = pipelineCode;
-    }
+  public void setPipelineCode(String pipelineCode) {
+    this.jobCode = pipelineCode;
+  }
 }

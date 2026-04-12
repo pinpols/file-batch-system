@@ -5,10 +5,10 @@ import lombok.Data;
 @Data
 public class WorkflowDefinitionQueryRequest extends PageQueryRequest {
 
-    private String tenantId;
-    private String workflowCode;
-    private String workflowName;
-    private String workflowType;
-    private Integer version;
-    private Boolean enabled = true;
+  private String tenantId;
+  private String workflowCode;
+  private String workflowName;
+  private String workflowType;
+  private Integer version;
+  private Boolean enabled = true;
 }

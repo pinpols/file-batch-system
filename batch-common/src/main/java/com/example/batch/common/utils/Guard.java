@@ -2,7 +2,6 @@ package com.example.batch.common.utils;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-
 import org.springframework.util.StringUtils;
 
 /**
@@ -21,38 +20,38 @@ import org.springframework.util.StringUtils;
  */
 public final class Guard {
 
-    private Guard() {}
+  private Guard() {}
 
-    /**
-     * Mapper 查询结果非 null 断言。
-     *
-     * <pre>{@code
-     * // Before
-     * JobInstanceEntity entity = mapper.selectById(tenantId, id);
-     * if (entity == null) throw new BizException(ResultCode.NOT_FOUND, "job instance not found");
-     *
-     * // After
-     * JobInstanceEntity entity = Guard.requireFound(mapper.selectById(tenantId, id), "job instance not found");
-     * }</pre>
-     */
-    public static <T> T requireFound(T entity, String message) {
-        if (entity == null) {
-            throw new BizException(ResultCode.NOT_FOUND, message);
-        }
-        return entity;
+  /**
+   * Mapper 查询结果非 null 断言。
+   *
+   * <pre>{@code
+   * // Before
+   * JobInstanceEntity entity = mapper.selectById(tenantId, id);
+   * if (entity == null) throw new BizException(ResultCode.NOT_FOUND, "job instance not found");
+   *
+   * // After
+   * JobInstanceEntity entity = Guard.requireFound(mapper.selectById(tenantId, id), "job instance not found");
+   * }</pre>
+   */
+  public static <T> T requireFound(T entity, String message) {
+    if (entity == null) {
+      throw new BizException(ResultCode.NOT_FOUND, message);
     }
+    return entity;
+  }
 
-    /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
-    public static void requireText(String str, String message) {
-        if (!StringUtils.hasText(str)) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, message);
-        }
+  /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
+  public static void requireText(String str, String message) {
+    if (!StringUtils.hasText(str)) {
+      throw new BizException(ResultCode.INVALID_ARGUMENT, message);
     }
+  }
 
-    /** 通用业务条件断言。 */
-    public static void require(boolean condition, String message) {
-        if (!condition) {
-            throw new BizException(ResultCode.INVALID_ARGUMENT, message);
-        }
+  /** 通用业务条件断言。 */
+  public static void require(boolean condition, String message) {
+    if (!condition) {
+      throw new BizException(ResultCode.INVALID_ARGUMENT, message);
     }
+  }
 }

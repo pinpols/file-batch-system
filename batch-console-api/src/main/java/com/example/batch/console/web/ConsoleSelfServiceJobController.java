@@ -7,13 +7,10 @@ import com.example.batch.console.service.ConsoleSelfServiceJobService;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.CompensationParam;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.RerunParam;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
-
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,55 +27,55 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleSelfServiceJobController {
 
-    private final ConsoleSelfServiceJobService selfServiceJobService;
-    private final ConsoleResponseFactory responseFactory;
-    private final ConsoleRequestMetadataResolver requestMetadataResolver;
+  private final ConsoleSelfServiceJobService selfServiceJobService;
+  private final ConsoleResponseFactory responseFactory;
+  private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-    @PostMapping("/rerun-request")
-    public CommonResponse<String> requestRerun(
-            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-            @Valid @RequestBody SelfServiceRerunRequest request) {
-        String operator = requestMetadataResolver.current().operatorId();
-        RerunParam param =
-                new RerunParam(
-                        request.tenantId(),
-                        request.jobCode(),
-                        request.bizDate(),
-                        request.targetInstanceNo(),
-                        request.reason());
-        return responseFactory.success(
-                selfServiceJobService.requestRerun(param, operator, idempotencyKey));
-    }
+  @PostMapping("/rerun-request")
+  public CommonResponse<String> requestRerun(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody SelfServiceRerunRequest request) {
+    String operator = requestMetadataResolver.current().operatorId();
+    RerunParam param =
+        new RerunParam(
+            request.tenantId(),
+            request.jobCode(),
+            request.bizDate(),
+            request.targetInstanceNo(),
+            request.reason());
+    return responseFactory.success(
+        selfServiceJobService.requestRerun(param, operator, idempotencyKey));
+  }
 
-    @PostMapping("/compensation-request")
-    public CommonResponse<String> requestCompensation(
-            @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-            @Valid @RequestBody SelfServiceCompensationRequest request) {
-        String operator = requestMetadataResolver.current().operatorId();
-        CompensationParam param =
-                new CompensationParam(
-                        request.tenantId(),
-                        request.jobCode(),
-                        request.bizDate(),
-                        request.compensationType(),
-                        request.targetInstanceNo(),
-                        request.reason());
-        return responseFactory.success(
-                selfServiceJobService.requestCompensation(param, operator, idempotencyKey));
-    }
+  @PostMapping("/compensation-request")
+  public CommonResponse<String> requestCompensation(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody SelfServiceCompensationRequest request) {
+    String operator = requestMetadataResolver.current().operatorId();
+    CompensationParam param =
+        new CompensationParam(
+            request.tenantId(),
+            request.jobCode(),
+            request.bizDate(),
+            request.compensationType(),
+            request.targetInstanceNo(),
+            request.reason());
+    return responseFactory.success(
+        selfServiceJobService.requestCompensation(param, operator, idempotencyKey));
+  }
 
-    record SelfServiceRerunRequest(
-            @NotBlank String tenantId,
-            @NotBlank @Size(max = 128) String jobCode,
-            @NotBlank String bizDate,
-            String targetInstanceNo,
-            @Size(max = 512) String reason) {}
+  record SelfServiceRerunRequest(
+      @NotBlank String tenantId,
+      @NotBlank @Size(max = 128) String jobCode,
+      @NotBlank String bizDate,
+      String targetInstanceNo,
+      @Size(max = 512) String reason) {}
 
-    record SelfServiceCompensationRequest(
-            @NotBlank String tenantId,
-            @NotBlank @Size(max = 128) String jobCode,
-            @NotBlank String bizDate,
-            String compensationType,
-            String targetInstanceNo,
-            @Size(max = 512) String reason) {}
+  record SelfServiceCompensationRequest(
+      @NotBlank String tenantId,
+      @NotBlank @Size(max = 128) String jobCode,
+      @NotBlank String bizDate,
+      String compensationType,
+      String targetInstanceNo,
+      @Size(max = 512) String reason) {}
 }

@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
-import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.enums.TriggerType;
 import com.example.batch.orchestrator.BatchOrchestratorApplication;
 import com.example.batch.orchestrator.application.service.TaskExecutionService;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -23,8 +23,8 @@ import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
-import java.time.LocalDate;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -39,47 +39,42 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * 集成测试：两个 Worker 竞争认领同一个已启动的任务。
  *
- * <p>验证在并发条件下真实认领路径只允许一个获胜者。失败方在重新读取行时
- * 观察到获胜方的分配结果，这是预期的冲突行为。
+ * <p>验证在并发条件下真实认领路径只允许一个获胜者。失败方在重新读取行时 观察到获胜方的分配结果，这是预期的冲突行为。
  */
 @SpringBootTest(
-        classes = BatchOrchestratorApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    classes = BatchOrchestratorApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
-    private static final String TENANT = "t1";
-    private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
+  private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
 
-    @Autowired
-    private LaunchService launchService;
+  @Autowired private LaunchService launchService;
 
-    @Autowired
-    private TaskExecutionService taskExecutionService;
+  @Autowired private TaskExecutionService taskExecutionService;
 
-    @Autowired
-    private JobInstanceMapper jobInstanceMapper;
+  @Autowired private JobInstanceMapper jobInstanceMapper;
 
-    @Autowired
-    private JobTaskMapper jobTaskMapper;
+  @Autowired private JobTaskMapper jobTaskMapper;
 
-    @Autowired
-    private JobPartitionMapper jobPartitionMapper;
+  @Autowired private JobPartitionMapper jobPartitionMapper;
 
-    @Autowired
-    private WorkerRegistryRepository workerRegistryRepository;
+  @Autowired private WorkerRegistryRepository workerRegistryRepository;
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
-    @Test
-    void assignWorker_onlyOneWorkerWins_whenTwoWorkersRaceConcurrently() throws Exception {
-        LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
-                jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
-        String winnerWorker = seed.workerCode();
-        String loserWorker = "worker-race-b";
-        workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
+  @Test
+  void assignWorker_onlyOneWorkerWins_whenTwoWorkersRaceConcurrently() throws Exception {
+    LaunchSeed seed =
+        LaunchIntegrationFixture.prepareLaunchWithWorker(
+            jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
+    String winnerWorker = seed.workerCode();
+    String loserWorker = "worker-race-b";
+    workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
 
-        LaunchResponse response = launchService.launch(new LaunchRequest(
+    LaunchResponse response =
+        launchService.launch(
+            new LaunchRequest(
                 TENANT,
                 seed.jobCode(),
                 BIZ_DATE,
@@ -87,73 +82,83 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
                 seed.requestId(),
                 "trace-concurrent-claim",
                 Map.of()));
-        assertThat(response.instanceNo()).isNotBlank();
+    assertThat(response.instanceNo()).isNotBlank();
 
-        JobInstanceEntity jobInstance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
-        assertThat(jobInstance).isNotNull();
+    JobInstanceEntity jobInstance =
+        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    assertThat(jobInstance).isNotNull();
 
-        List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
-                new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
-        assertThat(tasks).hasSize(1);
-        JobTaskEntity task = tasks.get(0);
-        Long taskId = task.getId();
+    List<JobTaskEntity> tasks =
+        jobTaskMapper.selectByQuery(
+            new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+    assertThat(tasks).hasSize(1);
+    JobTaskEntity task = tasks.get(0);
+    Long taskId = task.getId();
 
-        List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
-                new JobPartitionQuery(TENANT, jobInstance.getId(), null, null));
-        assertThat(partitions).hasSize(1);
-        Long partitionId = partitions.get(0).getId();
+    List<JobPartitionEntity> partitions =
+        jobPartitionMapper.selectByQuery(
+            new JobPartitionQuery(TENANT, jobInstance.getId(), null, null));
+    assertThat(partitions).hasSize(1);
+    Long partitionId = partitions.get(0).getId();
 
-        CountDownLatch startGate = new CountDownLatch(1);
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+    CountDownLatch startGate = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
 
-        Future<JobTaskEntity> winnerFuture = pool.submit(() -> {
-            startGate.await();
-            return taskExecutionService.assignWorker(TENANT, taskId, winnerWorker);
-        });
-        Future<JobTaskEntity> loserFuture = pool.submit(() -> {
-            startGate.await();
-            return taskExecutionService.assignWorker(TENANT, taskId, loserWorker);
-        });
+    Future<JobTaskEntity> winnerFuture =
+        pool.submit(
+            () -> {
+              startGate.await();
+              return taskExecutionService.assignWorker(TENANT, taskId, winnerWorker);
+            });
+    Future<JobTaskEntity> loserFuture =
+        pool.submit(
+            () -> {
+              startGate.await();
+              return taskExecutionService.assignWorker(TENANT, taskId, loserWorker);
+            });
 
-        startGate.countDown();
+    startGate.countDown();
 
-        JobTaskEntity winnerResult = winnerFuture.get();
-        JobTaskEntity loserResult = loserFuture.get();
-        pool.shutdownNow();
+    JobTaskEntity winnerResult = winnerFuture.get();
+    JobTaskEntity loserResult = loserFuture.get();
+    pool.shutdownNow();
 
-        assertThat(winnerResult).isNotNull();
-        assertThat(loserResult).isNotNull();
-        assertThat(
-                (winnerWorker.equals(winnerResult.getAssignedWorkerCode()) ? 1 : 0)
-                        + (loserWorker.equals(loserResult.getAssignedWorkerCode()) ? 1 : 0))
-                .as("exactly one caller should see itself as the claim winner")
-                .isEqualTo(1);
+    assertThat(winnerResult).isNotNull();
+    assertThat(loserResult).isNotNull();
+    assertThat(
+            (winnerWorker.equals(winnerResult.getAssignedWorkerCode()) ? 1 : 0)
+                + (loserWorker.equals(loserResult.getAssignedWorkerCode()) ? 1 : 0))
+        .as("exactly one caller should see itself as the claim winner")
+        .isEqualTo(1);
 
-        JobTaskEntity finalTask = jobTaskMapper.selectById(TENANT, taskId);
-        assertThat(finalTask.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
-        assertThat(finalTask.getAssignedWorkerCode()).isIn(winnerWorker, loserWorker);
+    JobTaskEntity finalTask = jobTaskMapper.selectById(TENANT, taskId);
+    assertThat(finalTask.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    assertThat(finalTask.getAssignedWorkerCode()).isIn(winnerWorker, loserWorker);
 
-        JobPartitionEntity finalPartition = jobPartitionMapper.selectById(TENANT, partitionId);
-        assertThat(finalPartition.getPartitionStatus()).isEqualTo("RUNNING");
-        assertThat(finalPartition.getWorkerCode()).isEqualTo(finalTask.getAssignedWorkerCode());
+    JobPartitionEntity finalPartition = jobPartitionMapper.selectById(TENANT, partitionId);
+    assertThat(finalPartition.getPartitionStatus()).isEqualTo("RUNNING");
+    assertThat(finalPartition.getWorkerCode()).isEqualTo(finalTask.getAssignedWorkerCode());
+  }
+
+  @Test
+  void assignWorker_onlyOneWorkerWins_acrossRepeatedLaunches() throws Exception {
+    for (int i = 0; i < 5; i++) {
+      assertOneClaimWinnerForFreshLaunch();
     }
+  }
 
-    @Test
-    void assignWorker_onlyOneWorkerWins_acrossRepeatedLaunches() throws Exception {
-        for (int i = 0; i < 5; i++) {
-            assertOneClaimWinnerForFreshLaunch();
-        }
-    }
+  private void assertOneClaimWinnerForFreshLaunch() throws Exception {
+    LaunchSeed seed =
+        LaunchIntegrationFixture.prepareLaunchWithWorker(
+            jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
+    String winnerWorker = seed.workerCode();
+    String loserWorker = "worker-race-b-" + System.nanoTime();
 
-    private void assertOneClaimWinnerForFreshLaunch() throws Exception {
-        LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
-                jdbcTemplate, TENANT, "IMPORT", "DEFAULT", TriggerType.MANUAL);
-        String winnerWorker = seed.workerCode();
-        String loserWorker = "worker-race-b-" + System.nanoTime();
+    workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
 
-        workerRegistryRepository.save(onlineWorker(TENANT, loserWorker, "DEFAULT"));
-
-        LaunchResponse response = launchService.launch(new LaunchRequest(
+    LaunchResponse response =
+        launchService.launch(
+            new LaunchRequest(
                 TENANT,
                 seed.jobCode(),
                 BIZ_DATE,
@@ -161,48 +166,62 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
                 seed.requestId(),
                 "trace-concurrent-claim-loop-" + seed.requestId(),
                 Map.of()));
-        assertThat(response.instanceNo()).isNotBlank();
+    assertThat(response.instanceNo()).isNotBlank();
 
-        JobInstanceEntity jobInstance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
-        List<JobTaskEntity> tasks = jobTaskMapper.selectByQuery(
-                new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
-        assertThat(tasks).hasSize(1);
-        JobTaskEntity task = tasks.get(0);
+    JobInstanceEntity jobInstance =
+        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    List<JobTaskEntity> tasks =
+        jobTaskMapper.selectByQuery(
+            new JobTaskQuery(TENANT, jobInstance.getId(), null, null, null));
+    assertThat(tasks).hasSize(1);
+    JobTaskEntity task = tasks.get(0);
 
-        CountDownLatch startGate = new CountDownLatch(1);
-        ExecutorService pool = Executors.newFixedThreadPool(2);
-        try {
-            Future<JobTaskEntity> winnerFuture = pool.submit(() -> {
+    CountDownLatch startGate = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      Future<JobTaskEntity> winnerFuture =
+          pool.submit(
+              () -> {
                 startGate.await();
                 return taskExecutionService.assignWorker(TENANT, task.getId(), winnerWorker);
-            });
-            Future<JobTaskEntity> loserFuture = pool.submit(() -> {
+              });
+      Future<JobTaskEntity> loserFuture =
+          pool.submit(
+              () -> {
                 startGate.await();
                 return taskExecutionService.assignWorker(TENANT, task.getId(), loserWorker);
-            });
+              });
 
-            startGate.countDown();
+      startGate.countDown();
 
-            JobTaskEntity winnerResult = winnerFuture.get();
-            JobTaskEntity loserResult = loserFuture.get();
+      JobTaskEntity winnerResult = winnerFuture.get();
+      JobTaskEntity loserResult = loserFuture.get();
 
-            assertThat(winnerResult).isNotNull();
-            assertThat(loserResult).isNotNull();
-            assertThat(
-                    (winnerWorker.equals(winnerResult.getAssignedWorkerCode()) ? 1 : 0)
-                            + (loserWorker.equals(loserResult.getAssignedWorkerCode()) ? 1 : 0))
-                    .as("exactly one caller should see itself as the claim winner")
-                    .isEqualTo(1);
-        } finally {
-            pool.shutdownNow();
-        }
+      assertThat(winnerResult).isNotNull();
+      assertThat(loserResult).isNotNull();
+      assertThat(
+              (winnerWorker.equals(winnerResult.getAssignedWorkerCode()) ? 1 : 0)
+                  + (loserWorker.equals(loserResult.getAssignedWorkerCode()) ? 1 : 0))
+          .as("exactly one caller should see itself as the claim winner")
+          .isEqualTo(1);
+    } finally {
+      pool.shutdownNow();
     }
+  }
 
-    private static WorkerRegistryRecord onlineWorker(String tenantId, String workerCode, String workerGroup) {
-        return new WorkerRegistryRecord(
-                null, tenantId, workerCode, workerGroup,
-                new JsonbString("{}"), null,
-                "ONLINE",
-                Instant.now(), 0, null, null);
-    }
+  private static WorkerRegistryRecord onlineWorker(
+      String tenantId, String workerCode, String workerGroup) {
+    return new WorkerRegistryRecord(
+        null,
+        tenantId,
+        workerCode,
+        workerGroup,
+        new JsonbString("{}"),
+        null,
+        "ONLINE",
+        Instant.now(),
+        0,
+        null,
+        null);
+  }
 }

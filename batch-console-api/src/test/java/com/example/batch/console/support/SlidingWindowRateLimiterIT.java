@@ -19,67 +19,67 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 class SlidingWindowRateLimiterIT {
 
-    @Container
-    static final RedisContainer REDIS =
-            new RedisContainer(DockerImageName.parse("redis:7-alpine"));
+  @Container
+  static final RedisContainer REDIS = new RedisContainer(DockerImageName.parse("redis:7-alpine"));
 
-    private SlidingWindowRateLimiter rateLimiter;
+  private SlidingWindowRateLimiter rateLimiter;
 
-    @BeforeEach
-    void setUp() {
-        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(
-                REDIS.getHost(), REDIS.getFirstMappedPort());
-        LettuceConnectionFactory factory = new LettuceConnectionFactory(config);
-        factory.afterPropertiesSet();
-        StringRedisTemplate template = new StringRedisTemplate(factory);
-        template.afterPropertiesSet();
-        rateLimiter = new SlidingWindowRateLimiter(template);
+  @BeforeEach
+  void setUp() {
+    RedisStandaloneConfiguration config =
+        new RedisStandaloneConfiguration(REDIS.getHost(), REDIS.getFirstMappedPort());
+    LettuceConnectionFactory factory = new LettuceConnectionFactory(config);
+    factory.afterPropertiesSet();
+    StringRedisTemplate template = new StringRedisTemplate(factory);
+    template.afterPropertiesSet();
+    rateLimiter = new SlidingWindowRateLimiter(template);
+  }
+
+  @Test
+  void shouldAllowExactlyLimitRequests() {
+    for (int i = 0; i < 5; i++) {
+      assertThat(rateLimiter.tryAcquire("test:exact", 5)).isTrue();
     }
+    assertThat(rateLimiter.tryAcquire("test:exact", 5)).isFalse();
+  }
 
-    @Test
-    void shouldAllowExactlyLimitRequests() {
-        for (int i = 0; i < 5; i++) {
-            assertThat(rateLimiter.tryAcquire("test:exact", 5)).isTrue();
-        }
-        assertThat(rateLimiter.tryAcquire("test:exact", 5)).isFalse();
+  @Test
+  void shouldIsolateDifferentKeys() {
+    for (int i = 0; i < 5; i++) {
+      rateLimiter.tryAcquire("test:keyA", 5);
     }
+    assertThat(rateLimiter.tryAcquire("test:keyB", 5)).isTrue();
+  }
 
-    @Test
-    void shouldIsolateDifferentKeys() {
-        for (int i = 0; i < 5; i++) {
-            rateLimiter.tryAcquire("test:keyA", 5);
-        }
-        assertThat(rateLimiter.tryAcquire("test:keyB", 5)).isTrue();
+  @Test
+  void shouldBeThreadSafeUnderConcurrency() throws InterruptedException {
+    int threads = 20;
+    int limit = 10;
+    ExecutorService pool = Executors.newFixedThreadPool(threads);
+    CountDownLatch start = new CountDownLatch(1);
+    CountDownLatch done = new CountDownLatch(threads);
+    AtomicInteger allowed = new AtomicInteger();
+
+    for (int i = 0; i < threads; i++) {
+      pool.submit(
+          () -> {
+            try {
+              start.await();
+              if (rateLimiter.tryAcquire("test:concurrent", limit)) {
+                allowed.incrementAndGet();
+              }
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            } finally {
+              done.countDown();
+            }
+          });
     }
+    start.countDown();
+    done.await();
+    pool.shutdown();
 
-    @Test
-    void shouldBeThreadSafeUnderConcurrency() throws InterruptedException {
-        int threads = 20;
-        int limit = 10;
-        ExecutorService pool = Executors.newFixedThreadPool(threads);
-        CountDownLatch start = new CountDownLatch(1);
-        CountDownLatch done = new CountDownLatch(threads);
-        AtomicInteger allowed = new AtomicInteger();
-
-        for (int i = 0; i < threads; i++) {
-            pool.submit(() -> {
-                try {
-                    start.await();
-                    if (rateLimiter.tryAcquire("test:concurrent", limit)) {
-                        allowed.incrementAndGet();
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    done.countDown();
-                }
-            });
-        }
-        start.countDown();
-        done.await();
-        pool.shutdown();
-
-        // Redis Lua 原子性保证：并发情况下精确限制为 limit
-        assertThat(allowed.get()).isEqualTo(limit);
-    }
+    // Redis Lua 原子性保证：并发情况下精确限制为 limit
+    assertThat(allowed.get()).isEqualTo(limit);
+  }
 }

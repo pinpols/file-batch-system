@@ -26,115 +26,114 @@ import org.springframework.mock.web.MockHttpServletResponse;
 @ExtendWith(MockitoExtension.class)
 class ConsoleRateLimitFilterTest {
 
-    @Mock
-    private SlidingWindowRateLimiter rateLimiter;
+  @Mock private SlidingWindowRateLimiter rateLimiter;
 
-    @Mock
-    private FilterChain filterChain;
+  @Mock private FilterChain filterChain;
 
-    @Mock
-    private ConsoleSecurityResponseWriter responseWriter;
+  @Mock private ConsoleSecurityResponseWriter responseWriter;
 
-    private ConsoleRateLimitFilter filter;
+  private ConsoleRateLimitFilter filter;
 
-    @BeforeEach
-    void setUp() {
-        ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
-        props.setLoginIpLimitPerMinute(3);
-        props.setSensitiveOpUserLimitPerMinute(5);
-        filter = new ConsoleRateLimitFilter(rateLimiter, props, responseWriter);
+  @BeforeEach
+  void setUp() {
+    ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
+    props.setLoginIpLimitPerMinute(3);
+    props.setSensitiveOpUserLimitPerMinute(5);
+    filter = new ConsoleRateLimitFilter(rateLimiter, props, responseWriter);
+  }
+
+  // ── disabled ──────────────────────────────────────────────────────────────
+
+  @Test
+  void shouldPassThroughWhenDisabled() throws Exception {
+    ConsoleRateLimitProperties disabledProps = new ConsoleRateLimitProperties();
+    disabledProps.setEnabled(false);
+    ConsoleRateLimitFilter disabledFilter =
+        new ConsoleRateLimitFilter(rateLimiter, disabledProps, responseWriter);
+
+    MockHttpServletRequest request = loginRequest("1.2.3.4");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    for (int i = 0; i < 5; i++) {
+      disabledFilter.doFilter(request, response, filterChain);
     }
+    verify(filterChain, times(5)).doFilter(any(), any());
+    verifyNoInteractions(rateLimiter);
+  }
 
-    // ── disabled ──────────────────────────────────────────────────────────────
+  // ── login IP rate limit ───────────────────────────────────────────────────
 
-    @Test
-    void shouldPassThroughWhenDisabled() throws Exception {
-        ConsoleRateLimitProperties disabledProps = new ConsoleRateLimitProperties();
-        disabledProps.setEnabled(false);
-        ConsoleRateLimitFilter disabledFilter =
-                new ConsoleRateLimitFilter(rateLimiter, disabledProps, responseWriter);
+  @Test
+  void shouldAllowLoginWhenRateLimiterPermits() throws Exception {
+    when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(true);
 
-        MockHttpServletRequest request = loginRequest("1.2.3.4");
-        MockHttpServletResponse response = new MockHttpServletResponse();
+    MockHttpServletRequest request = loginRequest("10.0.0.1");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    filter.doFilter(request, response, filterChain);
 
-        for (int i = 0; i < 5; i++) {
-            disabledFilter.doFilter(request, response, filterChain);
-        }
-        verify(filterChain, times(5)).doFilter(any(), any());
-        verifyNoInteractions(rateLimiter);
-    }
+    verify(filterChain).doFilter(any(), any());
+    verifyNoInteractions(responseWriter);
+  }
 
-    // ── login IP rate limit ───────────────────────────────────────────────────
+  @Test
+  void shouldRejectLoginWhenRateLimiterDenies() throws Exception {
+    when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(false);
 
-    @Test
-    void shouldAllowLoginWhenRateLimiterPermits() throws Exception {
-        when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(true);
+    MockHttpServletRequest request = loginRequest("10.0.0.2");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    filter.doFilter(request, response, filterChain);
 
-        MockHttpServletRequest request = loginRequest("10.0.0.1");
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        filter.doFilter(request, response, filterChain);
+    verify(filterChain, never()).doFilter(any(), any());
+    verify(responseWriter)
+        .write(
+            any(HttpServletResponse.class),
+            eq(HttpStatus.TOO_MANY_REQUESTS),
+            eq(ResultCode.RATE_LIMITED),
+            contains("频繁"));
+  }
 
-        verify(filterChain).doFilter(any(), any());
-        verifyNoInteractions(responseWriter);
-    }
+  @Test
+  void shouldResolveXForwardedForAsIpKey() throws Exception {
+    when(rateLimiter.tryAcquire(contains("203.0.113.5"), anyInt())).thenReturn(true);
 
-    @Test
-    void shouldRejectLoginWhenRateLimiterDenies() throws Exception {
-        when(rateLimiter.tryAcquire(contains("login:ip:"), anyInt())).thenReturn(false);
+    MockHttpServletRequest request = loginRequest("10.0.0.3");
+    request.addHeader("X-Forwarded-For", "203.0.113.5, 10.0.0.1");
 
-        MockHttpServletRequest request = loginRequest("10.0.0.2");
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        filter.doFilter(request, response, filterChain);
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-        verify(filterChain, never()).doFilter(any(), any());
-        verify(responseWriter).write(any(HttpServletResponse.class),
-                eq(HttpStatus.TOO_MANY_REQUESTS),
-                eq(ResultCode.RATE_LIMITED),
-                contains("频繁"));
-    }
+    verify(rateLimiter).tryAcquire(contains("203.0.113.5"), anyInt());
+  }
 
-    @Test
-    void shouldResolveXForwardedForAsIpKey() throws Exception {
-        when(rateLimiter.tryAcquire(contains("203.0.113.5"), anyInt())).thenReturn(true);
+  // ── non-login requests not limited ───────────────────────────────────────
 
-        MockHttpServletRequest request = loginRequest("10.0.0.3");
-        request.addHeader("X-Forwarded-For", "203.0.113.5, 10.0.0.1");
+  @Test
+  void shouldNotRateLimitGetRequests() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/auth/login");
+    request.setRemoteAddr("1.2.3.4");
+    MockHttpServletResponse response = new MockHttpServletResponse();
 
-        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
+    filter.doFilter(request, response, filterChain);
 
-        verify(rateLimiter).tryAcquire(contains("203.0.113.5"), anyInt());
-    }
+    verify(filterChain).doFilter(any(), any());
+    verifyNoInteractions(rateLimiter);
+  }
 
-    // ── non-login requests not limited ───────────────────────────────────────
+  @Test
+  void shouldNotRateLimitOtherPostEndpoints() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/jobs/launch");
+    request.setRemoteAddr("1.2.3.4");
 
-    @Test
-    void shouldNotRateLimitGetRequests() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/console/auth/login");
-        request.setRemoteAddr("1.2.3.4");
-        MockHttpServletResponse response = new MockHttpServletResponse();
+    filter.doFilter(request, new MockHttpServletResponse(), filterChain);
 
-        filter.doFilter(request, response, filterChain);
+    verify(filterChain).doFilter(any(), any());
+    verifyNoInteractions(rateLimiter);
+  }
 
-        verify(filterChain).doFilter(any(), any());
-        verifyNoInteractions(rateLimiter);
-    }
+  // ── helpers ───────────────────────────────────────────────────────────────
 
-    @Test
-    void shouldNotRateLimitOtherPostEndpoints() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/jobs/launch");
-        request.setRemoteAddr("1.2.3.4");
-
-        filter.doFilter(request, new MockHttpServletResponse(), filterChain);
-
-        verify(filterChain).doFilter(any(), any());
-        verifyNoInteractions(rateLimiter);
-    }
-
-    // ── helpers ───────────────────────────────────────────────────────────────
-
-    private MockHttpServletRequest loginRequest(String remoteAddr) {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/auth/login");
-        request.setRemoteAddr(remoteAddr);
-        return request;
-    }
+  private MockHttpServletRequest loginRequest(String remoteAddr) {
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/auth/login");
+    request.setRemoteAddr(remoteAddr);
+    return request;
+  }
 }

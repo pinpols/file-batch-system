@@ -12,19 +12,20 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-@SpringBootTest(classes = BatchWorkerExportApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(
+    classes = BatchWorkerExportApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class BatchWorkerExportApplicationIntegrationTest extends AbstractIntegrationTest {
 
-    @DynamicPropertySource
-    static void orchestratorStub(DynamicPropertyRegistry registry) {
-        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-    }
+  @DynamicPropertySource
+  static void orchestratorStub(DynamicPropertyRegistry registry) {
+    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+  }
 
-    @Autowired
-    ApplicationContext applicationContext;
+  @Autowired ApplicationContext applicationContext;
 
-    @Test
-    void contextLoads() {
-        assertThat(applicationContext).isNotNull();
-    }
+  @Test
+  void contextLoads() {
+    assertThat(applicationContext).isNotNull();
+  }
 }

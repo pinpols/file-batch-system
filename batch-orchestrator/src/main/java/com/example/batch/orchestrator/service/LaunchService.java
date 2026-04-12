@@ -5,5 +5,5 @@ import com.example.batch.common.dto.LaunchResponse;
 
 public interface LaunchService {
 
-    LaunchResponse launch(LaunchRequest request);
+  LaunchResponse launch(LaunchRequest request);
 }

@@ -7,11 +7,11 @@ import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 
 public interface TriggerService {
 
-    LaunchResponse launch(TriggerLaunchCommand command);
+  LaunchResponse launch(TriggerLaunchCommand command);
 
-    LaunchResponse launchScheduled(ScheduledTriggerCommand command);
+  LaunchResponse launchScheduled(ScheduledTriggerCommand command);
 
-    LaunchResponse createPendingCatchUp(ScheduledTriggerCommand command);
+  LaunchResponse createPendingCatchUp(ScheduledTriggerCommand command);
 
-    LaunchResponse approvePendingCatchUp(PendingCatchUpApprovalCommand command);
+  LaunchResponse approvePendingCatchUp(PendingCatchUpApprovalCommand command);
 }

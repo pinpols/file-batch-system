@@ -12,39 +12,39 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Service
 public class ConsoleRealtimeEventBridge {
 
-    private final ConsoleRealtimeEventHub realtimeEventHub;
-    private final ConsoleRealtimeRedisPublisher redisPublisher;
-    private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
+  private final ConsoleRealtimeEventHub realtimeEventHub;
+  private final ConsoleRealtimeRedisPublisher redisPublisher;
+  private final ConsoleOpsSummaryRealtimeStream summaryRealtimeStream;
 
-    public ConsoleRealtimeEventBridge(
-            ConsoleRealtimeEventHub realtimeEventHub,
-            ConsoleRealtimeRedisPublisher redisPublisher,
-            ConsoleOpsSummaryRealtimeStream summaryRealtimeStream) {
-        this.realtimeEventHub = realtimeEventHub;
-        this.redisPublisher = redisPublisher;
-        this.summaryRealtimeStream = summaryRealtimeStream;
-    }
+  public ConsoleRealtimeEventBridge(
+      ConsoleRealtimeEventHub realtimeEventHub,
+      ConsoleRealtimeRedisPublisher redisPublisher,
+      ConsoleOpsSummaryRealtimeStream summaryRealtimeStream) {
+    this.realtimeEventHub = realtimeEventHub;
+    this.redisPublisher = redisPublisher;
+    this.summaryRealtimeStream = summaryRealtimeStream;
+  }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
-        if (event == null) {
-            return;
-        }
-        // ops-summary 需要重新拉取最新摘要快照，不能直接透传一个空变更事件给前端。
-        if (event.summaryRefresh()) {
-            summaryRealtimeStream.publishRefresh(event.tenantId());
-            return;
-        }
-        // 其余 domain event 在这里先直发本机 SSE，再同步写入 Redis Pub/Sub。
-        ConsoleSseEvent sseEvent =
-                new ConsoleSseEvent(
-                        event.tenantId(),
-                        event.stream(),
-                        event.eventType(),
-                        event.cursor(),
-                        event.data(),
-                        event.emittedAt());
-        realtimeEventHub.publish(sseEvent);
-        redisPublisher.publish(sseEvent);
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+  public void onDomainEvent(ConsoleRealtimeDomainEvent event) {
+    if (event == null) {
+      return;
     }
+    // ops-summary 需要重新拉取最新摘要快照，不能直接透传一个空变更事件给前端。
+    if (event.summaryRefresh()) {
+      summaryRealtimeStream.publishRefresh(event.tenantId());
+      return;
+    }
+    // 其余 domain event 在这里先直发本机 SSE，再同步写入 Redis Pub/Sub。
+    ConsoleSseEvent sseEvent =
+        new ConsoleSseEvent(
+            event.tenantId(),
+            event.stream(),
+            event.eventType(),
+            event.cursor(),
+            event.data(),
+            event.emittedAt());
+    realtimeEventHub.publish(sseEvent);
+    redisPublisher.publish(sseEvent);
+  }
 }

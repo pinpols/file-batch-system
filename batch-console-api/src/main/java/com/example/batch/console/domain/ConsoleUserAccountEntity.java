@@ -7,79 +7,79 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table(schema = "batch", name = "console_user_account")
 public class ConsoleUserAccountEntity {
 
-    @Id private Long id;
+  @Id private Long id;
 
-    @Column("tenant_id")
-    private String tenantId;
+  @Column("tenant_id")
+  private String tenantId;
 
-    @Column("username")
-    private String username;
+  @Column("username")
+  private String username;
 
-    @Column("display_name")
-    private String displayName;
+  @Column("display_name")
+  private String displayName;
 
-    @Column("password_hash")
-    private String passwordHash;
+  @Column("password_hash")
+  private String passwordHash;
 
-    @Column("authorities_csv")
-    private String authoritiesCsv;
+  @Column("authorities_csv")
+  private String authoritiesCsv;
 
-    @Column("enabled")
-    private boolean enabled;
+  @Column("enabled")
+  private boolean enabled;
 
-    public Long getId() {
-        return id;
-    }
+  public Long getId() {
+    return id;
+  }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+  public void setId(Long id) {
+    this.id = id;
+  }
 
-    public String getTenantId() {
-        return tenantId;
-    }
+  public String getTenantId() {
+    return tenantId;
+  }
 
-    public void setTenantId(String tenantId) {
-        this.tenantId = tenantId;
-    }
+  public void setTenantId(String tenantId) {
+    this.tenantId = tenantId;
+  }
 
-    public String getUsername() {
-        return username;
-    }
+  public String getUsername() {
+    return username;
+  }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
+  public void setUsername(String username) {
+    this.username = username;
+  }
 
-    public String getDisplayName() {
-        return displayName;
-    }
+  public String getDisplayName() {
+    return displayName;
+  }
 
-    public void setDisplayName(String displayName) {
-        this.displayName = displayName;
-    }
+  public void setDisplayName(String displayName) {
+    this.displayName = displayName;
+  }
 
-    public String getPasswordHash() {
-        return passwordHash;
-    }
+  public String getPasswordHash() {
+    return passwordHash;
+  }
 
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
+  public void setPasswordHash(String passwordHash) {
+    this.passwordHash = passwordHash;
+  }
 
-    public String getAuthoritiesCsv() {
-        return authoritiesCsv;
-    }
+  public String getAuthoritiesCsv() {
+    return authoritiesCsv;
+  }
 
-    public void setAuthoritiesCsv(String authoritiesCsv) {
-        this.authoritiesCsv = authoritiesCsv;
-    }
+  public void setAuthoritiesCsv(String authoritiesCsv) {
+    this.authoritiesCsv = authoritiesCsv;
+  }
 
-    public boolean isEnabled() {
-        return enabled;
-    }
+  public boolean isEnabled() {
+    return enabled;
+  }
 
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
+  }
 }

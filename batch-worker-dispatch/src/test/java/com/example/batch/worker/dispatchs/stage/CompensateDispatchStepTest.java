@@ -23,79 +23,78 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CompensateDispatchStepTest {
 
-    @Mock
-    private FileDispatchRepository fileDispatchRepository;
-    @Mock
-    private PlatformFileRuntimeRepository runtimeRepository;
+  @Mock private FileDispatchRepository fileDispatchRepository;
+  @Mock private PlatformFileRuntimeRepository runtimeRepository;
 
-    private CompensateDispatchStep step;
+  private CompensateDispatchStep step;
 
-    @BeforeEach
-    void setUp() {
-        step = new CompensateDispatchStep(fileDispatchRepository, runtimeRepository);
-    }
+  @BeforeEach
+  void setUp() {
+    step = new CompensateDispatchStep(fileDispatchRepository, runtimeRepository);
+  }
 
-    @Test
-    void stage_returnsCompensate() {
-        assertThat(step.stage()).isEqualTo(DispatchStage.COMPENSATE);
-    }
+  @Test
+  void stage_returnsCompensate() {
+    assertThat(step.stage()).isEqualTo(DispatchStage.COMPENSATE);
+  }
 
-    @Test
-    void execute_failsWhenNoPayload() {
-        DispatchJobContext context = new DispatchJobContext();
-        context.setTenantId("t1");
-        DispatchStageResult result = step.execute(context);
-        assertThat(result.success()).isFalse();
-        assertThat(result.code()).isEqualTo("DISPATCH_COMPENSATE_NO_PAYLOAD");
-    }
+  @Test
+  void execute_failsWhenNoPayload() {
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId("t1");
+    DispatchStageResult result = step.execute(context);
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("DISPATCH_COMPENSATE_NO_PAYLOAD");
+  }
 
-    @Test
-    void execute_failsWhenMarkCompensatedReturnsZero() {
-        when(runtimeRepository.toLong(any())).thenReturn(10L);
-        when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(0);
+  @Test
+  void execute_failsWhenMarkCompensatedReturnsZero() {
+    when(runtimeRepository.toLong(any())).thenReturn(10L);
+    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(0);
 
-        DispatchJobContext context = buildContext();
-        DispatchStageResult result = step.execute(context);
+    DispatchJobContext context = buildContext();
+    DispatchStageResult result = step.execute(context);
 
-        assertThat(result.success()).isFalse();
-        assertThat(result.code()).isEqualTo("DISPATCH_COMPENSATE_FAILED");
-        verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
-    }
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("DISPATCH_COMPENSATE_FAILED");
+    verify(runtimeRepository, never()).updateFileStatus(any(), any(), any());
+  }
 
-    @Test
-    void execute_succeedsAndUpdatesFileStatusToFailed() {
-        when(runtimeRepository.toLong(any())).thenReturn(10L);
-        when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
+  @Test
+  void execute_succeedsAndUpdatesFileStatusToFailed() {
+    when(runtimeRepository.toLong(any())).thenReturn(10L);
+    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
 
-        DispatchJobContext context = buildContext();
-        DispatchStageResult result = step.execute(context);
+    DispatchJobContext context = buildContext();
+    DispatchStageResult result = step.execute(context);
 
-        assertThat(result.success()).isTrue();
-        verify(runtimeRepository).updateFileStatus(eq(10L), eq("FAILED"), any());
-    }
+    assertThat(result.success()).isTrue();
+    verify(runtimeRepository).updateFileStatus(eq(10L), eq("FAILED"), any());
+  }
 
-    @Test
-    void execute_writesAuditLog() {
-        when(runtimeRepository.toLong(any())).thenReturn(10L);
-        when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
+  @Test
+  void execute_writesAuditLog() {
+    when(runtimeRepository.toLong(any())).thenReturn(10L);
+    when(fileDispatchRepository.markCompensated(any(), any(), any(), any(), any())).thenReturn(1);
 
-        DispatchJobContext context = buildContext();
-        context.setWorkerId("w1");
-        context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
-        context.getAttributes().put("externalRequestId", "ext-1");
-        step.execute(context);
+    DispatchJobContext context = buildContext();
+    context.setWorkerId("w1");
+    context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
+    context.getAttributes().put("externalRequestId", "ext-1");
+    step.execute(context);
 
-        verify(runtimeRepository).appendAudit(any());
-    }
+    verify(runtimeRepository).appendAudit(any());
+  }
 
-    private DispatchJobContext buildContext() {
-        DispatchPayload payload = new DispatchPayload("10", null, "CH1", "target", null, null, null, null, null, null);
-        DispatchJobContext context = new DispatchJobContext();
-        context.setTenantId("t1");
-        context.setWorkerId("w1");
-        context.getAttributes().put("dispatchPayload", payload);
-        context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
-        context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
-        return context;
-    }
+  private DispatchJobContext buildContext() {
+    DispatchPayload payload =
+        new DispatchPayload("10", null, "CH1", "target", null, null, null, null, null, null);
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId("t1");
+    context.setWorkerId("w1");
+    context.getAttributes().put("dispatchPayload", payload);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
+    context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, "tr-1");
+    return context;
+  }
 }

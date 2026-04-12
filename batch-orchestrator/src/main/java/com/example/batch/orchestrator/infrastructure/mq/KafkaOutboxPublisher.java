@@ -11,16 +11,13 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
-
-import lombok.RequiredArgsConstructor;
-
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.stereotype.Component;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
 
 /**
  * Outbox → Kafka 的投递器。
@@ -44,116 +41,102 @@ import java.util.concurrent.CompletionException;
 @RequiredArgsConstructor
 public class KafkaOutboxPublisher implements OutboxPublisher {
 
-    private final KafkaTemplate<String, String> kafkaTemplate;
-    private final BatchOrchestratorGovernanceProperties governance;
-    private final EventDeliveryLogMapper eventDeliveryLogMapper;
+  private final KafkaTemplate<String, String> kafkaTemplate;
+  private final BatchOrchestratorGovernanceProperties governance;
+  private final EventDeliveryLogMapper eventDeliveryLogMapper;
 
-    @Override
-    public CompletableFuture<Boolean> publish(OutboxEventEntity event) {
-        String topic = governance.mqTopics().resolveDispatchTopic(event.getEventType());
-        if (topic != null) {
-            // 任务派发：payloadJson 是 TaskDispatchMessage 的 JSON，直接按 eventKey 作为 Kafka key 投递。
-            TaskDispatchMessage dispatchMessage =
-                    JsonUtils.fromJson(event.getPayloadJson(), TaskDispatchMessage.class);
-            String targetTopic =
-                    dispatchMessage != null && dispatchMessage.selectedWorkerId() != null
-                            ? BatchTopics.directDispatchTopic(
-                                    topic, dispatchMessage.selectedWorkerId())
-                            : topic;
-            String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
-            return kafkaTemplate
-                    .send(targetTopic, event.getEventKey(), event.getPayloadJson())
-                    .toCompletableFuture()
-                    .handle(
-                            (result, ex) -> {
-                                if (ex == null) {
-                                    recordDelivery(
-                                            event,
-                                            targetTopic,
-                                            workerId,
-                                            OutboxPublishStatus.PUBLISHED.code(),
-                                            null);
-                                    return true;
-                                }
-                                recordDelivery(
-                                        event,
-                                        targetTopic,
-                                        workerId,
-                                        OutboxPublishStatus.FAILED.code(),
-                                        ex.getMessage());
-                                throw new CompletionException(ex);
-                            });
-        }
-
-        // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
-        String fallbackTopic = governance.outbox().getDefaultTopic();
-        BatchEventMessage message =
-                new BatchEventMessage(
-                        "v1",
-                        BatchMessageType.OUTBOX_EVENT,
-                        event.getTenantId(),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        event.getTraceId(),
-                        event.getEventKey(),
-                        event.getAggregateType(),
-                        governance.outbox().getProducerName(),
-                        event.getEventType(),
-                        fallbackTopic,
-                        event.getEventKey(),
-                        event.getCreatedAt(),
-                        Map.of("payload", JsonUtils.fromJson(event.getPayloadJson(), Object.class)),
-                        Map.of("aggregateId", event.getAggregateId()));
-        return kafkaTemplate
-                .send(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message))
-                .toCompletableFuture()
-                .handle(
-                        (result, ex) -> {
-                            if (ex == null) {
-                                recordDelivery(
-                                        event,
-                                        fallbackTopic,
-                                        null,
-                                        OutboxPublishStatus.PUBLISHED.code(),
-                                        null);
-                                return true;
-                            }
-                            recordDelivery(
-                                    event,
-                                    fallbackTopic,
-                                    null,
-                                    OutboxPublishStatus.FAILED.code(),
-                                    ex.getMessage());
-                            throw new CompletionException(ex);
-                        });
+  @Override
+  public CompletableFuture<Boolean> publish(OutboxEventEntity event) {
+    String topic = governance.mqTopics().resolveDispatchTopic(event.getEventType());
+    if (topic != null) {
+      // 任务派发：payloadJson 是 TaskDispatchMessage 的 JSON，直接按 eventKey 作为 Kafka key 投递。
+      TaskDispatchMessage dispatchMessage =
+          JsonUtils.fromJson(event.getPayloadJson(), TaskDispatchMessage.class);
+      String targetTopic =
+          dispatchMessage != null && dispatchMessage.selectedWorkerId() != null
+              ? BatchTopics.directDispatchTopic(topic, dispatchMessage.selectedWorkerId())
+              : topic;
+      String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
+      return kafkaTemplate
+          .send(targetTopic, event.getEventKey(), event.getPayloadJson())
+          .toCompletableFuture()
+          .handle(
+              (result, ex) -> {
+                if (ex == null) {
+                  recordDelivery(
+                      event, targetTopic, workerId, OutboxPublishStatus.PUBLISHED.code(), null);
+                  return true;
+                }
+                recordDelivery(
+                    event,
+                    targetTopic,
+                    workerId,
+                    OutboxPublishStatus.FAILED.code(),
+                    ex.getMessage());
+                throw new CompletionException(ex);
+              });
     }
 
-    private void recordDelivery(
-            OutboxEventEntity event,
-            String targetTopic,
-            String targetWorkerId,
-            String deliveryStatus,
-            String errorMessage) {
-        EventDeliveryLogEntity log = new EventDeliveryLogEntity();
-        log.setTenantId(event.getTenantId());
-        log.setOutboxEventId(event.getId());
-        log.setEventType(event.getEventType());
-        log.setEventKey(event.getEventKey());
-        log.setTargetTopic(targetTopic);
-        log.setTargetWorkerId(targetWorkerId);
-        log.setDeliveryStatus(deliveryStatus);
-        log.setDeliveryAttempt(
-                event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1);
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("aggregateType", event.getAggregateType());
-        summary.put("aggregateId", event.getAggregateId());
-        summary.put("payloadPreview", event.getPayloadJson());
-        log.setDeliverySummary(JsonUtils.toJson(summary));
-        log.setErrorMessage(errorMessage);
-        log.setTraceId(event.getTraceId());
-        eventDeliveryLogMapper.insert(log);
-    }
+    // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
+    String fallbackTopic = governance.outbox().getDefaultTopic();
+    BatchEventMessage message =
+        new BatchEventMessage(
+            "v1",
+            BatchMessageType.OUTBOX_EVENT,
+            event.getTenantId(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            event.getTraceId(),
+            event.getEventKey(),
+            event.getAggregateType(),
+            governance.outbox().getProducerName(),
+            event.getEventType(),
+            fallbackTopic,
+            event.getEventKey(),
+            event.getCreatedAt(),
+            Map.of("payload", JsonUtils.fromJson(event.getPayloadJson(), Object.class)),
+            Map.of("aggregateId", event.getAggregateId()));
+    return kafkaTemplate
+        .send(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message))
+        .toCompletableFuture()
+        .handle(
+            (result, ex) -> {
+              if (ex == null) {
+                recordDelivery(
+                    event, fallbackTopic, null, OutboxPublishStatus.PUBLISHED.code(), null);
+                return true;
+              }
+              recordDelivery(
+                  event, fallbackTopic, null, OutboxPublishStatus.FAILED.code(), ex.getMessage());
+              throw new CompletionException(ex);
+            });
+  }
+
+  private void recordDelivery(
+      OutboxEventEntity event,
+      String targetTopic,
+      String targetWorkerId,
+      String deliveryStatus,
+      String errorMessage) {
+    EventDeliveryLogEntity log = new EventDeliveryLogEntity();
+    log.setTenantId(event.getTenantId());
+    log.setOutboxEventId(event.getId());
+    log.setEventType(event.getEventType());
+    log.setEventKey(event.getEventKey());
+    log.setTargetTopic(targetTopic);
+    log.setTargetWorkerId(targetWorkerId);
+    log.setDeliveryStatus(deliveryStatus);
+    log.setDeliveryAttempt(event.getPublishAttempt() == null ? 1 : event.getPublishAttempt() + 1);
+    Map<String, Object> summary = new LinkedHashMap<>();
+    summary.put("aggregateType", event.getAggregateType());
+    summary.put("aggregateId", event.getAggregateId());
+    summary.put("payloadPreview", event.getPayloadJson());
+    log.setDeliverySummary(JsonUtils.toJson(summary));
+    log.setErrorMessage(errorMessage);
+    log.setTraceId(event.getTraceId());
+    eventDeliveryLogMapper.insert(log);
+  }
 }

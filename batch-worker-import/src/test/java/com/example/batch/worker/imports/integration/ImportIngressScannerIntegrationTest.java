@@ -22,94 +22,92 @@ import org.springframework.test.context.TestPropertySource;
 /**
  * 集成测试：ImportIngressScanner 发现放置在 MinIO 中的 CSV 文件并将其注册为数据库中的平台文件记录。
  *
- * <p>此处通过 {@code @TestPropertySource} 启用扫描器，覆盖 application-test.yml 中的
- * {@code scanner.enabled=false}。稳定窗口设为 0，文件立即被视为稳定。
+ * <p>此处通过 {@code @TestPropertySource} 启用扫描器，覆盖 application-test.yml 中的 {@code
+ * scanner.enabled=false}。稳定窗口设为 0，文件立即被视为稳定。
  */
 @SpringBootTest(
-        classes = BatchWorkerImportApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@TestPropertySource(properties = {
-        "batch.worker.import.tenant-id=t1",
-        "batch.worker.import.scanner.enabled=true",
-        "batch.worker.import.scanner.stability-window-seconds=0",
-        "batch.worker.import.scanner.prefix=ingress/",
-        "batch.worker.import.scanner.require-done-file=false"
-})
+    classes = BatchWorkerImportApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@TestPropertySource(
+    properties = {
+      "batch.worker.import.tenant-id=t1",
+      "batch.worker.import.scanner.enabled=true",
+      "batch.worker.import.scanner.stability-window-seconds=0",
+      "batch.worker.import.scanner.prefix=ingress/",
+      "batch.worker.import.scanner.require-done-file=false"
+    })
 class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
 
-    @DynamicPropertySource
-    static void orchestratorStub(DynamicPropertyRegistry registry) {
-        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-    }
+  @DynamicPropertySource
+  static void orchestratorStub(DynamicPropertyRegistry registry) {
+    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+  }
 
-    @Autowired
-    private ImportIngressScanner scanner;
+  @Autowired private ImportIngressScanner scanner;
 
-    @Autowired
-    private PlatformFileRuntimeRepository runtimeRepository;
+  @Autowired private PlatformFileRuntimeRepository runtimeRepository;
 
-    @Test
-    void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
-        String objectName = "ingress/it-scan-test.csv";
-        String bucket = minioBucket();
+  @Test
+  void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
+    String objectName = "ingress/it-scan-test.csv";
+    String bucket = minioBucket();
 
-        // 上传一个最小化的 CSV 到 MinIO
-        byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
-        MinioClient client = MinioClient.builder()
-                .endpoint(minioEndpoint())
-                .credentials("minioadmin", "minioadmin123")
-                .build();
-        client.putObject(
-                PutObjectArgs.builder()
-                        .bucket(bucket)
-                        .object(objectName)
-                        .stream(new ByteArrayInputStream(content), content.length, -1)
-                        .contentType("text/csv")
-                        .build()
-        );
+    // 上传一个最小化的 CSV 到 MinIO
+    byte[] content = "id,name\n1,Alice\n".getBytes(StandardCharsets.UTF_8);
+    MinioClient client =
+        MinioClient.builder()
+            .endpoint(minioEndpoint())
+            .credentials("minioadmin", "minioadmin123")
+            .build();
+    client.putObject(
+        PutObjectArgs.builder().bucket(bucket).object(objectName).stream(
+                new ByteArrayInputStream(content), content.length, -1)
+            .contentType("text/csv")
+            .build());
 
-        // 调度器中扫描已禁用，但我们直接调用 scan()
-        scanner.scan();
+    // 调度器中扫描已禁用，但我们直接调用 scan()
+    scanner.scan();
 
-        assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
-        Map<String, Object> row = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
-        assertThat(row).isNotEmpty();
-        assertThat(row.get("tenant_id")).isEqualTo("t1");
-        assertThat(row.get("storage_bucket")).isEqualTo(bucket);
-        assertThat(row.get("storage_path")).isEqualTo(objectName);
-        assertThat(row.get("file_status")).isEqualTo("RECEIVED");
-        assertThat(((Number) row.get("file_size_bytes")).longValue()).isEqualTo(content.length);
-    }
+    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+    Map<String, Object> row =
+        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+    assertThat(row).isNotEmpty();
+    assertThat(row.get("tenant_id")).isEqualTo("t1");
+    assertThat(row.get("storage_bucket")).isEqualTo(bucket);
+    assertThat(row.get("storage_path")).isEqualTo(objectName);
+    assertThat(row.get("file_status")).isEqualTo("RECEIVED");
+    assertThat(((Number) row.get("file_size_bytes")).longValue()).isEqualTo(content.length);
+  }
 
-    @Test
-    void shouldNotRegisterAlreadyKnownFile() throws Exception {
-        String objectName = "ingress/it-scan-already-known.csv";
-        String bucket = minioBucket();
+  @Test
+  void shouldNotRegisterAlreadyKnownFile() throws Exception {
+    String objectName = "ingress/it-scan-already-known.csv";
+    String bucket = minioBucket();
 
-        byte[] content = "id,name\n2,Bob\n".getBytes(StandardCharsets.UTF_8);
-        MinioClient client = MinioClient.builder()
-                .endpoint(minioEndpoint())
-                .credentials("minioadmin", "minioadmin123")
-                .build();
-        client.putObject(
-                PutObjectArgs.builder()
-                        .bucket(bucket)
-                        .object(objectName)
-                        .stream(new ByteArrayInputStream(content), content.length, -1)
-                        .contentType("text/csv")
-                        .build()
-        );
+    byte[] content = "id,name\n2,Bob\n".getBytes(StandardCharsets.UTF_8);
+    MinioClient client =
+        MinioClient.builder()
+            .endpoint(minioEndpoint())
+            .credentials("minioadmin", "minioadmin123")
+            .build();
+    client.putObject(
+        PutObjectArgs.builder().bucket(bucket).object(objectName).stream(
+                new ByteArrayInputStream(content), content.length, -1)
+            .contentType("text/csv")
+            .build());
 
-        // 第一次扫描：注册文件
-        scanner.scan();
-        assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
-        Map<String, Object> first = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
-        long firstId = ((Number) first.get("id")).longValue();
+    // 第一次扫描：注册文件
+    scanner.scan();
+    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+    Map<String, Object> first =
+        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+    long firstId = ((Number) first.get("id")).longValue();
 
-        // 第二次扫描：不应创建重复记录（幂等）
-        scanner.scan();
-        assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
-        Map<String, Object> after = runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
-        assertThat(((Number) after.get("id")).longValue()).isEqualTo(firstId);
-    }
+    // 第二次扫描：不应创建重复记录（幂等）
+    scanner.scan();
+    assertThat(runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName)).isTrue();
+    Map<String, Object> after =
+        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, objectName);
+    assertThat(((Number) after.get("id")).longValue()).isEqualTo(firstId);
+  }
 }

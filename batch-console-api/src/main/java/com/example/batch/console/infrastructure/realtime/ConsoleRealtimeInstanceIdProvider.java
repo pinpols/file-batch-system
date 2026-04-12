@@ -1,11 +1,9 @@
 package com.example.batch.console.infrastructure.realtime;
 
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
-
-import java.util.UUID;
 
 /**
  * 控制台实时实例标识。
@@ -16,38 +14,38 @@ import java.util.UUID;
 @Slf4j
 public class ConsoleRealtimeInstanceIdProvider {
 
-    private final String instanceId;
+  private final String instanceId;
 
-    public ConsoleRealtimeInstanceIdProvider(Environment environment) {
-        this.instanceId = resolveInstanceId(environment);
-    }
+  public ConsoleRealtimeInstanceIdProvider(Environment environment) {
+    this.instanceId = resolveInstanceId(environment);
+  }
 
-    public String instanceId() {
-        return instanceId;
-    }
+  public String instanceId() {
+    return instanceId;
+  }
 
-    private String resolveInstanceId(Environment environment) {
-        String configured =
-                firstNonBlank(
-                        environment.getProperty("batch.console.instance-id"),
-                        environment.getProperty("BATCH_CONSOLE_INSTANCE_ID"));
-        if (configured != null) {
-            return configured;
-        }
-        String generated = UUID.randomUUID().toString();
-        log.warn(
-                "BATCH_CONSOLE_INSTANCE_ID is not configured; generated random console realtime"
-                    + " instance id={}",
-                generated);
-        return generated;
+  private String resolveInstanceId(Environment environment) {
+    String configured =
+        firstNonBlank(
+            environment.getProperty("batch.console.instance-id"),
+            environment.getProperty("BATCH_CONSOLE_INSTANCE_ID"));
+    if (configured != null) {
+      return configured;
     }
+    String generated = UUID.randomUUID().toString();
+    log.warn(
+        "BATCH_CONSOLE_INSTANCE_ID is not configured; generated random console realtime"
+            + " instance id={}",
+        generated);
+    return generated;
+  }
 
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value.trim();
-            }
-        }
-        return null;
+  private String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        return value.trim();
+      }
     }
+    return null;
+  }
 }

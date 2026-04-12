@@ -20,99 +20,108 @@ import org.junit.jupiter.api.Test;
 
 class ConsoleApiKeyServiceTest {
 
-    private ConsoleApiKeyRepository repository;
-    private ConsoleTenantGuard tenantGuard;
-    private ConsoleApiKeyService service;
+  private ConsoleApiKeyRepository repository;
+  private ConsoleTenantGuard tenantGuard;
+  private ConsoleApiKeyService service;
 
-    @BeforeEach
-    void setUp() {
-        repository = mock(ConsoleApiKeyRepository.class);
-        tenantGuard = mock(ConsoleTenantGuard.class);
-        service = new ConsoleApiKeyService(repository, tenantGuard);
-        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    }
+  @BeforeEach
+  void setUp() {
+    repository = mock(ConsoleApiKeyRepository.class);
+    tenantGuard = mock(ConsoleTenantGuard.class);
+    service = new ConsoleApiKeyService(repository, tenantGuard);
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+  }
 
-    @Test
-    void shouldListApiKeys() {
-        ApiKeyEntity entity = new ApiKeyEntity();
-        entity.setId(1L);
-        entity.setKeyName("my-key");
-        when(repository.findAllByTenant("t1")).thenReturn(List.of(entity));
+  @Test
+  void shouldListApiKeys() {
+    ApiKeyEntity entity = new ApiKeyEntity();
+    entity.setId(1L);
+    entity.setKeyName("my-key");
+    when(repository.findAllByTenant("t1")).thenReturn(List.of(entity));
 
-        List<ApiKeyEntity> result = service.list("t1");
+    List<ApiKeyEntity> result = service.list("t1");
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getKeyName()).isEqualTo("my-key");
-    }
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0).getKeyName()).isEqualTo("my-key");
+  }
 
-    @Test
-    void shouldReturnDetailById() {
-        ApiKeyEntity entity = new ApiKeyEntity();
-        entity.setId(1L);
-        entity.setKeyName("my-key");
-        when(repository.findByTenantAndId("t1", 1L)).thenReturn(Optional.of(entity));
+  @Test
+  void shouldReturnDetailById() {
+    ApiKeyEntity entity = new ApiKeyEntity();
+    entity.setId(1L);
+    entity.setKeyName("my-key");
+    when(repository.findByTenantAndId("t1", 1L)).thenReturn(Optional.of(entity));
 
-        ApiKeyEntity result = service.detail("t1", 1L);
+    ApiKeyEntity result = service.detail("t1", 1L);
 
-        assertThat(result.getKeyName()).isEqualTo("my-key");
-    }
+    assertThat(result.getKeyName()).isEqualTo("my-key");
+  }
 
-    @Test
-    void shouldThrowNotFoundWhenDetailMissing() {
-        when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
+  @Test
+  void shouldThrowNotFoundWhenDetailMissing() {
+    when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.detail("t1", 99L))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("not found");
-    }
+    assertThatThrownBy(() -> service.detail("t1", 99L))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("not found");
+  }
 
-    @Test
-    void shouldCreateApiKeyWithBkPrefix() {
-        when(repository.findByTenantAndName("t1", "new-key")).thenReturn(Optional.empty());
+  @Test
+  void shouldCreateApiKeyWithBkPrefix() {
+    when(repository.findByTenantAndName("t1", "new-key")).thenReturn(Optional.empty());
 
-        ApiKeyEntity created = new ApiKeyEntity();
-        created.setId(1L);
-        created.setKeyName("new-key");
-        when(repository.findByTenantAndName("t1", "new-key"))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(created));
+    ApiKeyEntity created = new ApiKeyEntity();
+    created.setId(1L);
+    created.setKeyName("new-key");
+    when(repository.findByTenantAndName("t1", "new-key"))
+        .thenReturn(Optional.empty())
+        .thenReturn(Optional.of(created));
 
-        Instant expiresAt = Instant.now().plusSeconds(86400);
-        ConsoleApiKeyService.CreateResult result = service.create("t1", "new-key", "read", expiresAt, "admin");
+    Instant expiresAt = Instant.now().plusSeconds(86400);
+    ConsoleApiKeyService.CreateResult result =
+        service.create("t1", "new-key", "read", expiresAt, "admin");
 
-        assertThat(result.rawKey()).startsWith("bk_");
-        assertThat(result.entity().getKeyName()).isEqualTo("new-key");
-        verify(repository).insert(eq("t1"), eq("new-key"), anyString(), anyString(), eq("read"), eq(expiresAt), eq("admin"));
-    }
+    assertThat(result.rawKey()).startsWith("bk_");
+    assertThat(result.entity().getKeyName()).isEqualTo("new-key");
+    verify(repository)
+        .insert(
+            eq("t1"),
+            eq("new-key"),
+            anyString(),
+            anyString(),
+            eq("read"),
+            eq(expiresAt),
+            eq("admin"));
+  }
 
-    @Test
-    void shouldThrowConflictWhenNameExists() {
-        ApiKeyEntity existing = new ApiKeyEntity();
-        existing.setKeyName("dup-key");
-        when(repository.findByTenantAndName("t1", "dup-key")).thenReturn(Optional.of(existing));
+  @Test
+  void shouldThrowConflictWhenNameExists() {
+    ApiKeyEntity existing = new ApiKeyEntity();
+    existing.setKeyName("dup-key");
+    when(repository.findByTenantAndName("t1", "dup-key")).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> service.create("t1", "dup-key", "read", Instant.now(), "admin"))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("already exists");
-    }
+    assertThatThrownBy(() -> service.create("t1", "dup-key", "read", Instant.now(), "admin"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("already exists");
+  }
 
-    @Test
-    void shouldRevokeApiKey() {
-        ApiKeyEntity entity = new ApiKeyEntity();
-        entity.setId(1L);
-        when(repository.findByTenantAndId("t1", 1L)).thenReturn(Optional.of(entity));
+  @Test
+  void shouldRevokeApiKey() {
+    ApiKeyEntity entity = new ApiKeyEntity();
+    entity.setId(1L);
+    when(repository.findByTenantAndId("t1", 1L)).thenReturn(Optional.of(entity));
 
-        service.revoke("t1", 1L, "admin");
+    service.revoke("t1", 1L, "admin");
 
-        verify(repository).revoke("t1", 1L, "admin");
-    }
+    verify(repository).revoke("t1", 1L, "admin");
+  }
 
-    @Test
-    void shouldThrowNotFoundWhenRevokeIdMissing() {
-        when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
+  @Test
+  void shouldThrowNotFoundWhenRevokeIdMissing() {
+    when(repository.findByTenantAndId("t1", 99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.revoke("t1", 99L, "admin"))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("not found");
-    }
+    assertThatThrownBy(() -> service.revoke("t1", 99L, "admin"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("not found");
+  }
 }

@@ -1,9 +1,7 @@
 package com.example.batch.console.infrastructure.realtime;
 
 import com.example.batch.common.utils.JsonUtils;
-
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -16,27 +14,27 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleRealtimeRedisPublisher {
 
-    static final String CHANNEL_KEY = "batch:console:realtime";
+  static final String CHANNEL_KEY = "batch:console:realtime";
 
-    private final StringRedisTemplate redisTemplate;
-    private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
-    private final ConsoleRealtimeReplayStore replayStore;
+  private final StringRedisTemplate redisTemplate;
+  private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
+  private final ConsoleRealtimeReplayStore replayStore;
 
-    public void publish(ConsoleSseEvent event) {
-        if (event == null) {
-            return;
-        }
-        ConsoleRealtimeStreamEnvelope envelope =
-                new ConsoleRealtimeStreamEnvelope(
-                        instanceIdProvider.instanceId(),
-                        event.tenantId(),
-                        event.stream(),
-                        event.eventType(),
-                        event.cursor(),
-                        false,
-                        event.data() == null ? "" : JsonUtils.toJson(event.data()),
-                        event.emittedAt());
-        replayStore.append(envelope);
-        redisTemplate.convertAndSend(CHANNEL_KEY, JsonUtils.toJson(envelope));
+  public void publish(ConsoleSseEvent event) {
+    if (event == null) {
+      return;
     }
+    ConsoleRealtimeStreamEnvelope envelope =
+        new ConsoleRealtimeStreamEnvelope(
+            instanceIdProvider.instanceId(),
+            event.tenantId(),
+            event.stream(),
+            event.eventType(),
+            event.cursor(),
+            false,
+            event.data() == null ? "" : JsonUtils.toJson(event.data()),
+            event.emittedAt());
+    replayStore.append(envelope);
+    redisTemplate.convertAndSend(CHANNEL_KEY, JsonUtils.toJson(envelope));
+  }
 }

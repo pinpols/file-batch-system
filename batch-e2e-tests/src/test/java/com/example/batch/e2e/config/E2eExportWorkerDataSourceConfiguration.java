@@ -8,13 +8,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class E2eExportWorkerDataSourceConfiguration {
 
-    @Bean(name = "exportPlatformDataSource")
-    public DataSource exportPlatformDataSource(@Qualifier("dataSource") DataSource dataSource) {
-        return dataSource;
-    }
+  @Bean(name = "exportPlatformDataSource")
+  public DataSource exportPlatformDataSource(@Qualifier("dataSource") DataSource dataSource) {
+    return dataSource;
+  }
 
-    @Bean(name = "exportBusinessDataSource")
-    public DataSource exportBusinessDataSource(@Qualifier("dataSource") DataSource dataSource) {
-        return dataSource;
-    }
+  @Bean(name = "exportBusinessDataSource")
+  public DataSource exportBusinessDataSource(@Qualifier("dataSource") DataSource dataSource) {
+    return dataSource;
+  }
 }

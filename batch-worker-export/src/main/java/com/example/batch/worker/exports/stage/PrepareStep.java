@@ -1,13 +1,13 @@
 package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
-import com.example.batch.worker.exports.domain.ExportPayload;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.exports.domain.ExportJobContext;
+import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.domain.ExportWorkerType;
-import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -18,201 +18,222 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/**
- * 导出准备阶段：解析 payload、加载模板配置、确定文件名和对象路径。
- */
+/** 导出准备阶段：解析 payload、加载模板配置、确定文件名和对象路径。 */
 @Component
 public class PrepareStep implements ExportStageStep {
 
-    private final ObjectMapper objectMapper;
-    private final PlatformFileRuntimeRepository runtimeRepository;
+  private final ObjectMapper objectMapper;
+  private final PlatformFileRuntimeRepository runtimeRepository;
 
-    public PrepareStep(ObjectMapper objectMapper, PlatformFileRuntimeRepository runtimeRepository) {
-        this.objectMapper = objectMapper;
-        this.runtimeRepository = runtimeRepository;
+  public PrepareStep(ObjectMapper objectMapper, PlatformFileRuntimeRepository runtimeRepository) {
+    this.objectMapper = objectMapper;
+    this.runtimeRepository = runtimeRepository;
+  }
+
+  @Override
+  public ExportStage stage() {
+    return ExportStage.PREPARE;
+  }
+
+  @Override
+  public ExportStageResult execute(ExportJobContext context) {
+    if (context == null
+        || !StringUtils.hasText(context.getTenantId())
+        || !StringUtils.hasText(context.getRawPayload())) {
+      return ExportStageResult.failure(
+          stage(), "EXPORT_PREPARE_INVALID", "tenantId or payload is blank");
     }
-
-    @Override
-    public ExportStage stage() {
-        return ExportStage.PREPARE;
+    try {
+      ExportPayload payload =
+          context.getAttributes().get("exportPayload") instanceof ExportPayload exportPayload
+              ? exportPayload
+              : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
+      context.getAttributes().put("exportPayload", payload);
+      Map<String, Object> templateConfig = Map.of();
+      if (StringUtils.hasText(payload.templateCode())) {
+        templateConfig =
+            runtimeRepository.loadLatestTemplateConfig(
+                context.getTenantId(), payload.templateCode(), ExportWorkerType.EXPORT);
+        if (!templateConfig.isEmpty()) {
+          context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+        }
+      }
+      String fileFormatType = resolveText(templateConfig.get("file_format_type"), "JSON");
+      String fileName = resolveFileName(context, payload, templateConfig, fileFormatType);
+      String finalObjectName = resolveObjectName(context, payload, fileName);
+      String tempObjectName =
+          BatchFileConstants.tempObjectName(
+              context.getTenantId(), resolveBizDate(context, payload), fileName);
+      Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
+      context.getAttributes().put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, exportSnapshot);
+      context.getAttributes().put("fileName", fileName);
+      context.getAttributes().put("exportFileFormatType", fileFormatType);
+      context.getAttributes().put("objectName", finalObjectName);
+      context.getAttributes().put("tempObjectName", tempObjectName);
+    } catch (Exception ex) {
+      return ExportStageResult.failure(stage(), "EXPORT_PREPARE_PARSE_FAILED", ex.getMessage());
     }
+    return ExportStageResult.success(stage());
+  }
 
-    @Override
-    public ExportStageResult execute(ExportJobContext context) {
-        if (context == null || !StringUtils.hasText(context.getTenantId()) || !StringUtils.hasText(context.getRawPayload())) {
-            return ExportStageResult.failure(stage(), "EXPORT_PREPARE_INVALID", "tenantId or payload is blank");
-        }
-        try {
-            ExportPayload payload = context.getAttributes().get("exportPayload") instanceof ExportPayload exportPayload
-                    ? exportPayload
-                    : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
-            context.getAttributes().put("exportPayload", payload);
-            Map<String, Object> templateConfig = Map.of();
-            if (StringUtils.hasText(payload.templateCode())) {
-                templateConfig = runtimeRepository.loadLatestTemplateConfig(context.getTenantId(), payload.templateCode(), ExportWorkerType.EXPORT);
-                if (!templateConfig.isEmpty()) {
-                    context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
-                }
-            }
-            String fileFormatType = resolveText(templateConfig.get("file_format_type"), "JSON");
-            String fileName = resolveFileName(context, payload, templateConfig, fileFormatType);
-            String finalObjectName = resolveObjectName(context, payload, fileName);
-            String tempObjectName = BatchFileConstants.tempObjectName(context.getTenantId(), resolveBizDate(context, payload), fileName);
-            Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
-            context.getAttributes().put(PipelineRuntimeKeys.EXPORT_SNAPSHOT, exportSnapshot);
-            context.getAttributes().put("fileName", fileName);
-            context.getAttributes().put("exportFileFormatType", fileFormatType);
-            context.getAttributes().put("objectName", finalObjectName);
-            context.getAttributes().put("tempObjectName", tempObjectName);
-        } catch (Exception ex) {
-            return ExportStageResult.failure(stage(), "EXPORT_PREPARE_PARSE_FAILED", ex.getMessage());
-        }
-        return ExportStageResult.success(stage());
+  private String resolveFileName(
+      ExportJobContext context,
+      ExportPayload payload,
+      Map<String, Object> templateConfig,
+      String fileFormatType) {
+    if (StringUtils.hasText(payload.fileName())) {
+      return payload.fileName();
     }
-
-    private String resolveFileName(ExportJobContext context,
-                                   ExportPayload payload,
-                                   Map<String, Object> templateConfig,
-                                   String fileFormatType) {
-        if (StringUtils.hasText(payload.fileName())) {
-            return payload.fileName();
-        }
-        String namingRule = templateConfig.get("naming_rule") == null ? null : String.valueOf(templateConfig.get("naming_rule"));
-        String bizDate = resolveBizDate(context, payload);
-        String bizType = StringUtils.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
-        String extension = switch (fileFormatType.toUpperCase()) {
-            case "DELIMITED" -> ".csv";
-            case "EXCEL" -> ".xlsx";
-            case "FIXED_WIDTH" -> ".txt";
-            case "XML" -> ".xml";
-            default -> ".json";
+    String namingRule =
+        templateConfig.get("naming_rule") == null
+            ? null
+            : String.valueOf(templateConfig.get("naming_rule"));
+    String bizDate = resolveBizDate(context, payload);
+    String bizType =
+        StringUtils.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
+    String extension =
+        switch (fileFormatType.toUpperCase()) {
+          case "DELIMITED" -> ".csv";
+          case "EXCEL" -> ".xlsx";
+          case "FIXED_WIDTH" -> ".txt";
+          case "XML" -> ".xml";
+          default -> ".json";
         };
-        if (StringUtils.hasText(namingRule)) {
-            return namingRule
-                    .replace("${bizDate}", bizDate)
-                    .replace("${tenantId}", context.getTenantId())
-                    .replace("${batchNo}", defaultText(payload.batchNo(), "batch"))
-                    .replace("${version}", "v1");
-        }
-        return bizType + "_" + bizDate + "_" + defaultText(payload.batchNo(), "batch") + extension;
+    if (StringUtils.hasText(namingRule)) {
+      return namingRule
+          .replace("${bizDate}", bizDate)
+          .replace("${tenantId}", context.getTenantId())
+          .replace("${batchNo}", defaultText(payload.batchNo(), "batch"))
+          .replace("${version}", "v1");
     }
+    return bizType + "_" + bizDate + "_" + defaultText(payload.batchNo(), "batch") + extension;
+  }
 
-    private String resolveObjectName(ExportJobContext context, ExportPayload payload, String fileName) {
-        if (StringUtils.hasText(payload.objectName())) {
-            return payload.objectName();
-        }
-        String bizType = StringUtils.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
-        String bizDate = resolveBizDate(context, payload);
-        return BatchFileConstants.outboundObjectName(bizType, bizDate, defaultText(payload.batchNo(), "batch"), "v1", fileName);
+  private String resolveObjectName(
+      ExportJobContext context, ExportPayload payload, String fileName) {
+    if (StringUtils.hasText(payload.objectName())) {
+      return payload.objectName();
     }
+    String bizType =
+        StringUtils.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
+    String bizDate = resolveBizDate(context, payload);
+    return BatchFileConstants.outboundObjectName(
+        bizType, bizDate, defaultText(payload.batchNo(), "batch"), "v1", fileName);
+  }
 
-    private String resolveBizDate(ExportJobContext context, ExportPayload payload) {
-        if (StringUtils.hasText(payload.bizDate())) {
-            return payload.bizDate();
-        }
-        if (StringUtils.hasText(context.getBizDate())) {
-            return context.getBizDate();
-        }
-        return LocalDate.now().toString();
+  private String resolveBizDate(ExportJobContext context, ExportPayload payload) {
+    if (StringUtils.hasText(payload.bizDate())) {
+      return payload.bizDate();
     }
+    if (StringUtils.hasText(context.getBizDate())) {
+      return context.getBizDate();
+    }
+    return LocalDate.now().toString();
+  }
 
-    private String resolveText(Object value, String fallback) {
-        return value == null || !StringUtils.hasText(String.valueOf(value)) ? fallback : String.valueOf(value);
-    }
+  private String resolveText(Object value, String fallback) {
+    return value == null || !StringUtils.hasText(String.valueOf(value))
+        ? fallback
+        : String.valueOf(value);
+  }
 
-    private String defaultText(String value, String fallback) {
-        return StringUtils.hasText(value) ? value : fallback;
-    }
+  private String defaultText(String value, String fallback) {
+    return StringUtils.hasText(value) ? value : fallback;
+  }
 
-    /**
-     * 构建导出快照元数据，优先级：模板配置 &gt; payload.metadata &gt; 默认值。
-     * 包含字段：snapshotMode、snapshotTs、sourcePartitions。
-     */
-    private Map<String, Object> buildExportSnapshot(ExportPayload payload, Map<String, Object> templateConfig) {
-        Map<String, Object> hints = extractTemplateSnapshotHints(templateConfig);
-        Map<String, Object> meta = payload != null && payload.metadata() != null ? payload.metadata() : Map.of();
-        Map<String, Object> snap = new LinkedHashMap<>();
-        snap.put("snapshotMode", firstNonBlank(
-                stringHint(hints, "snapshotMode"),
-                stringMeta(meta, "snapshotMode"),
-                "AS_OF_BATCH"
-        ));
-        snap.put("snapshotTs", firstNonBlank(
-                stringHint(hints, "snapshotTs"),
-                stringMeta(meta, "snapshotTs"),
-                Instant.now().toString()
-        ));
-        snap.put("sourcePartitions", mergePartitions(hints.get("sourcePartitions"), meta.get("sourcePartitions")));
-        return snap;
-    }
+  /**
+   * 构建导出快照元数据，优先级：模板配置 &gt; payload.metadata &gt; 默认值。
+   * 包含字段：snapshotMode、snapshotTs、sourcePartitions。
+   */
+  private Map<String, Object> buildExportSnapshot(
+      ExportPayload payload, Map<String, Object> templateConfig) {
+    Map<String, Object> hints = extractTemplateSnapshotHints(templateConfig);
+    Map<String, Object> meta =
+        payload != null && payload.metadata() != null ? payload.metadata() : Map.of();
+    Map<String, Object> snap = new LinkedHashMap<>();
+    snap.put(
+        "snapshotMode",
+        firstNonBlank(
+            stringHint(hints, "snapshotMode"), stringMeta(meta, "snapshotMode"), "AS_OF_BATCH"));
+    snap.put(
+        "snapshotTs",
+        firstNonBlank(
+            stringHint(hints, "snapshotTs"),
+            stringMeta(meta, "snapshotTs"),
+            Instant.now().toString()));
+    snap.put(
+        "sourcePartitions",
+        mergePartitions(hints.get("sourcePartitions"), meta.get("sourcePartitions")));
+    return snap;
+  }
 
-    private Map<String, Object> extractTemplateSnapshotHints(Map<String, Object> template) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        if (template == null || template.isEmpty()) {
-            return out;
-        }
-        putIfHasText(out, "snapshotMode", template.get("snapshot_mode"));
-        putIfHasText(out, "snapshotTs", template.get("snapshot_ts"));
-        if (template.get("source_partitions") != null) {
-            out.put("sourcePartitions", template.get("source_partitions"));
-        }
-        Object qps = template.get("query_param_schema");
-        if (qps instanceof Map<?, ?> schema) {
-            Object nested = schema.get("exportSnapshot");
-            if (nested instanceof Map<?, ?> snap) {
-                snap.forEach((k, v) -> out.put(String.valueOf(k), v));
-            }
-        }
-        return out;
+  private Map<String, Object> extractTemplateSnapshotHints(Map<String, Object> template) {
+    Map<String, Object> out = new LinkedHashMap<>();
+    if (template == null || template.isEmpty()) {
+      return out;
     }
+    putIfHasText(out, "snapshotMode", template.get("snapshot_mode"));
+    putIfHasText(out, "snapshotTs", template.get("snapshot_ts"));
+    if (template.get("source_partitions") != null) {
+      out.put("sourcePartitions", template.get("source_partitions"));
+    }
+    Object qps = template.get("query_param_schema");
+    if (qps instanceof Map<?, ?> schema) {
+      Object nested = schema.get("exportSnapshot");
+      if (nested instanceof Map<?, ?> snap) {
+        snap.forEach((k, v) -> out.put(String.valueOf(k), v));
+      }
+    }
+    return out;
+  }
 
-    private void putIfHasText(Map<String, Object> out, String key, Object value) {
-        if (value != null && StringUtils.hasText(String.valueOf(value))) {
-            out.put(key, String.valueOf(value).trim());
-        }
+  private void putIfHasText(Map<String, Object> out, String key, Object value) {
+    if (value != null && StringUtils.hasText(String.valueOf(value))) {
+      out.put(key, String.valueOf(value).trim());
     }
+  }
 
-    private String stringHint(Map<String, Object> hints, String key) {
-        Object v = hints.get(key);
-        return v == null ? null : String.valueOf(v);
-    }
+  private String stringHint(Map<String, Object> hints, String key) {
+    Object v = hints.get(key);
+    return v == null ? null : String.valueOf(v);
+  }
 
-    private String stringMeta(Map<String, Object> meta, String key) {
-        Object v = meta.get(key);
-        return v == null ? null : String.valueOf(v);
-    }
+  private String stringMeta(Map<String, Object> meta, String key) {
+    Object v = meta.get(key);
+    return v == null ? null : String.valueOf(v);
+  }
 
-    private String firstNonBlank(String a, String b, String fallback) {
-        if (StringUtils.hasText(a)) {
-            return a;
-        }
-        if (StringUtils.hasText(b)) {
-            return b;
-        }
-        return fallback;
+  private String firstNonBlank(String a, String b, String fallback) {
+    if (StringUtils.hasText(a)) {
+      return a;
     }
+    if (StringUtils.hasText(b)) {
+      return b;
+    }
+    return fallback;
+  }
 
-    private List<Object> mergePartitions(Object fromTemplate, Object fromMeta) {
-        List<Object> out = new ArrayList<>();
-        appendPartitions(out, fromTemplate);
-        appendPartitions(out, fromMeta);
-        return out.isEmpty() ? List.of() : List.copyOf(out);
-    }
+  private List<Object> mergePartitions(Object fromTemplate, Object fromMeta) {
+    List<Object> out = new ArrayList<>();
+    appendPartitions(out, fromTemplate);
+    appendPartitions(out, fromMeta);
+    return out.isEmpty() ? List.of() : List.copyOf(out);
+  }
 
-    private void appendPartitions(List<Object> out, Object raw) {
-        if (raw == null) {
-            return;
-        }
-        if (raw instanceof List<?> list) {
-            out.addAll(list);
-            return;
-        }
-        if (raw instanceof String text && StringUtils.hasText(text)) {
-            for (String part : text.split(",")) {
-                if (StringUtils.hasText(part.trim())) {
-                    out.add(part.trim());
-                }
-            }
-        }
+  private void appendPartitions(List<Object> out, Object raw) {
+    if (raw == null) {
+      return;
     }
+    if (raw instanceof List<?> list) {
+      out.addAll(list);
+      return;
+    }
+    if (raw instanceof String text && StringUtils.hasText(text)) {
+      for (String part : text.split(",")) {
+        if (StringUtils.hasText(part.trim())) {
+          out.add(part.trim());
+        }
+      }
+    }
+  }
 }

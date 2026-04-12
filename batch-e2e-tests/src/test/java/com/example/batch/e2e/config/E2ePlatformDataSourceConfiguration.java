@@ -16,24 +16,24 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class E2ePlatformDataSourceConfiguration {
 
-    @Value("${spring.datasource.url}")
-    private String url;
+  @Value("${spring.datasource.url}")
+  private String url;
 
-    @Value("${spring.datasource.username}")
-    private String username;
+  @Value("${spring.datasource.username}")
+  private String username;
 
-    @Value("${spring.datasource.password}")
-    private String password;
+  @Value("${spring.datasource.password}")
+  private String password;
 
-    @Bean(name = "dataSource")
-    @Primary
-    @ConditionalOnMissingBean(name = "dataSource")
-    public DataSource platformDataSource() {
-        return DataSourceBuilder.create()
-                .url(url)
-                .username(username)
-                .password(password)
-                .driverClassName("org.postgresql.Driver")
-                .build();
-    }
+  @Bean(name = "dataSource")
+  @Primary
+  @ConditionalOnMissingBean(name = "dataSource")
+  public DataSource platformDataSource() {
+    return DataSourceBuilder.create()
+        .url(url)
+        .username(username)
+        .password(password)
+        .driverClassName("org.postgresql.Driver")
+        .build();
+  }
 }

@@ -11,8 +11,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @ConditionalOnClass(OncePerRequestFilter.class)
 public class HttpRequestMdcAutoConfiguration {
 
-    @Bean
-    public HttpRequestMdcFilter httpRequestMdcFilter() {
-        return new HttpRequestMdcFilter();
-    }
+  @Bean
+  public HttpRequestMdcFilter httpRequestMdcFilter() {
+    return new HttpRequestMdcFilter();
+  }
 }

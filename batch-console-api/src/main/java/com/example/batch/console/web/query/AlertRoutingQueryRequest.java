@@ -5,9 +5,9 @@ import lombok.Data;
 @Data
 public class AlertRoutingQueryRequest extends PageQueryRequest {
 
-    private String tenantId;
-    private String routeCode;
-    private String team;
-    private String severity;
-    private Boolean enabled;
+  private String tenantId;
+  private String routeCode;
+  private String team;
+  private String severity;
+  private Boolean enabled;
 }

@@ -8,9 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.config.ConsoleSecurityProperties;
-import com.example.batch.console.support.ConsolePrincipal;
 import com.example.batch.console.support.ConsoleJwtService;
 import com.example.batch.console.support.ConsoleLoginService;
+import com.example.batch.console.support.ConsolePrincipal;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleSessionRegistry;
@@ -31,120 +31,128 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 @ExtendWith(MockitoExtension.class)
 class ConsoleAuthApplicationServiceTest {
 
-    @Mock
-    private ConsoleJwtService jwtService;
-    @Mock
-    private ConsoleLoginService loginService;
-    @Mock
-    private ConsoleSessionRegistry sessionRegistry;
-    @Mock
-    private ConsoleRequestMetadataResolver requestMetadataResolver;
+  @Mock private ConsoleJwtService jwtService;
+  @Mock private ConsoleLoginService loginService;
+  @Mock private ConsoleSessionRegistry sessionRegistry;
+  @Mock private ConsoleRequestMetadataResolver requestMetadataResolver;
 
-    private ConsoleSecurityProperties securityProperties;
-    private ConsoleAuthApplicationService service;
+  private ConsoleSecurityProperties securityProperties;
+  private ConsoleAuthApplicationService service;
 
-    @BeforeEach
-    void setUp() {
-        securityProperties = new ConsoleSecurityProperties();
-        securityProperties.setDefaultTenantId("default-tenant");
-        securityProperties.setDefaultAuthorities(List.of("ROLE_ADMIN"));
+  @BeforeEach
+  void setUp() {
+    securityProperties = new ConsoleSecurityProperties();
+    securityProperties.setDefaultTenantId("default-tenant");
+    securityProperties.setDefaultAuthorities(List.of("ROLE_ADMIN"));
 
-        service = new ConsoleAuthApplicationService(
-                jwtService, loginService, sessionRegistry, securityProperties, requestMetadataResolver);
-    }
+    service =
+        new ConsoleAuthApplicationService(
+            jwtService, loginService, sessionRegistry, securityProperties, requestMetadataResolver);
+  }
 
-    @Test
-    void login_delegatesToLoginService() {
-        ConsoleLoginRequest request = new ConsoleLoginRequest();
-        request.setUsername("admin");
-        request.setPassword("pass");
-        ConsoleAuthTokenResponse response = stubTokenResponse();
-        when(loginService.login(request)).thenReturn(response);
+  @Test
+  void login_delegatesToLoginService() {
+    ConsoleLoginRequest request = new ConsoleLoginRequest();
+    request.setUsername("admin");
+    request.setPassword("pass");
+    ConsoleAuthTokenResponse response = stubTokenResponse();
+    when(loginService.login(request)).thenReturn(response);
 
-        ConsoleAuthTokenResponse result = service.login(request);
+    ConsoleAuthTokenResponse result = service.login(request);
 
-        assertThat(result).isSameAs(response);
-        verify(loginService).login(request);
-    }
+    assertThat(result).isSameAs(response);
+    verify(loginService).login(request);
+  }
 
-    @Test
-    void issueToken_usesConsolePrincipalWhenPresent() {
-        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
-        when(sessionRegistry.nextSessionVersion("alice", "t1")).thenReturn(1L);
-        when(jwtService.issueToken(anyString(), anyString(), any(), anyLong())).thenReturn(stubTokenResponse());
+  @Test
+  void issueToken_usesConsolePrincipalWhenPresent() {
+    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+    UsernamePasswordAuthenticationToken auth =
+        new UsernamePasswordAuthenticationToken(
+            principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+    when(sessionRegistry.nextSessionVersion("alice", "t1")).thenReturn(1L);
+    when(jwtService.issueToken(anyString(), anyString(), any(), anyLong()))
+        .thenReturn(stubTokenResponse());
 
-        service.issueToken(auth);
+    service.issueToken(auth);
 
-        verify(jwtService).issueToken("alice", "t1", Set.of("ROLE_ADMIN"), 1L);
-    }
+    verify(jwtService).issueToken("alice", "t1", Set.of("ROLE_ADMIN"), 1L);
+  }
 
-    @Test
-    void profile_returnsConsolePrincipalFieldsWhenPresent() {
-        ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+  @Test
+  void profile_returnsConsolePrincipalFieldsWhenPresent() {
+    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+    UsernamePasswordAuthenticationToken auth =
+        new UsernamePasswordAuthenticationToken(
+            principal, "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
 
-        ConsoleAuthProfileResponse response = service.profile(auth);
+    ConsoleAuthProfileResponse response = service.profile(auth);
 
-        assertThat(response.username()).isEqualTo("alice");
-        assertThat(response.tenantId()).isEqualTo("t1");
-        assertThat(response.authorities()).containsExactly("ROLE_ADMIN");
-    }
+    assertThat(response.username()).isEqualTo("alice");
+    assertThat(response.tenantId()).isEqualTo("t1");
+    assertThat(response.authorities()).containsExactly("ROLE_ADMIN");
+  }
 
-    @Test
-    void profile_usesRequestMetadataTenantWhenNoConsolePrincipal() {
-        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                "non-principal-user", "creds",
-                List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
-        when(requestMetadataResolver.current())
-                .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
+  @Test
+  void profile_usesRequestMetadataTenantWhenNoConsolePrincipal() {
+    UsernamePasswordAuthenticationToken auth =
+        new UsernamePasswordAuthenticationToken(
+            "non-principal-user", "creds", List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
-        ConsoleAuthProfileResponse response = service.profile(auth);
+    ConsoleAuthProfileResponse response = service.profile(auth);
 
-        assertThat(response.tenantId()).isEqualTo("default-tenant"); // metadata.tenantId() is null → fallback
-    }
+    assertThat(response.tenantId())
+        .isEqualTo("default-tenant"); // metadata.tenantId() is null → fallback
+  }
 
-    @Test
-    void profile_fallsBackToDefaultTenantWhenMetadataEmpty() {
-        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
-        when(requestMetadataResolver.current())
-                .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
+  @Test
+  void profile_fallsBackToDefaultTenantWhenMetadataEmpty() {
+    UsernamePasswordAuthenticationToken auth =
+        new UsernamePasswordAuthenticationToken(
+            "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
-        ConsoleAuthProfileResponse response = service.profile(auth);
+    ConsoleAuthProfileResponse response = service.profile(auth);
 
-        assertThat(response.tenantId()).isEqualTo("default-tenant");
-    }
+    assertThat(response.tenantId()).isEqualTo("default-tenant");
+  }
 
-    @Test
-    void profile_usesDefaultAuthoritiesWhenGrantedContainsOnlyRoleUser() {
-        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
-        when(requestMetadataResolver.current())
-                .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
+  @Test
+  void profile_usesDefaultAuthoritiesWhenGrantedContainsOnlyRoleUser() {
+    UsernamePasswordAuthenticationToken auth =
+        new UsernamePasswordAuthenticationToken(
+            "user", "creds", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
-        ConsoleAuthProfileResponse response = service.profile(auth);
+    ConsoleAuthProfileResponse response = service.profile(auth);
 
-        assertThat(response.authorities()).containsExactlyElementsOf(securityProperties.getDefaultAuthorities());
-    }
+    assertThat(response.authorities())
+        .containsExactlyElementsOf(securityProperties.getDefaultAuthorities());
+  }
 
-    @Test
-    void profile_handlesNullAuthentication() {
-        when(requestMetadataResolver.current())
-                .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
+  @Test
+  void profile_handlesNullAuthentication() {
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("req-1", "tr-1", null, null, null, "127.0.0.1"));
 
-        ConsoleAuthProfileResponse response = service.profile(null);
+    ConsoleAuthProfileResponse response = service.profile(null);
 
-        assertThat(response.username()).isNull();
-        assertThat(response.tenantId()).isEqualTo("default-tenant");
-    }
+    assertThat(response.username()).isNull();
+    assertThat(response.tenantId()).isEqualTo("default-tenant");
+  }
 
-    private ConsoleAuthTokenResponse stubTokenResponse() {
-        return new ConsoleAuthTokenResponse(
-                "jwt-token", "Bearer",
-                Instant.now(), Instant.now().plusSeconds(3600),
-                "admin", "t1", Set.of("ROLE_ADMIN"));
-    }
+  private ConsoleAuthTokenResponse stubTokenResponse() {
+    return new ConsoleAuthTokenResponse(
+        "jwt-token",
+        "Bearer",
+        Instant.now(),
+        Instant.now().plusSeconds(3600),
+        "admin",
+        "t1",
+        Set.of("ROLE_ADMIN"));
+  }
 }

@@ -4,21 +4,21 @@ import java.util.List;
 
 public interface TriggerRegistrationService {
 
-    void registerAll();
+  void registerAll();
 
-    void registerByJobCode(String tenantId, String jobCode);
+  void registerByJobCode(String tenantId, String jobCode);
 
-    void unregisterByJobCode(String tenantId, String jobCode);
+  void unregisterByJobCode(String tenantId, String jobCode);
 
-    void pauseByJobCode(String tenantId, String jobCode);
+  void pauseByJobCode(String tenantId, String jobCode);
 
-    void resumeByJobCode(String tenantId, String jobCode);
+  void resumeByJobCode(String tenantId, String jobCode);
 
-    List<TriggerStatusInfo> listRegisteredTriggers();
+  List<TriggerStatusInfo> listRegisteredTriggers();
 
-    void pauseAll();
+  void pauseAll();
 
-    void resumeAll();
+  void resumeAll();
 
-    String schedulerStatus();
+  String schedulerStatus();
 }

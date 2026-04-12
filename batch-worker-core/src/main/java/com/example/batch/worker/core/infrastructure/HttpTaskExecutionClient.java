@@ -7,11 +7,11 @@ import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.support.TaskExecutionClient;
-
 import io.micrometer.core.instrument.MeterRegistry;
-
+import java.net.http.HttpClient;
+import java.time.Duration;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
@@ -25,225 +25,246 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
-import java.net.http.HttpClient;
-import java.time.Duration;
-import java.util.Optional;
-
 /** 调用 orchestrator 内部任务 API，带超时、瞬态失败有限重试及 Micrometer 失败计数。 */
 @Component
 @Slf4j
 public class HttpTaskExecutionClient implements TaskExecutionClient {
 
-    private final OrchestratorTaskClientProperties properties;
-    private final BatchSecurityProperties securityProperties;
-    private final RestClient.Builder builder;
-    private final Environment environment;
-    private final Optional<MeterRegistry> meterRegistry;
-    // L-2: volatile 保证双重检查锁的可见性，避免其他线程读到未完全构造的 RestClient
-    private volatile RestClient restClient;
+  private final OrchestratorTaskClientProperties properties;
+  private final BatchSecurityProperties securityProperties;
+  private final RestClient.Builder builder;
+  private final Environment environment;
+  private final Optional<MeterRegistry> meterRegistry;
+  // L-2: volatile 保证双重检查锁的可见性，避免其他线程读到未完全构造的 RestClient
+  private volatile RestClient restClient;
 
-    public HttpTaskExecutionClient(
-            OrchestratorTaskClientProperties properties,
-            BatchSecurityProperties securityProperties,
-            RestClient.Builder builder,
-            Environment environment,
-            @Autowired(required = false) MeterRegistry meterRegistry) {
-        this.properties = properties;
-        this.securityProperties = securityProperties;
-        this.builder = builder;
-        this.environment = environment;
-        this.meterRegistry = Optional.ofNullable(meterRegistry);
-    }
+  public HttpTaskExecutionClient(
+      OrchestratorTaskClientProperties properties,
+      BatchSecurityProperties securityProperties,
+      RestClient.Builder builder,
+      Environment environment,
+      @Autowired(required = false) MeterRegistry meterRegistry) {
+    this.properties = properties;
+    this.securityProperties = securityProperties;
+    this.builder = builder;
+    this.environment = environment;
+    this.meterRegistry = Optional.ofNullable(meterRegistry);
+  }
 
-    @Override
-    public boolean claim(String tenantId, Long taskId, String workerId) {
-        String traceId = currentTraceId();
-        String resolvedTraceId = StringUtils.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-        return executeClaimLike(
-                "claim",
-                () -> client().post()
-                        .uri("/internal/tasks/{taskId}/claim", taskId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                        .body(new ClaimRequest(tenantId, workerId))
-                        .retrieve()
-                        .toBodilessEntity());
-    }
+  @Override
+  public boolean claim(String tenantId, Long taskId, String workerId) {
+    String traceId = currentTraceId();
+    String resolvedTraceId = StringUtils.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+    return executeClaimLike(
+        "claim",
+        () ->
+            client()
+                .post()
+                .uri("/internal/tasks/{taskId}/claim", taskId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                .body(new ClaimRequest(tenantId, workerId))
+                .retrieve()
+                .toBodilessEntity());
+  }
 
-    @Override
-    public boolean renewLease(String tenantId, Long taskId, String workerId) {
-        String traceId = currentTraceId();
-        String resolvedTraceId = StringUtils.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-        return executeClaimLike(
-                "renew",
-                () -> client().post()
-                        .uri("/internal/tasks/{taskId}/renew", taskId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                        .body(new ClaimRequest(tenantId, workerId))
-                        .retrieve()
-                        .toBodilessEntity());
-    }
+  @Override
+  public boolean renewLease(String tenantId, Long taskId, String workerId) {
+    String traceId = currentTraceId();
+    String resolvedTraceId = StringUtils.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+    return executeClaimLike(
+        "renew",
+        () ->
+            client()
+                .post()
+                .uri("/internal/tasks/{taskId}/renew", taskId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                .body(new ClaimRequest(tenantId, workerId))
+                .retrieve()
+                .toBodilessEntity());
+  }
 
-    @Override
-    public void report(TaskExecutionReport report) {
-        int max = Math.max(1, properties.getReportMaxAttempts());
-        long backoff = Math.max(1L, properties.getReportInitialBackoffMillis());
-        long cap = Math.max(backoff, properties.getReportMaxBackoffMillis());
-        String traceFallback = currentTraceId();
-        for (int attempt = 1; attempt <= max; attempt++) {
-            String traceId = firstNonBlank(report.getTraceId(), traceFallback);
-            if (!StringUtils.hasText(traceId)) {
-                traceId = IdGenerator.newTraceId();
-            }
-            try {
-                client().post()
-                        .uri("/internal/tasks/{taskId}/report", report.getTaskId())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, report.getTenantId())
-                        .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
-                        .body(report)
-                        .retrieve()
-                        .toBodilessEntity();
-                return;
-            } catch (HttpClientErrorException ex) {
-                if (ex.getStatusCode() == HttpStatus.CONFLICT) {
-                    // 409 STATE_CONFLICT：orchestrator 乐观锁失败，整个事务已回滚，task/partition 仍是 RUNNING，可以重试。
-                    recordReportFailure("STATE_CONFLICT");
-                    if (attempt >= max) {
-                        logStructuredReportFailure("STATE_CONFLICT", attempt, max, ex);
-                        throw ex;
-                    }
-                    log.warn("orchestrator report state conflict, will retry: attempt={}/{}", attempt, max);
-                    sleepBackoff(backoff);
-                    backoff = Math.min(cap, backoff * 2);
-                    continue;
-                }
-                if (ex.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
-                    recordReportFailure("RATE_LIMITED");
-                    logStructuredReportFailure("RATE_LIMITED", attempt, max, ex);
-                    throw ex;
-                }
-                recordReportFailure("CLIENT_ERROR");
-                logStructuredReportFailure("CLIENT_ERROR", attempt, max, ex);
-                throw ex;
-            } catch (HttpServerErrorException ex) {
-                recordReportFailure("SERVER_ERROR");
-                if (attempt >= max) {
-                    logStructuredReportFailure("SERVER_ERROR", attempt, max, ex);
-                    throw ex;
-                }
-                log.warn("orchestrator report transient failure, will retry: attempt={}/{}, status={}, message={}",
-                        attempt, max, ex.getStatusCode(), ex.getMessage());
-                sleepBackoff(backoff);
-                backoff = Math.min(cap, backoff * 2);
-            } catch (ResourceAccessException ex) {
-                recordReportFailure("IO_TIMEOUT");
-                if (attempt >= max) {
-                    logStructuredReportFailure("IO_TIMEOUT", attempt, max, ex);
-                    throw ex;
-                }
-                log.warn("orchestrator report I/O failure, will retry: attempt={}/{}, message={}",
-                        attempt, max, ex.getMessage());
-                sleepBackoff(backoff);
-                backoff = Math.min(cap, backoff * 2);
-            }
+  @Override
+  public void report(TaskExecutionReport report) {
+    int max = Math.max(1, properties.getReportMaxAttempts());
+    long backoff = Math.max(1L, properties.getReportInitialBackoffMillis());
+    long cap = Math.max(backoff, properties.getReportMaxBackoffMillis());
+    String traceFallback = currentTraceId();
+    for (int attempt = 1; attempt <= max; attempt++) {
+      String traceId = firstNonBlank(report.getTraceId(), traceFallback);
+      if (!StringUtils.hasText(traceId)) {
+        traceId = IdGenerator.newTraceId();
+      }
+      try {
+        client()
+            .post()
+            .uri("/internal/tasks/{taskId}/report", report.getTaskId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, report.getTenantId())
+            .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, traceId)
+            .body(report)
+            .retrieve()
+            .toBodilessEntity();
+        return;
+      } catch (HttpClientErrorException ex) {
+        if (ex.getStatusCode() == HttpStatus.CONFLICT) {
+          // 409 STATE_CONFLICT：orchestrator 乐观锁失败，整个事务已回滚，task/partition 仍是 RUNNING，可以重试。
+          recordReportFailure("STATE_CONFLICT");
+          if (attempt >= max) {
+            logStructuredReportFailure("STATE_CONFLICT", attempt, max, ex);
+            throw ex;
+          }
+          log.warn("orchestrator report state conflict, will retry: attempt={}/{}", attempt, max);
+          sleepBackoff(backoff);
+          backoff = Math.min(cap, backoff * 2);
+          continue;
         }
-    }
-
-    private boolean executeClaimLike(String operation, Runnable call) {
-        int max = Math.max(1, properties.getClaimMaxAttempts());
-        long backoff = Math.max(1L, properties.getClaimInitialBackoffMillis());
-        long cap = Math.max(backoff, properties.getClaimMaxBackoffMillis());
-        for (int attempt = 1; attempt <= max; attempt++) {
-            try {
-                call.run();
-                return true;
-            } catch (HttpClientErrorException ex) {
-                if (ex.getStatusCode() == HttpStatus.CONFLICT || ex.getStatusCode() == HttpStatus.NOT_FOUND) {
-                    return false;
-                }
-                throw ex;
-            } catch (HttpServerErrorException | ResourceAccessException ex) {
-                if (attempt >= max) {
-                    log.warn("{} failed after {} attempts: {}", operation, max, ex.getMessage());
-                    throw ex instanceof RuntimeException r ? r : new IllegalStateException(ex);
-                }
-                log.warn("{} transient failure, retrying: attempt={}/{}, message={}",
-                        operation, attempt, max, ex.getMessage());
-                sleepBackoff(backoff);
-                backoff = Math.min(cap, backoff * 2);
-            }
+        if (ex.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
+          recordReportFailure("RATE_LIMITED");
+          logStructuredReportFailure("RATE_LIMITED", attempt, max, ex);
+          throw ex;
         }
-        throw new IllegalStateException(operation + " exhausted retries without outcome");
-    }
-
-    private void recordReportFailure(String reason) {
-        meterRegistry.ifPresent(reg -> reg.counter("worker.report.failed.total", "reason", reason).increment());
-    }
-
-    private void logStructuredReportFailure(String reasonCode, int attempt, int max, Exception ex) {
-        log.warn("orchestrator report aborted: reasonCode={}, attempt={}/{}, error={}",
-                reasonCode, attempt, max, ex.toString());
-    }
-
-    private static void sleepBackoff(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted during orchestrator client backoff", ie);
+        recordReportFailure("CLIENT_ERROR");
+        logStructuredReportFailure("CLIENT_ERROR", attempt, max, ex);
+        throw ex;
+      } catch (HttpServerErrorException ex) {
+        recordReportFailure("SERVER_ERROR");
+        if (attempt >= max) {
+          logStructuredReportFailure("SERVER_ERROR", attempt, max, ex);
+          throw ex;
         }
-    }
-
-    private String currentTraceId() {
-        String value = MDC.get(StructuredLogField.TRACE_ID);
-        return StringUtils.hasText(value) ? value : null;
-    }
-
-    private static String firstNonBlank(String value, String fallback) {
-        if (StringUtils.hasText(value)) {
-            return value;
+        log.warn(
+            "orchestrator report transient failure, will retry: attempt={}/{}, status={},"
+                + " message={}",
+            attempt,
+            max,
+            ex.getStatusCode(),
+            ex.getMessage());
+        sleepBackoff(backoff);
+        backoff = Math.min(cap, backoff * 2);
+      } catch (ResourceAccessException ex) {
+        recordReportFailure("IO_TIMEOUT");
+        if (attempt >= max) {
+          logStructuredReportFailure("IO_TIMEOUT", attempt, max, ex);
+          throw ex;
         }
-        return StringUtils.hasText(fallback) ? fallback : null;
+        log.warn(
+            "orchestrator report I/O failure, will retry: attempt={}/{}, message={}",
+            attempt,
+            max,
+            ex.getMessage());
+        sleepBackoff(backoff);
+        backoff = Math.min(cap, backoff * 2);
+      }
     }
+  }
 
-    private RestClient client() {
-        RestClient current = this.restClient;
-        if (current != null) {
-            return current;
+  private boolean executeClaimLike(String operation, Runnable call) {
+    int max = Math.max(1, properties.getClaimMaxAttempts());
+    long backoff = Math.max(1L, properties.getClaimInitialBackoffMillis());
+    long cap = Math.max(backoff, properties.getClaimMaxBackoffMillis());
+    for (int attempt = 1; attempt <= max; attempt++) {
+      try {
+        call.run();
+        return true;
+      } catch (HttpClientErrorException ex) {
+        if (ex.getStatusCode() == HttpStatus.CONFLICT
+            || ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+          return false;
         }
-        synchronized (this) {
-            if (this.restClient == null) {
-                JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
-                        HttpClient.newBuilder()
-                                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                                .build());
-                factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
-                this.restClient = builder
-                        .baseUrl(resolveBaseUrl())
-                        .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
-                        .requestFactory(factory)
-                        .build();
-            }
-            return this.restClient;
+        throw ex;
+      } catch (HttpServerErrorException | ResourceAccessException ex) {
+        if (attempt >= max) {
+          log.warn("{} failed after {} attempts: {}", operation, max, ex.getMessage());
+          throw ex instanceof RuntimeException r ? r : new IllegalStateException(ex);
         }
+        log.warn(
+            "{} transient failure, retrying: attempt={}/{}, message={}",
+            operation,
+            attempt,
+            max,
+            ex.getMessage());
+        sleepBackoff(backoff);
+        backoff = Math.min(cap, backoff * 2);
+      }
     }
+    throw new IllegalStateException(operation + " exhausted retries without outcome");
+  }
 
-    private String resolveBaseUrl() {
-        String configuredBaseUrl = properties.getBaseUrl();
-        if (StringUtils.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
-            return configuredBaseUrl;
-        }
-        String localPort = environment.getProperty("local.server.port");
-        if (StringUtils.hasText(localPort)) {
-            return "http://127.0.0.1:" + localPort;
-        }
-        throw new IllegalStateException("Unable to resolve batch.worker.task-client.base-url for task execution client");
-    }
+  private void recordReportFailure(String reason) {
+    meterRegistry.ifPresent(
+        reg -> reg.counter("worker.report.failed.total", "reason", reason).increment());
+  }
 
-    private record ClaimRequest(String tenantId, String workerId) {
+  private void logStructuredReportFailure(String reasonCode, int attempt, int max, Exception ex) {
+    log.warn(
+        "orchestrator report aborted: reasonCode={}, attempt={}/{}, error={}",
+        reasonCode,
+        attempt,
+        max,
+        ex.toString());
+  }
+
+  private static void sleepBackoff(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("interrupted during orchestrator client backoff", ie);
     }
+  }
+
+  private String currentTraceId() {
+    String value = MDC.get(StructuredLogField.TRACE_ID);
+    return StringUtils.hasText(value) ? value : null;
+  }
+
+  private static String firstNonBlank(String value, String fallback) {
+    if (StringUtils.hasText(value)) {
+      return value;
+    }
+    return StringUtils.hasText(fallback) ? fallback : null;
+  }
+
+  private RestClient client() {
+    RestClient current = this.restClient;
+    if (current != null) {
+      return current;
+    }
+    synchronized (this) {
+      if (this.restClient == null) {
+        JdkClientHttpRequestFactory factory =
+            new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
+                    .build());
+        factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
+        this.restClient =
+            builder
+                .baseUrl(resolveBaseUrl())
+                .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
+                .requestFactory(factory)
+                .build();
+      }
+      return this.restClient;
+    }
+  }
+
+  private String resolveBaseUrl() {
+    String configuredBaseUrl = properties.getBaseUrl();
+    if (StringUtils.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
+      return configuredBaseUrl;
+    }
+    String localPort = environment.getProperty("local.server.port");
+    if (StringUtils.hasText(localPort)) {
+      return "http://127.0.0.1:" + localPort;
+    }
+    throw new IllegalStateException(
+        "Unable to resolve batch.worker.task-client.base-url for task execution client");
+  }
+
+  private record ClaimRequest(String tenantId, String workerId) {}
 }

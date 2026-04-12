@@ -13,77 +13,70 @@ import org.junit.jupiter.api.Test;
 
 class CalendarBizDateResolverTest {
 
-    private final CalendarBizDateResolver resolver = new CalendarBizDateResolver();
+  private final CalendarBizDateResolver resolver = new CalendarBizDateResolver();
 
-    @Test
-    void shouldUsePreviousBusinessDayWhenTriggeredBeforeCutoff() {
-        LocalDate bizDate = resolver.resolve(
-                instant("2026-03-29T02:00:00+08:00"),
-                ZoneId.of("Asia/Shanghai"),
-                calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of())
-        );
+  @Test
+  void shouldUsePreviousBusinessDayWhenTriggeredBeforeCutoff() {
+    LocalDate bizDate =
+        resolver.resolve(
+            instant("2026-03-29T02:00:00+08:00"),
+            ZoneId.of("Asia/Shanghai"),
+            calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of()));
 
-        assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 28));
-    }
+    assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 28));
+  }
 
-    @Test
-    void shouldUseSameBusinessDayWhenTriggeredAfterCutoff() {
-        LocalDate bizDate = resolver.resolve(
-                instant("2026-03-29T08:00:00+08:00"),
-                ZoneId.of("Asia/Shanghai"),
-                calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of())
-        );
+  @Test
+  void shouldUseSameBusinessDayWhenTriggeredAfterCutoff() {
+    LocalDate bizDate =
+        resolver.resolve(
+            instant("2026-03-29T08:00:00+08:00"),
+            ZoneId.of("Asia/Shanghai"),
+            calendar("Asia/Shanghai", "SKIP", Set.of(), Set.of()));
 
-        assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 29));
-    }
+    assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 29));
+  }
 
-    @Test
-    void shouldSkipWhenPreviousBusinessDayIsHolidayAndRuleIsSkip() {
-        LocalDate bizDate = resolver.resolve(
-                instant("2026-03-29T02:00:00+08:00"),
-                ZoneId.of("Asia/Shanghai"),
-                calendar("Asia/Shanghai", "SKIP", Set.of(LocalDate.of(2026, 3, 28)), Set.of())
-        );
+  @Test
+  void shouldSkipWhenPreviousBusinessDayIsHolidayAndRuleIsSkip() {
+    LocalDate bizDate =
+        resolver.resolve(
+            instant("2026-03-29T02:00:00+08:00"),
+            ZoneId.of("Asia/Shanghai"),
+            calendar("Asia/Shanghai", "SKIP", Set.of(LocalDate.of(2026, 3, 28)), Set.of()));
 
-        assertThat(bizDate).isNull();
-    }
+    assertThat(bizDate).isNull();
+  }
 
-    @Test
-    void shouldMoveToPreviousWorkdayWhenHolidayRuleRequiresIt() {
-        LocalDate bizDate = resolver.resolve(
-                instant("2026-03-29T02:00:00+08:00"),
-                ZoneId.of("Asia/Shanghai"),
-                calendar("Asia/Shanghai", "PREV_WORKDAY", Set.of(LocalDate.of(2026, 3, 28)), Set.of())
-        );
+  @Test
+  void shouldMoveToPreviousWorkdayWhenHolidayRuleRequiresIt() {
+    LocalDate bizDate =
+        resolver.resolve(
+            instant("2026-03-29T02:00:00+08:00"),
+            ZoneId.of("Asia/Shanghai"),
+            calendar("Asia/Shanghai", "PREV_WORKDAY", Set.of(LocalDate.of(2026, 3, 28)), Set.of()));
 
-        assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 27));
-    }
+    assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 27));
+  }
 
-    @Test
-    void shouldFallBackToOriginalTimezoneBasedLogicWhenCalendarIsMissing() {
-        LocalDate bizDate = resolver.resolve(
-                instant("2026-03-27T16:30:00Z"),
-                ZoneId.of("Asia/Shanghai"),
-                null
-        );
+  @Test
+  void shouldFallBackToOriginalTimezoneBasedLogicWhenCalendarIsMissing() {
+    LocalDate bizDate =
+        resolver.resolve(instant("2026-03-27T16:30:00Z"), ZoneId.of("Asia/Shanghai"), null);
 
-        assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 28));
-    }
+    assertThat(bizDate).isEqualTo(LocalDate.of(2026, 3, 28));
+  }
 
-    private CalendarBizDateDefinition calendar(String timezone,
-                                               String holidayRollRule,
-                                               Set<LocalDate> holidays,
-                                               Set<LocalDate> workdayOverrides) {
-        return new CalendarBizDateDefinition(
-                timezone,
-                LocalTime.of(6, 0),
-                holidayRollRule,
-                holidays,
-                workdayOverrides
-        );
-    }
+  private CalendarBizDateDefinition calendar(
+      String timezone,
+      String holidayRollRule,
+      Set<LocalDate> holidays,
+      Set<LocalDate> workdayOverrides) {
+    return new CalendarBizDateDefinition(
+        timezone, LocalTime.of(6, 0), holidayRollRule, holidays, workdayOverrides);
+  }
 
-    private Instant instant(String value) {
-        return OffsetDateTime.parse(value).toInstant();
-    }
+  private Instant instant(String value) {
+    return OffsetDateTime.parse(value).toInstant();
+  }
 }

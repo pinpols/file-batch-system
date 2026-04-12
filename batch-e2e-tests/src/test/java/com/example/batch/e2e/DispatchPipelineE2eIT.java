@@ -6,10 +6,10 @@ import static org.awaitility.Awaitility.await;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.e2e.apps.E2eDispatchApplication;
-import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.e2e.support.E2eOutboxPublishSupport;
 import com.example.batch.e2e.support.E2eScenarioFixture;
 import com.example.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
+import com.example.batch.e2e.support.E2eTestSql;
 import com.example.batch.e2e.support.verifier.DispatchReceiptVerifier;
 import com.example.batch.orchestrator.service.LaunchService;
 import com.example.batch.testing.AbstractIntegrationTest;
@@ -29,131 +29,139 @@ import org.springframework.test.context.jdbc.Sql;
  * 端到端测试：Dispatch 主链路成功闭环。
  *
  * <p>链路路径：
+ *
  * <pre>
  * launch → orchestrator 生成 task/outbox → Kafka 派发 → dispatch worker claim → 渠道投递（LOCAL）
  *      → 回写平台表（file_record/file_dispatch_record/file_audit_log）→ worker report → orchestrator 终态
  * </pre>
  *
  * <p>本用例不仅断言任务成功，还断言“交付可追溯”：
+ *
  * <ul>
- *   <li>{@code file_record.file_status = DISPATCHED}</li>
- *   <li>{@code file_dispatch_record.receipt_code} 被写入（便于对账）</li>
- *   <li>{@code file_audit_log} 至少有一条审计记录（便于审计/排障）</li>
+ *   <li>{@code file_record.file_status = DISPATCHED}
+ *   <li>{@code file_dispatch_record.receipt_code} 被写入（便于对账）
+ *   <li>{@code file_audit_log} 至少有一条审计记录（便于审计/排障）
  * </ul>
  */
 @SpringBootTest(
-        classes = E2eDispatchApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "batch.worker.dispatch.worker-type=DISPATCH")
+    classes = E2eDispatchApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "batch.worker.dispatch.worker-type=DISPATCH")
 @ActiveProfiles({"test", "e2e"})
-@Sql(scripts = {
-        E2eTestSql.BIZ_SCHEMA,
-})
+@Sql(
+    scripts = {
+      E2eTestSql.BIZ_SCHEMA,
+    })
 @Tag("e2e")
 class DispatchPipelineE2eIT extends AbstractIntegrationTest {
 
-    private static final String TENANT = "t1";
+  private static final String TENANT = "t1";
 
-    @Autowired
-    private LaunchService launchService;
+  @Autowired private LaunchService launchService;
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+  @Autowired private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-    @Test
-    void dispatchJobRunsThroughKafkaClaimAndReportsSuccess() {
-        jdbcTemplate.update(
-                """
-                        insert into batch.file_channel_config (
-                            tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
-                            config_json, receipt_policy, timeout_seconds, enabled
-                        )
-                        select
-                            ?, ?, ?, 'LOCAL', null, 'NONE',
-                            jsonb_build_object(
-                                'target_endpoint', '/tmp/batch-e2e-dispatch-out',
-                                'receipt_policy', 'NONE',
-                                'channel_type', 'LOCAL',
-                                'channel_code', 'e2e_local_dispatch'
-                            ),
-                            'NONE', 10, true
-                        where not exists (
-                            select 1 from batch.file_channel_config
-                            where tenant_id = ? and channel_code = ?
-                        )
-                        """,
-                TENANT,
-                "e2e_local_dispatch",
-                "E2E local dispatch",
-                TENANT,
-                "e2e_local_dispatch");
+  @Test
+  void dispatchJobRunsThroughKafkaClaimAndReportsSuccess() {
+    jdbcTemplate.update(
+        """
+        insert into batch.file_channel_config (
+            tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
+            config_json, receipt_policy, timeout_seconds, enabled
+        )
+        select
+            ?, ?, ?, 'LOCAL', null, 'NONE',
+            jsonb_build_object(
+                'target_endpoint', '/tmp/batch-e2e-dispatch-out',
+                'receipt_policy', 'NONE',
+                'channel_type', 'LOCAL',
+                'channel_code', 'e2e_local_dispatch'
+            ),
+            'NONE', 10, true
+        where not exists (
+            select 1 from batch.file_channel_config
+            where tenant_id = ? and channel_code = ?
+        )
+        """,
+        TENANT,
+        "e2e_local_dispatch",
+        "E2E local dispatch",
+        TENANT,
+        "e2e_local_dispatch");
 
-        String path = "/tmp/e2e-dispatch-" + System.nanoTime() + ".json";
-        Long fileId = jdbcTemplate.queryForObject(
-                """
-                        insert into batch.file_record (
-                            tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
-                            file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
-                            storage_path, source_type, file_status, biz_date, trace_id
-                        ) values (
-                            ?, 'e2e-dis', 'OUTPUT', 'OUTPUT', 'e2e.json', 'e2e.json', 'json',
-                            'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
-                            ?, 'SYSTEM', 'GENERATED', date '2026-01-15', 'e2e-dis-trace'
-                        ) returning id
-                        """,
-                Long.class,
-                TENANT,
-                path);
-        assertThat(fileId).isNotNull();
+    String path = "/tmp/e2e-dispatch-" + System.nanoTime() + ".json";
+    Long fileId =
+        jdbcTemplate.queryForObject(
+            """
+            insert into batch.file_record (
+                tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
+                file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
+                storage_path, source_type, file_status, biz_date, trace_id
+            ) values (
+                ?, 'e2e-dis', 'OUTPUT', 'OUTPUT', 'e2e.json', 'e2e.json', 'json',
+                'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
+                ?, 'SYSTEM', 'GENERATED', date '2026-01-15', 'e2e-dis-trace'
+            ) returning id
+            """,
+            Long.class,
+            TENANT,
+            path);
+    assertThat(fileId).isNotNull();
 
-        LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-                jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+    LaunchSeed seed =
+        E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+            jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
 
-        Map<String, Object> params = new LinkedHashMap<>();
-        params.put("fileId", String.valueOf(fileId));
-        params.put("channelCode", "e2e_local_dispatch");
-        params.put("dispatchTarget", "/tmp");
-        params.put("externalRequestId", "e2e-ext-" + System.nanoTime());
-        params.put("receiptCode", "R-E2E-DISPATCH");
-        params.put("ackRequired", false);
-        params.put("forceRetry", false);
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("fileId", String.valueOf(fileId));
+    params.put("channelCode", "e2e_local_dispatch");
+    params.put("dispatchTarget", "/tmp");
+    params.put("externalRequestId", "e2e-ext-" + System.nanoTime());
+    params.put("receiptCode", "R-E2E-DISPATCH");
+    params.put("ackRequired", false);
+    params.put("forceRetry", false);
 
-        launchService.launch(new LaunchRequest(
-                TENANT,
-                seed.jobCode(),
-                LocalDate.of(2026, 1, 15),
-                TriggerType.API,
-                seed.requestId(),
-                "e2e-tr-dispatch",
-                params));
+    launchService.launch(
+        new LaunchRequest(
+            TENANT,
+            seed.jobCode(),
+            LocalDate.of(2026, 1, 15),
+            TriggerType.API,
+            seed.requestId(),
+            "e2e-tr-dispatch",
+            params));
 
-        e2eOutboxPublishSupport.publishAllPending(TENANT);
+    e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
-            String status = jdbcTemplate.queryForObject(
-                    """
-                            select t.task_status from batch.job_task t
-                            join batch.job_instance ji on ji.id = t.job_instance_id
-                            where ji.tenant_id = ? and ji.dedup_key = ?
-                            """,
-                    String.class,
-                    TENANT,
-                    seed.dedupKey());
-            assertThat(status).isEqualTo("SUCCESS");
-        });
+    await()
+        .atMost(Duration.ofSeconds(120))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(
+            () -> {
+              String status =
+                  jdbcTemplate.queryForObject(
+                      """
+                      select t.task_status from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """,
+                      String.class,
+                      TENANT,
+                      seed.dedupKey());
+              assertThat(status).isEqualTo("SUCCESS");
+            });
 
-        // Content-level triple-check (状态 + 回执 + 审计) via DispatchReceiptVerifier
-        DispatchReceiptVerifier.forTenant(TENANT)
-                .fileId(fileId)
-                .platformJdbc(jdbcTemplate)
-                .expectedFileStatus("DISPATCHED")
-                .expectedReceiptCode("R-E2E-DISPATCH")
-                .expectedChannelCode("e2e_local_dispatch")
-                .expectedMinAuditCount(1)
-                .build()
-                .verify();
-    }
+    // Content-level triple-check (状态 + 回执 + 审计) via DispatchReceiptVerifier
+    DispatchReceiptVerifier.forTenant(TENANT)
+        .fileId(fileId)
+        .platformJdbc(jdbcTemplate)
+        .expectedFileStatus("DISPATCHED")
+        .expectedReceiptCode("R-E2E-DISPATCH")
+        .expectedChannelCode("e2e_local_dispatch")
+        .expectedMinAuditCount(1)
+        .build()
+        .verify();
+  }
 }
