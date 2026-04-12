@@ -2,6 +2,10 @@ package com.example.batch.common.enums;
 
 import org.springframework.util.StringUtils;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum ShardStrategy {
     NONE("NONE", "不分片"),
     STATIC("STATIC", "静态分片"),
@@ -34,5 +38,9 @@ public enum ShardStrategy {
             }
         }
         return NONE;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(ShardStrategy::code).collect(Collectors.toUnmodifiableSet());
     }
 }

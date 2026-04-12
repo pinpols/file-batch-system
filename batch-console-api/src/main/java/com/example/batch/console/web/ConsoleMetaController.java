@@ -54,4 +54,10 @@ public class ConsoleMetaController {
             @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(queryService.workerGroups(tenantId));
     }
+
+    @GetMapping("/biz-types")
+    public CommonResponse<List<ConsoleMetaOption>> bizTypes(
+            @RequestParam("tenantId") String tenantId) {
+        return responseFactory.success(queryService.bizTypes(tenantId));
+    }
 }

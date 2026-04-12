@@ -1,5 +1,9 @@
 package com.example.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum WorkerRegistryStatus {
     ONLINE("ONLINE", "在线"),
     OFFLINE("OFFLINE", "离线"),
@@ -20,5 +24,9 @@ public enum WorkerRegistryStatus {
 
     public String label() {
         return label;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(WorkerRegistryStatus::code).collect(Collectors.toUnmodifiableSet());
     }
 }

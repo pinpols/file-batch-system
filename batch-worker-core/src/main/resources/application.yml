@@ -11,6 +11,9 @@ management:
         include: health,info,prometheus
 
 batch:
+  security:
+    # 内部接口共享密钥；生产环境必须通过 BATCH_INTERNAL_SECRET 环境变量注入强密钥
+    internal-secret: ${BATCH_INTERNAL_SECRET:internal-secret}
   worker:
     heartbeat-interval-seconds: ${BATCH_WORKER_HEARTBEAT_INTERVAL_SECONDS:15}
     graceful-shutdown:

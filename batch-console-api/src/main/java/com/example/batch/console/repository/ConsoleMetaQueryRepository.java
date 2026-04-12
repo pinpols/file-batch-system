@@ -50,6 +50,16 @@ public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryA
             """)
     List<SimpleOptionView> workerGroupOptions(@Param("tenantId") String tenantId);
 
+    @Query(
+            """
+            SELECT DISTINCT biz_type AS code, biz_type AS label
+              FROM batch.file_record
+             WHERE tenant_id = :tenantId
+               AND biz_type IS NOT NULL
+             ORDER BY biz_type
+            """)
+    List<SimpleOptionView> bizTypeOptions(@Param("tenantId") String tenantId);
+
     interface SimpleOptionView {
         String getCode();
 

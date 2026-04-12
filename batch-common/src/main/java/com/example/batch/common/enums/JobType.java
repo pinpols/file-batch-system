@@ -1,5 +1,9 @@
 package com.example.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum JobType {
     GENERAL("GENERAL", "通用任务"),
     IMPORT("IMPORT", "导入任务"),
@@ -21,5 +25,9 @@ public enum JobType {
 
     public String label() {
         return label;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(JobType::code).collect(Collectors.toUnmodifiableSet());
     }
 }

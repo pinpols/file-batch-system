@@ -9,6 +9,8 @@ import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.BatchWindowEndStrategy;
+import com.example.batch.common.enums.OutOfWindowAction;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -88,8 +90,8 @@ public class DefaultConsoleBatchWindowExcelApplicationService
                     "enabled",
                     "description");
     private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
-    private static final Set<String> END_STRATEGIES = Set.of("STOP", "FINISH_RUNNING", "CONTINUE");
-    private static final Set<String> OUT_OF_WINDOW_ACTIONS = Set.of("WAIT", "FAIL");
+    private static final Set<String> END_STRATEGIES = BatchWindowEndStrategy.codes();
+    private static final Set<String> OUT_OF_WINDOW_ACTIONS = OutOfWindowAction.codes();
     private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
             Map.ofEntries(
                     Map.entry(

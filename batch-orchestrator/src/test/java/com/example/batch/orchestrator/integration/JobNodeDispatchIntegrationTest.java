@@ -247,7 +247,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
         // 模拟子任务成功完成
         taskOutcomeService.applyTaskOutcome(new TaskOutcomeCommand(
-                TENANT, childTaskId, true, "{}", null, null));
+                TENANT, childTaskId, null, true, "{}", null, null));
 
         // 子 job instance 应为 SUCCESS
         String childStatus = jdbcTemplate.queryForObject(
@@ -298,7 +298,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
                 Timestamp.from(Instant.now()), childTaskId);
 
         taskOutcomeService.applyTaskOutcome(new TaskOutcomeCommand(
-                TENANT, childTaskId, false, "{}", "ERR_CHILD", "child task failed"));
+                TENANT, childTaskId, null, false, "{}", "ERR_CHILD", "child task failed"));
 
         // 父任务应为 FAILED（子任务失败，无重试策略）
         String parentStatus = jdbcTemplate.queryForObject(

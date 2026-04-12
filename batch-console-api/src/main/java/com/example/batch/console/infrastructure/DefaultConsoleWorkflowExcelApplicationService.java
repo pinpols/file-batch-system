@@ -11,6 +11,10 @@ import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.RetryPolicyType;
+import com.example.batch.common.enums.WorkflowEdgeType;
+import com.example.batch.common.enums.WorkflowNodeType;
+import com.example.batch.common.enums.WorkflowType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
@@ -255,12 +259,10 @@ public class DefaultConsoleWorkflowExcelApplicationService
                             "enabled",
                             optionalColumn("该依赖边是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")));
 
-    private static final Set<String> WORKFLOW_TYPES = Set.of("DAG", "PIPELINE", "MIXED");
-    private static final Set<String> NODE_TYPES =
-            Set.of("TASK", "GATEWAY", "FILE_STEP", "START", "END", "JOB");
-    private static final Set<String> RETRY_POLICIES = Set.of("NONE", "FIXED", "EXPONENTIAL");
-    private static final Set<String> EDGE_TYPES =
-            Set.of("SUCCESS", "FAILURE", "CONDITION", "ALWAYS");
+    private static final Set<String> WORKFLOW_TYPES = WorkflowType.codes();
+    private static final Set<String> NODE_TYPES = WorkflowNodeType.codes();
+    private static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
+    private static final Set<String> EDGE_TYPES = WorkflowEdgeType.codes();
 
     private final ConsoleTenantGuard tenantGuard;
     private final ConsoleRequestMetadataResolver requestMetadataResolver;

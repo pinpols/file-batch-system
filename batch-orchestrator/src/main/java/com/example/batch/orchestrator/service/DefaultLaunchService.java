@@ -4,6 +4,7 @@ import com.example.batch.common.constants.BatchStatusConstants;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.JobInstanceStatus;
+import com.example.batch.common.enums.JobType;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
@@ -190,33 +191,42 @@ public class DefaultLaunchService implements LaunchService {
         launchBatchDayService.upsertBatchDayInstance(
                 request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
 
-        List<WorkflowDagService.DagNodeResolution> initialNodes =
-                workflowDagService.resolveInitialNodes(
-                        loaded.workflowDefinition().id(),
-                        launchParamResolver.buildPayloadJson(effectiveParams));
-
-        WorkflowRunEntity workflowRun = new WorkflowRunEntity();
-        workflowRun.setTenantId(request.tenantId());
-        workflowRun.setWorkflowDefinitionId(loaded.workflowDefinition().id());
-        workflowRun.setRelatedJobInstanceId(jobInstance.getId());
-        workflowRun.setBizDate(request.bizDate());
-        workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
-        workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
-        workflowRun.setTraceId(traceId);
-        workflowMappers.workflowRunMapper.insert(workflowRun);
-
+        // WORKFLOW 类型：解析 DAG 初始节点并创建 workflow_run/node_run；其他类型（IMPORT/EXPORT/DISPATCH/GENERAL）无 workflow，跳过。
+        List<WorkflowDagService.DagNodeResolution> initialNodes;
+        WorkflowRunEntity workflowRun;
         Instant startedAt = Instant.now();
-        WorkflowNodeRunEntity startNodeRun = new WorkflowNodeRunEntity();
-        startNodeRun.setWorkflowRunId(workflowRun.getId());
-        startNodeRun.setNodeCode(WorkflowNodeCode.START.code());
-        startNodeRun.setNodeType(WorkflowNodeType.START.code());
-        startNodeRun.setRunSeq(1);
-        startNodeRun.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
-        startNodeRun.setRetryCount(0);
-        startNodeRun.setDurationMs(0L);
-        startNodeRun.setStartedAt(startedAt);
-        startNodeRun.setFinishedAt(startedAt);
-        workflowMappers.workflowNodeRunMapper.insert(startNodeRun);
+
+        if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {
+            initialNodes =
+                    workflowDagService.resolveInitialNodes(
+                            loaded.workflowDefinition().id(),
+                            launchParamResolver.buildPayloadJson(effectiveParams));
+
+            workflowRun = new WorkflowRunEntity();
+            workflowRun.setTenantId(request.tenantId());
+            workflowRun.setWorkflowDefinitionId(loaded.workflowDefinition().id());
+            workflowRun.setRelatedJobInstanceId(jobInstance.getId());
+            workflowRun.setBizDate(request.bizDate());
+            workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
+            workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
+            workflowRun.setTraceId(traceId);
+            workflowMappers.workflowRunMapper.insert(workflowRun);
+
+            WorkflowNodeRunEntity startNodeRun = new WorkflowNodeRunEntity();
+            startNodeRun.setWorkflowRunId(workflowRun.getId());
+            startNodeRun.setNodeCode(WorkflowNodeCode.START.code());
+            startNodeRun.setNodeType(WorkflowNodeType.START.code());
+            startNodeRun.setRunSeq(1);
+            startNodeRun.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
+            startNodeRun.setRetryCount(0);
+            startNodeRun.setDurationMs(0L);
+            startNodeRun.setStartedAt(startedAt);
+            startNodeRun.setFinishedAt(startedAt);
+            workflowMappers.workflowNodeRunMapper.insert(startNodeRun);
+        } else {
+            initialNodes = List.of();
+            workflowRun = null;
+        }
 
         return new PreparedLaunch(jobInstance, workflowRun, initialNodes, startedAt);
     }

@@ -28,6 +28,8 @@ spring:
     baseline-on-migrate: true
     # baseline-version 固定为 1：仅表示「V1（建 schema）已由 Docker init 等预置」，勿改成当前最新迁移号（V34/V35…）。
     baseline-version: 1
+    # 本地开发：迁移脚本修改后 jar 重建前 checksum 可能不一致，跳过校验避免卡启动；生产保持 true（application.yml 默认）。
+    validate-on-migrate: false
   sql:
     init:
       mode: never

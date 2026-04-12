@@ -1,5 +1,9 @@
 package com.example.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum AiPromptCategory {
     PLATFORM("PLATFORM", "平台咨询"),
     FILE_GOVERNANCE("FILE_GOVERNANCE", "文件治理"),
@@ -21,5 +25,9 @@ public enum AiPromptCategory {
 
     public String label() {
         return label;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(AiPromptCategory::code).collect(Collectors.toUnmodifiableSet());
     }
 }

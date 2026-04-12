@@ -1,13 +1,17 @@
 package com.example.batch.worker.core.infrastructure;
 
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.support.TaskExecutionClient;
+
 import io.micrometer.core.instrument.MeterRegistry;
-import java.net.http.HttpClient;
-import java.time.Duration;
-import java.util.Optional;
+
 import lombok.extern.slf4j.Slf4j;
+
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
@@ -20,9 +24,10 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
-import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.common.logging.StructuredLogField;
-import com.example.batch.common.utils.IdGenerator;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
+import java.util.Optional;
 
 /** 调用 orchestrator 内部任务 API，带超时、瞬态失败有限重试及 Micrometer 失败计数。 */
 @Component
@@ -30,6 +35,7 @@ import com.example.batch.common.utils.IdGenerator;
 public class HttpTaskExecutionClient implements TaskExecutionClient {
 
     private final OrchestratorTaskClientProperties properties;
+    private final BatchSecurityProperties securityProperties;
     private final RestClient.Builder builder;
     private final Environment environment;
     private final Optional<MeterRegistry> meterRegistry;
@@ -38,10 +44,12 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
 
     public HttpTaskExecutionClient(
             OrchestratorTaskClientProperties properties,
+            BatchSecurityProperties securityProperties,
             RestClient.Builder builder,
             Environment environment,
             @Autowired(required = false) MeterRegistry meterRegistry) {
         this.properties = properties;
+        this.securityProperties = securityProperties;
         this.builder = builder;
         this.environment = environment;
         this.meterRegistry = Optional.ofNullable(meterRegistry);
@@ -216,6 +224,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
                 factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()));
                 this.restClient = builder
                         .baseUrl(resolveBaseUrl())
+                        .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
                         .requestFactory(factory)
                         .build();
             }

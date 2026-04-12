@@ -26,7 +26,8 @@ INSERT INTO batch.resource_queue (
     ('default', 'dispatch-queue', 'Default Dispatch Queue', 'DISPATCH',
      2, 4, 15, 'dispatch', 'delivery', 'FIFO',        3,
      TRUE, 'Dispatch queue template — adjust max_running_jobs / max_qps before use',
-     'delivery', 1, 'NONE',           2);
+     'delivery', 1, 'NONE',           2)
+ON CONFLICT (tenant_id, queue_code) DO NOTHING;
 
 -- ── TENANT_QUOTA_POLICY ───────────────────────────────────────────────────────
 -- 保守额度：单租户并发上限较低，防止新租户上线初期冲高负载
@@ -40,7 +41,8 @@ INSERT INTO batch.tenant_quota_policy (
     ('default', 'default-policy',
      5, 10, 30,
      1, TRUE, 'Conservative default quota policy — raise limits after capacity planning',
-     'core', 1, 2, 'SLIDING_WINDOW', 3);
+     'core', 1, 2, 'SLIDING_WINDOW', 3)
+ON CONFLICT (tenant_id, policy_code) DO NOTHING;
 
 -- ── BATCH_WINDOW ──────────────────────────────────────────────────────────────
 -- 全天开放，最宽松窗口；租户可按批量时间窗收窄
@@ -51,7 +53,8 @@ INSERT INTO batch.batch_window (
 ) VALUES
     ('default', 'always-open', 'Always Open', 'Asia/Shanghai',
      TIME '00:00:00', TIME '23:59:59', 'FINISH_RUNNING', 'WAIT',
-     TRUE, TRUE, 'Full-day window template');
+     TRUE, TRUE, 'Full-day window template')
+ON CONFLICT (tenant_id, window_code) DO NOTHING;
 
 -- ── BUSINESS_CALENDAR ─────────────────────────────────────────────────────────
 -- 无节假日占位，catchup 自动触发；租户可添加节假日列表并调整 holiday_roll_rule
@@ -60,7 +63,8 @@ INSERT INTO batch.business_calendar (
     holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled
 ) VALUES
     ('default', 'default-calendar', 'Default Calendar', 'Asia/Shanghai',
-     'NEXT_WORKDAY', 'AUTO', 3, TRUE);
+     'NEXT_WORKDAY', 'AUTO', 3, TRUE)
+ON CONFLICT (tenant_id, calendar_code) DO NOTHING;
 
 -- ── FILE_TEMPLATE ─────────────────────────────────────────────────────────────
 -- 通用占位模板：field_mappings / validation_rule_set 为空对象，
@@ -86,7 +90,7 @@ INSERT INTO batch.file_template_config (
      FALSE, E'\n', ',', '"', '\\',
      0, 1, 0, NULL, NULL,
      'SHA-256', 'NONE', 'NONE',
-     '${bizType}-import-${bizDate}-${version}', '{}', '{}',
+     '$${bizType}-import-$${bizDate}-$${version}', '{}', '{}',
      NULL, NULL, '{}',
      TRUE, 1000, 1000, 500,
      TRUE, 1,
@@ -99,11 +103,12 @@ INSERT INTO batch.file_template_config (
      FALSE, E'\n', ',', '"', '\\',
      0, 1, 0, NULL, NULL,
      'SHA-256', 'NONE', 'NONE',
-     '${bizType}-export-${bizDate}-${version}', '{}', '{}',
+     '$${bizType}-export-$${bizDate}-$${version}', '{}', '{}',
      NULL, NULL, '{}',
      TRUE, 1000, 1000, 500,
      TRUE, 1,
      'Generic CSV export template — fill field_mappings / default_query_sql / export_data_ref before use',
      'system', 'system',
      FALSE, FALSE, FALSE, FALSE, NULL, FALSE, NULL,
-     NULL, 'sql_template_export');
+     NULL, 'sql_template_export')
+ON CONFLICT (tenant_id, template_code) DO NOTHING;

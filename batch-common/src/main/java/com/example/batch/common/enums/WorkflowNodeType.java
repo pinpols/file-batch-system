@@ -1,5 +1,9 @@
 package com.example.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum WorkflowNodeType {
     TASK("TASK", "任务节点"),
     GATEWAY("GATEWAY", "网关节点"),
@@ -22,5 +26,9 @@ public enum WorkflowNodeType {
 
     public String label() {
         return label;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(WorkflowNodeType::code).collect(Collectors.toUnmodifiableSet());
     }
 }

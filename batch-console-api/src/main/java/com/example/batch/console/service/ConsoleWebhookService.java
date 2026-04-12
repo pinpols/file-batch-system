@@ -7,6 +7,7 @@ import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
+import com.example.batch.console.support.CallbackUrlValidator;
 import com.example.batch.console.support.ConsoleTenantGuard;
 
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class ConsoleWebhookService {
     private final ConsoleWebhookSubscriptionRepository subscriptionRepository;
     private final ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
     private final ConsoleTenantGuard tenantGuard;
+    private final CallbackUrlValidator callbackUrlValidator;
 
     public List<WebhookSubscriptionEntity> listSubscriptions(String tenantId) {
         return subscriptionRepository.findAllByTenant(tenantGuard.resolveTenant(tenantId));
@@ -48,6 +50,7 @@ public class ConsoleWebhookService {
             boolean enabled,
             String operator) {
         String resolved = tenantGuard.resolveTenant(tenantId);
+        callbackUrlValidator.validate(callbackUrl);
         subscriptionRepository
                 .findByTenantAndName(resolved, name)
                 .ifPresent(
@@ -84,6 +87,7 @@ public class ConsoleWebhookService {
         if (subscriptionRepository.findByTenantAndId(resolved, id).isEmpty()) {
             throw new BizException(ResultCode.NOT_FOUND, "webhook subscription not found");
         }
+        callbackUrlValidator.validate(callbackUrl);
         subscriptionRepository.update(
                 resolved,
                 id,

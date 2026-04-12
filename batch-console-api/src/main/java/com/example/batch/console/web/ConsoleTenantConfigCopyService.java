@@ -203,17 +203,7 @@ public class ConsoleTenantConfigCopyService {
     // ------------------------------------------------------------------ readers
 
     private List<JobDefinitionSpec> readJobDefinitions(String tenantId) {
-        JobDefinitionQuery query =
-                new JobDefinitionQuery(
-                        tenantId,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        new PageRequest(1, MAX_PAGE_SIZE));
+        JobDefinitionQuery query = JobDefinitionQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE));
         List<JobDefinitionEntity> entities = jobDefinitionMapper.selectByQuery(query);
         List<JobDefinitionSpec> specs = new ArrayList<>(entities.size());
         for (JobDefinitionEntity e : entities) {
@@ -247,9 +237,7 @@ public class ConsoleTenantConfigCopyService {
     }
 
     private List<WorkflowDefinitionSpec> readWorkflowDefinitions(String tenantId) {
-        WorkflowDefinitionQuery query =
-                new WorkflowDefinitionQuery(
-                        tenantId, null, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+        WorkflowDefinitionQuery query = WorkflowDefinitionQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE));
         List<WorkflowDefinitionEntity> entities = workflowDefinitionMapper.selectByQuery(query);
         List<WorkflowDefinitionSpec> specs = new ArrayList<>(entities.size());
         for (WorkflowDefinitionEntity e : entities) {
@@ -260,15 +248,7 @@ public class ConsoleTenantConfigCopyService {
             s.setEnabled(e.getEnabled());
 
             // nodes
-            WorkflowNodeQuery nodeQuery =
-                    new WorkflowNodeQuery(
-                            null,
-                            e.getId(),
-                            null,
-                            null,
-                            null,
-                            null,
-                            new PageRequest(1, MAX_PAGE_SIZE));
+            WorkflowNodeQuery nodeQuery = WorkflowNodeQuery.ofDefinition(e.getId(), new PageRequest(1, MAX_PAGE_SIZE));
             List<WorkflowNodeEntity> nodes = workflowNodeMapper.selectByQuery(nodeQuery);
             List<WorkflowDefinitionSpec.NodeSpec> nodeSpecs = new ArrayList<>(nodes.size());
             for (WorkflowNodeEntity n : nodes) {
@@ -291,16 +271,7 @@ public class ConsoleTenantConfigCopyService {
             s.setNodes(nodeSpecs);
 
             // edges
-            WorkflowEdgeQuery edgeQuery =
-                    new WorkflowEdgeQuery(
-                            null,
-                            e.getId(),
-                            null,
-                            null,
-                            null,
-                            null,
-                            null,
-                            new PageRequest(1, MAX_PAGE_SIZE));
+            WorkflowEdgeQuery edgeQuery = WorkflowEdgeQuery.ofDefinition(e.getId(), new PageRequest(1, MAX_PAGE_SIZE));
             List<WorkflowEdgeEntity> edges = workflowEdgeMapper.selectByQuery(edgeQuery);
             List<WorkflowDefinitionSpec.EdgeSpec> edgeSpecs = new ArrayList<>(edges.size());
             for (WorkflowEdgeEntity edge : edges) {
@@ -495,12 +466,12 @@ public class ConsoleTenantConfigCopyService {
         List<BusinessCalendarSpec> specs = new ArrayList<>(rows.size());
         for (Map<String, Object> r : rows) {
             BusinessCalendarSpec s = new BusinessCalendarSpec();
-            s.setCalendarCode(str(r, "calendarCode"));
-            s.setCalendarName(str(r, "calendarName"));
+            s.setCalendarCode(str(r, "calendar_code"));
+            s.setCalendarName(str(r, "calendar_name"));
             s.setTimezone(str(r, "timezone"));
-            s.setHolidayRollRule(str(r, "holidayRollRule"));
-            s.setCatchUpPolicy(str(r, "catchUpPolicy"));
-            s.setCatchUpMaxDays(intVal(r, "catchUpMaxDays"));
+            s.setHolidayRollRule(str(r, "holiday_roll_rule"));
+            s.setCatchUpPolicy(str(r, "catch_up_policy"));
+            s.setCatchUpMaxDays(intVal(r, "catch_up_max_days"));
             s.setEnabled(bool(r, "enabled"));
             Long calendarId = num(r, "id");
             if (calendarId != null) {

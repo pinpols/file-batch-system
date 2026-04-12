@@ -1,5 +1,9 @@
 package com.example.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum OutboxPublishStatus {
     NEW("NEW", "待发送"),
     PUBLISHING("PUBLISHING", "发送中"),
@@ -21,5 +25,9 @@ public enum OutboxPublishStatus {
 
     public String label() {
         return label;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(OutboxPublishStatus::code).collect(Collectors.toUnmodifiableSet());
     }
 }

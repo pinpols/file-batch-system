@@ -9,6 +9,8 @@ import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.QueuePriorityPolicy;
+import com.example.batch.common.enums.ResourceQueueType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -88,8 +90,8 @@ public class DefaultConsoleResourceQueueExcelApplicationService
                     "enabled",
                     "description");
     private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
-    private static final Set<String> QUEUE_TYPES = Set.of("IMPORT", "EXPORT", "DISPATCH", "MIXED");
-    private static final Set<String> PRIORITY_POLICIES = Set.of("FIFO", "PRIORITY", "FAIR_SHARE");
+    private static final Set<String> QUEUE_TYPES = ResourceQueueType.codes();
+    private static final Set<String> PRIORITY_POLICIES = QueuePriorityPolicy.codes();
     private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
             Map.ofEntries(
                     Map.entry(

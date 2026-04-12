@@ -1,5 +1,7 @@
 package com.example.batch.trigger.config;
 
+import com.example.batch.common.config.BatchSecurityProperties;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,7 +13,12 @@ public class QuartzTriggerConfiguration {
 
     @Bean
     public RestClient orchestratorRestClient(
-            RestClient.Builder builder, OrchestratorClientProperties properties) {
-        return builder.baseUrl(properties.getBaseUrl()).build();
+            RestClient.Builder builder,
+            OrchestratorClientProperties properties,
+            BatchSecurityProperties securityProperties) {
+        return builder
+                .baseUrl(properties.getBaseUrl())
+                .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
+                .build();
     }
 }

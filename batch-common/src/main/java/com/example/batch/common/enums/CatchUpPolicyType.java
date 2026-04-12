@@ -1,5 +1,9 @@
 package com.example.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum CatchUpPolicyType {
     NONE("NONE", "不补跑"),
     AUTO("AUTO", "自动补跑"),
@@ -43,5 +47,9 @@ public enum CatchUpPolicyType {
             }
         }
         return NONE;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(CatchUpPolicyType::code).collect(Collectors.toUnmodifiableSet());
     }
 }

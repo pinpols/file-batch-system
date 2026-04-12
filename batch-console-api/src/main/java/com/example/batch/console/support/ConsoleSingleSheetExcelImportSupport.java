@@ -152,7 +152,8 @@ public final class ConsoleSingleSheetExcelImportSupport {
                 for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
                     String columnName = columns.get(columnIndex);
                     String value = rawRow.get(columnName);
-                    dataRow.createCell(columnIndex).setCellValue(value == null ? "" : value);
+                    dataRow.createCell(columnIndex)
+                            .setCellValue(ConsoleExcelStyles.escapeFormula(value == null ? "" : value));
                 }
             }
             validationApplier.accept(dataSheet);

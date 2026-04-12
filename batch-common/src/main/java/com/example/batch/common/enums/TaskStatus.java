@@ -1,5 +1,9 @@
 package com.example.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum TaskStatus {
     CREATED("CREATED", "已创建"),
     READY("READY", "待执行"),
@@ -23,5 +27,9 @@ public enum TaskStatus {
 
     public String label() {
         return label;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(TaskStatus::code).collect(Collectors.toUnmodifiableSet());
     }
 }

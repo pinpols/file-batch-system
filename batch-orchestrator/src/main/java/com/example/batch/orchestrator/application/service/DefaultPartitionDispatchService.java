@@ -152,12 +152,14 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             }
             jobInstance.setVersion(
                     (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
-            workflowRunMapper.markRunning(
-                    jobInstance.getTenantId(),
-                    workflowRun.getId(),
-                    stateMachine.transition(workflowRun, "START").toState(),
-                    workflowRun.getCurrentNodeCode(),
-                    startedAt);
+            if (workflowRun != null) {
+                workflowRunMapper.markRunning(
+                        jobInstance.getTenantId(),
+                        workflowRun.getId(),
+                        stateMachine.transition(workflowRun, "START").toState(),
+                        workflowRun.getCurrentNodeCode(),
+                        startedAt);
+            }
         } else {
             // 不可派发（资源不足/窗口限制等）：instance 进入 WAITING，由等待派发调度器后续推进。
             int updated =
@@ -176,12 +178,14 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             }
             jobInstance.setVersion(
                     (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
-            workflowRunMapper.markRunning(
-                    jobInstance.getTenantId(),
-                    workflowRun.getId(),
-                    WorkflowRunStatus.CREATED.code(),
-                    workflowRun.getCurrentNodeCode(),
-                    null);
+            if (workflowRun != null) {
+                workflowRunMapper.markRunning(
+                        jobInstance.getTenantId(),
+                        workflowRun.getId(),
+                        WorkflowRunStatus.CREATED.code(),
+                        workflowRun.getCurrentNodeCode(),
+                        null);
+            }
         }
     }
 
