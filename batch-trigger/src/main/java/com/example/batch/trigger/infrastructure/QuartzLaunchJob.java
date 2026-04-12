@@ -82,7 +82,8 @@ public class QuartzLaunchJob implements Job {
             "tenant is suspended, auto-pausing quartz job: tenantId={}, jobCode={}",
             descriptor.getTenantId(),
             descriptor.getJobCode());
-        triggerRegistrationService.pauseByJobCode(descriptor.getTenantId(), descriptor.getJobCode());
+        triggerRegistrationService.pauseByJobCode(
+            descriptor.getTenantId(), descriptor.getJobCode());
       } else {
         throw new JobExecutionException(e, false);
       }

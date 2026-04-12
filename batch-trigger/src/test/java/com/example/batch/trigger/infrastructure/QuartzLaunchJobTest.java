@@ -39,8 +39,7 @@ class QuartzLaunchJobTest {
     TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
     properties.setMisfireCatchUpThresholdSeconds(60L);
     job =
-        new QuartzLaunchJob(
-            triggerService, misfireHandler, properties, triggerRegistrationService);
+        new QuartzLaunchJob(triggerService, misfireHandler, properties, triggerRegistrationService);
   }
 
   @Test

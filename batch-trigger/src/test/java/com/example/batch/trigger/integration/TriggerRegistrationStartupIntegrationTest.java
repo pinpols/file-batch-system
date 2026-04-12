@@ -44,7 +44,9 @@ class TriggerRegistrationStartupIntegrationTest extends AbstractIntegrationTest 
     jdbcTemplate.update("delete from batch.tenant where tenant_id = ?", "t-trigger");
     jdbcTemplate.update(
         "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, ?)",
-        "t-trigger", "t-trigger", "ACTIVE");
+        "t-trigger",
+        "t-trigger",
+        "ACTIVE");
     reset(scheduler); // Spring singleton mock — 每个测试前重置调用计数
   }
 
