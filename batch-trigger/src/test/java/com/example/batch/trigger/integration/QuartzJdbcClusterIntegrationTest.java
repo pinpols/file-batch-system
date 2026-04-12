@@ -39,7 +39,9 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
 
     jdbcTemplate.update(
         "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, ?)",
-        tenantId, tenantId, "ACTIVE");
+        tenantId,
+        tenantId,
+        "ACTIVE");
     insertBusinessCalendar(tenantId, calendarCode);
     insertCronJobDefinition(tenantId, jobCode, calendarCode, cronExpr);
 
@@ -82,10 +84,12 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
       }
       jdbcTemplate.update(
           "delete from batch.job_definition where tenant_id = ? and job_code = ?",
-          tenantId, jobCode);
+          tenantId,
+          jobCode);
       jdbcTemplate.update(
           "delete from batch.business_calendar where tenant_id = ? and calendar_code = ?",
-          tenantId, calendarCode);
+          tenantId,
+          calendarCode);
       jdbcTemplate.update("delete from batch.tenant where tenant_id = ?", tenantId);
     }
   }
