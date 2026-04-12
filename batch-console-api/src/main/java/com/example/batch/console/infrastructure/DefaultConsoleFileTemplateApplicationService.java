@@ -8,6 +8,7 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.ConsoleFileTemplateApplicationService;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.param.FileTemplateConfigUpsertParam;
+import com.example.batch.console.mapper.query.FileTemplateConfigQuery;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
@@ -32,17 +33,8 @@ public class DefaultConsoleFileTemplateApplicationService
   public PageResponse<Map<String, Object>> list(FileTemplateQueryRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    long total =
-        mapper.countByQuery(
-            tenantId,
-            request.getKeyword(),
-            request.getTemplateCode(),
-            request.getTemplateName(),
-            request.getTemplateType(),
-            request.getBizType(),
-            request.getEnabled());
-    List<Map<String, Object>> items =
-        mapper.selectByQuery(
+    FileTemplateConfigQuery query =
+        new FileTemplateConfigQuery(
             tenantId,
             request.getKeyword(),
             request.getTemplateCode(),
@@ -51,6 +43,8 @@ public class DefaultConsoleFileTemplateApplicationService
             request.getBizType(),
             request.getEnabled(),
             pageRequest);
+    long total = mapper.countByQuery(query);
+    List<Map<String, Object>> items = mapper.selectByQuery(query);
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 

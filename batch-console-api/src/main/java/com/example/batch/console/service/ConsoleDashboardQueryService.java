@@ -10,6 +10,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConsoleDashboardQueryService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_DAILY_TREND = "dailyTrend";
+  private static final String KEY_DAY = "day";
+  private static final String KEY_COUNT = "count";
+
   private final ConsoleDashboardQueryRepository repository;
   private final ConsoleTenantGuard tenantGuard;
 
@@ -33,14 +38,14 @@ public class ConsoleDashboardQueryService {
     result.put("byStatus", byStatus);
     result.put("total", total);
     result.put(
-        "dailyTrend",
+        KEY_DAILY_TREND,
         repository.jobDailyTrend(resolved, days).stream()
             .map(
                 row ->
                     Map.of(
-                        "day", row.getDay(),
+                        KEY_DAY, row.getDay(),
                         "status", row.getStatus(),
-                        "count", row.getCount() == null ? 0L : row.getCount()))
+                        KEY_COUNT, row.getCount() == null ? 0L : row.getCount()))
             .toList());
     return result;
   }
@@ -56,16 +61,16 @@ public class ConsoleDashboardQueryService {
                     Map.of(
                         "type",
                         row.getType(),
-                        "count",
+                        KEY_COUNT,
                         row.getCount() == null ? 0L : row.getCount()))
             .toList());
     result.put(
-        "dailyTrend",
+        KEY_DAILY_TREND,
         repository.triggerDailyTrend(resolved, days).stream()
             .map(
                 row ->
                     Map.of(
-                        "day", row.getDay(), "count", row.getCount() == null ? 0L : row.getCount()))
+                        KEY_DAY, row.getDay(), KEY_COUNT, row.getCount() == null ? 0L : row.getCount()))
             .toList());
     return result;
   }
@@ -81,7 +86,7 @@ public class ConsoleDashboardQueryService {
                     Map.of(
                         "status",
                         row.getStatus(),
-                        "count",
+                        KEY_COUNT,
                         row.getCount() == null ? 0L : row.getCount()))
             .toList());
     result.put(
@@ -92,7 +97,7 @@ public class ConsoleDashboardQueryService {
                     Map.of(
                         "workerGroup", row.getWorkerGroup(),
                         "status", row.getStatus(),
-                        "count", row.getCount() == null ? 0L : row.getCount()))
+                        KEY_COUNT, row.getCount() == null ? 0L : row.getCount()))
             .toList());
     result.put(
         "activePartitionsByWorker",
@@ -119,18 +124,18 @@ public class ConsoleDashboardQueryService {
                     Map.of(
                         "severity",
                         row.getSeverity(),
-                        "count",
+                        KEY_COUNT,
                         row.getCount() == null ? 0L : row.getCount()))
             .toList());
     result.put(
-        "dailyTrend",
+        KEY_DAILY_TREND,
         repository.alertDailyTrend(resolved, days).stream()
             .map(
                 row ->
                     Map.of(
-                        "day", row.getDay(),
+                        KEY_DAY, row.getDay(),
                         "severity", row.getSeverity(),
-                        "count", row.getCount() == null ? 0L : row.getCount()))
+                        KEY_COUNT, row.getCount() == null ? 0L : row.getCount()))
             .toList());
     return result;
   }
@@ -219,12 +224,12 @@ public class ConsoleDashboardQueryService {
         "totalWithSla", stats == null || stats.totalWithSla() == null ? 0L : stats.totalWithSla());
     result.put("avgDurationSeconds", stats == null ? null : stats.avgDurationSeconds());
     result.put(
-        "dailyTrend",
+        KEY_DAILY_TREND,
         repository.slaDailyTrend(resolved, days).stream()
             .map(
                 row ->
                     Map.of(
-                        "day", row.getDay(),
+                        KEY_DAY, row.getDay(),
                         "breached", row.getBreached() == null ? 0L : row.getBreached(),
                         "onTime", row.getOnTime() == null ? 0L : row.getOnTime()))
             .toList());

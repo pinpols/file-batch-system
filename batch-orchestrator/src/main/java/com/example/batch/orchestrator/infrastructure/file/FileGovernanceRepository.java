@@ -20,6 +20,13 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class FileGovernanceRepository {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_RUNNING_STATUS = "runningStatus";
+  private static final String KEY_LIMIT = "limit";
+  private static final String KEY_THRESHOLD_SECONDS = "thresholdSeconds";
+  private static final String KEY_TENANT_ID = "tenantId";
+  private static final String KEY_FILE_ID = "fileId";
+
   public record FileIdentity(
       String tenantId, String fileCategory, String fileName, String fileFormatType) {}
 
@@ -52,7 +59,7 @@ public class FileGovernanceRepository {
       return Map.of();
     }
     Map<String, Object> fileRecord =
-        fileGovernanceMapper.selectFileRecord(params("tenantId", tenantId, "fileId", fileId));
+        fileGovernanceMapper.selectFileRecord(params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId));
     return fileRecord == null ? Map.of() : fileRecord;
   }
 
@@ -62,7 +69,7 @@ public class FileGovernanceRepository {
     }
     Map<String, Object> security =
         fileGovernanceMapper.selectFileTemplateSecurity(
-            params("tenantId", tenantId, "fileId", fileId));
+            params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId));
     return security == null ? Map.of() : security;
   }
 
@@ -73,10 +80,10 @@ public class FileGovernanceRepository {
     Long count =
         fileGovernanceMapper.countActivePipelineInstances(
             params(
-                "tenantId", tenantId,
-                "fileId", fileId,
+                KEY_TENANT_ID, tenantId,
+                KEY_FILE_ID, fileId,
                 "createdStatus", FileDispatchRunStatus.CREATED.code(),
-                "runningStatus", FileDispatchRunStatus.RUNNING.code(),
+                KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code(),
                 "compensatingStatus", FileDispatchRunStatus.COMPENSATING.code()));
     return count == null ? 0L : count;
   }
@@ -88,8 +95,8 @@ public class FileGovernanceRepository {
     Long count =
         fileGovernanceMapper.countPendingDispatchRecords(
             params(
-                "tenantId", tenantId,
-                "fileId", fileId,
+                KEY_TENANT_ID, tenantId,
+                KEY_FILE_ID, fileId,
                 "dispatchCreatedStatus", FileDispatchStatus.CREATED.name(),
                 "dispatchSentStatus", FileDispatchStatus.SENT.name(),
                 "receiptPendingStatus", FileReceiptStatus.PENDING.name()));
@@ -103,7 +110,7 @@ public class FileGovernanceRepository {
     }
     Map<String, Object> dispatchRecord =
         fileGovernanceMapper.selectLatestDispatchRecord(
-            params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode));
+            params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, "channelCode", channelCode));
     return dispatchRecord == null ? Map.of() : dispatchRecord;
   }
 
@@ -121,7 +128,7 @@ public class FileGovernanceRepository {
     }
     fileGovernanceMapper.resetDispatchRecordForRedispatch(
         params(
-            "tenantId", tenantId,
+            KEY_TENANT_ID, tenantId,
             "dispatchRecordId", dispatchRecordId,
             "dispatchCreatedStatus", FileDispatchStatus.CREATED.name()));
   }
@@ -130,7 +137,7 @@ public class FileGovernanceRepository {
     return fileGovernanceMapper.selectArchivedFilesForCleanup(
         params(
             "cutoff", cutoff,
-            "limit", limit,
+            KEY_LIMIT, limit,
             "archivedStatus", FileDispatchRunStatus.ARCHIVED.code()));
   }
 
@@ -138,14 +145,14 @@ public class FileGovernanceRepository {
     if (limit <= 0) {
       return List.of();
     }
-    return fileGovernanceMapper.selectArrivalGovernanceCandidates(params("limit", limit));
+    return fileGovernanceMapper.selectArrivalGovernanceCandidates(params(KEY_LIMIT, limit));
   }
 
   public List<Map<String, Object>> selectArrivalGroupSummaries(
       String tenantId, String fileGroupCode, String arrivalState) {
     return fileGovernanceMapper.selectArrivalGroupSummaries(
         params(
-            "tenantId", tenantId,
+            KEY_TENANT_ID, tenantId,
             "fileGroupCode", fileGroupCode,
             "arrivalState", arrivalState));
   }
@@ -155,7 +162,7 @@ public class FileGovernanceRepository {
       return List.of();
     }
     return fileGovernanceMapper.selectArrivalGroupFiles(
-        params("tenantId", tenantId, "fileGroupCode", fileGroupCode));
+        params(KEY_TENANT_ID, tenantId, "fileGroupCode", fileGroupCode));
   }
 
   public long countArrivalDelayViolations(String tenantId, long thresholdSeconds) {
@@ -165,8 +172,8 @@ public class FileGovernanceRepository {
     Long count =
         fileGovernanceMapper.countArrivalDelayViolations(
             params(
-                "tenantId", tenantId,
-                "thresholdSeconds", thresholdSeconds));
+                KEY_TENANT_ID, tenantId,
+                KEY_THRESHOLD_SECONDS, thresholdSeconds));
     return count == null ? 0L : count;
   }
 
@@ -174,7 +181,7 @@ public class FileGovernanceRepository {
     if (!StringUtils.hasText(tenantId)) {
       return 0L;
     }
-    Long maxDelay = fileGovernanceMapper.selectMaxArrivalDelaySeconds(params("tenantId", tenantId));
+    Long maxDelay = fileGovernanceMapper.selectMaxArrivalDelaySeconds(params(KEY_TENANT_ID, tenantId));
     return maxDelay == null ? 0L : maxDelay;
   }
 
@@ -185,9 +192,9 @@ public class FileGovernanceRepository {
     }
     return fileGovernanceMapper.selectArrivalDelaySamples(
         params(
-            "tenantId", tenantId,
-            "thresholdSeconds", thresholdSeconds,
-            "limit", limit));
+            KEY_TENANT_ID, tenantId,
+            KEY_THRESHOLD_SECONDS, thresholdSeconds,
+            KEY_LIMIT, limit));
   }
 
   public long countProcessingDelayViolations(String tenantId, long thresholdSeconds) {
@@ -197,9 +204,9 @@ public class FileGovernanceRepository {
     Long count =
         fileGovernanceMapper.countProcessingDelayViolations(
             params(
-                "tenantId", tenantId,
-                "thresholdSeconds", thresholdSeconds,
-                "runningStatus", FileDispatchRunStatus.RUNNING.code()));
+                KEY_TENANT_ID, tenantId,
+                KEY_THRESHOLD_SECONDS, thresholdSeconds,
+                KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
     return count == null ? 0L : count;
   }
 
@@ -209,7 +216,7 @@ public class FileGovernanceRepository {
     }
     Long maxDelay =
         fileGovernanceMapper.selectMaxProcessingDelaySeconds(
-            params("tenantId", tenantId, "runningStatus", FileDispatchRunStatus.RUNNING.code()));
+            params(KEY_TENANT_ID, tenantId, KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
     return maxDelay == null ? 0L : maxDelay;
   }
 
@@ -220,10 +227,10 @@ public class FileGovernanceRepository {
     }
     return fileGovernanceMapper.selectProcessingDelaySamples(
         params(
-            "tenantId", tenantId,
-            "thresholdSeconds", thresholdSeconds,
-            "limit", limit,
-            "runningStatus", FileDispatchRunStatus.RUNNING.code()));
+            KEY_TENANT_ID, tenantId,
+            KEY_THRESHOLD_SECONDS, thresholdSeconds,
+            KEY_LIMIT, limit,
+            KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
   }
 
   public boolean existsFileRecordByStoragePath(
@@ -234,14 +241,14 @@ public class FileGovernanceRepository {
     Long count =
         fileGovernanceMapper.countFileRecordByStoragePath(
             params(
-                "tenantId", tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
+                KEY_TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
     return count != null && count > 0;
   }
 
   public Long createReconciledFileRecord(ReconciledFileRecordCommand command) {
     Map<String, Object> params =
         params(
-            "tenantId", command.identity().tenantId(),
+            KEY_TENANT_ID, command.identity().tenantId(),
             "fileCategory", command.identity().fileCategory(),
             "fileName", command.identity().fileName(),
             "fileExt", resolveFileExt(command.identity().fileName()),
@@ -272,9 +279,9 @@ public class FileGovernanceRepository {
     int updated =
         fileGovernanceMapper.updateFileStatus(
             params(
-                "tenantId",
+                KEY_TENANT_ID,
                 tenantId,
-                "fileId",
+                KEY_FILE_ID,
                 fileId,
                 "currentStatus",
                 currentStatus,
@@ -293,7 +300,7 @@ public class FileGovernanceRepository {
       return;
     }
     fileGovernanceMapper.updateFileMetadata(
-        params("tenantId", tenantId, "fileId", fileId, "metadataJson", toJson(metadata)));
+        params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, "metadataJson", toJson(metadata)));
   }
 
   public void appendAudit(FileAuditCommand command) {
@@ -306,8 +313,8 @@ public class FileGovernanceRepository {
     }
     fileGovernanceMapper.insertFileAuditLog(
         params(
-            "tenantId", command.tenantId(),
-            "fileId", command.fileId(),
+            KEY_TENANT_ID, command.tenantId(),
+            KEY_FILE_ID, command.fileId(),
             "operationType", command.operationType(),
             "operationResult", command.operationResult(),
             "operatorType",

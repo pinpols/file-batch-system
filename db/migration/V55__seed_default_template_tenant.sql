@@ -111,4 +111,4 @@ INSERT INTO batch.file_template_config (
      'system', 'system',
      FALSE, FALSE, FALSE, FALSE, NULL, FALSE, NULL,
      NULL, 'sql_template_export')
-ON CONFLICT (tenant_id, template_code) DO NOTHING;
+ON CONFLICT (tenant_id, template_code, version) DO NOTHING;

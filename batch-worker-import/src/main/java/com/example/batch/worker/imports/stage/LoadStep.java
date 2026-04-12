@@ -32,6 +32,13 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class LoadStep implements ImportStageStep {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_FILE_NAME = "file_name";
+  private static final String KEY_SUCCESS_COUNT = "successCount";
+  private static final String KEY_SKIPPED_COUNT = "skippedCount";
+  private static final String KEY_LOADED_COUNT = "loadedCount";
+  private static final String KEY_MANUAL_REVIEW_REQUIRED = "manualReviewRequired";
+
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
   private final ImportLoadPluginRegistry importLoadPluginRegistry;
@@ -59,7 +66,7 @@ public class LoadStep implements ImportStageStep {
       return executeLegacy(context);
     }
     try {
-      if (numberValue(context.getAttributes().get("skippedCount")) > 0
+      if (numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0
           && Files.size(validatedRecordsPath) == 0L) {
         return markLoaded(context, 0L);
       }
@@ -67,8 +74,8 @@ public class LoadStep implements ImportStageStep {
           context.getAttributes().get("importPayload") instanceof ImportPayload item ? item : null;
       Object fileRecord = context.getAttributes().get(PipelineRuntimeKeys.FILE_RECORD);
       String sourceFileName =
-          fileRecord instanceof Map<?, ?> row && row.get("file_name") != null
-              ? String.valueOf(row.get("file_name"))
+          fileRecord instanceof Map<?, ?> row && row.get(KEY_FILE_NAME) != null
+              ? String.valueOf(row.get(KEY_FILE_NAME))
               : context.getFileId();
       ImportLoadPlugin plugin =
           importLoadPluginRegistry.require(resolveLoadTargetRef(context, importPayload));
@@ -93,22 +100,22 @@ public class LoadStep implements ImportStageStep {
           loadedCount += flushChunk(plugin, loadCtx, chunk);
         }
       }
-      context.getAttributes().put("loadedCount", loadedCount);
+      context.getAttributes().put(KEY_LOADED_COUNT, loadedCount);
       context
           .getAttributes()
           .put(
-              "successCount",
-              numberValue(context.getAttributes().get("successCount")) + loadedCount);
+              KEY_SUCCESS_COUNT,
+              numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)) + loadedCount);
       runtimeRepository.updateFileStatus(
           runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
           "LOADED",
           Map.of(
-              "loadedCount", loadedCount,
-              "successCount", numberValue(context.getAttributes().get("successCount")),
-              "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
+              KEY_LOADED_COUNT, loadedCount,
+              KEY_SUCCESS_COUNT, numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)),
+              KEY_SKIPPED_COUNT, numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)),
               "badRecordCount", badRecordCount(context),
-              "manualReviewRequired",
-                  Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
+              KEY_MANUAL_REVIEW_REQUIRED,
+                  Boolean.TRUE.equals(context.getAttributes().get(KEY_MANUAL_REVIEW_REQUIRED)),
               "loadTargetRef", resolveLoadTargetRef(context, importPayload)));
       deleteQuietly(validatedRecordsPath);
       deleteQuietly(
@@ -137,7 +144,7 @@ public class LoadStep implements ImportStageStep {
   private ImportStageResult executeLegacy(ImportJobContext context) {
     Object payload = context == null ? null : context.getAttributes().get("customerPayloads");
     if (!(payload instanceof List<?> payloads) || payloads.isEmpty()) {
-      if (numberValue(context.getAttributes().get("skippedCount")) > 0) {
+      if (numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)) > 0) {
         return markLoaded(context, 0L);
       }
       return ImportStageResult.failure(
@@ -149,8 +156,8 @@ public class LoadStep implements ImportStageStep {
         context.getAttributes().get("importPayload") instanceof ImportPayload item ? item : null;
     Object fileRecord = context.getAttributes().get(PipelineRuntimeKeys.FILE_RECORD);
     String sourceFileName =
-        fileRecord instanceof Map<?, ?> row && row.get("file_name") != null
-            ? String.valueOf(row.get("file_name"))
+        fileRecord instanceof Map<?, ?> row && row.get(KEY_FILE_NAME) != null
+            ? String.valueOf(row.get(KEY_FILE_NAME))
             : context.getFileId();
     try {
       ImportLoadPlugin plugin =
@@ -169,20 +176,20 @@ public class LoadStep implements ImportStageStep {
       if (!chunk.isEmpty()) {
         n += flushChunk(plugin, loadCtx, chunk);
       }
-      context.getAttributes().put("loadedCount", n);
+      context.getAttributes().put(KEY_LOADED_COUNT, n);
       context
           .getAttributes()
-          .put("successCount", numberValue(context.getAttributes().get("successCount")) + n);
+          .put(KEY_SUCCESS_COUNT, numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)) + n);
       runtimeRepository.updateFileStatus(
           runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
           "LOADED",
           Map.of(
-              "loadedCount", n,
-              "successCount", numberValue(context.getAttributes().get("successCount")),
-              "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
+              KEY_LOADED_COUNT, n,
+              KEY_SUCCESS_COUNT, numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)),
+              KEY_SKIPPED_COUNT, numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)),
               "badRecordCount", badRecordCount(context),
-              "manualReviewRequired",
-                  Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired")),
+              KEY_MANUAL_REVIEW_REQUIRED,
+                  Boolean.TRUE.equals(context.getAttributes().get(KEY_MANUAL_REVIEW_REQUIRED)),
               "loadTargetRef", resolveLoadTargetRef(context, importPayload)));
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
@@ -247,13 +254,13 @@ public class LoadStep implements ImportStageStep {
         runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
         "LOADED",
         Map.of(
-            "loadedCount", loadedCount,
-            "successCount", numberValue(context.getAttributes().get("successCount")),
-            "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
+            KEY_LOADED_COUNT, loadedCount,
+            KEY_SUCCESS_COUNT, numberValue(context.getAttributes().get(KEY_SUCCESS_COUNT)),
+            KEY_SKIPPED_COUNT, numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)),
             "badRecordCount", badRecordCount(context),
-            "manualReviewRequired",
-                Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired"))));
-    context.getAttributes().put("loadedCount", loadedCount);
+            KEY_MANUAL_REVIEW_REQUIRED,
+                Boolean.TRUE.equals(context.getAttributes().get(KEY_MANUAL_REVIEW_REQUIRED))));
+    context.getAttributes().put(KEY_LOADED_COUNT, loadedCount);
     return ImportStageResult.success(stage());
   }
 

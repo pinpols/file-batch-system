@@ -25,6 +25,13 @@ import org.springframework.stereotype.Service;
 /** 共享文件治理实现。具体的 @Scheduled 包装类委托到此处， 使每个任务可以独立演进，避免将无关的扫描耦合到同一个调度器 Bean 中。 */
 public class FileGovernanceScheduler {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String STATUS_TIMEOUT = "TIMEOUT";
+  private static final String SCHEDULER_NAME = "file-governance-scheduler";
+  private static final String STATUS_TRIGGERED = "TRIGGERED";
+  private static final String STATUS_WAITING_MANUAL_CONFIRM = "WAITING_MANUAL_CONFIRM";
+  private static final String ACTOR_SYSTEM = "SYSTEM";
+
   private record ArrivalGroupUpdateState(String arrivalState, String reason, Instant now) {}
 
   private record ArrivalGroupUpdateFiles(
@@ -145,9 +152,9 @@ public class FileGovernanceScheduler {
         continue;
       }
       switch (decision.state()) {
-        case "WAITING_ARRIVAL", "WAITING_FILE_GROUP", "WAITING_MANUAL_CONFIRM" -> waitingGroups++;
-        case "TRIGGERED" -> triggeredGroups++;
-        case "TIMEOUT" -> timeoutGroups++;
+        case "WAITING_ARRIVAL", "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM -> waitingGroups++;
+        case STATUS_TRIGGERED -> triggeredGroups++;
+        case STATUS_TIMEOUT -> timeoutGroups++;
         default -> {}
       }
     }
@@ -213,7 +220,7 @@ public class FileGovernanceScheduler {
               fileId,
               "CLEANUP",
               "SUCCESS",
-              new FileGovernanceRepository.FileAuditActor("SYSTEM", "file-governance-scheduler"),
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
               "cleanup-" + fileId,
               auditDetail));
     } catch (Exception exception) {
@@ -226,7 +233,7 @@ public class FileGovernanceScheduler {
               fileId,
               "CLEANUP",
               "FAILED",
-              new FileGovernanceRepository.FileAuditActor("SYSTEM", "file-governance-scheduler"),
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
               "cleanup-" + fileId,
               auditDetail));
       log.warn(
@@ -261,7 +268,7 @@ public class FileGovernanceScheduler {
                 object.size(),
                 new FileGovernanceRepository.FileStorage(
                     "S3", object.objectName(), object.bucket()),
-                "SYSTEM",
+                ACTOR_SYSTEM,
                 fileStatus,
                 traceId,
                 buildReconcileMetadata(object)));
@@ -271,7 +278,7 @@ public class FileGovernanceScheduler {
             fileId,
             "RECONCILE_REGISTER",
             "SUCCESS",
-            new FileGovernanceRepository.FileAuditActor("SYSTEM", "file-governance-scheduler"),
+            new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
             traceId,
             Map.of("bucket", object.bucket(), "storagePath", object.objectName())));
   }
@@ -309,42 +316,42 @@ public class FileGovernanceScheduler {
             new ArrivalGroupUpdateContext(
                 key,
                 new ArrivalGroupUpdateState(
-                    "WAITING_MANUAL_CONFIRM", "TIMEOUT_WAITING_MANUAL_CONFIRM", now),
+                    STATUS_WAITING_MANUAL_CONFIRM, "TIMEOUT_WAITING_MANUAL_CONFIRM", now),
                 new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
-        return new ArrivalGroupDecision("WAITING_MANUAL_CONFIRM");
+        return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
       }
       if ("BLOCK_DOWNSTREAM".equalsIgnoreCase(timeoutAction)
           || "BLOCK".equalsIgnoreCase(timeoutAction)) {
         updateGroupState(
             new ArrivalGroupUpdateContext(
                 key,
-                new ArrivalGroupUpdateState("TIMEOUT", "LATEST_TOLERABLE_TIME_EXCEEDED", now),
+                new ArrivalGroupUpdateState(STATUS_TIMEOUT, "LATEST_TOLERABLE_TIME_EXCEEDED", now),
                 new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
-        return new ArrivalGroupDecision("TIMEOUT");
+        return new ArrivalGroupDecision(STATUS_TIMEOUT);
       }
       updateGroupState(
           new ArrivalGroupUpdateContext(
               key,
-              new ArrivalGroupUpdateState("TRIGGERED", "TIMEOUT_OVERRIDE_" + timeoutAction, now),
+              new ArrivalGroupUpdateState(STATUS_TRIGGERED, "TIMEOUT_OVERRIDE_" + timeoutAction, now),
               new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
-      return new ArrivalGroupDecision("TRIGGERED");
+      return new ArrivalGroupDecision(STATUS_TRIGGERED);
     }
     if (!requiredFiles.isEmpty() && missingFiles.isEmpty()) {
       if (triggerOnComplete) {
         updateGroupState(
             new ArrivalGroupUpdateContext(
                 key,
-                new ArrivalGroupUpdateState("TRIGGERED", "ALL_FILES_ARRIVED", now),
+                new ArrivalGroupUpdateState(STATUS_TRIGGERED, "ALL_FILES_ARRIVED", now),
                 new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
-        return new ArrivalGroupDecision("TRIGGERED");
+        return new ArrivalGroupDecision(STATUS_TRIGGERED);
       }
       updateGroupState(
           new ArrivalGroupUpdateContext(
               key,
               new ArrivalGroupUpdateState(
-                  "WAITING_MANUAL_CONFIRM", "COMPLETE_WAITING_MANUAL_CONFIRM", now),
+                  STATUS_WAITING_MANUAL_CONFIRM, "COMPLETE_WAITING_MANUAL_CONFIRM", now),
               new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
-      return new ArrivalGroupDecision("WAITING_MANUAL_CONFIRM");
+      return new ArrivalGroupDecision(STATUS_WAITING_MANUAL_CONFIRM);
     }
     updateGroupState(
         new ArrivalGroupUpdateContext(
@@ -366,10 +373,10 @@ public class FileGovernanceScheduler {
     metadata.put("groupArrivedCount", context.files().groupFiles().size());
     metadata.put("groupRequiredCount", context.files().requiredFiles().size());
     metadata.put("groupMissingFileSet", String.join(",", context.files().missingFiles()));
-    if ("TRIGGERED".equals(context.state().arrivalState())) {
+    if (STATUS_TRIGGERED.equals(context.state().arrivalState())) {
       metadata.put("arrivalTriggeredAt", context.state().now().toString());
     }
-    if ("TIMEOUT".equals(context.state().arrivalState())) {
+    if (STATUS_TIMEOUT.equals(context.state().arrivalState())) {
       metadata.put("arrivalTimedOutAt", context.state().now().toString());
     }
     for (Map<String, Object> file : context.files().groupFiles()) {
@@ -385,7 +392,7 @@ public class FileGovernanceScheduler {
               fileId,
               "ARRIVAL_GROUP_" + context.state().arrivalState(),
               "SUCCESS",
-              new FileGovernanceRepository.FileAuditActor("SYSTEM", "file-governance-scheduler"),
+              new FileGovernanceRepository.FileAuditActor(ACTOR_SYSTEM, SCHEDULER_NAME),
               "arrival-group-" + context.key().fileGroupCode(),
               metadata));
     }

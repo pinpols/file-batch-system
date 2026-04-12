@@ -31,6 +31,9 @@
         select
         <include refid="TriggerDefinitionBaseColumns"/>
         from batch.job_definition jd
+        join batch.tenant t
+          on t.tenant_id = jd.tenant_id
+         and t.status != 'SUSPENDED'
         left join batch.business_calendar bc
           on bc.tenant_id = jd.tenant_id
          and bc.calendar_code = jd.calendar_code

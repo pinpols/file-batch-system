@@ -41,51 +41,18 @@ public class StoreStep implements ExportStageStep {
       return ExportStageResult.failure(stage(), "EXPORT_STORE_INVALID", "export data missing");
     }
     try {
-      String objectName =
-          resolveText(
-              context.getAttributes().get("objectName"),
-              BatchFileConstants.EXPORT_OBJECT_PREFIX
-                  + UUID.randomUUID()
-                  + BatchFileConstants.JSON_SUFFIX);
-      String tempObjectName =
-          resolveText(
-              context.getAttributes().get("tempObjectName"),
-              objectName + BatchFileConstants.FILE_PART_SUFFIX);
-      if (!tempObjectName.endsWith(BatchFileConstants.FILE_PART_SUFFIX)) {
-        tempObjectName = tempObjectName + BatchFileConstants.FILE_PART_SUFFIX;
-      }
-      String fileFormatType =
-          String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
-      String contentType =
-          switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
-            case "DELIMITED" -> BatchFileConstants.CONTENT_TYPE_CSV;
-            case "EXCEL" -> BatchFileConstants.CONTENT_TYPE_EXCEL;
-            case "FIXED_WIDTH" -> BatchFileConstants.CONTENT_TYPE_TEXT_UTF8;
-            case "XML" -> BatchFileConstants.CONTENT_TYPE_XML;
-            default -> BatchFileConstants.CONTENT_TYPE_JSON;
-          };
+      String objectName = resolveObjectName(context);
+      String tempObjectName = resolveTempObjectName(context, objectName);
+      String contentType = resolveContentType(context);
       Path generatedFile = Path.of(pathText);
       if (!Files.exists(generatedFile)) {
         return ExportStageResult.failure(stage(), "EXPORT_STORE_INVALID", "generated file missing");
       }
 
-      Map<String, Object> security = templateSecurity(context);
-      boolean encrypt = cryptoService.shouldEncrypt(security);
-      Path uploadPath = generatedFile;
-      Path encryptedPath = null;
-      if (encrypt) {
-        encryptedPath = Files.createTempFile(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, ".bin");
-        cryptoService.encrypt(generatedFile, encryptedPath, cryptoService.resolveKeyRef(security));
-        uploadPath = encryptedPath;
-        context.getAttributes().put("contentEncryptionEnabled", Boolean.TRUE);
-        context.getAttributes().put("encryptionKeyRef", cryptoService.resolveKeyRef(security));
-        context.getAttributes().put("encryptionObjectVersion", "BATCHENC1");
-      } else {
-        context.getAttributes().put("contentEncryptionEnabled", Boolean.FALSE);
-      }
-      context
-          .getAttributes()
-          .put("downloadRequiresApproval", security.get("download_requires_approval"));
+      EncryptionOutcome encryption = encryptIfNeeded(context, generatedFile);
+      Path uploadPath = encryption.uploadPath();
+      Path encryptedPath = encryption.encryptedPath();
+      boolean encrypt = encryption.encrypted();
 
       String expectedSha = sha256Hex(uploadPath);
       context.getAttributes().put("checksumType", "SHA-256");
@@ -96,45 +63,128 @@ public class StoreStep implements ExportStageStep {
               tempObjectName,
               uploadPath,
               encrypt ? BatchFileConstants.CONTENT_TYPE_OCTET_STREAM : contentType);
-      String remotePartSha = minioExportStorage.sha256Hex(tempKey);
-      if (!expectedSha.equalsIgnoreCase(remotePartSha)) {
-        minioExportStorage.removeObject(tempKey);
-        if (encryptedPath != null) {
-          Files.deleteIfExists(encryptedPath);
-        }
-        return ExportStageResult.failure(
-            stage(),
-            "EXPORT_STORE_PART_DIGEST_MISMATCH",
-            "temp object digest mismatch after upload");
+      ExportStageResult partVerification =
+          verifyPartUpload(expectedSha, tempKey, encryptedPath);
+      if (partVerification != null) {
+        return partVerification;
       }
 
-      minioExportStorage.copyObject(tempKey, objectName);
-      String remoteFinalSha = minioExportStorage.sha256Hex(objectName);
-      if (!expectedSha.equalsIgnoreCase(remoteFinalSha)) {
-        minioExportStorage.removeObject(objectName);
-        minioExportStorage.removeObject(tempKey);
-        if (encryptedPath != null) {
-          Files.deleteIfExists(encryptedPath);
-        }
-        return ExportStageResult.failure(
-            stage(),
-            "EXPORT_STORE_FINAL_DIGEST_MISMATCH",
-            "final object digest mismatch after promote");
+      ExportStageResult finalVerification =
+          promoteAndVerifyFinal(expectedSha, tempKey, objectName, encryptedPath);
+      if (finalVerification != null) {
+        return finalVerification;
       }
-      minioExportStorage.removeObject(tempKey);
 
-      context.getAttributes().put("objectName", objectName);
-      context.getAttributes().put("tempObjectName", tempKey);
-      context.getAttributes().put("exportStoreCommitted", Boolean.TRUE);
-      Files.deleteIfExists(generatedFile);
-      if (encryptedPath != null) {
-        Files.deleteIfExists(encryptedPath);
-      }
-      return ExportStageResult.success(stage());
+      return commitStoredObject(context, objectName, tempKey, generatedFile, encryptedPath);
     } catch (Exception ex) {
       return ExportStageResult.failure(stage(), "EXPORT_STORE_FAILED", ex.getMessage());
     }
   }
+
+  private String resolveObjectName(ExportJobContext context) {
+    return resolveText(
+        context.getAttributes().get("objectName"),
+        BatchFileConstants.EXPORT_OBJECT_PREFIX
+            + UUID.randomUUID()
+            + BatchFileConstants.JSON_SUFFIX);
+  }
+
+  private String resolveTempObjectName(ExportJobContext context, String objectName) {
+    String tempObjectName =
+        resolveText(
+            context.getAttributes().get("tempObjectName"),
+            objectName + BatchFileConstants.FILE_PART_SUFFIX);
+    if (!tempObjectName.endsWith(BatchFileConstants.FILE_PART_SUFFIX)) {
+      tempObjectName = tempObjectName + BatchFileConstants.FILE_PART_SUFFIX;
+    }
+    return tempObjectName;
+  }
+
+  private String resolveContentType(ExportJobContext context) {
+    String fileFormatType =
+        String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
+    return switch (fileFormatType == null ? "" : fileFormatType.toUpperCase()) {
+      case "DELIMITED" -> BatchFileConstants.CONTENT_TYPE_CSV;
+      case "EXCEL" -> BatchFileConstants.CONTENT_TYPE_EXCEL;
+      case "FIXED_WIDTH" -> BatchFileConstants.CONTENT_TYPE_TEXT_UTF8;
+      case "XML" -> BatchFileConstants.CONTENT_TYPE_XML;
+      default -> BatchFileConstants.CONTENT_TYPE_JSON;
+    };
+  }
+
+  private EncryptionOutcome encryptIfNeeded(ExportJobContext context, Path generatedFile)
+      throws Exception {
+    Map<String, Object> security = templateSecurity(context);
+    context
+        .getAttributes()
+        .put("downloadRequiresApproval", security.get("download_requires_approval"));
+    boolean encrypt = cryptoService.shouldEncrypt(security);
+    if (encrypt) {
+      Path encryptedPath =
+          Files.createTempFile(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, ".bin");
+      cryptoService.encrypt(generatedFile, encryptedPath, cryptoService.resolveKeyRef(security));
+      context.getAttributes().put("contentEncryptionEnabled", Boolean.TRUE);
+      context.getAttributes().put("encryptionKeyRef", cryptoService.resolveKeyRef(security));
+      context.getAttributes().put("encryptionObjectVersion", "BATCHENC1");
+      return new EncryptionOutcome(encryptedPath, encryptedPath, true);
+    }
+    context.getAttributes().put("contentEncryptionEnabled", Boolean.FALSE);
+    return new EncryptionOutcome(generatedFile, null, false);
+  }
+
+  private ExportStageResult verifyPartUpload(
+      String expectedSha, String tempKey, Path encryptedPath) throws Exception {
+    String remotePartSha = minioExportStorage.sha256Hex(tempKey);
+    if (!expectedSha.equalsIgnoreCase(remotePartSha)) {
+      minioExportStorage.removeObject(tempKey);
+      if (encryptedPath != null) {
+        Files.deleteIfExists(encryptedPath);
+      }
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_STORE_PART_DIGEST_MISMATCH",
+          "temp object digest mismatch after upload");
+    }
+    return null;
+  }
+
+  private ExportStageResult promoteAndVerifyFinal(
+      String expectedSha, String tempKey, String objectName, Path encryptedPath) throws Exception {
+    minioExportStorage.copyObject(tempKey, objectName);
+    String remoteFinalSha = minioExportStorage.sha256Hex(objectName);
+    if (!expectedSha.equalsIgnoreCase(remoteFinalSha)) {
+      minioExportStorage.removeObject(objectName);
+      minioExportStorage.removeObject(tempKey);
+      if (encryptedPath != null) {
+        Files.deleteIfExists(encryptedPath);
+      }
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_STORE_FINAL_DIGEST_MISMATCH",
+          "final object digest mismatch after promote");
+    }
+    minioExportStorage.removeObject(tempKey);
+    return null;
+  }
+
+  private ExportStageResult commitStoredObject(
+      ExportJobContext context,
+      String objectName,
+      String tempKey,
+      Path generatedFile,
+      Path encryptedPath)
+      throws Exception {
+    context.getAttributes().put("objectName", objectName);
+    context.getAttributes().put("tempObjectName", tempKey);
+    context.getAttributes().put("exportStoreCommitted", Boolean.TRUE);
+    Files.deleteIfExists(generatedFile);
+    if (encryptedPath != null) {
+      Files.deleteIfExists(encryptedPath);
+    }
+    return ExportStageResult.success(stage());
+  }
+
+  private record EncryptionOutcome(Path uploadPath, Path encryptedPath, boolean encrypted) {}
 
   private Map<String, Object> templateSecurity(ExportJobContext context) {
     Object templateConfig =

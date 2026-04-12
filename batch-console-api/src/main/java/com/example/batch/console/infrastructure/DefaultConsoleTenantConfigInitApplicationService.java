@@ -69,6 +69,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultConsoleTenantConfigInitApplicationService
     implements ConsoleTenantConfigInitApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_ENABLED = "enabled";
+  private static final String KEY_ID = "id";
+
   private final JobDefinitionMapper jobDefinitionMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
@@ -441,7 +445,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
             (c, s) -> insertPipelineDefinition(c.tenantId(), s),
             (c, s, existing) ->
                 updatePipelineDefinition(
-                    c.tenantId(), ((Number) existing.get("id")).longValue(), s, existing)));
+                    c.tenantId(), ((Number) existing.get(KEY_ID)).longValue(), s, existing)));
   }
 
   @Transactional
@@ -454,10 +458,10 @@ public class DefaultConsoleTenantConfigInitApplicationService
     params.put("biz_type", spec.getBizType());
     params.put("worker_group", spec.getWorkerGroup());
     params.put("version", 1);
-    params.put("enabled", spec.getEnabled() != null && spec.getEnabled());
+    params.put(KEY_ENABLED, spec.getEnabled() != null && spec.getEnabled());
     params.put("description", spec.getDescription());
     pipelineDefinitionMapper.insert(params);
-    Long defId = ((Number) params.get("id")).longValue();
+    Long defId = ((Number) params.get(KEY_ID)).longValue();
     insertPipelineSteps(defId, spec.getSteps());
   }
 
@@ -466,7 +470,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
       String tenantId, Long id, PipelineDefinitionSpec spec, Map<String, Object> existing) {
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
-    params.put("id", id);
+    params.put(KEY_ID, id);
     params.put(
         "pipeline_name",
         spec.getPipelineName() != null ? spec.getPipelineName() : existing.get("pipeline_name"));
@@ -478,7 +482,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
     params.put(
         "worker_group",
         spec.getWorkerGroup() != null ? spec.getWorkerGroup() : existing.get("worker_group"));
-    params.put("enabled", spec.getEnabled() != null ? spec.getEnabled() : existing.get("enabled"));
+    params.put(KEY_ENABLED, spec.getEnabled() != null ? spec.getEnabled() : existing.get(KEY_ENABLED));
     params.put(
         "description",
         spec.getDescription() != null ? spec.getDescription() : existing.get("description"));
@@ -509,7 +513,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
           "retry_policy", step.getRetryPolicy() != null ? step.getRetryPolicy() : "NONE");
       stepParams.put(
           "retry_max_count", step.getRetryMaxCount() != null ? step.getRetryMaxCount() : 0);
-      stepParams.put("enabled", step.getEnabled() != null ? step.getEnabled() : true);
+      stepParams.put(KEY_ENABLED, step.getEnabled() != null ? step.getEnabled() : true);
       pipelineStepDefinitionMapper.insert(stepParams);
     }
   }
@@ -715,7 +719,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
             (c, s) -> upsertBusinessCalendar(c.tenantId(), s, c.operator(), null),
             (c, s, existing) ->
                 upsertBusinessCalendar(
-                    c.tenantId(), s, c.operator(), ((Number) existing.get("id")).longValue())));
+                    c.tenantId(), s, c.operator(), ((Number) existing.get(KEY_ID)).longValue())));
   }
 
   private void upsertBusinessCalendar(
@@ -738,7 +742,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
           businessCalendarMapper.selectActiveByTenantAndCalendarCode(
               tenantId, spec.getCalendarCode());
       if (saved != null) {
-        Long calendarId = ((Number) saved.get("id")).longValue();
+        Long calendarId = ((Number) saved.get(KEY_ID)).longValue();
         if (existingId != null) {
           calendarHolidayMapper.deleteByCalendarId(calendarId);
         }

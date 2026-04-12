@@ -23,8 +23,11 @@ import org.springframework.util.StringUtils;
 @Component
 public class RegisterStep implements ExportStageStep {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_OBJECT_NAME = "objectName";
+
   private static final Set<String> RESERVED_METADATA_KEYS =
-      Set.of("recordCount", "totalAmount", "templateCode", "objectName", "exportSnapshot");
+      Set.of("recordCount", "totalAmount", "templateCode", KEY_OBJECT_NAME, "exportSnapshot");
 
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ExportDataPluginRegistry exportDataPluginRegistry;
@@ -46,7 +49,7 @@ public class RegisterStep implements ExportStageStep {
 
   @Override
   public ExportStageResult execute(ExportJobContext context) {
-    if (context == null || context.getAttributes().get("objectName") == null) {
+    if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
       return ExportStageResult.failure(stage(), "EXPORT_REGISTER_INVALID", "objectName missing");
     }
     Object payload = context.getAttributes().get("exportPayload");
@@ -56,7 +59,7 @@ public class RegisterStep implements ExportStageStep {
       return ExportStageResult.failure(
           stage(), "EXPORT_REGISTER_INVALID", "export context missing");
     }
-    String objectName = String.valueOf(context.getAttributes().get("objectName"));
+    String objectName = String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME));
     String fileName = String.valueOf(context.getAttributes().get("fileName"));
     String fileFormatType =
         String.valueOf(context.getAttributes().getOrDefault("exportFileFormatType", "JSON"));
@@ -81,7 +84,7 @@ public class RegisterStep implements ExportStageStep {
     metadata.put("recordCount", context.getAttributes().get("recordCount"));
     metadata.put("totalAmount", context.getAttributes().get("totalAmount"));
     metadata.put("templateCode", exportPayload.templateCode());
-    metadata.put("objectName", objectName);
+    metadata.put(KEY_OBJECT_NAME, objectName);
     mergeSecurityMetadata(metadata, context.getAttributes());
     if (context.getAttributes().get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
       metadata.put(
@@ -161,7 +164,7 @@ public class RegisterStep implements ExportStageStep {
         .onRegistered(buildDataContext(context, exportPayload2), batchId, exportVersion, traceId);
     Map<String, Object> audit = new LinkedHashMap<>();
     audit.put("reason", "STORE_TO_REGISTER_RETRY");
-    audit.put("objectName", context.getAttributes().get("objectName"));
+    audit.put(KEY_OBJECT_NAME, context.getAttributes().get(KEY_OBJECT_NAME));
     runtimeRepository.appendAudit(
         FileAuditParam.builder()
             .fileId(fileId)
@@ -171,7 +174,7 @@ public class RegisterStep implements ExportStageStep {
             .operatorType("SYSTEM")
             .operatorId(context.getWorkerId())
             .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
-            .evidenceRef(String.valueOf(context.getAttributes().get("objectName")))
+            .evidenceRef(String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME)))
             .detailSummary(audit)
             .build());
     return ExportStageResult.success(stage());

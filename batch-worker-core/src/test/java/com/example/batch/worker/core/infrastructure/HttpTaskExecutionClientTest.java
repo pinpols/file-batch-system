@@ -3,6 +3,7 @@ package com.example.batch.worker.core.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,7 +36,7 @@ class HttpTaskExecutionClientTest {
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
-              props, jsonRestClientBuilder(), new MockEnvironment(), registry);
+              props, new BatchSecurityProperties(), jsonRestClientBuilder(), new MockEnvironment(), registry);
 
       TaskExecutionReport report = report(42L);
       client.report(report);
@@ -66,7 +67,7 @@ class HttpTaskExecutionClientTest {
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
-              props, jsonRestClientBuilder(), new MockEnvironment(), registry);
+              props, new BatchSecurityProperties(), jsonRestClientBuilder(), new MockEnvironment(), registry);
 
       assertThatThrownBy(() -> client.report(report(7L)))
           .isInstanceOf(HttpClientErrorException.class);

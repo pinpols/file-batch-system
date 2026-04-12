@@ -28,6 +28,9 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class LaunchBatchDayService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String REASON_LATE_ACCEPTED = "LATE_ACCEPTED";
+
   private final OrchestratorConfigCacheService configCacheService;
   private final BatchDayInstanceRepository batchDayInstanceRepository;
   private final JobExecutionLogMapper jobExecutionLogMapper;
@@ -65,7 +68,7 @@ public class LaunchBatchDayService {
           (catchUpLaunch || lateAccepted) ? "IN_FLIGHT" : (pastCutoff ? "CUTOFF" : "OPEN");
       String reasonCode =
           (catchUpLaunch || lateAccepted)
-              ? (lateAccepted ? "LATE_ACCEPTED" : "CATCH_UP_LAUNCHED")
+              ? (lateAccepted ? REASON_LATE_ACCEPTED : "CATCH_UP_LAUNCHED")
               : (pastCutoff ? "CUTOFF_REACHED_ON_CREATE" : "BATCH_DAY_OPENED");
       batchDayInstanceRepository.save(
           new BatchDayInstanceRecord(
@@ -125,7 +128,7 @@ public class LaunchBatchDayService {
     if (lateAccepted) {
       updated = updated.withLateCount(LaunchParamResolver.safeIncrement(updated.lateCount()), now);
       changed = true;
-      reasonCode = "LATE_ACCEPTED";
+      reasonCode = REASON_LATE_ACCEPTED;
     }
     if (catchUpLaunch) {
       updated =
@@ -259,7 +262,7 @@ public class LaunchBatchDayService {
     Object lateArrival = params.get("lateArrival");
     Object arrivalStatus = params.get("arrivalStatus");
     return LaunchParamResolver.toBoolean(lateArrival)
-        && "LATE_ACCEPTED".equalsIgnoreCase(LaunchParamResolver.textValue(arrivalStatus));
+        && REASON_LATE_ACCEPTED.equalsIgnoreCase(LaunchParamResolver.textValue(arrivalStatus));
   }
 
   boolean isCatchUpLaunch(LaunchRequest request) {
@@ -298,7 +301,7 @@ public class LaunchBatchDayService {
       routedParams.putAll(request.params());
     }
     routedParams.put("lateArrival", true);
-    routedParams.put("arrivalStatus", lateAccepted ? "LATE_ACCEPTED" : "LATE_REJECTED");
+    routedParams.put("arrivalStatus", lateAccepted ? REASON_LATE_ACCEPTED : "LATE_REJECTED");
     routedParams.put("batchDayStatus", dayStatus);
     if (batchDay.cutoffAt() != null) {
       routedParams.put("batchDayCutoffAt", batchDay.cutoffAt().toString());

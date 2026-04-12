@@ -74,19 +74,7 @@ public class DefaultConsoleFileChannelApplicationService
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);
-    mapper.insertFileChannelConfig(
-        param.getTenantId(),
-        param.getChannelCode(),
-        param.getChannelName(),
-        param.getChannelType(),
-        param.getTargetEndpoint(),
-        param.getAuthType(),
-        param.getConfigJson(),
-        param.getReceiptPolicy(),
-        param.getTimeoutSeconds(),
-        param.getEnabled(),
-        param.getCreatedBy(),
-        param.getUpdatedBy());
+    mapper.insertFileChannelConfig(param);
     return mapper.selectByUniqueKey(tenantId, request.getChannelCode());
   }
 

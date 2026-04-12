@@ -19,6 +19,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultWorkflowDagService implements WorkflowDagService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String STATUS_SUCCESS = "SUCCESS";
+
   private final WorkflowEdgeMapper workflowEdgeMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowNodeRunMapper workflowNodeRunMapper;
@@ -102,7 +105,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if ("ALWAYS".equalsIgnoreCase(edgeType)) {
       return true;
     }
-    if ("SUCCESS".equalsIgnoreCase(edgeType)) {
+    if (STATUS_SUCCESS.equalsIgnoreCase(edgeType)) {
       return success;
     }
     if ("FAILURE".equalsIgnoreCase(edgeType)) {
@@ -120,21 +123,21 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     if ("ALWAYS".equalsIgnoreCase(edgeType)) {
       return isTerminal(predecessorStatus);
     }
-    if ("SUCCESS".equalsIgnoreCase(edgeType)) {
-      return "SUCCESS".equalsIgnoreCase(predecessorStatus);
+    if (STATUS_SUCCESS.equalsIgnoreCase(edgeType)) {
+      return STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus);
     }
     if ("FAILURE".equalsIgnoreCase(edgeType)) {
       return "FAILED".equalsIgnoreCase(predecessorStatus);
     }
     if ("CONDITION".equalsIgnoreCase(edgeType)) {
-      return "SUCCESS".equalsIgnoreCase(predecessorStatus)
+      return STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
           && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
     }
     return false;
   }
 
   private boolean isTerminal(String nodeStatus) {
-    return "SUCCESS".equalsIgnoreCase(nodeStatus)
+    return STATUS_SUCCESS.equalsIgnoreCase(nodeStatus)
         || "FAILED".equalsIgnoreCase(nodeStatus)
         || "SKIPPED".equalsIgnoreCase(nodeStatus);
   }

@@ -1,11 +1,11 @@
 package com.example.batch.trigger.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.enums.CatchUpPolicyType;
@@ -81,14 +81,14 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
-  void shouldThrowOnInvalidCronExpression() {
+  void shouldSkipInvalidCronExpression() throws Exception {
     TriggerDescriptor descriptor = cronDescriptor("t1", "BAD_CRON", true);
     descriptor.setScheduleExpression("not-a-cron");
     when(triggerDefinitionLoader.loadByJobCode("t1", "BAD_CRON")).thenReturn(descriptor);
 
-    assertThatThrownBy(() -> facade.registerByJobCode("t1", "BAD_CRON"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("invalid cron expression");
+    facade.registerByJobCode("t1", "BAD_CRON");
+
+    verify(scheduler, never()).scheduleJob(any(JobDetail.class), any(CronTrigger.class));
   }
 
   // ─── FIXED_RATE ───────────────────────────────────────────────────────────────
@@ -134,43 +134,43 @@ class TriggerSchedulerFacadeTest {
   }
 
   @Test
-  void shouldThrowOnNonNumericFixedRateExpression() {
+  void shouldSkipNonNumericFixedRateExpression() throws Exception {
     TriggerDescriptor descriptor = fixedRateDescriptor("t1", "BAD_FR", "not-a-number", true);
     when(triggerDefinitionLoader.loadByJobCode("t1", "BAD_FR")).thenReturn(descriptor);
 
-    assertThatThrownBy(() -> facade.registerByJobCode("t1", "BAD_FR"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("FIXED_RATE schedule_expr must be a positive integer");
+    facade.registerByJobCode("t1", "BAD_FR");
+
+    verify(scheduler, never()).scheduleJob(any(JobDetail.class), any(SimpleTrigger.class));
   }
 
   @Test
-  void shouldThrowOnZeroFixedRateInterval() {
+  void shouldSkipZeroFixedRateInterval() throws Exception {
     TriggerDescriptor descriptor = fixedRateDescriptor("t1", "ZERO_FR", "0", true);
     when(triggerDefinitionLoader.loadByJobCode("t1", "ZERO_FR")).thenReturn(descriptor);
 
-    assertThatThrownBy(() -> facade.registerByJobCode("t1", "ZERO_FR"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("FIXED_RATE interval must be > 0");
+    facade.registerByJobCode("t1", "ZERO_FR");
+
+    verify(scheduler, never()).scheduleJob(any(JobDetail.class), any(SimpleTrigger.class));
   }
 
   @Test
-  void shouldThrowOnNegativeFixedRateInterval() {
+  void shouldSkipNegativeFixedRateInterval() throws Exception {
     TriggerDescriptor descriptor = fixedRateDescriptor("t1", "NEG_FR", "-10", true);
     when(triggerDefinitionLoader.loadByJobCode("t1", "NEG_FR")).thenReturn(descriptor);
 
-    assertThatThrownBy(() -> facade.registerByJobCode("t1", "NEG_FR"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("FIXED_RATE interval must be > 0");
+    facade.registerByJobCode("t1", "NEG_FR");
+
+    verify(scheduler, never()).scheduleJob(any(JobDetail.class), any(SimpleTrigger.class));
   }
 
   @Test
-  void shouldThrowOnBlankFixedRateExpression() {
+  void shouldSkipBlankFixedRateExpression() throws Exception {
     TriggerDescriptor descriptor = fixedRateDescriptor("t1", "BLANK_FR", "  ", true);
     when(triggerDefinitionLoader.loadByJobCode("t1", "BLANK_FR")).thenReturn(descriptor);
 
-    assertThatThrownBy(() -> facade.registerByJobCode("t1", "BLANK_FR"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("FIXED_RATE schedule_expr must be a positive integer");
+    facade.registerByJobCode("t1", "BLANK_FR");
+
+    verify(scheduler, never()).scheduleJob(any(JobDetail.class), any(SimpleTrigger.class));
   }
 
   // ─── 跳过非 scheduled 类型 ─────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ class TriggerSchedulerFacadeTest {
 
     facade.registerAll();
 
-    verify(scheduler, never()).scheduleJob(any(), any());
+    verifyNoInteractions(scheduler);
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────────

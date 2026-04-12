@@ -32,6 +32,10 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class ValidateStep implements ImportStageStep {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String ERR_SKIP_THRESHOLD_EXCEEDED = "IMPORT_SKIP_THRESHOLD_EXCEEDED";
+  private static final String MSG_SKIP_THRESHOLD_EXCEEDED = "skip threshold exceeded";
+
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
   private final PlatformFileRuntimeRepository runtimeRepository;
@@ -85,8 +89,8 @@ public class ValidateStep implements ImportStageStep {
         return failStreaming(
             context,
             validatedRecordsPath,
-            "IMPORT_SKIP_THRESHOLD_EXCEEDED",
-            "skip threshold exceeded");
+            ERR_SKIP_THRESHOLD_EXCEEDED,
+            MSG_SKIP_THRESHOLD_EXCEEDED);
       }
       return ImportStageResult.success(stage());
     } catch (Exception exception) {
@@ -125,8 +129,8 @@ public class ValidateStep implements ImportStageStep {
         return failStreaming(
             context,
             validatedRecordsPath,
-            "IMPORT_SKIP_THRESHOLD_EXCEEDED",
-            "skip threshold exceeded");
+            ERR_SKIP_THRESHOLD_EXCEEDED,
+            MSG_SKIP_THRESHOLD_EXCEEDED);
       }
     }
     return null;
@@ -172,8 +176,8 @@ public class ValidateStep implements ImportStageStep {
                 failStreaming(
                     context,
                     validatedRecordsPath,
-                    "IMPORT_SKIP_THRESHOLD_EXCEEDED",
-                    "skip threshold exceeded"));
+                    ERR_SKIP_THRESHOLD_EXCEEDED,
+                    MSG_SKIP_THRESHOLD_EXCEEDED));
           }
           continue;
         }
@@ -259,7 +263,7 @@ public class ValidateStep implements ImportStageStep {
             context, recordNo, issue.errorCode(), issue.errorMessage(), issue.rawRecord());
         if (!recordGovernanceService.withinThreshold(context)) {
           return ChunkProcessResult.failure(
-              "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded", validCount);
+              ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED, validCount);
         }
         continue;
       }

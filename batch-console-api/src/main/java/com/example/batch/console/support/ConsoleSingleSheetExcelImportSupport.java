@@ -28,6 +28,9 @@ import org.springframework.util.StringUtils;
 /** 单 sheet Excel 导入场景的通用能力：解析 workbook、读取临时会话、生成预览错误 workbook。 */
 public final class ConsoleSingleSheetExcelImportSupport {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_TENANT_ID = "tenant_id";
+
   private static final MediaType EXCEL_MEDIA_TYPE =
       MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
@@ -98,11 +101,11 @@ public final class ConsoleSingleSheetExcelImportSupport {
           Integer columnIndex = headerIndex.get(header);
           rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
         }
-        if (columns.contains("tenant_id")) {
+        if (columns.contains(COL_TENANT_ID)) {
           rowValues.put(
-              "tenant_id",
-              StringUtils.hasText(rowValues.get("tenant_id"))
-                  ? rowValues.get("tenant_id")
+              COL_TENANT_ID,
+              StringUtils.hasText(rowValues.get(COL_TENANT_ID))
+                  ? rowValues.get(COL_TENANT_ID)
                   : tenantId);
         }
         rows.add(rowValues);
@@ -129,7 +132,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
         session.rows());
   }
 
-  public static byte[] writePreviewWorkbook(
+  public record WritePreviewWorkbookParam(
       ParsedSession session,
       List<String> columns,
       Map<String, ConsoleExcelStyles.ColumnGuide> guides,
@@ -137,7 +140,17 @@ public final class ConsoleSingleSheetExcelImportSupport {
       Consumer<Workbook> extraSheetWriter,
       List<WorkbookIssue> issues,
       int fallbackColumnIndex,
-      String systemErrorMessage) {
+      String systemErrorMessage) {}
+
+  public static byte[] writePreviewWorkbook(WritePreviewWorkbookParam param) {
+    ParsedSession session = param.session();
+    List<String> columns = param.columns();
+    Map<String, ConsoleExcelStyles.ColumnGuide> guides = param.guides();
+    Consumer<Sheet> validationApplier = param.validationApplier();
+    Consumer<Workbook> extraSheetWriter = param.extraSheetWriter();
+    List<WorkbookIssue> issues = param.issues();
+    int fallbackColumnIndex = param.fallbackColumnIndex();
+    String systemErrorMessage = param.systemErrorMessage();
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       Sheet dataSheet = workbook.createSheet(session.sheetName());
       dataSheet.createFreezePane(0, 1);

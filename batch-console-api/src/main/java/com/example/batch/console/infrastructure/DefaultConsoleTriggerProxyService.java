@@ -70,6 +70,16 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
     return resp != null ? resp.data() : Map.of();
   }
 
+  @Override
+  public Map<String, String> pauseByTenant(String tenantId) {
+    return proxyScheduler("POST", "/api/triggers/management/pause-tenant?tenantId=" + tenantId);
+  }
+
+  @Override
+  public Map<String, String> resumeByTenant(String tenantId) {
+    return proxyScheduler("POST", "/api/triggers/management/resume-tenant?tenantId=" + tenantId);
+  }
+
   private Map<String, String> proxyScheduler(String method, String path) {
     RestClient client =
         restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();

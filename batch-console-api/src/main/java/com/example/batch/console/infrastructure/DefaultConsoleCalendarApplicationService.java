@@ -24,6 +24,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleCalendarApplicationService implements ConsoleCalendarApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String ERR_CALENDAR_NOT_FOUND = "calendar not found";
+  private static final String KEY_CALENDAR_CODE = "calendar_code";
+
   private final BusinessCalendarMapper calendarMapper;
   private final CalendarHolidayMapper holidayMapper;
   private final ConsoleTenantGuard tenantGuard;
@@ -70,7 +74,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   public Map<String, Object> update(Long id, CalendarSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing =
-        Guard.requireFound(calendarMapper.selectById(tenantId, id), "calendar not found");
+        Guard.requireFound(calendarMapper.selectById(tenantId, id), ERR_CALENDAR_NOT_FOUND);
     Map<String, Object> params = new HashMap<>();
     params.put("id", id);
     params.put("tenantId", tenantId);
@@ -85,7 +89,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         "catchUpMaxDays", request.getCatchUpMaxDays() == null ? 0 : request.getCatchUpMaxDays());
     calendarMapper.update(params);
     cacheInvalidationService.evictBusinessCalendar(
-        tenantId, String.valueOf(existing.get("calendar_code")));
+        tenantId, String.valueOf(existing.get(KEY_CALENDAR_CODE)));
     return calendarMapper.selectById(tenantId, id);
   }
 
@@ -94,12 +98,12 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     String resolved = tenantGuard.resolveTenant(tenantId);
     int rows = calendarMapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "calendar not found");
+      throw new BizException(ResultCode.NOT_FOUND, ERR_CALENDAR_NOT_FOUND);
     }
     Map<String, Object> calendar = calendarMapper.selectById(resolved, id);
     if (calendar != null) {
       cacheInvalidationService.evictBusinessCalendar(
-          resolved, String.valueOf(calendar.get("calendar_code")));
+          resolved, String.valueOf(calendar.get(KEY_CALENDAR_CODE)));
     }
   }
 
@@ -107,7 +111,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   public List<Map<String, Object>> holidays(Long id, String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> calendar =
-        Guard.requireFound(calendarMapper.selectById(resolved, id), "calendar not found");
+        Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
     return holidayMapper.selectByCalendarId(id);
   }
 
@@ -115,7 +119,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   public void importHolidays(Long id, HolidayImportRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> calendar =
-        Guard.requireFound(calendarMapper.selectById(tenantId, id), "calendar not found");
+        Guard.requireFound(calendarMapper.selectById(tenantId, id), ERR_CALENDAR_NOT_FOUND);
     List<Map<String, Object>> list =
         request.getItems().stream()
             .map(
@@ -131,14 +135,14 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
             .collect(Collectors.toList());
     holidayMapper.batchInsert(list);
     cacheInvalidationService.evictBusinessCalendar(
-        tenantId, String.valueOf(calendar.get("calendar_code")));
+        tenantId, String.valueOf(calendar.get(KEY_CALENDAR_CODE)));
   }
 
   @Override
   public Map<String, Object> updateHoliday(Long id, Long holidayId, HolidaySaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> calendar =
-        Guard.requireFound(calendarMapper.selectById(tenantId, id), "calendar not found");
+        Guard.requireFound(calendarMapper.selectById(tenantId, id), ERR_CALENDAR_NOT_FOUND);
     Map<String, Object> existing =
         Guard.requireFound(holidayMapper.selectById(holidayId), "holiday not found");
     Map<String, Object> params = new HashMap<>();
@@ -149,7 +153,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     params.put("description", request.getDescription());
     holidayMapper.update(params);
     cacheInvalidationService.evictBusinessCalendar(
-        tenantId, String.valueOf(calendar.get("calendar_code")));
+        tenantId, String.valueOf(calendar.get(KEY_CALENDAR_CODE)));
     return holidayMapper.selectById(holidayId);
   }
 
@@ -157,12 +161,12 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
   public void deleteHoliday(Long id, Long holidayId, String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> calendar =
-        Guard.requireFound(calendarMapper.selectById(resolved, id), "calendar not found");
+        Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
     int rows = holidayMapper.deleteById(holidayId);
     if (rows == 0) {
       throw new BizException(ResultCode.NOT_FOUND, "holiday not found");
     }
     cacheInvalidationService.evictBusinessCalendar(
-        resolved, String.valueOf(calendar.get("calendar_code")));
+        resolved, String.valueOf(calendar.get(KEY_CALENDAR_CODE)));
   }
 }

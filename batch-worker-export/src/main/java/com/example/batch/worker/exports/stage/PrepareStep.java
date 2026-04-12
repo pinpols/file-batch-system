@@ -22,6 +22,11 @@ import org.springframework.util.StringUtils;
 @Component
 public class PrepareStep implements ExportStageStep {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_SNAPSHOT_MODE = "snapshotMode";
+  private static final String KEY_SNAPSHOT_TS = "snapshotTs";
+  private static final String KEY_SOURCE_PARTITIONS = "sourcePartitions";
+
   private final ObjectMapper objectMapper;
   private final PlatformFileRuntimeRepository runtimeRepository;
 
@@ -152,18 +157,18 @@ public class PrepareStep implements ExportStageStep {
         payload != null && payload.metadata() != null ? payload.metadata() : Map.of();
     Map<String, Object> snap = new LinkedHashMap<>();
     snap.put(
-        "snapshotMode",
+        KEY_SNAPSHOT_MODE,
         firstNonBlank(
-            stringHint(hints, "snapshotMode"), stringMeta(meta, "snapshotMode"), "AS_OF_BATCH"));
+            stringHint(hints, KEY_SNAPSHOT_MODE), stringMeta(meta, KEY_SNAPSHOT_MODE), "AS_OF_BATCH"));
     snap.put(
-        "snapshotTs",
+        KEY_SNAPSHOT_TS,
         firstNonBlank(
-            stringHint(hints, "snapshotTs"),
-            stringMeta(meta, "snapshotTs"),
+            stringHint(hints, KEY_SNAPSHOT_TS),
+            stringMeta(meta, KEY_SNAPSHOT_TS),
             Instant.now().toString()));
     snap.put(
-        "sourcePartitions",
-        mergePartitions(hints.get("sourcePartitions"), meta.get("sourcePartitions")));
+        KEY_SOURCE_PARTITIONS,
+        mergePartitions(hints.get(KEY_SOURCE_PARTITIONS), meta.get(KEY_SOURCE_PARTITIONS)));
     return snap;
   }
 
@@ -172,10 +177,10 @@ public class PrepareStep implements ExportStageStep {
     if (template == null || template.isEmpty()) {
       return out;
     }
-    putIfHasText(out, "snapshotMode", template.get("snapshot_mode"));
-    putIfHasText(out, "snapshotTs", template.get("snapshot_ts"));
+    putIfHasText(out, KEY_SNAPSHOT_MODE, template.get("snapshot_mode"));
+    putIfHasText(out, KEY_SNAPSHOT_TS, template.get("snapshot_ts"));
     if (template.get("source_partitions") != null) {
-      out.put("sourcePartitions", template.get("source_partitions"));
+      out.put(KEY_SOURCE_PARTITIONS, template.get("source_partitions"));
     }
     Object qps = template.get("query_param_schema");
     if (qps instanceof Map<?, ?> schema) {

@@ -68,6 +68,11 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
     implements ConsoleTenantQuotaPolicyExcelApplicationService {
 
   private static final String SHEET_NAME = "tenant_quota_policy";
+
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_DESCRIPTION = "description";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String COL_ENABLED = "enabled";
   private static final List<String> COLUMNS =
       List.of(
           "tenant_id",
@@ -76,8 +81,8 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
           "max_partitions_per_tenant",
           "max_qps_per_tenant",
           "fair_share_weight",
-          "enabled",
-          "description");
+          COL_ENABLED,
+          COL_DESCRIPTION);
   private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
@@ -88,8 +93,8 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
           Map.entry("max_partitions_per_tenant", requiredColumn("租户最大分区数，必须 >= 0。", "整数", "100")),
           Map.entry("max_qps_per_tenant", requiredColumn("租户最大 QPS，必须 >= 0。", "整数", "50")),
           Map.entry("fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", "整数", "1")),
-          Map.entry("enabled", optionalColumn("策略是否启用，默认 TRUE。", "布尔值", "TRUE", "TRUE", "FALSE")),
-          Map.entry("description", optionalColumn("策略描述信息。", "字符串", "默认配额策略")));
+          Map.entry(COL_ENABLED, optionalColumn("策略是否启用，默认 TRUE。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
+          Map.entry(COL_DESCRIPTION, optionalColumn("策略描述信息。", "字符串", "默认配额策略")));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -289,8 +294,8 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
                 .build())
         .state(
             PolicyState.builder()
-                .enabled(optionalBoolean(values, "enabled", true, issues))
-                .description(optionalText(values, "description", 512, issues))
+                .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
+                .description(optionalText(values, COL_DESCRIPTION, 512, issues))
                 .build())
         .build();
   }
@@ -348,7 +353,7 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
     if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
@@ -403,18 +408,19 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
                         .stream())
             .toList();
     return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(
-        session,
-        COLUMNS,
-        COLUMN_GUIDES,
-        this::applyValidations,
-        workbook -> {
-          createReadmeSheet(workbook);
-          createDictSheet(workbook);
-          createValidationSheet(workbook);
-        },
-        workbookIssues,
-        1,
-        "failed to generate preview excel workbook");
+        new ConsoleSingleSheetExcelImportSupport.WritePreviewWorkbookParam(
+            session,
+            COLUMNS,
+            COLUMN_GUIDES,
+            this::applyValidations,
+            workbook -> {
+              createReadmeSheet(workbook);
+              createDictSheet(workbook);
+              createValidationSheet(workbook);
+            },
+            workbookIssues,
+            1,
+            "failed to generate preview excel workbook"));
   }
 
   private void applyValidations(Sheet sheet) {
@@ -447,10 +453,10 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
     Sheet sheet = workbook.createSheet("DICT");
     sheet.createFreezePane(0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
-    writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
+    writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, "FALSE", "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);

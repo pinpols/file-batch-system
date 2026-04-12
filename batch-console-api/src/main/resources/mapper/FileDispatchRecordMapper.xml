@@ -21,52 +21,52 @@
             created_at,
             updated_at
         from batch.file_dispatch_record
-        where tenant_id = #{tenantId}
-        <if test="fileId != null">
-            and file_id = #{fileId}
+        where tenant_id = #{q.tenantId}
+        <if test="q.fileId != null">
+            and file_id = #{q.fileId}
         </if>
-        <if test="channelCode != null and channelCode != ''">
-            and channel_code = #{channelCode}
+        <if test="q.channelCode != null and q.channelCode != ''">
+            and channel_code = #{q.channelCode}
         </if>
-        <if test="dispatchStatus != null and dispatchStatus != ''">
-            and dispatch_status = #{dispatchStatus}
+        <if test="q.dispatchStatus != null and q.dispatchStatus != ''">
+            and dispatch_status = #{q.dispatchStatus}
         </if>
-        <if test="receiptStatus != null and receiptStatus != ''">
-            and receipt_status = #{receiptStatus}
+        <if test="q.receiptStatus != null and q.receiptStatus != ''">
+            and receipt_status = #{q.receiptStatus}
         </if>
-        <if test="fromTime != null">
-            and created_at &gt;= #{fromTime}
+        <if test="q.fromTime != null">
+            and created_at &gt;= #{q.fromTime}
         </if>
-        <if test="toTime != null">
-            and created_at &lt;= #{toTime}
+        <if test="q.toTime != null">
+            and created_at &lt;= #{q.toTime}
         </if>
         order by id desc
-        <if test="pageRequest != null">
-            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+        <if test="q.pageRequest != null">
+            limit #{q.pageRequest.pageSize} offset (#{q.pageRequest.pageNo} - 1) * #{q.pageRequest.pageSize}
         </if>
     </select>
 
     <select id="countByQuery" resultType="long">
         select count(1)
         from batch.file_dispatch_record
-        where tenant_id = #{tenantId}
-        <if test="fileId != null">
-            and file_id = #{fileId}
+        where tenant_id = #{q.tenantId}
+        <if test="q.fileId != null">
+            and file_id = #{q.fileId}
         </if>
-        <if test="channelCode != null and channelCode != ''">
-            and channel_code = #{channelCode}
+        <if test="q.channelCode != null and q.channelCode != ''">
+            and channel_code = #{q.channelCode}
         </if>
-        <if test="dispatchStatus != null and dispatchStatus != ''">
-            and dispatch_status = #{dispatchStatus}
+        <if test="q.dispatchStatus != null and q.dispatchStatus != ''">
+            and dispatch_status = #{q.dispatchStatus}
         </if>
-        <if test="receiptStatus != null and receiptStatus != ''">
-            and receipt_status = #{receiptStatus}
+        <if test="q.receiptStatus != null and q.receiptStatus != ''">
+            and receipt_status = #{q.receiptStatus}
         </if>
-        <if test="fromTime != null">
-            and created_at &gt;= #{fromTime}
+        <if test="q.fromTime != null">
+            and created_at &gt;= #{q.fromTime}
         </if>
-        <if test="toTime != null">
-            and created_at &lt;= #{toTime}
+        <if test="q.toTime != null">
+            and created_at &lt;= #{q.toTime}
         </if>
     </select>
 </mapper>

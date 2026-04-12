@@ -41,15 +41,7 @@ public interface ConsoleWebhookDeliveryLogRepository
       """
       INSERT INTO batch.webhook_delivery_log
              (tenant_id, subscription_id, event_type, payload_json, http_status, response_body, delivery_status, attempt)
-      VALUES (:tenantId, :subscriptionId, :eventType, cast(:payloadJson as jsonb), :httpStatus, :responseBody, :deliveryStatus, :attempt)
+      VALUES (:#{#p.tenantId}, :#{#p.subscriptionId}, :#{#p.eventType}, cast(:#{#p.payloadJson} as jsonb), :#{#p.httpStatus}, :#{#p.responseBody}, :#{#p.deliveryStatus}, :#{#p.attempt})
       """)
-  void insert(
-      @Param("tenantId") String tenantId,
-      @Param("subscriptionId") Long subscriptionId,
-      @Param("eventType") String eventType,
-      @Param("payloadJson") String payloadJson,
-      @Param("httpStatus") Integer httpStatus,
-      @Param("responseBody") String responseBody,
-      @Param("deliveryStatus") String deliveryStatus,
-      @Param("attempt") int attempt);
+  void insert(@Param("p") WebhookDeliveryLogInsertParam p);
 }

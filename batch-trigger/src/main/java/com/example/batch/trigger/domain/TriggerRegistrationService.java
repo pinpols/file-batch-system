@@ -14,6 +14,10 @@ public interface TriggerRegistrationService {
 
   void resumeByJobCode(String tenantId, String jobCode);
 
+  void pauseByTenant(String tenantId);
+
+  void resumeByTenant(String tenantId);
+
   List<TriggerStatusInfo> listRegisteredTriggers();
 
   void pauseAll();

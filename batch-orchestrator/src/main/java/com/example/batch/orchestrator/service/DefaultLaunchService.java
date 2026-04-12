@@ -129,6 +129,30 @@ public class DefaultLaunchService implements LaunchService {
       LaunchLoadResult loaded,
       Map<String, Object> effectiveParams,
       String traceId) {
+    Instant batchDaySlaDeadlineAt =
+        launchBatchDayService.resolveBatchDaySlaDeadlineAt(
+            request.tenantId(), loaded.jobDefinition().calendarCode(), request.bizDate());
+    JobInstanceEntity jobInstance =
+        buildJobInstanceEntity(request, loaded, effectiveParams, traceId, batchDaySlaDeadlineAt);
+    jobMappers.jobInstanceMapper.insert(jobInstance);
+    launchBatchDayService.upsertBatchDayInstance(
+        request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
+
+    // WORKFLOW 类型：解析 DAG 初始节点并创建 workflow_run/node_run；其他类型（IMPORT/EXPORT/DISPATCH/GENERAL）无
+    // workflow，跳过。
+    Instant startedAt = Instant.now();
+    if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {
+      return prepareWorkflowRunAndNodes(request, loaded, effectiveParams, traceId, jobInstance, startedAt);
+    }
+    return new PreparedLaunch(jobInstance, null, List.of(), startedAt);
+  }
+
+  private JobInstanceEntity buildJobInstanceEntity(
+      LaunchRequest request,
+      LaunchLoadResult loaded,
+      Map<String, Object> effectiveParams,
+      String traceId,
+      Instant batchDaySlaDeadlineAt) {
     JobInstanceEntity jobInstance = new JobInstanceEntity();
     jobInstance.setTenantId(request.tenantId());
     jobInstance.setJobDefinitionId(loaded.jobDefinition().id());
@@ -160,9 +184,6 @@ public class DefaultLaunchService implements LaunchService {
         launchParamResolver.buildParamsSnapshot(
             loaded.jobDefinition(), request, effectiveParams, traceId));
     jobInstance.setResultSummary(null);
-    Instant batchDaySlaDeadlineAt =
-        launchBatchDayService.resolveBatchDaySlaDeadlineAt(
-            request.tenantId(), loaded.jobDefinition().calendarCode(), request.bizDate());
     Instant createdAt = Instant.now();
     jobInstance.setDeadlineAt(
         launchParamResolver.resolveDeadlineAt(
@@ -175,47 +196,42 @@ public class DefaultLaunchService implements LaunchService {
         launchParamResolver.resolveExpectedDurationSeconds(
             loaded.jobDefinition(), effectiveParams));
     jobInstance.setSlaAlertedAt(null);
-    jobMappers.jobInstanceMapper.insert(jobInstance);
-    launchBatchDayService.upsertBatchDayInstance(
-        request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
+    return jobInstance;
+  }
 
-    // WORKFLOW 类型：解析 DAG 初始节点并创建 workflow_run/node_run；其他类型（IMPORT/EXPORT/DISPATCH/GENERAL）无
-    // workflow，跳过。
-    List<WorkflowDagService.DagNodeResolution> initialNodes;
-    WorkflowRunEntity workflowRun;
-    Instant startedAt = Instant.now();
+  private PreparedLaunch prepareWorkflowRunAndNodes(
+      LaunchRequest request,
+      LaunchLoadResult loaded,
+      Map<String, Object> effectiveParams,
+      String traceId,
+      JobInstanceEntity jobInstance,
+      Instant startedAt) {
+    List<WorkflowDagService.DagNodeResolution> initialNodes =
+        workflowDagService.resolveInitialNodes(
+            loaded.workflowDefinition().id(),
+            launchParamResolver.buildPayloadJson(effectiveParams));
 
-    if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {
-      initialNodes =
-          workflowDagService.resolveInitialNodes(
-              loaded.workflowDefinition().id(),
-              launchParamResolver.buildPayloadJson(effectiveParams));
+    WorkflowRunEntity workflowRun = new WorkflowRunEntity();
+    workflowRun.setTenantId(request.tenantId());
+    workflowRun.setWorkflowDefinitionId(loaded.workflowDefinition().id());
+    workflowRun.setRelatedJobInstanceId(jobInstance.getId());
+    workflowRun.setBizDate(request.bizDate());
+    workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
+    workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
+    workflowRun.setTraceId(traceId);
+    workflowMappers.workflowRunMapper.insert(workflowRun);
 
-      workflowRun = new WorkflowRunEntity();
-      workflowRun.setTenantId(request.tenantId());
-      workflowRun.setWorkflowDefinitionId(loaded.workflowDefinition().id());
-      workflowRun.setRelatedJobInstanceId(jobInstance.getId());
-      workflowRun.setBizDate(request.bizDate());
-      workflowRun.setRunStatus(WorkflowRunStatus.CREATED.code());
-      workflowRun.setCurrentNodeCode(resolveInitialCurrentNode(initialNodes));
-      workflowRun.setTraceId(traceId);
-      workflowMappers.workflowRunMapper.insert(workflowRun);
-
-      WorkflowNodeRunEntity startNodeRun = new WorkflowNodeRunEntity();
-      startNodeRun.setWorkflowRunId(workflowRun.getId());
-      startNodeRun.setNodeCode(WorkflowNodeCode.START.code());
-      startNodeRun.setNodeType(WorkflowNodeType.START.code());
-      startNodeRun.setRunSeq(1);
-      startNodeRun.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
-      startNodeRun.setRetryCount(0);
-      startNodeRun.setDurationMs(0L);
-      startNodeRun.setStartedAt(startedAt);
-      startNodeRun.setFinishedAt(startedAt);
-      workflowMappers.workflowNodeRunMapper.insert(startNodeRun);
-    } else {
-      initialNodes = List.of();
-      workflowRun = null;
-    }
+    WorkflowNodeRunEntity startNodeRun = new WorkflowNodeRunEntity();
+    startNodeRun.setWorkflowRunId(workflowRun.getId());
+    startNodeRun.setNodeCode(WorkflowNodeCode.START.code());
+    startNodeRun.setNodeType(WorkflowNodeType.START.code());
+    startNodeRun.setRunSeq(1);
+    startNodeRun.setNodeStatus(WorkflowNodeRunStatus.SUCCESS.code());
+    startNodeRun.setRetryCount(0);
+    startNodeRun.setDurationMs(0L);
+    startNodeRun.setStartedAt(startedAt);
+    startNodeRun.setFinishedAt(startedAt);
+    workflowMappers.workflowNodeRunMapper.insert(startNodeRun);
 
     return new PreparedLaunch(jobInstance, workflowRun, initialNodes, startedAt);
   }

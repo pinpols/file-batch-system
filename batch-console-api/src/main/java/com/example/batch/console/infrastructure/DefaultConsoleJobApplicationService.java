@@ -56,6 +56,9 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleJobApplicationService implements ConsoleJobApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String JOB_TYPE_COMPENSATION = "COMPENSATION";
+
   private final RestClient.Builder restClientBuilder;
   private final ConsoleTriggerClientProperties triggerClientProperties;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
@@ -91,8 +94,8 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
       String result =
           submitApproval(
               new ApprovalSubmitContext(
-                  "COMPENSATION",
-                  "COMPENSATION",
+                  JOB_TYPE_COMPENSATION,
+                  JOB_TYPE_COMPENSATION,
                   "JOB",
                   String.valueOf(request.getTargetId()),
                   request,
@@ -231,7 +234,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
       String result =
           submitApproval(
               new ApprovalSubmitContext(
-                  "COMPENSATION",
+                  JOB_TYPE_COMPENSATION,
                   "RETRY",
                   "JOB_TASK",
                   String.valueOf(request.getTaskId()),
@@ -260,7 +263,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
       String result =
           submitApproval(
               new ApprovalSubmitContext(
-                  "COMPENSATION",
+                  JOB_TYPE_COMPENSATION,
                   "RETRY",
                   "JOB_PARTITION",
                   String.valueOf(request.getPartitionId()),

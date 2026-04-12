@@ -72,40 +72,51 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     implements ConsoleBatchWindowExcelApplicationService {
 
   private static final String SHEET_NAME = "batch_window";
+
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_TIMEZONE = "timezone";
+  private static final String COL_DESCRIPTION = "description";
+  private static final String COL_END_STRATEGY = "end_strategy";
+  private static final String COL_ENABLED = "enabled";
+  private static final String GUIDE_FALSE = "FALSE";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String COL_OUT_OF_WINDOW_ACTION = "out_of_window_action";
+  private static final String COL_ALLOW_CROSS_DAY = "allow_cross_day";
+  private static final String GUIDE_STR = "字符串";
   private static final Pattern TIME_PATTERN = Pattern.compile("^\\d{2}:\\d{2}(:\\d{2})?$");
   private static final List<String> COLUMNS =
       List.of(
           "tenant_id",
           "window_code",
           "window_name",
-          "timezone",
+          COL_TIMEZONE,
           "start_time",
           "end_time",
-          "end_strategy",
-          "out_of_window_action",
-          "allow_cross_day",
-          "enabled",
-          "description");
+          COL_END_STRATEGY,
+          COL_OUT_OF_WINDOW_ACTION,
+          COL_ALLOW_CROSS_DAY,
+          COL_ENABLED,
+          COL_DESCRIPTION);
   private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
   private static final Set<String> END_STRATEGIES = BatchWindowEndStrategy.codes();
   private static final Set<String> OUT_OF_WINDOW_ACTIONS = OutOfWindowAction.codes();
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
-          Map.entry("window_code", requiredColumn("窗口唯一编码，作为导入匹配键。", "字符串", "WIN_SETTLEMENT")),
-          Map.entry("window_name", requiredColumn("控制台展示的窗口名称。", "字符串", "清算窗口")),
-          Map.entry("timezone", requiredColumn("时区标识。", "字符串", "Asia/Shanghai")),
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("window_code", requiredColumn("窗口唯一编码，作为导入匹配键。", GUIDE_STR, "WIN_SETTLEMENT")),
+          Map.entry("window_name", requiredColumn("控制台展示的窗口名称。", GUIDE_STR, "清算窗口")),
+          Map.entry(COL_TIMEZONE, requiredColumn("时区标识。", GUIDE_STR, "Asia/Shanghai")),
           Map.entry("start_time", requiredColumn("窗口开始时间，格式 HH:mm 或 HH:mm:ss。", "时间", "08:00")),
           Map.entry("end_time", requiredColumn("窗口结束时间，格式 HH:mm 或 HH:mm:ss。", "时间", "18:00")),
           Map.entry(
-              "end_strategy",
+              COL_END_STRATEGY,
               requiredColumn(
                   "窗口结束策略。", "枚举", "FINISH_RUNNING", "STOP", "FINISH_RUNNING", "CONTINUE")),
           Map.entry(
-              "out_of_window_action", requiredColumn("窗口外操作策略。", "枚举", "WAIT", "WAIT", "FAIL")),
-          Map.entry("allow_cross_day", optionalColumn("是否允许跨天。", "布尔值", "FALSE", "TRUE", "FALSE")),
-          Map.entry("enabled", optionalColumn("窗口是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
-          Map.entry("description", optionalColumn("窗口描述信息。", "字符串", "用于清算批处理的执行窗口")));
+              COL_OUT_OF_WINDOW_ACTION, requiredColumn("窗口外操作策略。", "枚举", "WAIT", "WAIT", "FAIL")),
+          Map.entry(COL_ALLOW_CROSS_DAY, optionalColumn("是否允许跨天。", "布尔值", GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(COL_ENABLED, optionalColumn("窗口是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(COL_DESCRIPTION, optionalColumn("窗口描述信息。", GUIDE_STR, "用于清算批处理的执行窗口")));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -299,18 +310,18 @@ public class DefaultConsoleBatchWindowExcelApplicationService
         .definition(
             WindowDefinition.builder()
                 .windowName(requireText(values, "window_name", 256, issues))
-                .timezone(requireText(values, "timezone", 64, issues))
+                .timezone(requireText(values, COL_TIMEZONE, 64, issues))
                 .startTime(requireTime(values, "start_time", issues))
                 .endTime(requireTime(values, "end_time", issues))
-                .endStrategy(requireEnum(values, "end_strategy", END_STRATEGIES, 32, issues))
+                .endStrategy(requireEnum(values, COL_END_STRATEGY, END_STRATEGIES, 32, issues))
                 .outOfWindowAction(
-                    requireEnum(values, "out_of_window_action", OUT_OF_WINDOW_ACTIONS, 32, issues))
+                    requireEnum(values, COL_OUT_OF_WINDOW_ACTION, OUT_OF_WINDOW_ACTIONS, 32, issues))
                 .build())
         .settings(
             WindowSettings.builder()
-                .allowCrossDay(optionalBoolean(values, "allow_cross_day", false, issues))
-                .enabled(optionalBoolean(values, "enabled", true, issues))
-                .description(optionalText(values, "description", 512, issues))
+                .allowCrossDay(optionalBoolean(values, COL_ALLOW_CROSS_DAY, false, issues))
+                .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
+                .description(optionalText(values, COL_DESCRIPTION, 512, issues))
                 .build())
         .build();
   }
@@ -378,10 +389,10 @@ public class DefaultConsoleBatchWindowExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
-    if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
+    if (List.of(GUIDE_FALSE, "N", "0", "NO").contains(upper)) {
       return false;
     }
     issues.add(key + " must be boolean");
@@ -433,18 +444,19 @@ public class DefaultConsoleBatchWindowExcelApplicationService
                         .stream())
             .toList();
     return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(
-        session,
-        COLUMNS,
-        COLUMN_GUIDES,
-        this::applyValidations,
-        workbook -> {
-          createReadmeSheet(workbook);
-          createDictSheet(workbook);
-          createValidationSheet(workbook);
-        },
-        workbookIssues,
-        1,
-        "failed to generate preview excel workbook");
+        new ConsoleSingleSheetExcelImportSupport.WritePreviewWorkbookParam(
+            session,
+            COLUMNS,
+            COLUMN_GUIDES,
+            this::applyValidations,
+            workbook -> {
+              createReadmeSheet(workbook);
+              createDictSheet(workbook);
+              createValidationSheet(workbook);
+            },
+            workbookIssues,
+            1,
+            "failed to generate preview excel workbook"));
   }
 
   private void applyValidations(Sheet sheet) {
@@ -486,17 +498,17 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     Sheet sheet = workbook.createSheet("DICT");
     sheet.createFreezePane(0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
-    writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
+    writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {
-      {"end_strategy", "STOP", "stop immediately"},
-      {"end_strategy", "FINISH_RUNNING", "finish running tasks"},
-      {"end_strategy", "CONTINUE", "continue without restriction"},
-      {"out_of_window_action", "WAIT", "wait until window opens"},
-      {"out_of_window_action", "FAIL", "fail the task"},
-      {"allow_cross_day", "TRUE", "allow cross-day window"},
-      {"allow_cross_day", "FALSE", "disallow cross-day window"},
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_END_STRATEGY, "STOP", "stop immediately"},
+      {COL_END_STRATEGY, "FINISH_RUNNING", "finish running tasks"},
+      {COL_END_STRATEGY, "CONTINUE", "continue without restriction"},
+      {COL_OUT_OF_WINDOW_ACTION, "WAIT", "wait until window opens"},
+      {COL_OUT_OF_WINDOW_ACTION, "FAIL", "fail the task"},
+      {COL_ALLOW_CROSS_DAY, GUIDE_TRUE, "allow cross-day window"},
+      {COL_ALLOW_CROSS_DAY, GUIDE_FALSE, "disallow cross-day window"},
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, GUIDE_FALSE, "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);
@@ -547,7 +559,7 @@ public class DefaultConsoleBatchWindowExcelApplicationService
                     "detail",
                         mapOf(
                             "windowName", row.windowName(),
-                            "timezone", row.timezone(),
+                            COL_TIMEZONE, row.timezone(),
                             "startTime", row.startTime(),
                             "endTime", row.endTime(),
                             "endStrategy", row.endStrategy(),

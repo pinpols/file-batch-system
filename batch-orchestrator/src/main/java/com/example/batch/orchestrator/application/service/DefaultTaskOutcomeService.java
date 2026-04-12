@@ -305,14 +305,15 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
     if (nodeProgress.allFinished() && workflowRun != null) {
       advanceDagNodes(
-          command,
-          task,
-          jobInstance,
-          workflowRun,
-          currentNodeCode,
-          nodeProgress,
-          activeNodes,
-          finishedAt);
+          new DagAdvanceContext(
+              command,
+              task,
+              jobInstance,
+              workflowRun,
+              currentNodeCode,
+              nodeProgress,
+              activeNodes,
+              finishedAt));
     }
 
     boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
@@ -353,62 +354,54 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   }
 
   /** DAG 工作流节点推进：完成当前节点运行记录，解析并派发后继节点。 */
-  private void advanceDagNodes(
-      TaskOutcomeCommand command,
-      JobTaskEntity task,
-      JobInstanceEntity jobInstance,
-      WorkflowRunEntity workflowRun,
-      String currentNodeCode,
-      NodePartitionProgress nodeProgress,
-      Set<String> activeNodes,
-      Instant finishedAt) {
-    activeNodes.remove(currentNodeCode);
+  private void advanceDagNodes(DagAdvanceContext ctx) {
+    ctx.activeNodes().remove(ctx.currentNodeCode());
     recordNodeRunFinish(
         NodeRunFinishCommand.of(
-            new NodeRunKey(workflowRun.getId(), currentNodeCode, resolveCurrentNodeType(task)),
+            new NodeRunKey(ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task())),
             new NodeRunOutcome(
-                nodeProgress.failedCount() == 0,
-                command.errorCode(),
-                command.errorMessage(),
+                ctx.nodeProgress().failedCount() == 0,
+                ctx.command().errorCode(),
+                ctx.command().errorMessage(),
                 resolveNodeStartedAt(
-                    workflowRun.getId(), currentNodeCode, workflowRun.getStartedAt(), finishedAt),
-                finishedAt)));
+                    ctx.workflowRun().getId(), ctx.currentNodeCode(), ctx.workflowRun().getStartedAt(), ctx.finishedAt()),
+                ctx.finishedAt())));
     List<WorkflowDagService.DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodes(
-            workflowRun.getWorkflowDefinitionId(),
-            currentNodeCode,
-            nodeProgress.failedCount() == 0,
-            task.getTaskPayload());
+            ctx.workflowRun().getWorkflowDefinitionId(),
+            ctx.currentNodeCode(),
+            ctx.nodeProgress().failedCount() == 0,
+            ctx.task().getTaskPayload());
     for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
       if (nextNode == null) {
         continue;
       }
       if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
         if (workflowDagService.isNodeReadyForDispatch(
-            workflowRun.getId(),
-            workflowRun.getWorkflowDefinitionId(),
+            ctx.workflowRun().getId(),
+            ctx.workflowRun().getWorkflowDefinitionId(),
             nextNode.nodeCode(),
-            task.getTaskPayload())) {
+            ctx.task().getTaskPayload())) {
           recordNodeRunStart(
-              workflowRun.getId(), nextNode.nodeCode(), nextNode.nodeType(), finishedAt);
+              ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType(), ctx.finishedAt());
           recordNodeRunFinish(
               NodeRunFinishCommand.of(
-                  new NodeRunKey(workflowRun.getId(), nextNode.nodeCode(), nextNode.nodeType()),
+                  new NodeRunKey(ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType()),
                   new NodeRunOutcome(
-                      nodeProgress.failedCount() == 0,
-                      command.errorCode(),
-                      command.errorMessage(),
-                      finishedAt,
-                      finishedAt)));
+                      ctx.nodeProgress().failedCount() == 0,
+                      ctx.command().errorCode(),
+                      ctx.command().errorMessage(),
+                      ctx.finishedAt(),
+                      ctx.finishedAt())));
         }
         continue;
       }
       workflowNodeDispatchServiceProvider
           .getObject()
           .dispatchNode(
-              jobInstance, workflowRun, nextNode, task.getTaskPayload(), jobInstance.getTraceId());
-      if (isActiveNode(workflowRun.getId(), nextNode.nodeCode())) {
-        activeNodes.add(nextNode.nodeCode());
+              ctx.jobInstance(), ctx.workflowRun(), nextNode, ctx.task().getTaskPayload(), ctx.jobInstance().getTraceId());
+      if (isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode())) {
+        ctx.activeNodes().add(nextNode.nodeCode());
       }
     }
   }
@@ -802,4 +795,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       return partitionCount > 0 && successCount + failedCount == partitionCount;
     }
   }
+
+  private record DagAdvanceContext(
+      TaskOutcomeCommand command,
+      JobTaskEntity task,
+      JobInstanceEntity jobInstance,
+      WorkflowRunEntity workflowRun,
+      String currentNodeCode,
+      NodePartitionProgress nodeProgress,
+      Set<String> activeNodes,
+      Instant finishedAt) {}
 }

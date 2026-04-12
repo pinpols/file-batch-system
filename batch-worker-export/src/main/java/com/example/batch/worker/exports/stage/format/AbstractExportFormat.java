@@ -22,6 +22,9 @@ import org.springframework.util.StringUtils;
  */
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_DETAIL_PREFIX = "detail.";
+
   protected static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
   protected final ObjectMapper objectMapper;
@@ -54,7 +57,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     List<ColumnLayout> inferred = new ArrayList<>();
     for (String key : firstPage.get(0).keySet()) {
-      inferred.add(new ColumnLayout(key, "detail." + key, null, false, ' '));
+      inferred.add(new ColumnLayout(key, KEY_DETAIL_PREFIX + key, null, false, ' '));
     }
     return inferred;
   }
@@ -90,7 +93,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     List<ColumnLayout> inferred = new ArrayList<>();
     for (String key : firstPage.get(0).keySet()) {
-      inferred.add(new ColumnLayout(key, "detail." + key, Math.max(key.length(), 16), false, ' '));
+      inferred.add(new ColumnLayout(key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' '));
     }
     return inferred;
   }
@@ -171,10 +174,10 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   protected String normalizeDelimitedSource(String source) {
     String value = source == null ? "" : source.trim();
-    if (value.startsWith("batch.") || value.startsWith("detail.")) {
+    if (value.startsWith("batch.") || value.startsWith(KEY_DETAIL_PREFIX)) {
       return value;
     }
-    return "detail." + value;
+    return KEY_DETAIL_PREFIX + value;
   }
 
   protected String defaultDelimitedHeader(String source) {
@@ -246,8 +249,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (source.startsWith("batch.")) {
       return batch.get(source.substring("batch.".length()));
     }
-    if (source.startsWith("detail.")) {
-      return detail.get(source.substring("detail.".length()));
+    if (source.startsWith(KEY_DETAIL_PREFIX)) {
+      return detail.get(source.substring(KEY_DETAIL_PREFIX.length()));
     }
     Object detailValue = detail.get(source);
     return detailValue != null ? detailValue : batch.get(source);

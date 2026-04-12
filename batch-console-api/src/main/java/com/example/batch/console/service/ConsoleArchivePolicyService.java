@@ -3,6 +3,7 @@ package com.example.batch.console.service;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
+import com.example.batch.console.repository.ArchivePolicyUpsertParam;
 import com.example.batch.console.repository.ConsoleArchivePolicyRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
@@ -35,32 +36,25 @@ public class ConsoleArchivePolicyService {
   }
 
   @Transactional
-  public void upsert(
-      String tenantId,
-      String targetTable,
-      int retentionDays,
-      boolean archiveEnabled,
-      boolean cleanupEnabled,
-      int batchSize,
-      String description,
-      String operator) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    String normalized = targetTable.toLowerCase(Locale.ROOT);
+  public void upsert(ArchivePolicyUpsertParam param) {
+    String resolved = tenantGuard.resolveTenant(param.tenantId());
+    String normalized = param.targetTable().toLowerCase(Locale.ROOT);
     if (!VALID_TABLES.contains(normalized)) {
       throw new BizException(
           ResultCode.INVALID_ARGUMENT, "target_table must be one of: " + VALID_TABLES);
     }
-    if (retentionDays < 1) {
+    if (param.retentionDays() < 1) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "retention_days must be >= 1");
     }
     repository.upsert(
-        resolved,
-        normalized,
-        retentionDays,
-        archiveEnabled,
-        cleanupEnabled,
-        Math.max(batchSize, 100),
-        description,
-        operator);
+        new ArchivePolicyUpsertParam(
+            resolved,
+            normalized,
+            param.retentionDays(),
+            param.archiveEnabled(),
+            param.cleanupEnabled(),
+            Math.max(param.batchSize(), 100),
+            param.description(),
+            param.operator()));
   }
 }

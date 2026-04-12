@@ -4,6 +4,7 @@ import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
+import com.example.batch.console.repository.WebhookDeliveryLogInsertParam;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -160,14 +161,15 @@ public class WebhookDispatcher {
       String deliveryStatus,
       int attempt) {
     deliveryLogRepository.insert(
-        payload.tenantId(),
-        subscription.getId(),
-        payload.eventType(),
-        payloadJson,
-        httpStatus,
-        responseBody,
-        deliveryStatus,
-        attempt);
+        new WebhookDeliveryLogInsertParam(
+            payload.tenantId(),
+            subscription.getId(),
+            payload.eventType(),
+            payloadJson,
+            httpStatus,
+            responseBody,
+            deliveryStatus,
+            attempt));
   }
 
   private boolean matches(String configuredEventTypes, String eventType) {

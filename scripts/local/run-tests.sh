@@ -128,7 +128,7 @@ run_mvn() {
   if (( ${#EXTRA_MVN_ARGS[@]} > 0 )); then
     cmd+=("${EXTRA_MVN_ARGS[@]}")
   fi
-  printf '> %s\n\n' "${cmd[*]}"
+  printf -- '> %s\n\n' "${cmd[*]}"
   "${cmd[@]}"
   local ret=$?
   return $ret
@@ -141,9 +141,9 @@ run_module_tests() {
   local overall=0
   local module
   for module in "$@"; do
-    printf '\n------------------------------------------------------------\n'
-    printf '== 测试模块: %s\n' "$module"
-    printf '------------------------------------------------------------\n\n'
+    printf -- '\n------------------------------------------------------------\n'
+    printf -- '== 测试模块: %s\n' "$module"
+    printf -- '------------------------------------------------------------\n\n'
 
     local -a args=(test -pl "$module" -Dsurefire.failIfNoSpecifiedTests=false)
     if [[ -n "$test_selector" ]]; then
@@ -171,12 +171,12 @@ record_test_result() {
 
 print_test_summary() {
   banner "测试执行总结"
-  printf '%-40s %s\n' "模块" "状态"
-  printf '%s\n' "$(printf '=%.0s' {1..50})"
+  printf -- '%-40s %s\n' "模块" "状态"
+  printf -- '%s\n' "$(printf '=%.0s' {1..50})"
   for entry in "${TEST_RESULT_LINES[@]}"; do
     local module="${entry%%=*}"
     local status="${entry#*=}"
-    printf '%-40s %s\n' "$module" "$status"
+    printf -- '%-40s %s\n' "$module" "$status"
   done
   printf '%s\n' "$(printf '=%.0s' {1..50})"
   printf 'PASSED: %d  |  FAILED: %d\n' "$TEST_PASSED" "$TEST_FAILED"

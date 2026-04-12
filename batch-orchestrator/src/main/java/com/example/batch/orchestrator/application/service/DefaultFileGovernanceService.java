@@ -34,6 +34,9 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class DefaultFileGovernanceService implements FileGovernanceService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String STATUS_SUCCESS = "SUCCESS";
+
   private final FileGovernanceRepository fileGovernanceRepository;
   private final JobTaskMapper jobTaskMapper;
   private final JobPartitionMapper jobPartitionMapper;
@@ -88,7 +91,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
               command.tenantId(),
               command.fileId(),
               "PRESIGN_DOWNLOAD",
-              "SUCCESS",
+              STATUS_SUCCESS,
               new FileGovernanceRepository.FileAuditActor(
                   resolveOperatorType(command.operatorId()), command.operatorId()),
               command.traceId(),
@@ -124,7 +127,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             command.tenantId(),
             command.fileId(),
             "PRESIGN_DOWNLOAD",
-            "SUCCESS",
+            STATUS_SUCCESS,
             new FileGovernanceRepository.FileAuditActor(
                 resolveOperatorType(command.operatorId()), command.operatorId()),
             command.traceId(),
@@ -185,7 +188,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             command.tenantId(),
             command.fileId(),
             "REDISPATCH",
-            "SUCCESS",
+            STATUS_SUCCESS,
             new FileGovernanceRepository.FileAuditActor(
                 resolveOperatorType(command.operatorId()), command.operatorId()),
             command.traceId(),
@@ -256,7 +259,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
               command.tenantId(),
               fileId,
               "ARRIVAL_MANUAL_" + action,
-              "SUCCESS",
+              STATUS_SUCCESS,
               new FileGovernanceRepository.FileAuditActor(
                   resolveOperatorType(command.operatorId()), command.operatorId()),
               command.traceId(),
@@ -315,7 +318,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
               command.tenantId(),
               command.fileId(),
               operationType,
-              "SUCCESS",
+              STATUS_SUCCESS,
               new FileGovernanceRepository.FileAuditActor(
                   resolveOperatorType(command.operatorId()), command.operatorId()),
               command.traceId(),

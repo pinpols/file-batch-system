@@ -31,6 +31,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class JobSlaScheduler {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_VIOLATION_REASON = "violationReason";
+
   private final JobInstanceMapper jobInstanceMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final BatchOrchestratorGovernanceProperties governance;
@@ -123,7 +126,7 @@ public class JobSlaScheduler {
 
   private String buildMessage(JobInstanceEntity candidate, Instant now) {
     Map<String, Object> extra = buildExtra(candidate, now);
-    return "job SLA violated: " + extra.get("violationReason");
+    return "job SLA violated: " + extra.get(KEY_VIOLATION_REASON);
   }
 
   private Map<String, Object> buildExtra(JobInstanceEntity candidate, Instant now) {
@@ -134,7 +137,7 @@ public class JobSlaScheduler {
     extra.put("deadlineAt", candidate.getDeadlineAt());
     extra.put("expectedDurationSeconds", candidate.getExpectedDurationSeconds());
     if (candidate.getDeadlineAt() != null && candidate.getDeadlineAt().isBefore(now)) {
-      extra.put("violationReason", "DEADLINE_EXCEEDED");
+      extra.put(KEY_VIOLATION_REASON, "DEADLINE_EXCEEDED");
       extra.put(
           "deadlineDelaySeconds", Duration.between(candidate.getDeadlineAt(), now).getSeconds());
     } else if (candidate.getExpectedDurationSeconds() != null
@@ -142,11 +145,11 @@ public class JobSlaScheduler {
         && candidate.getStartedAt() != null) {
       Instant expectedFinish =
           candidate.getStartedAt().plusSeconds(candidate.getExpectedDurationSeconds());
-      extra.put("violationReason", "EXPECTED_DURATION_EXCEEDED");
+      extra.put(KEY_VIOLATION_REASON, "EXPECTED_DURATION_EXCEEDED");
       extra.put("expectedFinishAt", expectedFinish);
       extra.put("durationDelaySeconds", Duration.between(expectedFinish, now).getSeconds());
     } else {
-      extra.put("violationReason", "UNKNOWN");
+      extra.put(KEY_VIOLATION_REASON, "UNKNOWN");
     }
     return extra;
   }
