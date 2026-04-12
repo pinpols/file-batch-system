@@ -11,6 +11,8 @@ info:
     - date: "2026-04-11"
       summary: "移除 DELETE job-definitions/{id}、workflow-definitions/{id}、file-channels/{id}、file-templates/{id}；软删除统一走 PATCH /{id}，DELETE 仅保留于物理删除场景"
     - date: "2026-04-12"
+      summary: "新增 /api/console/config/tenant-package/excel 5 个端点：8-Sheet 租户配置包 Excel 导入（template/upload/preview/preview-workbook/apply），含跨 Sheet 依赖校验和单事务写库"
+    - date: "2026-04-12"
       summary: "POST /api/console/tenants/batch 新增可选字段 initConfigFrom/initMode：非空时建完租户后自动复制源租户配置，响应从 List<ConsoleTenantResponse> 改为 {tenants, configInit}"
     - date: "2026-04-11"
       summary: "新增 POST /api/console/tenants/batch 批量建租户端点（共享密码+用户名前缀，单事务）"
@@ -1520,6 +1522,7 @@ paths:
       tags: [Config]
       summary: Upload file template Excel
       operationId: uploadFileTemplateExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -1543,6 +1546,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded file template Excel
       operationId: previewFileTemplateExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -1561,6 +1565,7 @@ paths:
       tags: [Config]
       summary: Download preview workbook with validation annotations
       operationId: downloadFileTemplatePreviewWorkbook
+      deprecated: true
       security:
         - bearerAuth: []
       parameters:
@@ -1582,6 +1587,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded file template Excel
       operationId: applyFileTemplateExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -1650,6 +1656,7 @@ paths:
       tags: [Config]
       summary: Upload file channel Excel
       operationId: uploadFileChannelExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -1673,6 +1680,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded file channel Excel
       operationId: previewFileChannelExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -1691,6 +1699,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for file channel Excel
       operationId: downloadFileChannelExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -1710,6 +1719,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded file channel Excel
       operationId: applyFileChannelExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -1784,6 +1794,7 @@ paths:
       tags: [Config]
       summary: Upload workflow Excel
       operationId: uploadWorkflowExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -1807,6 +1818,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded workflow Excel
       operationId: previewWorkflowExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -1825,6 +1837,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for workflow Excel
       operationId: downloadWorkflowExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -1844,6 +1857,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded workflow Excel
       operationId: applyWorkflowExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -1912,6 +1926,7 @@ paths:
       tags: [Config]
       summary: Upload job definition Excel
       operationId: uploadJobDefinitionExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -1935,6 +1950,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded job definition Excel
       operationId: previewJobDefinitionExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -1953,6 +1969,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for job definition Excel
       operationId: downloadJobDefinitionExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -1972,6 +1989,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded job definition Excel
       operationId: applyJobDefinitionExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -2046,6 +2064,7 @@ paths:
       tags: [AlertRoutings]
       summary: Upload alert routing Excel
       operationId: uploadAlertRoutingExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -2069,6 +2088,7 @@ paths:
       tags: [AlertRoutings]
       summary: Preview uploaded alert routing Excel
       operationId: previewAlertRoutingExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2087,6 +2107,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for alert routing Excel
       operationId: downloadAlertRoutingExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2106,6 +2127,7 @@ paths:
       tags: [AlertRoutings]
       summary: Apply uploaded alert routing Excel
       operationId: applyAlertRoutingExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -2159,6 +2181,7 @@ paths:
       tags: [Config]
       summary: Upload batch window Excel
       operationId: uploadBatchWindowExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -2182,6 +2205,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded batch window Excel
       operationId: previewBatchWindowExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2200,6 +2224,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for batch window Excel
       operationId: downloadBatchWindowExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2219,6 +2244,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded batch window Excel
       operationId: applyBatchWindowExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -2272,6 +2298,7 @@ paths:
       tags: [Config]
       summary: Upload business calendar Excel
       operationId: uploadBusinessCalendarExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -2295,6 +2322,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded business calendar Excel
       operationId: previewBusinessCalendarExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2313,6 +2341,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for business calendar Excel
       operationId: downloadBusinessCalendarExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2332,6 +2361,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded business calendar Excel
       operationId: applyBusinessCalendarExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -2400,6 +2430,7 @@ paths:
       tags: [Config]
       summary: Upload pipeline definition Excel
       operationId: uploadPipelineDefinitionExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -2423,6 +2454,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded pipeline definition Excel
       operationId: previewPipelineDefinitionExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2441,6 +2473,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for pipeline definition Excel
       operationId: downloadPipelineDefinitionExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2460,6 +2493,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded pipeline definition Excel
       operationId: applyPipelineDefinitionExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -2523,6 +2557,7 @@ paths:
       tags: [Config]
       summary: Upload quota policy Excel
       operationId: uploadQuotaPolicyExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -2546,6 +2581,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded quota policy Excel
       operationId: previewQuotaPolicyExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2564,6 +2600,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for quota policy Excel
       operationId: downloadQuotaPolicyExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2583,6 +2620,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded quota policy Excel
       operationId: applyQuotaPolicyExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -2651,6 +2689,7 @@ paths:
       tags: [Config]
       summary: Upload resource queue Excel
       operationId: uploadResourceQueueExcel
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -2674,6 +2713,7 @@ paths:
       tags: [Config]
       summary: Preview uploaded resource queue Excel
       operationId: previewResourceQueueExcel
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2692,6 +2732,7 @@ paths:
       tags: [Config]
       summary: Download annotated preview workbook for resource queue Excel
       operationId: downloadResourceQueueExcelPreviewWorkbook
+      deprecated: true
       parameters:
         - name: uploadToken
           in: path
@@ -2711,6 +2752,7 @@ paths:
       tags: [Config]
       summary: Apply uploaded resource queue Excel
       operationId: applyResourceQueueExcel
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - name: uploadToken
@@ -7828,6 +7870,124 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
 
+  /api/console/config/tenant-package/excel/export:
+    get:
+      tags: [Config]
+      summary: Export current tenant config package as 8-sheet Excel (importable)
+      operationId: exportTenantConfigPackageExcel
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 8-sheet Excel workbook containing all config data for the tenant
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/tenant-package/excel/template:
+    get:
+      tags: [Config]
+      summary: Download blank tenant config package Excel template (8 sheets)
+      operationId: downloadTenantConfigPackageExcelTemplate
+      responses:
+        '200':
+          description: Empty Excel template with 8 data sheets
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/tenant-package/excel/upload:
+    post:
+      tags: [Config]
+      summary: Upload tenant config package Excel (8 sheets)
+      operationId: uploadTenantConfigPackageExcel
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Upload session with row counts per sheet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelUpload'
+  /api/console/config/tenant-package/excel/preview/{uploadToken}:
+    get:
+      tags: [Config]
+      summary: Preview uploaded tenant config package Excel with cross-sheet validation
+      operationId: previewTenantConfigPackageExcel
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Preview result with per-sheet stats and issue list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelPreview'
+  /api/console/config/tenant-package/excel/preview/{uploadToken}/workbook:
+    get:
+      tags: [Config]
+      summary: Download annotated preview workbook for tenant config package Excel
+      operationId: downloadTenantConfigPackageExcelPreviewWorkbook
+      parameters:
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Annotated workbook download (re-uploadable after fixing errors)
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /api/console/config/tenant-package/excel/apply/{uploadToken}:
+    post:
+      tags: [Config]
+      summary: Apply tenant config package Excel in a single transaction
+      operationId: applyTenantConfigPackageExcel
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: uploadToken
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantConfigPackageExcelApplyRequest'
+      responses:
+        '200':
+          description: Apply result with inserted/updated counts per config type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseTenantConfigPackageExcelApply'
+
 components:
   securitySchemes:
     basicAuth:
@@ -12360,3 +12520,162 @@ components:
                 type: string
                 nullable: true
       required: [created, updated, skipped, failed]
+    CommonResponseTenantConfigPackageExcelUpload:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TenantConfigPackageExcelUploadResponse'
+      required: [code, message, data]
+    CommonResponseTenantConfigPackageExcelPreview:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TenantConfigPackageExcelPreviewResponse'
+      required: [code, message, data]
+    CommonResponseTenantConfigPackageExcelApply:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TenantConfigPackageExcelApplyResponse'
+      required: [code, message, data]
+    TenantConfigPackageExcelApplyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 512
+    TenantConfigPackageExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        jobRows:
+          type: integer
+          format: int32
+        fileChannelRows:
+          type: integer
+          format: int32
+        alertRoutingRows:
+          type: integer
+          format: int32
+        pipelineRows:
+          type: integer
+          format: int32
+        pipelineStepRows:
+          type: integer
+          format: int32
+        workflowDefinitionRows:
+          type: integer
+          format: int32
+        workflowNodeRows:
+          type: integer
+          format: int32
+        workflowEdgeRows:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, jobRows, fileChannelRows, alertRoutingRows, pipelineRows, pipelineStepRows, workflowDefinitionRows, workflowNodeRows, workflowEdgeRows]
+    TenantConfigPackageExcelPreviewResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        sheets:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigPackageSheetStats'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantConfigPackageIssueDto'
+      required: [uploadToken, fileName, totalRows, validRows, invalidRows, sheets, issues]
+    TenantConfigPackageSheetStats:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+      required: [sheetName, totalRows, validRows, invalidRows]
+    TenantConfigPackageIssueDto:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        rowNo:
+          type: integer
+          format: int32
+        columnName:
+          type: string
+        message:
+          type: string
+      required: [sheetName, rowNo, columnName, message]
+    TenantConfigPackageExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        jobInserted:
+          type: integer
+          format: int32
+        jobUpdated:
+          type: integer
+          format: int32
+        channelInserted:
+          type: integer
+          format: int32
+        channelUpdated:
+          type: integer
+          format: int32
+        routingInserted:
+          type: integer
+          format: int32
+        routingUpdated:
+          type: integer
+          format: int32
+        pipelineInserted:
+          type: integer
+          format: int32
+        pipelineUpdated:
+          type: integer
+          format: int32
+        workflowInserted:
+          type: integer
+          format: int32
+        workflowUpdated:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, jobInserted, jobUpdated, channelInserted, channelUpdated, routingInserted, routingUpdated, pipelineInserted, pipelineUpdated, workflowInserted, workflowUpdated]

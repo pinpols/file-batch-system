@@ -19,6 +19,7 @@ import com.example.batch.console.application.ConsoleResourceQueueExcelApplicatio
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.excel.ConsoleResourceQueueExcelController;
 import com.example.batch.console.web.response.ConsoleResourceQueueExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleResourceQueueExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleResourceQueueExcelUploadResponse;

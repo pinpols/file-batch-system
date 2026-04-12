@@ -129,6 +129,31 @@ public final class ConsoleExcelStyles {
         return style;
     }
 
+    /** 创建必填标记单元格样式：浅橙底（#FFE0B2）+ 四边细线，用于填写说明 sheet。 */
+    public static CellStyle createRequiredMarkStyle(Workbook workbook) {
+        return createFilledDataStyle(workbook,
+                new byte[]{(byte) 0xFF, (byte) 0xE0, (byte) 0xB2},
+                IndexedColors.LIGHT_ORANGE.getIndex());
+    }
+
+    /** 创建选填标记单元格样式：浅绿底（#E8F5E9）+ 四边细线，用于填写说明 sheet。 */
+    public static CellStyle createOptionalMarkStyle(Workbook workbook) {
+        return createFilledDataStyle(workbook,
+                new byte[]{(byte) 0xE8, (byte) 0xF5, (byte) 0xE9},
+                IndexedColors.LIGHT_GREEN.getIndex());
+    }
+
+    private static CellStyle createFilledDataStyle(Workbook workbook, byte[] rgb, short fallbackIndex) {
+        CellStyle style = createDataStyle(workbook);
+        if (style instanceof XSSFCellStyle xssfStyle) {
+            xssfStyle.setFillForegroundColor(new XSSFColor(rgb, null));
+        } else {
+            style.setFillForegroundColor(fallbackIndex);
+        }
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return style;
+    }
+
     /** 写通用表头行。 */
     public static void writeHeaders(Sheet sheet, List<String> columns, CellStyle headerStyle) {
         Row headerRow = sheet.createRow(0);

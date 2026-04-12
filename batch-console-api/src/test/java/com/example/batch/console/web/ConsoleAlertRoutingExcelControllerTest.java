@@ -17,6 +17,7 @@ import com.example.batch.console.application.ConsoleAlertRoutingExcelApplication
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.excel.ConsoleAlertRoutingExcelController;
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleAlertRoutingExcelUploadResponse;
