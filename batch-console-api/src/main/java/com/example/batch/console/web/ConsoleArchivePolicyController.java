@@ -2,6 +2,7 @@ package com.example.batch.console.web;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
+import com.example.batch.console.repository.ArchivePolicyUpsertParam;
 import com.example.batch.console.service.ConsoleArchivePolicyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -43,14 +44,15 @@ public class ConsoleArchivePolicyController {
       @Valid @RequestBody UpsertArchivePolicyRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
     archivePolicyService.upsert(
-        tenantId,
-        request.targetTable(),
-        request.retentionDays(),
-        request.archiveEnabled(),
-        request.cleanupEnabled(),
-        request.batchSize(),
-        request.description(),
-        operator);
+        new ArchivePolicyUpsertParam(
+            tenantId,
+            request.targetTable(),
+            request.retentionDays(),
+            request.archiveEnabled(),
+            request.cleanupEnabled(),
+            request.batchSize(),
+            request.description(),
+            operator));
     return responseFactory.success(null);
   }
 

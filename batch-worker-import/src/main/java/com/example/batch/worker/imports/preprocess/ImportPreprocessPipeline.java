@@ -32,6 +32,11 @@ import org.springframework.util.StringUtils;
  */
 public final class ImportPreprocessPipeline {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_TYPE = "type";
+  private static final String POLICY_NONE = "NONE";
+  private static final String EMPTY = "";
+
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
 
   private ImportPreprocessPipeline() {}
@@ -50,7 +55,7 @@ public final class ImportPreprocessPipeline {
       byte[] current = input;
       boolean digestVerifiedInPipeline = false;
       for (Map<String, Object> step : steps) {
-        String type = stringProp(step, "type");
+        String type = stringProp(step, KEY_TYPE);
         if (!StringUtils.hasText(type)) {
           continue;
         }
@@ -102,14 +107,14 @@ public final class ImportPreprocessPipeline {
     List<Map<String, Object>> implicit = new ArrayList<>();
     String compress = stringProp(template, "compress_type");
     if ("ZIP".equalsIgnoreCase(compress)) {
-      implicit.add(new LinkedHashMap<>(Map.of("type", "UNZIP")));
+      implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, "UNZIP")));
     } else if ("GZIP".equalsIgnoreCase(compress)) {
-      implicit.add(new LinkedHashMap<>(Map.of("type", "GUNZIP")));
+      implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, "GUNZIP")));
     }
     String enc = stringProp(template, "encrypt_type");
     if ("AES".equalsIgnoreCase(enc)) {
-      implicit.add(new LinkedHashMap<>(Map.of("type", "AES_GCM_DECRYPT")));
-    } else if (StringUtils.hasText(enc) && !"NONE".equalsIgnoreCase(enc) && !testingOpen) {
+      implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, "AES_GCM_DECRYPT")));
+    } else if (StringUtils.hasText(enc) && !POLICY_NONE.equalsIgnoreCase(enc) && !testingOpen) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED",
           "encrypt_type "
@@ -213,7 +218,7 @@ public final class ImportPreprocessPipeline {
     MessageDigest digest = MessageDigest.getInstance(algorithm);
     byte[] hash = digest.digest(input);
     String actual = HexFormat.of().formatHex(hash);
-    if (!actual.equalsIgnoreCase(expected.trim().replace(" ", ""))) {
+    if (!actual.equalsIgnoreCase(expected.trim().replace(" ", EMPTY))) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DIGEST_MISMATCH", "digest mismatch for " + algorithm);
     }
@@ -222,7 +227,7 @@ public final class ImportPreprocessPipeline {
   private static void verifyImplicitChecksum(
       byte[] input, ImportPayload payload, Map<String, Object> template) throws Exception {
     String algorithm = digestAlgorithm(template, payload);
-    if ("NONE".equalsIgnoreCase(algorithm)) {
+    if (POLICY_NONE.equalsIgnoreCase(algorithm)) {
       return;
     }
     String expected = checksumExpected(payload);
@@ -232,7 +237,7 @@ public final class ImportPreprocessPipeline {
     MessageDigest digest = MessageDigest.getInstance(algorithm);
     byte[] hash = digest.digest(input);
     String actual = HexFormat.of().formatHex(hash);
-    if (!actual.equalsIgnoreCase(expected.trim().replace(" ", ""))) {
+    if (!actual.equalsIgnoreCase(expected.trim().replace(" ", EMPTY))) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_CHECKSUM_MISMATCH", "checksum mismatch for " + algorithm);
     }
@@ -241,19 +246,19 @@ public final class ImportPreprocessPipeline {
   private static String digestAlgorithm(Map<String, Object> template, ImportPayload payload) {
     if (payload != null
         && StringUtils.hasText(payload.checksumType())
-        && !"NONE".equalsIgnoreCase(payload.checksumType())) {
+        && !POLICY_NONE.equalsIgnoreCase(payload.checksumType())) {
       return normalizeDigestName(payload.checksumType());
     }
     String fromTemplate = stringProp(template, "checksum_type");
-    if (StringUtils.hasText(fromTemplate) && !"NONE".equalsIgnoreCase(fromTemplate)) {
+    if (StringUtils.hasText(fromTemplate) && !POLICY_NONE.equalsIgnoreCase(fromTemplate)) {
       return normalizeDigestName(fromTemplate);
     }
-    return "NONE";
+    return POLICY_NONE;
   }
 
   private static String normalizeDigestName(String raw) {
     if (!StringUtils.hasText(raw)) {
-      return "NONE";
+      return POLICY_NONE;
     }
     String upper = raw.trim().toUpperCase(Locale.ROOT);
     if ("MD5".equals(upper)) {
@@ -298,9 +303,9 @@ public final class ImportPreprocessPipeline {
 
   private static PublicKey readPublicKeyFromPem(String pem) throws Exception {
     String stripped =
-        pem.replace("-----BEGIN PUBLIC KEY-----", "")
-            .replace("-----END PUBLIC KEY-----", "")
-            .replaceAll("\\s", "");
+        pem.replace("-----BEGIN PUBLIC KEY-----", EMPTY)
+            .replace("-----END PUBLIC KEY-----", EMPTY)
+            .replaceAll("\\s", EMPTY);
     byte[] decoded = Base64.getDecoder().decode(stripped);
     X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
     return KeyFactory.getInstance("RSA").generatePublic(spec);

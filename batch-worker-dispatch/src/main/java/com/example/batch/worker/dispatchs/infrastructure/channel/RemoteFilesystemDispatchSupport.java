@@ -28,6 +28,10 @@ import org.springframework.util.StringUtils;
 
 final class RemoteFilesystemDispatchSupport {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_TARGET_ENDPOINT = "target_endpoint";
+  private static final String PATH_SEP = "/";
+
   private static final int MINIO_PART_SIZE = 10 * 1024 * 1024;
 
   private RemoteFilesystemDispatchSupport() {}
@@ -38,7 +42,7 @@ final class RemoteFilesystemDispatchSupport {
       Map<String, Object> channelConfig = command.channelConfig();
       String remoteDir = stringProp(channelConfig, "nas_remote_directory");
       if (!StringUtils.hasText(remoteDir)) {
-        remoteDir = stringProp(channelConfig, "target_endpoint");
+        remoteDir = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       }
       if (!StringUtils.hasText(remoteDir)) {
         return new DispatchResult(
@@ -75,7 +79,7 @@ final class RemoteFilesystemDispatchSupport {
       if (!StringUtils.hasText(bucket)) {
         return new DispatchResult(false, null, null, false, false, "oss_bucket missing", null);
       }
-      String objectPrefix = firstText(channelConfig, "oss_object_prefix", "target_endpoint", "");
+      String objectPrefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
       String externalRequestId = resolveExternalRequestId(command);
       String receiptCode = resolveReceiptCode(command, externalRequestId);
       String remoteName =
@@ -96,7 +100,7 @@ final class RemoteFilesystemDispatchSupport {
           externalRequestId,
           receiptCode,
           "uploaded via OSS",
-          "oss://" + bucket + "/" + objectName);
+          "oss://" + bucket + PATH_SEP + objectName);
     } catch (Exception ex) {
       return failResult(command, ex);
     }
@@ -113,7 +117,7 @@ final class RemoteFilesystemDispatchSupport {
     try {
       String remoteDir = stringProp(channelConfig, "nas_remote_directory");
       if (!StringUtils.hasText(remoteDir)) {
-        remoteDir = stringProp(channelConfig, "target_endpoint");
+        remoteDir = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       }
       if (!StringUtils.hasText(remoteDir)) {
         return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
@@ -153,7 +157,7 @@ final class RemoteFilesystemDispatchSupport {
       if (!StringUtils.hasText(bucket)) {
         return new DispatchChannelProbeResult(false, "oss_bucket missing", null);
       }
-      String prefix = firstText(channelConfig, "oss_object_prefix", "target_endpoint", "");
+      String prefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
       String objectName = normalizeObjectName(prefix, BatchFileConstants.newHealthProbeName());
       byte[] payload = ("probe@" + Instant.now()).getBytes(StandardCharsets.UTF_8);
       client.putObject(
@@ -167,7 +171,7 @@ final class RemoteFilesystemDispatchSupport {
         client.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(objectName).build());
       }
       return new DispatchChannelProbeResult(
-          true, "oss probe ok", "oss://" + bucket + "/" + objectName);
+          true, "oss probe ok", "oss://" + bucket + PATH_SEP + objectName);
     } catch (Exception ex) {
       return new DispatchChannelProbeResult(false, ex.getMessage(), null);
     }
@@ -177,7 +181,7 @@ final class RemoteFilesystemDispatchSupport {
     try {
       String host = stringProp(channelConfig, "sftp_host");
       if (!StringUtils.hasText(host)) {
-        host = stringProp(channelConfig, "target_endpoint");
+        host = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       }
       if (!StringUtils.hasText(host)) {
         return new DispatchChannelProbeResult(false, "sftp_host missing", null);
@@ -196,7 +200,7 @@ final class RemoteFilesystemDispatchSupport {
     try {
       String host = stringProp(channelConfig, "smtp_host");
       if (!StringUtils.hasText(host)) {
-        host = stringProp(channelConfig, "target_endpoint");
+        host = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       }
       if (!StringUtils.hasText(host)) {
         return new DispatchChannelProbeResult(false, "smtp_host missing", null);
@@ -213,7 +217,7 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeHttp(Map<String, Object> channelConfig) {
     try {
-      String endpoint = stringProp(channelConfig, "target_endpoint");
+      String endpoint = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       if (!StringUtils.hasText(endpoint)) {
         return new DispatchChannelProbeResult(false, "target_endpoint missing", null);
       }
@@ -311,11 +315,11 @@ final class RemoteFilesystemDispatchSupport {
 
   private static String normalizeObjectName(String prefix, String name) {
     String p = prefix == null ? "" : prefix.trim();
-    if (p.startsWith("/")) {
+    if (p.startsWith(PATH_SEP)) {
       p = p.substring(1);
     }
-    if (!p.isEmpty() && !p.endsWith("/")) {
-      p = p + "/";
+    if (!p.isEmpty() && !p.endsWith(PATH_SEP)) {
+      p = p + PATH_SEP;
     }
     return p + sanitizeFileName(name);
   }

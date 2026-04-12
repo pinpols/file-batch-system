@@ -27,6 +27,9 @@ import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.response.ConsoleFileArrivalGroupResponse;
 import com.example.batch.console.web.response.ConsoleFileChannelResponse;
 import com.example.batch.console.web.response.ConsoleFileDispatchRecordResponse;
+import com.example.batch.console.mapper.query.FileDispatchRecordQuery;
+import com.example.batch.console.mapper.query.FilePipelineQuery;
+import com.example.batch.console.mapper.query.FileTemplateConfigQuery;
 import com.example.batch.console.web.response.ConsoleFileErrorRecordResponse;
 import com.example.batch.console.web.response.ConsoleFilePipelineResponse;
 import com.example.batch.console.web.response.ConsoleFilePipelineStepResponse;
@@ -42,6 +45,14 @@ import org.springframework.util.StringUtils;
 @Service
 @RequiredArgsConstructor
 class ConsoleFileQueryService {
+
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_TENANT_ID = "tenant_id";
+  private static final String KEY_CREATED_AT = "created_at";
+  private static final String KEY_UPDATED_AT = "updated_at";
+  private static final String KEY_FROM_TIME = "fromTime";
+  private static final String KEY_TO_TIME = "toTime";
+  private static final String KEY_ID = "id";
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleFileQueryMappers fileMappers;
@@ -59,8 +70,8 @@ class ConsoleFileQueryService {
             parseLong(request.getFileId(), "fileId"),
             request.getFileName(),
             request.getTraceId(),
-            parseInstant(request.getFromTime(), "fromTime"),
-            parseInstant(request.getToTime(), "toTime"),
+            parseInstant(request.getFromTime(), KEY_FROM_TIME),
+            parseInstant(request.getToTime(), KEY_TO_TIME),
             pageRequest);
     List<FileRecordEntity> rows = fileMappers.fileRecordMapper.selectByQuery(query);
     long total = fileMappers.fileRecordMapper.countByQuery(query);
@@ -69,27 +80,20 @@ class ConsoleFileQueryService {
 
   PageResponse<ConsoleFilePipelineResponse> filePipelines(FilePipelineQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    List<Map<String, Object>> rows =
-        fileMappers.filePipelineMapper.selectByQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    FilePipelineQuery q =
+        new FilePipelineQuery(
+            tenantId,
             request.getFileId(),
             request.getPipelineInstanceId(),
             request.getPipelineType(),
             request.getRunStatus(),
             request.getTraceId(),
-            parseInstant(request.getFromTime(), "fromTime"),
-            parseInstant(request.getToTime(), "toTime"),
+            parseInstant(request.getFromTime(), KEY_FROM_TIME),
+            parseInstant(request.getToTime(), KEY_TO_TIME),
             pageRequest);
-    long total =
-        fileMappers.filePipelineMapper.countByQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getFileId(),
-            request.getPipelineInstanceId(),
-            request.getPipelineType(),
-            request.getRunStatus(),
-            request.getTraceId(),
-            parseInstant(request.getFromTime(), "fromTime"),
-            parseInstant(request.getToTime(), "toTime"));
+    List<Map<String, Object>> rows = fileMappers.filePipelineMapper.selectByQuery(q);
+    long total = fileMappers.filePipelineMapper.countByQuery(q.withoutPage());
     return page(pageRequest, total, rows, this::toFilePipelineResponse);
   }
 
@@ -115,25 +119,19 @@ class ConsoleFileQueryService {
   PageResponse<ConsoleFileDispatchRecordResponse> fileDispatchRecords(
       FileDispatchRecordQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    List<Map<String, Object>> rows =
-        fileMappers.fileDispatchRecordMapper.selectByQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    FileDispatchRecordQuery q =
+        new FileDispatchRecordQuery(
+            tenantId,
             request.getFileId(),
             request.getChannelCode(),
             request.getDispatchStatus(),
             request.getReceiptStatus(),
-            parseInstant(request.getFromTime(), "fromTime"),
-            parseInstant(request.getToTime(), "toTime"),
+            parseInstant(request.getFromTime(), KEY_FROM_TIME),
+            parseInstant(request.getToTime(), KEY_TO_TIME),
             pageRequest);
-    long total =
-        fileMappers.fileDispatchRecordMapper.countByQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getFileId(),
-            request.getChannelCode(),
-            request.getDispatchStatus(),
-            request.getReceiptStatus(),
-            parseInstant(request.getFromTime(), "fromTime"),
-            parseInstant(request.getToTime(), "toTime"));
+    List<Map<String, Object>> rows = fileMappers.fileDispatchRecordMapper.selectByQuery(q);
+    long total = fileMappers.fileDispatchRecordMapper.countByQuery(q.withoutPage());
     return page(pageRequest, total, rows, this::toFileDispatchRecordResponse);
   }
 
@@ -157,9 +155,10 @@ class ConsoleFileQueryService {
 
   PageResponse<ConsoleFileTemplateResponse> fileTemplates(FileTemplateQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    List<Map<String, Object>> rows =
-        fileMappers.fileTemplateConfigMapper.selectByQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
+    String tenantId = resolveTenant(tenantGuard, request.getTenantId());
+    FileTemplateConfigQuery q =
+        new FileTemplateConfigQuery(
+            tenantId,
             request.getKeyword(),
             request.getTemplateCode(),
             request.getTemplateName(),
@@ -167,15 +166,18 @@ class ConsoleFileQueryService {
             request.getBizType(),
             request.getEnabled(),
             pageRequest);
+    List<Map<String, Object>> rows = fileMappers.fileTemplateConfigMapper.selectByQuery(q);
     long total =
         fileMappers.fileTemplateConfigMapper.countByQuery(
-            resolveTenant(tenantGuard, request.getTenantId()),
-            request.getKeyword(),
-            request.getTemplateCode(),
-            request.getTemplateName(),
-            request.getTemplateType(),
-            request.getBizType(),
-            request.getEnabled());
+            new FileTemplateConfigQuery(
+                tenantId,
+                request.getKeyword(),
+                request.getTemplateCode(),
+                request.getTemplateName(),
+                request.getTemplateType(),
+                request.getBizType(),
+                request.getEnabled(),
+                null));
     return page(pageRequest, total, rows, this::toFileTemplateResponse);
   }
 
@@ -256,7 +258,7 @@ class ConsoleFileQueryService {
     PageRequest pageSingle = new PageRequest(1, 1);
     List<Map<String, Object>> rows =
         fileMappers.filePipelineMapper.selectByQuery(
-            resolved, null, id, null, null, null, null, null, pageSingle);
+            new FilePipelineQuery(resolved, null, id, null, null, null, null, null, pageSingle));
     if (rows.isEmpty()) {
       throw new BizException(ResultCode.NOT_FOUND, "pipeline instance not found: " + id);
     }
@@ -319,8 +321,8 @@ class ConsoleFileQueryService {
 
   ConsoleFilePipelineResponse toFilePipelineResponse(Map<String, Object> row) {
     return new ConsoleFilePipelineResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenant_id"),
+        longValue(row, KEY_ID),
+        stringValue(row, KEY_TENANT_ID),
         longValue(row, "pipeline_definition_id"),
         stringValue(row, "job_code"),
         stringValue(row, "pipeline_type"),
@@ -332,13 +334,13 @@ class ConsoleFileQueryService {
         stringValue(row, "trace_id"),
         instantValue(row, "started_at"),
         instantValue(row, "finished_at"),
-        instantValue(row, "created_at"),
-        instantValue(row, "updated_at"));
+        instantValue(row, KEY_CREATED_AT),
+        instantValue(row, KEY_UPDATED_AT));
   }
 
   private ConsoleFilePipelineStepResponse toFilePipelineStepResponse(Map<String, Object> row) {
     return new ConsoleFilePipelineStepResponse(
-        longValue(row, "id"),
+        longValue(row, KEY_ID),
         longValue(row, "pipeline_instance_id"),
         stringValue(row, "step_code"),
         stringValue(row, "stage_code"),
@@ -356,8 +358,8 @@ class ConsoleFileQueryService {
 
   private ConsoleFileDispatchRecordResponse toFileDispatchRecordResponse(Map<String, Object> row) {
     return new ConsoleFileDispatchRecordResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenant_id"),
+        longValue(row, KEY_ID),
+        stringValue(row, KEY_TENANT_ID),
         longValue(row, "file_id"),
         longValue(row, "pipeline_instance_id"),
         stringValue(row, "channel_code"),
@@ -371,14 +373,14 @@ class ConsoleFileQueryService {
         stringValue(row, "error_message"),
         instantValue(row, "dispatched_at"),
         instantValue(row, "ack_at"),
-        instantValue(row, "created_at"),
-        instantValue(row, "updated_at"));
+        instantValue(row, KEY_CREATED_AT),
+        instantValue(row, KEY_UPDATED_AT));
   }
 
   private ConsoleFileChannelResponse toFileChannelResponse(Map<String, Object> row) {
     return new ConsoleFileChannelResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenant_id"),
+        longValue(row, KEY_ID),
+        stringValue(row, KEY_TENANT_ID),
         stringValue(row, "channel_code"),
         stringValue(row, "channel_name"),
         stringValue(row, "channel_type"),
@@ -388,14 +390,14 @@ class ConsoleFileQueryService {
         stringValue(row, "receipt_policy"),
         intValue(row, "timeout_seconds"),
         booleanValue(row, "enabled"),
-        instantValue(row, "created_at"),
-        instantValue(row, "updated_at"));
+        instantValue(row, KEY_CREATED_AT),
+        instantValue(row, KEY_UPDATED_AT));
   }
 
   private ConsoleFileTemplateResponse toFileTemplateResponse(Map<String, Object> row) {
     return new ConsoleFileTemplateResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenant_id"),
+        longValue(row, KEY_ID),
+        stringValue(row, KEY_TENANT_ID),
         stringValue(row, "template_code"),
         stringValue(row, "template_name"),
         stringValue(row, "template_type"),
@@ -438,8 +440,8 @@ class ConsoleFileQueryService {
         stringValue(row, "description"),
         stringValue(row, "created_by"),
         stringValue(row, "updated_by"),
-        instantValue(row, "created_at"),
-        instantValue(row, "updated_at"));
+        instantValue(row, KEY_CREATED_AT),
+        instantValue(row, KEY_UPDATED_AT));
   }
 
   private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(

@@ -16,6 +16,7 @@ import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.CalendarHolidayMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
+import com.example.batch.console.mapper.query.FileTemplateConfigQuery;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
@@ -58,6 +59,10 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class ConsoleTenantConfigCopyService {
+
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_ENABLED = "enabled";
+  private static final String KEY_DESCRIPTION = "description";
 
   private static final int MAX_PAGE_SIZE = 5000;
 
@@ -302,8 +307,8 @@ public class ConsoleTenantConfigCopyService {
       s.setPipelineType(str(e, "pipeline_type"));
       s.setBizType(str(e, "biz_type"));
       s.setWorkerGroup(str(e, "worker_group"));
-      s.setEnabled(bool(e, "enabled"));
-      s.setDescription(str(e, "description"));
+      s.setEnabled(bool(e, KEY_ENABLED));
+      s.setDescription(str(e, KEY_DESCRIPTION));
 
       Long defId = num(e, "id");
       if (defId != null) {
@@ -322,7 +327,7 @@ public class ConsoleTenantConfigCopyService {
             ss.setTimeoutSeconds(intVal(step, "timeout_seconds"));
             ss.setRetryPolicy(str(step, "retry_policy"));
             ss.setRetryMaxCount(intVal(step, "retry_max_count"));
-            ss.setEnabled(bool(step, "enabled"));
+            ss.setEnabled(bool(step, KEY_ENABLED));
             stepSpecs.add(ss);
           }
           s.setSteps(stepSpecs);
@@ -348,7 +353,7 @@ public class ConsoleTenantConfigCopyService {
       s.setConfigJson(str(e, "config_json"));
       s.setReceiptPolicy(str(e, "receipt_policy"));
       s.setTimeoutSeconds(intVal(e, "timeout_seconds"));
-      s.setEnabled(bool(e, "enabled"));
+      s.setEnabled(bool(e, KEY_ENABLED));
       specs.add(s);
     }
     return specs;
@@ -357,7 +362,7 @@ public class ConsoleTenantConfigCopyService {
   private List<FileTemplateSpec> readFileTemplates(String tenantId) {
     List<Map<String, Object>> entities =
         fileTemplateConfigMapper.selectByQuery(
-            tenantId, null, null, null, null, null, null, new PageRequest(1, MAX_PAGE_SIZE));
+            FileTemplateConfigQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE)));
     List<FileTemplateSpec> specs = new ArrayList<>(entities.size());
     for (Map<String, Object> e : entities) {
       FileTemplateSpec s = new FileTemplateSpec();
@@ -398,9 +403,9 @@ public class ConsoleTenantConfigCopyService {
       s.setEncryptionKeyRef(str(e, "encryption_key_ref"));
       s.setDownloadRequiresApproval(bool(e, "download_requires_approval"));
       s.setMaskingRuleSet(str(e, "masking_rule_set"));
-      s.setEnabled(bool(e, "enabled"));
+      s.setEnabled(bool(e, KEY_ENABLED));
       s.setVersion(intVal(e, "version"));
-      s.setDescription(str(e, "description"));
+      s.setDescription(str(e, KEY_DESCRIPTION));
       specs.add(s);
     }
     return specs;
@@ -423,8 +428,8 @@ public class ConsoleTenantConfigCopyService {
       s.setResourceTag(str(r, "resource_tag"));
       s.setPriorityPolicy(str(r, "priority_policy"));
       s.setFairShareWeight(intVal(r, "fair_share_weight"));
-      s.setEnabled(bool(r, "enabled"));
-      s.setDescription(str(r, "description"));
+      s.setEnabled(bool(r, KEY_ENABLED));
+      s.setDescription(str(r, KEY_DESCRIPTION));
       specs.add(s);
     }
     return specs;
@@ -444,8 +449,8 @@ public class ConsoleTenantConfigCopyService {
       s.setEndStrategy(str(r, "end_strategy"));
       s.setOutOfWindowAction(str(r, "out_of_window_action"));
       s.setAllowCrossDay(bool(r, "allow_cross_day"));
-      s.setEnabled(bool(r, "enabled"));
-      s.setDescription(str(r, "description"));
+      s.setEnabled(bool(r, KEY_ENABLED));
+      s.setDescription(str(r, KEY_DESCRIPTION));
       specs.add(s);
     }
     return specs;
@@ -464,7 +469,7 @@ public class ConsoleTenantConfigCopyService {
       s.setHolidayRollRule(str(r, "holiday_roll_rule"));
       s.setCatchUpPolicy(str(r, "catch_up_policy"));
       s.setCatchUpMaxDays(intVal(r, "catch_up_max_days"));
-      s.setEnabled(bool(r, "enabled"));
+      s.setEnabled(bool(r, KEY_ENABLED));
       Long calendarId = num(r, "id");
       if (calendarId != null) {
         List<Map<String, Object>> holidays = calendarHolidayMapper.selectByCalendarId(calendarId);
@@ -494,8 +499,8 @@ public class ConsoleTenantConfigCopyService {
       s.setMaxPartitionsPerTenant(intVal(r, "max_partitions_per_tenant"));
       s.setMaxQpsPerTenant(intVal(r, "max_qps_per_tenant"));
       s.setFairShareWeight(intVal(r, "fair_share_weight"));
-      s.setEnabled(bool(r, "enabled"));
-      s.setDescription(str(r, "description"));
+      s.setEnabled(bool(r, KEY_ENABLED));
+      s.setDescription(str(r, KEY_DESCRIPTION));
       specs.add(s);
     }
     return specs;
@@ -518,8 +523,8 @@ public class ConsoleTenantConfigCopyService {
       s.setGroupWaitSeconds(intVal(r, "group_wait_seconds"));
       s.setGroupIntervalSeconds(intVal(r, "group_interval_seconds"));
       s.setRepeatIntervalSeconds(intVal(r, "repeat_interval_seconds"));
-      s.setEnabled(bool(r, "enabled"));
-      s.setDescription(str(r, "description"));
+      s.setEnabled(bool(r, KEY_ENABLED));
+      s.setDescription(str(r, KEY_DESCRIPTION));
       specs.add(s);
     }
     return specs;

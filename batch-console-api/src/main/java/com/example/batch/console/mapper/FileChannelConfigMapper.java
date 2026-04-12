@@ -34,19 +34,7 @@ public interface FileChannelConfigMapper {
 
   int deleteById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  int insertFileChannelConfig(
-      @Param("tenantId") String tenantId,
-      @Param("channelCode") String channelCode,
-      @Param("channelName") String channelName,
-      @Param("channelType") String channelType,
-      @Param("targetEndpoint") String targetEndpoint,
-      @Param("authType") String authType,
-      @Param("configJson") String configJson,
-      @Param("receiptPolicy") String receiptPolicy,
-      @Param("timeoutSeconds") Integer timeoutSeconds,
-      @Param("enabled") Boolean enabled,
-      @Param("createdBy") String createdBy,
-      @Param("updatedBy") String updatedBy);
+  int insertFileChannelConfig(@Param("p") FileChannelConfigUpsertParam p);
 
   int updateFileChannelConfig(@Param("p") FileChannelConfigUpdateParam param);
 }

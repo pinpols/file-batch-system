@@ -42,6 +42,16 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     }
   }
 
+  private record SftpUploadContext(
+      Map<String, Object> channelConfig,
+      ConnectionConfig connConfig,
+      RemoteTarget remoteTarget,
+      Map<String, Object> fileRecord,
+      String externalRequestId,
+      String receiptCode,
+      boolean acknowledged,
+      boolean pending) {}
+
   @Override
   public DispatchResult dispatch(DispatchCommand command) {
     Map<String, Object> channelConfig = command.channelConfig();
@@ -74,14 +84,15 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
         "ASYNC".equalsIgnoreCase(receiptPolicy) || "POLLING".equalsIgnoreCase(receiptPolicy);
 
     return uploadViaSftp(
-        channelConfig,
-        connConfig,
-        remoteTarget,
-        command.fileRecord(),
-        externalRequestId,
-        receiptCode,
-        acknowledged,
-        pending);
+        new SftpUploadContext(
+            channelConfig,
+            connConfig,
+            remoteTarget,
+            command.fileRecord(),
+            externalRequestId,
+            receiptCode,
+            acknowledged,
+            pending));
   }
 
   private ConnectionConfig resolveConnectionConfig(Map<String, Object> channelConfig) {
@@ -118,55 +129,47 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     return new RemoteTarget(remoteDir, remoteName);
   }
 
-  private DispatchResult uploadViaSftp(
-      Map<String, Object> channelConfig,
-      ConnectionConfig connConfig,
-      RemoteTarget remoteTarget,
-      Map<String, Object> fileRecord,
-      String externalRequestId,
-      String receiptCode,
-      boolean acknowledged,
-      boolean pending) {
+  private DispatchResult uploadViaSftp(SftpUploadContext ctx) {
     Session session = null;
     ChannelSftp sftp = null;
     try {
       JSch jsch = new JSch();
       // H-6: 默认启用主机密钥检查；允许通过 channel 配置显式关闭
-      String strictHostKeyChecking = stringProp(channelConfig, "sftp_strict_host_key_checking");
+      String strictHostKeyChecking = stringProp(ctx.channelConfig(), "sftp_strict_host_key_checking");
       boolean strictMode = !"no".equalsIgnoreCase(strictHostKeyChecking);
       if (!strictMode) {
         log.warn(
             "SFTP StrictHostKeyChecking disabled for host {} — susceptible to MITM attacks",
-            connConfig.host());
+            ctx.connConfig().host());
       } else {
-        String knownHostsPath = stringProp(channelConfig, "sftp_known_hosts_path");
+        String knownHostsPath = stringProp(ctx.channelConfig(), "sftp_known_hosts_path");
         if (StringUtils.hasText(knownHostsPath)) {
           jsch.setKnownHosts(knownHostsPath);
         }
       }
-      session = jsch.getSession(connConfig.user(), connConfig.host(), connConfig.port());
+      session = jsch.getSession(ctx.connConfig().user(), ctx.connConfig().host(), ctx.connConfig().port());
       // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
-      session.setPassword(connConfig.password());
+      session.setPassword(ctx.connConfig().password());
       session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");
       session.connect(30_000);
       sftp = (ChannelSftp) session.openChannel("sftp");
       sftp.connect(30_000);
-      String remotePath = remoteTarget.remotePath();
-      try (InputStream in = fileContentResolver.openInputStream(fileRecord)) {
+      String remotePath = ctx.remoteTarget().remotePath();
+      try (InputStream in = fileContentResolver.openInputStream(ctx.fileRecord())) {
         sftp.put(in, remotePath, ChannelSftp.OVERWRITE);
       }
-      String evidence = "sftp://" + connConfig.host() + remotePath;
+      String evidence = "sftp://" + ctx.connConfig().host() + remotePath;
       return new DispatchResult(
           true,
-          externalRequestId,
-          receiptCode,
-          acknowledged,
-          pending,
+          ctx.externalRequestId(),
+          ctx.receiptCode(),
+          ctx.acknowledged(),
+          ctx.pending(),
           "uploaded via SFTP",
           evidence);
     } catch (Exception ex) {
       return new DispatchResult(
-          false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
+          false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
     } finally {
       if (sftp != null) {
         try {

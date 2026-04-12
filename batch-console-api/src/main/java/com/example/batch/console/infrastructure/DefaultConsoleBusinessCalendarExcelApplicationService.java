@@ -78,22 +78,37 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     implements ConsoleBusinessCalendarExcelApplicationService {
 
   private static final String CALENDAR_SHEET_NAME = "business_calendar";
+
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_CALENDAR_NAME = "calendar_name";
+  private static final String COL_CATCH_UP_MAX_DAYS = "catch_up_max_days";
+  private static final String COL_BIZ_DATE = "biz_date";
+  private static final String COL_HOLIDAY_NAME = "holiday_name";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String COL_CALENDAR_CODE = "calendar_code";
+  private static final String COL_TENANT_ID = "tenant_id";
+  private static final String COL_HOLIDAY_ROLL_RULE = "holiday_roll_rule";
+  private static final String COL_CATCH_UP_POLICY = "catch_up_policy";
+  private static final String COL_ENABLED = "enabled";
+  private static final String COL_DAY_TYPE = "day_type";
+  private static final String GUIDE_STR = "字符串";
+  private static final String COL_DESCRIPTION = "description";
   private static final String HOLIDAY_SHEET_NAME = "calendar_holiday";
 
   private static final List<String> CALENDAR_COLUMNS =
       List.of(
-          "tenant_id",
-          "calendar_code",
-          "calendar_name",
+          COL_TENANT_ID,
+          COL_CALENDAR_CODE,
+          COL_CALENDAR_NAME,
           "timezone",
-          "holiday_roll_rule",
-          "catch_up_policy",
-          "catch_up_max_days",
-          "enabled");
+          COL_HOLIDAY_ROLL_RULE,
+          COL_CATCH_UP_POLICY,
+          COL_CATCH_UP_MAX_DAYS,
+          COL_ENABLED);
   private static final Set<String> CALENDAR_REQUIRED_HEADERS = Set.copyOf(CALENDAR_COLUMNS);
 
   private static final List<String> HOLIDAY_COLUMNS =
-      List.of("calendar_code", "biz_date", "day_type", "holiday_name", "description");
+      List.of(COL_CALENDAR_CODE, COL_BIZ_DATE, COL_DAY_TYPE, COL_HOLIDAY_NAME, COL_DESCRIPTION);
   private static final Set<String> HOLIDAY_REQUIRED_HEADERS = Set.copyOf(HOLIDAY_COLUMNS);
 
   private static final Set<String> HOLIDAY_ROLL_RULES = HolidayRollRule.codes();
@@ -103,32 +118,32 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> CALENDAR_COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
-          Map.entry("calendar_code", requiredColumn("日历唯一编码，作为导入匹配键。", "字符串", "CAL_CN_STOCK")),
-          Map.entry("calendar_name", requiredColumn("控制台展示的日历名称。", "字符串", "中国A股交易日历")),
+          Map.entry(COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry(COL_CALENDAR_CODE, requiredColumn("日历唯一编码，作为导入匹配键。", GUIDE_STR, "CAL_CN_STOCK")),
+          Map.entry(COL_CALENDAR_NAME, requiredColumn("控制台展示的日历名称。", GUIDE_STR, "中国A股交易日历")),
           Map.entry("timezone", requiredColumn("日历时区。", "时区ID", "Asia/Shanghai")),
           Map.entry(
-              "holiday_roll_rule",
+              COL_HOLIDAY_ROLL_RULE,
               requiredColumn("假日滚动规则。", "枚举", "SKIP", "SKIP", "NEXT_WORKDAY", "PREV_WORKDAY")),
           Map.entry(
-              "catch_up_policy",
+              COL_CATCH_UP_POLICY,
               requiredColumn("补跑策略。", "枚举", "NONE", "NONE", "AUTO", "MANUAL_APPROVAL")),
-          Map.entry("catch_up_max_days", requiredColumn("补跑最大天数，必须大于等于 0。", "整数", "0")),
-          Map.entry("enabled", optionalColumn("日历是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")));
+          Map.entry(COL_CATCH_UP_MAX_DAYS, requiredColumn("补跑最大天数，必须大于等于 0。", "整数", "0")),
+          Map.entry(COL_ENABLED, optionalColumn("日历是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> HOLIDAY_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
-              "calendar_code",
+              COL_CALENDAR_CODE,
               requiredColumn(
                   "关联日历编码，必须与 business_calendar sheet 中的 calendar_code 对应。",
-                  "字符串",
+                  GUIDE_STR,
                   "CAL_CN_STOCK")),
-          Map.entry("biz_date", requiredColumn("日期，格式 yyyy-MM-dd。", "日期", "2026-01-01")),
+          Map.entry(COL_BIZ_DATE, requiredColumn("日期，格式 yyyy-MM-dd。", "日期", "2026-01-01")),
           Map.entry(
-              "day_type", requiredColumn("日期类型。", "枚举", "HOLIDAY", "HOLIDAY", "WORKDAY_OVERRIDE")),
-          Map.entry("holiday_name", optionalColumn("假日名称。", "字符串", "元旦")),
-          Map.entry("description", optionalColumn("备注说明。", "字符串", "元旦法定假日")));
+              COL_DAY_TYPE, requiredColumn("日期类型。", "枚举", "HOLIDAY", "HOLIDAY", "WORKDAY_OVERRIDE")),
+          Map.entry(COL_HOLIDAY_NAME, optionalColumn("假日名称。", GUIDE_STR, "元旦")),
+          Map.entry(COL_DESCRIPTION, optionalColumn("备注说明。", GUIDE_STR, "元旦法定假日")));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -148,7 +163,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       String calendarCode = (String) calendar.get("calendarCode");
       List<Map<String, Object>> holidays = calendarHolidayMapper.selectByCalendarId(calendarId);
       for (Map<String, Object> holiday : holidays) {
-        holiday.put("calendar_code", calendarCode);
+        holiday.put(COL_CALENDAR_CODE, calendarCode);
       }
       allHolidays.addAll(holidays);
     }
@@ -245,14 +260,34 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String operatorId = metadata.operatorId();
     String traceId = metadata.traceId();
+
+    int[] calendarCounts = applyCalendarRows(result.calendarRows(), session.tenantId(), request.getReason(), operatorId, traceId);
+    int appliedHolidayRows = applyHolidayRows(result.holidayRows(), session.tenantId());
+
+    importStore.remove(uploadToken);
+    return new ConsoleBusinessCalendarExcelApplyResponse(
+        uploadToken,
+        session.tenantId(),
+        result.calendarRows().size(),
+        calendarCounts[0],
+        calendarCounts[1],
+        appliedHolidayRows);
+  }
+
+  /** Upserts all calendar rows and returns {@code [inserted, updated]} counts. */
+  private int[] applyCalendarRows(
+      List<CalendarRow> calendarRows,
+      String tenantId,
+      String reason,
+      String operatorId,
+      String traceId) {
     int inserted = 0;
     int updated = 0;
-    for (CalendarRow row : result.calendarRows()) {
+    for (CalendarRow row : calendarRows) {
       Map<String, Object> existing =
-          businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-              session.tenantId(), row.calendarCode());
+          businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, row.calendarCode());
       BusinessCalendarUpsertParam param = new BusinessCalendarUpsertParam();
-      param.setTenantId(session.tenantId());
+      param.setTenantId(tenantId);
       param.setCalendarCode(row.calendarCode());
       param.setCalendarName(row.calendarName());
       param.setTimezone(row.timezone());
@@ -265,46 +300,36 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       businessCalendarMapper.upsertBusinessCalendar(param);
       if (existing == null || existing.isEmpty()) {
         inserted++;
-        logChange(
-            session.tenantId(),
-            row.calendarCode(),
-            request.getReason(),
-            operatorId,
-            traceId,
-            "CREATE");
+        logChange(tenantId, row.calendarCode(), reason, operatorId, traceId, "CREATE");
       } else {
         updated++;
-        logChange(
-            session.tenantId(),
-            row.calendarCode(),
-            request.getReason(),
-            operatorId,
-            traceId,
-            "PUBLISH");
+        logChange(tenantId, row.calendarCode(), reason, operatorId, traceId, "PUBLISH");
       }
     }
-    // Apply holidays: for each calendar_code, delete existing holidays and re-insert
-    int appliedHolidayRows = 0;
-    for (HolidayRow row : result.holidayRows()) {
+    return new int[] {inserted, updated};
+  }
+
+  /** Deletes and re-inserts holidays grouped by calendar_code; returns total rows inserted. */
+  private int applyHolidayRows(List<HolidayRow> holidayRows, String tenantId) {
+    // First pass: delete existing holidays for each referenced calendar
+    for (HolidayRow row : holidayRows) {
       Map<String, Object> calendar =
-          businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-              session.tenantId(), row.calendarCode());
+          businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, row.calendarCode());
       if (calendar == null || calendar.isEmpty()) {
         continue;
       }
       Long calendarId = ((Number) calendar.get("id")).longValue();
-      // Group holidays by calendar_code and delete+reinsert per calendar
       calendarHolidayMapper.deleteByCalendarId(calendarId);
     }
-    // Re-group and batch insert holidays per calendar
+    // Second pass: batch-insert holidays per calendar
     Map<String, List<HolidayRow>> holidaysByCalendar = new LinkedHashMap<>();
-    for (HolidayRow row : result.holidayRows()) {
+    for (HolidayRow row : holidayRows) {
       holidaysByCalendar.computeIfAbsent(row.calendarCode(), k -> new ArrayList<>()).add(row);
     }
+    int appliedHolidayRows = 0;
     for (Map.Entry<String, List<HolidayRow>> entry : holidaysByCalendar.entrySet()) {
       Map<String, Object> calendar =
-          businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-              session.tenantId(), entry.getKey());
+          businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, entry.getKey());
       if (calendar == null || calendar.isEmpty()) {
         continue;
       }
@@ -317,7 +342,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         holidayParam.put("bizDate", row.bizDate());
         holidayParam.put("dayType", row.dayType());
         holidayParam.put("holidayName", row.holidayName());
-        holidayParam.put("description", row.description());
+        holidayParam.put(COL_DESCRIPTION, row.description());
         batchParams.add(holidayParam);
       }
       if (!batchParams.isEmpty()) {
@@ -325,14 +350,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         appliedHolidayRows += batchParams.size();
       }
     }
-    importStore.remove(uploadToken);
-    return new ConsoleBusinessCalendarExcelApplyResponse(
-        uploadToken,
-        session.tenantId(),
-        result.calendarRows().size(),
-        inserted,
-        updated,
-        appliedHolidayRows);
+    return appliedHolidayRows;
   }
 
   // ── session ──
@@ -408,11 +426,11 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         Integer columnIndex = headerIndex.get(header);
         rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
       }
-      if (tenantId != null && columns.contains("tenant_id")) {
+      if (tenantId != null && columns.contains(COL_TENANT_ID)) {
         rowValues.put(
-            "tenant_id",
-            StringUtils.hasText(rowValues.get("tenant_id"))
-                ? rowValues.get("tenant_id")
+            COL_TENANT_ID,
+            StringUtils.hasText(rowValues.get(COL_TENANT_ID))
+                ? rowValues.get(COL_TENANT_ID)
                 : tenantId);
       }
       rows.add(rowValues);
@@ -489,7 +507,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
   private CalendarRow toCalendarRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
-    String effectiveTenant = normalize(values.get("tenant_id"));
+    String effectiveTenant = normalize(values.get(COL_TENANT_ID));
     if (!StringUtils.hasText(effectiveTenant)) {
       effectiveTenant = tenantId;
     } else if (!tenantId.equals(effectiveTenant)) {
@@ -498,24 +516,24 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     return CalendarRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
-        .calendarCode(requireText(values, "calendar_code", 128, issues))
-        .calendarName(requireText(values, "calendar_name", 256, issues))
+        .calendarCode(requireText(values, COL_CALENDAR_CODE, 128, issues))
+        .calendarName(requireText(values, COL_CALENDAR_NAME, 256, issues))
         .timezone(requireText(values, "timezone", 64, issues))
-        .holidayRollRule(requireEnum(values, "holiday_roll_rule", HOLIDAY_ROLL_RULES, 32, issues))
-        .catchUpPolicy(requireEnum(values, "catch_up_policy", CATCH_UP_POLICIES, 32, issues))
-        .catchUpMaxDays(requireInteger(values, "catch_up_max_days", 0, issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
+        .holidayRollRule(requireEnum(values, COL_HOLIDAY_ROLL_RULE, HOLIDAY_ROLL_RULES, 32, issues))
+        .catchUpPolicy(requireEnum(values, COL_CATCH_UP_POLICY, CATCH_UP_POLICIES, 32, issues))
+        .catchUpMaxDays(requireInteger(values, COL_CATCH_UP_MAX_DAYS, 0, issues))
+        .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
         .build();
   }
 
   private HolidayRow toHolidayRow(int rowNo, Map<String, String> values, List<String> issues) {
     return HolidayRow.builder()
         .rowNo(rowNo)
-        .calendarCode(requireText(values, "calendar_code", 128, issues))
-        .bizDate(requireDate(values, "biz_date", issues))
-        .dayType(requireEnum(values, "day_type", DAY_TYPES, 32, issues))
-        .holidayName(optionalText(values, "holiday_name", 128, issues))
-        .description(optionalText(values, "description", 512, issues))
+        .calendarCode(requireText(values, COL_CALENDAR_CODE, 128, issues))
+        .bizDate(requireDate(values, COL_BIZ_DATE, issues))
+        .dayType(requireEnum(values, COL_DAY_TYPE, DAY_TYPES, 32, issues))
+        .holidayName(optionalText(values, COL_HOLIDAY_NAME, 128, issues))
+        .description(optionalText(values, COL_DESCRIPTION, 512, issues))
         .build();
   }
 
@@ -591,7 +609,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
     if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
@@ -717,22 +735,22 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
   private Object mapCalendarExportValue(String header, Map<String, Object> row) {
     return switch (header) {
-      case "tenant_id" -> row.get("tenantId");
-      case "calendar_code" -> row.get("calendarCode");
-      case "calendar_name" -> row.get("calendarName");
-      case "holiday_roll_rule" -> row.get("holidayRollRule");
-      case "catch_up_policy" -> row.get("catchUpPolicy");
-      case "catch_up_max_days" -> row.get("catchUpMaxDays");
+      case COL_TENANT_ID -> row.get("tenantId");
+      case COL_CALENDAR_CODE -> row.get("calendarCode");
+      case COL_CALENDAR_NAME -> row.get("calendarName");
+      case COL_HOLIDAY_ROLL_RULE -> row.get("holidayRollRule");
+      case COL_CATCH_UP_POLICY -> row.get("catchUpPolicy");
+      case COL_CATCH_UP_MAX_DAYS -> row.get("catchUpMaxDays");
       default -> row.get(header);
     };
   }
 
   private Object mapHolidayExportValue(String header, Map<String, Object> row) {
     return switch (header) {
-      case "calendar_code" -> row.get("calendar_code");
-      case "biz_date" -> row.get("bizDate");
-      case "day_type" -> row.get("dayType");
-      case "holiday_name" -> row.get("holidayName");
+      case COL_CALENDAR_CODE -> row.get(COL_CALENDAR_CODE);
+      case COL_BIZ_DATE -> row.get("bizDate");
+      case COL_DAY_TYPE -> row.get("dayType");
+      case COL_HOLIDAY_NAME -> row.get("holidayName");
       default -> row.get(header);
     };
   }
@@ -852,18 +870,18 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     Sheet sheet = workbook.createSheet("DICT");
     sheet.createFreezePane(0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
-    writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
+    writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {
-      {"holiday_roll_rule", "SKIP", "skip holiday, do not execute"},
-      {"holiday_roll_rule", "NEXT_WORKDAY", "move to next workday"},
-      {"holiday_roll_rule", "PREV_WORKDAY", "move to previous workday"},
-      {"catch_up_policy", "NONE", "no catch-up"},
-      {"catch_up_policy", "AUTO", "auto catch-up"},
-      {"catch_up_policy", "MANUAL_APPROVAL", "manual approval required"},
-      {"day_type", "HOLIDAY", "holiday"},
-      {"day_type", "WORKDAY_OVERRIDE", "workday override (e.g. weekend work)"},
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_HOLIDAY_ROLL_RULE, "SKIP", "skip holiday, do not execute"},
+      {COL_HOLIDAY_ROLL_RULE, "NEXT_WORKDAY", "move to next workday"},
+      {COL_HOLIDAY_ROLL_RULE, "PREV_WORKDAY", "move to previous workday"},
+      {COL_CATCH_UP_POLICY, "NONE", "no catch-up"},
+      {COL_CATCH_UP_POLICY, "AUTO", "auto catch-up"},
+      {COL_CATCH_UP_POLICY, "MANUAL_APPROVAL", "manual approval required"},
+      {COL_DAY_TYPE, "HOLIDAY", "holiday"},
+      {COL_DAY_TYPE, "WORKDAY_OVERRIDE", "workday override (e.g. weekend work)"},
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, "FALSE", "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);

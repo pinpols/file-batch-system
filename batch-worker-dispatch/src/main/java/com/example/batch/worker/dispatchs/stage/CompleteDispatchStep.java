@@ -15,6 +15,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class CompleteDispatchStep implements DispatchStageStep {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_RECEIPT_CODE = "receiptCode";
+
   private final PlatformFileRuntimeRepository runtimeRepository;
 
   public CompleteDispatchStep(PlatformFileRuntimeRepository runtimeRepository) {
@@ -40,8 +43,8 @@ public class CompleteDispatchStep implements DispatchStageStep {
     if ("SUCCESS".equalsIgnoreCase(receiptStatus)) {
       Map<String, Object> fileMetadata = new LinkedHashMap<>();
       fileMetadata.put("channelCode", dispatchPayload.channelCode());
-      if (context.getAttributes().get("receiptCode") != null) {
-        fileMetadata.put("receiptCode", context.getAttributes().get("receiptCode"));
+      if (context.getAttributes().get(KEY_RECEIPT_CODE) != null) {
+        fileMetadata.put(KEY_RECEIPT_CODE, context.getAttributes().get(KEY_RECEIPT_CODE));
       }
       runtimeRepository.updateFileStatus(fileId, "DISPATCHED", fileMetadata);
     }
@@ -49,7 +52,7 @@ public class CompleteDispatchStep implements DispatchStageStep {
     detailSummary.put("channelCode", dispatchPayload.channelCode());
     detailSummary.put("dispatchTarget", dispatchPayload.dispatchTarget());
     detailSummary.put("externalRequestId", context.getAttributes().get("externalRequestId"));
-    detailSummary.put("receiptCode", context.getAttributes().get("receiptCode"));
+    detailSummary.put(KEY_RECEIPT_CODE, context.getAttributes().get(KEY_RECEIPT_CODE));
     detailSummary.put("receiptStatus", receiptStatus);
     runtimeRepository.appendAudit(
         FileAuditParam.builder()

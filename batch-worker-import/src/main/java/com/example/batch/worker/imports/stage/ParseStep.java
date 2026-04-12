@@ -57,6 +57,11 @@ import org.xml.sax.InputSource;
 @RequiredArgsConstructor
 public class ParseStep implements ImportStageStep {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_RECORDS = "records";
+  private static final String KEY_PARSED_COUNT = "parsedCount";
+  private static final String KEY_SCHEMA_FIELDS = "schemaFields";
+
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
   private final ObjectMapper objectMapper;
@@ -90,7 +95,7 @@ public class ParseStep implements ImportStageStep {
       context.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
       context
           .getAttributes()
-          .put("parsedCount", numberValue(context.getAttributes().get("parsedCount")));
+          .put(KEY_PARSED_COUNT, numberValue(context.getAttributes().get(KEY_PARSED_COUNT)));
       context.getAttributes().put("totalCount", totalCount);
       if (totalCount == 0 && numberValue(context.getAttributes().get("skippedCount")) == 0) {
         deleteQuietly(stagingFile);
@@ -105,7 +110,7 @@ public class ParseStep implements ImportStageStep {
           runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
           "PARSED",
           Map.of(
-              "parsedCount", numberValue(context.getAttributes().get("parsedCount")),
+              KEY_PARSED_COUNT, numberValue(context.getAttributes().get(KEY_PARSED_COUNT)),
               "totalCount", totalCount,
               "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
               "badRecordCount", badRecordCount(context),
@@ -614,10 +619,10 @@ public class ParseStep implements ImportStageStep {
         return parseJsonArray(context, parser, writer, preserveLogicalRow);
       }
       if (token == JsonToken.START_OBJECT) {
-        // 信封模式路径：{"records":[...]} 或单记录对象。
+        // 信封模式路径：{KEY_RECORDS:[...]} 或单记录对象。
         // 若不存在 records 数组，则将根对象视为一条逻辑记录。
         JsonNode rootObj = objectMapper.readTree(parser);
-        JsonNode recordsNode = rootObj == null ? null : rootObj.get("records");
+        JsonNode recordsNode = rootObj == null ? null : rootObj.get(KEY_RECORDS);
         if (recordsNode != null && recordsNode.isArray()) {
           long recordNo = 0L;
           for (JsonNode record : recordsNode) {
@@ -649,7 +654,7 @@ public class ParseStep implements ImportStageStep {
   }
 
   /**
-   * 以流式方式解析 JSON 对象载荷，无需将整个内容加载到内存。 通过流式解析器定位 {@code {"records":[...]}} 信封中的 "records" 数组；
+   * 以流式方式解析 JSON 对象载荷，无需将整个内容加载到内存。 通过流式解析器定位 {@code {KEY_RECORDS:[...]}} 信封中的 KEY_RECORDS 数组；
    * 若为其他顶层对象，则作为单条记录读取。
    */
   private long parseJsonObjectStreaming(
@@ -658,21 +663,21 @@ public class ParseStep implements ImportStageStep {
       BufferedWriter writer,
       boolean preserveLogicalRow)
       throws Exception {
-    // 遍历根对象的字段，查找 "records" 数组
+    // 遍历根对象的字段，查找 KEY_RECORDS 数组
     while (parser.nextToken() != JsonToken.END_OBJECT) {
-      if (parser.currentToken() == JsonToken.FIELD_NAME && "records".equals(parser.currentName())) {
+      if (parser.currentToken() == JsonToken.FIELD_NAME && KEY_RECORDS.equals(parser.currentName())) {
         JsonToken arrayToken = parser.nextToken();
         if (arrayToken == JsonToken.START_ARRAY) {
           return parseJsonArray(context, parser, writer, preserveLogicalRow);
         }
-        // "records" 字段不是数组——作为单个值读取并跳过
+        // KEY_RECORDS 字段不是数组——作为单个值读取并跳过
         parser.skipChildren();
       } else {
         // 跳过非 records 字段
         parser.skipChildren();
       }
     }
-    // 未找到 "records" 数组——此为单对象载荷；由于解析器已被消费，无法重读。
+    // 未找到 KEY_RECORDS 数组——此为单对象载荷；由于解析器已被消费，无法重读。
     // 返回 0 表示无记录。需要单记录回退的调用方应改用 JSON 数组格式。
     return 0L;
   }
@@ -764,7 +769,7 @@ public class ParseStep implements ImportStageStep {
         if ((withHeader || headerRows > 0) && nonBlankLineNo <= Math.max(headerRows, 1)) {
           if (nonBlankLineNo == 1) {
             headers = parseDelimitedLine(line, delimiter);
-            context.getAttributes().put("schemaFields", new ArrayList<>(headers));
+            context.getAttributes().put(KEY_SCHEMA_FIELDS, new ArrayList<>(headers));
           }
           continue;
         }
@@ -796,7 +801,7 @@ public class ParseStep implements ImportStageStep {
                   recordNo,
                   "IMPORT_PARSE_LINE_INVALID",
                   row));
-          parsedCount = numberValue(context.getAttributes().get("parsedCount"));
+          parsedCount = numberValue(context.getAttributes().get(KEY_PARSED_COUNT));
         } catch (Exception exception) {
           recordParseError(
               context, recordNo, "IMPORT_PARSE_LINE_INVALID", exception.getMessage(), line);
@@ -938,7 +943,7 @@ public class ParseStep implements ImportStageStep {
     if (context == null || node == null || !node.isObject()) {
       return;
     }
-    Object existing = context.getAttributes().get("schemaFields");
+    Object existing = context.getAttributes().get(KEY_SCHEMA_FIELDS);
     LinkedHashSet<String> fields = new LinkedHashSet<>();
     if (existing instanceof List<?> list) {
       for (Object item : list) {
@@ -948,14 +953,14 @@ public class ParseStep implements ImportStageStep {
       }
     }
     node.fieldNames().forEachRemaining(fields::add);
-    context.getAttributes().put("schemaFields", new ArrayList<>(fields));
+    context.getAttributes().put(KEY_SCHEMA_FIELDS, new ArrayList<>(fields));
   }
 
   private void collectSchemaFields(ImportJobContext context, Map<String, ?> row) {
     if (context == null || row == null || row.isEmpty()) {
       return;
     }
-    Object existing = context.getAttributes().get("schemaFields");
+    Object existing = context.getAttributes().get(KEY_SCHEMA_FIELDS);
     LinkedHashSet<String> fields = new LinkedHashSet<>();
     if (existing instanceof List<?> list) {
       for (Object item : list) {
@@ -965,7 +970,7 @@ public class ParseStep implements ImportStageStep {
       }
     }
     row.keySet().forEach(fields::add);
-    context.getAttributes().put("schemaFields", new ArrayList<>(fields));
+    context.getAttributes().put(KEY_SCHEMA_FIELDS, new ArrayList<>(fields));
   }
 
   private record WriteParsedRecordContext(
@@ -1020,7 +1025,7 @@ public class ParseStep implements ImportStageStep {
     writer.newLine();
     context
         .getAttributes()
-        .put("parsedCount", numberValue(context.getAttributes().get("parsedCount")) + 1);
+        .put(KEY_PARSED_COUNT, numberValue(context.getAttributes().get(KEY_PARSED_COUNT)) + 1);
   }
 
   /** 写入单个 JSON 值，不关闭底层 writer（NDJSON 模式下每个暂存文件写入多行）。 */

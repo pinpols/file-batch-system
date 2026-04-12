@@ -11,6 +11,7 @@ import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.TenantMapper;
 import com.example.batch.console.mapper.WorkflowRunMapper;
 import com.example.batch.console.mapper.param.TenantUpsertParam;
+import com.example.batch.console.application.ConsoleTriggerProxyService;
 import com.example.batch.console.support.ConsolePasswordHasher;
 import com.example.batch.console.support.ConsoleRoles;
 import com.example.batch.console.web.response.ConsoleTenantResponse;
@@ -37,6 +38,7 @@ public class ConsoleTenantApplicationService {
   private final JobInstanceMapper jobInstanceMapper;
   private final FilePipelineMapper filePipelineMapper;
   private final WorkflowRunMapper workflowRunMapper;
+  private final ConsoleTriggerProxyService triggerProxyService;
 
   // ── commands ──
 
@@ -127,6 +129,7 @@ public class ConsoleTenantApplicationService {
     assertExists(tenantId);
     assertNoActiveInstances(tenantId);
     tenantMapper.updateStatus(tenantId, "SUSPENDED");
+    triggerProxyService.pauseByTenant(tenantId);
     return toResponse(tenantMapper.selectByTenantId(tenantId));
   }
 
@@ -152,6 +155,7 @@ public class ConsoleTenantApplicationService {
   public ConsoleTenantResponse activateTenant(String tenantId) {
     assertExists(tenantId);
     tenantMapper.updateStatus(tenantId, "ACTIVE");
+    triggerProxyService.resumeByTenant(tenantId);
     return toResponse(tenantMapper.selectByTenantId(tenantId));
   }
 

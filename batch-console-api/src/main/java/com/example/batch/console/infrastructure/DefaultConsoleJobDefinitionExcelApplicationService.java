@@ -84,40 +84,55 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     implements ConsoleJobDefinitionExcelApplicationService {
 
   private static final String SHEET = "job_definition";
+
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_JOB_TYPE = "job_type";
+  private static final String COL_SCHEDULE_TYPE = "schedule_type";
+  private static final String COL_EXECUTION_HANDLER = "execution_handler";
+  private static final String COL_PARAM_SCHEMA = "param_schema";
+  private static final String COL_DEFAULT_PARAMS = "default_params";
+  private static final String COL_DESCRIPTION = "description";
+  private static final String GUIDE_FALSE = "FALSE";
+  private static final String GUIDE_NONE = "NONE";
+  private static final String COL_SHARD_STRATEGY = "shard_strategy";
+  private static final String COL_ENABLED = "enabled";
+  private static final String COL_RETRY_POLICY = "retry_policy";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String GUIDE_STR = "字符串";
   private static final List<String> COLUMNS =
       List.of(
           "tenant_id",
           "job_code",
           "job_name",
-          "job_type",
+          COL_JOB_TYPE,
           "queue_code",
           "worker_group",
-          "schedule_type",
+          COL_SCHEDULE_TYPE,
           "schedule_expr",
           "calendar_code",
           "window_code",
-          "retry_policy",
+          COL_RETRY_POLICY,
           "retry_max_count",
           "timeout_seconds",
-          "shard_strategy",
-          "execution_handler",
-          "param_schema",
-          "default_params",
-          "enabled",
-          "description");
+          COL_SHARD_STRATEGY,
+          COL_EXECUTION_HANDLER,
+          COL_PARAM_SCHEMA,
+          COL_DEFAULT_PARAMS,
+          COL_ENABLED,
+          COL_DESCRIPTION);
   private static final Set<String> HEADERS = Set.copyOf(COLUMNS);
   private static final Set<String> JOB_TYPES = JobType.codes();
   private static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
   private static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
   private static final Set<String> SHARD_STRATEGIES = ShardStrategy.codes();
-  private static final Set<String> ENABLED_VALUES = Set.of("TRUE", "FALSE");
+  private static final Set<String> ENABLED_VALUES = Set.of(GUIDE_TRUE, GUIDE_FALSE);
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
-          Map.entry("job_code", requiredColumn("作业唯一编码，用于匹配已有作业定义。", "字符串", "JOB_SETTLEMENT_001")),
-          Map.entry("job_name", optionalColumn("控制台展示的作业名称。", "字符串", "清算作业")),
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("job_code", requiredColumn("作业唯一编码，用于匹配已有作业定义。", GUIDE_STR, "JOB_SETTLEMENT_001")),
+          Map.entry("job_name", optionalColumn("控制台展示的作业名称。", GUIDE_STR, "清算作业")),
           Map.entry(
-              "job_type",
+              COL_JOB_TYPE,
               requiredReadOnlyColumn(
                   "作业执行类型。该维护模板中为只读字段，仅校验是否与导出值一致。",
                   "枚举",
@@ -130,7 +145,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
           Map.entry("queue_code", optionalColumn("资源队列编码。留空表示保持当前值。", "编码", "queue-default")),
           Map.entry("worker_group", optionalColumn("目标执行器分组。留空表示保持当前值。", "编码", "worker-general")),
           Map.entry(
-              "schedule_type",
+              COL_SCHEDULE_TYPE,
               requiredReadOnlyColumn(
                   "调度类型在维护模板中为只读字段，必须与导出值一致。",
                   "枚举",
@@ -149,27 +164,27 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
           Map.entry("calendar_code", optionalColumn("业务日历编码，系统中必须已存在。", "编码", "BIZ_CALENDAR")),
           Map.entry("window_code", optionalColumn("批量窗口编码，系统中必须已存在。", "编码", "WINDOW_NIGHT")),
           Map.entry(
-              "retry_policy",
-              optionalColumn("执行失败后的重试策略。", "枚举", "FIXED", "NONE", "FIXED", "EXPONENTIAL")),
+              COL_RETRY_POLICY,
+              optionalColumn("执行失败后的重试策略。", "枚举", "FIXED", GUIDE_NONE, "FIXED", "EXPONENTIAL")),
           Map.entry("retry_max_count", optionalColumn("最大重试次数，必须大于等于 0。", "整数", "3")),
           Map.entry("timeout_seconds", optionalColumn("超时时间（秒），必须大于等于 0。", "整数", "1800")),
           Map.entry(
-              "shard_strategy",
-              optionalColumn("编排器使用的分片策略。", "枚举", "AUTO", "NONE", "STATIC", "DYNAMIC", "AUTO")),
+              COL_SHARD_STRATEGY,
+              optionalColumn("编排器使用的分片策略。", "枚举", "AUTO", GUIDE_NONE, "STATIC", "DYNAMIC", "AUTO")),
           Map.entry(
-              "execution_handler",
+              COL_EXECUTION_HANDLER,
               readOnlyColumn(
                   "运行时处理器 Bean/Class。该维护模板中为只读字段。",
-                  "字符串",
+                  GUIDE_STR,
                   "com.example.batch.worker.general.GenericTaskHandler")),
           Map.entry(
-              "param_schema",
+              COL_PARAM_SCHEMA,
               readOnlyColumn("启动参数 Schema。该维护模板中请保持导出的 JSON 不变。", "JSON", "{\"type\":\"object\"}")),
           Map.entry(
-              "default_params",
+              COL_DEFAULT_PARAMS,
               readOnlyColumn("默认启动参数。该维护模板中请保持导出的 JSON 不变。", "JSON", "{\"batchSize\":1000}")),
-          Map.entry("enabled", optionalColumn("作业定义是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
-          Map.entry("description", optionalColumn("面向运维人员的说明信息。", "字符串", "夜间清算处理链路")));
+          Map.entry(COL_ENABLED, optionalColumn("作业定义是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "夜间清算处理链路")));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -353,22 +368,22 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
               tenantOrDefault(values.get("tenant_id"), tenantId),
               normalize(values.get("job_code")),
               normalize(values.get("job_name")),
-              normalizeEnum(values.get("job_type")),
+              normalizeEnum(values.get(COL_JOB_TYPE)),
               normalize(values.get("queue_code")),
               normalize(values.get("worker_group")),
-              normalizeEnum(values.get("schedule_type")),
+              normalizeEnum(values.get(COL_SCHEDULE_TYPE)),
               normalize(values.get("schedule_expr")),
               normalize(values.get("calendar_code")),
               normalize(values.get("window_code")),
-              normalizeEnum(values.get("retry_policy")),
+              normalizeEnum(values.get(COL_RETRY_POLICY)),
               parseInteger(values.get("retry_max_count")),
               parseInteger(values.get("timeout_seconds")),
-              normalizeEnum(values.get("shard_strategy")),
-              normalize(values.get("execution_handler")),
-              normalize(values.get("param_schema")),
-              normalize(values.get("default_params")),
-              parseBoolean(values.get("enabled"), true),
-              normalize(values.get("description"))));
+              normalizeEnum(values.get(COL_SHARD_STRATEGY)),
+              normalize(values.get(COL_EXECUTION_HANDLER)),
+              normalize(values.get(COL_PARAM_SCHEMA)),
+              normalize(values.get(COL_DEFAULT_PARAMS)),
+              parseBoolean(values.get(COL_ENABLED), true),
+              normalize(values.get(COL_DESCRIPTION))));
     }
     return rows;
   }
@@ -418,13 +433,13 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       if (existing == null) {
         rowIssues.add("job definition not found for maintenance: " + row.jobCode());
       } else {
-        checkReadOnly(row.jobType(), existing.getJobType(), "job_type", rowIssues);
-        checkReadOnly(row.scheduleType(), existing.getScheduleType(), "schedule_type", rowIssues);
+        checkReadOnly(row.jobType(), existing.getJobType(), COL_JOB_TYPE, rowIssues);
+        checkReadOnly(row.scheduleType(), existing.getScheduleType(), COL_SCHEDULE_TYPE, rowIssues);
         checkReadOnly(
-            row.executionHandler(), existing.getExecutionHandler(), "execution_handler", rowIssues);
-        checkReadOnly(row.paramSchema(), existing.getParamSchema(), "param_schema", rowIssues);
+            row.executionHandler(), existing.getExecutionHandler(), COL_EXECUTION_HANDLER, rowIssues);
+        checkReadOnly(row.paramSchema(), existing.getParamSchema(), COL_PARAM_SCHEMA, rowIssues);
         checkReadOnly(
-            row.defaultParams(), existing.getDefaultParams(), "default_params", rowIssues);
+            row.defaultParams(), existing.getDefaultParams(), COL_DEFAULT_PARAMS, rowIssues);
       }
       if (hasText(row.retryPolicy()) && !RETRY_POLICIES.contains(row.retryPolicy())) {
         rowIssues.add("retry_policy must be one of " + RETRY_POLICIES);
@@ -637,17 +652,17 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     Sheet sheet = workbook.createSheet("DICT");
     sheet.createFreezePane(0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
-    writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
+    writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {
-      {"retry_policy", "NONE", "no retry"},
-      {"retry_policy", "FIXED", "fixed retry"},
-      {"retry_policy", "EXPONENTIAL", "exponential retry"},
-      {"shard_strategy", "NONE", "no shard"},
-      {"shard_strategy", "STATIC", "static shard"},
-      {"shard_strategy", "DYNAMIC", "dynamic shard"},
-      {"shard_strategy", "AUTO", "auto shard"},
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_RETRY_POLICY, GUIDE_NONE, "no retry"},
+      {COL_RETRY_POLICY, "FIXED", "fixed retry"},
+      {COL_RETRY_POLICY, "EXPONENTIAL", "exponential retry"},
+      {COL_SHARD_STRATEGY, GUIDE_NONE, "no shard"},
+      {COL_SHARD_STRATEGY, "STATIC", "static shard"},
+      {COL_SHARD_STRATEGY, "DYNAMIC", "dynamic shard"},
+      {COL_SHARD_STRATEGY, "AUTO", "auto shard"},
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, GUIDE_FALSE, "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);
@@ -708,7 +723,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
                                 effective(row.timeoutSeconds(), existing.getTimeoutSeconds()),
                             "shardStrategy",
                                 effective(row.shardStrategy(), existing.getShardStrategy()),
-                            "enabled", effective(row.enabled(), existing.getEnabled()))))));
+                            COL_ENABLED, effective(row.enabled(), existing.getEnabled()))))));
   }
 
   private Map<String, Object> mapOf(Object... pairs) {
@@ -749,10 +764,10 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
-    if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
+    if (List.of(GUIDE_FALSE, "N", "0", "NO").contains(upper)) {
       return false;
     }
     return defaultValue;

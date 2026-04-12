@@ -91,6 +91,34 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   }
 
   @Override
+  public void pauseByTenant(String tenantId) {
+    try {
+      String prefix = tenantId + ":";
+      for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
+        if (jobKey.getName().startsWith(prefix)) {
+          scheduler.pauseJob(jobKey);
+        }
+      }
+    } catch (SchedulerException e) {
+      throw new IllegalStateException("failed to pause triggers for tenant: " + tenantId, e);
+    }
+  }
+
+  @Override
+  public void resumeByTenant(String tenantId) {
+    try {
+      String prefix = tenantId + ":";
+      for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
+        if (jobKey.getName().startsWith(prefix)) {
+          scheduler.resumeJob(jobKey);
+        }
+      }
+    } catch (SchedulerException e) {
+      throw new IllegalStateException("failed to resume triggers for tenant: " + tenantId, e);
+    }
+  }
+
+  @Override
   public List<TriggerStatusInfo> listRegisteredTriggers() {
     try {
       List<TriggerStatusInfo> result = new ArrayList<>();

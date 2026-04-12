@@ -15,4 +15,8 @@ public interface ConsoleTriggerProxyService {
   List<Object> triggerList();
 
   Map<String, String> triggerAction(String tenantId, String jobCode, String action);
+
+  Map<String, String> pauseByTenant(String tenantId);
+
+  Map<String, String> resumeByTenant(String tenantId);
 }

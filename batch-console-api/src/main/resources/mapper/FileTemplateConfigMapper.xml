@@ -50,60 +50,60 @@
             created_at,
             updated_at
         from batch.file_template_config
-        where tenant_id = #{tenantId}
-        <if test="keyword != null and keyword != ''">
+        where tenant_id = #{q.tenantId}
+        <if test="q.keyword != null and q.keyword != ''">
             and (
-                template_code like concat('%', #{keyword}, '%')
-                or template_name like concat('%', #{keyword}, '%')
-                or template_type like concat('%', #{keyword}, '%')
+                template_code like concat('%', #{q.keyword}, '%')
+                or template_name like concat('%', #{q.keyword}, '%')
+                or template_type like concat('%', #{q.keyword}, '%')
             )
         </if>
-        <if test="templateCode != null and templateCode != ''">
-            and template_code like concat('%', #{templateCode}, '%')
+        <if test="q.templateCode != null and q.templateCode != ''">
+            and template_code like concat('%', #{q.templateCode}, '%')
         </if>
-        <if test="templateName != null and templateName != ''">
-            and template_name like concat('%', #{templateName}, '%')
+        <if test="q.templateName != null and q.templateName != ''">
+            and template_name like concat('%', #{q.templateName}, '%')
         </if>
-        <if test="templateType != null and templateType != ''">
-            and template_type = #{templateType}
+        <if test="q.templateType != null and q.templateType != ''">
+            and template_type = #{q.templateType}
         </if>
-        <if test="bizType != null and bizType != ''">
-            and biz_type = #{bizType}
+        <if test="q.bizType != null and q.bizType != ''">
+            and biz_type = #{q.bizType}
         </if>
-        <if test="enabled != null">
-            and enabled = #{enabled}
+        <if test="q.enabled != null">
+            and enabled = #{q.enabled}
         </if>
         order by template_code asc, version desc
-        <if test="pageRequest != null">
-            limit #{pageRequest.pageSize} offset (#{pageRequest.pageNo} - 1) * #{pageRequest.pageSize}
+        <if test="q.pageRequest != null">
+            limit #{q.pageRequest.pageSize} offset (#{q.pageRequest.pageNo} - 1) * #{q.pageRequest.pageSize}
         </if>
     </select>
 
     <select id="countByQuery" resultType="long">
         select count(1)
         from batch.file_template_config
-        where tenant_id = #{tenantId}
-        <if test="keyword != null and keyword != ''">
+        where tenant_id = #{q.tenantId}
+        <if test="q.keyword != null and q.keyword != ''">
             and (
-                template_code like concat('%', #{keyword}, '%')
-                or template_name like concat('%', #{keyword}, '%')
-                or template_type like concat('%', #{keyword}, '%')
+                template_code like concat('%', #{q.keyword}, '%')
+                or template_name like concat('%', #{q.keyword}, '%')
+                or template_type like concat('%', #{q.keyword}, '%')
             )
         </if>
-        <if test="templateCode != null and templateCode != ''">
-            and template_code like concat('%', #{templateCode}, '%')
+        <if test="q.templateCode != null and q.templateCode != ''">
+            and template_code like concat('%', #{q.templateCode}, '%')
         </if>
-        <if test="templateName != null and templateName != ''">
-            and template_name like concat('%', #{templateName}, '%')
+        <if test="q.templateName != null and q.templateName != ''">
+            and template_name like concat('%', #{q.templateName}, '%')
         </if>
-        <if test="templateType != null and templateType != ''">
-            and template_type = #{templateType}
+        <if test="q.templateType != null and q.templateType != ''">
+            and template_type = #{q.templateType}
         </if>
-        <if test="bizType != null and bizType != ''">
-            and biz_type = #{bizType}
+        <if test="q.bizType != null and q.bizType != ''">
+            and biz_type = #{q.bizType}
         </if>
-        <if test="enabled != null">
-            and enabled = #{enabled}
+        <if test="q.enabled != null">
+            and enabled = #{q.enabled}
         </if>
     </select>
 

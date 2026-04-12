@@ -14,6 +14,11 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class TriggerManagementController {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_TENANT_ID = "tenantId";
+  private static final String KEY_JOB_CODE = "jobCode";
+  private static final String KEY_STATUS = "status";
+
   private final TriggerRegistrationService triggerRegistrationService;
   private final TriggerGracefulShutdown gracefulShutdown;
 
@@ -24,52 +29,64 @@ public class TriggerManagementController {
 
   @PostMapping("/register")
   public CommonResponse<Map<String, String>> register(
-      @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
+      @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
     triggerRegistrationService.registerByJobCode(tenantId, jobCode);
     return CommonResponse.success(
-        Map.of("tenantId", tenantId, "jobCode", jobCode, "status", "REGISTERED"));
+        Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, "REGISTERED"));
   }
 
   @PostMapping("/unregister")
   public CommonResponse<Map<String, String>> unregister(
-      @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
+      @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
     triggerRegistrationService.unregisterByJobCode(tenantId, jobCode);
     return CommonResponse.success(
-        Map.of("tenantId", tenantId, "jobCode", jobCode, "status", "UNREGISTERED"));
+        Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, "UNREGISTERED"));
   }
 
   @PostMapping("/pause")
   public CommonResponse<Map<String, String>> pause(
-      @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
+      @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
     triggerRegistrationService.pauseByJobCode(tenantId, jobCode);
     return CommonResponse.success(
-        Map.of("tenantId", tenantId, "jobCode", jobCode, "status", "PAUSED"));
+        Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, "PAUSED"));
   }
 
   @PostMapping("/resume")
   public CommonResponse<Map<String, String>> resume(
-      @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
+      @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
     triggerRegistrationService.resumeByJobCode(tenantId, jobCode);
     return CommonResponse.success(
-        Map.of("tenantId", tenantId, "jobCode", jobCode, "status", "NORMAL"));
+        Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, "NORMAL"));
   }
 
   @GetMapping("/scheduler-status")
   public CommonResponse<Map<String, String>> schedulerStatus() {
     String status = triggerRegistrationService.schedulerStatus();
-    return CommonResponse.success(Map.of("status", status));
+    return CommonResponse.success(Map.of(KEY_STATUS, status));
   }
 
   @PostMapping("/pause-all")
   public CommonResponse<Map<String, String>> pauseAll() {
     triggerRegistrationService.pauseAll();
-    return CommonResponse.success(Map.of("status", "ALL_PAUSED"));
+    return CommonResponse.success(Map.of(KEY_STATUS, "ALL_PAUSED"));
   }
 
   @PostMapping("/resume-all")
   public CommonResponse<Map<String, String>> resumeAll() {
     triggerRegistrationService.resumeAll();
-    return CommonResponse.success(Map.of("status", "ALL_RESUMED"));
+    return CommonResponse.success(Map.of(KEY_STATUS, "ALL_RESUMED"));
+  }
+
+  @PostMapping("/pause-tenant")
+  public CommonResponse<Map<String, String>> pauseByTenant(@RequestParam String tenantId) {
+    triggerRegistrationService.pauseByTenant(tenantId);
+    return CommonResponse.success(Map.of(KEY_STATUS, "TENANT_PAUSED", "tenantId", tenantId));
+  }
+
+  @PostMapping("/resume-tenant")
+  public CommonResponse<Map<String, String>> resumeByTenant(@RequestParam String tenantId) {
+    triggerRegistrationService.resumeByTenant(tenantId);
+    return CommonResponse.success(Map.of(KEY_STATUS, "TENANT_RESUMED", "tenantId", tenantId));
   }
 
   @GetMapping("/drain/status")

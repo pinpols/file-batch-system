@@ -2,21 +2,25 @@ package com.example.batch.trigger.infrastructure;
 
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.config.TriggerRuntimeProperties;
 import com.example.batch.trigger.domain.MisfireHandler;
+import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.service.TriggerService;
 import com.example.batch.trigger.support.TriggerDescriptor;
 import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.quartz.Job;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class QuartzLaunchJob implements Job {
@@ -34,6 +38,7 @@ public class QuartzLaunchJob implements Job {
   private final TriggerService triggerService;
   private final MisfireHandler misfireHandler;
   private final TriggerRuntimeProperties triggerRuntimeProperties;
+  private final TriggerRegistrationService triggerRegistrationService;
 
   @Override
   public void execute(JobExecutionContext context) throws JobExecutionException {
@@ -63,13 +68,25 @@ public class QuartzLaunchJob implements Job {
       return;
     }
     TriggerType triggerType = resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
-    triggerService.launchScheduled(
-        new ScheduledTriggerCommand(
-            descriptor,
-            scheduledFireTime,
-            triggerType,
-            IdGenerator.newBusinessNo("quartz"),
-            IdGenerator.newTraceId()));
+    try {
+      triggerService.launchScheduled(
+          new ScheduledTriggerCommand(
+              descriptor,
+              scheduledFireTime,
+              triggerType,
+              IdGenerator.newBusinessNo("quartz"),
+              IdGenerator.newTraceId()));
+    } catch (BizException e) {
+      if (e.getMessage() != null && e.getMessage().contains("tenant is suspended")) {
+        log.warn(
+            "tenant is suspended, auto-pausing quartz job: tenantId={}, jobCode={}",
+            descriptor.getTenantId(),
+            descriptor.getJobCode());
+        triggerRegistrationService.pauseByJobCode(descriptor.getTenantId(), descriptor.getJobCode());
+      } else {
+        throw new JobExecutionException(e, false);
+      }
+    }
   }
 
   private TriggerType resolveTriggerType(

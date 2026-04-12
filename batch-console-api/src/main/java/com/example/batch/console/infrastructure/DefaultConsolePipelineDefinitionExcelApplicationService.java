@@ -73,34 +73,61 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     implements ConsolePipelineDefinitionExcelApplicationService {
 
   private static final String PIPELINE_SHEET_NAME = "pipeline_definition";
+
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_STEP_CODE = "step_code";
+  private static final String COL_STEP_NAME = "step_name";
+  private static final String COL_STEP_ORDER = "step_order";
+  private static final String COL_IMPL_CODE = "impl_code";
+  private static final String COL_STEP_PARAMS = "step_params";
+  private static final String COL_TIMEOUT_SECONDS = "timeout_seconds";
+  private static final String COL_RETRY_MAX_COUNT = "retry_max_count";
+  private static final String STAGE_PARSE = "PARSE";
+  private static final String GUIDE_FALSE = "FALSE";
+  private static final String COL_STAGE_CODE = "stage_code";
+  private static final String COL_ENABLED = "enabled";
+  private static final String GUIDE_STR = "字符串";
+  private static final String COL_JOB_CODE = "job_code";
+  private static final String COL_VERSION = "version";
+  private static final String COL_TENANT_ID = "tenant_id";
+  private static final String COL_PIPELINE_TYPE = "pipeline_type";
+  private static final String COL_RETRY_POLICY = "retry_policy";
+  private static final String KEY_SEP_COLON = ":";
+  private static final String COL_DESCRIPTION = "description";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String COL_PIPELINE_NAME = "pipeline_name";
+  private static final String COL_BIZ_TYPE = "biz_type";
+  private static final String COL_WORKER_GROUP = "worker_group";
+  private static final String STAGE_DISPATCH = "DISPATCH";
+  private static final String GUIDE_INT = "整数";
   private static final String STEP_SHEET_NAME = "pipeline_step_definition";
 
   private static final List<String> PIPELINE_COLUMNS =
       List.of(
-          "tenant_id",
-          "job_code",
-          "pipeline_name",
-          "pipeline_type",
-          "biz_type",
-          "worker_group",
-          "version",
-          "enabled",
-          "description");
+          COL_TENANT_ID,
+          COL_JOB_CODE,
+          COL_PIPELINE_NAME,
+          COL_PIPELINE_TYPE,
+          COL_BIZ_TYPE,
+          COL_WORKER_GROUP,
+          COL_VERSION,
+          COL_ENABLED,
+          COL_DESCRIPTION);
 
   private static final List<String> STEP_COLUMNS =
       List.of(
-          "job_code",
-          "version",
-          "step_code",
-          "step_name",
-          "stage_code",
-          "step_order",
-          "impl_code",
-          "step_params",
-          "timeout_seconds",
-          "retry_policy",
-          "retry_max_count",
-          "enabled");
+          COL_JOB_CODE,
+          COL_VERSION,
+          COL_STEP_CODE,
+          COL_STEP_NAME,
+          COL_STAGE_CODE,
+          COL_STEP_ORDER,
+          COL_IMPL_CODE,
+          COL_STEP_PARAMS,
+          COL_TIMEOUT_SECONDS,
+          COL_RETRY_POLICY,
+          COL_RETRY_MAX_COUNT,
+          COL_ENABLED);
 
   private static final Set<String> PIPELINE_REQUIRED_HEADERS = Set.copyOf(PIPELINE_COLUMNS);
   private static final Set<String> STEP_REQUIRED_HEADERS = Set.copyOf(STEP_COLUMNS);
@@ -110,63 +137,63 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       Set.of(
           "RECEIVE",
           "PREPROCESS",
-          "PARSE",
+          STAGE_PARSE,
           "VALIDATE",
           "LOAD",
           "GENERATE",
           "TRANSFER",
-          "DISPATCH",
+          STAGE_DISPATCH,
           "ACK");
   private static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> PIPELINE_COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+          Map.entry(COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
-              "job_code",
-              requiredColumn("作业唯一编码，与 version 组成联合键。", "字符串", "JOB_IMPORT_SETTLEMENT")),
-          Map.entry("pipeline_name", requiredColumn("流水线名称。", "字符串", "清算导入流水线")),
+              COL_JOB_CODE,
+              requiredColumn("作业唯一编码，与 version 组成联合键。", GUIDE_STR, "JOB_IMPORT_SETTLEMENT")),
+          Map.entry(COL_PIPELINE_NAME, requiredColumn("流水线名称。", GUIDE_STR, "清算导入流水线")),
           Map.entry(
-              "pipeline_type",
-              requiredColumn("流水线类型。", "枚举", "IMPORT", "IMPORT", "EXPORT", "DISPATCH")),
-          Map.entry("biz_type", optionalColumn("业务类型标识。", "字符串", "SETTLEMENT")),
-          Map.entry("worker_group", optionalColumn("Worker 分组名称。", "字符串", "default")),
-          Map.entry("version", requiredColumn("版本号，与 job_code 组成联合键。", "整数", "1")),
-          Map.entry("enabled", optionalColumn("是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
-          Map.entry("description", optionalColumn("流水线描述。", "字符串", "用于清算文件导入")));
+              COL_PIPELINE_TYPE,
+              requiredColumn("流水线类型。", "枚举", "IMPORT", "IMPORT", "EXPORT", STAGE_DISPATCH)),
+          Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "SETTLEMENT")),
+          Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组名称。", GUIDE_STR, "default")),
+          Map.entry(COL_VERSION, requiredColumn("版本号，与 job_code 组成联合键。", GUIDE_INT, "1")),
+          Map.entry(COL_ENABLED, optionalColumn("是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(COL_DESCRIPTION, optionalColumn("流水线描述。", GUIDE_STR, "用于清算文件导入")));
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> STEP_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
-              "job_code", requiredColumn("关联的 pipeline job_code。", "字符串", "JOB_IMPORT_SETTLEMENT")),
-          Map.entry("version", requiredColumn("关联的 pipeline version。", "整数", "1")),
-          Map.entry("step_code", requiredColumn("步骤唯一编码。", "字符串", "STEP_PARSE_CSV")),
-          Map.entry("step_name", requiredColumn("步骤名称。", "字符串", "解析CSV文件")),
+              COL_JOB_CODE, requiredColumn("关联的 pipeline job_code。", GUIDE_STR, "JOB_IMPORT_SETTLEMENT")),
+          Map.entry(COL_VERSION, requiredColumn("关联的 pipeline version。", GUIDE_INT, "1")),
+          Map.entry(COL_STEP_CODE, requiredColumn("步骤唯一编码。", GUIDE_STR, "STEP_PARSE_CSV")),
+          Map.entry(COL_STEP_NAME, requiredColumn("步骤名称。", GUIDE_STR, "解析CSV文件")),
           Map.entry(
-              "stage_code",
+              COL_STAGE_CODE,
               requiredColumn(
                   "阶段编码。",
                   "枚举",
-                  "PARSE",
+                  STAGE_PARSE,
                   "RECEIVE",
                   "PREPROCESS",
-                  "PARSE",
+                  STAGE_PARSE,
                   "VALIDATE",
                   "LOAD",
                   "GENERATE",
                   "TRANSFER",
-                  "DISPATCH",
+                  STAGE_DISPATCH,
                   "ACK")),
-          Map.entry("step_order", requiredColumn("步骤顺序，整数。", "整数", "1")),
-          Map.entry("impl_code", requiredColumn("步骤实现编码。", "字符串", "csvParserStep")),
+          Map.entry(COL_STEP_ORDER, requiredColumn("步骤顺序，整数。", GUIDE_INT, "1")),
+          Map.entry(COL_IMPL_CODE, requiredColumn("步骤实现编码。", GUIDE_STR, "csvParserStep")),
           Map.entry(
-              "step_params", optionalColumn("步骤参数，须为合法 JSON。", "JSON", "{\"delimiter\":\",\"}")),
-          Map.entry("timeout_seconds", requiredColumn("超时时间（秒），必须 >= 0。", "整数", "60")),
+              COL_STEP_PARAMS, optionalColumn("步骤参数，须为合法 JSON。", "JSON", "{\"delimiter\":\",\"}")),
+          Map.entry(COL_TIMEOUT_SECONDS, requiredColumn("超时时间（秒），必须 >= 0。", GUIDE_INT, "60")),
           Map.entry(
-              "retry_policy",
+              COL_RETRY_POLICY,
               requiredColumn("重试策略。", "枚举", "NONE", "NONE", "FIXED", "EXPONENTIAL")),
-          Map.entry("retry_max_count", requiredColumn("最大重试次数，必须 >= 0。", "整数", "0")),
-          Map.entry("enabled", optionalColumn("是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")));
+          Map.entry(COL_RETRY_MAX_COUNT, requiredColumn("最大重试次数，必须 >= 0。", GUIDE_INT, "0")),
+          Map.entry(COL_ENABLED, optionalColumn("是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -187,12 +214,12 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       Long pipelineId = ((Number) pipeline.get("id")).longValue();
       List<Map<String, Object>> steps =
           pipelineStepDefinitionMapper.selectByPipelineDefinitionId(pipelineId);
-      String pipelineJobCode = String.valueOf(pipeline.get("job_code"));
-      String pipelineVersion = String.valueOf(pipeline.get("version"));
+      String pipelineJobCode = String.valueOf(pipeline.get(COL_JOB_CODE));
+      String pipelineVersion = String.valueOf(pipeline.get(COL_VERSION));
       for (Map<String, Object> step : steps) {
         Map<String, Object> enriched = new LinkedHashMap<>(step);
-        enriched.put("job_code", pipelineJobCode);
-        enriched.put("version", pipelineVersion);
+        enriched.put(COL_JOB_CODE, pipelineJobCode);
+        enriched.put(COL_VERSION, pipelineVersion);
         allSteps.add(enriched);
       }
     }
@@ -293,10 +320,10 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
     Map<String, List<StepRow>> stepsByKey =
         result.stepRows().stream()
-            .collect(Collectors.groupingBy(s -> s.jobCode() + ":" + s.version()));
+            .collect(Collectors.groupingBy(s -> s.jobCode() + KEY_SEP_COLON + s.version()));
 
     for (PipelineRow pipelineRow : result.pipelineRows()) {
-      String uniqueKey = pipelineRow.jobCode() + ":" + pipelineRow.version();
+      String uniqueKey = pipelineRow.jobCode() + KEY_SEP_COLON + pipelineRow.version();
       Map<String, Object> existing =
           pipelineDefinitionMapper.selectByUniqueKey(
               session.tenantId(), pipelineRow.jobCode(), pipelineRow.version());
@@ -399,9 +426,9 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         Integer columnIndex = headerIndex.get(header);
         rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
       }
-      if (defaultTenantId != null && columns.contains("tenant_id")) {
-        if (!StringUtils.hasText(rowValues.get("tenant_id"))) {
-          rowValues.put("tenant_id", defaultTenantId);
+      if (defaultTenantId != null && columns.contains(COL_TENANT_ID)) {
+        if (!StringUtils.hasText(rowValues.get(COL_TENANT_ID))) {
+          rowValues.put(COL_TENANT_ID, defaultTenantId);
         }
       }
       rows.add(rowValues);
@@ -419,7 +446,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     for (Map<String, String> rowValues : session.pipelineRows()) {
       List<String> rowIssues = new ArrayList<>();
       PipelineRow row = toPipelineRow(session.tenantId(), pipelineRowNo, rowValues, rowIssues);
-      String uniqueKey = row.jobCode() + ":" + row.version();
+      String uniqueKey = row.jobCode() + KEY_SEP_COLON + row.version();
       if (!pipelineUniqueKeys.add(uniqueKey)) {
         rowIssues.add("duplicate pipeline key (job_code + version) in excel: " + uniqueKey);
       }
@@ -439,7 +466,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     for (Map<String, String> rowValues : session.stepRows()) {
       List<String> rowIssues = new ArrayList<>();
       StepRow row = toStepRow(stepRowNo, rowValues, rowIssues);
-      String parentKey = row.jobCode() + ":" + row.version();
+      String parentKey = row.jobCode() + KEY_SEP_COLON + row.version();
       if (!pipelineUniqueKeys.contains(parentKey)) {
         rowIssues.add("no matching pipeline for job_code + version: " + parentKey);
       }
@@ -474,7 +501,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private PipelineRow toPipelineRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
-    String effectiveTenant = normalize(values.get("tenant_id"));
+    String effectiveTenant = normalize(values.get(COL_TENANT_ID));
     if (!StringUtils.hasText(effectiveTenant)) {
       effectiveTenant = tenantId;
     } else if (!tenantId.equals(effectiveTenant)) {
@@ -483,32 +510,32 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     return PipelineRow.builder()
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
-        .jobCode(requireText(values, "job_code", 128, issues))
-        .pipelineName(requireText(values, "pipeline_name", 256, issues))
-        .pipelineType(requireEnum(values, "pipeline_type", PIPELINE_TYPES, 32, issues))
-        .bizType(optionalText(values, "biz_type", 64, issues))
-        .workerGroup(optionalText(values, "worker_group", 128, issues))
-        .version(requireInteger(values, "version", 1, issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
-        .description(optionalText(values, "description", 512, issues))
+        .jobCode(requireText(values, COL_JOB_CODE, 128, issues))
+        .pipelineName(requireText(values, COL_PIPELINE_NAME, 256, issues))
+        .pipelineType(requireEnum(values, COL_PIPELINE_TYPE, PIPELINE_TYPES, 32, issues))
+        .bizType(optionalText(values, COL_BIZ_TYPE, 64, issues))
+        .workerGroup(optionalText(values, COL_WORKER_GROUP, 128, issues))
+        .version(requireInteger(values, COL_VERSION, 1, issues))
+        .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
+        .description(optionalText(values, COL_DESCRIPTION, 512, issues))
         .build();
   }
 
   private StepRow toStepRow(int rowNo, Map<String, String> values, List<String> issues) {
     return StepRow.builder()
         .rowNo(rowNo)
-        .jobCode(requireText(values, "job_code", 128, issues))
-        .version(requireInteger(values, "version", 1, issues))
-        .stepCode(requireText(values, "step_code", 128, issues))
-        .stepName(requireText(values, "step_name", 256, issues))
-        .stageCode(requireEnum(values, "stage_code", STAGE_CODES, 64, issues))
-        .stepOrder(requireInteger(values, "step_order", 1, issues))
-        .implCode(requireText(values, "impl_code", 128, issues))
-        .stepParams(optionalJson(values, "step_params", issues))
-        .timeoutSeconds(requireInteger(values, "timeout_seconds", 0, issues))
-        .retryPolicy(requireEnum(values, "retry_policy", RETRY_POLICIES, 32, issues))
-        .retryMaxCount(requireInteger(values, "retry_max_count", 0, issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
+        .jobCode(requireText(values, COL_JOB_CODE, 128, issues))
+        .version(requireInteger(values, COL_VERSION, 1, issues))
+        .stepCode(requireText(values, COL_STEP_CODE, 128, issues))
+        .stepName(requireText(values, COL_STEP_NAME, 256, issues))
+        .stageCode(requireEnum(values, COL_STAGE_CODE, STAGE_CODES, 64, issues))
+        .stepOrder(requireInteger(values, COL_STEP_ORDER, 1, issues))
+        .implCode(requireText(values, COL_IMPL_CODE, 128, issues))
+        .stepParams(optionalJson(values, COL_STEP_PARAMS, issues))
+        .timeoutSeconds(requireInteger(values, COL_TIMEOUT_SECONDS, 0, issues))
+        .retryPolicy(requireEnum(values, COL_RETRY_POLICY, RETRY_POLICIES, 32, issues))
+        .retryMaxCount(requireInteger(values, COL_RETRY_MAX_COUNT, 0, issues))
+        .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
         .build();
   }
 
@@ -584,10 +611,10 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
-    if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
+    if (List.of(GUIDE_FALSE, "N", "0", "NO").contains(upper)) {
       return false;
     }
     issues.add(key + " must be boolean");
@@ -826,25 +853,25 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     Sheet sheet = workbook.createSheet("DICT");
     sheet.createFreezePane(0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
-    writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
+    writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {
-      {"pipeline_type", "IMPORT", "import pipeline"},
-      {"pipeline_type", "EXPORT", "export pipeline"},
-      {"pipeline_type", "DISPATCH", "dispatch pipeline"},
-      {"stage_code", "RECEIVE", "receive stage"},
-      {"stage_code", "PREPROCESS", "preprocess stage"},
-      {"stage_code", "PARSE", "parse stage"},
-      {"stage_code", "VALIDATE", "validate stage"},
-      {"stage_code", "LOAD", "load stage"},
-      {"stage_code", "GENERATE", "generate stage"},
-      {"stage_code", "TRANSFER", "transfer stage"},
-      {"stage_code", "DISPATCH", "dispatch stage"},
-      {"stage_code", "ACK", "acknowledge stage"},
-      {"retry_policy", "NONE", "no retry"},
-      {"retry_policy", "FIXED", "fixed interval retry"},
-      {"retry_policy", "EXPONENTIAL", "exponential backoff retry"},
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_PIPELINE_TYPE, "IMPORT", "import pipeline"},
+      {COL_PIPELINE_TYPE, "EXPORT", "export pipeline"},
+      {COL_PIPELINE_TYPE, STAGE_DISPATCH, "dispatch pipeline"},
+      {COL_STAGE_CODE, "RECEIVE", "receive stage"},
+      {COL_STAGE_CODE, "PREPROCESS", "preprocess stage"},
+      {COL_STAGE_CODE, STAGE_PARSE, "parse stage"},
+      {COL_STAGE_CODE, "VALIDATE", "validate stage"},
+      {COL_STAGE_CODE, "LOAD", "load stage"},
+      {COL_STAGE_CODE, "GENERATE", "generate stage"},
+      {COL_STAGE_CODE, "TRANSFER", "transfer stage"},
+      {COL_STAGE_CODE, STAGE_DISPATCH, "dispatch stage"},
+      {COL_STAGE_CODE, "ACK", "acknowledge stage"},
+      {COL_RETRY_POLICY, "NONE", "no retry"},
+      {COL_RETRY_POLICY, "FIXED", "fixed interval retry"},
+      {COL_RETRY_POLICY, "EXPONENTIAL", "exponential backoff retry"},
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, GUIDE_FALSE, "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);
@@ -865,44 +892,44 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private Map<String, Object> buildPipelineInsertParams(String tenantId, PipelineRow row) {
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("tenant_id", tenantId);
-    params.put("job_code", row.jobCode());
-    params.put("pipeline_name", row.pipelineName());
-    params.put("pipeline_type", row.pipelineType());
-    params.put("biz_type", row.bizType());
-    params.put("worker_group", row.workerGroup());
-    params.put("version", row.version());
-    params.put("enabled", row.enabled());
-    params.put("description", row.description());
+    params.put(COL_TENANT_ID, tenantId);
+    params.put(COL_JOB_CODE, row.jobCode());
+    params.put(COL_PIPELINE_NAME, row.pipelineName());
+    params.put(COL_PIPELINE_TYPE, row.pipelineType());
+    params.put(COL_BIZ_TYPE, row.bizType());
+    params.put(COL_WORKER_GROUP, row.workerGroup());
+    params.put(COL_VERSION, row.version());
+    params.put(COL_ENABLED, row.enabled());
+    params.put(COL_DESCRIPTION, row.description());
     return params;
   }
 
   private Map<String, Object> buildPipelineUpdateParams(String tenantId, Long id, PipelineRow row) {
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("tenant_id", tenantId);
+    params.put(COL_TENANT_ID, tenantId);
     params.put("id", id);
-    params.put("pipeline_name", row.pipelineName());
-    params.put("pipeline_type", row.pipelineType());
-    params.put("biz_type", row.bizType());
-    params.put("worker_group", row.workerGroup());
-    params.put("enabled", row.enabled());
-    params.put("description", row.description());
+    params.put(COL_PIPELINE_NAME, row.pipelineName());
+    params.put(COL_PIPELINE_TYPE, row.pipelineType());
+    params.put(COL_BIZ_TYPE, row.bizType());
+    params.put(COL_WORKER_GROUP, row.workerGroup());
+    params.put(COL_ENABLED, row.enabled());
+    params.put(COL_DESCRIPTION, row.description());
     return params;
   }
 
   private Map<String, Object> buildStepInsertParams(Long pipelineDefinitionId, StepRow row) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("pipeline_definition_id", pipelineDefinitionId);
-    params.put("step_code", row.stepCode());
-    params.put("step_name", row.stepName());
-    params.put("stage_code", row.stageCode());
-    params.put("step_order", row.stepOrder());
-    params.put("impl_code", row.implCode());
-    params.put("step_params", row.stepParams());
-    params.put("timeout_seconds", row.timeoutSeconds());
-    params.put("retry_policy", row.retryPolicy());
-    params.put("retry_max_count", row.retryMaxCount());
-    params.put("enabled", row.enabled());
+    params.put(COL_STEP_CODE, row.stepCode());
+    params.put(COL_STEP_NAME, row.stepName());
+    params.put(COL_STAGE_CODE, row.stageCode());
+    params.put(COL_STEP_ORDER, row.stepOrder());
+    params.put(COL_IMPL_CODE, row.implCode());
+    params.put(COL_STEP_PARAMS, row.stepParams());
+    params.put(COL_TIMEOUT_SECONDS, row.timeoutSeconds());
+    params.put(COL_RETRY_POLICY, row.retryPolicy());
+    params.put(COL_RETRY_MAX_COUNT, row.retryMaxCount());
+    params.put(COL_ENABLED, row.enabled());
     return params;
   }
 
@@ -911,11 +938,11 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private List<PipelineDefinitionDetailResponse> toPipelineResponses(ValidationResult result) {
     Map<String, List<StepRow>> stepsByKey =
         result.stepRows().stream()
-            .collect(Collectors.groupingBy(s -> s.jobCode() + ":" + s.version()));
+            .collect(Collectors.groupingBy(s -> s.jobCode() + KEY_SEP_COLON + s.version()));
     return result.pipelineRows().stream()
         .map(
             pipeline -> {
-              String key = pipeline.jobCode() + ":" + pipeline.version();
+              String key = pipeline.jobCode() + KEY_SEP_COLON + pipeline.version();
               List<PipelineDefinitionDetailResponse.StepResponse> stepResponses =
                   stepsByKey.getOrDefault(key, List.of()).stream()
                       .map(
@@ -970,7 +997,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
             "configType",
             "PIPELINE_DEFINITION",
             "configKey",
-            row.jobCode() + ":" + row.version(),
+            row.jobCode() + KEY_SEP_COLON + row.version(),
             "versionNo",
             row.version(),
             "changeAction",

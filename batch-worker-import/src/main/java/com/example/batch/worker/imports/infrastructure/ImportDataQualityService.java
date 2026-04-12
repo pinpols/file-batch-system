@@ -29,6 +29,15 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class ImportDataQualityService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_MIN = "min";
+  private static final String KEY_MAX = "max";
+  private static final String MSG_ACTUAL_SUFFIX = ", actual=";
+  private static final String KEY_ACTUAL = "actual";
+  private static final String KEY_REQUIRED = "required";
+  private static final String KEY_ALLOWED_VALUES = "allowedValues";
+  private static final String KEY_ERROR_CODE = "errorCode";
+
   private final ObjectMapper objectMapper;
   private final BatchSecurityProperties batchSecurityProperties;
 
@@ -208,15 +217,15 @@ public class ImportDataQualityService {
     }
     appliedChecks.add("row_count_check");
     Integer exactCount = integerValue(rule.get("exact"));
-    Integer minCount = integerValue(firstNonNull(rule.get("min"), rule.get("minimum")));
-    Integer maxCount = integerValue(firstNonNull(rule.get("max"), rule.get("maximum")));
+    Integer minCount = integerValue(firstNonNull(rule.get(KEY_MIN), rule.get("minimum")));
+    Integer maxCount = integerValue(firstNonNull(rule.get(KEY_MAX), rule.get("maximum")));
     if (exactCount != null && actualCount != exactCount) {
       datasetIssues.add(
           new ValidationIssue(
               null,
               "IMPORT_VALIDATE_ROW_COUNT",
-              "row count mismatch, expected=" + exactCount + ", actual=" + actualCount,
-              Map.of("expected", exactCount, "actual", actualCount)));
+              "row count mismatch, expected=" + exactCount + MSG_ACTUAL_SUFFIX + actualCount,
+              Map.of("expected", exactCount, KEY_ACTUAL, actualCount)));
       return;
     }
     if (minCount != null && actualCount < minCount) {
@@ -224,8 +233,8 @@ public class ImportDataQualityService {
           new ValidationIssue(
               null,
               "IMPORT_VALIDATE_ROW_COUNT",
-              "row count below minimum, min=" + minCount + ", actual=" + actualCount,
-              Map.of("min", minCount, "actual", actualCount)));
+              "row count below minimum, min=" + minCount + MSG_ACTUAL_SUFFIX + actualCount,
+              Map.of(KEY_MIN, minCount, KEY_ACTUAL, actualCount)));
       return;
     }
     if (maxCount != null && actualCount > maxCount) {
@@ -233,8 +242,8 @@ public class ImportDataQualityService {
           new ValidationIssue(
               null,
               "IMPORT_VALIDATE_ROW_COUNT",
-              "row count exceeds maximum, max=" + maxCount + ", actual=" + actualCount,
-              Map.of("max", maxCount, "actual", actualCount)));
+              "row count exceeds maximum, max=" + maxCount + MSG_ACTUAL_SUFFIX + actualCount,
+              Map.of(KEY_MAX, maxCount, KEY_ACTUAL, actualCount)));
     }
   }
 
@@ -274,9 +283,9 @@ public class ImportDataQualityService {
           new ValidationIssue(
               null,
               "IMPORT_VALIDATE_CHECKSUM",
-              "checksum mismatch, expected=" + expectedChecksum + ", actual=" + actualChecksum,
+              "checksum mismatch, expected=" + expectedChecksum + MSG_ACTUAL_SUFFIX + actualChecksum,
               Map.of(
-                  "algorithm", algorithm, "expected", expectedChecksum, "actual", actualChecksum)));
+                  "algorithm", algorithm, "expected", expectedChecksum, KEY_ACTUAL, actualChecksum)));
     }
   }
 
@@ -406,9 +415,9 @@ public class ImportDataQualityService {
       }
       String value = stringValue(row.get(field));
       String errorCode =
-          defaultText(stringValue(rule.get("errorCode")), defaultErrorCode(field, rule));
+          defaultText(stringValue(rule.get(KEY_ERROR_CODE)), defaultErrorCode(field, rule));
       String explicitMessage = stringValue(rule.get("errorMessage"));
-      if (booleanValue(firstNonNull(rule.get("required"), rule.get("notNull")), false)
+      if (booleanValue(firstNonNull(rule.get(KEY_REQUIRED), rule.get("notNull")), false)
           && !StringUtils.hasText(value)) {
         return new ValidationIssue(
             recordNo, errorCode, defaultText(explicitMessage, field + " is required"), row);
@@ -441,7 +450,7 @@ public class ImportDataQualityService {
             row);
       }
       List<String> allowedValues =
-          stringList(firstNonNull(rule.get("allowedValues"), rule.get("enum")));
+          stringList(firstNonNull(rule.get(KEY_ALLOWED_VALUES), rule.get("enum")));
       if (!allowedValues.isEmpty() && !containsIgnoreCase(allowedValues, value)) {
         return new ValidationIssue(
             recordNo,
@@ -450,7 +459,7 @@ public class ImportDataQualityService {
             row);
       }
       BigDecimal numberValue = decimalValue(value);
-      BigDecimal minValue = decimalValue(rule.get("min"));
+      BigDecimal minValue = decimalValue(rule.get(KEY_MIN));
       if (minValue != null && numberValue != null && numberValue.compareTo(minValue) < 0) {
         return new ValidationIssue(
             recordNo,
@@ -458,7 +467,7 @@ public class ImportDataQualityService {
             defaultText(explicitMessage, field + " must be >= " + minValue),
             row);
       }
-      BigDecimal maxValue = decimalValue(rule.get("max"));
+      BigDecimal maxValue = decimalValue(rule.get(KEY_MAX));
       if (maxValue != null && numberValue != null && numberValue.compareTo(maxValue) > 0) {
         return new ValidationIssue(
             recordNo,
@@ -508,22 +517,22 @@ public class ImportDataQualityService {
 
   private Map<String, Object> defaultRuleSet() {
     Map<String, Object> fieldRules = new LinkedHashMap<>();
-    fieldRules.put("customerNo", Map.of("required", true, "errorCode", "IMPORT_VALIDATE_REQUIRED"));
+    fieldRules.put("customerNo", Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
     fieldRules.put(
-        "customerName", Map.of("required", true, "errorCode", "IMPORT_VALIDATE_REQUIRED"));
+        "customerName", Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
     fieldRules.put(
         "customerType",
         Map.of(
-            "allowedValues",
+            KEY_ALLOWED_VALUES,
             List.of("PERSONAL", "ENTERPRISE"),
-            "errorCode",
+            KEY_ERROR_CODE,
             "IMPORT_VALIDATE_TYPE_INVALID"));
     fieldRules.put(
         "status",
         Map.of(
-            "allowedValues",
+            KEY_ALLOWED_VALUES,
             List.of("ACTIVE", "INACTIVE", "FROZEN"),
-            "errorCode",
+            KEY_ERROR_CODE,
             "IMPORT_VALIDATE_STATUS_INVALID"));
     Map<String, Object> defaults = new LinkedHashMap<>();
     defaults.put("fieldRules", fieldRules);
@@ -707,7 +716,7 @@ public class ImportDataQualityService {
   }
 
   private String defaultErrorCode(String field, Map<String, Object> rule) {
-    if (booleanValue(firstNonNull(rule.get("required"), rule.get("notNull")), false)) {
+    if (booleanValue(firstNonNull(rule.get(KEY_REQUIRED), rule.get("notNull")), false)) {
       return "IMPORT_VALIDATE_NULL";
     }
     if (firstNonNull(rule.get("minLength"), rule.get("maxLength")) != null) {
@@ -716,10 +725,10 @@ public class ImportDataQualityService {
     if (firstNonNull(rule.get("regex"), rule.get("pattern")) != null) {
       return "IMPORT_VALIDATE_REGEX";
     }
-    if (firstNonNull(rule.get("min"), rule.get("max")) != null) {
+    if (firstNonNull(rule.get(KEY_MIN), rule.get(KEY_MAX)) != null) {
       return "IMPORT_VALIDATE_RANGE";
     }
-    if (firstNonNull(rule.get("allowedValues"), rule.get("enum")) != null) {
+    if (firstNonNull(rule.get(KEY_ALLOWED_VALUES), rule.get("enum")) != null) {
       if ("customerType".equals(field)) {
         return "IMPORT_VALIDATE_TYPE_INVALID";
       }

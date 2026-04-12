@@ -30,6 +30,9 @@ public class ImportRecordGovernanceService {
 
   private static final String BAD_RECORDS_KEY = "badRecords";
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_SKIPPED_COUNT = "skippedCount";
+
   private final ImportSkipProperties skipProperties;
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ImportErrorOutputStorage errorOutputStorage;
@@ -88,7 +91,7 @@ public class ImportRecordGovernanceService {
     if (!isSkipEnabled()) {
       return true;
     }
-    long skippedCount = numberValue(context.getAttributes().get("skippedCount"));
+    long skippedCount = numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT));
     long totalCount = numberValue(context.getAttributes().get("totalCount"));
     SkipThresholdMode mode = resolveThresholdMode();
     if (mode == SkipThresholdMode.PERCENTAGE) {
@@ -118,7 +121,7 @@ public class ImportRecordGovernanceService {
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("badRecordCount", badRecords.size());
     metadata.put("successCount", numberValue(context.getAttributes().get("successCount")));
-    metadata.put("skippedCount", numberValue(context.getAttributes().get("skippedCount")));
+    metadata.put(KEY_SKIPPED_COUNT, numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)));
     metadata.put("failedCount", numberValue(context.getAttributes().get("failedCount")));
     metadata.put("totalCount", numberValue(context.getAttributes().get("totalCount")));
     metadata.put(
@@ -176,7 +179,7 @@ public class ImportRecordGovernanceService {
     badRecords(context).add(badRecord);
 
     if (skipped) {
-      increment(context, "skippedCount");
+      increment(context, KEY_SKIPPED_COUNT);
     } else {
       increment(context, "failedCount");
     }

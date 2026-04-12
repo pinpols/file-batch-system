@@ -23,6 +23,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultConsoleNotificationApplicationService
     implements ConsoleNotificationApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String ERR_CHANNEL_NOT_FOUND = "notification channel not found: ";
+  private static final String KEY_CONFIG_JSON = "configJson";
+  private static final String KEY_UPDATED_BY = "updatedBy";
+  private static final String KEY_RULE_NAME = "ruleName";
+  private static final String KEY_EVENT_TYPES = "eventTypes";
+  private static final String KEY_SEVERITY_FILTER = "severityFilter";
+  private static final String KEY_JOB_CODE_FILTER = "jobCodeFilter";
+  private static final String KEY_CHANNEL_CODE = "channelCode";
+  private static final String KEY_ENABLED = "enabled";
+  private static final String KEY_CHANNEL_NAME = "channelName";
+  private static final String KEY_CHANNEL_TYPE = "channelType";
+  private static final String KEY_TENANT_ID = "tenantId";
+
+
   private static final Set<String> CHANNEL_TYPES =
       Set.of("EMAIL", "DINGTALK", "WECOM", "WEBHOOK", "SMS");
 
@@ -45,7 +60,7 @@ public class DefaultConsoleNotificationApplicationService
     Map<String, Object> channel =
         Guard.requireFound(
             channelMapper.selectByCode(resolved, channelCode),
-            "notification channel not found: " + channelCode);
+            ERR_CHANNEL_NOT_FOUND + channelCode);
     return channel;
   }
 
@@ -53,11 +68,11 @@ public class DefaultConsoleNotificationApplicationService
   @Transactional
   public void createChannel(String tenantId, Map<String, Object> params) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String channelCode = str(params, "channelCode");
+    String channelCode = str(params, KEY_CHANNEL_CODE);
     Guard.requireText(channelCode, "channelCode is required");
-    String channelName = str(params, "channelName");
+    String channelName = str(params, KEY_CHANNEL_NAME);
     Guard.requireText(channelName, "channelName is required");
-    String channelType = str(params, "channelType");
+    String channelType = str(params, KEY_CHANNEL_TYPE);
     if (!CHANNEL_TYPES.contains(channelType)) {
       throw new BizException(
           ResultCode.INVALID_ARGUMENT, "channelType must be one of " + CHANNEL_TYPES);
@@ -68,21 +83,21 @@ public class DefaultConsoleNotificationApplicationService
     String operator = metadataResolver.current().operatorId();
     channelMapper.insert(
         mapOf(
-            "tenantId",
+            KEY_TENANT_ID,
             resolved,
-            "channelCode",
+            KEY_CHANNEL_CODE,
             ConsoleTextSanitizer.safeInput(channelCode, 64),
-            "channelName",
-            ConsoleTextSanitizer.safeInput(str(params, "channelName"), 128),
-            "channelType",
+            KEY_CHANNEL_NAME,
+            ConsoleTextSanitizer.safeInput(str(params, KEY_CHANNEL_NAME), 128),
+            KEY_CHANNEL_TYPE,
             channelType,
-            "configJson",
-            str(params, "configJson"),
-            "enabled",
-            params.getOrDefault("enabled", true),
+            KEY_CONFIG_JSON,
+            str(params, KEY_CONFIG_JSON),
+            KEY_ENABLED,
+            params.getOrDefault(KEY_ENABLED, true),
             "createdBy",
             operator,
-            "updatedBy",
+            KEY_UPDATED_BY,
             operator));
   }
 
@@ -92,8 +107,8 @@ public class DefaultConsoleNotificationApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode),
-        "notification channel not found: " + channelCode);
-    String channelType = str(params, "channelType");
+        ERR_CHANNEL_NOT_FOUND + channelCode);
+    String channelType = str(params, KEY_CHANNEL_TYPE);
     if (channelType != null && !CHANNEL_TYPES.contains(channelType)) {
       throw new BizException(
           ResultCode.INVALID_ARGUMENT, "channelType must be one of " + CHANNEL_TYPES);
@@ -101,13 +116,13 @@ public class DefaultConsoleNotificationApplicationService
     String operator = metadataResolver.current().operatorId();
     channelMapper.update(
         mapOf(
-            "tenantId", resolved,
-            "channelCode", channelCode,
-            "channelName", ConsoleTextSanitizer.safeInput(str(params, "channelName"), 128),
-            "channelType", str(params, "channelType"),
-            "configJson", str(params, "configJson"),
-            "enabled", params.getOrDefault("enabled", true),
-            "updatedBy", operator));
+            KEY_TENANT_ID, resolved,
+            KEY_CHANNEL_CODE, channelCode,
+            KEY_CHANNEL_NAME, ConsoleTextSanitizer.safeInput(str(params, KEY_CHANNEL_NAME), 128),
+            KEY_CHANNEL_TYPE, str(params, KEY_CHANNEL_TYPE),
+            KEY_CONFIG_JSON, str(params, KEY_CONFIG_JSON),
+            KEY_ENABLED, params.getOrDefault(KEY_ENABLED, true),
+            KEY_UPDATED_BY, operator));
   }
 
   @Override
@@ -137,22 +152,22 @@ public class DefaultConsoleNotificationApplicationService
   @Transactional
   public void createRule(String tenantId, Map<String, Object> params) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String channelCode = str(params, "channelCode");
+    String channelCode = str(params, KEY_CHANNEL_CODE);
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode),
-        "notification channel not found: " + channelCode);
+        ERR_CHANNEL_NOT_FOUND + channelCode);
     String operator = metadataResolver.current().operatorId();
     ruleMapper.insert(
         mapOf(
-            "tenantId", resolved,
-            "ruleName", ConsoleTextSanitizer.safeInput(str(params, "ruleName"), 128),
-            "channelCode", channelCode,
-            "eventTypes", ConsoleTextSanitizer.safeInput(str(params, "eventTypes"), 512),
-            "severityFilter", ConsoleTextSanitizer.safeInput(str(params, "severityFilter"), 128),
-            "jobCodeFilter", ConsoleTextSanitizer.safeInput(str(params, "jobCodeFilter"), 512),
-            "enabled", params.getOrDefault("enabled", true),
+            KEY_TENANT_ID, resolved,
+            KEY_RULE_NAME, ConsoleTextSanitizer.safeInput(str(params, KEY_RULE_NAME), 128),
+            KEY_CHANNEL_CODE, channelCode,
+            KEY_EVENT_TYPES, ConsoleTextSanitizer.safeInput(str(params, KEY_EVENT_TYPES), 512),
+            KEY_SEVERITY_FILTER, ConsoleTextSanitizer.safeInput(str(params, KEY_SEVERITY_FILTER), 128),
+            KEY_JOB_CODE_FILTER, ConsoleTextSanitizer.safeInput(str(params, KEY_JOB_CODE_FILTER), 512),
+            KEY_ENABLED, params.getOrDefault(KEY_ENABLED, true),
             "createdBy", operator,
-            "updatedBy", operator));
+            KEY_UPDATED_BY, operator));
   }
 
   @Override
@@ -164,15 +179,15 @@ public class DefaultConsoleNotificationApplicationService
     String operator = metadataResolver.current().operatorId();
     ruleMapper.update(
         mapOf(
-            "tenantId", resolved,
+            KEY_TENANT_ID, resolved,
             "id", ruleId,
-            "ruleName", ConsoleTextSanitizer.safeInput(str(params, "ruleName"), 128),
-            "channelCode", str(params, "channelCode"),
-            "eventTypes", ConsoleTextSanitizer.safeInput(str(params, "eventTypes"), 512),
-            "severityFilter", ConsoleTextSanitizer.safeInput(str(params, "severityFilter"), 128),
-            "jobCodeFilter", ConsoleTextSanitizer.safeInput(str(params, "jobCodeFilter"), 512),
-            "enabled", params.getOrDefault("enabled", true),
-            "updatedBy", operator));
+            KEY_RULE_NAME, ConsoleTextSanitizer.safeInput(str(params, KEY_RULE_NAME), 128),
+            KEY_CHANNEL_CODE, str(params, KEY_CHANNEL_CODE),
+            KEY_EVENT_TYPES, ConsoleTextSanitizer.safeInput(str(params, KEY_EVENT_TYPES), 512),
+            KEY_SEVERITY_FILTER, ConsoleTextSanitizer.safeInput(str(params, KEY_SEVERITY_FILTER), 128),
+            KEY_JOB_CODE_FILTER, ConsoleTextSanitizer.safeInput(str(params, KEY_JOB_CODE_FILTER), 512),
+            KEY_ENABLED, params.getOrDefault(KEY_ENABLED, true),
+            KEY_UPDATED_BY, operator));
   }
 
   @Override
@@ -197,15 +212,15 @@ public class DefaultConsoleNotificationApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     Guard.requireFound(
         channelMapper.selectByCode(resolved, channelCode),
-        "notification channel not found: " + channelCode);
+        ERR_CHANNEL_NOT_FOUND + channelCode);
     // 写一条测试投递日志
     deliveryLogMapper.insert(
         mapOf(
-            "tenantId",
+            KEY_TENANT_ID,
             resolved,
             "ruleId",
             0,
-            "channelCode",
+            KEY_CHANNEL_CODE,
             channelCode,
             "eventType",
             "TEST",
@@ -218,7 +233,7 @@ public class DefaultConsoleNotificationApplicationService
             "attempt",
             1));
     return Map.of(
-        "channelCode", channelCode, "status", "OK", "message", "test notification dispatched");
+        KEY_CHANNEL_CODE, channelCode, "status", "OK", "message", "test notification dispatched");
   }
 
   // ── helpers ──

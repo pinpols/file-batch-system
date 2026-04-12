@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class WorkflowRunManagementApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String STATUS_TERMINATED = "TERMINATED";
+
   private static final Set<String> CANCELLABLE = Set.of("CREATED", "RUNNING");
   private static final Set<String> TERMINABLE = Set.of("RUNNING");
 
@@ -30,8 +33,8 @@ public class WorkflowRunManagementApplicationService {
       throw new BizException(ResultCode.STATE_CONFLICT, "cannot cancel from " + run.getRunStatus());
     }
     workflowRunMapper.updateStatus(
-        tenantId, id, "TERMINATED", run.getCurrentNodeCode(), Instant.now());
-    return Map.of("id", id, "status", "TERMINATED");
+        tenantId, id, STATUS_TERMINATED, run.getCurrentNodeCode(), Instant.now());
+    return Map.of("id", id, "status", STATUS_TERMINATED);
   }
 
   public Map<String, Object> terminate(String tenantId, Long id) {
@@ -41,8 +44,8 @@ public class WorkflowRunManagementApplicationService {
           ResultCode.STATE_CONFLICT, "cannot terminate from " + run.getRunStatus());
     }
     workflowRunMapper.updateStatus(
-        tenantId, id, "TERMINATED", run.getCurrentNodeCode(), Instant.now());
-    return Map.of("id", id, "status", "TERMINATED");
+        tenantId, id, STATUS_TERMINATED, run.getCurrentNodeCode(), Instant.now());
+    return Map.of("id", id, "status", STATUS_TERMINATED);
   }
 
   public Map<String, Object> skipNode(String tenantId, Long id, String nodeCode) {

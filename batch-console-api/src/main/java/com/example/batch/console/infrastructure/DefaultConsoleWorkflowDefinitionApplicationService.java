@@ -38,6 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultConsoleWorkflowDefinitionApplicationService
     implements ConsoleWorkflowDefinitionApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String ERR_WORKFLOW_NOT_FOUND = "Workflow definition not found: ";
+
   private final WorkflowDefinitionMapper definitionMapper;
   private final WorkflowNodeMapper nodeMapper;
   private final WorkflowEdgeMapper edgeMapper;
@@ -51,7 +54,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     WorkflowDefinitionEntity def =
         Guard.requireFound(
             definitionMapper.selectById(resolvedTenant, id),
-            "Workflow definition not found: " + id);
+            ERR_WORKFLOW_NOT_FOUND + id);
     List<WorkflowNodeEntity> nodes =
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));
     List<WorkflowEdgeEntity> edges =
@@ -95,7 +98,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     WorkflowDefinitionEntity def =
         Guard.requireFound(
             definitionMapper.selectById(resolvedTenant, id),
-            "Workflow definition not found: " + id);
+            ERR_WORKFLOW_NOT_FOUND + id);
 
     definitionMapper.updateWorkflowDefinition(
         resolvedTenant,
@@ -118,7 +121,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
     int rows = definitionMapper.toggleEnabled(resolvedTenant, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "Workflow definition not found: " + id);
+      throw new BizException(ResultCode.NOT_FOUND, ERR_WORKFLOW_NOT_FOUND + id);
     }
     WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
     if (def != null) {
@@ -133,7 +136,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     WorkflowDefinitionEntity def =
         Guard.requireFound(
             definitionMapper.selectById(resolvedTenant, id),
-            "Workflow definition not found: " + id);
+            ERR_WORKFLOW_NOT_FOUND + id);
 
     List<WorkflowNodeEntity> nodes =
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));

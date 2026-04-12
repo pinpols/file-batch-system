@@ -30,6 +30,13 @@ public class DefaultConsoleConfigApprovalApplicationService
 
   private static final String PENDING_APPROVAL = "PENDING_APPROVAL";
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String STATUS_PENDING = "PENDING";
+  private static final String KEY_APPROVAL_STATUS = "approvalStatus";
+  private static final String KEY_TENANT_ID = "tenantId";
+  private static final String KEY_RELEASE_ID = "releaseId";
+  private static final String KEY_NEXT_STATUS = "nextStatus";
+
   private final ConsoleTenantGuard tenantGuard;
   private final ConfigReleaseMapper configReleaseMapper;
   private final ConfigApprovalMapper configApprovalMapper;
@@ -44,17 +51,17 @@ public class DefaultConsoleConfigApprovalApplicationService
       throw new BizException(ResultCode.INVALID_ARGUMENT, "only DRAFT release can submit approval");
     }
     Map<String, Object> latest = configApprovalMapper.selectLatestByRelease(tenantId, releaseId);
-    if (latest != null && "PENDING".equals(String.valueOf(latest.get("approvalStatus")))) {
+    if (latest != null && STATUS_PENDING.equals(String.valueOf(latest.get(KEY_APPROVAL_STATUS)))) {
       throw new BizException(ResultCode.CONFLICT, "config approval already pending");
     }
     configApprovalMapper.insert(
         mapOf(
-            "tenantId",
+            KEY_TENANT_ID,
             tenantId,
-            "releaseId",
+            KEY_RELEASE_ID,
             releaseId,
-            "approvalStatus",
-            "PENDING",
+            KEY_APPROVAL_STATUS,
+            STATUS_PENDING,
             "requestedBy",
             ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
             "reviewComment",
@@ -63,11 +70,11 @@ public class DefaultConsoleConfigApprovalApplicationService
             parseInstant(request.getExpiredAt())));
     configReleaseMapper.updateConfigReleaseStatus(
         mapOf(
-            "tenantId",
+            KEY_TENANT_ID,
             tenantId,
-            "releaseId",
+            KEY_RELEASE_ID,
             releaseId,
-            "nextStatus",
+            KEY_NEXT_STATUS,
             PENDING_APPROVAL,
             "publishedAt",
             null,
@@ -82,8 +89,8 @@ public class DefaultConsoleConfigApprovalApplicationService
         request.getOperatorId(),
         request.getReason(),
         Map.of(
-            "releaseId", releaseId,
-            "nextStatus", PENDING_APPROVAL));
+            KEY_RELEASE_ID, releaseId,
+            KEY_NEXT_STATUS, PENDING_APPROVAL));
     return detail(tenantId, releaseId);
   }
 
@@ -93,8 +100,8 @@ public class DefaultConsoleConfigApprovalApplicationService
     ConfigReleaseEntity release = loadRelease(resolved, releaseId);
     Map<String, Object> approval = configApprovalMapper.selectLatestByRelease(resolved, releaseId);
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("releaseId", release.getId());
-    result.put("tenantId", release.getTenantId());
+    result.put(KEY_RELEASE_ID, release.getId());
+    result.put(KEY_TENANT_ID, release.getTenantId());
     result.put("configType", release.getConfigType());
     result.put("configKey", release.getConfigKey());
     result.put("configStatus", release.getConfigStatus());
@@ -107,15 +114,15 @@ public class DefaultConsoleConfigApprovalApplicationService
   public Map<String, Object> approve(Long approvalId, ConfigApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> approval = requireApproval(tenantId, approvalId);
-    if (!"PENDING".equals(String.valueOf(approval.get("approvalStatus")))) {
+    if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "config approval is not pending");
     }
-    Long releaseId = longValue(approval.get("releaseId"));
+    Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
     int rows =
         configApprovalMapper.approve(
             mapOf(
-                "tenantId",
+                KEY_TENANT_ID,
                 tenantId,
                 "id",
                 approvalId,
@@ -128,11 +135,11 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     configReleaseMapper.updateConfigReleaseStatus(
         mapOf(
-            "tenantId",
+            KEY_TENANT_ID,
             tenantId,
-            "releaseId",
+            KEY_RELEASE_ID,
             releaseId,
-            "nextStatus",
+            KEY_NEXT_STATUS,
             ConfigLifecycleStatus.PUBLISHED.code(),
             "publishedAt",
             Instant.now(),
@@ -146,7 +153,7 @@ public class DefaultConsoleConfigApprovalApplicationService
         "APPROVE",
         request.getOperatorId(),
         request.getReason(),
-        Map.of("approvalId", approvalId, "nextStatus", ConfigLifecycleStatus.PUBLISHED.code()));
+        Map.of("approvalId", approvalId, KEY_NEXT_STATUS, ConfigLifecycleStatus.PUBLISHED.code()));
     return detail(tenantId, releaseId);
   }
 
@@ -155,15 +162,15 @@ public class DefaultConsoleConfigApprovalApplicationService
   public Map<String, Object> reject(Long approvalId, ConfigApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> approval = requireApproval(tenantId, approvalId);
-    if (!"PENDING".equals(String.valueOf(approval.get("approvalStatus")))) {
+    if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "config approval is not pending");
     }
-    Long releaseId = longValue(approval.get("releaseId"));
+    Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
     int rows =
         configApprovalMapper.reject(
             mapOf(
-                "tenantId",
+                KEY_TENANT_ID,
                 tenantId,
                 "id",
                 approvalId,
@@ -176,11 +183,11 @@ public class DefaultConsoleConfigApprovalApplicationService
     }
     configReleaseMapper.updateConfigReleaseStatus(
         mapOf(
-            "tenantId",
+            KEY_TENANT_ID,
             tenantId,
-            "releaseId",
+            KEY_RELEASE_ID,
             releaseId,
-            "nextStatus",
+            KEY_NEXT_STATUS,
             ConfigLifecycleStatus.DRAFT.code(),
             "publishedAt",
             null,
@@ -194,7 +201,7 @@ public class DefaultConsoleConfigApprovalApplicationService
         "REJECT",
         request.getOperatorId(),
         request.getReason(),
-        Map.of("approvalId", approvalId, "nextStatus", ConfigLifecycleStatus.DRAFT.code()));
+        Map.of("approvalId", approvalId, KEY_NEXT_STATUS, ConfigLifecycleStatus.DRAFT.code()));
     return detail(tenantId, releaseId);
   }
 
@@ -205,7 +212,7 @@ public class DefaultConsoleConfigApprovalApplicationService
 
   private ConfigReleaseEntity loadRelease(String tenantId, Long releaseId) {
     return Guard.requireFound(
-        configReleaseMapper.selectById(mapOf("tenantId", tenantId, "releaseId", releaseId)),
+        configReleaseMapper.selectById(mapOf(KEY_TENANT_ID, tenantId, KEY_RELEASE_ID, releaseId)),
         "config release not found");
   }
 
@@ -218,7 +225,7 @@ public class DefaultConsoleConfigApprovalApplicationService
       Map<String, Object> detail) {
     configChangeLogMapper.insertConfigChangeLog(
         mapOf(
-            "tenantId",
+            KEY_TENANT_ID,
             tenantId,
             "configType",
             release.getConfigType(),

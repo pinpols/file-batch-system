@@ -29,6 +29,10 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_WORKERS = "workers";
+  private static final String KEY_TENANT_ID = "tenantId";
+
   private final RestClient.Builder restClientBuilder;
   private final ConsoleOrchestratorClientProperties orchestratorClientProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -44,7 +48,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     RestClient client =
         restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
     Map<String, Object> body = new LinkedHashMap<>();
-    body.put("tenantId", tenantId);
+    body.put(KEY_TENANT_ID, tenantId);
     if (request.getTimeoutSeconds() != null) {
       body.put("timeoutSeconds", request.getTimeoutSeconds());
     }
@@ -59,7 +63,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 .body(body)
                 .retrieve()
                 .body(ConsoleWorkerRegistryResponse.class));
-    domainEventPublisher.publishChanged(tenantId, "workers", "worker-updated");
+    domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
     domainEventPublisher.publishSummaryRefresh(tenantId);
     return response;
   }
@@ -79,10 +83,10 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-                .body(Map.of("tenantId", tenantId))
+                .body(Map.of(KEY_TENANT_ID, tenantId))
                 .retrieve()
                 .body(ConsoleWorkerRegistryResponse.class));
-    domainEventPublisher.publishChanged(tenantId, "workers", "worker-updated");
+    domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
     domainEventPublisher.publishSummaryRefresh(tenantId);
     return response;
   }
@@ -102,10 +106,10 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-                .body(Map.of("tenantId", tenantId))
+                .body(Map.of(KEY_TENANT_ID, tenantId))
                 .retrieve()
                 .body(ConsoleWorkerRegistryResponse.class));
-    domainEventPublisher.publishChanged(tenantId, "workers", "worker-updated");
+    domainEventPublisher.publishChanged(tenantId, KEY_WORKERS, "worker-updated");
     domainEventPublisher.publishSummaryRefresh(tenantId);
     return response;
   }
@@ -123,7 +127,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 uriBuilder ->
                     uriBuilder
                         .path("/internal/workers/{workerCode}/claimed-tasks")
-                        .queryParam("tenantId", resolved)
+                        .queryParam(KEY_TENANT_ID, resolved)
                         .build(workerCode))
             .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
             .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
@@ -147,10 +151,10 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
                 .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
                 .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
                 .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
-                .body(Map.of("tenantId", resolved))
+                .body(Map.of(KEY_TENANT_ID, resolved))
                 .retrieve()
                 .body(ConsoleWorkerRegistryResponse.class));
-    domainEventPublisher.publishChanged(resolved, "workers", "worker-warmup");
+    domainEventPublisher.publishChanged(resolved, KEY_WORKERS, "worker-warmup");
     return response;
   }
 

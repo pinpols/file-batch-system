@@ -252,7 +252,33 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     // 与 TASK/FILE_STEP 节点一致：立即将节点标为 READY
     recordNodeRunReady(workflowRun.getId(), node.nodeCode(), node.nodeType());
 
-    // 计算虚拟分区的 partition_no
+    String idempotencyKey =
+        jobInstance.getTenantId() + ":wf:" + workflowRun.getId() + ":" + node.nodeCode();
+    JobPartitionEntity virtualPartition =
+        createVirtualPartition(jobInstance, node, refJobCode, idempotencyKey);
+    JobTaskEntity virtualTask =
+        createVirtualTask(jobInstance, node, refJobCode, virtualPartition, sourcePayload);
+    incrementExpectedPartitionCount(jobInstance, node.nodeCode());
+
+    // 为子作业写入 trigger_request，供 LaunchValidationService.load() 加载
+    String childRequestId =
+        writeTriggerRequestForChildJob(jobInstance, refJobCode, idempotencyKey, traceId);
+
+    // 子作业启动参数含回指字段，便于子作业完成后回写本虚拟 task
+    LaunchRequest childLaunchRequest =
+        buildChildLaunchRequest(
+            new ChildLaunchContext(
+                jobInstance, workflowRun, node, refJobCode, sourcePayload, childRequestId, traceId, virtualTask));
+    launchServiceProvider.getObject().launch(childLaunchRequest);
+
+    return 1; // one virtual partition added to the parent job
+  }
+
+  private JobPartitionEntity createVirtualPartition(
+      JobInstanceEntity jobInstance,
+      WorkflowDagService.DagNodeResolution node,
+      String refJobCode,
+      String idempotencyKey) {
     List<JobPartitionEntity> existingPartitions =
         jobMappers.jobPartitionMapper.selectByQuery(
             new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
@@ -264,9 +290,6 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                 .orElse(0)
             + 1;
 
-    // 创建虚拟分区（RUNNING，无需 worker 领取）
-    String idempotencyKey =
-        jobInstance.getTenantId() + ":wf:" + workflowRun.getId() + ":" + node.nodeCode();
     JobPartitionEntity virtualPartition = new JobPartitionEntity();
     virtualPartition.setTenantId(jobInstance.getTenantId());
     virtualPartition.setJobInstanceId(jobInstance.getId());
@@ -278,15 +301,21 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     virtualPartition.setBusinessKey(refJobCode + ":" + node.nodeCode());
     virtualPartition.setIdempotencyKey(idempotencyKey);
     jobMappers.jobPartitionMapper.insert(virtualPartition);
+    return virtualPartition;
+  }
 
-    // 构造虚拟 task 载荷，与 TASK 节点对齐，便于 outcome 服务解析 workflowNodeCode / workflowNodeType
+  private JobTaskEntity createVirtualTask(
+      JobInstanceEntity jobInstance,
+      WorkflowDagService.DagNodeResolution node,
+      String refJobCode,
+      JobPartitionEntity virtualPartition,
+      String sourcePayload) {
     Map<String, Object> payloadMap = new LinkedHashMap<>(parsePayloadMap(sourcePayload));
     payloadMap.put("workflowNodeCode", node.nodeCode());
     payloadMap.put("workflowNodeType", node.nodeType());
     payloadMap.put("targetJobCode", refJobCode);
     String taskPayload = JsonUtils.toJson(payloadMap);
 
-    // 创建虚拟 task（RUNNING），不产生 outbox 派发事件
     JobTaskEntity virtualTaskTemplate = new JobTaskEntity();
     virtualTaskTemplate.setTenantId(jobInstance.getTenantId());
     virtualTaskTemplate.setJobInstanceId(jobInstance.getId());
@@ -296,10 +325,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     virtualTaskTemplate.setTaskStatus(TaskStatus.RUNNING.code());
     virtualTaskTemplate.setVersion(0L);
     virtualTaskTemplate.setTaskPayload(taskPayload);
-    JobTaskEntity virtualTask =
-        taskExecutionServiceProvider.getObject().createTask(virtualTaskTemplate);
+    return taskExecutionServiceProvider.getObject().createTask(virtualTaskTemplate);
+  }
 
-    // 更新父作业期望分区数（乐观锁）
+  private void incrementExpectedPartitionCount(
+      JobInstanceEntity jobInstance, String nodeCode) {
     int currentExpected =
         jobInstance.getExpectedPartitionCount() == null
             ? 0
@@ -312,12 +342,17 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
             jobInstance.getVersion());
     if (updated <= 0) {
       throw new IllegalStateException(
-          "job instance expected partition count update conflict for JOB node " + node.nodeCode());
+          "job instance expected partition count update conflict for JOB node " + nodeCode);
     }
     jobInstance.setExpectedPartitionCount(currentExpected + 1);
     jobInstance.setVersion((jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+  }
 
-    // 为子作业写入 trigger_request，供 LaunchValidationService.load() 加载
+  private String writeTriggerRequestForChildJob(
+      JobInstanceEntity jobInstance,
+      String refJobCode,
+      String idempotencyKey,
+      String traceId) {
     String childRequestId = IdGenerator.newTraceId();
     String childDedupKey = idempotencyKey + ":child";
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();
@@ -330,26 +365,33 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     triggerRequest.setRequestStatus(BatchStatusConstants.ACCEPTED);
     triggerRequest.setTraceId(traceId);
     jobMappers.triggerRequestMapper.insert(triggerRequest);
+    return childRequestId;
+  }
 
-    // 子作业启动参数含回指字段，便于子作业完成后回写本虚拟 task
-    Map<String, Object> childParams = new LinkedHashMap<>(parsePayloadMap(sourcePayload));
-    childParams.put("parentInstanceId", jobInstance.getId());
-    childParams.put("_parentVirtualTaskId", virtualTask.getId());
-    childParams.put("_parentWorkflowRunId", workflowRun.getId());
-    childParams.put("_parentNodeCode", node.nodeCode());
+  private record ChildLaunchContext(
+      JobInstanceEntity jobInstance,
+      WorkflowRunEntity workflowRun,
+      WorkflowDagService.DagNodeResolution node,
+      String refJobCode,
+      String sourcePayload,
+      String childRequestId,
+      String traceId,
+      JobTaskEntity virtualTask) {}
 
-    LaunchRequest childLaunchRequest =
-        new LaunchRequest(
-            jobInstance.getTenantId(),
-            refJobCode,
-            jobInstance.getBizDate(),
-            TriggerType.EVENT,
-            childRequestId,
-            traceId,
-            childParams);
-    launchServiceProvider.getObject().launch(childLaunchRequest);
-
-    return 1; // one virtual partition added to the parent job
+  private LaunchRequest buildChildLaunchRequest(ChildLaunchContext ctx) {
+    Map<String, Object> childParams = new LinkedHashMap<>(parsePayloadMap(ctx.sourcePayload()));
+    childParams.put("parentInstanceId", ctx.jobInstance().getId());
+    childParams.put("_parentVirtualTaskId", ctx.virtualTask().getId());
+    childParams.put("_parentWorkflowRunId", ctx.workflowRun().getId());
+    childParams.put("_parentNodeCode", ctx.node().nodeCode());
+    return new LaunchRequest(
+        ctx.jobInstance().getTenantId(),
+        ctx.refJobCode(),
+        ctx.jobInstance().getBizDate(),
+        TriggerType.EVENT,
+        ctx.childRequestId(),
+        ctx.traceId(),
+        childParams);
   }
 
   private void createTerminalNodeRun(

@@ -70,44 +70,54 @@ import org.springframework.web.multipart.MultipartFile;
 public class DefaultConsoleResourceQueueExcelApplicationService
     implements ConsoleResourceQueueExcelApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_DESCRIPTION = "description";
+  private static final String GUIDE_INT = "整数";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String COL_QUEUE_TYPE = "queue_type";
+  private static final String COL_PRIORITY_POLICY = "priority_policy";
+  private static final String COL_ENABLED = "enabled";
+  private static final String GUIDE_STR = "字符串";
+
+
   private static final String SHEET_NAME = "resource_queue";
   private static final List<String> COLUMNS =
       List.of(
           "tenant_id",
           "queue_code",
           "queue_name",
-          "queue_type",
+          COL_QUEUE_TYPE,
           "max_running_jobs",
           "max_running_partitions",
           "max_qps",
           "worker_group",
           "resource_tag",
-          "priority_policy",
+          COL_PRIORITY_POLICY,
           "fair_share_weight",
-          "enabled",
-          "description");
+          COL_ENABLED,
+          COL_DESCRIPTION);
   private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
   private static final Set<String> QUEUE_TYPES = ResourceQueueType.codes();
   private static final Set<String> PRIORITY_POLICIES = QueuePriorityPolicy.codes();
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
-          Map.entry("queue_code", requiredColumn("队列唯一编码，作为导入匹配键。", "字符串", "QUEUE_IMPORT_01")),
-          Map.entry("queue_name", requiredColumn("控制台展示的队列名称。", "字符串", "导入主队列")),
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("queue_code", requiredColumn("队列唯一编码，作为导入匹配键。", GUIDE_STR, "QUEUE_IMPORT_01")),
+          Map.entry("queue_name", requiredColumn("控制台展示的队列名称。", GUIDE_STR, "导入主队列")),
           Map.entry(
-              "queue_type",
+              COL_QUEUE_TYPE,
               requiredColumn("队列类型。", "枚举", "IMPORT", "IMPORT", "EXPORT", "DISPATCH", "MIXED")),
-          Map.entry("max_running_jobs", requiredColumn("最大并行作业数，必须 >= 0。", "整数", "10")),
-          Map.entry("max_running_partitions", requiredColumn("最大并行分区数，必须 >= 0。", "整数", "20")),
-          Map.entry("max_qps", requiredColumn("最大 QPS 限制，必须 >= 0。", "整数", "100")),
-          Map.entry("worker_group", optionalColumn("指定 Worker 分组。", "字符串", "group-a")),
-          Map.entry("resource_tag", optionalColumn("资源标签，用于资源隔离。", "字符串", "high-priority")),
+          Map.entry("max_running_jobs", requiredColumn("最大并行作业数，必须 >= 0。", GUIDE_INT, "10")),
+          Map.entry("max_running_partitions", requiredColumn("最大并行分区数，必须 >= 0。", GUIDE_INT, "20")),
+          Map.entry("max_qps", requiredColumn("最大 QPS 限制，必须 >= 0。", GUIDE_INT, "100")),
+          Map.entry("worker_group", optionalColumn("指定 Worker 分组。", GUIDE_STR, "group-a")),
+          Map.entry("resource_tag", optionalColumn("资源标签，用于资源隔离。", GUIDE_STR, "high-priority")),
           Map.entry(
-              "priority_policy",
+              COL_PRIORITY_POLICY,
               requiredColumn("优先级策略。", "枚举", "FIFO", "FIFO", "PRIORITY", "FAIR_SHARE")),
-          Map.entry("fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", "整数", "1")),
-          Map.entry("enabled", optionalColumn("队列是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
-          Map.entry("description", optionalColumn("队列描述信息。", "字符串", "用于导入任务的主队列")));
+          Map.entry("fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", GUIDE_INT, "1")),
+          Map.entry(COL_ENABLED, optionalColumn("队列是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
+          Map.entry(COL_DESCRIPTION, optionalColumn("队列描述信息。", GUIDE_STR, "用于导入任务的主队列")));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -306,7 +316,7 @@ public class DefaultConsoleResourceQueueExcelApplicationService
         .definition(
             QueueDefinition.builder()
                 .queueName(requireText(values, "queue_name", 256, issues))
-                .queueType(requireEnum(values, "queue_type", QUEUE_TYPES, 32, issues))
+                .queueType(requireEnum(values, COL_QUEUE_TYPE, QUEUE_TYPES, 32, issues))
                 .maxRunningJobs(requireInteger(values, "max_running_jobs", 0, issues))
                 .maxRunningPartitions(requireInteger(values, "max_running_partitions", 0, issues))
                 .maxQps(requireInteger(values, "max_qps", 0, issues))
@@ -316,10 +326,10 @@ public class DefaultConsoleResourceQueueExcelApplicationService
                 .workerGroup(optionalText(values, "worker_group", 128, issues))
                 .resourceTag(optionalText(values, "resource_tag", 64, issues))
                 .priorityPolicy(
-                    requireEnum(values, "priority_policy", PRIORITY_POLICIES, 32, issues))
+                    requireEnum(values, COL_PRIORITY_POLICY, PRIORITY_POLICIES, 32, issues))
                 .fairShareWeight(requireInteger(values, "fair_share_weight", 1, issues))
-                .enabled(optionalBoolean(values, "enabled", true, issues))
-                .description(optionalText(values, "description", 512, issues))
+                .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
+                .description(optionalText(values, COL_DESCRIPTION, 512, issues))
                 .build())
         .build();
   }
@@ -394,7 +404,7 @@ public class DefaultConsoleResourceQueueExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
     if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
@@ -449,18 +459,19 @@ public class DefaultConsoleResourceQueueExcelApplicationService
                         .stream())
             .toList();
     return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(
-        session,
-        COLUMNS,
-        COLUMN_GUIDES,
-        this::applyValidations,
-        workbook -> {
-          createReadmeSheet(workbook);
-          createDictSheet(workbook);
-          createValidationSheet(workbook);
-        },
-        workbookIssues,
-        1,
-        "failed to generate preview excel workbook");
+        new ConsoleSingleSheetExcelImportSupport.WritePreviewWorkbookParam(
+            session,
+            COLUMNS,
+            COLUMN_GUIDES,
+            this::applyValidations,
+            workbook -> {
+              createReadmeSheet(workbook);
+              createDictSheet(workbook);
+              createValidationSheet(workbook);
+            },
+            workbookIssues,
+            1,
+            "failed to generate preview excel workbook"));
   }
 
   private void applyValidations(Sheet sheet) {
@@ -502,17 +513,17 @@ public class DefaultConsoleResourceQueueExcelApplicationService
     Sheet sheet = workbook.createSheet("DICT");
     sheet.createFreezePane(0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
-    writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
+    writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {
-      {"queue_type", "IMPORT", "import queue"},
-      {"queue_type", "EXPORT", "export queue"},
-      {"queue_type", "DISPATCH", "dispatch queue"},
-      {"queue_type", "MIXED", "mixed queue"},
-      {"priority_policy", "FIFO", "first in first out"},
-      {"priority_policy", "PRIORITY", "priority based"},
-      {"priority_policy", "FAIR_SHARE", "fair share scheduling"},
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_QUEUE_TYPE, "IMPORT", "import queue"},
+      {COL_QUEUE_TYPE, "EXPORT", "export queue"},
+      {COL_QUEUE_TYPE, "DISPATCH", "dispatch queue"},
+      {COL_QUEUE_TYPE, "MIXED", "mixed queue"},
+      {COL_PRIORITY_POLICY, "FIFO", "first in first out"},
+      {COL_PRIORITY_POLICY, "PRIORITY", "priority based"},
+      {COL_PRIORITY_POLICY, "FAIR_SHARE", "fair share scheduling"},
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, "FALSE", "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);

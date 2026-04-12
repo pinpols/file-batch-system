@@ -31,6 +31,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class DefaultConsoleConfigSyncApplicationService
     implements ConsoleConfigSyncApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_SUMMARY = "summary";
+  private static final String KEY_TENANT_ID = "tenantId";
+
+
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleTenantConfigCopyService tenantConfigCopyService;
   private final ConsoleTenantConfigInitApplicationService initApplicationService;
@@ -47,7 +52,7 @@ public class DefaultConsoleConfigSyncApplicationService
         "sourceTenantId", tenantId,
         "sourceEnv", request.getSourceEnv(),
         "targetEnv", request.getTargetEnv(),
-        "summary", summarize(bundle),
+        KEY_SUMMARY, summarize(bundle),
         "bundle", bundle);
   }
 
@@ -58,11 +63,11 @@ public class DefaultConsoleConfigSyncApplicationService
     ConfigSyncBundlePayload bundle =
         tenantConfigCopyService.buildBundle(sourceTenantId, request.getConfigTypes());
     return mapOf(
-        "tenantId", tenantId,
+        KEY_TENANT_ID, tenantId,
         "sourceTenantId", sourceTenantId,
         "sourceEnv", request.getSourceEnv(),
         "targetEnv", request.getTargetEnv(),
-        "summary", summarize(bundle));
+        KEY_SUMMARY, summarize(bundle));
   }
 
   @Override
@@ -84,7 +89,7 @@ public class DefaultConsoleConfigSyncApplicationService
       updateLog(logId, tenantId, response);
       return mapOf(
           "syncLogId", logId,
-          "summary", summarize(request.getBundle()),
+          KEY_SUMMARY, summarize(request.getBundle()),
           "result", response);
     } catch (RuntimeException ex) {
       markLogFailed(tenantId, logId, totalCount(request.getBundle()), ex.getMessage());
@@ -105,7 +110,7 @@ public class DefaultConsoleConfigSyncApplicationService
         status ->
             configSyncLogMapper.updateResult(
                 mapOf(
-                    "tenantId",
+                    KEY_TENANT_ID,
                     tenantId,
                     "id",
                     logId,
@@ -128,7 +133,7 @@ public class DefaultConsoleConfigSyncApplicationService
     String operator = metadataResolver.current().operatorId();
     Map<String, Object> params =
         mapOf(
-            "tenantId",
+            KEY_TENANT_ID,
             tenantId,
             "syncDirection",
             "IMPORT",
@@ -149,7 +154,7 @@ public class DefaultConsoleConfigSyncApplicationService
             "syncStatus",
             "RUNNING",
             "detailJson",
-            JsonUtils.toJson(mapOf("summary", summary, "dryRun", request.isDryRun())),
+            JsonUtils.toJson(mapOf(KEY_SUMMARY, summary, "dryRun", request.isDryRun())),
             "operatorId",
             operator);
     configSyncLogMapper.insert(params);
@@ -162,7 +167,7 @@ public class DefaultConsoleConfigSyncApplicationService
     int failed = response.failureTenants();
     configSyncLogMapper.updateResult(
         mapOf(
-            "tenantId", tenantId,
+            KEY_TENANT_ID, tenantId,
             "id", logId,
             "syncStatus", failed > 0 ? "PARTIAL_FAILED" : "SUCCESS",
             "successItems", success,

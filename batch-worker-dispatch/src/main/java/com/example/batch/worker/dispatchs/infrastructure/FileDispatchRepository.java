@@ -15,6 +15,13 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class FileDispatchRepository {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_TENANT_ID = "tenantId";
+  private static final String KEY_FILE_ID = "fileId";
+  private static final String KEY_CHANNEL_CODE = "channelCode";
+  private static final String KEY_DISPATCH_STATUS = "dispatchStatus";
+  private static final String KEY_RECEIPT_STATUS = "receiptStatus";
+
   private static final int MAX_DISPATCH_BATCH_SIZE = 500;
 
   private final FileDispatchMapper fileDispatchMapper;
@@ -31,7 +38,7 @@ public class FileDispatchRepository {
       return Map.of();
     }
     Map<String, Object> fileRecord =
-        fileDispatchMapper.selectFileRecord(params("tenantId", tenantId, "fileId", fileId));
+        fileDispatchMapper.selectFileRecord(params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId));
     return fileRecord == null ? Map.of() : fileRecord;
   }
 
@@ -41,7 +48,7 @@ public class FileDispatchRepository {
     }
     Map<String, Object> channelConfig =
         fileDispatchMapper.selectChannelConfig(
-            params("tenantId", tenantId, "channelCode", channelCode));
+            params(KEY_TENANT_ID, tenantId, KEY_CHANNEL_CODE, channelCode));
     return channelConfig == null ? Map.of() : channelConfig;
   }
 
@@ -52,7 +59,7 @@ public class FileDispatchRepository {
     }
     Map<String, Object> dispatchRecord =
         fileDispatchMapper.selectLatestDispatchRecord(
-            params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode));
+            params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, KEY_CHANNEL_CODE, channelCode));
     return dispatchRecord == null ? Map.of() : dispatchRecord;
   }
 
@@ -69,20 +76,20 @@ public class FileDispatchRepository {
   public int insertDispatchRecord(InsertDispatchParam p) {
     return fileDispatchMapper.insertDispatchRecord(
         params(
-            "tenantId", p.tenantId(),
-            "fileId", p.fileId(),
+            KEY_TENANT_ID, p.tenantId(),
+            KEY_FILE_ID, p.fileId(),
             "pipelineInstanceId", p.pipelineInstanceId(),
-            "channelCode", p.channelCode(),
+            KEY_CHANNEL_CODE, p.channelCode(),
             "dispatchTarget", p.dispatchTarget(),
-            "dispatchStatus", FileDispatchStatus.CREATED.name(),
+            KEY_DISPATCH_STATUS, FileDispatchStatus.CREATED.name(),
             "receiptCode", p.receiptCode(),
-            "receiptStatus", p.receiptStatus(),
+            KEY_RECEIPT_STATUS, p.receiptStatus(),
             "externalRequestId", p.externalRequestId()));
   }
 
   public int incrementAttempt(String tenantId, Long fileId, String channelCode) {
     return fileDispatchMapper.incrementAttempt(
-        params("tenantId", tenantId, "fileId", fileId, "channelCode", channelCode));
+        params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId, KEY_CHANNEL_CODE, channelCode));
   }
 
   public int markSent(
@@ -94,23 +101,23 @@ public class FileDispatchRepository {
       String receiptStatus) {
     return fileDispatchMapper.markSent(
         params(
-            "tenantId", tenantId,
-            "fileId", fileId,
-            "channelCode", channelCode,
-            "dispatchStatus", FileDispatchStatus.SENT.name(),
+            KEY_TENANT_ID, tenantId,
+            KEY_FILE_ID, fileId,
+            KEY_CHANNEL_CODE, channelCode,
+            KEY_DISPATCH_STATUS, FileDispatchStatus.SENT.name(),
             "externalRequestId", externalRequestId,
             "receiptCode", receiptCode,
-            "receiptStatus", receiptStatus));
+            KEY_RECEIPT_STATUS, receiptStatus));
   }
 
   public int markAcked(String tenantId, Long fileId, String channelCode, String receiptCode) {
     return fileDispatchMapper.markAcked(
         params(
-            "tenantId", tenantId,
-            "fileId", fileId,
-            "channelCode", channelCode,
-            "dispatchStatus", FileDispatchStatus.ACKED.name(),
-            "receiptStatus", FileReceiptStatus.SUCCESS.name(),
+            KEY_TENANT_ID, tenantId,
+            KEY_FILE_ID, fileId,
+            KEY_CHANNEL_CODE, channelCode,
+            KEY_DISPATCH_STATUS, FileDispatchStatus.ACKED.name(),
+            KEY_RECEIPT_STATUS, FileReceiptStatus.SUCCESS.name(),
             "receiptCode", receiptCode));
   }
 
@@ -118,11 +125,11 @@ public class FileDispatchRepository {
       String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
     return fileDispatchMapper.markFailed(
         params(
-            "tenantId", tenantId,
-            "fileId", fileId,
-            "channelCode", channelCode,
-            "dispatchStatus", FileDispatchStatus.FAILED.name(),
-            "receiptStatus", FileReceiptStatus.FAILED.name(),
+            KEY_TENANT_ID, tenantId,
+            KEY_FILE_ID, fileId,
+            KEY_CHANNEL_CODE, channelCode,
+            KEY_DISPATCH_STATUS, FileDispatchStatus.FAILED.name(),
+            KEY_RECEIPT_STATUS, FileReceiptStatus.FAILED.name(),
             "errorCode", errorCode,
             "errorMessage", errorMessage));
   }
@@ -131,10 +138,10 @@ public class FileDispatchRepository {
       String tenantId, Long fileId, String channelCode, String errorCode, String errorMessage) {
     return fileDispatchMapper.markCompensated(
         params(
-            "tenantId", tenantId,
-            "fileId", fileId,
-            "channelCode", channelCode,
-            "dispatchStatus", FileDispatchStatus.COMPENSATED.name(),
+            KEY_TENANT_ID, tenantId,
+            KEY_FILE_ID, fileId,
+            KEY_CHANNEL_CODE, channelCode,
+            KEY_DISPATCH_STATUS, FileDispatchStatus.COMPENSATED.name(),
             "receiptStatusSuccess", FileReceiptStatus.SUCCESS.name(),
             "receiptStatusFailed", FileReceiptStatus.FAILED.name(),
             "errorCode", errorCode,
@@ -146,8 +153,8 @@ public class FileDispatchRepository {
     return fileDispatchMapper.listPendingReceiptPolls(
         params(
             "limit", safe,
-            "dispatchStatus", FileDispatchStatus.SENT.name(),
-            "receiptStatus", FileReceiptStatus.PENDING.name()));
+            KEY_DISPATCH_STATUS, FileDispatchStatus.SENT.name(),
+            KEY_RECEIPT_STATUS, FileReceiptStatus.PENDING.name()));
   }
 
   private Map<String, Object> params(Object... pairs) {

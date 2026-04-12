@@ -39,6 +39,9 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class DefaultCompensationService implements CompensationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_ACTION = "action";
+
   private final CompensationCommandMapper compensationCommandMapper;
   private final OrchestratorJobMappers jobMappers;
   private final RetryGovernanceService retryGovernanceService;
@@ -220,7 +223,7 @@ public class DefaultCompensationService implements CompensationService {
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? sourceInstance.getId() : launched.getId());
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("action", "JOB_RERUN");
+    result.put(KEY_ACTION, "JOB_RERUN");
     result.put("sourceInstanceNo", sourceInstance.getInstanceNo());
     result.put("newInstanceNo", response.instanceNo());
     result.put("newTraceId", response.traceId());
@@ -245,7 +248,7 @@ public class DefaultCompensationService implements CompensationService {
     retryGovernanceService.retryTask(
         command.tenantId(), taskId, command.tenantId() + ":manual-step:" + commandNo);
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("action", "STEP_RERUN");
+    result.put(KEY_ACTION, "STEP_RERUN");
     result.put("stepInstanceId", stepInstance.getId());
     result.put("jobInstanceId", stepInstance.getJobInstanceId());
     JobTaskEntity task = jobMappers.jobTaskMapper.selectById(command.tenantId(), taskId);
@@ -270,7 +273,7 @@ public class DefaultCompensationService implements CompensationService {
         command.targetId(),
         command.tenantId() + ":manual-partition:" + commandNo);
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("action", "PARTITION_RETRY");
+    result.put(KEY_ACTION, "PARTITION_RETRY");
     result.put("partitionId", command.targetId());
     result.put("traceId", traceId);
     return result;
@@ -292,7 +295,7 @@ public class DefaultCompensationService implements CompensationService {
                 command.approvalId()));
     entity.setRelatedFileId(fileId);
     Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("action", "FILE_REPROCESS");
+    summary.put(KEY_ACTION, "FILE_REPROCESS");
     summary.put("fileId", fileId);
     summary.put("channelCode", command.channelCode());
     summary.put("status", result);
@@ -330,7 +333,7 @@ public class DefaultCompensationService implements CompensationService {
         jobMappers.jobInstanceMapper.selectByInstanceNo(command.tenantId(), response.instanceNo());
     entity.setRelatedJobInstanceId(launched == null ? null : launched.getId());
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("action", "BATCH_RERUN");
+    result.put(KEY_ACTION, "BATCH_RERUN");
     result.put("jobCode", command.jobCode());
     result.put("bizDate", command.bizDate());
     result.put("batchNo", command.batchNo());
@@ -349,7 +352,7 @@ public class DefaultCompensationService implements CompensationService {
     }
     retryGovernanceService.replayDeadLetter(command.tenantId(), command.targetId());
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("action", "DLQ_REPLAY");
+    result.put(KEY_ACTION, "DLQ_REPLAY");
     result.put("deadLetterId", command.targetId());
     result.put("commandNo", commandNo);
     result.put("traceId", traceId);

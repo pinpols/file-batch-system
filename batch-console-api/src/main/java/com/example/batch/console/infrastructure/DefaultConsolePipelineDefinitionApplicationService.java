@@ -32,6 +32,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultConsolePipelineDefinitionApplicationService
     implements ConsolePipelineDefinitionApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String KEY_PIPELINE_NAME = "pipeline_name";
+  private static final String KEY_PIPELINE_TYPE = "pipeline_type";
+  private static final String KEY_BIZ_TYPE = "biz_type";
+  private static final String KEY_WORKER_GROUP = "worker_group";
+  private static final String KEY_DESCRIPTION = "description";
+  private static final String KEY_ID = "id";
+  private static final String KEY_ENABLED = "enabled";
+
+
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
   private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final ConsoleTenantGuard tenantGuard;
@@ -67,15 +77,15 @@ public class DefaultConsolePipelineDefinitionApplicationService
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
     params.put("job_code", request.getJobCode());
-    params.put("pipeline_name", request.getPipelineName());
-    params.put("pipeline_type", request.getPipelineType());
-    params.put("biz_type", request.getBizType());
-    params.put("worker_group", request.getWorkerGroup());
+    params.put(KEY_PIPELINE_NAME, request.getPipelineName());
+    params.put(KEY_PIPELINE_TYPE, request.getPipelineType());
+    params.put(KEY_BIZ_TYPE, request.getBizType());
+    params.put(KEY_WORKER_GROUP, request.getWorkerGroup());
     params.put("version", 1);
-    params.put("enabled", request.getEnabled() != null ? request.getEnabled() : true);
-    params.put("description", request.getDescription());
+    params.put(KEY_ENABLED, request.getEnabled() != null ? request.getEnabled() : true);
+    params.put(KEY_DESCRIPTION, request.getDescription());
     pipelineDefinitionMapper.insert(params);
-    Long defId = ((Number) params.get("id")).longValue();
+    Long defId = ((Number) params.get(KEY_ID)).longValue();
 
     insertSteps(defId, request.getSteps());
 
@@ -93,27 +103,27 @@ public class DefaultConsolePipelineDefinitionApplicationService
             pipelineDefinitionMapper.selectById(tenantId, id), "pipeline definition not found");
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
-    params.put("id", id);
+    params.put(KEY_ID, id);
     params.put(
-        "pipeline_name",
+        KEY_PIPELINE_NAME,
         request.getPipelineName() != null
             ? request.getPipelineName()
-            : existing.get("pipeline_name"));
+            : existing.get(KEY_PIPELINE_NAME));
     params.put(
-        "pipeline_type",
+        KEY_PIPELINE_TYPE,
         request.getPipelineType() != null
             ? request.getPipelineType()
-            : existing.get("pipeline_type"));
+            : existing.get(KEY_PIPELINE_TYPE));
     params.put(
-        "biz_type", request.getBizType() != null ? request.getBizType() : existing.get("biz_type"));
+        KEY_BIZ_TYPE, request.getBizType() != null ? request.getBizType() : existing.get(KEY_BIZ_TYPE));
     params.put(
-        "worker_group",
-        request.getWorkerGroup() != null ? request.getWorkerGroup() : existing.get("worker_group"));
+        KEY_WORKER_GROUP,
+        request.getWorkerGroup() != null ? request.getWorkerGroup() : existing.get(KEY_WORKER_GROUP));
     params.put(
-        "enabled", request.getEnabled() != null ? request.getEnabled() : existing.get("enabled"));
+        KEY_ENABLED, request.getEnabled() != null ? request.getEnabled() : existing.get(KEY_ENABLED));
     params.put(
-        "description",
-        request.getDescription() != null ? request.getDescription() : existing.get("description"));
+        KEY_DESCRIPTION,
+        request.getDescription() != null ? request.getDescription() : existing.get(KEY_DESCRIPTION));
     pipelineDefinitionMapper.update(params);
 
     pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);
@@ -156,7 +166,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
           "retry_policy", step.getRetryPolicy() != null ? step.getRetryPolicy() : "NONE");
       stepParams.put(
           "retry_max_count", step.getRetryMaxCount() != null ? step.getRetryMaxCount() : 0);
-      stepParams.put("enabled", step.getEnabled() != null ? step.getEnabled() : true);
+      stepParams.put(KEY_ENABLED, step.getEnabled() != null ? step.getEnabled() : true);
       pipelineStepDefinitionMapper.insert(stepParams);
     }
   }
@@ -164,16 +174,16 @@ public class DefaultConsolePipelineDefinitionApplicationService
   private PipelineDefinitionDetailResponse toDetailResponse(
       Map<String, Object> row, List<Map<String, Object>> stepRows) {
     return new PipelineDefinitionDetailResponse(
-        toLong(row.get("id")),
+        toLong(row.get(KEY_ID)),
         (String) row.get("tenant_id"),
         (String) row.get("job_code"),
-        (String) row.get("pipeline_name"),
-        (String) row.get("pipeline_type"),
-        (String) row.get("biz_type"),
-        (String) row.get("worker_group"),
+        (String) row.get(KEY_PIPELINE_NAME),
+        (String) row.get(KEY_PIPELINE_TYPE),
+        (String) row.get(KEY_BIZ_TYPE),
+        (String) row.get(KEY_WORKER_GROUP),
         toInt(row.get("version")),
-        (Boolean) row.get("enabled"),
-        (String) row.get("description"),
+        (Boolean) row.get(KEY_ENABLED),
+        (String) row.get(KEY_DESCRIPTION),
         toInstant(row.get("created_at")),
         toInstant(row.get("updated_at")),
         stepRows.stream().map(this::toStepResponse).toList());
@@ -181,7 +191,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
 
   private StepResponse toStepResponse(Map<String, Object> row) {
     return new StepResponse(
-        toLong(row.get("id")),
+        toLong(row.get(KEY_ID)),
         toLong(row.get("pipeline_definition_id")),
         (String) row.get("step_code"),
         (String) row.get("step_name"),
@@ -192,7 +202,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
         toInt(row.get("timeout_seconds")),
         (String) row.get("retry_policy"),
         toInt(row.get("retry_max_count")),
-        (Boolean) row.get("enabled"),
+        (Boolean) row.get(KEY_ENABLED),
         toInstant(row.get("created_at")),
         toInstant(row.get("updated_at")));
   }

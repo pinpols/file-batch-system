@@ -103,76 +103,92 @@ public class DefaultConsoleWorkflowExcelApplicationService
     implements ConsoleWorkflowExcelApplicationService {
 
   private static final String DEF_SHEET = "workflow_definition";
+
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_DESCRIPTION = "description";
+  private static final String EDGE_SUCCESS = "SUCCESS";
+  private static final String GUIDE_STR = "字符串";
+  private static final String COL_ENABLED = "enabled";
+  private static final String COL_TENANT_ID = "tenant_id";
+  private static final String COL_WORKFLOW_CODE = "workflow_code";
+  private static final String COL_NODE_TYPE = "node_type";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String COL_EDGE_TYPE = "edge_type";
+  private static final String COL_WORKFLOW_TYPE = "workflow_type";
+  private static final String COL_WORKFLOW_VERSION = "workflow_version";
+  private static final String COL_RETRY_POLICY = "retry_policy";
+  private static final String GUIDE_INT = "整数";
+  private static final String GUIDE_FALSE = "FALSE";
   private static final String NODE_SHEET = "workflow_node";
   private static final String EDGE_SHEET = "workflow_edge";
 
   private static final List<String> DEF_COLUMNS =
       List.of(
-          "tenant_id",
-          "workflow_code",
+          COL_TENANT_ID,
+          COL_WORKFLOW_CODE,
           "workflow_name",
-          "workflow_type",
+          COL_WORKFLOW_TYPE,
           "version",
-          "enabled",
-          "description");
+          COL_ENABLED,
+          COL_DESCRIPTION);
   private static final List<String> NODE_COLUMNS =
       List.of(
-          "tenant_id",
-          "workflow_code",
-          "workflow_version",
+          COL_TENANT_ID,
+          COL_WORKFLOW_CODE,
+          COL_WORKFLOW_VERSION,
           "node_code",
           "node_name",
-          "node_type",
+          COL_NODE_TYPE,
           "related_job_code",
           "related_pipeline_code",
           "worker_group",
           "window_code",
           "node_order",
-          "retry_policy",
+          COL_RETRY_POLICY,
           "retry_max_count",
           "timeout_seconds",
           "node_params",
-          "enabled");
+          COL_ENABLED);
   private static final List<String> EDGE_COLUMNS =
       List.of(
-          "tenant_id",
-          "workflow_code",
-          "workflow_version",
+          COL_TENANT_ID,
+          COL_WORKFLOW_CODE,
+          COL_WORKFLOW_VERSION,
           "from_node_code",
           "to_node_code",
-          "edge_type",
+          COL_EDGE_TYPE,
           "condition_expr",
-          "enabled");
+          COL_ENABLED);
 
   private static final Set<String> DEF_HEADERS = Set.copyOf(DEF_COLUMNS);
   private static final Set<String> NODE_HEADERS = Set.copyOf(NODE_COLUMNS);
   private static final Set<String> EDGE_HEADERS = Set.copyOf(EDGE_COLUMNS);
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> DEF_COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+          Map.entry(COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
-              "workflow_code",
-              requiredColumn("工作流唯一编码，三个工作流 sheet 都依赖这个键。", "字符串", "WF_SETTLEMENT")),
-          Map.entry("workflow_name", requiredColumn("控制台展示的工作流名称。", "字符串", "清算工作流")),
+              COL_WORKFLOW_CODE,
+              requiredColumn("工作流唯一编码，三个工作流 sheet 都依赖这个键。", GUIDE_STR, "WF_SETTLEMENT")),
+          Map.entry("workflow_name", requiredColumn("控制台展示的工作流名称。", GUIDE_STR, "清算工作流")),
           Map.entry(
-              "workflow_type", requiredColumn("工作流拓扑类型。", "枚举", "DAG", "DAG", "PIPELINE", "MIXED")),
-          Map.entry("version", requiredColumn("工作流版本号，节点和边必须使用同一版本。", "整数", "1")),
-          Map.entry("enabled", optionalColumn("工作流定义是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
-          Map.entry("description", optionalColumn("面向运维人员的说明信息。", "字符串", "夜间清算编排流程")));
+              COL_WORKFLOW_TYPE, requiredColumn("工作流拓扑类型。", "枚举", "DAG", "DAG", "PIPELINE", "MIXED")),
+          Map.entry("version", requiredColumn("工作流版本号，节点和边必须使用同一版本。", GUIDE_INT, "1")),
+          Map.entry(COL_ENABLED, optionalColumn("工作流定义是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "夜间清算编排流程")));
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> NODE_COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+          Map.entry(COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
-              "workflow_code",
+              COL_WORKFLOW_CODE,
               requiredColumn(
-                  "工作流编码，必须与 workflow_definition.workflow_code 一致。", "字符串", "WF_SETTLEMENT")),
+                  "工作流编码，必须与 workflow_definition.workflow_code 一致。", GUIDE_STR, "WF_SETTLEMENT")),
           Map.entry(
-              "workflow_version",
-              requiredColumn("工作流版本，必须与 workflow_definition.version 一致。", "整数", "1")),
-          Map.entry("node_code", requiredColumn("工作流内唯一节点编码。", "字符串", "LOAD_SOURCE")),
-          Map.entry("node_name", requiredColumn("面向运维人员的节点名称。", "字符串", "加载源文件")),
+              COL_WORKFLOW_VERSION,
+              requiredColumn("工作流版本，必须与 workflow_definition.version 一致。", GUIDE_INT, "1")),
+          Map.entry("node_code", requiredColumn("工作流内唯一节点编码。", GUIDE_STR, "LOAD_SOURCE")),
+          Map.entry("node_name", requiredColumn("面向运维人员的节点名称。", GUIDE_STR, "加载源文件")),
           Map.entry(
-              "node_type",
+              COL_NODE_TYPE,
               requiredColumn(
                   "编排器识别的节点类型。",
                   "枚举",
@@ -183,41 +199,41 @@ public class DefaultConsoleWorkflowExcelApplicationService
                   "START",
                   "END",
                   "JOB")),
-          Map.entry("related_job_code", optionalColumn("当该节点触发作业定义时填写。", "字符串", "JOB_IMPORT_001")),
+          Map.entry("related_job_code", optionalColumn("当该节点触发作业定义时填写。", GUIDE_STR, "JOB_IMPORT_001")),
           Map.entry(
               "related_pipeline_code",
-              optionalColumn("当该节点引用 pipeline 定义时填写。", "字符串", "PIPE_IMPORT_001")),
-          Map.entry("worker_group", optionalColumn("运行时使用的执行器分组。", "字符串", "worker-general")),
-          Map.entry("window_code", optionalColumn("系统中已准备好的批量窗口编码。", "字符串", "WINDOW_NIGHT")),
-          Map.entry("node_order", optionalColumn("同层节点的建议执行顺序。", "整数", "10")),
+              optionalColumn("当该节点引用 pipeline 定义时填写。", GUIDE_STR, "PIPE_IMPORT_001")),
+          Map.entry("worker_group", optionalColumn("运行时使用的执行器分组。", GUIDE_STR, "worker-general")),
+          Map.entry("window_code", optionalColumn("系统中已准备好的批量窗口编码。", GUIDE_STR, "WINDOW_NIGHT")),
+          Map.entry("node_order", optionalColumn("同层节点的建议执行顺序。", GUIDE_INT, "10")),
           Map.entry(
-              "retry_policy",
+              COL_RETRY_POLICY,
               optionalColumn("节点失败后的重试策略。", "枚举", "FIXED", "NONE", "FIXED", "EXPONENTIAL")),
-          Map.entry("retry_max_count", optionalColumn("最大重试次数，必须大于等于 0。", "整数", "3")),
-          Map.entry("timeout_seconds", optionalColumn("超时时间（秒），必须大于等于 0。", "整数", "1800")),
+          Map.entry("retry_max_count", optionalColumn("最大重试次数，必须大于等于 0。", GUIDE_INT, "3")),
+          Map.entry("timeout_seconds", optionalColumn("超时时间（秒），必须大于等于 0。", GUIDE_INT, "1800")),
           Map.entry(
               "node_params", optionalColumn("节点运行参数，请保持为合法 JSON。", "JSON", "{\"mode\":\"full\"}")),
-          Map.entry("enabled", optionalColumn("节点是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")));
+          Map.entry(COL_ENABLED, optionalColumn("节点是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> EDGE_COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
+          Map.entry(COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
-              "workflow_code",
+              COL_WORKFLOW_CODE,
               requiredColumn(
-                  "工作流编码，必须与 workflow_definition.workflow_code 一致。", "字符串", "WF_SETTLEMENT")),
+                  "工作流编码，必须与 workflow_definition.workflow_code 一致。", GUIDE_STR, "WF_SETTLEMENT")),
           Map.entry(
-              "workflow_version",
-              requiredColumn("工作流版本，必须与 workflow_definition.version 一致。", "整数", "1")),
-          Map.entry("from_node_code", requiredColumn("依赖关系中的上游节点编码。", "字符串", "LOAD_SOURCE")),
-          Map.entry("to_node_code", requiredColumn("依赖关系中的下游节点编码。", "字符串", "VALIDATE_FILE")),
+              COL_WORKFLOW_VERSION,
+              requiredColumn("工作流版本，必须与 workflow_definition.version 一致。", GUIDE_INT, "1")),
+          Map.entry("from_node_code", requiredColumn("依赖关系中的上游节点编码。", GUIDE_STR, "LOAD_SOURCE")),
+          Map.entry("to_node_code", requiredColumn("依赖关系中的下游节点编码。", GUIDE_STR, "VALIDATE_FILE")),
           Map.entry(
-              "edge_type",
+              COL_EDGE_TYPE,
               requiredColumn(
-                  "两个节点之间的流转类型。", "枚举", "SUCCESS", "SUCCESS", "FAILURE", "CONDITION", "ALWAYS")),
+                  "两个节点之间的流转类型。", "枚举", EDGE_SUCCESS, EDGE_SUCCESS, "FAILURE", "CONDITION", "ALWAYS")),
           Map.entry(
               "condition_expr",
               optionalColumn("当 edge_type 为 CONDITION 时填写条件表达式。", "表达式", "${fileReady == true}")),
-          Map.entry("enabled", optionalColumn("该依赖边是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")));
+          Map.entry(COL_ENABLED, optionalColumn("该依赖边是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
 
   private static final Set<String> WORKFLOW_TYPES = WorkflowType.codes();
   private static final Set<String> NODE_TYPES = WorkflowNodeType.codes();
@@ -502,14 +518,14 @@ public class DefaultConsoleWorkflowExcelApplicationService
           new WorkflowDefinitionRow(
               new WorkflowIdentity(
                   rowData.rowNo(),
-                  tenantOrDefault(rowValues.get("tenant_id"), tenantId),
-                  normalize(rowValues.get("workflow_code"))),
+                  tenantOrDefault(rowValues.get(COL_TENANT_ID), tenantId),
+                  normalize(rowValues.get(COL_WORKFLOW_CODE))),
               new WorkflowDefinitionPayload(
                   normalize(rowValues.get("workflow_name")),
-                  normalizeEnum(rowValues.get("workflow_type"), WORKFLOW_TYPES),
+                  normalizeEnum(rowValues.get(COL_WORKFLOW_TYPE), WORKFLOW_TYPES),
                   parseInteger(rowValues.get("version")),
-                  parseBoolean(rowValues.get("enabled"), true),
-                  normalize(rowValues.get("description")))));
+                  parseBoolean(rowValues.get(COL_ENABLED), true),
+                  normalize(rowValues.get(COL_DESCRIPTION)))));
     }
     return rows;
   }
@@ -522,13 +538,13 @@ public class DefaultConsoleWorkflowExcelApplicationService
           new WorkflowNodeRow(
               new WorkflowNodeIdentity(
                   rowData.rowNo(),
-                  tenantOrDefault(rowValues.get("tenant_id"), tenantId),
-                  normalize(rowValues.get("workflow_code")),
-                  parseInteger(rowValues.get("workflow_version")),
+                  tenantOrDefault(rowValues.get(COL_TENANT_ID), tenantId),
+                  normalize(rowValues.get(COL_WORKFLOW_CODE)),
+                  parseInteger(rowValues.get(COL_WORKFLOW_VERSION)),
                   normalize(rowValues.get("node_code"))),
               new WorkflowNodeRelation(
                   normalize(rowValues.get("node_name")),
-                  normalizeEnum(rowValues.get("node_type"), NODE_TYPES),
+                  normalizeEnum(rowValues.get(COL_NODE_TYPE), NODE_TYPES),
                   normalize(rowValues.get("related_job_code")),
                   normalize(rowValues.get("related_pipeline_code"))),
               new WorkflowNodeExecution(
@@ -536,11 +552,11 @@ public class DefaultConsoleWorkflowExcelApplicationService
                   normalize(rowValues.get("window_code")),
                   parseInteger(rowValues.get("node_order"))),
               new WorkflowNodeRuntime(
-                  normalizeEnum(rowValues.get("retry_policy"), RETRY_POLICIES),
+                  normalizeEnum(rowValues.get(COL_RETRY_POLICY), RETRY_POLICIES),
                   parseInteger(rowValues.get("retry_max_count")),
                   parseInteger(rowValues.get("timeout_seconds")),
                   normalize(rowValues.get("node_params")),
-                  parseBoolean(rowValues.get("enabled"), true))));
+                  parseBoolean(rowValues.get(COL_ENABLED), true))));
     }
     return rows;
   }
@@ -553,15 +569,15 @@ public class DefaultConsoleWorkflowExcelApplicationService
           new WorkflowEdgeRow(
               new WorkflowEdgeIdentity(
                   rowData.rowNo(),
-                  tenantOrDefault(rowValues.get("tenant_id"), tenantId),
-                  normalize(rowValues.get("workflow_code")),
-                  parseInteger(rowValues.get("workflow_version")),
+                  tenantOrDefault(rowValues.get(COL_TENANT_ID), tenantId),
+                  normalize(rowValues.get(COL_WORKFLOW_CODE)),
+                  parseInteger(rowValues.get(COL_WORKFLOW_VERSION)),
                   normalize(rowValues.get("from_node_code")),
                   normalize(rowValues.get("to_node_code"))),
               new WorkflowEdgePayload(
-                  normalizeEnum(rowValues.get("edge_type"), EDGE_TYPES),
+                  normalizeEnum(rowValues.get(COL_EDGE_TYPE), EDGE_TYPES),
                   normalize(rowValues.get("condition_expr")),
-                  parseBoolean(rowValues.get("enabled"), true))));
+                  parseBoolean(rowValues.get(COL_ENABLED), true))));
     }
     return rows;
   }
@@ -771,51 +787,9 @@ public class DefaultConsoleWorkflowExcelApplicationService
       writeTemplateHeaders(nodeSheet, NODE_COLUMNS, NODE_COLUMN_GUIDES, workbook);
       writeTemplateHeaders(edgeSheet, EDGE_COLUMNS, EDGE_COLUMN_GUIDES, workbook);
 
-      int definitionRowIndex = 1;
-      for (WorkflowDefinitionRow rowData : session.definitions()) {
-        Row row = definitionSheet.createRow(definitionRowIndex++);
-        writeCell(row, 0, rowData.tenantId());
-        writeCell(row, 1, rowData.workflowCode());
-        writeCell(row, 2, rowData.workflowName());
-        writeCell(row, 3, rowData.workflowType());
-        writeCell(row, 4, rowData.version());
-        writeCell(row, 5, rowData.enabled());
-        writeCell(row, 6, rowData.description());
-      }
-
-      int nodeRowIndex = 1;
-      for (WorkflowNodeRow rowData : session.nodes()) {
-        Row row = nodeSheet.createRow(nodeRowIndex++);
-        writeCell(row, 0, rowData.tenantId());
-        writeCell(row, 1, rowData.workflowCode());
-        writeCell(row, 2, rowData.workflowVersion());
-        writeCell(row, 3, rowData.nodeCode());
-        writeCell(row, 4, rowData.nodeName());
-        writeCell(row, 5, rowData.nodeType());
-        writeCell(row, 6, rowData.relatedJobCode());
-        writeCell(row, 7, rowData.relatedPipelineCode());
-        writeCell(row, 8, rowData.workerGroup());
-        writeCell(row, 9, rowData.windowCode());
-        writeCell(row, 10, rowData.nodeOrder());
-        writeCell(row, 11, rowData.retryPolicy());
-        writeCell(row, 12, rowData.retryMaxCount());
-        writeCell(row, 13, rowData.timeoutSeconds());
-        writeCell(row, 14, rowData.nodeParams());
-        writeCell(row, 15, rowData.enabled());
-      }
-
-      int edgeRowIndex = 1;
-      for (WorkflowEdgeRow rowData : session.edges()) {
-        Row row = edgeSheet.createRow(edgeRowIndex++);
-        writeCell(row, 0, rowData.tenantId());
-        writeCell(row, 1, rowData.workflowCode());
-        writeCell(row, 2, rowData.workflowVersion());
-        writeCell(row, 3, rowData.fromNodeCode());
-        writeCell(row, 4, rowData.toNodeCode());
-        writeCell(row, 5, rowData.edgeType());
-        writeCell(row, 6, rowData.conditionExpr());
-        writeCell(row, 7, rowData.enabled());
-      }
+      populatePreviewDefinitionSheet(definitionSheet, session.definitions());
+      populatePreviewNodeSheet(nodeSheet, session.nodes());
+      populatePreviewEdgeSheet(edgeSheet, session.edges());
 
       applyValidations(definitionSheet, nodeSheet, edgeSheet);
       setWidths(definitionSheet, DEF_COLUMNS);
@@ -825,28 +799,91 @@ public class DefaultConsoleWorkflowExcelApplicationService
       createDictSheet(workbook);
       createValidationSheet(workbook);
 
-      List<WorkbookIssue> workbookIssues =
-          validationResult.issues().stream()
-              .flatMap(
-                  issue ->
-                      ConsoleExcelPreviewWorkbookSupport.expandIssues(
-                          issue.sheetName(),
-                          issue.rowNo(),
-                          issue.messages(),
-                          columnsForSheet(issue.sheetName()))
-                          .stream())
-              .toList();
-      ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, workbookIssues);
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-          definitionSheet, DEF_COLUMNS, filterIssues(workbookIssues, DEF_SHEET), 1);
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-          nodeSheet, NODE_COLUMNS, filterIssues(workbookIssues, NODE_SHEET), 3);
-      ConsoleExcelPreviewWorkbookSupport.addIssueComments(
-          edgeSheet, EDGE_COLUMNS, filterIssues(workbookIssues, EDGE_SHEET), 3);
+      populatePreviewIssueAnnotations(
+          workbook, definitionSheet, nodeSheet, edgeSheet, validationResult);
       return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
     } catch (IOException exception) {
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate preview excel workbook");
     }
+  }
+
+  private void populatePreviewDefinitionSheet(
+      Sheet definitionSheet, List<WorkflowDefinitionRow> definitions) {
+    int rowIndex = 1;
+    for (WorkflowDefinitionRow rowData : definitions) {
+      Row row = definitionSheet.createRow(rowIndex++);
+      writeCell(row, 0, rowData.tenantId());
+      writeCell(row, 1, rowData.workflowCode());
+      writeCell(row, 2, rowData.workflowName());
+      writeCell(row, 3, rowData.workflowType());
+      writeCell(row, 4, rowData.version());
+      writeCell(row, 5, rowData.enabled());
+      writeCell(row, 6, rowData.description());
+    }
+  }
+
+  private void populatePreviewNodeSheet(Sheet nodeSheet, List<WorkflowNodeRow> nodes) {
+    int rowIndex = 1;
+    for (WorkflowNodeRow rowData : nodes) {
+      Row row = nodeSheet.createRow(rowIndex++);
+      writeCell(row, 0, rowData.tenantId());
+      writeCell(row, 1, rowData.workflowCode());
+      writeCell(row, 2, rowData.workflowVersion());
+      writeCell(row, 3, rowData.nodeCode());
+      writeCell(row, 4, rowData.nodeName());
+      writeCell(row, 5, rowData.nodeType());
+      writeCell(row, 6, rowData.relatedJobCode());
+      writeCell(row, 7, rowData.relatedPipelineCode());
+      writeCell(row, 8, rowData.workerGroup());
+      writeCell(row, 9, rowData.windowCode());
+      writeCell(row, 10, rowData.nodeOrder());
+      writeCell(row, 11, rowData.retryPolicy());
+      writeCell(row, 12, rowData.retryMaxCount());
+      writeCell(row, 13, rowData.timeoutSeconds());
+      writeCell(row, 14, rowData.nodeParams());
+      writeCell(row, 15, rowData.enabled());
+    }
+  }
+
+  private void populatePreviewEdgeSheet(Sheet edgeSheet, List<WorkflowEdgeRow> edges) {
+    int rowIndex = 1;
+    for (WorkflowEdgeRow rowData : edges) {
+      Row row = edgeSheet.createRow(rowIndex++);
+      writeCell(row, 0, rowData.tenantId());
+      writeCell(row, 1, rowData.workflowCode());
+      writeCell(row, 2, rowData.workflowVersion());
+      writeCell(row, 3, rowData.fromNodeCode());
+      writeCell(row, 4, rowData.toNodeCode());
+      writeCell(row, 5, rowData.edgeType());
+      writeCell(row, 6, rowData.conditionExpr());
+      writeCell(row, 7, rowData.enabled());
+    }
+  }
+
+  private void populatePreviewIssueAnnotations(
+      Workbook workbook,
+      Sheet definitionSheet,
+      Sheet nodeSheet,
+      Sheet edgeSheet,
+      ValidationResult validationResult) {
+    List<WorkbookIssue> workbookIssues =
+        validationResult.issues().stream()
+            .flatMap(
+                issue ->
+                    ConsoleExcelPreviewWorkbookSupport.expandIssues(
+                            issue.sheetName(),
+                            issue.rowNo(),
+                            issue.messages(),
+                            columnsForSheet(issue.sheetName()))
+                        .stream())
+            .toList();
+    ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(workbook, workbookIssues);
+    ConsoleExcelPreviewWorkbookSupport.addIssueComments(
+        definitionSheet, DEF_COLUMNS, filterIssues(workbookIssues, DEF_SHEET), 1);
+    ConsoleExcelPreviewWorkbookSupport.addIssueComments(
+        nodeSheet, NODE_COLUMNS, filterIssues(workbookIssues, NODE_SHEET), 3);
+    ConsoleExcelPreviewWorkbookSupport.addIssueComments(
+        edgeSheet, EDGE_COLUMNS, filterIssues(workbookIssues, EDGE_SHEET), 3);
   }
 
   private byte[] writeWorkbook(String tenantId, List<WorkflowDefinitionEntity> definitions) {
@@ -1011,26 +1048,26 @@ public class DefaultConsoleWorkflowExcelApplicationService
     Sheet sheet = workbook.createSheet("DICT");
     sheet.createFreezePane(0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
-    writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
+    writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {
-      {"workflow_type", "DAG", "dag workflow"},
-      {"workflow_type", "PIPELINE", "pipeline workflow"},
-      {"workflow_type", "MIXED", "mixed workflow"},
-      {"node_type", "TASK", "task node"},
-      {"node_type", "GATEWAY", "gateway node"},
-      {"node_type", "FILE_STEP", "file step node"},
-      {"node_type", "START", "start node"},
-      {"node_type", "END", "end node"},
-      {"node_type", "JOB", "job node"},
-      {"retry_policy", "NONE", "no retry"},
-      {"retry_policy", "FIXED", "fixed retry"},
-      {"retry_policy", "EXPONENTIAL", "exponential retry"},
-      {"edge_type", "SUCCESS", "success edge"},
-      {"edge_type", "FAILURE", "failure edge"},
-      {"edge_type", "CONDITION", "condition edge"},
-      {"edge_type", "ALWAYS", "always edge"},
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_WORKFLOW_TYPE, "DAG", "dag workflow"},
+      {COL_WORKFLOW_TYPE, "PIPELINE", "pipeline workflow"},
+      {COL_WORKFLOW_TYPE, "MIXED", "mixed workflow"},
+      {COL_NODE_TYPE, "TASK", "task node"},
+      {COL_NODE_TYPE, "GATEWAY", "gateway node"},
+      {COL_NODE_TYPE, "FILE_STEP", "file step node"},
+      {COL_NODE_TYPE, "START", "start node"},
+      {COL_NODE_TYPE, "END", "end node"},
+      {COL_NODE_TYPE, "JOB", "job node"},
+      {COL_RETRY_POLICY, "NONE", "no retry"},
+      {COL_RETRY_POLICY, "FIXED", "fixed retry"},
+      {COL_RETRY_POLICY, "EXPONENTIAL", "exponential retry"},
+      {COL_EDGE_TYPE, EDGE_SUCCESS, "success edge"},
+      {COL_EDGE_TYPE, "FAILURE", "failure edge"},
+      {COL_EDGE_TYPE, "CONDITION", "condition edge"},
+      {COL_EDGE_TYPE, "ALWAYS", "always edge"},
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, GUIDE_FALSE, "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);
@@ -1078,7 +1115,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
             "configKey", ctx.row().workflowCode() + "#" + ctx.row().version(),
             "versionNo", ctx.row().version(),
             "changeAction", ctx.action(),
-            "changeResult", "SUCCESS",
+            "changeResult", EDGE_SUCCESS,
             "operatorType", "USER",
             "operatorId", ConsoleTextSanitizer.safeInput(ctx.operatorId(), 64),
             "traceId", ConsoleTextSanitizer.safeInput(ctx.traceId(), 128),
@@ -1090,7 +1127,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
                             mapOf(
                                 "workflowName", ctx.row().workflowName(),
                                 "workflowType", ctx.row().workflowType(),
-                                "enabled", ctx.row().enabled(),
+                                COL_ENABLED, ctx.row().enabled(),
                                 "nodeCount", ctx.nodeCount(),
                                 "edgeCount", ctx.edgeCount())))));
   }
@@ -1236,10 +1273,10 @@ public class DefaultConsoleWorkflowExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
-    if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
+    if (List.of(GUIDE_FALSE, "N", "0", "NO").contains(upper)) {
       return false;
     }
     return defaultValue;

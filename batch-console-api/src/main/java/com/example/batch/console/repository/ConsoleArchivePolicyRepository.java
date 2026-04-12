@@ -31,23 +31,15 @@ public interface ConsoleArchivePolicyRepository extends Repository<ArchivePolicy
   @Query(
       """
       INSERT INTO batch.archive_policy (tenant_id, target_table, retention_days, archive_enabled, cleanup_enabled, batch_size, description, created_by, updated_by)
-      VALUES (:tenantId, :targetTable, :retentionDays, :archiveEnabled, :cleanupEnabled, :batchSize, :description, :operator, :operator)
+      VALUES (:#{#p.tenantId}, :#{#p.targetTable}, :#{#p.retentionDays}, :#{#p.archiveEnabled}, :#{#p.cleanupEnabled}, :#{#p.batchSize}, :#{#p.description}, :#{#p.operator}, :#{#p.operator})
       ON CONFLICT (tenant_id, target_table) DO UPDATE
-         SET retention_days  = :retentionDays,
-             archive_enabled = :archiveEnabled,
-             cleanup_enabled = :cleanupEnabled,
-             batch_size      = :batchSize,
-             description     = :description,
-             updated_by      = :operator,
+         SET retention_days  = :#{#p.retentionDays},
+             archive_enabled = :#{#p.archiveEnabled},
+             cleanup_enabled = :#{#p.cleanupEnabled},
+             batch_size      = :#{#p.batchSize},
+             description     = :#{#p.description},
+             updated_by      = :#{#p.operator},
              updated_at      = CURRENT_TIMESTAMP
       """)
-  void upsert(
-      @Param("tenantId") String tenantId,
-      @Param("targetTable") String targetTable,
-      @Param("retentionDays") int retentionDays,
-      @Param("archiveEnabled") boolean archiveEnabled,
-      @Param("cleanupEnabled") boolean cleanupEnabled,
-      @Param("batchSize") int batchSize,
-      @Param("description") String description,
-      @Param("operator") String operator);
+  void upsert(@Param("p") ArchivePolicyUpsertParam p);
 }

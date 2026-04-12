@@ -74,19 +74,28 @@ import org.springframework.web.multipart.MultipartFile;
 public class DefaultConsoleFileChannelExcelApplicationService
     implements ConsoleFileChannelExcelApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String GUIDE_NONE = "NONE";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String COL_CHANNEL_TYPE = "channel_type";
+  private static final String COL_AUTH_TYPE = "auth_type";
+  private static final String COL_RECEIPT_POLICY = "receipt_policy";
+  private static final String COL_ENABLED = "enabled";
+
+
   private static final String SHEET_NAME = "file_channel_config";
   private static final List<String> COLUMNS =
       List.of(
           "tenant_id",
           "channel_code",
           "channel_name",
-          "channel_type",
+          COL_CHANNEL_TYPE,
           "target_endpoint",
-          "auth_type",
+          COL_AUTH_TYPE,
           "config_json",
-          "receipt_policy",
+          COL_RECEIPT_POLICY,
           "timeout_seconds",
-          "enabled");
+          COL_ENABLED);
   private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
   private static final Set<String> CHANNEL_TYPES = FileChannelType.codes();
   private static final Set<String> AUTH_TYPES = FileChannelAuthType.codes();
@@ -97,19 +106,19 @@ public class DefaultConsoleFileChannelExcelApplicationService
           Map.entry("channel_code", requiredColumn("通道唯一编码，作为导入匹配键。", "字符串", "CH_API_SETTLEMENT")),
           Map.entry("channel_name", requiredColumn("控制台展示的通道名称。", "字符串", "清算 API 通道")),
           Map.entry(
-              "channel_type",
+              COL_CHANNEL_TYPE,
               requiredColumn(
                   "该通道的传输类型。", "枚举", "API", "SFTP", "API", "EMAIL", "NAS", "OSS", "LOCAL")),
           Map.entry(
               "target_endpoint",
               optionalColumn("目标地址、路径或邮箱。", "URL / 路径 / 邮箱", "https://api.example.com/push")),
           Map.entry(
-              "auth_type",
+              COL_AUTH_TYPE,
               requiredColumn(
                   "目标端点使用的认证方式。",
                   "枚举",
                   "TOKEN",
-                  "NONE",
+                  GUIDE_NONE,
                   "PASSWORD",
                   "KEY_PAIR",
                   "TOKEN",
@@ -119,10 +128,10 @@ public class DefaultConsoleFileChannelExcelApplicationService
               "config_json",
               requiredColumn("通道专属连接配置，请保持为合法 JSON。", "JSON", "{\"token\":\"xxx\"}")),
           Map.entry(
-              "receipt_policy",
-              requiredColumn("文件投递后的回执或回调策略。", "枚举", "SYNC", "NONE", "SYNC", "ASYNC", "POLLING")),
+              COL_RECEIPT_POLICY,
+              requiredColumn("文件投递后的回执或回调策略。", "枚举", "SYNC", GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
           Map.entry("timeout_seconds", requiredColumn("超时时间（秒），必须大于等于 0。", "整数", "30")),
-          Map.entry("enabled", optionalColumn("文件通道是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")));
+          Map.entry(COL_ENABLED, optionalColumn("文件通道是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -321,16 +330,16 @@ public class DefaultConsoleFileChannelExcelApplicationService
         .definition(
             ChannelDefinition.builder()
                 .channelName(requireText(values, "channel_name", 256, issues))
-                .channelType(requireEnum(values, "channel_type", CHANNEL_TYPES, 32, issues))
+                .channelType(requireEnum(values, COL_CHANNEL_TYPE, CHANNEL_TYPES, 32, issues))
                 .targetEndpoint(optionalText(values, "target_endpoint", 1024, issues))
-                .authType(requireEnum(values, "auth_type", AUTH_TYPES, 32, issues))
+                .authType(requireEnum(values, COL_AUTH_TYPE, AUTH_TYPES, 32, issues))
                 .build())
         .delivery(
             ChannelDelivery.builder()
                 .configJson(requireJson(values, "config_json", issues))
-                .receiptPolicy(requireEnum(values, "receipt_policy", RECEIPT_POLICIES, 32, issues))
+                .receiptPolicy(requireEnum(values, COL_RECEIPT_POLICY, RECEIPT_POLICIES, 32, issues))
                 .timeoutSeconds(requireInteger(values, "timeout_seconds", 0, issues))
-                .enabled(optionalBoolean(values, "enabled", true, issues))
+                .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
                 .build())
         .build();
   }
@@ -405,7 +414,7 @@ public class DefaultConsoleFileChannelExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
     if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
@@ -475,18 +484,19 @@ public class DefaultConsoleFileChannelExcelApplicationService
                         .stream())
             .toList();
     return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(
-        session,
-        COLUMNS,
-        COLUMN_GUIDES,
-        this::applyValidations,
-        workbook -> {
-          createReadmeSheet(workbook);
-          createDictSheet(workbook);
-          createValidationSheet(workbook);
-        },
-        workbookIssues,
-        1,
-        "failed to generate preview excel workbook");
+        new ConsoleSingleSheetExcelImportSupport.WritePreviewWorkbookParam(
+            session,
+            COLUMNS,
+            COLUMN_GUIDES,
+            this::applyValidations,
+            workbook -> {
+              createReadmeSheet(workbook);
+              createDictSheet(workbook);
+              createValidationSheet(workbook);
+            },
+            workbookIssues,
+            1,
+            "failed to generate preview excel workbook"));
   }
 
   private void applyValidations(Sheet sheet) {
@@ -528,24 +538,24 @@ public class DefaultConsoleFileChannelExcelApplicationService
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
     String[][] rows = {
-      {"channel_type", "SFTP", "sftp channel"},
-      {"channel_type", "API", "api channel"},
-      {"channel_type", "EMAIL", "email channel"},
-      {"channel_type", "NAS", "nas channel"},
-      {"channel_type", "OSS", "object storage"},
-      {"channel_type", "LOCAL", "local filesystem"},
-      {"auth_type", "NONE", "no auth"},
-      {"auth_type", "PASSWORD", "password auth"},
-      {"auth_type", "KEY_PAIR", "key pair auth"},
-      {"auth_type", "TOKEN", "token auth"},
-      {"auth_type", "OAUTH2", "oauth2 auth"},
-      {"auth_type", "CUSTOM", "custom auth"},
-      {"receipt_policy", "NONE", "no receipt"},
-      {"receipt_policy", "SYNC", "synchronous receipt"},
-      {"receipt_policy", "ASYNC", "asynchronous receipt"},
-      {"receipt_policy", "POLLING", "polling receipt"},
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_CHANNEL_TYPE, "SFTP", "sftp channel"},
+      {COL_CHANNEL_TYPE, "API", "api channel"},
+      {COL_CHANNEL_TYPE, "EMAIL", "email channel"},
+      {COL_CHANNEL_TYPE, "NAS", "nas channel"},
+      {COL_CHANNEL_TYPE, "OSS", "object storage"},
+      {COL_CHANNEL_TYPE, "LOCAL", "local filesystem"},
+      {COL_AUTH_TYPE, GUIDE_NONE, "no auth"},
+      {COL_AUTH_TYPE, "PASSWORD", "password auth"},
+      {COL_AUTH_TYPE, "KEY_PAIR", "key pair auth"},
+      {COL_AUTH_TYPE, "TOKEN", "token auth"},
+      {COL_AUTH_TYPE, "OAUTH2", "oauth2 auth"},
+      {COL_AUTH_TYPE, "CUSTOM", "custom auth"},
+      {COL_RECEIPT_POLICY, GUIDE_NONE, "no receipt"},
+      {COL_RECEIPT_POLICY, "SYNC", "synchronous receipt"},
+      {COL_RECEIPT_POLICY, "ASYNC", "asynchronous receipt"},
+      {COL_RECEIPT_POLICY, "POLLING", "polling receipt"},
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, "FALSE", "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);

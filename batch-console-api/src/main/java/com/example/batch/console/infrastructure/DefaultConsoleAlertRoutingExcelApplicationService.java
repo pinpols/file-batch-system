@@ -70,43 +70,53 @@ import org.springframework.web.multipart.MultipartFile;
 public class DefaultConsoleAlertRoutingExcelApplicationService
     implements ConsoleAlertRoutingExcelApplicationService {
 
+  // ── duplicate literal constants ─────────────────────────────────────────
+  private static final String COL_TEAM = "team";
+  private static final String COL_RECEIVER = "receiver";
+  private static final String COL_DESCRIPTION = "description";
+  private static final String GUIDE_TRUE = "TRUE";
+  private static final String COL_SEVERITY = "severity";
+  private static final String GUIDE_STR = "字符串";
+  private static final String COL_ENABLED = "enabled";
+
+
   private static final String SHEET_NAME = "alert_routing_config";
   private static final List<String> COLUMNS =
       List.of(
           "tenant_id",
           "route_code",
           "route_name",
-          "team",
+          COL_TEAM,
           "alert_group",
-          "severity",
-          "receiver",
+          COL_SEVERITY,
+          COL_RECEIVER,
           "group_by",
           "group_wait_seconds",
           "group_interval_seconds",
           "repeat_interval_seconds",
-          "enabled",
-          "description");
+          COL_ENABLED,
+          COL_DESCRIPTION);
   private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
   private static final Set<String> SEVERITIES = AlertSeverity.codes();
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", "字符串", "tenant-a")),
-          Map.entry("route_code", requiredColumn("路由唯一编码，作为导入匹配键。", "字符串", "RT_BATCH_ERROR")),
-          Map.entry("route_name", requiredColumn("控制台展示的路由名称。", "字符串", "批处理异常路由")),
-          Map.entry("team", requiredColumn("负责该路由的团队或值班组。", "字符串", "ops")),
-          Map.entry("alert_group", requiredColumn("通知引擎使用的告警分组。", "字符串", "batch")),
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("route_code", requiredColumn("路由唯一编码，作为导入匹配键。", GUIDE_STR, "RT_BATCH_ERROR")),
+          Map.entry("route_name", requiredColumn("控制台展示的路由名称。", GUIDE_STR, "批处理异常路由")),
+          Map.entry(COL_TEAM, requiredColumn("负责该路由的团队或值班组。", GUIDE_STR, "ops")),
+          Map.entry("alert_group", requiredColumn("通知引擎使用的告警分组。", GUIDE_STR, "batch")),
           Map.entry(
-              "severity",
+              COL_SEVERITY,
               requiredColumn("该路由处理的告警级别。", "枚举", "ERROR", "INFO", "WARN", "ERROR", "CRITICAL")),
-          Map.entry("receiver", requiredColumn("目标接收方、通道或 webhook 别名。", "字符串", "slack-ops")),
+          Map.entry(COL_RECEIVER, requiredColumn("目标接收方、通道或 webhook 别名。", GUIDE_STR, "slack-ops")),
           Map.entry("group_by", optionalColumn("用于去重和聚合的分组键，可选。", "表达式", "job_code")),
           Map.entry("group_wait_seconds", optionalColumn("首次聚合通知前的等待秒数，必须大于等于 0。", "整数", "30")),
           Map.entry(
               "group_interval_seconds", optionalColumn("两次聚合通知之间的最小间隔，必须大于等于 0。", "整数", "300")),
           Map.entry(
               "repeat_interval_seconds", optionalColumn("持续告警的重复通知间隔，必须大于等于 0。", "整数", "3600")),
-          Map.entry("enabled", optionalColumn("告警路由是否启用。", "布尔值", "TRUE", "TRUE", "FALSE")),
-          Map.entry("description", optionalColumn("面向运维人员的说明信息。", "字符串", "批处理失败默认路由")));
+          Map.entry(COL_ENABLED, optionalColumn("告警路由是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
+          Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "批处理失败默认路由")));
 
   private static final MediaType XLSX_MEDIA_TYPE =
       MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -289,16 +299,16 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
         .tenantId(effectiveTenant)
         .routeCode(requireText(values, "route_code", 128, issues))
         .routeName(requireText(values, "route_name", 256, issues))
-        .team(requireText(values, "team", 128, issues))
+        .team(requireText(values, COL_TEAM, 128, issues))
         .alertGroup(requireText(values, "alert_group", 128, issues))
-        .severity(requireEnum(values, "severity", SEVERITIES, 16, issues))
-        .receiver(requireText(values, "receiver", 256, issues))
+        .severity(requireEnum(values, COL_SEVERITY, SEVERITIES, 16, issues))
+        .receiver(requireText(values, COL_RECEIVER, 256, issues))
         .groupBy(optionalText(values, "group_by", 512, issues))
         .groupWaitSeconds(optionalInteger(values, "group_wait_seconds", 0, 30, issues))
         .groupIntervalSeconds(optionalInteger(values, "group_interval_seconds", 0, 300, issues))
         .repeatIntervalSeconds(optionalInteger(values, "repeat_interval_seconds", 0, 3600, issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
-        .description(optionalText(values, "description", 1024, issues))
+        .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
+        .description(optionalText(values, COL_DESCRIPTION, 1024, issues))
         .build();
   }
 
@@ -371,7 +381,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
-    if (List.of("TRUE", "Y", "1", "YES").contains(upper)) {
+    if (List.of(GUIDE_TRUE, "Y", "1", "YES").contains(upper)) {
       return true;
     }
     if (List.of("FALSE", "N", "0", "NO").contains(upper)) {
@@ -426,18 +436,19 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
                         .stream())
             .toList();
     return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(
-        session,
-        COLUMNS,
-        COLUMN_GUIDES,
-        this::applyValidations,
-        workbook -> {
-          createReadmeSheet(workbook);
-          createDictSheet(workbook);
-          createValidationSheet(workbook);
-        },
-        workbookIssues,
-        1,
-        "failed to generate preview excel workbook");
+        new ConsoleSingleSheetExcelImportSupport.WritePreviewWorkbookParam(
+            session,
+            COLUMNS,
+            COLUMN_GUIDES,
+            this::applyValidations,
+            workbook -> {
+              createReadmeSheet(workbook);
+              createDictSheet(workbook);
+              createValidationSheet(workbook);
+            },
+            workbookIssues,
+            1,
+            "failed to generate preview excel workbook"));
   }
 
   private void applyValidations(Sheet sheet) {
@@ -472,14 +483,14 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
     Sheet sheet = workbook.createSheet("DICT");
     sheet.createFreezePane(0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
-    writeHeaders(sheet, List.of("field", "value", "description"), dictHeaderStyle);
+    writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {
-      {"severity", "INFO", "informational"},
-      {"severity", "WARN", "warning"},
-      {"severity", "ERROR", "error"},
-      {"severity", "CRITICAL", "critical"},
-      {"enabled", "TRUE", "enabled"},
-      {"enabled", "FALSE", "disabled"}
+      {COL_SEVERITY, "INFO", "informational"},
+      {COL_SEVERITY, "WARN", "warning"},
+      {COL_SEVERITY, "ERROR", "error"},
+      {COL_SEVERITY, "CRITICAL", "critical"},
+      {COL_ENABLED, GUIDE_TRUE, COL_ENABLED},
+      {COL_ENABLED, "FALSE", "disabled"}
     };
     for (int i = 0; i < rows.length; i++) {
       Row row = sheet.createRow(i + 1);
@@ -530,9 +541,9 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
                     "detail",
                         mapOf(
                             "routeName", row.routeName(),
-                            "team", row.team(),
-                            "severity", row.severity(),
-                            "receiver", row.receiver())))));
+                            COL_TEAM, row.team(),
+                            COL_SEVERITY, row.severity(),
+                            COL_RECEIVER, row.receiver())))));
   }
 
   private Map<String, Object> mapOf(Object... pairs) {
