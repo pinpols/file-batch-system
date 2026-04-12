@@ -495,12 +495,12 @@ public class ConsoleTenantConfigCopyService {
         List<BusinessCalendarSpec> specs = new ArrayList<>(rows.size());
         for (Map<String, Object> r : rows) {
             BusinessCalendarSpec s = new BusinessCalendarSpec();
-            s.setCalendarCode(str(r, "calendar_code"));
-            s.setCalendarName(str(r, "calendar_name"));
+            s.setCalendarCode(str(r, "calendarCode"));
+            s.setCalendarName(str(r, "calendarName"));
             s.setTimezone(str(r, "timezone"));
-            s.setHolidayRollRule(str(r, "holiday_roll_rule"));
-            s.setCatchUpPolicy(str(r, "catch_up_policy"));
-            s.setCatchUpMaxDays(intVal(r, "catch_up_max_days"));
+            s.setHolidayRollRule(str(r, "holidayRollRule"));
+            s.setCatchUpPolicy(str(r, "catchUpPolicy"));
+            s.setCatchUpMaxDays(intVal(r, "catchUpMaxDays"));
             s.setEnabled(bool(r, "enabled"));
             Long calendarId = num(r, "id");
             if (calendarId != null) {

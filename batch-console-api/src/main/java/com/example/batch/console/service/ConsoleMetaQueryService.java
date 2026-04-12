@@ -1,8 +1,10 @@
 package com.example.batch.console.service;
 
+import com.example.batch.common.enums.TriggerType;
 import com.example.batch.console.repository.ConsoleMetaQueryRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.web.ConsoleMetaController;
+import com.example.batch.console.web.response.ConsoleMetaEnumItem;
+import com.example.batch.console.web.response.ConsoleMetaOption;
 
 import org.springframework.stereotype.Service;
 
@@ -23,106 +25,104 @@ public class ConsoleMetaQueryService {
         this.tenantGuard = tenantGuard;
     }
 
-    public Map<String, List<ConsoleMetaController.EnumItem>> enums() {
-        Map<String, List<ConsoleMetaController.EnumItem>> result = new LinkedHashMap<>();
-        result.put("triggerType", enumItems(com.example.batch.common.enums.TriggerType.values()));
+    public Map<String, List<ConsoleMetaEnumItem>> enums() {
+        Map<String, List<ConsoleMetaEnumItem>> result = new LinkedHashMap<>();
+        result.put("triggerType", enumItems(TriggerType.values()));
         result.put(
                 "jobType",
                 List.of(
-                        new ConsoleMetaController.EnumItem("GENERAL", "通用作业"),
-                        new ConsoleMetaController.EnumItem("IMPORT", "导入"),
-                        new ConsoleMetaController.EnumItem("EXPORT", "导出"),
-                        new ConsoleMetaController.EnumItem("DISPATCH", "派发"),
-                        new ConsoleMetaController.EnumItem("WORKFLOW", "工作流")));
+                        new ConsoleMetaEnumItem("GENERAL", "通用作业"),
+                        new ConsoleMetaEnumItem("IMPORT", "导入"),
+                        new ConsoleMetaEnumItem("EXPORT", "导出"),
+                        new ConsoleMetaEnumItem("DISPATCH", "派发"),
+                        new ConsoleMetaEnumItem("WORKFLOW", "工作流")));
         result.put(
                 "scheduleType",
                 List.of(
-                        new ConsoleMetaController.EnumItem("CRON", "Cron 表达式"),
-                        new ConsoleMetaController.EnumItem("FIXED_RATE", "固定频率"),
-                        new ConsoleMetaController.EnumItem("MANUAL", "手动"),
-                        new ConsoleMetaController.EnumItem("EVENT", "事件触发"),
-                        new ConsoleMetaController.EnumItem("ONE_TIME", "一次性")));
+                        new ConsoleMetaEnumItem("CRON", "Cron 表达式"),
+                        new ConsoleMetaEnumItem("FIXED_RATE", "固定频率"),
+                        new ConsoleMetaEnumItem("MANUAL", "手动"),
+                        new ConsoleMetaEnumItem("EVENT", "事件触发"),
+                        new ConsoleMetaEnumItem("ONE_TIME", "一次性")));
         result.put(
                 "triggerMode",
                 List.of(
-                        new ConsoleMetaController.EnumItem("SCHEDULED", "定时"),
-                        new ConsoleMetaController.EnumItem("API", "API"),
-                        new ConsoleMetaController.EnumItem("MANUAL", "手动"),
-                        new ConsoleMetaController.EnumItem("EVENT", "事件"),
-                        new ConsoleMetaController.EnumItem("MIXED", "混合")));
+                        new ConsoleMetaEnumItem("SCHEDULED", "定时"),
+                        new ConsoleMetaEnumItem("API", "API"),
+                        new ConsoleMetaEnumItem("MANUAL", "手动"),
+                        new ConsoleMetaEnumItem("EVENT", "事件"),
+                        new ConsoleMetaEnumItem("MIXED", "混合")));
         result.put(
                 "shardStrategy",
                 List.of(
-                        new ConsoleMetaController.EnumItem("NONE", "不分片"),
-                                new ConsoleMetaController.EnumItem("STATIC", "静态分片"),
-                        new ConsoleMetaController.EnumItem("DYNAMIC", "动态分片"),
-                                new ConsoleMetaController.EnumItem("AUTO", "自动")));
+                        new ConsoleMetaEnumItem("NONE", "不分片"),
+                        new ConsoleMetaEnumItem("STATIC", "静态分片"),
+                        new ConsoleMetaEnumItem("DYNAMIC", "动态分片"),
+                        new ConsoleMetaEnumItem("AUTO", "自动")));
         result.put(
                 "retryPolicy",
                 List.of(
-                        new ConsoleMetaController.EnumItem("NONE", "不重试"),
-                        new ConsoleMetaController.EnumItem("FIXED", "固定间隔"),
-                        new ConsoleMetaController.EnumItem("EXPONENTIAL", "指数退避")));
+                        new ConsoleMetaEnumItem("NONE", "不重试"),
+                        new ConsoleMetaEnumItem("FIXED", "固定间隔"),
+                        new ConsoleMetaEnumItem("EXPONENTIAL", "指数退避")));
         result.put(
                 "instanceStatus",
                 List.of(
-                        new ConsoleMetaController.EnumItem("CREATED", "已创建"),
-                        new ConsoleMetaController.EnumItem("WAITING", "等待中"),
-                        new ConsoleMetaController.EnumItem("READY", "就绪"),
-                        new ConsoleMetaController.EnumItem("RUNNING", "运行中"),
-                        new ConsoleMetaController.EnumItem("SUCCESS", "成功"),
-                        new ConsoleMetaController.EnumItem("PARTIAL_FAILED", "部分失败"),
-                        new ConsoleMetaController.EnumItem("FAILED", "失败"),
-                        new ConsoleMetaController.EnumItem("CANCELLED", "已取消"),
-                        new ConsoleMetaController.EnumItem("TERMINATED", "已终止")));
+                        new ConsoleMetaEnumItem("CREATED", "已创建"),
+                        new ConsoleMetaEnumItem("WAITING", "等待中"),
+                        new ConsoleMetaEnumItem("READY", "就绪"),
+                        new ConsoleMetaEnumItem("RUNNING", "运行中"),
+                        new ConsoleMetaEnumItem("SUCCESS", "成功"),
+                        new ConsoleMetaEnumItem("PARTIAL_FAILED", "部分失败"),
+                        new ConsoleMetaEnumItem("FAILED", "失败"),
+                        new ConsoleMetaEnumItem("CANCELLED", "已取消"),
+                        new ConsoleMetaEnumItem("TERMINATED", "已终止")));
         result.put(
                 "workflowNodeType",
                 List.of(
-                        new ConsoleMetaController.EnumItem("START", "开始"),
-                        new ConsoleMetaController.EnumItem("END", "结束"),
-                        new ConsoleMetaController.EnumItem("JOB", "作业"),
-                        new ConsoleMetaController.EnumItem("PIPELINE", "流水线"),
-                        new ConsoleMetaController.EnumItem("CONDITION", "条件"),
-                        new ConsoleMetaController.EnumItem("FORK", "分支"),
-                        new ConsoleMetaController.EnumItem("JOIN", "汇聚")));
+                        new ConsoleMetaEnumItem("START", "开始"),
+                        new ConsoleMetaEnumItem("END", "结束"),
+                        new ConsoleMetaEnumItem("JOB", "作业"),
+                        new ConsoleMetaEnumItem("PIPELINE", "流水线"),
+                        new ConsoleMetaEnumItem("CONDITION", "条件"),
+                        new ConsoleMetaEnumItem("FORK", "分支"),
+                        new ConsoleMetaEnumItem("JOIN", "汇聚")));
         result.put(
                 "channelType",
                 List.of(
-                        new ConsoleMetaController.EnumItem("SFTP", "SFTP"),
-                        new ConsoleMetaController.EnumItem("S3", "S3"),
-                        new ConsoleMetaController.EnumItem("HTTP", "HTTP"),
-                        new ConsoleMetaController.EnumItem("LOCAL", "本地"),
-                        new ConsoleMetaController.EnumItem("API_PUSH", "API推送")));
+                        new ConsoleMetaEnumItem("SFTP", "SFTP"),
+                        new ConsoleMetaEnumItem("S3", "S3"),
+                        new ConsoleMetaEnumItem("HTTP", "HTTP"),
+                        new ConsoleMetaEnumItem("LOCAL", "本地"),
+                        new ConsoleMetaEnumItem("API_PUSH", "API推送")));
         return result;
     }
 
-    public List<ConsoleMetaController.SimpleOption> queues(String tenantId) {
+    public List<ConsoleMetaOption> queues(String tenantId) {
         return toOptions(repository.queueOptions(tenantGuard.resolveTenant(tenantId)));
     }
 
-    public List<ConsoleMetaController.SimpleOption> calendars(String tenantId) {
+    public List<ConsoleMetaOption> calendars(String tenantId) {
         return toOptions(repository.calendarOptions(tenantGuard.resolveTenant(tenantId)));
     }
 
-    public List<ConsoleMetaController.SimpleOption> windows(String tenantId) {
+    public List<ConsoleMetaOption> windows(String tenantId) {
         return toOptions(repository.windowOptions(tenantGuard.resolveTenant(tenantId)));
     }
 
-    public List<ConsoleMetaController.SimpleOption> workerGroups(String tenantId) {
+    public List<ConsoleMetaOption> workerGroups(String tenantId) {
         return toOptions(repository.workerGroupOptions(tenantGuard.resolveTenant(tenantId)));
     }
 
-    private List<ConsoleMetaController.SimpleOption> toOptions(
-            List<ConsoleMetaQueryRepository.SimpleOptionView> rows) {
+    private List<ConsoleMetaOption> toOptions(List<ConsoleMetaQueryRepository.SimpleOptionView> rows) {
         return rows.stream()
-                .map(row -> new ConsoleMetaController.SimpleOption(row.getCode(), row.getLabel()))
+                .map(row -> new ConsoleMetaOption(row.getCode(), row.getLabel()))
                 .toList();
     }
 
-    private static List<ConsoleMetaController.EnumItem> enumItems(
-            com.example.batch.common.enums.TriggerType[] values) {
+    private static List<ConsoleMetaEnumItem> enumItems(TriggerType[] values) {
         return Arrays.stream(values)
-                .map(e -> new ConsoleMetaController.EnumItem(e.code(), e.label()))
+                .map(e -> new ConsoleMetaEnumItem(e.code(), e.label()))
                 .toList();
     }
 }

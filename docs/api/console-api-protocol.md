@@ -13,6 +13,8 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | 2026-04-11 | 移除 `DELETE job-definitions/{id}`、`workflow-definitions/{id}`、`file-channels/{id}`、`file-templates/{id}`；软删除统一走 `PATCH /{id}`，`DELETE` 仅保留于物理删除场景 |
 | 2026-04-11 | 删除 `DELETE /api/console/users/{id}`：账号不可物理删除，停用走 disable，彻底下线走租户 suspend |
 | 2026-04-11 | 删除 `POST /api/console/users`（独立创建账号）：每个租户仅一个运营账号，由建租户接口统一创建，后续通过 `PUT /api/console/users/{id}` 调整权限 |
+| 2026-04-12 | `POST /api/console/tenants/batch`：`initConfigFrom` 不传时默认使用 `default` 模板租户（原逻辑：不传则跳过配置初始化） |
+| 2026-04-12 | `POST /api/console/tenants/batch` 新增可选字段 `initConfigFrom`（源租户 ID）和 `initMode`（默认 `SKIP_EXISTING`）：非空时建完租户后自动复制源租户全部配置，响应体从 `List<ConsoleTenantResponse>` 改为 `{tenants, configInit}`（`configInit` 在未传 `initConfigFrom` 时为 null） |
 | 2026-04-12 | 补齐 OpenAPI 缺失接口 `GET /api/console/config/file-templates/excel/preview/{uploadToken}/workbook`；修正 18 处 CRUD 创建/更新/复制响应体错误类型（`CommonResponseLong`/`CommonResponseString` → `CommonResponseObject`）；协议正文同步 PATCH 改造、移除已删除的 user create/delete 和 POST files/delete 接口描述 |
 | 2026-04-11 | 新增 `POST /api/console/tenants/batch` 批量建租户端点，共享密码（≥12位）+ 用户名前缀（默认 `op-`），单事务 |
 | 2026-04-11 | `POST /api/console/tenants` 新增必填字段 `username`/`password`，建租户时同步创建 `ROLE_TENANT_USER` 操作账号 |
