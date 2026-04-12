@@ -337,6 +337,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         }
 
         boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
+        boolean jobFullyComplete = allPartitionsFinished && !dagContinues;
         String instanceEvent =
                 resolveInstanceEvent(
                         successCount, failedCount, allPartitionsFinished, dagContinues);
@@ -352,8 +353,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                                 .resultSummary(
                                         buildJobInstanceResultSummary(
                                                 jobInstance, partitions, command))
-                                .finishedAt(
-                                        allPartitionsFinished && !dagContinues ? finishedAt : null)
+                                .finishedAt(jobFullyComplete ? finishedAt : null)
                                 .expectedVersion(jobInstance.getVersion())
                                 .build());
         if (progressUpdated <= 0) {
@@ -361,7 +361,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         }
         jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
         // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
-        if (allPartitionsFinished && !dagContinues && isTerminalJobInstanceStatus(instanceStatus)) {
+        if (jobFullyComplete && isTerminalJobInstanceStatus(instanceStatus)) {
             signalParentVirtualTask(jobInstance, instanceStatus, command);
         }
         if (workflowRun != null) {
@@ -373,7 +373,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                     workflowRun.getId(),
                     workflowStatus,
                     resolveWorkflowCurrentNode(activeNodes, workflowStatus, currentNodeCode),
-                    allPartitionsFinished && !dagContinues ? finishedAt : null);
+                    jobFullyComplete ? finishedAt : null);
         }
     }
 

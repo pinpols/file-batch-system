@@ -203,17 +203,19 @@ public class DefaultResourceScheduler implements ResourceScheduler {
             return 1;
         }
         TenantQuotaPolicyRecord policy = configCacheService.findEnabledQuotaPolicy(tenantId);
-        if (policy == null || policy.fairShareWeight() == null || policy.fairShareWeight() <= 0) {
-            return 1;
-        }
-        return policy.fairShareWeight();
+        return hasValidFairShareWeight(policy == null ? null : policy.fairShareWeight())
+                ? policy.fairShareWeight()
+                : 1;
     }
 
     private int resolveQueueWeight(ResourceQueueRecord queue) {
-        if (queue == null || queue.fairShareWeight() == null || queue.fairShareWeight() <= 0) {
-            return 1;
-        }
-        return queue.fairShareWeight();
+        return hasValidFairShareWeight(queue == null ? null : queue.fairShareWeight())
+                ? queue.fairShareWeight()
+                : 1;
+    }
+
+    private boolean hasValidFairShareWeight(Integer weight) {
+        return weight != null && weight > 0;
     }
 
     private int resolveTenantActiveJobs(ResourceSchedulingRequest request) {

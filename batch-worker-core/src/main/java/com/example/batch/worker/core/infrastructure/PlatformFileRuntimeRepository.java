@@ -407,7 +407,7 @@ public class PlatformFileRuntimeRepository {
             existingCodes.add(existingStep.stepCode());
         }
         for (PipelineStepTemplate template : defaultSteps) {
-            if (template == null || !StringUtils.hasText(template.stepCode()) || existingCodes.contains(template.stepCode())) {
+            if (shouldSkipStepTemplate(template, existingCodes)) {
                 continue;
             }
             platformFileRuntimeMapper.insertPipelineStepDefinition(params(
@@ -497,6 +497,12 @@ public class PlatformFileRuntimeRepository {
             case "EXCEL" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
             default -> "text/plain";
         };
+    }
+
+    private boolean shouldSkipStepTemplate(PipelineStepTemplate template, Set<String> existingCodes) {
+        return template == null
+                || !StringUtils.hasText(template.stepCode())
+                || existingCodes.contains(template.stepCode());
     }
 
     private String defaultText(String value, String fallback) {

@@ -77,8 +77,16 @@ build_module() {
   local mod
   mod="$(maven_module_for "$name")"
   echo "  构建 $mod ..."
-  ./mvnw -pl "$mod" -am clean package -DskipTests -q
-  cp "$mod/target/$mod"-*.jar "$RUNTIME_JAR_DIR/$name.jar"
+  _MVND_BIN="${HOME}/.local/bin/mvnd"
+  if [[ -x "$_MVND_BIN" ]]; then
+    export MVND_HOME="${HOME}/.local/share/maven-mvnd-1.0.5-darwin-aarch64"
+    _MVN="$_MVND_BIN"
+  else
+    _MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
+  fi
+  "$_MVN" -pl "$mod" -am clean package -DskipTests -q
+  jar="$(ls "$mod/target/$mod"-*-exec.jar 2>/dev/null | head -1 || ls "$mod/target/$mod"-*.jar 2>/dev/null | grep -Ev 'sources|javadoc|\.original$|-exec\.jar$' | head -1)"
+  cp "$jar" "$RUNTIME_JAR_DIR/$name.jar"
   echo "  构建完成 → build/runtime-jars/$name.jar"
 }
 

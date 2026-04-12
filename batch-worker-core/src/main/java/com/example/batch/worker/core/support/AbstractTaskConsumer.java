@@ -11,6 +11,7 @@ import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
@@ -201,25 +202,10 @@ public abstract class AbstractTaskConsumer {
         String baseTopic = cfg.topic();
         if (baseTopic == null || baseTopic.isBlank()) {
             // e2e / local 环境可能不完整注入 topic；兜底保证 @KafkaListener(topics=...) 不会解析成 null。
-            String workerType = cfg.workerType();
-            if (workerType != null && "IMPORT".equalsIgnoreCase(workerType)) {
-                baseTopic = BatchTopics.TASK_DISPATCH_IMPORT;
-            } else if (workerType != null && "EXPORT".equalsIgnoreCase(workerType)) {
-                baseTopic = BatchTopics.TASK_DISPATCH_EXPORT;
-            } else if (workerType != null && "DISPATCH".equalsIgnoreCase(workerType)) {
-                baseTopic = BatchTopics.TASK_DISPATCH_DISPATCH;
-            }
-
+            baseTopic = resolveTopicByWorkerType(cfg.workerType());
             // 最后兜底：仅根据 workerCode 文本推断，避免返回空数组导致 Spring Kafka 启动失败。
             if (baseTopic == null || baseTopic.isBlank()) {
-                String wc = configuredWorkerCode == null ? "" : configuredWorkerCode.toLowerCase();
-                if (wc.contains("import")) {
-                    baseTopic = BatchTopics.TASK_DISPATCH_IMPORT;
-                } else if (wc.contains("export")) {
-                    baseTopic = BatchTopics.TASK_DISPATCH_EXPORT;
-                } else if (wc.contains("dispatch")) {
-                    baseTopic = BatchTopics.TASK_DISPATCH_DISPATCH;
-                }
+                baseTopic = resolveTopicByWorkerCode(configuredWorkerCode);
             }
         }
         if (baseTopic == null || baseTopic.isBlank()) {
@@ -238,6 +224,35 @@ public abstract class AbstractTaskConsumer {
      */
     public String consumerGroupId() {
         return workerConfiguration().consumerGroupId();
+    }
+
+    private static final Map<String, String> WORKER_TYPE_TOPIC = Map.of(
+            "IMPORT",   BatchTopics.TASK_DISPATCH_IMPORT,
+            "EXPORT",   BatchTopics.TASK_DISPATCH_EXPORT,
+            "DISPATCH", BatchTopics.TASK_DISPATCH_DISPATCH
+    );
+
+    // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → dispatch）
+    private static final List<Map.Entry<String, String>> WORKER_CODE_KEYWORD_TOPIC = List.of(
+            Map.entry("import",   BatchTopics.TASK_DISPATCH_IMPORT),
+            Map.entry("export",   BatchTopics.TASK_DISPATCH_EXPORT),
+            Map.entry("dispatch", BatchTopics.TASK_DISPATCH_DISPATCH)
+    );
+
+    private String resolveTopicByWorkerType(String workerType) {
+        if (workerType == null || workerType.isBlank()) {
+            return null;
+        }
+        return WORKER_TYPE_TOPIC.get(workerType.toUpperCase());
+    }
+
+    private String resolveTopicByWorkerCode(String workerCode) {
+        String wc = workerCode == null ? "" : workerCode.toLowerCase();
+        return WORKER_CODE_KEYWORD_TOPIC.stream()
+                .filter(entry -> wc.contains(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean accepts(TaskDispatchMessage message, WorkerRegistration registration) {

@@ -234,34 +234,24 @@ class ConsoleFileQueryService {
 
     Map<String, Object> fileChannelDetail(String tenantId, String channelCode) {
         String resolved = resolveTenant(tenantGuard, tenantId);
-        Map<String, Object> row =
-                fileMappers.fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode);
-        if (row == null || row.isEmpty()) {
-            throw new BizException(ResultCode.NOT_FOUND, "file channel not found: " + channelCode);
-        }
-        return row;
+        return requireRow(
+                fileMappers.fileChannelConfigMapper.selectByUniqueKey(resolved, channelCode),
+                "file channel not found: " + channelCode);
     }
 
     Map<String, Object> fileTemplateDetail(String tenantId, String templateCode, Integer version) {
         String resolved = resolveTenant(tenantGuard, tenantId);
         Integer ver = version != null ? version : 1;
-        Map<String, Object> row =
-                fileMappers.fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver);
-        if (row == null || row.isEmpty()) {
-            throw new BizException(
-                    ResultCode.NOT_FOUND, "file template not found: " + templateCode);
-        }
-        return row;
+        return requireRow(
+                fileMappers.fileTemplateConfigMapper.selectByUniqueKey(resolved, templateCode, ver),
+                "file template not found: " + templateCode);
     }
 
     Map<String, Object> fileRecordDetail(String tenantId, Long fileId) {
         String resolved = resolveTenant(tenantGuard, tenantId);
-        Map<String, Object> row =
-                fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId);
-        if (row == null || row.isEmpty()) {
-            throw new BizException(ResultCode.NOT_FOUND, "file record not found: " + fileId);
-        }
-        return row;
+        return requireRow(
+                fileMappers.fileRecordMapper.selectFileRecordById(resolved, fileId),
+                "file record not found: " + fileId);
     }
 
     ConsoleFilePipelineResponse filePipelineDetail(String tenantId, Long id) {

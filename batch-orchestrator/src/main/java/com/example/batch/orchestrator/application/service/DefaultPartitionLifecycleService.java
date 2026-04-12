@@ -54,7 +54,9 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             partitionEntity.setVersion(0L);
             partitionEntity.setRetryCount(0);
             partitionEntity.setBusinessKey(partitionPlan.getBusinessKey());
-            partitionEntity.setIdempotencyKey(partitionPlan.getPartitionKey());
+            // idempotencyKey 绑定到 jobInstanceId，避免 FIXED_RATE 等同一天多次触发时
+            // 不同 job_instance 的分区互相冲突（partitionKey 仅作业务分片键，不作全局唯一约束）
+            partitionEntity.setIdempotencyKey(jobInstanceId + ":" + partitionPlan.getPartitionNo());
             partitionEntity.setInputSnapshot(
                     buildInputSnapshot(plan, partitionPlan, jobInstanceId));
             jobPartitionMapper.insert(partitionEntity);
