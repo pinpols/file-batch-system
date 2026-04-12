@@ -309,16 +309,9 @@ extract_test_results() {
   grep -E -A 10 "\[ERROR\]|\[FAILURE\]" "$log_file" 2>/dev/null >> "$failed_file" || true
 }
 
-# 将核心模块目录写入给定数组名（bash 3 兼容，避免 mapfile）
-# 用法：build_core_dirs _core_dirs
-build_core_dirs() {
-  local _arr_name=$1
-  local _m
-  eval "${_arr_name}=()"
-  for _m in "${CORE_TEST_MODULES[@]}"; do
-    eval "${_arr_name}+=(\"\$ROOT_DIR/\$_m\")"
-  done
-}
+# 在调用处内联：
+#   _core_dirs=(); for _m in "${CORE_TEST_MODULES[@]}"; do _core_dirs+=("$ROOT_DIR/$_m"); done
+# 不封装为函数——bash 3.2 的 eval 在函数内只创建局部变量，无法写入调用方作用域
 
 case "$MODE" in
   unit)       truncate_logs "$LOG_UNIT"         "$LOG_UNIT_PASSED"         "$LOG_UNIT_FAILED" ;;
@@ -383,7 +376,7 @@ case "$MODE" in
     else
       record_test_result "UNIT_TESTS" "FAILED"
     fi
-    build_core_dirs _core_dirs
+    _core_dirs=(); for _m in "${CORE_TEST_MODULES[@]}"; do _core_dirs+=("$ROOT_DIR/$_m"); done
     extract_test_results "$LOG_UNIT" "$LOG_UNIT_PASSED" "$LOG_UNIT_FAILED" "${_core_dirs[@]}"
     ;;
 
@@ -399,7 +392,7 @@ case "$MODE" in
     else
       record_test_result "INTEGRATION_TESTS" "FAILED"
     fi
-    build_core_dirs _core_dirs
+    _core_dirs=(); for _m in "${CORE_TEST_MODULES[@]}"; do _core_dirs+=("$ROOT_DIR/$_m"); done
     extract_test_results "$LOG_IT" "$LOG_IT_PASSED" "$LOG_IT_FAILED" "${_core_dirs[@]}"
     ;;
 
@@ -429,7 +422,7 @@ case "$MODE" in
     else
       record_test_result "DEFAULT_TESTS" "FAILED"
     fi
-    build_core_dirs _core_dirs
+    _core_dirs=(); for _m in "${CORE_TEST_MODULES[@]}"; do _core_dirs+=("$ROOT_DIR/$_m"); done
     extract_test_results "$LOG_DEFAULT" "$LOG_DEFAULT_PASSED" "$LOG_DEFAULT_FAILED" "${_core_dirs[@]}"
     ;;
 
@@ -445,7 +438,7 @@ case "$MODE" in
     else
       record_test_result "UNIT_INTEGRATION_TESTS" "FAILED"
     fi
-    build_core_dirs _core_dirs
+    _core_dirs=(); for _m in "${CORE_TEST_MODULES[@]}"; do _core_dirs+=("$ROOT_DIR/$_m"); done
     extract_test_results "$LOG_ALL_UNIT_IT" "$LOG_ALL_UNIT_IT_PASSED" "$LOG_ALL_UNIT_IT_FAILED" "${_core_dirs[@]}"
 
     banner "E2E 测试（*E2eIT）"
