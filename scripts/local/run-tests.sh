@@ -177,6 +177,10 @@ run_module_tests() {
     if [[ -n "$test_selector" ]]; then
       args+=("-Dtest=$test_selector")
     fi
+    # --skip-build 时各 mode 并行运行，跳过编译避免多进程同时写 target/test-classes/
+    if $SKIP_BUILD; then
+      args+=("-Dmaven.compiler.skip=true")
+    fi
 
     if ! run_mvn "${args[@]}"; then
       overall=1
