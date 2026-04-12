@@ -268,7 +268,14 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     LaunchRequest childLaunchRequest =
         buildChildLaunchRequest(
             new ChildLaunchContext(
-                jobInstance, workflowRun, node, refJobCode, sourcePayload, childRequestId, traceId, virtualTask));
+                jobInstance,
+                workflowRun,
+                node,
+                refJobCode,
+                sourcePayload,
+                childRequestId,
+                traceId,
+                virtualTask));
     launchServiceProvider.getObject().launch(childLaunchRequest);
 
     return 1; // one virtual partition added to the parent job
@@ -328,8 +335,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     return taskExecutionServiceProvider.getObject().createTask(virtualTaskTemplate);
   }
 
-  private void incrementExpectedPartitionCount(
-      JobInstanceEntity jobInstance, String nodeCode) {
+  private void incrementExpectedPartitionCount(JobInstanceEntity jobInstance, String nodeCode) {
     int currentExpected =
         jobInstance.getExpectedPartitionCount() == null
             ? 0
@@ -349,10 +355,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   }
 
   private String writeTriggerRequestForChildJob(
-      JobInstanceEntity jobInstance,
-      String refJobCode,
-      String idempotencyKey,
-      String traceId) {
+      JobInstanceEntity jobInstance, String refJobCode, String idempotencyKey, String traceId) {
     String childRequestId = IdGenerator.newTraceId();
     String childDedupKey = idempotencyKey + ":child";
     TriggerRequestEntity triggerRequest = new TriggerRequestEntity();

@@ -152,7 +152,8 @@ public class FileGovernanceScheduler {
         continue;
       }
       switch (decision.state()) {
-        case "WAITING_ARRIVAL", "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM -> waitingGroups++;
+        case "WAITING_ARRIVAL", "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM ->
+            waitingGroups++;
         case STATUS_TRIGGERED -> triggeredGroups++;
         case STATUS_TIMEOUT -> timeoutGroups++;
         default -> {}
@@ -332,7 +333,8 @@ public class FileGovernanceScheduler {
       updateGroupState(
           new ArrivalGroupUpdateContext(
               key,
-              new ArrivalGroupUpdateState(STATUS_TRIGGERED, "TIMEOUT_OVERRIDE_" + timeoutAction, now),
+              new ArrivalGroupUpdateState(
+                  STATUS_TRIGGERED, "TIMEOUT_OVERRIDE_" + timeoutAction, now),
               new ArrivalGroupUpdateFiles(groupFiles, requiredFiles, missingFiles)));
       return new ArrivalGroupDecision(STATUS_TRIGGERED);
     }
