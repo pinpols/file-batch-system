@@ -18,6 +18,7 @@ import com.example.batch.console.application.ConsoleJobDefinitionExcelApplicatio
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.excel.ConsoleJobDefinitionExcelController;
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleJobDefinitionExcelRowIssueResponse;

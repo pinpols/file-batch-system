@@ -19,6 +19,7 @@ import com.example.batch.console.application.ConsolePipelineDefinitionExcelAppli
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.excel.ConsolePipelineDefinitionExcelController;
 import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelApplyResponse;
 import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelUploadResponse;

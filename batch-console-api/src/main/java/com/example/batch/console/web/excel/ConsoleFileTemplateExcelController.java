@@ -1,13 +1,14 @@
-package com.example.batch.console.web;
+package com.example.batch.console.web.excel;
 
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
-import com.example.batch.console.application.ConsolePipelineDefinitionExcelApplicationService;
+import com.example.batch.console.application.ConsoleFileTemplateExcelApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.web.request.PipelineDefinitionExcelApplyRequest;
-import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelApplyResponse;
-import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsolePipelineDefinitionExcelUploadResponse;
+import com.example.batch.console.web.query.FileTemplateQueryRequest;
+import com.example.batch.console.web.request.FileTemplateExcelApplyRequest;
+import com.example.batch.console.web.response.ConsoleFileTemplateExcelApplyResponse;
+import com.example.batch.console.web.response.ConsoleFileTemplateExcelPreviewResponse;
+import com.example.batch.console.web.response.ConsoleFileTemplateExcelUploadResponse;
 
 import jakarta.validation.Valid;
 
@@ -19,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,32 +33,26 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 
 /**
- * 流水线定义（pipeline_definition + pipeline_step_definition）配置的 Excel 批量维护接口。
+ * 文件模板 Excel 导入导出 REST。
  *
- * <p>典型流程：{@code GET /export} 导出 → {@code POST /upload} 上传得 {@code uploadToken} → {@code GET
- * /preview/{uploadToken}} 校验预览 → {@code POST /apply/{uploadToken}} 确认写库（需幂等键）。
- *
- * <p>权限：导出含只读审计角色；上传/预览为配置管理员；落库仅管理员。
+ * @deprecated upload / preview / previewWorkbook / apply 已废弃；文件模板由建租户时从 {@code default}
+ *     模板自动初始化，后续调整请通过页面单条维护。export 仍可用。
  */
 @RestController
 @Validated
-@RequestMapping("/api/console/config/pipeline-definitions/excel")
+@RequestMapping("/api/console/config/file-templates/excel")
 @RequiredArgsConstructor
-public class ConsolePipelineDefinitionExcelController {
+public class ConsoleFileTemplateExcelController {
 
-    private final ConsolePipelineDefinitionExcelApplicationService applicationService;
+    private final ConsoleFileTemplateExcelApplicationService applicationService;
     private final ConsoleResponseFactory responseFactory;
 
-    /** 按查询条件导出当前租户可见的流水线定义配置为 {@code .xlsx} 流。 */
+    /** 导出文件模板 Excel。 */
     @GetMapping("/export")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
     public ResponseEntity<InputStreamResource> export(
-            @RequestParam("tenantId") String tenantId,
-            @RequestParam(value = "jobCode", required = false) String jobCode,
-            @RequestParam(value = "pipelineType", required = false) String pipelineType,
-            @RequestParam(value = "enabled", required = false) Boolean enabled) {
-        return applicationService.exportPipelineDefinitions(
-                tenantId, jobCode, pipelineType, enabled);
+            @Valid @ModelAttribute FileTemplateQueryRequest request) {
+        return applicationService.exportFileTemplates(request);
     }
 
     /** 下载空白模板。 */
@@ -66,50 +62,40 @@ public class ConsolePipelineDefinitionExcelController {
         return applicationService.downloadTemplate();
     }
 
-    /**
-     * 上传 Excel 工作簿，解析后写入服务端临时会话，返回 {@code uploadToken} 供预览与确认。
-     *
-     * @param file 表单字段名 {@code file}，内容为 xlsx
-     */
+    /** @deprecated 已废弃；文件模板由建租户时从 {@code default} 模板自动初始化，后续调整请通过页面单条维护。 */
+    @Deprecated
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<ConsolePipelineDefinitionExcelUploadResponse> upload(
+    public CommonResponse<ConsoleFileTemplateExcelUploadResponse> upload(
             @RequestParam("file") MultipartFile file) throws IOException {
         return responseFactory.success(applicationService.upload(file));
     }
 
-    /**
-     * 根据 {@code uploadToken} 返回解析后的行数据及校验问题，不写库。
-     *
-     * @param uploadToken {@code /upload} 响应中的令牌
-     */
+    /** @deprecated 已废弃；文件模板由建租户时从 {@code default} 模板自动初始化，后续调整请通过页面单条维护。 */
+    @Deprecated
     @GetMapping("/preview/{uploadToken}")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-    public CommonResponse<ConsolePipelineDefinitionExcelPreviewResponse> preview(
+    public CommonResponse<ConsoleFileTemplateExcelPreviewResponse> preview(
             @PathVariable String uploadToken) {
         return responseFactory.success(applicationService.preview(uploadToken));
     }
 
-    /** 下载带校验问题与批注的预览 workbook。 */
+    /** @deprecated 已废弃；文件模板由建租户时从 {@code default} 模板自动初始化，后续调整请通过页面单条维护。 */
+    @Deprecated
     @GetMapping("/preview/{uploadToken}/workbook")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
     public ResponseEntity<InputStreamResource> previewWorkbook(@PathVariable String uploadToken) {
         return applicationService.downloadPreviewWorkbook(uploadToken);
     }
 
-    /**
-     * 将已通过预览的会话数据批量写入/更新流水线定义配置，并记录配置变更。
-     *
-     * @param idempotencyKey 请求头幂等键，防重复提交
-     * @param uploadToken 与预览阶段相同
-     * @param request 可选说明，如落库原因（见 {@link PipelineDefinitionExcelApplyRequest}）
-     */
+    /** @deprecated 已废弃；文件模板由建租户时从 {@code default} 模板自动初始化，后续调整请通过页面单条维护。 */
+    @Deprecated
     @PostMapping("/apply/{uploadToken}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<ConsolePipelineDefinitionExcelApplyResponse> apply(
+    public CommonResponse<ConsoleFileTemplateExcelApplyResponse> apply(
             @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @PathVariable String uploadToken,
-            @Valid @RequestBody PipelineDefinitionExcelApplyRequest request) {
+            @Valid @RequestBody FileTemplateExcelApplyRequest request) {
         return responseFactory.success(applicationService.apply(uploadToken, request));
     }
 }

@@ -19,6 +19,7 @@ import com.example.batch.console.application.ConsoleTenantQuotaPolicyExcelApplic
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.excel.ConsoleTenantQuotaPolicyExcelController;
 import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelUploadResponse;

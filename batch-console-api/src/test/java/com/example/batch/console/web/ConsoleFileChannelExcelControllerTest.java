@@ -17,6 +17,7 @@ import com.example.batch.console.application.ConsoleFileChannelExcelApplicationS
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.excel.ConsoleFileChannelExcelController;
 import com.example.batch.console.web.response.ConsoleFileChannelExcelApplyResponse;
 import com.example.batch.console.web.response.ConsoleFileChannelExcelPreviewResponse;
 import com.example.batch.console.web.response.ConsoleFileChannelExcelUploadResponse;
