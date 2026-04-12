@@ -5,10 +5,10 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ApprovalActionRequest;
+import com.example.batch.console.web.request.BatchApprovalActionRequest;
 import com.example.batch.console.web.response.ConsoleBatchApprovalResultResponse;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
 
 import lombok.RequiredArgsConstructor;
 
@@ -85,10 +85,4 @@ public class ConsoleApprovalController {
                         request.operatorId(),
                         request.reason()));
     }
-
-    public record BatchApprovalActionRequest(
-            String tenantId,
-            @NotEmpty List<String> approvalNos,
-            String operatorId,
-            String reason) {}
 }

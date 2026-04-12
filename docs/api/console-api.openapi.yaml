@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-04-11"
+  x-last-updated: "2026-04-12"
   x-changelog:
     - date: "2026-04-11"
       summary: "POST /api/console/files/delete 改为 DELETE /api/console/files/{fileId}，请求体拆为 path/query 参数，统一物理删除走 DELETE 方法"
@@ -10,6 +10,8 @@ info:
       summary: "软删除改 PATCH：POST /{id}/toggle + POST /batch-toggle 统一改为 PATCH /{id}（body: EnabledPatchRequest）和 PATCH /batch（body: BatchEnabledPatchRequest），移除旧 toggle/batch-toggle 路径"
     - date: "2026-04-11"
       summary: "移除 DELETE job-definitions/{id}、workflow-definitions/{id}、file-channels/{id}、file-templates/{id}；软删除统一走 PATCH /{id}，DELETE 仅保留于物理删除场景"
+    - date: "2026-04-12"
+      summary: "POST /api/console/tenants/batch 新增可选字段 initConfigFrom/initMode：非空时建完租户后自动复制源租户配置，响应从 List<ConsoleTenantResponse> 改为 {tenants, configInit}"
     - date: "2026-04-11"
       summary: "新增 POST /api/console/tenants/batch 批量建租户端点（共享密码+用户名前缀，单事务）"
     - date: "2026-04-11"
@@ -6852,11 +6854,16 @@ paths:
   /api/console/tenants/batch:
     post:
       tags: [Tenants]
-      summary: Batch create tenants
+      summary: Batch create tenants with optional config init
       description: |
         批量创建租户，每个租户自动绑定一个 ROLE_TENANT_USER 操作账号。
         账号用户名 = `usernamePrefix` + `tenantId`，所有租户共享同一初始密码。
-        全部操作在单事务内完成，任意冲突均回滚。
+        全部租户创建操作在单事务内完成，任意冲突均回滚。
+
+        租户创建成功后自动将源租户的配置（含作业定义、工作流定义、资源队列等全部 10 类）
+        复制到新建租户，等价于调用 `POST /api/console/config/tenant-copy`。
+        `initConfigFrom` 不传时默认使用 `default` 模板租户。
+        配置复制失败不影响租户记录，失败详情见响应 `configInit` 字段。
       operationId: batchCreateTenants
       security:
         - bearerAuth: []
@@ -6898,13 +6905,38 @@ paths:
                   minLength: 12
                   maxLength: 256
                   description: 批量初始密码（≥12位高强度），首次登录后应立即修改
+                initConfigFrom:
+                  type: string
+                  maxLength: 64
+                  nullable: true
+                  description: |
+                    可选。配置初始化源租户 ID。不传时默认使用 default 模板租户。
+                    租户创建成功后自动将源租户的全部配置复制到新建租户。
+                initMode:
+                  type: string
+                  enum: [SKIP_EXISTING, UPSERT]
+                  default: SKIP_EXISTING
+                  description: 配置初始化模式，默认 SKIP_EXISTING
       responses:
         '200':
-          description: List of created tenants
+          description: 租户创建结果及（可选）配置初始化结果
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                allOf:
+                  - $ref: '#/components/schemas/CommonResponseObject'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          tenants:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/ConsoleTenantResponse'
+                          configInit:
+                            nullable: true
+                            $ref: '#/components/schemas/TenantConfigBatchInitResponse'
         '409':
           description: Conflict — tenantId or username already exists
           content:
@@ -12233,3 +12265,98 @@ components:
           items:
             type: string
       required: [rowNo, queueCode, messages]
+
+    ConsoleTenantResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        tenantName:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [tenantId, tenantName, status]
+
+    TenantConfigBatchInitResponse:
+      type: object
+      properties:
+        batchOperationId:
+          type: string
+        totalTenants:
+          type: integer
+        successTenants:
+          type: integer
+        failureTenants:
+          type: integer
+        dryRun:
+          type: boolean
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              tenantId:
+                type: string
+              success:
+                type: boolean
+              errorMessage:
+                type: string
+                nullable: true
+              jobDefinitions:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              workflowDefinitions:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              pipelineDefinitions:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              fileChannels:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              fileTemplates:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              resourceQueues:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              batchWindows:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              businessCalendars:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              quotaPolicies:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+              alertRoutings:
+                $ref: '#/components/schemas/TenantConfigInitItemStats'
+      required: [batchOperationId, totalTenants, successTenants, failureTenants, dryRun, results]
+
+    TenantConfigInitItemStats:
+      type: object
+      properties:
+        created:
+          type: integer
+        updated:
+          type: integer
+        skipped:
+          type: integer
+        failed:
+          type: integer
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+                nullable: true
+              action:
+                type: string
+                enum: [CREATED, UPDATED, SKIPPED, FAILED]
+              errorMessage:
+                type: string
+                nullable: true
+      required: [created, updated, skipped, failed]

@@ -9,15 +9,17 @@ import com.example.batch.console.service.ConsoleTenantApplicationService.BatchCr
 import com.example.batch.console.service.ConsoleTenantApplicationService.CreateTenantCommand;
 import com.example.batch.console.service.ConsoleTenantApplicationService.TenantSpec;
 import com.example.batch.console.support.ConsolePrincipal;
+import com.example.batch.console.web.request.BatchCreateTenantRequest;
+import com.example.batch.console.web.request.CreateTenantRequest;
+import com.example.batch.console.web.request.TenantConfigBatchInitRequest.InitMode;
+import com.example.batch.console.web.request.TenantConfigCopyRequest;
+import com.example.batch.console.web.request.UpdateTenantRequest;
+import com.example.batch.console.web.response.BatchCreateTenantsResponse;
 import com.example.batch.console.web.response.ConsoleTenantResponse;
+import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 租户管理 REST 端点。
@@ -46,6 +49,7 @@ import java.util.List;
 public class ConsoleTenantController {
 
     private final ConsoleTenantApplicationService tenantService;
+    private final ConsoleTenantConfigCopyService copyService;
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping
@@ -81,24 +85,37 @@ public class ConsoleTenantController {
 
     @PostMapping("/batch")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<List<ConsoleTenantResponse>> batchCreate(
+    public CommonResponse<BatchCreateTenantsResponse> batchCreate(
             @Validated @RequestBody BatchCreateTenantRequest request,
             Authentication authentication) {
+        String operator = resolveOperator(authentication);
         List<TenantSpec> specs = request.getTenants().stream()
                 .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
                 .toList();
-        return responseFactory.success(
-                tenantService.batchCreateTenants(new BatchCreateTenantCommand(
-                        specs,
-                        request.getUsernamePrefix(),
-                        request.getPassword(),
-                        resolveOperator(authentication))));
+        List<ConsoleTenantResponse> tenants = tenantService.batchCreateTenants(
+                new BatchCreateTenantCommand(specs, request.getUsernamePrefix(),
+                        request.getPassword(), operator));
+
+        TenantConfigBatchInitResponse configInit = null;
+        if (request.getInitConfigFrom() != null && !request.getInitConfigFrom().isBlank()) {
+            List<String> newTenantIds = tenants.stream()
+                    .map(ConsoleTenantResponse::tenantId).toList();
+            TenantConfigCopyRequest copyRequest = new TenantConfigCopyRequest();
+            copyRequest.setSourceTenantId(request.getInitConfigFrom());
+            copyRequest.setTargetTenantIds(newTenantIds);
+            copyRequest.setMode(request.getInitMode() != null
+                    ? request.getInitMode() : InitMode.SKIP_EXISTING);
+            configInit = copyService.copy(copyRequest, operator, UUID.randomUUID().toString());
+        }
+
+        return responseFactory.success(new BatchCreateTenantsResponse(tenants, configInit));
     }
 
     @PutMapping("/{tenantId}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public CommonResponse<ConsoleTenantResponse> update(
-            @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
+            @PathVariable String tenantId,
+            @Validated @RequestBody UpdateTenantRequest request) {
         return responseFactory.success(
                 tenantService.updateTenant(
                         tenantId, request.getTenantName(), request.getDescription()));
@@ -116,89 +133,10 @@ public class ConsoleTenantController {
         return responseFactory.success(tenantService.activateTenant(tenantId));
     }
 
-    // ── internal ──
-
     private String resolveOperator(Authentication authentication) {
         if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal p) {
             return p.username();
         }
         return authentication != null ? authentication.getName() : "system";
-    }
-
-    @Data
-    public static class CreateTenantRequest {
-        @NotBlank
-        @Size(min = 2, max = 64)
-        @Pattern(
-                regexp = "^[a-z0-9][a-z0-9\\-]*[a-z0-9]$",
-                message = "tenant_id must be lowercase alphanumeric with hyphens, e.g. my-tenant")
-        private String tenantId;
-
-        @NotBlank
-        @Size(max = 256)
-        private String tenantName;
-
-        @Size(max = 512)
-        private String description;
-
-        @NotBlank
-        @Size(min = 2, max = 128)
-        @Pattern(
-                regexp = "^[a-zA-Z0-9][a-zA-Z0-9._\\-]*$",
-                message =
-                        "username must start with alphanumeric and contain only letters, digits,"
-                            + " '.', '_', '-'")
-        private String username;
-
-        @NotBlank
-        @Size(min = 8, max = 256)
-        private String password;
-    }
-
-    @Data
-    public static class UpdateTenantRequest {
-        @NotBlank
-        @Size(max = 256)
-        private String tenantName;
-
-        @Size(max = 512)
-        private String description;
-    }
-
-    @Data
-    public static class BatchCreateTenantRequest {
-        @NotEmpty
-        @Size(max = 50, message = "tenants must not exceed 50")
-        @Valid
-        private List<TenantSpecRequest> tenants;
-
-        /** 账号用户名前缀，最终用户名为 {prefix}{tenantId}，默认 op- */
-        @Size(max = 32)
-        @Pattern(
-                regexp = "^[a-zA-Z0-9][a-zA-Z0-9._\\-]*$",
-                message = "usernamePrefix must start with alphanumeric")
-        private String usernamePrefix = "op-";
-
-        /** 批量初始密码（高强度，≥12位），首次登录后应立即修改。 */
-        @NotBlank
-        @Size(min = 12, max = 256)
-        private String password;
-    }
-
-    @Data
-    public static class TenantSpecRequest {
-        @NotBlank
-        @Size(min = 2, max = 64)
-        @Pattern(
-                regexp = "^[a-z0-9][a-z0-9\\-]*[a-z0-9]$",
-                message = "tenant_id must be lowercase alphanumeric with hyphens")
-        private String tenantId;
-
-        @NotBlank
-        @Size(max = 256)
-        private String tenantName;
-
-        @Size(max = 512)
-        private String description;
     }
 }

@@ -3,6 +3,8 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.service.ConsoleMetaQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.web.response.ConsoleMetaEnumItem;
+import com.example.batch.console.web.response.ConsoleMetaOption;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,32 +30,28 @@ public class ConsoleMetaController {
     private final ConsoleResponseFactory responseFactory;
 
     @GetMapping("/enums")
-    public CommonResponse<Map<String, List<EnumItem>>> enums() {
+    public CommonResponse<Map<String, List<ConsoleMetaEnumItem>>> enums() {
         return responseFactory.success(queryService.enums());
     }
 
     @GetMapping("/queues")
-    public CommonResponse<List<SimpleOption>> queues(@RequestParam("tenantId") String tenantId) {
+    public CommonResponse<List<ConsoleMetaOption>> queues(@RequestParam("tenantId") String tenantId) {
         return responseFactory.success(queryService.queues(tenantId));
     }
 
     @GetMapping("/calendars")
-    public CommonResponse<List<SimpleOption>> calendars(@RequestParam("tenantId") String tenantId) {
+    public CommonResponse<List<ConsoleMetaOption>> calendars(@RequestParam("tenantId") String tenantId) {
         return responseFactory.success(queryService.calendars(tenantId));
     }
 
     @GetMapping("/windows")
-    public CommonResponse<List<SimpleOption>> windows(@RequestParam("tenantId") String tenantId) {
+    public CommonResponse<List<ConsoleMetaOption>> windows(@RequestParam("tenantId") String tenantId) {
         return responseFactory.success(queryService.windows(tenantId));
     }
 
     @GetMapping("/worker-groups")
-    public CommonResponse<List<SimpleOption>> workerGroups(
+    public CommonResponse<List<ConsoleMetaOption>> workerGroups(
             @RequestParam("tenantId") String tenantId) {
         return responseFactory.success(queryService.workerGroups(tenantId));
     }
-
-    public record EnumItem(String code, String label) {}
-
-    public record SimpleOption(String code, String label) {}
 }

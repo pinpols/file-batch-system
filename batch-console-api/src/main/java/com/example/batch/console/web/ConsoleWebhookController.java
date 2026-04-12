@@ -6,11 +6,10 @@ import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleWebhookService;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.web.request.CreateWebhookRequest;
+import com.example.batch.console.web.request.UpdateWebhookRequest;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Size;
 
 import lombok.RequiredArgsConstructor;
 
@@ -100,17 +99,4 @@ public class ConsoleWebhookController {
         webhookService.deleteSubscription(tenantId, id);
         return responseFactory.success(null);
     }
-
-    public record CreateWebhookRequest(
-            @NotBlank @Size(max = 128) String name,
-            @NotBlank @Size(max = 1024) String callbackUrl,
-            @NotEmpty List<@NotBlank @Size(max = 64) String> eventTypes,
-            @Size(max = 256) String secret,
-            Boolean enabled) {}
-
-    public record UpdateWebhookRequest(
-            @NotBlank @Size(max = 1024) String callbackUrl,
-            @NotEmpty List<@NotBlank @Size(max = 64) String> eventTypes,
-            @Size(max = 256) String secret,
-            Boolean enabled) {}
 }

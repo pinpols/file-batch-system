@@ -4,18 +4,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
-import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.service.ConsoleUserAccountService;
 import com.example.batch.console.support.ConsolePasswordHasher;
 import com.example.batch.console.support.ConsoleSessionRegistry;
-import com.example.batch.console.web.response.ConsoleUserAccountResponse;
 
 import java.util.Map;
 
@@ -31,9 +28,8 @@ class ConsoleUserAccountControllerTest {
     @Mock private ConsoleUserAccountMapper userAccountMapper;
     @Mock private ConsolePasswordHasher passwordHasher;
     @Mock private ConsoleSessionRegistry sessionRegistry;
-    @Mock private ConsoleResponseFactory responseFactory;
 
-    private ConsoleUserAccountController controller;
+    private ConsoleUserAccountService service;
 
     private static final Map<String, Object> ACCOUNT = Map.of(
             "id", 42L,
@@ -59,15 +55,14 @@ class ConsoleUserAccountControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new ConsoleUserAccountController(
-                userAccountMapper, passwordHasher, sessionRegistry, responseFactory);
+        service = new ConsoleUserAccountService(userAccountMapper, passwordHasher, sessionRegistry);
     }
 
     @Test
     void disable_invalidatesSession() {
         when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT, DISABLED_ACCOUNT);
 
-        controller.disable(42L);
+        service.disable(42L);
 
         verify(userAccountMapper).updateEnabled(42L, false);
         verify(sessionRegistry).invalidateSession("user-a", "tenant-a");
@@ -77,7 +72,7 @@ class ConsoleUserAccountControllerTest {
     void disable_nonExistentAccount_throwsBizException() {
         when(userAccountMapper.selectById(99L)).thenReturn(null);
 
-        assertThatThrownBy(() -> controller.disable(99L))
+        assertThatThrownBy(() -> service.disable(99L))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("user account not found");
 
@@ -90,11 +85,7 @@ class ConsoleUserAccountControllerTest {
         when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT);
         when(passwordHasher.encode("newSecurePass")).thenReturn("$argon2id$...");
 
-        ConsoleUserAccountController.ResetPasswordRequest request =
-                new ConsoleUserAccountController.ResetPasswordRequest();
-        request.setNewPassword("newSecurePass");
-
-        controller.resetPassword(42L, request);
+        service.resetPassword(42L, "newSecurePass");
 
         verify(userAccountMapper).updatePasswordHash(42L, "$argon2id$...");
         verify(sessionRegistry).invalidateSession("user-a", "tenant-a");
@@ -104,11 +95,7 @@ class ConsoleUserAccountControllerTest {
     void resetPassword_nonExistentAccount_throwsBizException() {
         when(userAccountMapper.selectById(99L)).thenReturn(null);
 
-        ConsoleUserAccountController.ResetPasswordRequest request =
-                new ConsoleUserAccountController.ResetPasswordRequest();
-        request.setNewPassword("newSecurePass");
-
-        assertThatThrownBy(() -> controller.resetPassword(99L, request))
+        assertThatThrownBy(() -> service.resetPassword(99L, "newSecurePass"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("user account not found");
 
@@ -120,7 +107,7 @@ class ConsoleUserAccountControllerTest {
     void enable_doesNotInvalidateSession() {
         when(userAccountMapper.selectById(42L)).thenReturn(ACCOUNT);
 
-        controller.enable(42L);
+        service.enable(42L);
 
         verify(userAccountMapper).updateEnabled(42L, true);
         verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());

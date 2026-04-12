@@ -76,12 +76,12 @@
     <insert id="insertFileChannelConfig" useGeneratedKeys="true" keyProperty="id">
         insert into batch.file_channel_config (
             tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
-            config_json, receipt_policy, timeout_seconds, enabled, created_by, updated_by,
+            config_json, receipt_policy, timeout_seconds, enabled,
             created_at, updated_at
         ) values (
             #{p.tenantId}, #{p.channelCode}, #{p.channelName}, #{p.channelType}, #{p.targetEndpoint}, #{p.authType},
             #{p.configJson,jdbcType=VARCHAR}::jsonb, #{p.receiptPolicy}, #{p.timeoutSeconds}, #{p.enabled},
-            #{p.createdBy}, #{p.updatedBy}, current_timestamp, current_timestamp
+            current_timestamp, current_timestamp
         )
     </insert>
 
@@ -95,7 +95,6 @@
             receipt_policy   = #{p.receiptPolicy},
             timeout_seconds  = #{p.timeoutSeconds},
             enabled          = #{p.enabled},
-            updated_by       = #{p.updatedBy},
             updated_at       = current_timestamp
         where tenant_id = #{p.tenantId} and id = #{p.id}
     </update>
@@ -103,12 +102,12 @@
     <insert id="upsertFileChannelConfig">
         insert into batch.file_channel_config (
             tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
-            config_json, receipt_policy, timeout_seconds, enabled, created_by, updated_by,
+            config_json, receipt_policy, timeout_seconds, enabled,
             created_at, updated_at
         ) values (
             #{p.tenantId}, #{p.channelCode}, #{p.channelName}, #{p.channelType}, #{p.targetEndpoint}, #{p.authType},
             #{p.configJson,jdbcType=VARCHAR}::jsonb, #{p.receiptPolicy}, #{p.timeoutSeconds}, #{p.enabled},
-            #{p.createdBy}, #{p.updatedBy}, current_timestamp, current_timestamp
+            current_timestamp, current_timestamp
         )
         on conflict (tenant_id, channel_code) do update set
             channel_name = excluded.channel_name,
@@ -119,7 +118,6 @@
             receipt_policy = excluded.receipt_policy,
             timeout_seconds = excluded.timeout_seconds,
             enabled = excluded.enabled,
-            updated_by = excluded.updated_by,
             updated_at = current_timestamp
     </insert>
 </mapper>
