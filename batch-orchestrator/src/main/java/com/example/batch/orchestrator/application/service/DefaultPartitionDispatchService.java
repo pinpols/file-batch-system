@@ -277,12 +277,15 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     private String resolveTaskType(SchedulePlan plan, JobPartitionEntity partition) {
         if (partition != null
                 && partition.getWorkerGroup() != null
-                && plan != null
-                && plan.getDefaultWorkerRoute() != null
+                && hasDefaultRoute(plan)
                 && plan.getDefaultWorkerRoute().getWorkerType() != null) {
             return plan.getDefaultWorkerRoute().getWorkerType();
         }
         return plan == null ? null : plan.getDefaultWorkerType();
+    }
+
+    private boolean hasDefaultRoute(SchedulePlan plan) {
+        return plan != null && plan.getDefaultWorkerRoute() != null;
     }
 
     private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {
@@ -291,7 +294,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                 && !partition.getWorkerCode().isBlank()) {
             return partition.getWorkerCode();
         }
-        if (plan != null && plan.getDefaultWorkerRoute() != null) {
+        if (hasDefaultRoute(plan)) {
             return plan.getDefaultWorkerRoute().getWorkerCode();
         }
         return null;

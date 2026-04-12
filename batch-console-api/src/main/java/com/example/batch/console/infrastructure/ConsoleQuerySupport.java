@@ -40,6 +40,13 @@ final class ConsoleQuerySupport {
         return value;
     }
 
+    static Map<String, Object> requireRow(Map<String, Object> row, String message) {
+        if (row == null || row.isEmpty()) {
+            throw new BizException(ResultCode.NOT_FOUND, message);
+        }
+        return row;
+    }
+
     static String resolveTenant(ConsoleTenantGuard tenantGuard, String requestTenantId) {
         return tenantGuard.resolveTenant(requestTenantId);
     }

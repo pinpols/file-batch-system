@@ -34,7 +34,7 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
         // 3) 最后等待 in-flight 任务自然结束（有超时），避免 RUNNING 卡死/重复调度
         Collection<WorkerRegistration> registrations = workerRuntimeState.snapshot();
         for (WorkerRegistration registration : registrations) {
-            if (registration == null || registration.getWorkerId() == null || registration.getWorkerId().isBlank()) {
+            if (!isValidRegistration(registration)) {
                 continue;
             }
             try {
@@ -57,6 +57,12 @@ public class GracefulKafkaShutdown implements ApplicationListener<ContextClosedE
         } catch (Exception ex) {
             log.warn("failed to await in-flight tasks drain: {}", ex.getMessage(), ex);
         }
+    }
+
+    private boolean isValidRegistration(WorkerRegistration registration) {
+        return registration != null
+                && registration.getWorkerId() != null
+                && !registration.getWorkerId().isBlank();
     }
 }
 

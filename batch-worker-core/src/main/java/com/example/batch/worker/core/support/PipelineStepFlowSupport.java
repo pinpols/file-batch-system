@@ -23,13 +23,11 @@ public final class PipelineStepFlowSupport {
                                                          boolean success,
                                                          List<PipelineStepDefinition> steps,
                                                          Map<String, Object> attributes) {
-        if (current != null) {
-            if (success && current.booleanParam("terminalOnSuccess", "stopOnSuccess")) {
-                return null;
-            }
-            if (!success && current.booleanParam("terminalOnFailure", "stopOnFailure")) {
-                return null;
-            }
+        if (current != null && success && current.booleanParam("terminalOnSuccess", "stopOnSuccess")) {
+            return null;
+        }
+        if (current != null && !success && current.booleanParam("terminalOnFailure", "stopOnFailure")) {
+            return null;
         }
         String selector = popSelector(attributes);
         if (!StringUtils.hasText(selector) && current != null) {

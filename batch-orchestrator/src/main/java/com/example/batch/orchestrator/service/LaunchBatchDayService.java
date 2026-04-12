@@ -41,7 +41,7 @@ public class LaunchBatchDayService {
             JobDefinitionRecord jobDefinition,
             Map<String, Object> effectiveParams,
             Instant batchDaySlaDeadlineAt) {
-        if (request == null || request.bizDate() == null || jobDefinition == null) {
+        if (isMissingLaunchContext(request, jobDefinition)) {
             return;
         }
         String calendarCode = LaunchParamResolver.textValue(jobDefinition.calendarCode());
@@ -189,7 +189,7 @@ public class LaunchBatchDayService {
     Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
         BusinessCalendarRecord calendar =
                 configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
-        if (calendar == null || calendar.slaOffsetMin() == null || calendar.slaOffsetMin() <= 0) {
+        if (!hasValidSlaOffset(calendar)) {
             return null;
         }
         LocalTime cutoffTime =
@@ -207,7 +207,7 @@ public class LaunchBatchDayService {
     }
 
     boolean isPastBatchDayCutoff(BatchDayInstanceRecord batchDay, String calendarCode) {
-        if (batchDay == null || batchDay.bizDate() == null || batchDay.tenantId() == null) {
+        if (isIncompleteBatchDay(batchDay)) {
             return false;
         }
         Instant cutoffAt = batchDay.cutoffAt();
@@ -243,12 +243,30 @@ public class LaunchBatchDayService {
     Integer resolveLateArrivalToleranceMin(String tenantId, String calendarCode) {
         BusinessCalendarRecord calendar =
                 configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
-        if (calendar == null
-                || calendar.lateArrivalToleranceMin() == null
-                || calendar.lateArrivalToleranceMin() < 0) {
+        if (!hasValidLateArrivalTolerance(calendar)) {
             return 0;
         }
         return calendar.lateArrivalToleranceMin();
+    }
+
+    private boolean isMissingLaunchContext(LaunchRequest request, JobDefinitionRecord jobDefinition) {
+        return request == null || request.bizDate() == null || jobDefinition == null;
+    }
+
+    private boolean isIncompleteBatchDay(BatchDayInstanceRecord batchDay) {
+        return batchDay == null || batchDay.bizDate() == null || batchDay.tenantId() == null;
+    }
+
+    private boolean hasValidSlaOffset(BusinessCalendarRecord calendar) {
+        return calendar != null
+                && calendar.slaOffsetMin() != null
+                && calendar.slaOffsetMin() > 0;
+    }
+
+    private boolean hasValidLateArrivalTolerance(BusinessCalendarRecord calendar) {
+        return calendar != null
+                && calendar.lateArrivalToleranceMin() != null
+                && calendar.lateArrivalToleranceMin() >= 0;
     }
 
     boolean isLateAccepted(Map<String, Object> params) {
