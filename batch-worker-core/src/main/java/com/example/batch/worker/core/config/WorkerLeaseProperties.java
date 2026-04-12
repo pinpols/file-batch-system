@@ -7,5 +7,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.worker.lease")
 public class WorkerLeaseProperties {
 
-    private long renewIntervalMillis = 10000L;
+  private long renewIntervalMillis = 10000L;
 }

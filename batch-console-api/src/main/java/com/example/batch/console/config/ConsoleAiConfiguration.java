@@ -10,10 +10,10 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ConsoleAiConfiguration {
 
-    @Bean
-    @ConditionalOnProperty(prefix = "batch.console.ai", name = "enabled", havingValue = "true")
-    @ConditionalOnBean(ChatModel.class)
-    public ChatClient consoleChatClient(ChatModel chatModel) {
-        return ChatClient.create(chatModel);
-    }
+  @Bean
+  @ConditionalOnProperty(prefix = "batch.console.ai", name = "enabled", havingValue = "true")
+  @ConditionalOnBean(ChatModel.class)
+  public ChatClient consoleChatClient(ChatModel chatModel) {
+    return ChatClient.create(chatModel);
+  }
 }

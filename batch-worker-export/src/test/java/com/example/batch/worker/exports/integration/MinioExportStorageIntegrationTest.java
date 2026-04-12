@@ -18,107 +18,109 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/**
- * Integration test: MinioExportStorage read/write/copy/remove against real MinIO container.
- */
+/** Integration test: MinioExportStorage read/write/copy/remove against real MinIO container. */
 @SpringBootTest(
-        classes = BatchWorkerExportApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    classes = BatchWorkerExportApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class MinioExportStorageIntegrationTest extends AbstractIntegrationTest {
 
-    @DynamicPropertySource
-    static void orchestratorStub(DynamicPropertyRegistry registry) {
-        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+  @DynamicPropertySource
+  static void orchestratorStub(DynamicPropertyRegistry registry) {
+    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+  }
+
+  @Autowired private MinioExportStorage storage;
+
+  @Test
+  void shouldWriteAndDetectJsonObject() {
+    String objectName = "export/it-test-write.json";
+    String content = "{\"test\":true,\"value\":42}";
+
+    storage.writeJson(objectName, content);
+
+    assertThat(storage.objectExists(objectName)).isTrue();
+  }
+
+  @Test
+  void shouldComputeCorrectSha256AfterWrite() throws Exception {
+    String objectName = "export/it-test-sha256.json";
+    String content = "{\"checksum\":\"test\"}";
+    byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+
+    storage.writeJson(objectName, content);
+
+    String expectedHex =
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(contentBytes));
+    assertThat(storage.sha256Hex(objectName)).isEqualTo(expectedHex);
+  }
+
+  @Test
+  void shouldCopyObjectToNewKey() {
+    String source = "export/it-test-copy-source.json";
+    String dest = "export/it-test-copy-dest.json";
+    storage.writeJson(source, "{\"copy\":true}");
+
+    storage.copyObject(source, dest);
+
+    assertThat(storage.objectExists(dest)).isTrue();
+    assertThat(storage.sha256Hex(dest)).isEqualTo(storage.sha256Hex(source));
+  }
+
+  @Test
+  void shouldRemoveObject() {
+    String objectName = "export/it-test-remove.json";
+    storage.writeJson(objectName, "{\"remove\":true}");
+    assertThat(storage.objectExists(objectName)).isTrue();
+
+    storage.removeObject(objectName);
+
+    assertThat(storage.objectExists(objectName)).isFalse();
+  }
+
+  @Test
+  void shouldReturnFalseForNonExistentObject() {
+    assertThat(
+            storage.objectExists("export/no-such-object-" + System.currentTimeMillis() + ".json"))
+        .isFalse();
+  }
+
+  @Test
+  void shouldWriteRawBytesAndDetectObject() {
+    String objectName = "export/it-test-bytes.bin";
+    byte[] bytes = "raw binary content".getBytes(StandardCharsets.UTF_8);
+
+    String written = storage.writeObject(objectName, bytes, "application/octet-stream");
+
+    assertThat(written).isEqualTo(objectName);
+    assertThat(storage.objectExists(objectName)).isTrue();
+  }
+
+  @Test
+  void shouldGenerateObjectNameWhenNullProvided() {
+    String written =
+        storage.writeObject(null, "{}".getBytes(StandardCharsets.UTF_8), "application/json");
+
+    assertThat(written).isNotBlank();
+    assertThat(storage.objectExists(written)).isTrue();
+  }
+
+  @Test
+  void shouldRoundTripWrittenJsonThroughMinio() throws Exception {
+    String objectName = "export/it-test-roundtrip.json";
+    String content = "{\"roundTrip\":true,\"n\":7}";
+
+    storage.writeJson(objectName, content);
+
+    MinioClient client =
+        MinioClient.builder()
+            .endpoint(minioEndpoint())
+            .credentials("minioadmin", "minioadmin123")
+            .build();
+    try (InputStream in =
+        client.getObject(
+            GetObjectArgs.builder().bucket(minioBucket()).object(objectName).build())) {
+      String read = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+      assertThat(read).isEqualTo(content);
     }
-
-    @Autowired
-    private MinioExportStorage storage;
-
-    @Test
-    void shouldWriteAndDetectJsonObject() {
-        String objectName = "export/it-test-write.json";
-        String content = "{\"test\":true,\"value\":42}";
-
-        storage.writeJson(objectName, content);
-
-        assertThat(storage.objectExists(objectName)).isTrue();
-    }
-
-    @Test
-    void shouldComputeCorrectSha256AfterWrite() throws Exception {
-        String objectName = "export/it-test-sha256.json";
-        String content = "{\"checksum\":\"test\"}";
-        byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
-
-        storage.writeJson(objectName, content);
-
-        String expectedHex = HexFormat.of().formatHex(
-                MessageDigest.getInstance("SHA-256").digest(contentBytes));
-        assertThat(storage.sha256Hex(objectName)).isEqualTo(expectedHex);
-    }
-
-    @Test
-    void shouldCopyObjectToNewKey() {
-        String source = "export/it-test-copy-source.json";
-        String dest = "export/it-test-copy-dest.json";
-        storage.writeJson(source, "{\"copy\":true}");
-
-        storage.copyObject(source, dest);
-
-        assertThat(storage.objectExists(dest)).isTrue();
-        assertThat(storage.sha256Hex(dest)).isEqualTo(storage.sha256Hex(source));
-    }
-
-    @Test
-    void shouldRemoveObject() {
-        String objectName = "export/it-test-remove.json";
-        storage.writeJson(objectName, "{\"remove\":true}");
-        assertThat(storage.objectExists(objectName)).isTrue();
-
-        storage.removeObject(objectName);
-
-        assertThat(storage.objectExists(objectName)).isFalse();
-    }
-
-    @Test
-    void shouldReturnFalseForNonExistentObject() {
-        assertThat(storage.objectExists("export/no-such-object-" + System.currentTimeMillis() + ".json")).isFalse();
-    }
-
-    @Test
-    void shouldWriteRawBytesAndDetectObject() {
-        String objectName = "export/it-test-bytes.bin";
-        byte[] bytes = "raw binary content".getBytes(StandardCharsets.UTF_8);
-
-        String written = storage.writeObject(objectName, bytes, "application/octet-stream");
-
-        assertThat(written).isEqualTo(objectName);
-        assertThat(storage.objectExists(objectName)).isTrue();
-    }
-
-    @Test
-    void shouldGenerateObjectNameWhenNullProvided() {
-        String written = storage.writeObject(null, "{}".getBytes(StandardCharsets.UTF_8), "application/json");
-
-        assertThat(written).isNotBlank();
-        assertThat(storage.objectExists(written)).isTrue();
-    }
-
-    @Test
-    void shouldRoundTripWrittenJsonThroughMinio() throws Exception {
-        String objectName = "export/it-test-roundtrip.json";
-        String content = "{\"roundTrip\":true,\"n\":7}";
-
-        storage.writeJson(objectName, content);
-
-        MinioClient client = MinioClient.builder()
-                .endpoint(minioEndpoint())
-                .credentials("minioadmin", "minioadmin123")
-                .build();
-        try (InputStream in = client.getObject(
-                GetObjectArgs.builder().bucket(minioBucket()).object(objectName).build())) {
-            String read = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            assertThat(read).isEqualTo(content);
-        }
-    }
+  }
 }

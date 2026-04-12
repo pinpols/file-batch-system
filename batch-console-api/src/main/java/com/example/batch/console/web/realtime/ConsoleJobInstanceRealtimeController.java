@@ -2,9 +2,7 @@ package com.example.batch.console.web.realtime;
 
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeEventHub;
 import com.example.batch.console.support.ConsoleTenantGuard;
-
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -23,24 +21,20 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Validated
 @RequestMapping("/api/console/stream")
 @PreAuthorize(
-        "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
+    "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
 public class ConsoleJobInstanceRealtimeController {
 
-    private final ConsoleRealtimeEventHub realtimeEventHub;
-    private final ConsoleTenantGuard tenantGuard;
+  private final ConsoleRealtimeEventHub realtimeEventHub;
+  private final ConsoleTenantGuard tenantGuard;
 
-    @GetMapping(path = "/job-instances/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter jobInstances(
-            @RequestParam("tenantId") String tenantId,
-            @RequestParam(value = "eventType", required = false) String eventType,
-            @RequestParam(value = "cursor", required = false) String cursor,
-            @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
-        return realtimeEventHub.subscribe(
-                tenantGuard.resolveTenant(tenantId),
-                "job-instances",
-                eventType,
-                cursor,
-                heartbeatMillis);
-    }
+  @GetMapping(path = "/job-instances/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public SseEmitter jobInstances(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam(value = "eventType", required = false) String eventType,
+      @RequestParam(value = "cursor", required = false) String cursor,
+      @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+    return realtimeEventHub.subscribe(
+        tenantGuard.resolveTenant(tenantId), "job-instances", eventType, cursor, heartbeatMillis);
+  }
 }

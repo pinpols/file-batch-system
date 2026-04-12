@@ -15,32 +15,29 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkerLifecycleManagerTest {
 
-    @Mock
-    private WorkerSelfRegistrationService workerRegistryService;
+  @Mock private WorkerSelfRegistrationService workerRegistryService;
 
-    @Mock
-    private WorkerRuntimeState workerRuntimeState;
+  @Mock private WorkerRuntimeState workerRuntimeState;
 
-    @Mock
-    private ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
+  @Mock private ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
 
-    @Test
-    void shutdown_removesLocalStateEvenWhenRemoteStatusSyncFails() {
-        WorkerRegistration registration = new WorkerRegistration();
-        registration.setWorkerId("worker-1");
-        when(workerRuntimeState.get("worker-1")).thenReturn(registration);
-        when(activeTaskLeaseRegistry.snapshot()).thenReturn(List.of());
-        when(workerRegistryService.updateStatus(registration, "DRAINING")).thenReturn(registration);
-        doThrow(new RuntimeException("orchestrator unavailable"))
-                .when(workerRegistryService).updateStatus(registration, "DECOMMISSIONED");
+  @Test
+  void shutdown_removesLocalStateEvenWhenRemoteStatusSyncFails() {
+    WorkerRegistration registration = new WorkerRegistration();
+    registration.setWorkerId("worker-1");
+    when(workerRuntimeState.get("worker-1")).thenReturn(registration);
+    when(activeTaskLeaseRegistry.snapshot()).thenReturn(List.of());
+    when(workerRegistryService.updateStatus(registration, "DRAINING")).thenReturn(registration);
+    doThrow(new RuntimeException("orchestrator unavailable"))
+        .when(workerRegistryService)
+        .updateStatus(registration, "DECOMMISSIONED");
 
-        DefaultWorkerLifecycleManager manager = new DefaultWorkerLifecycleManager(
-                workerRegistryService,
-                workerRuntimeState,
-                activeTaskLeaseRegistry);
+    DefaultWorkerLifecycleManager manager =
+        new DefaultWorkerLifecycleManager(
+            workerRegistryService, workerRuntimeState, activeTaskLeaseRegistry);
 
-        manager.shutdown("worker-1");
+    manager.shutdown("worker-1");
 
-        verify(workerRuntimeState).remove("worker-1");
-    }
+    verify(workerRuntimeState).remove("worker-1");
+  }
 }

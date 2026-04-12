@@ -7,101 +7,82 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
-
-import lombok.RequiredArgsConstructor;
-
-import org.springframework.stereotype.Service;
-
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class InstanceManagementApplicationService {
 
-    private static final Set<String> CANCELLABLE = Set.of("CREATED", "WAITING", "READY");
-    private static final Set<String> TERMINABLE = Set.of("RUNNING");
-    private static final Set<String> PARTITION_CANCELLABLE = Set.of("CREATED", "WAITING", "READY");
+  private static final Set<String> CANCELLABLE = Set.of("CREATED", "WAITING", "READY");
+  private static final Set<String> TERMINABLE = Set.of("RUNNING");
+  private static final Set<String> PARTITION_CANCELLABLE = Set.of("CREATED", "WAITING", "READY");
 
-    private final JobInstanceMapper jobInstanceMapper;
-    private final JobPartitionMapper jobPartitionMapper;
+  private final JobInstanceMapper jobInstanceMapper;
+  private final JobPartitionMapper jobPartitionMapper;
 
-    public Map<String, Object> cancel(String tenantId, Long id) {
-        return transition(tenantId, id, CANCELLABLE, "CANCELLED");
+  public Map<String, Object> cancel(String tenantId, Long id) {
+    return transition(tenantId, id, CANCELLABLE, "CANCELLED");
+  }
+
+  public Map<String, Object> terminate(String tenantId, Long id) {
+    return transition(tenantId, id, TERMINABLE, "TERMINATED");
+  }
+
+  public Map<String, Object> cancelPartition(String tenantId, Long id) {
+    JobPartitionEntity partition = findPartition(tenantId, id);
+    if (!PARTITION_CANCELLABLE.contains(partition.getPartitionStatus())) {
+      throw new BizException(
+          ResultCode.STATE_CONFLICT,
+          "cannot cancel partition from " + partition.getPartitionStatus());
     }
-
-    public Map<String, Object> terminate(String tenantId, Long id) {
-        return transition(tenantId, id, TERMINABLE, "TERMINATED");
+    int rows =
+        jobPartitionMapper.promoteStatus(
+            tenantId, id, partition.getPartitionStatus(), "CANCELLED", partition.getVersion());
+    if (rows == 0) {
+      throw new BizException(ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
     }
+    return Map.of("id", id, "status", "CANCELLED");
+  }
 
-    public Map<String, Object> cancelPartition(String tenantId, Long id) {
-        JobPartitionEntity partition = findPartition(tenantId, id);
-        if (!PARTITION_CANCELLABLE.contains(partition.getPartitionStatus())) {
-            throw new BizException(
-                    ResultCode.STATE_CONFLICT,
-                    "cannot cancel partition from " + partition.getPartitionStatus());
-        }
-        int rows =
-                jobPartitionMapper.promoteStatus(
-                        tenantId,
-                        id,
-                        partition.getPartitionStatus(),
-                        "CANCELLED",
-                        partition.getVersion());
-        if (rows == 0) {
-            throw new BizException(
-                    ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
-        }
-        return Map.of("id", id, "status", "CANCELLED");
+  public Map<String, Object> retryPartition(String tenantId, Long id) {
+    JobPartitionEntity partition = findPartition(tenantId, id);
+    if (!"FAILED".equals(partition.getPartitionStatus())) {
+      throw new BizException(
+          ResultCode.STATE_CONFLICT,
+          "can only retry FAILED partitions, current: " + partition.getPartitionStatus());
     }
+    int rows =
+        jobPartitionMapper.markRetrying(
+            tenantId, id, partition.getRetryCount() + 1, "RETRYING", partition.getVersion());
+    if (rows == 0) {
+      throw new BizException(ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
+    }
+    return Map.of("id", id, "status", "RETRYING");
+  }
 
-    public Map<String, Object> retryPartition(String tenantId, Long id) {
-        JobPartitionEntity partition = findPartition(tenantId, id);
-        if (!"FAILED".equals(partition.getPartitionStatus())) {
-            throw new BizException(
-                    ResultCode.STATE_CONFLICT,
-                    "can only retry FAILED partitions, current: " + partition.getPartitionStatus());
-        }
-        int rows =
-                jobPartitionMapper.markRetrying(
-                        tenantId,
-                        id,
-                        partition.getRetryCount() + 1,
-                        "RETRYING",
-                        partition.getVersion());
-        if (rows == 0) {
-            throw new BizException(
-                    ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
-        }
-        return Map.of("id", id, "status", "RETRYING");
-    }
+  private JobPartitionEntity findPartition(String tenantId, Long id) {
+    return Guard.requireFound(jobPartitionMapper.selectById(tenantId, id), "partition not found");
+  }
 
-    private JobPartitionEntity findPartition(String tenantId, Long id) {
-        return Guard.requireFound(
-                jobPartitionMapper.selectById(tenantId, id), "partition not found");
+  private Map<String, Object> transition(
+      String tenantId, Long id, Set<String> allowedFrom, String targetStatus) {
+    JobInstanceEntity instance =
+        Guard.requireFound(jobInstanceMapper.selectById(tenantId, id), "job instance not found");
+    if (!allowedFrom.contains(instance.getInstanceStatus())) {
+      throw new BizException(
+          ResultCode.STATE_CONFLICT,
+          "cannot transition from " + instance.getInstanceStatus() + " to " + targetStatus);
     }
-
-    private Map<String, Object> transition(
-            String tenantId, Long id, Set<String> allowedFrom, String targetStatus) {
-        JobInstanceEntity instance =
-                Guard.requireFound(
-                        jobInstanceMapper.selectById(tenantId, id), "job instance not found");
-        if (!allowedFrom.contains(instance.getInstanceStatus())) {
-            throw new BizException(
-                    ResultCode.STATE_CONFLICT,
-                    "cannot transition from "
-                            + instance.getInstanceStatus()
-                            + " to "
-                            + targetStatus);
-        }
-        int rows =
-                jobInstanceMapper.updateStatus(
-                        tenantId, id, targetStatus, Instant.now(), instance.getVersion());
-        if (rows == 0) {
-            throw new BizException(
-                    ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
-        }
-        return Map.of("id", id, "instanceNo", instance.getInstanceNo(), "status", targetStatus);
+    int rows =
+        jobInstanceMapper.updateStatus(
+            tenantId, id, targetStatus, Instant.now(), instance.getVersion());
+    if (rows == 0) {
+      throw new BizException(ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
     }
+    return Map.of("id", id, "instanceNo", instance.getInstanceNo(), "status", targetStatus);
+  }
 }

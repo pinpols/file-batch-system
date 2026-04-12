@@ -8,10 +8,10 @@ import java.time.Instant;
  * <p>service 层只发布这个事件，统一 listener 再把它转成 SSE 或摘要刷新。
  */
 public record ConsoleRealtimeDomainEvent(
-        String tenantId,
-        String stream,
-        String eventType,
-        String cursor,
-        Object data,
-        boolean summaryRefresh,
-        Instant emittedAt) {}
+    String tenantId,
+    String stream,
+    String eventType,
+    String cursor,
+    Object data,
+    boolean summaryRefresh,
+    Instant emittedAt) {}

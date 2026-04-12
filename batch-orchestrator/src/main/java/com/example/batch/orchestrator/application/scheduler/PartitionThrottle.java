@@ -6,5 +6,5 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest
 
 public interface PartitionThrottle {
 
-    ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue);
+  ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue);
 }

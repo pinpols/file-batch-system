@@ -9,9 +9,7 @@ import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.config.RetryGovernanceProperties;
 import com.example.batch.orchestrator.config.SlaGovernanceProperties;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
-
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.stereotype.Component;
 
 /** Orchestrator 治理配置聚合类，将分散的 {@code @ConfigurationProperties} 统一组合，减少重复注入点。 */
@@ -19,49 +17,49 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BatchOrchestratorGovernanceProperties {
 
-    private final OutboxProperties outbox;
-    private final ResourceSchedulerProperties resourceScheduler;
-    private final RateLimitProperties rateLimit;
-    private final SlaGovernanceProperties sla;
-    private final RetryGovernanceProperties retry;
-    private final PartitionLeaseProperties partitionLease;
-    private final WorkerDrainProperties workerDrain;
-    private final FileGovernanceProperties fileGovernance;
-    private final BatchMqTopicsProperties mqTopics;
+  private final OutboxProperties outbox;
+  private final ResourceSchedulerProperties resourceScheduler;
+  private final RateLimitProperties rateLimit;
+  private final SlaGovernanceProperties sla;
+  private final RetryGovernanceProperties retry;
+  private final PartitionLeaseProperties partitionLease;
+  private final WorkerDrainProperties workerDrain;
+  private final FileGovernanceProperties fileGovernance;
+  private final BatchMqTopicsProperties mqTopics;
 
-    public OutboxProperties outbox() {
-        return outbox;
-    }
+  public OutboxProperties outbox() {
+    return outbox;
+  }
 
-    public ResourceSchedulerProperties resourceScheduler() {
-        return resourceScheduler;
-    }
+  public ResourceSchedulerProperties resourceScheduler() {
+    return resourceScheduler;
+  }
 
-    public RateLimitProperties rateLimit() {
-        return rateLimit;
-    }
+  public RateLimitProperties rateLimit() {
+    return rateLimit;
+  }
 
-    public SlaGovernanceProperties sla() {
-        return sla;
-    }
+  public SlaGovernanceProperties sla() {
+    return sla;
+  }
 
-    public RetryGovernanceProperties retry() {
-        return retry;
-    }
+  public RetryGovernanceProperties retry() {
+    return retry;
+  }
 
-    public PartitionLeaseProperties partitionLease() {
-        return partitionLease;
-    }
+  public PartitionLeaseProperties partitionLease() {
+    return partitionLease;
+  }
 
-    public WorkerDrainProperties workerDrain() {
-        return workerDrain;
-    }
+  public WorkerDrainProperties workerDrain() {
+    return workerDrain;
+  }
 
-    public FileGovernanceProperties fileGovernance() {
-        return fileGovernance;
-    }
+  public FileGovernanceProperties fileGovernance() {
+    return fileGovernance;
+  }
 
-    public BatchMqTopicsProperties mqTopics() {
-        return mqTopics;
-    }
+  public BatchMqTopicsProperties mqTopics() {
+    return mqTopics;
+  }
 }

@@ -5,5 +5,5 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest
 
 public interface ResourceQueueManager {
 
-    ResourceQueueRecord resolveQueue(ResourceSchedulingRequest request);
+  ResourceQueueRecord resolveQueue(ResourceSchedulingRequest request);
 }

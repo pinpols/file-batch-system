@@ -8,9 +8,9 @@ import java.time.Instant;
  * <p>实时总线最终发送给浏览器的载荷。
  */
 public record ConsoleSseEvent(
-        String tenantId,
-        String stream,
-        String eventType,
-        String cursor,
-        Object data,
-        Instant emittedAt) {}
+    String tenantId,
+    String stream,
+    String eventType,
+    String cursor,
+    Object data,
+    Instant emittedAt) {}

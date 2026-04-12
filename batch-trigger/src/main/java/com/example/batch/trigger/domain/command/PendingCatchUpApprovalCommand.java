@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 public class PendingCatchUpApprovalCommand {
 
-    private String tenantId;
-    private String requestId;
-    private String reason;
+  private String tenantId;
+  private String requestId;
+  private String reason;
 }

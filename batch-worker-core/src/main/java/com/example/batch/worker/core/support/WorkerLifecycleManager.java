@@ -4,7 +4,7 @@ import com.example.batch.worker.core.domain.WorkerRegistration;
 
 public interface WorkerLifecycleManager {
 
-    WorkerRegistration start(WorkerRegistration registration);
+  WorkerRegistration start(WorkerRegistration registration);
 
-    void shutdown(String workerId);
+  void shutdown(String workerId);
 }

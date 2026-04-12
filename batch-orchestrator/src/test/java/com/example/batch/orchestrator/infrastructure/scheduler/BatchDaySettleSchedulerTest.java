@@ -33,197 +33,201 @@ import org.mockito.ArgumentCaptor;
 
 class BatchDaySettleSchedulerTest {
 
-    private BatchDayInstanceRepository batchDayInstanceRepository;
-    private JobInstanceMapper jobInstanceMapper;
-    private JobExecutionLogMapper jobExecutionLogMapper;
-    private TriggerRequestMapper triggerRequestMapper;
-    private OrchestratorConfigCacheService configCacheService;
-    private LaunchService launchService;
-    private OrchestratorGracefulShutdown gracefulShutdown;
-    private BatchDaySettleScheduler scheduler;
+  private BatchDayInstanceRepository batchDayInstanceRepository;
+  private JobInstanceMapper jobInstanceMapper;
+  private JobExecutionLogMapper jobExecutionLogMapper;
+  private TriggerRequestMapper triggerRequestMapper;
+  private OrchestratorConfigCacheService configCacheService;
+  private LaunchService launchService;
+  private OrchestratorGracefulShutdown gracefulShutdown;
+  private BatchDaySettleScheduler scheduler;
 
-    @BeforeEach
-    void setUp() {
-        batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
-        jobInstanceMapper = mock(JobInstanceMapper.class);
-        jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
-        triggerRequestMapper = mock(TriggerRequestMapper.class);
-        configCacheService = mock(OrchestratorConfigCacheService.class);
-        launchService = mock(LaunchService.class);
-        gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
-        scheduler = new BatchDaySettleScheduler(
-                batchDayInstanceRepository,
-                jobInstanceMapper,
-                jobExecutionLogMapper,
-                triggerRequestMapper,
-                configCacheService,
-                launchService,
-                gracefulShutdown
-        );
-    }
+  @BeforeEach
+  void setUp() {
+    batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
+    jobInstanceMapper = mock(JobInstanceMapper.class);
+    jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
+    triggerRequestMapper = mock(TriggerRequestMapper.class);
+    configCacheService = mock(OrchestratorConfigCacheService.class);
+    launchService = mock(LaunchService.class);
+    gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+    scheduler =
+        new BatchDaySettleScheduler(
+            batchDayInstanceRepository,
+            jobInstanceMapper,
+            jobExecutionLogMapper,
+            triggerRequestMapper,
+            configCacheService,
+            launchService,
+            gracefulShutdown);
+  }
 
-    @Test
-    void shouldDoNothingWhenNoCandidates() {
-        when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of());
+  @Test
+  void shouldDoNothingWhenNoCandidates() {
+    when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of());
 
-        scheduler.settle();
+    scheduler.settle();
 
-        verify(jobInstanceMapper, never()).selectBatchDayMetrics(anyString(), anyString(), any());
-    }
+    verify(jobInstanceMapper, never()).selectBatchDayMetrics(anyString(), anyString(), any());
+  }
 
-    @Test
-    void shouldPromoteToInFlightWhenActiveInstancesExist() {
-        BatchDayInstanceRecord candidate = candidate("CUTOFF");
-        BatchDayInstanceMetrics metrics = metrics(3L, 2L, 1L, 0L);
+  @Test
+  void shouldPromoteToInFlightWhenActiveInstancesExist() {
+    BatchDayInstanceRecord candidate = candidate("CUTOFF");
+    BatchDayInstanceMetrics metrics = metrics(3L, 2L, 1L, 0L);
 
-        when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
-        when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate())).thenReturn(metrics);
-        when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate()))
+        .thenReturn(metrics);
+    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        scheduler.settle();
+    scheduler.settle();
 
-        ArgumentCaptor<BatchDayInstanceRecord> captor = ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
-        verify(batchDayInstanceRepository).save(captor.capture());
-        assertThat(captor.getValue().dayStatus()).isEqualTo("IN_FLIGHT");
-        assertThat(captor.getValue().settledAt()).isNull();
-    }
+    ArgumentCaptor<BatchDayInstanceRecord> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    verify(batchDayInstanceRepository).save(captor.capture());
+    assertThat(captor.getValue().dayStatus()).isEqualTo("IN_FLIGHT");
+    assertThat(captor.getValue().settledAt()).isNull();
+  }
 
-    @Test
-    void shouldSettleWhenAllInstancesSucceeded() {
-        BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
-        BatchDayInstanceMetrics metrics = metrics(4L, 0L, 4L, 0L);
+  @Test
+  void shouldSettleWhenAllInstancesSucceeded() {
+    BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceMetrics metrics = metrics(4L, 0L, 4L, 0L);
 
-        when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
-        when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate())).thenReturn(metrics);
-        when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate()))
+        .thenReturn(metrics);
+    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        scheduler.settle();
+    scheduler.settle();
 
-        ArgumentCaptor<BatchDayInstanceRecord> captor = ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
-        verify(batchDayInstanceRepository).save(captor.capture());
-        assertThat(captor.getValue().dayStatus()).isEqualTo("SETTLED");
-        assertThat(captor.getValue().settledAt()).isNotNull();
-    }
+    ArgumentCaptor<BatchDayInstanceRecord> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    verify(batchDayInstanceRepository).save(captor.capture());
+    assertThat(captor.getValue().dayStatus()).isEqualTo("SETTLED");
+    assertThat(captor.getValue().settledAt()).isNotNull();
+  }
 
-    @Test
-    void shouldFailWhenAllInstancesTerminalAndAnyFailed() {
-        BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
-        BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
+  @Test
+  void shouldFailWhenAllInstancesTerminalAndAnyFailed() {
+    BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
 
-        when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
-        when(jobInstanceMapper.selectBatchDayMetrics(eq("t1"), eq("CAL"), any())).thenReturn(metrics);
-        when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
+    when(jobInstanceMapper.selectBatchDayMetrics(eq("t1"), eq("CAL"), any())).thenReturn(metrics);
+    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        scheduler.settle();
+    scheduler.settle();
 
-        ArgumentCaptor<BatchDayInstanceRecord> captor = ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
-        verify(batchDayInstanceRepository).save(captor.capture());
-        assertThat(captor.getValue().dayStatus()).isEqualTo("FAILED");
-        assertThat(captor.getValue().settledAt()).isNotNull();
-    }
+    ArgumentCaptor<BatchDayInstanceRecord> captor =
+        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    verify(batchDayInstanceRepository).save(captor.capture());
+    assertThat(captor.getValue().dayStatus()).isEqualTo("FAILED");
+    assertThat(captor.getValue().settledAt()).isNotNull();
+  }
 
-    @Test
-    void shouldLaunchAutoCatchUpWhenBatchDayFailed() {
-        BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
-        BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
-        JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 101L);
-        BusinessCalendarRecord calendar = calendar("AUTO");
+  @Test
+  void shouldLaunchAutoCatchUpWhenBatchDayFailed() {
+    BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
+    JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 101L);
+    BusinessCalendarRecord calendar = calendar("AUTO");
 
-        when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
-        when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate())).thenReturn(metrics);
-        when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
-                .thenReturn(List.of(failedJob));
-        when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
-                .thenReturn(calendar);
-        when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
-        when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-001"));
+    when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate()))
+        .thenReturn(metrics);
+    when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
+        .thenReturn(List.of(failedJob));
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar);
+    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
+    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(launchService.launch(any())).thenReturn(new LaunchResponse("inst-001", "trace-001"));
 
-        scheduler.settle();
+    scheduler.settle();
 
-        ArgumentCaptor<BatchDayInstanceRecord> batchCaptor = ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
-        verify(batchDayInstanceRepository).save(batchCaptor.capture());
-        assertThat(batchCaptor.getValue().dayStatus()).isEqualTo("FAILED");
-        verify(triggerRequestMapper).insert(any());
-        ArgumentCaptor<LaunchRequest> launchCaptor =
-                ArgumentCaptor.forClass(LaunchRequest.class);
-        verify(launchService).launch(launchCaptor.capture());
-        assertThat(launchCaptor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
-        assertThat(launchCaptor.getValue().jobCode()).isEqualTo("FAILED_JOB");
-    }
+    ArgumentCaptor<BatchDayInstanceRecord> batchCaptor =
+        ArgumentCaptor.forClass(BatchDayInstanceRecord.class);
+    verify(batchDayInstanceRepository).save(batchCaptor.capture());
+    assertThat(batchCaptor.getValue().dayStatus()).isEqualTo("FAILED");
+    verify(triggerRequestMapper).insert(any());
+    ArgumentCaptor<LaunchRequest> launchCaptor = ArgumentCaptor.forClass(LaunchRequest.class);
+    verify(launchService).launch(launchCaptor.capture());
+    assertThat(launchCaptor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
+    assertThat(launchCaptor.getValue().jobCode()).isEqualTo("FAILED_JOB");
+  }
 
-    @Test
-    void shouldCreatePendingCatchUpWhenApprovalRequired() {
-        BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
-        BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
-        JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 102L);
-        BusinessCalendarRecord calendar = calendar("MANUAL_APPROVAL");
+  @Test
+  void shouldCreatePendingCatchUpWhenApprovalRequired() {
+    BatchDayInstanceRecord candidate = candidate("IN_FLIGHT");
+    BatchDayInstanceMetrics metrics = metrics(2L, 0L, 1L, 1L);
+    JobInstanceEntity failedJob = jobInstance("FAILED_JOB", 102L);
+    BusinessCalendarRecord calendar = calendar("MANUAL_APPROVAL");
 
-        when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
-        when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate())).thenReturn(metrics);
-        when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
-                .thenReturn(List.of(failedJob));
-        when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
-                .thenReturn(calendar);
-        when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
-        when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(batchDayInstanceRepository.findByDayStatusIn(any())).thenReturn(List.of(candidate));
+    when(jobInstanceMapper.selectBatchDayMetrics("t1", "CAL", candidate.bizDate()))
+        .thenReturn(metrics);
+    when(jobInstanceMapper.selectBatchDayCatchUpCandidates("t1", "CAL", candidate.bizDate()))
+        .thenReturn(List.of(failedJob));
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar);
+    when(triggerRequestMapper.selectByTenantAndDedupKey(eq("t1"), anyString())).thenReturn(null);
+    when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        scheduler.settle();
+    scheduler.settle();
 
-        verify(triggerRequestMapper).insert(any());
-        verify(launchService, never()).launch(any());
-    }
+    verify(triggerRequestMapper).insert(any());
+    verify(launchService, never()).launch(any());
+  }
 
-    private BatchDayInstanceRecord candidate(String status) {
-        return new BatchDayInstanceRecord(
-                1L,
-                "t1",
-                "CAL",
-                LocalDate.of(2026, 3, 27),
-                status,
-                Instant.parse("2026-03-27T00:00:00Z"),
-                Instant.parse("2026-03-27T06:00:00Z"),
-                null,
-                Instant.parse("2026-03-27T08:00:00Z"),
-                0,
-                0,
-                Instant.parse("2026-03-27T00:00:00Z"),
-                Instant.parse("2026-03-27T06:00:00Z")
-        );
-    }
+  private BatchDayInstanceRecord candidate(String status) {
+    return new BatchDayInstanceRecord(
+        1L,
+        "t1",
+        "CAL",
+        LocalDate.of(2026, 3, 27),
+        status,
+        Instant.parse("2026-03-27T00:00:00Z"),
+        Instant.parse("2026-03-27T06:00:00Z"),
+        null,
+        Instant.parse("2026-03-27T08:00:00Z"),
+        0,
+        0,
+        Instant.parse("2026-03-27T00:00:00Z"),
+        Instant.parse("2026-03-27T06:00:00Z"));
+  }
 
-    private JobInstanceEntity jobInstance(String jobCode, Long id) {
-        JobInstanceEntity entity = new JobInstanceEntity();
-        entity.setId(id);
-        entity.setTenantId("t1");
-        entity.setJobCode(jobCode);
-        entity.setJobDefinitionId(11L);
-        return entity;
-    }
+  private JobInstanceEntity jobInstance(String jobCode, Long id) {
+    JobInstanceEntity entity = new JobInstanceEntity();
+    entity.setId(id);
+    entity.setTenantId("t1");
+    entity.setJobCode(jobCode);
+    entity.setJobDefinitionId(11L);
+    return entity;
+  }
 
-    private BusinessCalendarRecord calendar(String catchUpPolicy) {
-        return new BusinessCalendarRecord(
-                1L,
-                "t1",
-                "CAL",
-                "Calendar",
-                "Asia/Shanghai",
-                "SKIP",
-                catchUpPolicy,
-                30,
-                LocalTime.of(6, 0),
-                30,
-                120,
-                true
-        );
-    }
+  private BusinessCalendarRecord calendar(String catchUpPolicy) {
+    return new BusinessCalendarRecord(
+        1L,
+        "t1",
+        "CAL",
+        "Calendar",
+        "Asia/Shanghai",
+        "SKIP",
+        catchUpPolicy,
+        30,
+        LocalTime.of(6, 0),
+        30,
+        120,
+        true);
+  }
 
-    private BatchDayInstanceMetrics metrics(Long totalCount, Long activeCount, Long successCount, Long failedCount) {
-        BatchDayInstanceMetrics metrics = new BatchDayInstanceMetrics();
-        metrics.setTotalCount(totalCount);
-        metrics.setActiveCount(activeCount);
-        metrics.setSuccessCount(successCount);
-        metrics.setFailedCount(failedCount);
-        return metrics;
-    }
+  private BatchDayInstanceMetrics metrics(
+      Long totalCount, Long activeCount, Long successCount, Long failedCount) {
+    BatchDayInstanceMetrics metrics = new BatchDayInstanceMetrics();
+    metrics.setTotalCount(totalCount);
+    metrics.setActiveCount(activeCount);
+    metrics.setSuccessCount(successCount);
+    metrics.setFailedCount(failedCount);
+    return metrics;
+  }
 }

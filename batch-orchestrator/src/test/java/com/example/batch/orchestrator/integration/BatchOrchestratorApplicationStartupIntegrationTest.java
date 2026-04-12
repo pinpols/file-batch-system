@@ -14,14 +14,15 @@ import org.springframework.context.ApplicationContext;
  *
  * <p>继承 {@link AbstractIntegrationTest} —— 不要在此重复 {@code @BatchIntegrationTest} 或容器配置。
  */
-@SpringBootTest(classes = BatchOrchestratorApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(
+    classes = BatchOrchestratorApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class BatchOrchestratorApplicationStartupIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    ApplicationContext applicationContext;
+  @Autowired ApplicationContext applicationContext;
 
-    @Test
-    void contextLoads() {
-        assertThat(applicationContext).isNotNull();
-    }
+  @Test
+  void contextLoads() {
+    assertThat(applicationContext).isNotNull();
+  }
 }

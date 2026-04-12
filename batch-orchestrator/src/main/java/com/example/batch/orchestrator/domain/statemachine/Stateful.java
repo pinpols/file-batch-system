@@ -7,6 +7,6 @@ package com.example.batch.orchestrator.domain.statemachine;
  */
 public interface Stateful {
 
-    /** 返回当前实体的状态字符串。 */
-    String getStatus();
+  /** 返回当前实体的状态字符串。 */
+  String getStatus();
 }

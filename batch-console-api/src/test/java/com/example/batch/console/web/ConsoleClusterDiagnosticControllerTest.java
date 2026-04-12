@@ -1,5 +1,6 @@
 package com.example.batch.console.web;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -18,38 +19,44 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-import static org.mockito.Mockito.mock;
 
 class ConsoleClusterDiagnosticControllerTest {
 
-    private final ConsoleClusterDiagnosticService diagnosticService = mock(ConsoleClusterDiagnosticService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
-    private MockMvc mockMvc;
+  private final ConsoleClusterDiagnosticService diagnosticService =
+      mock(ConsoleClusterDiagnosticService.class);
+  private final ConsoleRequestMetadataResolver requestMetadataResolver =
+      mock(ConsoleRequestMetadataResolver.class);
+  private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+  @BeforeEach
+  void setUp() {
+    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+    ConsoleApiExceptionHandler exceptionHandler =
+        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
 
-        when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
 
-        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-        validator.afterPropertiesSet();
+    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+    validator.afterPropertiesSet();
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleClusterDiagnosticController(diagnosticService, responseFactory))
-                .setControllerAdvice(exceptionHandler)
-                .setValidator(validator)
-                .build();
-    }
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new ConsoleClusterDiagnosticController(diagnosticService, responseFactory))
+            .setControllerAdvice(exceptionHandler)
+            .setValidator(validator)
+            .build();
+  }
 
-    @Test
-    void shouldReturnDiagnostic() throws Exception {
-        when(diagnosticService.diagnose("t1")).thenReturn(Map.of("status", "healthy", "nodeCount", 3));
+  @Test
+  void shouldReturnDiagnostic() throws Exception {
+    when(diagnosticService.diagnose("t1")).thenReturn(Map.of("status", "healthy", "nodeCount", 3));
 
-        mockMvc.perform(get("/api/console/ops/cluster-diagnostic").param("tenantId", "t1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.status").value("healthy"))
-                .andExpect(jsonPath("$.data.nodeCount").value(3));
-    }
+    mockMvc
+        .perform(get("/api/console/ops/cluster-diagnostic").param("tenantId", "t1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data.status").value("healthy"))
+        .andExpect(jsonPath("$.data.nodeCount").value(3));
+  }
 }

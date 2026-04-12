@@ -6,20 +6,20 @@ import java.util.Map;
 
 public interface PipelineDefinitionExcelImportStore {
 
-    String save(
-            String fileName,
-            String tenantId,
-            List<Map<String, String>> pipelineRows,
-            List<Map<String, String>> stepRows);
+  String save(
+      String fileName,
+      String tenantId,
+      List<Map<String, String>> pipelineRows,
+      List<Map<String, String>> stepRows);
 
-    ExcelImportSession get(String uploadToken);
+  ExcelImportSession get(String uploadToken);
 
-    void remove(String uploadToken);
+  void remove(String uploadToken);
 
-    record ExcelImportSession(
-            String fileName,
-            String tenantId,
-            Instant uploadedAt,
-            List<Map<String, String>> pipelineRows,
-            List<Map<String, String>> stepRows) {}
+  record ExcelImportSession(
+      String fileName,
+      String tenantId,
+      Instant uploadedAt,
+      List<Map<String, String>> pipelineRows,
+      List<Map<String, String>> stepRows) {}
 }

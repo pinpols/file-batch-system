@@ -22,5 +22,4 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-public @interface BatchIntegrationTest {
-}
+public @interface BatchIntegrationTest {}

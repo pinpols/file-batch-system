@@ -12,50 +12,52 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class FileGovernanceSchedulersTest {
 
-    @Mock
-    private FileGovernanceScheduler fileGovernanceScheduler;
+  @Mock private FileGovernanceScheduler fileGovernanceScheduler;
 
-    @Mock
-    private OrchestratorGracefulShutdown gracefulShutdown;
+  @Mock private OrchestratorGracefulShutdown gracefulShutdown;
 
-    private FileGovernanceArchiveCleanupScheduler archiveCleanupScheduler;
-    private FileGovernanceReconcileScheduler reconcileScheduler;
-    private FileGovernanceArrivalGroupScheduler arrivalGroupScheduler;
-    private FileGovernanceLatencyScheduler latencyScheduler;
+  private FileGovernanceArchiveCleanupScheduler archiveCleanupScheduler;
+  private FileGovernanceReconcileScheduler reconcileScheduler;
+  private FileGovernanceArrivalGroupScheduler arrivalGroupScheduler;
+  private FileGovernanceLatencyScheduler latencyScheduler;
 
-    @BeforeEach
-    void setUp() {
-        archiveCleanupScheduler = new FileGovernanceArchiveCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
-        reconcileScheduler = new FileGovernanceReconcileScheduler(fileGovernanceScheduler, gracefulShutdown);
-        arrivalGroupScheduler = new FileGovernanceArrivalGroupScheduler(fileGovernanceScheduler, gracefulShutdown);
-        latencyScheduler = new FileGovernanceLatencyScheduler(fileGovernanceScheduler, gracefulShutdown);
-    }
+  @BeforeEach
+  void setUp() {
+    archiveCleanupScheduler =
+        new FileGovernanceArchiveCleanupScheduler(fileGovernanceScheduler, gracefulShutdown);
+    reconcileScheduler =
+        new FileGovernanceReconcileScheduler(fileGovernanceScheduler, gracefulShutdown);
+    arrivalGroupScheduler =
+        new FileGovernanceArrivalGroupScheduler(fileGovernanceScheduler, gracefulShutdown);
+    latencyScheduler =
+        new FileGovernanceLatencyScheduler(fileGovernanceScheduler, gracefulShutdown);
+  }
 
-    @Test
-    void shouldDelegateArchiveCleanup() {
-        archiveCleanupScheduler.cleanupArchivedFiles();
+  @Test
+  void shouldDelegateArchiveCleanup() {
+    archiveCleanupScheduler.cleanupArchivedFiles();
 
-        verify(fileGovernanceScheduler).cleanupArchivedFiles();
-    }
+    verify(fileGovernanceScheduler).cleanupArchivedFiles();
+  }
 
-    @Test
-    void shouldDelegateReconcile() {
-        reconcileScheduler.reconcileObjectStorage();
+  @Test
+  void shouldDelegateReconcile() {
+    reconcileScheduler.reconcileObjectStorage();
 
-        verify(fileGovernanceScheduler).reconcileObjectStorage();
-    }
+    verify(fileGovernanceScheduler).reconcileObjectStorage();
+  }
 
-    @Test
-    void shouldDelegateArrivalGroupManagement() {
-        arrivalGroupScheduler.manageFileArrivalGroups();
+  @Test
+  void shouldDelegateArrivalGroupManagement() {
+    arrivalGroupScheduler.manageFileArrivalGroups();
 
-        verify(fileGovernanceScheduler).manageFileArrivalGroups();
-    }
+    verify(fileGovernanceScheduler).manageFileArrivalGroups();
+  }
 
-    @Test
-    void shouldDelegateLatencyCollection() {
-        latencyScheduler.collectLatencyMetrics();
+  @Test
+  void shouldDelegateLatencyCollection() {
+    latencyScheduler.collectLatencyMetrics();
 
-        verify(fileGovernanceScheduler).collectLatencyMetrics();
-    }
+    verify(fileGovernanceScheduler).collectLatencyMetrics();
+  }
 }

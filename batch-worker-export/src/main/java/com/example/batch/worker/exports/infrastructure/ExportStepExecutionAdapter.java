@@ -19,106 +19,108 @@ import java.util.Map;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
-/**
- * 导出 Pipeline 步骤执行适配器，将平台 step 执行请求转换为导出 stage 调用链。
- */
+/** 导出 Pipeline 步骤执行适配器，将平台 step 执行请求转换为导出 stage 调用链。 */
 @Primary
 @Component
-public class ExportStepExecutionAdapter extends AbstractPipelineStepExecutionAdapter<ExportJobContext, ExportStageResult> {
+public class ExportStepExecutionAdapter
+    extends AbstractPipelineStepExecutionAdapter<ExportJobContext, ExportStageResult> {
 
-    private final ExportStageExecutor exportStageExecutor;
-    private final ObjectMapper objectMapper;
+  private final ExportStageExecutor exportStageExecutor;
+  private final ObjectMapper objectMapper;
 
-    public ExportStepExecutionAdapter(ExportStageExecutor exportStageExecutor,
-                                      ObjectMapper objectMapper,
-                                      PlatformFileRuntimeRepository runtimeRepository) {
-        super(runtimeRepository);
-        this.exportStageExecutor = exportStageExecutor;
-        this.objectMapper = objectMapper;
+  public ExportStepExecutionAdapter(
+      ExportStageExecutor exportStageExecutor,
+      ObjectMapper objectMapper,
+      PlatformFileRuntimeRepository runtimeRepository) {
+    super(runtimeRepository);
+    this.exportStageExecutor = exportStageExecutor;
+    this.objectMapper = objectMapper;
+  }
+
+  @Override
+  protected String pipelineType() {
+    return ExportWorkerType.EXPORT;
+  }
+
+  @Override
+  protected String pipelineDescription() {
+    return "导出 pipeline";
+  }
+
+  @Override
+  protected List<PipelineStepTemplate> defaultPipelineSteps() {
+    return exportStageExecutor.defaultStepDefinitions();
+  }
+
+  @Override
+  protected String initialStage() {
+    return ExportStage.PREPARE.name();
+  }
+
+  @Override
+  protected ExportJobContext buildContext(
+      StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) throws Exception {
+    ExportJobContext context = new ExportJobContext();
+    context.setTenantId(request.tenantId());
+    context.setJobCode(String.valueOf(contextMap.getOrDefault("jobCode", request.jobCode())));
+    context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
+    context.setFileId(fileId == null ? "" : String.valueOf(fileId));
+    context.setWorkerId(request.workerId());
+    context.setRawPayload(String.valueOf(contextMap.getOrDefault("payload", "")));
+    context.setAttributes(contextMap);
+    Object exportPayload = contextMap.get("exportPayload");
+    if (exportPayload == null
+        && context.getRawPayload() != null
+        && !context.getRawPayload().isBlank()) {
+      exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
+      context.getAttributes().put("exportPayload", exportPayload);
     }
+    return context;
+  }
 
-    @Override
-    protected String pipelineType() {
-        return ExportWorkerType.EXPORT;
-    }
+  @Override
+  protected List<ExportStageResult> executeStages(ExportJobContext context) {
+    return exportStageExecutor.execute(context);
+  }
 
-    @Override
-    protected String pipelineDescription() {
-        return "导出 pipeline";
-    }
+  @Override
+  protected boolean isSuccess(ExportStageResult result) {
+    return result != null && result.success();
+  }
 
-    @Override
-    protected List<PipelineStepTemplate> defaultPipelineSteps() {
-        return exportStageExecutor.defaultStepDefinitions();
-    }
+  @Override
+  protected String resultStage(ExportStageResult result) {
+    return result.stage().name();
+  }
 
-    @Override
-    protected String initialStage() {
-        return ExportStage.PREPARE.name();
-    }
+  @Override
+  protected String resultCode(ExportStageResult result) {
+    return result.code();
+  }
 
-    @Override
-    protected ExportJobContext buildContext(StepExecutionRequest request,
-                                            Map<String, Object> contextMap,
-                                            Long fileId) throws Exception {
-        ExportJobContext context = new ExportJobContext();
-        context.setTenantId(request.tenantId());
-        context.setJobCode(String.valueOf(contextMap.getOrDefault("jobCode", request.jobCode())));
-        context.setBizDate(String.valueOf(contextMap.getOrDefault("bizDate", "")));
-        context.setFileId(fileId == null ? "" : String.valueOf(fileId));
-        context.setWorkerId(request.workerId());
-        context.setRawPayload(String.valueOf(contextMap.getOrDefault("payload", "")));
-        context.setAttributes(contextMap);
-        Object exportPayload = contextMap.get("exportPayload");
-        if (exportPayload == null && context.getRawPayload() != null && !context.getRawPayload().isBlank()) {
-            exportPayload = objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
-            context.getAttributes().put("exportPayload", exportPayload);
-        }
-        return context;
-    }
+  @Override
+  protected String resultMessage(ExportStageResult result) {
+    return result.message();
+  }
 
-    @Override
-    protected List<ExportStageResult> executeStages(ExportJobContext context) {
-        return exportStageExecutor.execute(context);
-    }
+  @Override
+  protected StepExecutionResponse buildSuccessResponse(
+      ExportJobContext context, List<ExportStageResult> results, Map<String, Object> attributes) {
+    String objectName = String.valueOf(context.getAttributes().getOrDefault("objectName", ""));
+    return new StepExecutionResponse(
+        true, "SUCCESS", objectName.isBlank() ? "导出阶段执行完成" : objectName);
+  }
 
-    @Override
-    protected boolean isSuccess(ExportStageResult result) {
-        return result != null && result.success();
+  @Override
+  protected void handlePipelineFailure(
+      Map<String, Object> attributes, String errorCode, String errorMessage) {
+    Long fileId = runtimeRepository().toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+    if (fileId == null) {
+      return;
     }
-
-    @Override
-    protected String resultStage(ExportStageResult result) {
-        return result.stage().name();
-    }
-
-    @Override
-    protected String resultCode(ExportStageResult result) {
-        return result.code();
-    }
-
-    @Override
-    protected String resultMessage(ExportStageResult result) {
-        return result.message();
-    }
-
-    @Override
-    protected StepExecutionResponse buildSuccessResponse(ExportJobContext context,
-                                                         List<ExportStageResult> results,
-                                                         Map<String, Object> attributes) {
-        String objectName = String.valueOf(context.getAttributes().getOrDefault("objectName", ""));
-        return new StepExecutionResponse(true, "SUCCESS", objectName.isBlank() ? "导出阶段执行完成" : objectName);
-    }
-
-    @Override
-    protected void handlePipelineFailure(Map<String, Object> attributes, String errorCode, String errorMessage) {
-        Long fileId = runtimeRepository().toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-        if (fileId == null) {
-            return;
-        }
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("errorCode", errorCode);
-        metadata.put("errorMessage", errorMessage);
-        runtimeRepository().updateFileStatus(fileId, "FAILED", metadata);
-    }
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("errorCode", errorCode);
+    metadata.put("errorMessage", errorMessage);
+    runtimeRepository().updateFileStatus(fileId, "FAILED", metadata);
+  }
 }

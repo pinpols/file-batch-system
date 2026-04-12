@@ -7,19 +7,19 @@ import java.time.ZoneId;
 
 public final class DateUtils {
 
-    private static final Clock CLOCK = Clock.systemDefaultZone();
+  private static final Clock CLOCK = Clock.systemDefaultZone();
 
-    private DateUtils() {}
+  private DateUtils() {}
 
-    public static LocalDate today() {
-        return LocalDate.now(CLOCK);
-    }
+  public static LocalDate today() {
+    return LocalDate.now(CLOCK);
+  }
 
-    public static Instant now() {
-        return Instant.now(CLOCK);
-    }
+  public static Instant now() {
+    return Instant.now(CLOCK);
+  }
 
-    public static ZoneId zoneId() {
-        return CLOCK.getZone();
-    }
+  public static ZoneId zoneId() {
+    return CLOCK.getZone();
+  }
 }

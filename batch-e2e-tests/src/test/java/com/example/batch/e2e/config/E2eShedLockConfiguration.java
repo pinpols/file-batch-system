@@ -13,13 +13,13 @@ import org.springframework.context.annotation.Configuration;
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
 public class E2eShedLockConfiguration {
 
-    @Bean
-    public LockProvider lockProvider(DataSource dataSource) {
-        return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource);
-    }
+  @Bean
+  public LockProvider lockProvider(DataSource dataSource) {
+    return ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource);
+  }
 
-    @Bean
-    public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
-        return new DefaultLockingTaskExecutor(lockProvider);
-    }
+  @Bean
+  public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
+    return new DefaultLockingTaskExecutor(lockProvider);
+  }
 }

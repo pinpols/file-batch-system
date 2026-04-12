@@ -12,23 +12,21 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/**
- * 使用 Testcontainers Postgres（platform + biz）、Kafka、MinIO 和模拟的
- * orchestrator HTTP 端点加载导入 Worker。
- */
-@SpringBootTest(classes = BatchWorkerImportApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
+/** 使用 Testcontainers Postgres（platform + biz）、Kafka、MinIO 和模拟的 orchestrator HTTP 端点加载导入 Worker。 */
+@SpringBootTest(
+    classes = BatchWorkerImportApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class BatchWorkerImportApplicationIntegrationTest extends AbstractIntegrationTest {
 
-    @DynamicPropertySource
-    static void orchestratorStub(DynamicPropertyRegistry registry) {
-        OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
-    }
+  @DynamicPropertySource
+  static void orchestratorStub(DynamicPropertyRegistry registry) {
+    OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
+  }
 
-    @Autowired
-    ApplicationContext applicationContext;
+  @Autowired ApplicationContext applicationContext;
 
-    @Test
-    void contextLoads() {
-        assertThat(applicationContext).isNotNull();
-    }
+  @Test
+  void contextLoads() {
+    assertThat(applicationContext).isNotNull();
+  }
 }

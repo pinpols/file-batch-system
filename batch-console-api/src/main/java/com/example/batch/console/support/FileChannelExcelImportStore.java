@@ -6,17 +6,17 @@ import java.util.Map;
 
 public interface FileChannelExcelImportStore {
 
-    String save(String fileName, String tenantId, String sheetName, List<Map<String, String>> rows);
+  String save(String fileName, String tenantId, String sheetName, List<Map<String, String>> rows);
 
-    ExcelImportSession get(String uploadToken);
+  ExcelImportSession get(String uploadToken);
 
-    void remove(String uploadToken);
+  void remove(String uploadToken);
 
-    record ExcelImportSession(
-            String fileName,
-            String tenantId,
-            String sheetName,
-            Instant uploadedAt,
-            List<Map<String, String>> rows)
-            implements ConsoleSingleSheetExcelImportSupport.SingleSheetImportSession {}
+  record ExcelImportSession(
+      String fileName,
+      String tenantId,
+      String sheetName,
+      Instant uploadedAt,
+      List<Map<String, String>> rows)
+      implements ConsoleSingleSheetExcelImportSupport.SingleSheetImportSession {}
 }

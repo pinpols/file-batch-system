@@ -4,9 +4,9 @@ import lombok.Data;
 
 @Data
 public class TenantUpsertParam {
-    private String tenantId;
-    private String tenantName;
-    private String status;
-    private String description;
-    private String createdBy;
+  private String tenantId;
+  private String tenantName;
+  private String status;
+  private String description;
+  private String createdBy;
 }

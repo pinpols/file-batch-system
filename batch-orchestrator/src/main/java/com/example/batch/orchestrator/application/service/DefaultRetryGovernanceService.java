@@ -27,17 +27,14 @@ import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.RetryScheduleMapper;
 import com.example.batch.orchestrator.repository.JobDefinitionRepository;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 失败重试与死信治理（Orchestrator 侧）。
@@ -61,448 +58,423 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
-    private final RetryScheduleMapper retryScheduleMapper;
-    private final DeadLetterTaskMapper deadLetterTaskMapper;
-    private final JobDefinitionRepository jobDefinitionRepository;
-    private final JobTaskMapper jobTaskMapper;
-    private final JobPartitionMapper jobPartitionMapper;
-    private final JobInstanceMapper jobInstanceMapper;
-    private final JobStepInstanceMapper jobStepInstanceMapper;
-    private final TaskDispatchOutboxService taskDispatchOutboxService;
-    private final BatchOrchestratorGovernanceProperties governance;
+  private final RetryScheduleMapper retryScheduleMapper;
+  private final DeadLetterTaskMapper deadLetterTaskMapper;
+  private final JobDefinitionRepository jobDefinitionRepository;
+  private final JobTaskMapper jobTaskMapper;
+  private final JobPartitionMapper jobPartitionMapper;
+  private final JobInstanceMapper jobInstanceMapper;
+  private final JobStepInstanceMapper jobStepInstanceMapper;
+  private final TaskDispatchOutboxService taskDispatchOutboxService;
+  private final BatchOrchestratorGovernanceProperties governance;
 
-    @Override
-    @Transactional
-    public boolean scheduleRetryIfNecessary(
-            JobTaskEntity task,
-            JobPartitionEntity partition,
-            JobInstanceEntity jobInstance,
-            String errorCode,
-            String errorMessage) {
-        // 入口语义：返回 true 表示“已进入 RETRYING（有后续重排队）”，返回 false 表示“本次失败将进入终态（dead-letter 或直接失败）”。
-        if (task == null || partition == null || jobInstance == null) {
-            return false;
-        }
-        String tenantId = task.getTenantId();
-        String traceId = jobInstance.getTraceId();
-        boolean injectMdc = traceId != null && !traceId.isBlank();
-        if (injectMdc) {
-            BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
-            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
-            BatchMdc.put(
-                    StructuredLogField.JOB_INSTANCE_ID,
-                    jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
-        }
-        try {
-            RetryPolicyPlan retryPolicyPlan = resolveRetryPolicy(jobInstance.getJobDefinitionId());
-            if (RetryPolicyType.NONE.code().equals(retryPolicyPlan.retryPolicy())
-                    || retryPolicyPlan.maxRetryCount() <= 0) {
-                // 无重试预算：直接进入死信，交由人工/审批/补偿处理。
-                createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
-                return false;
-            }
-
-            int nextRetryCount = Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1;
-            if (nextRetryCount > retryPolicyPlan.maxRetryCount()) {
-                // 重试耗尽：落死信（不会回到正常 dispatch）。
-                createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
-                return false;
-            }
-
-            RetryScheduleEntity retrySchedule = new RetryScheduleEntity();
-            retrySchedule.setTenantId(task.getTenantId());
-            retrySchedule.setRelatedType("JOB_PARTITION");
-            retrySchedule.setRelatedId(partition.getId());
-            retrySchedule.setRetryPolicy(retryPolicyPlan.retryPolicy());
-            retrySchedule.setRetryCount(nextRetryCount);
-            retrySchedule.setMaxRetryCount(retryPolicyPlan.maxRetryCount());
-            retrySchedule.setNextRetryAt(
-                    calculateNextRetryAt(retryPolicyPlan.retryPolicy(), nextRetryCount));
-            retrySchedule.setRetryStatus(RetryScheduleStatus.WAITING.code());
-            retrySchedule.setDedupKey(
-                    task.getTenantId() + ":" + partition.getId() + ":" + nextRetryCount);
-            retrySchedule.setLastErrorCode(errorCode);
-            retrySchedule.setLastErrorMessage(errorMessage);
-            retryScheduleMapper.insert(retrySchedule);
-            log.info(
-                    "retry scheduled: tenantId={}, partitionId={}, retryCount={}",
-                    task.getTenantId(),
-                    partition.getId(),
-                    nextRetryCount);
-            return true;
-        } finally {
-            if (injectMdc) {
-                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-                BatchMdc.remove(StructuredLogField.TRACE_ID);
-                BatchMdc.remove(StructuredLogField.TENANT_ID);
-            }
-        }
+  @Override
+  @Transactional
+  public boolean scheduleRetryIfNecessary(
+      JobTaskEntity task,
+      JobPartitionEntity partition,
+      JobInstanceEntity jobInstance,
+      String errorCode,
+      String errorMessage) {
+    // 入口语义：返回 true 表示“已进入 RETRYING（有后续重排队）”，返回 false 表示“本次失败将进入终态（dead-letter 或直接失败）”。
+    if (task == null || partition == null || jobInstance == null) {
+      return false;
     }
-
-    @Override
-    @Transactional
-    public void dispatchDueRetries() {
-        // 定时扫描：把到期的 retry_schedule 记录重排队（requeue）回 outbox。
-        List<RetryScheduleEntity> dueRetries =
-                retryScheduleMapper.selectByQuery(
-                        new RetryScheduleQuery(
-                                null,
-                                RetryScheduleStatus.WAITING.code(),
-                                Instant.now(),
-                                governance.retry().getBatchSize()));
-        for (RetryScheduleEntity retrySchedule : dueRetries) {
-            if (retryScheduleMapper.markRunning(
-                            retrySchedule.getId(),
-                            RetryScheduleStatus.WAITING.code(),
-                            RetryScheduleStatus.RUNNING.code())
-                    <= 0) {
-                continue;
-            }
-            try {
-                requeuePartition(retrySchedule);
-                retryScheduleMapper.markSuccess(
-                        retrySchedule.getId(), RetryScheduleStatus.SUCCESS.code());
-            } catch (TransientConflictException conflict) {
-                log.warn(
-                        "retry dispatch version conflict, will retry later: retryId={}, error={}",
-                        retrySchedule.getId(),
-                        conflict.getMessage());
-                retryScheduleMapper.resetToWaiting(
-                        retrySchedule.getId(), RetryScheduleStatus.WAITING.code());
-            } catch (Exception exception) {
-                log.warn(
-                        "retry dispatch failed: retryId={}, error={}",
-                        retrySchedule.getId(),
-                        exception.getMessage(),
-                        exception);
-                retryScheduleMapper.markFailed(
-                        retrySchedule.getId(),
-                        RetryScheduleStatus.FAILED.code(),
-                        "RETRY_DISPATCH_FAILED",
-                        exception.getMessage(),
-                        Instant.now());
-            }
-        }
+    String tenantId = task.getTenantId();
+    String traceId = jobInstance.getTraceId();
+    boolean injectMdc = traceId != null && !traceId.isBlank();
+    if (injectMdc) {
+      BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+      BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+      BatchMdc.put(
+          StructuredLogField.JOB_INSTANCE_ID,
+          jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
     }
+    try {
+      RetryPolicyPlan retryPolicyPlan = resolveRetryPolicy(jobInstance.getJobDefinitionId());
+      if (RetryPolicyType.NONE.code().equals(retryPolicyPlan.retryPolicy())
+          || retryPolicyPlan.maxRetryCount() <= 0) {
+        // 无重试预算：直接进入死信，交由人工/审批/补偿处理。
+        createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
+        return false;
+      }
 
-    @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void retryPartition(String tenantId, Long partitionId, String eventKey) {
-        requeuePartition(tenantId, partitionId, eventKey);
+      int nextRetryCount = Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1;
+      if (nextRetryCount > retryPolicyPlan.maxRetryCount()) {
+        // 重试耗尽：落死信（不会回到正常 dispatch）。
+        createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
+        return false;
+      }
+
+      RetryScheduleEntity retrySchedule = new RetryScheduleEntity();
+      retrySchedule.setTenantId(task.getTenantId());
+      retrySchedule.setRelatedType("JOB_PARTITION");
+      retrySchedule.setRelatedId(partition.getId());
+      retrySchedule.setRetryPolicy(retryPolicyPlan.retryPolicy());
+      retrySchedule.setRetryCount(nextRetryCount);
+      retrySchedule.setMaxRetryCount(retryPolicyPlan.maxRetryCount());
+      retrySchedule.setNextRetryAt(
+          calculateNextRetryAt(retryPolicyPlan.retryPolicy(), nextRetryCount));
+      retrySchedule.setRetryStatus(RetryScheduleStatus.WAITING.code());
+      retrySchedule.setDedupKey(
+          task.getTenantId() + ":" + partition.getId() + ":" + nextRetryCount);
+      retrySchedule.setLastErrorCode(errorCode);
+      retrySchedule.setLastErrorMessage(errorMessage);
+      retryScheduleMapper.insert(retrySchedule);
+      log.info(
+          "retry scheduled: tenantId={}, partitionId={}, retryCount={}",
+          task.getTenantId(),
+          partition.getId(),
+          nextRetryCount);
+      return true;
+    } finally {
+      if (injectMdc) {
+        BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+        BatchMdc.remove(StructuredLogField.TRACE_ID);
+        BatchMdc.remove(StructuredLogField.TENANT_ID);
+      }
     }
+  }
 
-    @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void retryTask(String tenantId, Long taskId, String eventKey) {
-        JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
-        if (task == null) {
-            throw new IllegalStateException("retry task not found");
-        }
-        String status = task.getStatus();
-        if (!TaskStatus.FAILED.code().equals(status)
-                && !TaskStatus.CANCELLED.code().equals(status)
-                && !TaskStatus.TERMINATED.code().equals(status)) {
-            throw new IllegalStateException(
-                    "retry only allowed from terminal state (FAILED/CANCELLED/TERMINATED), current"
-                        + " status: "
-                            + status);
-        }
-        if (task.getJobPartitionId() != null) {
-            requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
-            return;
-        }
-        requeueTaskWithoutPartition(tenantId, task, eventKey);
-    }
-
-    @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void reclaimTask(String tenantId, Long taskId, String eventKey) {
-        JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
-        if (task == null) {
-            throw new IllegalStateException("reclaim task not found");
-        }
-        String status = task.getStatus();
-        if (!TaskStatus.RUNNING.code().equals(status)
-                && !TaskStatus.FAILED.code().equals(status)
-                && !TaskStatus.CANCELLED.code().equals(status)
-                && !TaskStatus.TERMINATED.code().equals(status)) {
-            throw new IllegalStateException(
-                    "reclaim only allowed from RUNNING or terminal state, current status: "
-                            + status);
-        }
-        if (task.getJobPartitionId() != null) {
-            requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
-            return;
-        }
-        requeueTaskWithoutPartition(tenantId, task, eventKey);
-    }
-
-    @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
-        DeadLetterTaskEntity deadLetterTask =
-                deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
-        if (deadLetterTask == null) {
-            throw new IllegalStateException("dead letter task not found");
-        }
-        String traceId = deadLetterTask.getTraceId();
-        boolean injectMdc = traceId != null && !traceId.isBlank();
-        if (injectMdc) {
-            BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
-            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
-            BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, null);
-        }
-        try {
-            if (!DeadLetterReplayStatus.NEW.code().equals(deadLetterTask.getReplayStatus())
-                    && !DeadLetterReplayStatus.FAILED
-                            .code()
-                            .equals(deadLetterTask.getReplayStatus())) {
-                throw new IllegalStateException("dead letter task is not replayable");
-            }
-            if (deadLetterTaskMapper.markReplaying(
-                            tenantId,
-                            deadLetterTaskId,
-                            deadLetterTask.getReplayStatus(),
-                            DeadLetterReplayStatus.REPLAYING.code())
-                    <= 0) {
-                throw new IllegalStateException("dead letter task replay conflict");
-            }
-            Instant replayAt = Instant.now();
-            int replayCount = Optional.ofNullable(deadLetterTask.getReplayCount()).orElse(0) + 1;
-            try {
-                if (!"JOB_PARTITION".equals(deadLetterTask.getSourceType())) {
-                    throw new IllegalStateException(
-                            "unsupported dead letter source type: "
-                                    + deadLetterTask.getSourceType());
-                }
-                requeuePartition(
-                        tenantId,
-                        deadLetterTask.getSourceId(),
-                        tenantId + ":dead-letter:" + deadLetterTaskId);
-                deadLetterTaskMapper.markReplaySuccess(
-                        tenantId,
-                        deadLetterTaskId,
-                        DeadLetterReplayStatus.SUCCESS.code(),
-                        replayCount,
-                        replayAt,
-                        "REPLAY_ACCEPTED");
-            } catch (Exception exception) {
-                log.warn(
-                        "dead letter replay failed: deadLetterId={}, error={}",
-                        deadLetterTaskId,
-                        exception.getMessage(),
-                        exception);
-                deadLetterTaskMapper.markReplayFailure(
-                        tenantId,
-                        deadLetterTaskId,
-                        DeadLetterReplayStatus.FAILED.code(),
-                        replayCount,
-                        replayAt,
-                        exception.getMessage());
-                throw exception;
-            }
-        } finally {
-            if (injectMdc) {
-                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-                BatchMdc.remove(StructuredLogField.TRACE_ID);
-                BatchMdc.remove(StructuredLogField.TENANT_ID);
-            }
-        }
-    }
-
-    private void requeuePartition(RetryScheduleEntity retrySchedule) {
-        requeuePartition(
-                retrySchedule.getTenantId(),
-                retrySchedule.getRelatedId(),
-                retrySchedule.getTenantId() + ":retry:" + retrySchedule.getId());
-    }
-
-    private void requeuePartition(String tenantId, Long partitionId, String eventKey) {
-        JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, partitionId);
-        if (partition == null) {
-            throw new IllegalStateException("retry partition not found");
-        }
-        JobInstanceEntity jobInstance =
-                jobInstanceMapper.selectById(tenantId, partition.getJobInstanceId());
-        if (jobInstance == null) {
-            throw new IllegalStateException("retry job instance not found");
-        }
-        String traceId = jobInstance.getTraceId();
-        boolean injectMdc = traceId != null && !traceId.isBlank();
-        if (injectMdc) {
-            BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
-            BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
-            BatchMdc.put(
-                    StructuredLogField.JOB_INSTANCE_ID,
-                    jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
-        }
-        try {
-            List<JobTaskEntity> tasks =
-                    jobTaskMapper.selectByQuery(
-                            new JobTaskQuery(
-                                    tenantId, jobInstance.getId(), partition.getId(), null, null));
-            JobTaskEntity task =
-                    tasks.stream()
-                            .sorted(
-                                    (left, right) ->
-                                            Integer.compare(
-                                                    left.getTaskSeq() == null
-                                                            ? 0
-                                                            : left.getTaskSeq(),
-                                                    right.getTaskSeq() == null
-                                                            ? 0
-                                                            : right.getTaskSeq()))
-                            .findFirst()
-                            .orElseThrow(() -> new IllegalStateException("retry task not found"));
-
-            JobStepInstanceEntity stepInstance =
-                    jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
-            if (stepInstance != null) {
-                int nextRetryCount =
-                        Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
-                jobStepInstanceMapper.resetForRetryByJobTaskId(
-                        tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
-            }
-            if (jobPartitionMapper.resetForDispatch(
-                            tenantId,
-                            partition.getId(),
-                            PartitionStatus.READY.code(),
-                            partition.getVersion())
-                    <= 0) {
-                throw new TransientConflictException(
-                        "partition version conflict, requeue aborted: partitionId="
-                                + partition.getId());
-            }
-            if (jobTaskMapper.resetForRetry(
-                            tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion())
-                    <= 0) {
-                throw new TransientConflictException(
-                        "task version conflict, requeue aborted: taskId=" + task.getId());
-            }
-            taskDispatchOutboxService.writeDispatchEvent(
-                    jobInstance,
-                    task,
-                    partition,
-                    jobInstance.getTraceId(),
-                    eventKey,
-                    RunMode.RETRY);
-        } finally {
-            if (injectMdc) {
-                BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-                BatchMdc.remove(StructuredLogField.TRACE_ID);
-                BatchMdc.remove(StructuredLogField.TENANT_ID);
-            }
-        }
-    }
-
-    private void requeueTaskWithoutPartition(String tenantId, JobTaskEntity task, String eventKey) {
-        JobInstanceEntity jobInstance =
-                jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
-        if (jobInstance == null) {
-            throw new IllegalStateException("retry job instance not found");
-        }
-        JobStepInstanceEntity stepInstance =
-                jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
-        if (stepInstance != null) {
-            int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
-            jobStepInstanceMapper.resetForRetryByJobTaskId(
-                    tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
-        }
-        if (jobTaskMapper.resetForRetry(
-                        tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion())
-                <= 0) {
-            throw new TransientConflictException(
-                    "task version conflict, requeue aborted: taskId=" + task.getId());
-        }
-        taskDispatchOutboxService.writeDispatchEvent(
-                jobInstance, task, null, jobInstance.getTraceId(), eventKey, RunMode.RETRY);
-    }
-
-    private RetryPolicyPlan resolveRetryPolicy(Long jobDefinitionId) {
-        if (jobDefinitionId == null) {
-            return new RetryPolicyPlan(
-                    RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
-        }
-        JobDefinitionRecord jobDefinitionRecord =
-                jobDefinitionRepository.findById(jobDefinitionId).orElse(null);
-        if (jobDefinitionRecord == null) {
-            return new RetryPolicyPlan(
-                    RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
-        }
-        String retryPolicy = jobDefinitionRecord.retryPolicy();
-        Integer retryMaxCount = jobDefinitionRecord.retryMaxCount();
-        if (retryPolicy == null || retryPolicy.isBlank()) {
-            retryPolicy = RetryPolicyType.FIXED.code();
-        }
-        return new RetryPolicyPlan(
-                retryPolicy,
-                retryMaxCount == null
-                        ? governance.retry().getDefaultMaxRetryCount()
-                        : retryMaxCount);
-    }
-
-    /** 重试时间由治理层统一计算，避免调度器和业务处理各自散落一套 backoff 规则。 */
-    private Instant calculateNextRetryAt(String retryPolicy, int retryCount) {
-        long delaySeconds = governance.retry().getFixedDelaySeconds();
-        if (RetryPolicyType.EXPONENTIAL.code().equalsIgnoreCase(retryPolicy)) {
-            long multiplier = Math.max(1L, governance.retry().getExponentialMultiplier());
-            long maxDelay = governance.retry().getMaxDelaySeconds();
-            long candidate = delaySeconds;
-            for (int i = 1; i < retryCount; i++) {
-                if (candidate >= maxDelay) {
-                    candidate = maxDelay;
-                    break;
-                }
-                // L-1: 乘法前溢出保护，candidate * multiplier 可能溢出 long 范围
-                if (candidate > maxDelay / multiplier) {
-                    candidate = maxDelay;
-                } else {
-                    candidate = Math.min(maxDelay, candidate * multiplier);
-                }
-            }
-            delaySeconds = candidate;
-        }
-        return Instant.now().plusSeconds(delaySeconds);
-    }
-
-    private void createDeadLetter(
-            JobTaskEntity task,
-            JobPartitionEntity partition,
-            JobInstanceEntity jobInstance,
-            String errorCode,
-            String errorMessage) {
-        DeadLetterTaskEntity deadLetterTask = new DeadLetterTaskEntity();
-        deadLetterTask.setTenantId(task.getTenantId());
-        deadLetterTask.setSourceType("JOB_PARTITION");
-        deadLetterTask.setSourceId(partition.getId());
-        deadLetterTask.setDeadLetterReason(buildDeadLetterReason(errorCode, errorMessage));
-        deadLetterTask.setPayloadRef(jobInstance.getInstanceNo() + ":" + task.getId());
-        deadLetterTask.setReplayStatus(DeadLetterReplayStatus.NEW.code());
-        deadLetterTask.setReplayCount(0);
-        deadLetterTask.setTraceId(jobInstance.getTraceId());
-        deadLetterTaskMapper.insert(deadLetterTask);
+  @Override
+  @Transactional
+  public void dispatchDueRetries() {
+    // 定时扫描：把到期的 retry_schedule 记录重排队（requeue）回 outbox。
+    List<RetryScheduleEntity> dueRetries =
+        retryScheduleMapper.selectByQuery(
+            new RetryScheduleQuery(
+                null,
+                RetryScheduleStatus.WAITING.code(),
+                Instant.now(),
+                governance.retry().getBatchSize()));
+    for (RetryScheduleEntity retrySchedule : dueRetries) {
+      if (retryScheduleMapper.markRunning(
+              retrySchedule.getId(),
+              RetryScheduleStatus.WAITING.code(),
+              RetryScheduleStatus.RUNNING.code())
+          <= 0) {
+        continue;
+      }
+      try {
+        requeuePartition(retrySchedule);
+        retryScheduleMapper.markSuccess(retrySchedule.getId(), RetryScheduleStatus.SUCCESS.code());
+      } catch (TransientConflictException conflict) {
         log.warn(
-                "dead letter created: tenantId={}, partitionId={}, instanceNo={}",
-                task.getTenantId(),
-                partition.getId(),
-                jobInstance.getInstanceNo());
+            "retry dispatch version conflict, will retry later: retryId={}, error={}",
+            retrySchedule.getId(),
+            conflict.getMessage());
+        retryScheduleMapper.resetToWaiting(
+            retrySchedule.getId(), RetryScheduleStatus.WAITING.code());
+      } catch (Exception exception) {
+        log.warn(
+            "retry dispatch failed: retryId={}, error={}",
+            retrySchedule.getId(),
+            exception.getMessage(),
+            exception);
+        retryScheduleMapper.markFailed(
+            retrySchedule.getId(),
+            RetryScheduleStatus.FAILED.code(),
+            "RETRY_DISPATCH_FAILED",
+            exception.getMessage(),
+            Instant.now());
+      }
     }
+  }
 
-    private String buildDeadLetterReason(String errorCode, String errorMessage) {
-        String code = errorCode == null ? "UNKNOWN" : errorCode;
-        String message = errorMessage == null ? "retry exhausted" : errorMessage;
-        return code + ": " + message;
+  @Override
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void retryPartition(String tenantId, Long partitionId, String eventKey) {
+    requeuePartition(tenantId, partitionId, eventKey);
+  }
+
+  @Override
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void retryTask(String tenantId, Long taskId, String eventKey) {
+    JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
+    if (task == null) {
+      throw new IllegalStateException("retry task not found");
     }
+    String status = task.getStatus();
+    if (!TaskStatus.FAILED.code().equals(status)
+        && !TaskStatus.CANCELLED.code().equals(status)
+        && !TaskStatus.TERMINATED.code().equals(status)) {
+      throw new IllegalStateException(
+          "retry only allowed from terminal state (FAILED/CANCELLED/TERMINATED), current"
+              + " status: "
+              + status);
+    }
+    if (task.getJobPartitionId() != null) {
+      requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
+      return;
+    }
+    requeueTaskWithoutPartition(tenantId, task, eventKey);
+  }
 
-    private record RetryPolicyPlan(String retryPolicy, int maxRetryCount) {}
+  @Override
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void reclaimTask(String tenantId, Long taskId, String eventKey) {
+    JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
+    if (task == null) {
+      throw new IllegalStateException("reclaim task not found");
+    }
+    String status = task.getStatus();
+    if (!TaskStatus.RUNNING.code().equals(status)
+        && !TaskStatus.FAILED.code().equals(status)
+        && !TaskStatus.CANCELLED.code().equals(status)
+        && !TaskStatus.TERMINATED.code().equals(status)) {
+      throw new IllegalStateException(
+          "reclaim only allowed from RUNNING or terminal state, current status: " + status);
+    }
+    if (task.getJobPartitionId() != null) {
+      requeuePartition(tenantId, task.getJobPartitionId(), eventKey);
+      return;
+    }
+    requeueTaskWithoutPartition(tenantId, task, eventKey);
+  }
 
-    /**
-     * 乐观锁 CAS 失败时抛出，表示瞬态版本冲突，可在下次调度周期重试。 与 {@link IllegalStateException}（资源不存在等永久性错误）区分，避免
-     * retry_schedule 被错误地置为 FAILED。
-     */
-    private static final class TransientConflictException extends RuntimeException {
-        TransientConflictException(String message) {
-            super(message);
+  @Override
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void replayDeadLetter(String tenantId, Long deadLetterTaskId) {
+    DeadLetterTaskEntity deadLetterTask =
+        deadLetterTaskMapper.selectById(tenantId, deadLetterTaskId);
+    if (deadLetterTask == null) {
+      throw new IllegalStateException("dead letter task not found");
+    }
+    String traceId = deadLetterTask.getTraceId();
+    boolean injectMdc = traceId != null && !traceId.isBlank();
+    if (injectMdc) {
+      BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+      BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+      BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, null);
+    }
+    try {
+      if (!DeadLetterReplayStatus.NEW.code().equals(deadLetterTask.getReplayStatus())
+          && !DeadLetterReplayStatus.FAILED.code().equals(deadLetterTask.getReplayStatus())) {
+        throw new IllegalStateException("dead letter task is not replayable");
+      }
+      if (deadLetterTaskMapper.markReplaying(
+              tenantId,
+              deadLetterTaskId,
+              deadLetterTask.getReplayStatus(),
+              DeadLetterReplayStatus.REPLAYING.code())
+          <= 0) {
+        throw new IllegalStateException("dead letter task replay conflict");
+      }
+      Instant replayAt = Instant.now();
+      int replayCount = Optional.ofNullable(deadLetterTask.getReplayCount()).orElse(0) + 1;
+      try {
+        if (!"JOB_PARTITION".equals(deadLetterTask.getSourceType())) {
+          throw new IllegalStateException(
+              "unsupported dead letter source type: " + deadLetterTask.getSourceType());
         }
+        requeuePartition(
+            tenantId, deadLetterTask.getSourceId(), tenantId + ":dead-letter:" + deadLetterTaskId);
+        deadLetterTaskMapper.markReplaySuccess(
+            tenantId,
+            deadLetterTaskId,
+            DeadLetterReplayStatus.SUCCESS.code(),
+            replayCount,
+            replayAt,
+            "REPLAY_ACCEPTED");
+      } catch (Exception exception) {
+        log.warn(
+            "dead letter replay failed: deadLetterId={}, error={}",
+            deadLetterTaskId,
+            exception.getMessage(),
+            exception);
+        deadLetterTaskMapper.markReplayFailure(
+            tenantId,
+            deadLetterTaskId,
+            DeadLetterReplayStatus.FAILED.code(),
+            replayCount,
+            replayAt,
+            exception.getMessage());
+        throw exception;
+      }
+    } finally {
+      if (injectMdc) {
+        BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+        BatchMdc.remove(StructuredLogField.TRACE_ID);
+        BatchMdc.remove(StructuredLogField.TENANT_ID);
+      }
     }
+  }
+
+  private void requeuePartition(RetryScheduleEntity retrySchedule) {
+    requeuePartition(
+        retrySchedule.getTenantId(),
+        retrySchedule.getRelatedId(),
+        retrySchedule.getTenantId() + ":retry:" + retrySchedule.getId());
+  }
+
+  private void requeuePartition(String tenantId, Long partitionId, String eventKey) {
+    JobPartitionEntity partition = jobPartitionMapper.selectById(tenantId, partitionId);
+    if (partition == null) {
+      throw new IllegalStateException("retry partition not found");
+    }
+    JobInstanceEntity jobInstance =
+        jobInstanceMapper.selectById(tenantId, partition.getJobInstanceId());
+    if (jobInstance == null) {
+      throw new IllegalStateException("retry job instance not found");
+    }
+    String traceId = jobInstance.getTraceId();
+    boolean injectMdc = traceId != null && !traceId.isBlank();
+    if (injectMdc) {
+      BatchMdc.put(StructuredLogField.TENANT_ID, tenantId);
+      BatchMdc.put(StructuredLogField.TRACE_ID, traceId);
+      BatchMdc.put(
+          StructuredLogField.JOB_INSTANCE_ID,
+          jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
+    }
+    try {
+      List<JobTaskEntity> tasks =
+          jobTaskMapper.selectByQuery(
+              new JobTaskQuery(tenantId, jobInstance.getId(), partition.getId(), null, null));
+      JobTaskEntity task =
+          tasks.stream()
+              .sorted(
+                  (left, right) ->
+                      Integer.compare(
+                          left.getTaskSeq() == null ? 0 : left.getTaskSeq(),
+                          right.getTaskSeq() == null ? 0 : right.getTaskSeq()))
+              .findFirst()
+              .orElseThrow(() -> new IllegalStateException("retry task not found"));
+
+      JobStepInstanceEntity stepInstance =
+          jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
+      if (stepInstance != null) {
+        int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
+        jobStepInstanceMapper.resetForRetryByJobTaskId(
+            tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
+      }
+      if (jobPartitionMapper.resetForDispatch(
+              tenantId, partition.getId(), PartitionStatus.READY.code(), partition.getVersion())
+          <= 0) {
+        throw new TransientConflictException(
+            "partition version conflict, requeue aborted: partitionId=" + partition.getId());
+      }
+      if (jobTaskMapper.resetForRetry(
+              tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion())
+          <= 0) {
+        throw new TransientConflictException(
+            "task version conflict, requeue aborted: taskId=" + task.getId());
+      }
+      taskDispatchOutboxService.writeDispatchEvent(
+          jobInstance, task, partition, jobInstance.getTraceId(), eventKey, RunMode.RETRY);
+    } finally {
+      if (injectMdc) {
+        BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
+        BatchMdc.remove(StructuredLogField.TRACE_ID);
+        BatchMdc.remove(StructuredLogField.TENANT_ID);
+      }
+    }
+  }
+
+  private void requeueTaskWithoutPartition(String tenantId, JobTaskEntity task, String eventKey) {
+    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
+    if (jobInstance == null) {
+      throw new IllegalStateException("retry job instance not found");
+    }
+    JobStepInstanceEntity stepInstance =
+        jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
+    if (stepInstance != null) {
+      int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
+      jobStepInstanceMapper.resetForRetryByJobTaskId(
+          tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
+    }
+    if (jobTaskMapper.resetForRetry(
+            tenantId, task.getId(), TaskStatus.READY.code(), task.getVersion())
+        <= 0) {
+      throw new TransientConflictException(
+          "task version conflict, requeue aborted: taskId=" + task.getId());
+    }
+    taskDispatchOutboxService.writeDispatchEvent(
+        jobInstance, task, null, jobInstance.getTraceId(), eventKey, RunMode.RETRY);
+  }
+
+  private RetryPolicyPlan resolveRetryPolicy(Long jobDefinitionId) {
+    if (jobDefinitionId == null) {
+      return new RetryPolicyPlan(
+          RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
+    }
+    JobDefinitionRecord jobDefinitionRecord =
+        jobDefinitionRepository.findById(jobDefinitionId).orElse(null);
+    if (jobDefinitionRecord == null) {
+      return new RetryPolicyPlan(
+          RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
+    }
+    String retryPolicy = jobDefinitionRecord.retryPolicy();
+    Integer retryMaxCount = jobDefinitionRecord.retryMaxCount();
+    if (retryPolicy == null || retryPolicy.isBlank()) {
+      retryPolicy = RetryPolicyType.FIXED.code();
+    }
+    return new RetryPolicyPlan(
+        retryPolicy,
+        retryMaxCount == null ? governance.retry().getDefaultMaxRetryCount() : retryMaxCount);
+  }
+
+  /** 重试时间由治理层统一计算，避免调度器和业务处理各自散落一套 backoff 规则。 */
+  private Instant calculateNextRetryAt(String retryPolicy, int retryCount) {
+    long delaySeconds = governance.retry().getFixedDelaySeconds();
+    if (RetryPolicyType.EXPONENTIAL.code().equalsIgnoreCase(retryPolicy)) {
+      long multiplier = Math.max(1L, governance.retry().getExponentialMultiplier());
+      long maxDelay = governance.retry().getMaxDelaySeconds();
+      long candidate = delaySeconds;
+      for (int i = 1; i < retryCount; i++) {
+        if (candidate >= maxDelay) {
+          candidate = maxDelay;
+          break;
+        }
+        // L-1: 乘法前溢出保护，candidate * multiplier 可能溢出 long 范围
+        if (candidate > maxDelay / multiplier) {
+          candidate = maxDelay;
+        } else {
+          candidate = Math.min(maxDelay, candidate * multiplier);
+        }
+      }
+      delaySeconds = candidate;
+    }
+    return Instant.now().plusSeconds(delaySeconds);
+  }
+
+  private void createDeadLetter(
+      JobTaskEntity task,
+      JobPartitionEntity partition,
+      JobInstanceEntity jobInstance,
+      String errorCode,
+      String errorMessage) {
+    DeadLetterTaskEntity deadLetterTask = new DeadLetterTaskEntity();
+    deadLetterTask.setTenantId(task.getTenantId());
+    deadLetterTask.setSourceType("JOB_PARTITION");
+    deadLetterTask.setSourceId(partition.getId());
+    deadLetterTask.setDeadLetterReason(buildDeadLetterReason(errorCode, errorMessage));
+    deadLetterTask.setPayloadRef(jobInstance.getInstanceNo() + ":" + task.getId());
+    deadLetterTask.setReplayStatus(DeadLetterReplayStatus.NEW.code());
+    deadLetterTask.setReplayCount(0);
+    deadLetterTask.setTraceId(jobInstance.getTraceId());
+    deadLetterTaskMapper.insert(deadLetterTask);
+    log.warn(
+        "dead letter created: tenantId={}, partitionId={}, instanceNo={}",
+        task.getTenantId(),
+        partition.getId(),
+        jobInstance.getInstanceNo());
+  }
+
+  private String buildDeadLetterReason(String errorCode, String errorMessage) {
+    String code = errorCode == null ? "UNKNOWN" : errorCode;
+    String message = errorMessage == null ? "retry exhausted" : errorMessage;
+    return code + ": " + message;
+  }
+
+  private record RetryPolicyPlan(String retryPolicy, int maxRetryCount) {}
+
+  /**
+   * 乐观锁 CAS 失败时抛出，表示瞬态版本冲突，可在下次调度周期重试。 与 {@link IllegalStateException}（资源不存在等永久性错误）区分，避免
+   * retry_schedule 被错误地置为 FAILED。
+   */
+  private static final class TransientConflictException extends RuntimeException {
+    TransientConflictException(String message) {
+      super(message);
+    }
+  }
 }

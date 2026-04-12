@@ -6,38 +6,38 @@ import org.junit.jupiter.api.Test;
 
 class DeadLetterReplayStatusTest {
 
-    @Test
-    void shouldHaveCorrectCodeValues() {
-        assertThat(DeadLetterReplayStatus.NEW.code()).isEqualTo("NEW");
-        assertThat(DeadLetterReplayStatus.REPLAYING.code()).isEqualTo("REPLAYING");
-        assertThat(DeadLetterReplayStatus.SUCCESS.code()).isEqualTo("SUCCESS");
-        assertThat(DeadLetterReplayStatus.FAILED.code()).isEqualTo("FAILED");
-        assertThat(DeadLetterReplayStatus.GIVE_UP.code()).isEqualTo("GIVE_UP");
-    }
+  @Test
+  void shouldHaveCorrectCodeValues() {
+    assertThat(DeadLetterReplayStatus.NEW.code()).isEqualTo("NEW");
+    assertThat(DeadLetterReplayStatus.REPLAYING.code()).isEqualTo("REPLAYING");
+    assertThat(DeadLetterReplayStatus.SUCCESS.code()).isEqualTo("SUCCESS");
+    assertThat(DeadLetterReplayStatus.FAILED.code()).isEqualTo("FAILED");
+    assertThat(DeadLetterReplayStatus.GIVE_UP.code()).isEqualTo("GIVE_UP");
+  }
 
-    @Test
-    void shouldHaveNonBlankLabels() {
-        for (DeadLetterReplayStatus status : DeadLetterReplayStatus.values()) {
-            assertThat(status.label()).as("label for %s", status.name()).isNotBlank();
-        }
+  @Test
+  void shouldHaveNonBlankLabels() {
+    for (DeadLetterReplayStatus status : DeadLetterReplayStatus.values()) {
+      assertThat(status.label()).as("label for %s", status.name()).isNotBlank();
     }
+  }
 
-    @Test
-    void codeShouldMatchEnumName() {
-        for (DeadLetterReplayStatus status : DeadLetterReplayStatus.values()) {
-            assertThat(status.code()).isEqualTo(status.name());
-        }
+  @Test
+  void codeShouldMatchEnumName() {
+    for (DeadLetterReplayStatus status : DeadLetterReplayStatus.values()) {
+      assertThat(status.code()).isEqualTo(status.name());
     }
+  }
 
-    @Test
-    void shouldHaveReplayableInitialStatuses() {
-        // NEW 和 FAILED 是可重放的初始状态
-        assertThat(DeadLetterReplayStatus.NEW.code()).isEqualTo("NEW");
-        assertThat(DeadLetterReplayStatus.FAILED.code()).isEqualTo("FAILED");
-    }
+  @Test
+  void shouldHaveReplayableInitialStatuses() {
+    // NEW 和 FAILED 是可重放的初始状态
+    assertThat(DeadLetterReplayStatus.NEW.code()).isEqualTo("NEW");
+    assertThat(DeadLetterReplayStatus.FAILED.code()).isEqualTo("FAILED");
+  }
 
-    @Test
-    void shouldContainFiveValues() {
-        assertThat(DeadLetterReplayStatus.values()).hasSize(5);
-    }
+  @Test
+  void shouldContainFiveValues() {
+    assertThat(DeadLetterReplayStatus.values()).hasSize(5);
+  }
 }

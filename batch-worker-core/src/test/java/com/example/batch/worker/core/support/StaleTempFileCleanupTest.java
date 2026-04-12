@@ -14,42 +14,40 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class StaleTempFileCleanupTest {
 
-    @TempDir
-    Path tempDir;
+  @TempDir Path tempDir;
 
-    private String originalTmpDir;
+  private String originalTmpDir;
 
-    @AfterEach
-    void restoreTmpDir() {
-        if (originalTmpDir != null) {
-            System.setProperty("java.io.tmpdir", originalTmpDir);
-        }
+  @AfterEach
+  void restoreTmpDir() {
+    if (originalTmpDir != null) {
+      System.setProperty("java.io.tmpdir", originalTmpDir);
     }
+  }
 
-    @Test
-    void shouldDeleteOnlyBatchPrefixedFilesOlderThanCutoff() throws Exception {
-        originalTmpDir = System.getProperty("java.io.tmpdir");
-        System.setProperty("java.io.tmpdir", tempDir.toString());
+  @Test
+  void shouldDeleteOnlyBatchPrefixedFilesOlderThanCutoff() throws Exception {
+    originalTmpDir = System.getProperty("java.io.tmpdir");
+    System.setProperty("java.io.tmpdir", tempDir.toString());
 
-        Path oldBatch = tempDir.resolve("batch-import-old.tmp");
-        Files.writeString(oldBatch, "x");
-        Files.setLastModifiedTime(oldBatch, FileTime.from(Instant.now().minus(Duration.ofHours(7))));
+    Path oldBatch = tempDir.resolve("batch-import-old.tmp");
+    Files.writeString(oldBatch, "x");
+    Files.setLastModifiedTime(oldBatch, FileTime.from(Instant.now().minus(Duration.ofHours(7))));
 
-        Path newBatch = tempDir.resolve("batch-export-new.tmp");
-        Files.writeString(newBatch, "y");
-        Files.setLastModifiedTime(newBatch, FileTime.from(Instant.now().minus(Duration.ofHours(1))));
+    Path newBatch = tempDir.resolve("batch-export-new.tmp");
+    Files.writeString(newBatch, "y");
+    Files.setLastModifiedTime(newBatch, FileTime.from(Instant.now().minus(Duration.ofHours(1))));
 
-        Path oldOther = tempDir.resolve("not-batch-old.tmp");
-        Files.writeString(oldOther, "z");
-        Files.setLastModifiedTime(oldOther, FileTime.from(Instant.now().minus(Duration.ofHours(10))));
+    Path oldOther = tempDir.resolve("not-batch-old.tmp");
+    Files.writeString(oldOther, "z");
+    Files.setLastModifiedTime(oldOther, FileTime.from(Instant.now().minus(Duration.ofHours(10))));
 
-        StaleTempFileCleanup cleanup = new StaleTempFileCleanup();
-        ReflectionTestUtils.setField(cleanup, "staleTempFileHours", 6L);
-        cleanup.cleanStaleTempFiles();
+    StaleTempFileCleanup cleanup = new StaleTempFileCleanup();
+    ReflectionTestUtils.setField(cleanup, "staleTempFileHours", 6L);
+    cleanup.cleanStaleTempFiles();
 
-        assertThat(Files.exists(oldBatch)).isFalse();
-        assertThat(Files.exists(newBatch)).isTrue();
-        assertThat(Files.exists(oldOther)).isTrue();
-    }
+    assertThat(Files.exists(oldBatch)).isFalse();
+    assertThat(Files.exists(newBatch)).isTrue();
+    assertThat(Files.exists(oldOther)).isTrue();
+  }
 }
-

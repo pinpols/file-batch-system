@@ -20,60 +20,59 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @ExtendWith(MockitoExtension.class)
 class ConsoleRealtimeRedisPublisherTest {
 
-    @Mock
-    private StringRedisTemplate redisTemplate;
-    @Mock
-    private ConsoleRealtimeInstanceIdProvider instanceIdProvider;
-    @Mock
-    private ConsoleRealtimeReplayStore replayStore;
+  @Mock private StringRedisTemplate redisTemplate;
+  @Mock private ConsoleRealtimeInstanceIdProvider instanceIdProvider;
+  @Mock private ConsoleRealtimeReplayStore replayStore;
 
-    private ConsoleRealtimeRedisPublisher publisher;
+  private ConsoleRealtimeRedisPublisher publisher;
 
-    @BeforeEach
-    void setUp() {
-        publisher = new ConsoleRealtimeRedisPublisher(redisTemplate, instanceIdProvider, replayStore);
-    }
+  @BeforeEach
+  void setUp() {
+    publisher = new ConsoleRealtimeRedisPublisher(redisTemplate, instanceIdProvider, replayStore);
+  }
 
-    @Test
-    void publishNullEventIsNoOp() {
-        publisher.publish(null);
+  @Test
+  void publishNullEventIsNoOp() {
+    publisher.publish(null);
 
-        verify(replayStore, never()).append(any());
-        verify(redisTemplate, never()).convertAndSend(anyString(), anyString());
-    }
+    verify(replayStore, never()).append(any());
+    verify(redisTemplate, never()).convertAndSend(anyString(), anyString());
+  }
 
-    @Test
-    void publishAppendsToReplayStoreAndSendsToChannel() {
-        when(instanceIdProvider.instanceId()).thenReturn("instance-1");
-        ConsoleSseEvent event = new ConsoleSseEvent(
-                "t1", "job-instance", "JOB_STATUS", "cursor-abc", "payload", Instant.now());
+  @Test
+  void publishAppendsToReplayStoreAndSendsToChannel() {
+    when(instanceIdProvider.instanceId()).thenReturn("instance-1");
+    ConsoleSseEvent event =
+        new ConsoleSseEvent(
+            "t1", "job-instance", "JOB_STATUS", "cursor-abc", "payload", Instant.now());
 
-        publisher.publish(event);
+    publisher.publish(event);
 
-        ArgumentCaptor<ConsoleRealtimeStreamEnvelope> envelopeCaptor =
-                ArgumentCaptor.forClass(ConsoleRealtimeStreamEnvelope.class);
-        verify(replayStore).append(envelopeCaptor.capture());
-        ConsoleRealtimeStreamEnvelope envelope = envelopeCaptor.getValue();
-        assertThat(envelope.originInstanceId()).isEqualTo("instance-1");
-        assertThat(envelope.tenantId()).isEqualTo("t1");
-        assertThat(envelope.stream()).isEqualTo("job-instance");
-        assertThat(envelope.eventType()).isEqualTo("JOB_STATUS");
-        assertThat(envelope.cursor()).isEqualTo("cursor-abc");
+    ArgumentCaptor<ConsoleRealtimeStreamEnvelope> envelopeCaptor =
+        ArgumentCaptor.forClass(ConsoleRealtimeStreamEnvelope.class);
+    verify(replayStore).append(envelopeCaptor.capture());
+    ConsoleRealtimeStreamEnvelope envelope = envelopeCaptor.getValue();
+    assertThat(envelope.originInstanceId()).isEqualTo("instance-1");
+    assertThat(envelope.tenantId()).isEqualTo("t1");
+    assertThat(envelope.stream()).isEqualTo("job-instance");
+    assertThat(envelope.eventType()).isEqualTo("JOB_STATUS");
+    assertThat(envelope.cursor()).isEqualTo("cursor-abc");
 
-        verify(redisTemplate).convertAndSend(eq(ConsoleRealtimeRedisPublisher.CHANNEL_KEY), anyString());
-    }
+    verify(redisTemplate)
+        .convertAndSend(eq(ConsoleRealtimeRedisPublisher.CHANNEL_KEY), anyString());
+  }
 
-    @Test
-    void publishNullDataSerializesAsEmptyString() {
-        when(instanceIdProvider.instanceId()).thenReturn("instance-2");
-        ConsoleSseEvent event = new ConsoleSseEvent(
-                "t1", "ops", "SUMMARY", "cursor-1", null, Instant.now());
+  @Test
+  void publishNullDataSerializesAsEmptyString() {
+    when(instanceIdProvider.instanceId()).thenReturn("instance-2");
+    ConsoleSseEvent event =
+        new ConsoleSseEvent("t1", "ops", "SUMMARY", "cursor-1", null, Instant.now());
 
-        publisher.publish(event);
+    publisher.publish(event);
 
-        ArgumentCaptor<ConsoleRealtimeStreamEnvelope> captor =
-                ArgumentCaptor.forClass(ConsoleRealtimeStreamEnvelope.class);
-        verify(replayStore).append(captor.capture());
-        assertThat(captor.getValue().dataJson()).isEmpty();
-    }
+    ArgumentCaptor<ConsoleRealtimeStreamEnvelope> captor =
+        ArgumentCaptor.forClass(ConsoleRealtimeStreamEnvelope.class);
+    verify(replayStore).append(captor.capture());
+    assertThat(captor.getValue().dataJson()).isEmpty();
+  }
 }

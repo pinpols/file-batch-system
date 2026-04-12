@@ -5,12 +5,12 @@ package com.example.batch.common.service;
  */
 public interface IdempotencyGuard {
 
-    String executeOnce(String tenantId, String idempotencyKey, IdempotentAction action);
+  String executeOnce(String tenantId, String idempotencyKey, IdempotentAction action);
 
-    boolean isAlreadyExecuted(String tenantId, String idempotencyKey);
+  boolean isAlreadyExecuted(String tenantId, String idempotencyKey);
 
-    @FunctionalInterface
-    interface IdempotentAction {
-        String execute();
-    }
+  @FunctionalInterface
+  interface IdempotentAction {
+    String execute();
+  }
 }

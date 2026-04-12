@@ -150,7 +150,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-pmd-plugin</artifactId>
-                    <version>3.26.0</version>
+                    <version>3.27.0</version>
                     <configuration>
                         <rulesets>
                             <ruleset>${maven.multiModuleProjectDirectory}/build/pmd-ruleset.xml</ruleset>
@@ -167,11 +167,11 @@
                 <plugin>
                     <groupId>com.diffplug.spotless</groupId>
                     <artifactId>spotless-maven-plugin</artifactId>
-                    <version>2.44.0</version>
+                    <version>2.44.5</version>
                     <configuration>
                         <java>
                             <googleJavaFormat>
-                                <version>1.24.0</version>
+                                <version>1.27.0</version>
                                 <style>GOOGLE</style>
                                 <reflowLongStrings>true</reflowLongStrings>
                             </googleJavaFormat>

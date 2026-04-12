@@ -3,4 +3,4 @@ package com.example.batch.console.web.response;
 import java.time.Instant;
 
 public record ConsoleSseEventResponse(
-        String stream, String eventType, String cursor, Object data, Instant emittedAt) {}
+    String stream, String eventType, String cursor, Object data, Instant emittedAt) {}

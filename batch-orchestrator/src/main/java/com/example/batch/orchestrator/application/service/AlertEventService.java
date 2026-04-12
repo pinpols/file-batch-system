@@ -4,5 +4,5 @@ import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
 
 public interface AlertEventService {
 
-    void emit(AlertEmitRequest request);
+  void emit(AlertEmitRequest request);
 }

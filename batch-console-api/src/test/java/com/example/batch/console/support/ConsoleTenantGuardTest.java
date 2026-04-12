@@ -14,37 +14,40 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 class ConsoleTenantGuardTest {
 
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
-    private final ConsoleTenantGuard tenantGuard = new ConsoleTenantGuard(requestMetadataResolver);
+  private final ConsoleRequestMetadataResolver requestMetadataResolver =
+      mock(ConsoleRequestMetadataResolver.class);
+  private final ConsoleTenantGuard tenantGuard = new ConsoleTenantGuard(requestMetadataResolver);
 
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
-    }
+  @AfterEach
+  void tearDown() {
+    SecurityContextHolder.clearContext();
+  }
 
-    @Test
-    void shouldResolveTenantFromRequestParameterWhenRequestScopeIsUnavailable() {
-        when(requestMetadataResolver.current()).thenThrow(new IllegalStateException("request scope missing"));
+  @Test
+  void shouldResolveTenantFromRequestParameterWhenRequestScopeIsUnavailable() {
+    when(requestMetadataResolver.current())
+        .thenThrow(new IllegalStateException("request scope missing"));
 
-        assertThat(tenantGuard.resolveTenant("tenant-a")).isEqualTo("tenant-a");
-    }
+    assertThat(tenantGuard.resolveTenant("tenant-a")).isEqualTo("tenant-a");
+  }
 
-    @Test
-    void shouldPreferAuthenticatedTenantWhenRequestScopeIsUnavailable() {
-        when(requestMetadataResolver.current()).thenThrow(new IllegalStateException("request scope missing"));
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("tester", "tenant-b", Set.of("ROLE_ADMIN")),
-                "ignored"
-        ));
+  @Test
+  void shouldPreferAuthenticatedTenantWhenRequestScopeIsUnavailable() {
+    when(requestMetadataResolver.current())
+        .thenThrow(new IllegalStateException("request scope missing"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                new ConsolePrincipal("tester", "tenant-b", Set.of("ROLE_ADMIN")), "ignored"));
 
-        assertThat(tenantGuard.resolveTenant("tenant-b")).isEqualTo("tenant-b");
-    }
+    assertThat(tenantGuard.resolveTenant("tenant-b")).isEqualTo("tenant-b");
+  }
 
-    @Test
-    void shouldRejectMissingTenantWhenRequestScopeAndParameterAreBothUnavailable() {
-        when(requestMetadataResolver.current()).thenThrow(new IllegalStateException("request scope missing"));
+  @Test
+  void shouldRejectMissingTenantWhenRequestScopeAndParameterAreBothUnavailable() {
+    when(requestMetadataResolver.current())
+        .thenThrow(new IllegalStateException("request scope missing"));
 
-        assertThatThrownBy(() -> tenantGuard.resolveTenant(" "))
-                .isInstanceOf(BizException.class);
-    }
+    assertThatThrownBy(() -> tenantGuard.resolveTenant(" ")).isInstanceOf(BizException.class);
+  }
 }

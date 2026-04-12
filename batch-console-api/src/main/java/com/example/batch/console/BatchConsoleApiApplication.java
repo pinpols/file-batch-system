@@ -3,7 +3,6 @@ package com.example.batch.console;
 import com.example.batch.common.config.BatchJsonAutoConfiguration;
 import com.example.batch.common.config.BatchObjectCryptoAutoConfiguration;
 import com.example.batch.common.logging.HttpRequestMdcAutoConfiguration;
-
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
@@ -17,31 +16,32 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
+
 @SpringBootApplication(
-        scanBasePackages = {"com.example.batch.console", "com.example.batch.common"},
-        exclude = {
-            DataRedisRepositoriesAutoConfiguration.class,
-            HttpRequestMdcAutoConfiguration.class,
-            OpenAiAudioSpeechAutoConfiguration.class,
-            OpenAiAudioTranscriptionAutoConfiguration.class,
-            OpenAiEmbeddingAutoConfiguration.class,
-            OpenAiImageAutoConfiguration.class,
-            OpenAiModerationAutoConfiguration.class
-        },
-        excludeName =
-                "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration")
+    scanBasePackages = {"com.example.batch.console", "com.example.batch.common"},
+    exclude = {
+      DataRedisRepositoriesAutoConfiguration.class,
+      HttpRequestMdcAutoConfiguration.class,
+      OpenAiAudioSpeechAutoConfiguration.class,
+      OpenAiAudioTranscriptionAutoConfiguration.class,
+      OpenAiEmbeddingAutoConfiguration.class,
+      OpenAiImageAutoConfiguration.class,
+      OpenAiModerationAutoConfiguration.class
+    },
+    excludeName =
+        "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration")
 @ImportAutoConfiguration({
-    BatchJsonAutoConfiguration.class,
-    BatchObjectCryptoAutoConfiguration.class,
-    RestClientAutoConfiguration.class
+  BatchJsonAutoConfiguration.class,
+  BatchObjectCryptoAutoConfiguration.class,
+  RestClientAutoConfiguration.class
 })
 @MapperScan("com.example.batch.console.mapper")
 @EnableJdbcRepositories(basePackages = "com.example.batch.console.repository")
 @ConfigurationPropertiesScan(
-        basePackages = {"com.example.batch.console", "com.example.batch.common"})
+    basePackages = {"com.example.batch.console", "com.example.batch.common"})
 public class BatchConsoleApiApplication {
 
-    public static void main(String[] args) {
-        SpringApplication.run(BatchConsoleApiApplication.class, args);
-    }
+  public static void main(String[] args) {
+    SpringApplication.run(BatchConsoleApiApplication.class, args);
+  }
 }

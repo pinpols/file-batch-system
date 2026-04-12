@@ -5,7 +5,7 @@ import com.example.batch.worker.core.domain.WorkerExecutionResult;
 
 public interface TaskExecutionWrapper {
 
-    boolean claim(String tenantId, Long taskId, String workerId);
+  boolean claim(String tenantId, Long taskId, String workerId);
 
-    WorkerExecutionResult execute(PulledTask task);
+  WorkerExecutionResult execute(PulledTask task);
 }

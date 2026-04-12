@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface ImportStageExecutor {
 
-    List<ImportStageResult> execute(ImportJobContext context);
+  List<ImportStageResult> execute(ImportJobContext context);
 
-    List<PipelineStepTemplate> defaultStepDefinitions();
+  List<PipelineStepTemplate> defaultStepDefinitions();
 }

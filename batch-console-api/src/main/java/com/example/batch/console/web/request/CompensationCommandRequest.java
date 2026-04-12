@@ -2,33 +2,31 @@ package com.example.batch.console.web.request;
 
 import com.example.batch.common.validation.ValidBizDate;
 import com.example.batch.common.validation.ValidTenantId;
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
 import lombok.Data;
 
 @Data
 public class CompensationCommandRequest {
 
-    @ValidTenantId private String tenantId;
+  @ValidTenantId private String tenantId;
 
-    @NotBlank
-    @Size(max = 64, message = "compensationType too long (max 64)")
-    private String compensationType;
+  @NotBlank
+  @Size(max = 64, message = "compensationType too long (max 64)")
+  private String compensationType;
 
-    private Long targetId;
-    private String targetInstanceNo;
+  private Long targetId;
+  private String targetInstanceNo;
 
-    @Size(max = 128, message = "jobCode too long (max 128)")
-    private String jobCode;
+  @Size(max = 128, message = "jobCode too long (max 128)")
+  private String jobCode;
 
-    @ValidBizDate private String bizDate;
-    private String batchNo;
-    private Long relatedFileId;
-    private String channelCode;
-    private String reason;
-    private String operatorId;
-    private String approvalId;
-    private String strategy;
+  @ValidBizDate private String bizDate;
+  private String batchNo;
+  private Long relatedFileId;
+  private String channelCode;
+  private String reason;
+  private String operatorId;
+  private String approvalId;
+  private String strategy;
 }

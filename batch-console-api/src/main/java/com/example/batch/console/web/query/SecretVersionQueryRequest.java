@@ -5,8 +5,8 @@ import lombok.Data;
 @Data
 public class SecretVersionQueryRequest {
 
-    private String tenantId;
-    private String secretRef;
-    private String secretStatus;
-    private Boolean currentVersion;
+  private String tenantId;
+  private String secretRef;
+  private String secretStatus;
+  private Boolean currentVersion;
 }

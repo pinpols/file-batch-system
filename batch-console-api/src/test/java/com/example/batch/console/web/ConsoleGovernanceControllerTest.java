@@ -1,6 +1,7 @@
 package com.example.batch.console.web;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -24,70 +25,90 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-import static org.mockito.Mockito.mock;
 
 class ConsoleGovernanceControllerTest {
 
-    private final ConsoleSystemParameterService parameterService = mock(ConsoleSystemParameterService.class);
-    private final ConsoleRequestMetadataResolver requestMetadataResolver = mock(ConsoleRequestMetadataResolver.class);
-    private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
-    private MockMvc mockMvc;
+  private final ConsoleSystemParameterService parameterService =
+      mock(ConsoleSystemParameterService.class);
+  private final ConsoleRequestMetadataResolver requestMetadataResolver =
+      mock(ConsoleRequestMetadataResolver.class);
+  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
+  private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-        ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
-        ConsoleApiExceptionHandler exceptionHandler = new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
+  @BeforeEach
+  void setUp() {
+    ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
+    ConsoleApiExceptionHandler exceptionHandler =
+        new ConsoleApiExceptionHandler(responseFactory, new BatchSecurityProperties());
 
-        when(requestMetadataResolver.responseMeta()).thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
-        when(requestMetadataResolver.current()).thenReturn(new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
-        when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", Instant.now()));
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
 
-        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-        validator.afterPropertiesSet();
+    LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+    validator.afterPropertiesSet();
 
-        mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleGovernanceController(parameterService, responseFactory, requestMetadataResolver, tenantGuard))
-                .setControllerAdvice(exceptionHandler)
-                .setValidator(validator)
-                .build();
-    }
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(
+                new ConsoleGovernanceController(
+                    parameterService, responseFactory, requestMetadataResolver, tenantGuard))
+            .setControllerAdvice(exceptionHandler)
+            .setValidator(validator)
+            .build();
+  }
 
-    @Test
-    void shouldListGovernanceParams() throws Exception {
-        when(parameterService.getValue("t1", "governance.outbox.circuit-breaker.failure-threshold"))
-                .thenReturn(Optional.of("5"));
-        when(parameterService.getValue(anyString(), anyString())).thenReturn(Optional.empty());
-        when(parameterService.getValue("t1", "governance.outbox.circuit-breaker.failure-threshold"))
-                .thenReturn(Optional.of("5"));
+  @Test
+  void shouldListGovernanceParams() throws Exception {
+    when(parameterService.getValue("t1", "governance.outbox.circuit-breaker.failure-threshold"))
+        .thenReturn(Optional.of("5"));
+    when(parameterService.getValue(anyString(), anyString())).thenReturn(Optional.empty());
+    when(parameterService.getValue("t1", "governance.outbox.circuit-breaker.failure-threshold"))
+        .thenReturn(Optional.of("5"));
 
-        mockMvc.perform(get("/api/console/ops/governance").param("tenantId", "t1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data['governance.outbox.circuit-breaker.failure-threshold']").value("5"));
-    }
+    mockMvc
+        .perform(get("/api/console/ops/governance").param("tenantId", "t1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(
+            jsonPath("$.data['governance.outbox.circuit-breaker.failure-threshold']").value("5"));
+  }
 
-    @Test
-    void shouldUpdateGovernanceParam() throws Exception {
-        mockMvc.perform(post("/api/console/ops/governance")
-                        .param("tenantId", "t1")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {"key":"governance.outbox.circuit-breaker.failure-threshold","value":"5"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"));
+  @Test
+  void shouldUpdateGovernanceParam() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/console/ops/governance")
+                .param("tenantId", "t1")
+                .contentType(APPLICATION_JSON)
+                .content(
+                    """
+                    {"key":"governance.outbox.circuit-breaker.failure-threshold","value":"5"}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-        verify(parameterService).upsert("t1", "governance.outbox.circuit-breaker.failure-threshold",
-                "5", "Governance parameter: governance.outbox.circuit-breaker.failure-threshold", "operator-1");
-    }
+    verify(parameterService)
+        .upsert(
+            "t1",
+            "governance.outbox.circuit-breaker.failure-threshold",
+            "5",
+            "Governance parameter: governance.outbox.circuit-breaker.failure-threshold",
+            "operator-1");
+  }
 
-    @Test
-    void shouldResetGovernanceParam() throws Exception {
-        mockMvc.perform(post("/api/console/ops/governance/reset")
-                        .param("tenantId", "t1")
-                        .param("key", "governance.x"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("SUCCESS"));
+  @Test
+  void shouldResetGovernanceParam() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/console/ops/governance/reset")
+                .param("tenantId", "t1")
+                .param("key", "governance.x"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-        verify(parameterService).delete("t1", "governance.x");
-    }
+    verify(parameterService).delete("t1", "governance.x");
+  }
 }

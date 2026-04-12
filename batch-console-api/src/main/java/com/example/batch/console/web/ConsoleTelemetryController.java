@@ -5,12 +5,9 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.FrontendTelemetryRequest;
 import com.example.batch.console.web.request.FrontendTelemetryRequest.Event;
-
 import jakarta.validation.Valid;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.slf4j.MDC;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,44 +23,40 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class ConsoleTelemetryController {
 
-    private final ConsoleResponseFactory responseFactory;
+  private final ConsoleResponseFactory responseFactory;
 
-    @PostMapping("/events")
-    public CommonResponse<Void> receiveEvents(
-            @RequestBody @Valid FrontendTelemetryRequest request) {
-        MDC.put("frontendApp", request.app());
-        if (request.userId() != null) {
-            MDC.put("frontendUserId", request.userId());
-        }
-        try {
-            for (Event event : request.events()) {
-                MDC.put("frontendEventType", event.type());
-                MDC.put("frontendPage", event.page() != null ? event.page() : "");
-                try {
-                    String propsStr = event.props() != null ? JsonUtils.toJson(event.props()) : "";
-                    if ("error".equals(event.type())) {
-                        log.error(
-                                "[frontend:error] {} | page={} props={}",
-                                event.name(),
-                                event.page(),
-                                propsStr);
-                    } else {
-                        log.info(
-                                "[frontend:{}] {} | page={} props={}",
-                                event.type(),
-                                event.name(),
-                                event.page(),
-                                propsStr);
-                    }
-                } finally {
-                    MDC.remove("frontendEventType");
-                    MDC.remove("frontendPage");
-                }
-            }
-        } finally {
-            MDC.remove("frontendApp");
-            MDC.remove("frontendUserId");
-        }
-        return responseFactory.success(null);
+  @PostMapping("/events")
+  public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryRequest request) {
+    MDC.put("frontendApp", request.app());
+    if (request.userId() != null) {
+      MDC.put("frontendUserId", request.userId());
     }
+    try {
+      for (Event event : request.events()) {
+        MDC.put("frontendEventType", event.type());
+        MDC.put("frontendPage", event.page() != null ? event.page() : "");
+        try {
+          String propsStr = event.props() != null ? JsonUtils.toJson(event.props()) : "";
+          if ("error".equals(event.type())) {
+            log.error(
+                "[frontend:error] {} | page={} props={}", event.name(), event.page(), propsStr);
+          } else {
+            log.info(
+                "[frontend:{}] {} | page={} props={}",
+                event.type(),
+                event.name(),
+                event.page(),
+                propsStr);
+          }
+        } finally {
+          MDC.remove("frontendEventType");
+          MDC.remove("frontendPage");
+        }
+      }
+    } finally {
+      MDC.remove("frontendApp");
+      MDC.remove("frontendUserId");
+    }
+    return responseFactory.success(null);
+  }
 }

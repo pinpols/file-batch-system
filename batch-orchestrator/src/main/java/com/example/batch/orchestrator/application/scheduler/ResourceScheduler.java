@@ -5,5 +5,5 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest
 
 public interface ResourceScheduler {
 
-    ResourceSchedulingDecision schedule(ResourceSchedulingRequest request);
+  ResourceSchedulingDecision schedule(ResourceSchedulingRequest request);
 }

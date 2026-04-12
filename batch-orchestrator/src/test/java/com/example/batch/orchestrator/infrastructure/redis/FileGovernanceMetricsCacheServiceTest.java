@@ -22,66 +22,67 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class FileGovernanceMetricsCacheServiceTest {
 
-    @Mock
-    private OrchestratorRedisSupport redis;
-    @Mock
-    private FileGovernanceRepository fileGovernanceRepository;
+  @Mock private OrchestratorRedisSupport redis;
+  @Mock private FileGovernanceRepository fileGovernanceRepository;
 
-    private FileGovernanceMetricsCacheService service;
+  private FileGovernanceMetricsCacheService service;
 
-    @BeforeEach
-    void setUp() {
-        service = new FileGovernanceMetricsCacheService(redis, fileGovernanceRepository, new ObjectMapper());
-    }
+  @BeforeEach
+  void setUp() {
+    service =
+        new FileGovernanceMetricsCacheService(redis, fileGovernanceRepository, new ObjectMapper());
+  }
 
-    @Test
-    void blankTenantIdReturnsEmptyMap() {
-        Map<String, Object> result = service.load("", 600, 900, 10);
+  @Test
+  void blankTenantIdReturnsEmptyMap() {
+    Map<String, Object> result = service.load("", 600, 900, 10);
 
-        assertThat(result).isEmpty();
-        verify(redis, never()).entries(anyString());
-    }
+    assertThat(result).isEmpty();
+    verify(redis, never()).entries(anyString());
+  }
 
-    @Test
-    void cacheHitSkipsComputeAndReturnsHashEntries() {
-        Map<Object, Object> cached = Map.of(
-                "tenantId", "\"t1\"",
-                "arrivalDelayViolations", "2",
-                "maxArrivalDelaySeconds", "3600",
-                "processingDelayViolations", "0",
-                "maxProcessingDelaySeconds", "0",
-                "arrivalDelaySamples", "[]",
-                "processingDelaySamples", "[]"
-        );
-        when(redis.entries(anyString())).thenReturn(cached);
+  @Test
+  void cacheHitSkipsComputeAndReturnsHashEntries() {
+    Map<Object, Object> cached =
+        Map.of(
+            "tenantId", "\"t1\"",
+            "arrivalDelayViolations", "2",
+            "maxArrivalDelaySeconds", "3600",
+            "processingDelayViolations", "0",
+            "maxProcessingDelaySeconds", "0",
+            "arrivalDelaySamples", "[]",
+            "processingDelaySamples", "[]");
+    when(redis.entries(anyString())).thenReturn(cached);
 
-        Map<String, Object> result = service.load("t1", 600, 900, 10);
+    Map<String, Object> result = service.load("t1", 600, 900, 10);
 
-        assertThat(result).isNotEmpty();
-        verify(fileGovernanceRepository, never()).countArrivalDelayViolations(anyString(), anyLong());
-    }
+    assertThat(result).isNotEmpty();
+    verify(fileGovernanceRepository, never()).countArrivalDelayViolations(anyString(), anyLong());
+  }
 
-    @Test
-    void cacheMissComputesAndWritesToRedis() {
-        when(redis.entries(anyString())).thenReturn(Map.of());
-        when(fileGovernanceRepository.countArrivalDelayViolations(anyString(), anyLong())).thenReturn(1L);
-        when(fileGovernanceRepository.maxArrivalDelaySeconds(anyString())).thenReturn(7200L);
-        when(fileGovernanceRepository.countProcessingDelayViolations(anyString(), anyLong())).thenReturn(0L);
-        when(fileGovernanceRepository.maxProcessingDelaySeconds(anyString())).thenReturn(0L);
-        when(fileGovernanceRepository.selectArrivalDelaySamples(anyString(), anyLong(), anyInt()))
-                .thenReturn(List.of(Map.of("file_name", "f.csv")));
+  @Test
+  void cacheMissComputesAndWritesToRedis() {
+    when(redis.entries(anyString())).thenReturn(Map.of());
+    when(fileGovernanceRepository.countArrivalDelayViolations(anyString(), anyLong()))
+        .thenReturn(1L);
+    when(fileGovernanceRepository.maxArrivalDelaySeconds(anyString())).thenReturn(7200L);
+    when(fileGovernanceRepository.countProcessingDelayViolations(anyString(), anyLong()))
+        .thenReturn(0L);
+    when(fileGovernanceRepository.maxProcessingDelaySeconds(anyString())).thenReturn(0L);
+    when(fileGovernanceRepository.selectArrivalDelaySamples(anyString(), anyLong(), anyInt()))
+        .thenReturn(List.of(Map.of("file_name", "f.csv")));
 
-        Map<String, Object> result = service.load("t1", 600, 900, 10);
+    Map<String, Object> result = service.load("t1", 600, 900, 10);
 
-        assertThat(result).containsKey("arrivalDelayViolations");
-        assertThat(((Number) result.get("arrivalDelayViolations")).longValue()).isEqualTo(1L);
-        verify(redis).putHashAll(anyString(), any(), any());
-    }
+    assertThat(result).containsKey("arrivalDelayViolations");
+    assertThat(((Number) result.get("arrivalDelayViolations")).longValue()).isEqualTo(1L);
+    verify(redis).putHashAll(anyString(), any(), any());
+  }
 
-    @Test
-    void writeSkipsWhenMetricsMapIsEmpty() {
-        service.write("t1", Map.of());
+  @Test
+  void writeSkipsWhenMetricsMapIsEmpty() {
+    service.write("t1", Map.of());
 
-        verify(redis, never()).putHashAll(anyString(), any(), any());
-    }
+    verify(redis, never()).putHashAll(anyString(), any(), any());
+  }
 }

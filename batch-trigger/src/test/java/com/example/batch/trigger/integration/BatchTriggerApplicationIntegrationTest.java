@@ -10,27 +10,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(
-        classes = BatchTriggerApplication.class,
-        webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        properties = {
-                "spring.flyway.enabled=false",
-                "spring.quartz.job-store-type=jdbc",
-                "spring.quartz.jdbc.initialize-schema=always"
-        }
-)
+    classes = BatchTriggerApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    properties = {
+      "spring.flyway.enabled=false",
+      "spring.quartz.job-store-type=jdbc",
+      "spring.quartz.jdbc.initialize-schema=always"
+    })
 class BatchTriggerApplicationIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    Scheduler scheduler;
+  @Autowired Scheduler scheduler;
 
-    @Test
-    void contextLoads() {
-        assertThat(scheduler).isNotNull();
-    }
+  @Test
+  void contextLoads() {
+    assertThat(scheduler).isNotNull();
+  }
 
-    @Test
-    void quartzSchedulerStarted() throws Exception {
-        assertThat(scheduler.isStarted()).isTrue();
-    }
+  @Test
+  void quartzSchedulerStarted() throws Exception {
+    assertThat(scheduler.isStarted()).isTrue();
+  }
 }
-

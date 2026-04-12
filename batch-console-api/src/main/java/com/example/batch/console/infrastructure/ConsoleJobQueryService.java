@@ -18,173 +18,168 @@ import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
 import com.example.batch.console.web.response.ConsoleJobInstanceResponse;
 import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
-
-import lombok.RequiredArgsConstructor;
-
-import org.springframework.stereotype.Service;
-
 import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /** 作业相关查询子服务。 */
 @Service
 @RequiredArgsConstructor
 class ConsoleJobQueryService {
 
-    private final ConsoleTenantGuard tenantGuard;
-    private final ConsoleJobQueryMappers jobMappers;
+  private final ConsoleTenantGuard tenantGuard;
+  private final ConsoleJobQueryMappers jobMappers;
 
-    PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request) {
-        PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        JobDefinitionQuery query =
-                new JobDefinitionQuery(
-                        resolveTenant(tenantGuard, request.getTenantId()),
-                        request.getJobCode(),
-                        request.getJobName(),
-                        request.getJobType(),
-                        request.getWorkerGroup(),
-                        request.getQueueCode(),
-                        request.getScheduleType(),
-                        request.getEnabled(),
-                        pageRequest);
-        List<JobDefinitionEntity> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
-        long total = jobMappers.jobDefinitionMapper.countByQuery(query);
-        return page(pageRequest, total, rows, this::toJobDefinitionResponse);
-    }
+  PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request) {
+    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    JobDefinitionQuery query =
+        new JobDefinitionQuery(
+            resolveTenant(tenantGuard, request.getTenantId()),
+            request.getJobCode(),
+            request.getJobName(),
+            request.getJobType(),
+            request.getWorkerGroup(),
+            request.getQueueCode(),
+            request.getScheduleType(),
+            request.getEnabled(),
+            pageRequest);
+    List<JobDefinitionEntity> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
+    long total = jobMappers.jobDefinitionMapper.countByQuery(query);
+    return page(pageRequest, total, rows, this::toJobDefinitionResponse);
+  }
 
-    PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
-        PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        JobInstanceQuery query =
-                new JobInstanceQuery(
-                        resolveTenant(tenantGuard, request.getTenantId()),
-                        request.getJobCode(),
-                        request.getInstanceStatus(),
-                        request.getInstanceNo(),
-                        request.getBizDate(),
-                        request.getTraceId(),
-                        parseFlexibleInstant(request.getStartDate(), "startDate"),
-                        parseFlexibleInstantEndOfDay(request.getEndDate(), "endDate"),
-                        request.getSortBy(),
-                        request.getMinDurationSeconds(),
-                        pageRequest);
-        List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
-        long total = jobMappers.jobInstanceMapper.countByQuery(query);
-        return page(pageRequest, total, rows, this::toJobInstanceResponse);
-    }
+  PageResponse<ConsoleJobInstanceResponse> jobInstances(JobInstanceQueryRequest request) {
+    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    JobInstanceQuery query =
+        new JobInstanceQuery(
+            resolveTenant(tenantGuard, request.getTenantId()),
+            request.getJobCode(),
+            request.getInstanceStatus(),
+            request.getInstanceNo(),
+            request.getBizDate(),
+            request.getTraceId(),
+            parseFlexibleInstant(request.getStartDate(), "startDate"),
+            parseFlexibleInstantEndOfDay(request.getEndDate(), "endDate"),
+            request.getSortBy(),
+            request.getMinDurationSeconds(),
+            pageRequest);
+    List<JobInstanceEntity> rows = jobMappers.jobInstanceMapper.selectByQuery(query);
+    long total = jobMappers.jobInstanceMapper.countByQuery(query);
+    return page(pageRequest, total, rows, this::toJobInstanceResponse);
+  }
 
-    ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
-        JobInstanceEntity entity =
-                jobMappers.jobInstanceMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
-        return toJobInstanceResponse(requireNotNull(entity, "job instance not found"));
-    }
+  ConsoleJobInstanceResponse jobInstance(String tenantId, Long id) {
+    JobInstanceEntity entity =
+        jobMappers.jobInstanceMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
+    return toJobInstanceResponse(requireNotNull(entity, "job instance not found"));
+  }
 
-    List<ConsoleJobInstanceResponse> batchInstanceStatus(
-            String tenantId, List<String> instanceNos) {
-        String resolved = resolveTenant(tenantGuard, tenantId);
-        return jobMappers.jobInstanceMapper.selectByInstanceNos(resolved, instanceNos).stream()
-                .map(this::toJobInstanceResponse)
-                .toList();
-    }
+  List<ConsoleJobInstanceResponse> batchInstanceStatus(String tenantId, List<String> instanceNos) {
+    String resolved = resolveTenant(tenantGuard, tenantId);
+    return jobMappers.jobInstanceMapper.selectByInstanceNos(resolved, instanceNos).stream()
+        .map(this::toJobInstanceResponse)
+        .toList();
+  }
 
-    PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
-            JobStepInstanceQueryRequest request) {
-        PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-        JobStepInstanceQuery query =
-                new JobStepInstanceQuery(
-                        resolveTenant(tenantGuard, request.getTenantId()),
-                        request.getJobInstanceId(),
-                        request.getJobPartitionId(),
-                        request.getStepCode(),
-                        request.getStepStatus(),
-                        pageRequest);
-        List<JobStepInstanceEntity> rows = jobMappers.jobStepInstanceMapper.selectByQuery(query);
-        long total = jobMappers.jobStepInstanceMapper.countByQuery(query);
-        return page(pageRequest, total, rows, this::toJobStepInstanceResponse);
-    }
+  PageResponse<ConsoleJobStepInstanceResponse> jobStepInstances(
+      JobStepInstanceQueryRequest request) {
+    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    JobStepInstanceQuery query =
+        new JobStepInstanceQuery(
+            resolveTenant(tenantGuard, request.getTenantId()),
+            request.getJobInstanceId(),
+            request.getJobPartitionId(),
+            request.getStepCode(),
+            request.getStepStatus(),
+            pageRequest);
+    List<JobStepInstanceEntity> rows = jobMappers.jobStepInstanceMapper.selectByQuery(query);
+    long total = jobMappers.jobStepInstanceMapper.countByQuery(query);
+    return page(pageRequest, total, rows, this::toJobStepInstanceResponse);
+  }
 
-    ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id) {
-        JobStepInstanceEntity entity =
-                jobMappers.jobStepInstanceMapper.selectById(
-                        resolveTenant(tenantGuard, tenantId), id);
-        return toJobStepInstanceResponse(requireNotNull(entity, "job step instance not found"));
-    }
+  ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id) {
+    JobStepInstanceEntity entity =
+        jobMappers.jobStepInstanceMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
+    return toJobStepInstanceResponse(requireNotNull(entity, "job step instance not found"));
+  }
 
-    private ConsoleJobDefinitionResponse toJobDefinitionResponse(JobDefinitionEntity entity) {
-        return new ConsoleJobDefinitionResponse(
-                entity.getId(),
-                display(entity.getTenantId()),
-                display(entity.getJobCode()),
-                display(entity.getJobName()),
-                display(entity.getJobType()),
-                display(entity.getBizType()),
-                display(entity.getQueueCode()),
-                display(entity.getWorkerGroup()),
-                display(entity.getScheduleType()),
-                display(entity.getScheduleExpr()),
-                display(entity.getTimezone()),
-                display(entity.getCalendarCode()),
-                display(entity.getWindowCode()),
-                display(entity.getTriggerMode()),
-                entity.getDagEnabled(),
-                display(entity.getRetryPolicy()),
-                entity.getRetryMaxCount(),
-                entity.getTimeoutSeconds(),
-                display(entity.getShardStrategy()),
-                display(entity.getExecutionHandler()),
-                display(entity.getParamSchema()),
-                display(entity.getDefaultParams()),
-                entity.getPriority(),
-                entity.getVersion(),
-                entity.getEnabled(),
-                display(entity.getDescription()),
-                entity.getCreatedAt(),
-                entity.getUpdatedAt());
-    }
+  private ConsoleJobDefinitionResponse toJobDefinitionResponse(JobDefinitionEntity entity) {
+    return new ConsoleJobDefinitionResponse(
+        entity.getId(),
+        display(entity.getTenantId()),
+        display(entity.getJobCode()),
+        display(entity.getJobName()),
+        display(entity.getJobType()),
+        display(entity.getBizType()),
+        display(entity.getQueueCode()),
+        display(entity.getWorkerGroup()),
+        display(entity.getScheduleType()),
+        display(entity.getScheduleExpr()),
+        display(entity.getTimezone()),
+        display(entity.getCalendarCode()),
+        display(entity.getWindowCode()),
+        display(entity.getTriggerMode()),
+        entity.getDagEnabled(),
+        display(entity.getRetryPolicy()),
+        entity.getRetryMaxCount(),
+        entity.getTimeoutSeconds(),
+        display(entity.getShardStrategy()),
+        display(entity.getExecutionHandler()),
+        display(entity.getParamSchema()),
+        display(entity.getDefaultParams()),
+        entity.getPriority(),
+        entity.getVersion(),
+        entity.getEnabled(),
+        display(entity.getDescription()),
+        entity.getCreatedAt(),
+        entity.getUpdatedAt());
+  }
 
-    private ConsoleJobInstanceResponse toJobInstanceResponse(JobInstanceEntity entity) {
-        return new ConsoleJobInstanceResponse(
-                entity.getId(),
-                display(entity.getTenantId()),
-                display(entity.getJobCode()),
-                display(entity.getInstanceNo()),
-                entity.getBizDate(),
-                display(entity.getTriggerType()),
-                display(entity.getInstanceStatus()),
-                display(entity.getBatchNo()),
-                display(entity.getOperatorId()),
-                entity.getRerunFlag(),
-                entity.getRetryFlag(),
-                display(entity.getRerunReason()),
-                entity.getRelatedFileId(),
-                entity.getParentInstanceId(),
-                display(entity.getQueueCode()),
-                display(entity.getWorkerGroup()),
-                entity.getPriority(),
-                display(entity.getTraceId()),
-                display(entity.getParamsSnapshot()),
-                display(entity.getResultSummary()),
-                entity.getDeadlineAt(),
-                entity.getExpectedDurationSeconds(),
-                entity.getSlaAlertedAt(),
-                entity.getStartedAt(),
-                entity.getFinishedAt());
-    }
+  private ConsoleJobInstanceResponse toJobInstanceResponse(JobInstanceEntity entity) {
+    return new ConsoleJobInstanceResponse(
+        entity.getId(),
+        display(entity.getTenantId()),
+        display(entity.getJobCode()),
+        display(entity.getInstanceNo()),
+        entity.getBizDate(),
+        display(entity.getTriggerType()),
+        display(entity.getInstanceStatus()),
+        display(entity.getBatchNo()),
+        display(entity.getOperatorId()),
+        entity.getRerunFlag(),
+        entity.getRetryFlag(),
+        display(entity.getRerunReason()),
+        entity.getRelatedFileId(),
+        entity.getParentInstanceId(),
+        display(entity.getQueueCode()),
+        display(entity.getWorkerGroup()),
+        entity.getPriority(),
+        display(entity.getTraceId()),
+        display(entity.getParamsSnapshot()),
+        display(entity.getResultSummary()),
+        entity.getDeadlineAt(),
+        entity.getExpectedDurationSeconds(),
+        entity.getSlaAlertedAt(),
+        entity.getStartedAt(),
+        entity.getFinishedAt());
+  }
 
-    private ConsoleJobStepInstanceResponse toJobStepInstanceResponse(JobStepInstanceEntity entity) {
-        return new ConsoleJobStepInstanceResponse(
-                entity.getId(),
-                display(entity.getTenantId()),
-                entity.getJobInstanceId(),
-                entity.getJobPartitionId(),
-                entity.getJobTaskId(),
-                display(entity.getStepCode()),
-                display(entity.getStepType()),
-                display(entity.getStepStatus()),
-                entity.getRetryCount(),
-                entity.getRelatedFileId(),
-                display(entity.getResultSummary()),
-                display(entity.getErrorCode()),
-                display(entity.getErrorMessage()),
-                entity.getStartedAt(),
-                entity.getFinishedAt());
-    }
+  private ConsoleJobStepInstanceResponse toJobStepInstanceResponse(JobStepInstanceEntity entity) {
+    return new ConsoleJobStepInstanceResponse(
+        entity.getId(),
+        display(entity.getTenantId()),
+        entity.getJobInstanceId(),
+        entity.getJobPartitionId(),
+        entity.getJobTaskId(),
+        display(entity.getStepCode()),
+        display(entity.getStepType()),
+        display(entity.getStepStatus()),
+        entity.getRetryCount(),
+        entity.getRelatedFileId(),
+        display(entity.getResultSummary()),
+        display(entity.getErrorCode()),
+        display(entity.getErrorMessage()),
+        entity.getStartedAt(),
+        entity.getFinishedAt());
+  }
 }

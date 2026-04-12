@@ -17,11 +17,9 @@ import com.example.batch.console.web.request.UpdateTenantRequest;
 import com.example.batch.console.web.response.BatchCreateTenantsResponse;
 import com.example.batch.console.web.response.ConsoleTenantResponse;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
-
-import jakarta.validation.Valid;
-
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -34,9 +32,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-import java.util.UUID;
-
 /**
  * 租户管理 REST 端点。
  *
@@ -48,95 +43,94 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ConsoleTenantController {
 
-    private final ConsoleTenantApplicationService tenantService;
-    private final ConsoleTenantConfigCopyService copyService;
-    private final ConsoleResponseFactory responseFactory;
+  private final ConsoleTenantApplicationService tenantService;
+  private final ConsoleTenantConfigCopyService copyService;
+  private final ConsoleResponseFactory responseFactory;
 
-    @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
-    public CommonResponse<PageResponse<ConsoleTenantResponse>> list(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "1") int pageNo,
-            @RequestParam(defaultValue = "20") int pageSize) {
-        return responseFactory.success(
-                tenantService.listTenants(keyword, status, new PageRequest(pageNo, pageSize)));
+  @GetMapping
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+  public CommonResponse<PageResponse<ConsoleTenantResponse>> list(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "1") int pageNo,
+      @RequestParam(defaultValue = "20") int pageSize) {
+    return responseFactory.success(
+        tenantService.listTenants(keyword, status, new PageRequest(pageNo, pageSize)));
+  }
+
+  @GetMapping("/{tenantId}")
+  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
+  public CommonResponse<ConsoleTenantResponse> get(@PathVariable String tenantId) {
+    return responseFactory.success(tenantService.getTenant(tenantId));
+  }
+
+  @PostMapping
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  public CommonResponse<ConsoleTenantResponse> create(
+      @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
+    return responseFactory.success(
+        tenantService.createTenant(
+            new CreateTenantCommand(
+                request.getTenantId(),
+                request.getTenantName(),
+                request.getDescription(),
+                request.getUsername(),
+                request.getPassword(),
+                resolveOperator(authentication))));
+  }
+
+  @PostMapping("/batch")
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  public CommonResponse<BatchCreateTenantsResponse> batchCreate(
+      @Validated @RequestBody BatchCreateTenantRequest request, Authentication authentication) {
+    String operator = resolveOperator(authentication);
+    List<TenantSpec> specs =
+        request.getTenants().stream()
+            .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
+            .toList();
+    List<ConsoleTenantResponse> tenants =
+        tenantService.batchCreateTenants(
+            new BatchCreateTenantCommand(
+                specs, request.getUsernamePrefix(), request.getPassword(), operator));
+
+    TenantConfigBatchInitResponse configInit = null;
+    if (request.getInitConfigFrom() != null && !request.getInitConfigFrom().isBlank()) {
+      List<String> newTenantIds = tenants.stream().map(ConsoleTenantResponse::tenantId).toList();
+      TenantConfigCopyRequest copyRequest = new TenantConfigCopyRequest();
+      copyRequest.setSourceTenantId(request.getInitConfigFrom());
+      copyRequest.setTargetTenantIds(newTenantIds);
+      copyRequest.setMode(
+          request.getInitMode() != null ? request.getInitMode() : InitMode.SKIP_EXISTING);
+      configInit = copyService.copy(copyRequest, operator, UUID.randomUUID().toString());
     }
 
-    @GetMapping("/{tenantId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CONFIG_ADMIN')")
-    public CommonResponse<ConsoleTenantResponse> get(@PathVariable String tenantId) {
-        return responseFactory.success(tenantService.getTenant(tenantId));
+    return responseFactory.success(new BatchCreateTenantsResponse(tenants, configInit));
+  }
+
+  @PutMapping("/{tenantId}")
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  public CommonResponse<ConsoleTenantResponse> update(
+      @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
+    return responseFactory.success(
+        tenantService.updateTenant(tenantId, request.getTenantName(), request.getDescription()));
+  }
+
+  @PostMapping("/{tenantId}/suspend")
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  public CommonResponse<ConsoleTenantResponse> suspend(@PathVariable String tenantId) {
+    return responseFactory.success(tenantService.suspendTenant(tenantId));
+  }
+
+  @PostMapping("/{tenantId}/activate")
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  public CommonResponse<ConsoleTenantResponse> activate(@PathVariable String tenantId) {
+    return responseFactory.success(tenantService.activateTenant(tenantId));
+  }
+
+  private String resolveOperator(Authentication authentication) {
+    if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal p) {
+      return p.username();
     }
-
-    @PostMapping
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<ConsoleTenantResponse> create(
-            @Validated @RequestBody CreateTenantRequest request, Authentication authentication) {
-        return responseFactory.success(
-                tenantService.createTenant(new CreateTenantCommand(
-                        request.getTenantId(),
-                        request.getTenantName(),
-                        request.getDescription(),
-                        request.getUsername(),
-                        request.getPassword(),
-                        resolveOperator(authentication))));
-    }
-
-    @PostMapping("/batch")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<BatchCreateTenantsResponse> batchCreate(
-            @Validated @RequestBody BatchCreateTenantRequest request,
-            Authentication authentication) {
-        String operator = resolveOperator(authentication);
-        List<TenantSpec> specs = request.getTenants().stream()
-                .map(s -> new TenantSpec(s.getTenantId(), s.getTenantName(), s.getDescription()))
-                .toList();
-        List<ConsoleTenantResponse> tenants = tenantService.batchCreateTenants(
-                new BatchCreateTenantCommand(specs, request.getUsernamePrefix(),
-                        request.getPassword(), operator));
-
-        TenantConfigBatchInitResponse configInit = null;
-        if (request.getInitConfigFrom() != null && !request.getInitConfigFrom().isBlank()) {
-            List<String> newTenantIds = tenants.stream()
-                    .map(ConsoleTenantResponse::tenantId).toList();
-            TenantConfigCopyRequest copyRequest = new TenantConfigCopyRequest();
-            copyRequest.setSourceTenantId(request.getInitConfigFrom());
-            copyRequest.setTargetTenantIds(newTenantIds);
-            copyRequest.setMode(request.getInitMode() != null
-                    ? request.getInitMode() : InitMode.SKIP_EXISTING);
-            configInit = copyService.copy(copyRequest, operator, UUID.randomUUID().toString());
-        }
-
-        return responseFactory.success(new BatchCreateTenantsResponse(tenants, configInit));
-    }
-
-    @PutMapping("/{tenantId}")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<ConsoleTenantResponse> update(
-            @PathVariable String tenantId,
-            @Validated @RequestBody UpdateTenantRequest request) {
-        return responseFactory.success(
-                tenantService.updateTenant(
-                        tenantId, request.getTenantName(), request.getDescription()));
-    }
-
-    @PostMapping("/{tenantId}/suspend")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<ConsoleTenantResponse> suspend(@PathVariable String tenantId) {
-        return responseFactory.success(tenantService.suspendTenant(tenantId));
-    }
-
-    @PostMapping("/{tenantId}/activate")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public CommonResponse<ConsoleTenantResponse> activate(@PathVariable String tenantId) {
-        return responseFactory.success(tenantService.activateTenant(tenantId));
-    }
-
-    private String resolveOperator(Authentication authentication) {
-        if (authentication != null && authentication.getPrincipal() instanceof ConsolePrincipal p) {
-            return p.username();
-        }
-        return authentication != null ? authentication.getName() : "system";
-    }
+    return authentication != null ? authentication.getName() : "system";
+  }
 }

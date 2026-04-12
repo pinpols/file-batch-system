@@ -20,45 +20,46 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 @EnableConfigurationProperties(DataSourceProperties.class)
 public class PlatformDataSourceConfiguration {
 
-    @Bean(name = "importPlatformHikariConfig")
-    @ConfigurationProperties("spring.datasource.hikari")
-    public HikariConfig importPlatformHikariConfig() {
-        return new HikariConfig();
-    }
+  @Bean(name = "importPlatformHikariConfig")
+  @ConfigurationProperties("spring.datasource.hikari")
+  public HikariConfig importPlatformHikariConfig() {
+    return new HikariConfig();
+  }
 
-    @Bean(name = "importPlatformDataSource")
-    @Primary
-    public DataSource importPlatformDataSource(DataSourceProperties properties,
-                                               @Qualifier("importPlatformHikariConfig") HikariConfig hikariConfig) {
-        hikariConfig.setJdbcUrl(properties.determineUrl());
-        hikariConfig.setUsername(properties.determineUsername());
-        hikariConfig.setPassword(properties.determinePassword());
-        String driverClassName = properties.determineDriverClassName();
-        if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
-            hikariConfig.setDriverClassName(driverClassName);
-        }
-        return new HikariDataSource(hikariConfig);
+  @Bean(name = "importPlatformDataSource")
+  @Primary
+  public DataSource importPlatformDataSource(
+      DataSourceProperties properties,
+      @Qualifier("importPlatformHikariConfig") HikariConfig hikariConfig) {
+    hikariConfig.setJdbcUrl(properties.determineUrl());
+    hikariConfig.setUsername(properties.determineUsername());
+    hikariConfig.setPassword(properties.determinePassword());
+    String driverClassName = properties.determineDriverClassName();
+    if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
+      hikariConfig.setDriverClassName(driverClassName);
     }
+    return new HikariDataSource(hikariConfig);
+  }
 
-    @Bean(name = "importPlatformSqlSessionFactory")
-    public SqlSessionFactory importPlatformSqlSessionFactory(
-            @Qualifier("importPlatformDataSource") DataSource dataSource) throws Exception {
-        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
-        factoryBean.setDataSource(dataSource);
-        Resource[] platformMappers = new PathMatchingResourcePatternResolver()
-                .getResources("classpath*:mapper/*.xml");
-        if (platformMappers.length > 0) {
-            factoryBean.setMapperLocations(platformMappers);
-        }
-        Configuration configuration = new Configuration();
-        configuration.setMapUnderscoreToCamelCase(true);
-        factoryBean.setConfiguration(configuration);
-        return factoryBean.getObject();
+  @Bean(name = "importPlatformSqlSessionFactory")
+  public SqlSessionFactory importPlatformSqlSessionFactory(
+      @Qualifier("importPlatformDataSource") DataSource dataSource) throws Exception {
+    SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+    factoryBean.setDataSource(dataSource);
+    Resource[] platformMappers =
+        new PathMatchingResourcePatternResolver().getResources("classpath*:mapper/*.xml");
+    if (platformMappers.length > 0) {
+      factoryBean.setMapperLocations(platformMappers);
     }
+    Configuration configuration = new Configuration();
+    configuration.setMapUnderscoreToCamelCase(true);
+    factoryBean.setConfiguration(configuration);
+    return factoryBean.getObject();
+  }
 
-    @Bean(name = "importPlatformSqlSessionTemplate")
-    public SqlSessionTemplate importPlatformSqlSessionTemplate(
-            @Qualifier("importPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
-        return new SqlSessionTemplate(sqlSessionFactory);
-    }
+  @Bean(name = "importPlatformSqlSessionTemplate")
+  public SqlSessionTemplate importPlatformSqlSessionTemplate(
+      @Qualifier("importPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
+    return new SqlSessionTemplate(sqlSessionFactory);
+  }
 }

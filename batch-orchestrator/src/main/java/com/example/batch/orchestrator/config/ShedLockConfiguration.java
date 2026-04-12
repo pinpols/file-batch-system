@@ -1,12 +1,10 @@
 package com.example.batch.orchestrator.config;
 
 import com.example.batch.orchestrator.infrastructure.redis.RedisShedLockProvider;
-
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,16 +18,16 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @EnableSchedulerLock(defaultLockAtMostFor = "PT2M")
 public class ShedLockConfiguration {
 
-    @Value("${spring.application.name:batch-orchestrator}")
-    private String environment;
+  @Value("${spring.application.name:batch-orchestrator}")
+  private String environment;
 
-    @Bean
-    public LockProvider lockProvider(StringRedisTemplate redisTemplate) {
-        return new RedisShedLockProvider(redisTemplate, environment);
-    }
+  @Bean
+  public LockProvider lockProvider(StringRedisTemplate redisTemplate) {
+    return new RedisShedLockProvider(redisTemplate, environment);
+  }
 
-    @Bean
-    public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
-        return new DefaultLockingTaskExecutor(lockProvider);
-    }
+  @Bean
+  public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
+    return new DefaultLockingTaskExecutor(lockProvider);
+  }
 }

@@ -2,9 +2,7 @@ package com.example.batch.orchestrator.controller;
 
 import com.example.batch.orchestrator.application.service.AlertEventService;
 import com.example.batch.orchestrator.controller.request.AlertEmitRequest;
-
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,10 +13,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AlertInternalController {
 
-    private final AlertEventService alertEventService;
+  private final AlertEventService alertEventService;
 
-    @PostMapping
-    public void emit(@RequestBody AlertEmitRequest request) {
-        alertEventService.emit(request);
-    }
+  @PostMapping
+  public void emit(@RequestBody AlertEmitRequest request) {
+    alertEventService.emit(request);
+  }
 }

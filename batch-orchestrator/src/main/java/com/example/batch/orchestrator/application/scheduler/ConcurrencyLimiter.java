@@ -6,5 +6,5 @@ import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest
 
 public interface ConcurrencyLimiter {
 
-    ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue);
+  ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue);
 }

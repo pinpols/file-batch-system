@@ -9,21 +9,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class WorkerRuntimeState {
 
-    private final Map<String, WorkerRegistration> registrations = new ConcurrentHashMap<>();
+  private final Map<String, WorkerRegistration> registrations = new ConcurrentHashMap<>();
 
-    public void put(WorkerRegistration registration) {
-        registrations.put(registration.getWorkerId(), registration);
-    }
+  public void put(WorkerRegistration registration) {
+    registrations.put(registration.getWorkerId(), registration);
+  }
 
-    public WorkerRegistration get(String workerId) {
-        return registrations.get(workerId);
-    }
+  public WorkerRegistration get(String workerId) {
+    return registrations.get(workerId);
+  }
 
-    public WorkerRegistration remove(String workerId) {
-        return registrations.remove(workerId);
-    }
+  public WorkerRegistration remove(String workerId) {
+    return registrations.remove(workerId);
+  }
 
-    public Collection<WorkerRegistration> snapshot() {
-        return registrations.values();
-    }
+  public Collection<WorkerRegistration> snapshot() {
+    return registrations.values();
+  }
 }

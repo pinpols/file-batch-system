@@ -6,20 +6,20 @@ import java.util.Map;
 
 public interface BusinessCalendarExcelImportStore {
 
-    String save(
-            String fileName,
-            String tenantId,
-            List<Map<String, String>> calendarRows,
-            List<Map<String, String>> holidayRows);
+  String save(
+      String fileName,
+      String tenantId,
+      List<Map<String, String>> calendarRows,
+      List<Map<String, String>> holidayRows);
 
-    ExcelImportSession get(String uploadToken);
+  ExcelImportSession get(String uploadToken);
 
-    void remove(String uploadToken);
+  void remove(String uploadToken);
 
-    record ExcelImportSession(
-            String fileName,
-            String tenantId,
-            Instant uploadedAt,
-            List<Map<String, String>> calendarRows,
-            List<Map<String, String>> holidayRows) {}
+  record ExcelImportSession(
+      String fileName,
+      String tenantId,
+      Instant uploadedAt,
+      List<Map<String, String>> calendarRows,
+      List<Map<String, String>> holidayRows) {}
 }

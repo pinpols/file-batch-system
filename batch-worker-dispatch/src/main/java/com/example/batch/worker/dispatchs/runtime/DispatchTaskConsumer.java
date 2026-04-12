@@ -6,63 +6,65 @@ import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import com.example.batch.worker.core.support.AbstractTaskConsumer;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import com.example.batch.worker.dispatchs.config.DispatchWorkerConfiguration;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
-/**
- * 分发任务 Kafka 消费者，接收并处理分发类型的任务消息。
- */
+/** 分发任务 Kafka 消费者，接收并处理分发类型的任务消息。 */
 @Service
 public class DispatchTaskConsumer extends AbstractTaskConsumer {
 
-    private final DispatchWorkerLoop workerLoop;
-    private final DispatchWorkerConfiguration configuration;
-    private final TaskDispatchExecutor taskDispatchExecutor;
-    private final DeadLetterPublisher deadLetterPublisher;
+  private final DispatchWorkerLoop workerLoop;
+  private final DispatchWorkerConfiguration configuration;
+  private final TaskDispatchExecutor taskDispatchExecutor;
+  private final DeadLetterPublisher deadLetterPublisher;
 
-    public DispatchTaskConsumer(DispatchWorkerLoop workerLoop,
-                               DispatchWorkerConfiguration configuration,
-                               TaskDispatchExecutor taskDispatchExecutor,
-                               KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-                               DeadLetterPublisher deadLetterPublisher) {
-        super(kafkaListenerEndpointRegistry);
-        this.workerLoop = workerLoop;
-        this.configuration = configuration;
-        this.taskDispatchExecutor = taskDispatchExecutor;
-        this.deadLetterPublisher = deadLetterPublisher;
-    }
+  public DispatchTaskConsumer(
+      DispatchWorkerLoop workerLoop,
+      DispatchWorkerConfiguration configuration,
+      TaskDispatchExecutor taskDispatchExecutor,
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+      DeadLetterPublisher deadLetterPublisher) {
+    super(kafkaListenerEndpointRegistry);
+    this.workerLoop = workerLoop;
+    this.configuration = configuration;
+    this.taskDispatchExecutor = taskDispatchExecutor;
+    this.deadLetterPublisher = deadLetterPublisher;
+  }
 
-    @Override
-    protected AbstractWorkerLoop workerLoop() {
-        return workerLoop;
-    }
+  @Override
+  protected AbstractWorkerLoop workerLoop() {
+    return workerLoop;
+  }
 
-    @Override
-    protected WorkerConfiguration workerConfiguration() {
-        return configuration;
-    }
+  @Override
+  protected WorkerConfiguration workerConfiguration() {
+    return configuration;
+  }
 
-    @Override
-    protected TaskDispatchExecutor taskDispatchExecutor() {
-        return taskDispatchExecutor;
-    }
+  @Override
+  protected TaskDispatchExecutor taskDispatchExecutor() {
+    return taskDispatchExecutor;
+  }
 
-    @Override
-    protected DeadLetterPublisher deadLetterPublisher() {
-        return deadLetterPublisher;
-    }
+  @Override
+  protected DeadLetterPublisher deadLetterPublisher() {
+    return deadLetterPublisher;
+  }
 
-    @Override
-    protected String listenerId() {
-        return "dispatch-task-consumer";
-    }
+  @Override
+  protected String listenerId() {
+    return "dispatch-task-consumer";
+  }
 
-    @KafkaListener(id = "dispatch-task-consumer", topics = "#{__listener.topics()}", groupId = "#{__listener.consumerGroupId()}")
-    public void consume(String payload, Acknowledgment acknowledgment) {
-        if (doConsume(payload)) {
-            acknowledgment.acknowledge();
-        }
+  @KafkaListener(
+      id = "dispatch-task-consumer",
+      topics = "#{__listener.topics()}",
+      groupId = "#{__listener.consumerGroupId()}")
+  public void consume(String payload, Acknowledgment acknowledgment) {
+    if (doConsume(payload)) {
+      acknowledgment.acknowledge();
     }
+  }
 }

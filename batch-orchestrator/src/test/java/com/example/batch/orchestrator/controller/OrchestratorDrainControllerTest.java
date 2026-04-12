@@ -17,44 +17,48 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class OrchestratorDrainControllerTest {
 
-    private OrchestratorGracefulShutdown gracefulShutdown;
-    private MockMvc mockMvc;
+  private OrchestratorGracefulShutdown gracefulShutdown;
+  private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-        gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(gracefulShutdown))
-                .build();
-    }
+  @BeforeEach
+  void setUp() {
+    gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+    mockMvc =
+        MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(gracefulShutdown)).build();
+  }
 
-    @Test
-    void shouldReturnDrainStatus() throws Exception {
-        when(gracefulShutdown.status()).thenReturn(Map.of("draining", false, "reason", "none"));
+  @Test
+  void shouldReturnDrainStatus() throws Exception {
+    when(gracefulShutdown.status()).thenReturn(Map.of("draining", false, "reason", "none"));
 
-        mockMvc.perform(get("/internal/orchestrator/drain/status"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.draining").value(false));
-    }
+    mockMvc
+        .perform(get("/internal/orchestrator/drain/status"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.draining").value(false));
+  }
 
-    @Test
-    void shouldEnableDrain() throws Exception {
-        when(gracefulShutdown.status()).thenReturn(Map.of("draining", true, "reason", "manual-enable"));
+  @Test
+  void shouldEnableDrain() throws Exception {
+    when(gracefulShutdown.status()).thenReturn(Map.of("draining", true, "reason", "manual-enable"));
 
-        mockMvc.perform(post("/internal/orchestrator/drain/enable"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.draining").value(true));
+    mockMvc
+        .perform(post("/internal/orchestrator/drain/enable"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.draining").value(true));
 
-        verify(gracefulShutdown).startDraining("manual-enable");
-    }
+    verify(gracefulShutdown).startDraining("manual-enable");
+  }
 
-    @Test
-    void shouldDisableDrain() throws Exception {
-        when(gracefulShutdown.status()).thenReturn(Map.of("draining", false, "reason", "manual-disable"));
+  @Test
+  void shouldDisableDrain() throws Exception {
+    when(gracefulShutdown.status())
+        .thenReturn(Map.of("draining", false, "reason", "manual-disable"));
 
-        mockMvc.perform(post("/internal/orchestrator/drain/disable"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.draining").value(false));
+    mockMvc
+        .perform(post("/internal/orchestrator/drain/disable"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.draining").value(false));
 
-        verify(gracefulShutdown).stopDraining("manual-disable");
-    }
+    verify(gracefulShutdown).stopDraining("manual-disable");
+  }
 }

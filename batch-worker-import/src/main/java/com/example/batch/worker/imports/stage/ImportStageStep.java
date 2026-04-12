@@ -6,19 +6,19 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 
 public interface ImportStageStep {
 
-    ImportStage stage();
+  ImportStage stage();
 
-    default String stepCode() {
-        return "IMPORT_" + stage().name();
-    }
+  default String stepCode() {
+    return "IMPORT_" + stage().name();
+  }
 
-    default String stepName() {
-        return stepCode();
-    }
+  default String stepName() {
+    return stepCode();
+  }
 
-    default String implCode() {
-        return stepCode();
-    }
+  default String implCode() {
+    return stepCode();
+  }
 
-    ImportStageResult execute(ImportJobContext context);
+  ImportStageResult execute(ImportJobContext context);
 }

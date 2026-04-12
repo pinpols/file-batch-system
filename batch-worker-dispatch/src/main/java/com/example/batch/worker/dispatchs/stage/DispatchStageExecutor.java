@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface DispatchStageExecutor {
 
-    List<DispatchStageResult> execute(DispatchJobContext context);
+  List<DispatchStageResult> execute(DispatchJobContext context);
 
-    List<PipelineStepTemplate> defaultStepDefinitions();
+  List<PipelineStepTemplate> defaultStepDefinitions();
 }

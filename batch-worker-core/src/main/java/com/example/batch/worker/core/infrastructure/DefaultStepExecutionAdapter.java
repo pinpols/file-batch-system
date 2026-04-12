@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
 
-    @Override
-    public StepExecutionResponse execute(StepExecutionRequest request) {
-        return StepExecutionResponse.successResponse();
-    }
+  @Override
+  public StepExecutionResponse execute(StepExecutionRequest request) {
+    return StepExecutionResponse.successResponse();
+  }
 }

@@ -1,22 +1,21 @@
 package com.example.batch.orchestrator.domain.pipeline;
 
-import lombok.Data;
-
 import java.util.List;
+import lombok.Data;
 
 @Data
 public class PipelineExecutionResult {
 
-    private String jobCode;
-    private String runStatus;
-    private String message;
-    private List<StepResult> stepResults;
+  private String jobCode;
+  private String runStatus;
+  private String message;
+  private List<StepResult> stepResults;
 
-    public String getPipelineCode() {
-        return jobCode;
-    }
+  public String getPipelineCode() {
+    return jobCode;
+  }
 
-    public void setPipelineCode(String pipelineCode) {
-        this.jobCode = pipelineCode;
-    }
+  public void setPipelineCode(String pipelineCode) {
+    this.jobCode = pipelineCode;
+  }
 }

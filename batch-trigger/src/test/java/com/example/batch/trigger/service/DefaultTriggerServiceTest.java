@@ -24,8 +24,8 @@ import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TenantStatusMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.support.TriggerDescriptor;
-import java.time.Instant;
 import com.example.batch.trigger.web.request.TriggerLaunchRequest;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,228 +40,234 @@ import org.springframework.transaction.TransactionStatus;
 @ExtendWith(MockitoExtension.class)
 class DefaultTriggerServiceTest {
 
-    @Mock
-    private LaunchAdapterService launchAdapterService;
-    @Mock
-    private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
-    @Mock
-    private TriggerRequestMapper triggerRequestMapper;
-    @Mock
-    private BusinessCalendarMapper businessCalendarMapper;
-    @Mock
-    private TenantStatusMapper tenantStatusMapper;
-    @Mock
-    private PlatformTransactionManager transactionManager;
-    @Mock
-    private TransactionStatus transactionStatus;
+  @Mock private LaunchAdapterService launchAdapterService;
+  @Mock private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
+  @Mock private TriggerRequestMapper triggerRequestMapper;
+  @Mock private BusinessCalendarMapper businessCalendarMapper;
+  @Mock private TenantStatusMapper tenantStatusMapper;
+  @Mock private PlatformTransactionManager transactionManager;
+  @Mock private TransactionStatus transactionStatus;
 
-    private DefaultTriggerService service;
+  private DefaultTriggerService service;
 
-    @BeforeEach
-    void setUp() {
-        lenient().when(transactionManager.getTransaction(any())).thenReturn(transactionStatus);
-        lenient().when(tenantStatusMapper.selectStatus(any())).thenReturn("ACTIVE");
-        service = new DefaultTriggerService(
-                launchAdapterService,
-                orchestratorTriggerAdapter,
-                triggerRequestMapper,
-                businessCalendarMapper,
-                tenantStatusMapper,
-                transactionManager
-        );
-    }
+  @BeforeEach
+  void setUp() {
+    lenient().when(transactionManager.getTransaction(any())).thenReturn(transactionStatus);
+    lenient().when(tenantStatusMapper.selectStatus(any())).thenReturn("ACTIVE");
+    service =
+        new DefaultTriggerService(
+            launchAdapterService,
+            orchestratorTriggerAdapter,
+            triggerRequestMapper,
+            businessCalendarMapper,
+            tenantStatusMapper,
+            transactionManager);
+  }
 
-    @Test
-    void shouldRejectBlankIdempotencyKey() {
-        assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(validRequest(), " ", "req-001", "trace-001")))
-                .isInstanceOf(BizException.class)
-                .extracting("code")
-                .isEqualTo(ResultCode.MISSING_IDEMPOTENCY_KEY);
-    }
+  @Test
+  void shouldRejectBlankIdempotencyKey() {
+    assertThatThrownBy(
+            () ->
+                service.launch(
+                    new TriggerLaunchCommand(validRequest(), " ", "req-001", "trace-001")))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.MISSING_IDEMPOTENCY_KEY);
+  }
 
-    @Test
-    void shouldShortCircuitWhenDedupRequestAlreadyExists() {
-        TriggerLaunchCommand command = new TriggerLaunchCommand(validRequest(), "idem-001", "req-001", "trace-001");
-        LaunchRequest launchRequest = new LaunchRequest(
-                "t1",
-                "IMPORT_JOB",
-                LocalDate.of(2026, 3, 27),
-                TriggerType.API,
-                "req-001",
-                "trace-001",
-                Map.of()
-        );
-        TriggerRequestEntity existing = new TriggerRequestEntity();
-        existing.setTenantId("t1");
-        existing.setRequestId("existing-request");
-        existing.setTraceId("existing-trace");
+  @Test
+  void shouldShortCircuitWhenDedupRequestAlreadyExists() {
+    TriggerLaunchCommand command =
+        new TriggerLaunchCommand(validRequest(), "idem-001", "req-001", "trace-001");
+    LaunchRequest launchRequest =
+        new LaunchRequest(
+            "t1",
+            "IMPORT_JOB",
+            LocalDate.of(2026, 3, 27),
+            TriggerType.API,
+            "req-001",
+            "trace-001",
+            Map.of());
+    TriggerRequestEntity existing = new TriggerRequestEntity();
+    existing.setTenantId("t1");
+    existing.setRequestId("existing-request");
+    existing.setTraceId("existing-trace");
 
-        when(launchAdapterService.fromApiRequest(command)).thenReturn(launchRequest);
-        when(triggerRequestMapper.selectByTenantAndDedupKey("t1", "idem-001")).thenReturn(existing);
+    when(launchAdapterService.fromApiRequest(command)).thenReturn(launchRequest);
+    when(triggerRequestMapper.selectByTenantAndDedupKey("t1", "idem-001")).thenReturn(existing);
 
-        LaunchResponse response = service.launch(command);
+    LaunchResponse response = service.launch(command);
 
-        assertThat(response).isNotNull();
-        assertThat(response.traceId()).isEqualTo("existing-trace");
-        verify(triggerRequestMapper, never()).insert(any());
-        verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
-    }
+    assertThat(response).isNotNull();
+    assertThat(response.traceId()).isEqualTo("existing-trace");
+    verify(triggerRequestMapper, never()).insert(any());
+    verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+  }
 
-    @Test
-    void shouldMarkRequestRejectedWhenForwardingFails() {
-        TriggerLaunchCommand command = new TriggerLaunchCommand(validRequest(), "idem-002", "req-002", "trace-002");
-        LaunchRequest launchRequest = new LaunchRequest(
-                "t1",
-                "IMPORT_JOB",
-                LocalDate.of(2026, 3, 27),
-                TriggerType.API,
-                "req-002",
-                "trace-002",
-                Map.of("channel", "api")
-        );
+  @Test
+  void shouldMarkRequestRejectedWhenForwardingFails() {
+    TriggerLaunchCommand command =
+        new TriggerLaunchCommand(validRequest(), "idem-002", "req-002", "trace-002");
+    LaunchRequest launchRequest =
+        new LaunchRequest(
+            "t1",
+            "IMPORT_JOB",
+            LocalDate.of(2026, 3, 27),
+            TriggerType.API,
+            "req-002",
+            "trace-002",
+            Map.of("channel", "api"));
 
-        when(launchAdapterService.fromApiRequest(command)).thenReturn(launchRequest);
-        when(triggerRequestMapper.selectByTenantAndDedupKey("t1", "idem-002")).thenReturn(null);
-        when(orchestratorTriggerAdapter.sendTrigger(launchRequest)).thenThrow(new IllegalStateException("orchestrator down"));
+    when(launchAdapterService.fromApiRequest(command)).thenReturn(launchRequest);
+    when(triggerRequestMapper.selectByTenantAndDedupKey("t1", "idem-002")).thenReturn(null);
+    when(orchestratorTriggerAdapter.sendTrigger(launchRequest))
+        .thenThrow(new IllegalStateException("orchestrator down"));
 
-        assertThatThrownBy(() -> service.launch(command))
-                .isInstanceOf(SystemException.class)
-                .hasMessageContaining("failed to forward trigger request");
+    assertThatThrownBy(() -> service.launch(command))
+        .isInstanceOf(SystemException.class)
+        .hasMessageContaining("failed to forward trigger request");
 
-        ArgumentCaptor<TriggerRequestEntity> captor = ArgumentCaptor.forClass(TriggerRequestEntity.class);
-        verify(triggerRequestMapper).insert(captor.capture());
-        assertThat(captor.getValue().getRequestStatus()).isEqualTo("PENDING");
-        assertThat(captor.getValue().getDedupKey()).isEqualTo("idem-002");
-        verify(triggerRequestMapper).updateRequestStatus("t1", "req-002", "REJECTED");
-    }
+    ArgumentCaptor<TriggerRequestEntity> captor =
+        ArgumentCaptor.forClass(TriggerRequestEntity.class);
+    verify(triggerRequestMapper).insert(captor.capture());
+    assertThat(captor.getValue().getRequestStatus()).isEqualTo("PENDING");
+    assertThat(captor.getValue().getDedupKey()).isEqualTo("idem-002");
+    verify(triggerRequestMapper).updateRequestStatus("t1", "req-002", "REJECTED");
+  }
 
-    @Test
-    void shouldApprovePendingCatchUpAndMarkRequestLaunched() {
-        PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
-        command.setTenantId("t1");
-        command.setRequestId("req-pending");
-        command.setReason("manual approve");
+  @Test
+  void shouldApprovePendingCatchUpAndMarkRequestLaunched() {
+    PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
+    command.setTenantId("t1");
+    command.setRequestId("req-pending");
+    command.setReason("manual approve");
 
-        TriggerRequestEntity pending = new TriggerRequestEntity();
-        pending.setTenantId("t1");
-        pending.setRequestId("req-pending");
-        pending.setJobCode("EXPORT_JOB");
-        pending.setBizDate(LocalDate.of(2026, 3, 27));
-        pending.setTriggerType(TriggerType.CATCH_UP.code());
-        pending.setRequestStatus("ACCEPTED");
-        pending.setTraceId("trace-pending");
+    TriggerRequestEntity pending = new TriggerRequestEntity();
+    pending.setTenantId("t1");
+    pending.setRequestId("req-pending");
+    pending.setJobCode("EXPORT_JOB");
+    pending.setBizDate(LocalDate.of(2026, 3, 27));
+    pending.setTriggerType(TriggerType.CATCH_UP.code());
+    pending.setRequestStatus("ACCEPTED");
+    pending.setTraceId("trace-pending");
 
-        LaunchResponse response = new LaunchResponse("inst-001", "trace-pending");
-        when(triggerRequestMapper.selectByTenantAndRequestId("t1", "req-pending")).thenReturn(pending);
-        when(triggerRequestMapper.updateRequestStatusConditional("t1", "req-pending", "PROCESSING", "ACCEPTED")).thenReturn(1);
-        when(orchestratorTriggerAdapter.sendTrigger(any())).thenReturn(response);
+    LaunchResponse response = new LaunchResponse("inst-001", "trace-pending");
+    when(triggerRequestMapper.selectByTenantAndRequestId("t1", "req-pending")).thenReturn(pending);
+    when(triggerRequestMapper.updateRequestStatusConditional(
+            "t1", "req-pending", "PROCESSING", "ACCEPTED"))
+        .thenReturn(1);
+    when(orchestratorTriggerAdapter.sendTrigger(any())).thenReturn(response);
 
-        LaunchResponse approved = service.approvePendingCatchUp(command);
+    LaunchResponse approved = service.approvePendingCatchUp(command);
 
-        assertThat(approved.instanceNo()).isEqualTo("inst-001");
-        ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
-        verify(orchestratorTriggerAdapter).sendTrigger(captor.capture());
-        assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
-        assertThat(captor.getValue().params())
-                .containsEntry("operationType", "CATCH_UP_APPROVAL")
-                .containsEntry("approvalMode", "MANUAL_APPROVAL")
-                .containsEntry("catchUpApproved", true)
-                .containsEntry("reason", "manual approve");
-        verify(triggerRequestMapper).updateRequestStatus("t1", "req-pending", "LAUNCHED");
-    }
+    assertThat(approved.instanceNo()).isEqualTo("inst-001");
+    ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
+    verify(orchestratorTriggerAdapter).sendTrigger(captor.capture());
+    assertThat(captor.getValue().triggerType()).isEqualTo(TriggerType.CATCH_UP);
+    assertThat(captor.getValue().params())
+        .containsEntry("operationType", "CATCH_UP_APPROVAL")
+        .containsEntry("approvalMode", "MANUAL_APPROVAL")
+        .containsEntry("catchUpApproved", true)
+        .containsEntry("reason", "manual approve");
+    verify(triggerRequestMapper).updateRequestStatus("t1", "req-pending", "LAUNCHED");
+  }
 
-    @Test
-    void shouldRejectApprovalForNonCatchUpRequest() {
-        PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
-        command.setTenantId("t1");
-        command.setRequestId("req-invalid");
+  @Test
+  void shouldRejectApprovalForNonCatchUpRequest() {
+    PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
+    command.setTenantId("t1");
+    command.setRequestId("req-invalid");
 
-        TriggerRequestEntity request = new TriggerRequestEntity();
-        request.setTriggerType(TriggerType.API.code());
+    TriggerRequestEntity request = new TriggerRequestEntity();
+    request.setTriggerType(TriggerType.API.code());
 
-        when(triggerRequestMapper.selectByTenantAndRequestId("t1", "req-invalid")).thenReturn(request);
+    when(triggerRequestMapper.selectByTenantAndRequestId("t1", "req-invalid")).thenReturn(request);
 
-        assertThatThrownBy(() -> service.approvePendingCatchUp(command))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("not a catch-up request");
+    assertThatThrownBy(() -> service.approvePendingCatchUp(command))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("not a catch-up request");
 
-        verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
-    }
+    verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+  }
 
-    @Test
-    void shouldSkipScheduledTriggerWhenBizDateResolutionReturnsNull() {
-        ScheduledTriggerCommand command = new ScheduledTriggerCommand(
-                scheduledDescriptor(),
-                Instant.parse("2026-03-28T18:00:00Z"),
-                TriggerType.SCHEDULED,
-                "req-skip",
-                "trace-skip"
-        );
-        LaunchRequest launchRequest = new LaunchRequest(
-                "t1",
-                "IMPORT_JOB",
-                null,
-                TriggerType.SCHEDULED,
-                "req-skip",
-                "trace-skip",
-                Map.of("calendarCode", "BIZ_CAL")
-        );
+  @Test
+  void shouldSkipScheduledTriggerWhenBizDateResolutionReturnsNull() {
+    ScheduledTriggerCommand command =
+        new ScheduledTriggerCommand(
+            scheduledDescriptor(),
+            Instant.parse("2026-03-28T18:00:00Z"),
+            TriggerType.SCHEDULED,
+            "req-skip",
+            "trace-skip");
+    LaunchRequest launchRequest =
+        new LaunchRequest(
+            "t1",
+            "IMPORT_JOB",
+            null,
+            TriggerType.SCHEDULED,
+            "req-skip",
+            "trace-skip",
+            Map.of("calendarCode", "BIZ_CAL"));
 
-        when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
+    when(launchAdapterService.fromScheduledTrigger(eq(command), any())).thenReturn(launchRequest);
 
-        LaunchResponse response = service.launchScheduled(command);
+    LaunchResponse response = service.launchScheduled(command);
 
-        assertThat(response.instanceNo()).isNull();
-        assertThat(response.traceId()).isEqualTo("trace-skip");
-        verify(triggerRequestMapper, never()).insert(any());
-        verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
-    }
+    assertThat(response.instanceNo()).isNull();
+    assertThat(response.traceId()).isEqualTo("trace-skip");
+    verify(triggerRequestMapper, never()).insert(any());
+    verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+  }
 
-    @Test
-    void launch_suspendedTenant_throwsBizException() {
-        when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
+  @Test
+  void launch_suspendedTenant_throwsBizException() {
+    when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
 
-        assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(validRequest(), "idem-susp", "req-susp", "trace-susp")))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("suspended");
+    assertThatThrownBy(
+            () ->
+                service.launch(
+                    new TriggerLaunchCommand(
+                        validRequest(), "idem-susp", "req-susp", "trace-susp")))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("suspended");
 
-        verify(triggerRequestMapper, never()).insert(any());
-        verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
-    }
+    verify(triggerRequestMapper, never()).insert(any());
+    verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
+  }
 
-    @Test
-    void launchScheduled_suspendedTenant_throwsBizException() {
-        when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
+  @Test
+  void launchScheduled_suspendedTenant_throwsBizException() {
+    when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
 
-        ScheduledTriggerCommand command = new ScheduledTriggerCommand(
-                scheduledDescriptor(),
-                Instant.parse("2026-03-28T18:00:00Z"),
-                TriggerType.SCHEDULED,
-                "req-susp",
-                "trace-susp"
-        );
+    ScheduledTriggerCommand command =
+        new ScheduledTriggerCommand(
+            scheduledDescriptor(),
+            Instant.parse("2026-03-28T18:00:00Z"),
+            TriggerType.SCHEDULED,
+            "req-susp",
+            "trace-susp");
 
-        assertThatThrownBy(() -> service.launchScheduled(command))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("suspended");
-    }
+    assertThatThrownBy(() -> service.launchScheduled(command))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("suspended");
+  }
 
-    private TriggerLaunchRequest validRequest() {
-        TriggerLaunchRequest request = new TriggerLaunchRequest();
-        request.setTenantId("t1");
-        request.setJobCode("IMPORT_JOB");
-        request.setBizDate(LocalDate.of(2026, 3, 27));
-        request.setTriggerType(TriggerType.API);
-        request.setParams(Map.of());
-        return request;
-    }
+  private TriggerLaunchRequest validRequest() {
+    TriggerLaunchRequest request = new TriggerLaunchRequest();
+    request.setTenantId("t1");
+    request.setJobCode("IMPORT_JOB");
+    request.setBizDate(LocalDate.of(2026, 3, 27));
+    request.setTriggerType(TriggerType.API);
+    request.setParams(Map.of());
+    return request;
+  }
 
-    private TriggerDescriptor scheduledDescriptor() {
-        TriggerDescriptor descriptor = new TriggerDescriptor();
-        descriptor.setTenantId("t1");
-        descriptor.setJobCode("IMPORT_JOB");
-        descriptor.setTimezone("Asia/Shanghai");
-        descriptor.setCalendarCode("BIZ_CAL");
-        return descriptor;
-    }
+  private TriggerDescriptor scheduledDescriptor() {
+    TriggerDescriptor descriptor = new TriggerDescriptor();
+    descriptor.setTenantId("t1");
+    descriptor.setJobCode("IMPORT_JOB");
+    descriptor.setTimezone("Asia/Shanghai");
+    descriptor.setCalendarCode("BIZ_CAL");
+    return descriptor;
+  }
 }

@@ -1,55 +1,57 @@
 package com.example.batch.common.enums;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.Test;
+
 class CatchUpPolicyTypeTest {
 
-    @Test
-    void fromCode_knownCodes_returnsCorrectValue() {
-        assertThat(CatchUpPolicyType.fromCode("NONE")).isEqualTo(CatchUpPolicyType.NONE);
-        assertThat(CatchUpPolicyType.fromCode("AUTO")).isEqualTo(CatchUpPolicyType.AUTO);
-        assertThat(CatchUpPolicyType.fromCode("MANUAL_APPROVAL")).isEqualTo(CatchUpPolicyType.MANUAL_APPROVAL);
-    }
+  @Test
+  void fromCode_knownCodes_returnsCorrectValue() {
+    assertThat(CatchUpPolicyType.fromCode("NONE")).isEqualTo(CatchUpPolicyType.NONE);
+    assertThat(CatchUpPolicyType.fromCode("AUTO")).isEqualTo(CatchUpPolicyType.AUTO);
+    assertThat(CatchUpPolicyType.fromCode("MANUAL_APPROVAL"))
+        .isEqualTo(CatchUpPolicyType.MANUAL_APPROVAL);
+  }
 
-    @Test
-    void fromCode_caseInsensitive() {
-        assertThat(CatchUpPolicyType.fromCode("auto")).isEqualTo(CatchUpPolicyType.AUTO);
-        assertThat(CatchUpPolicyType.fromCode("Manual_Approval")).isEqualTo(CatchUpPolicyType.MANUAL_APPROVAL);
-    }
+  @Test
+  void fromCode_caseInsensitive() {
+    assertThat(CatchUpPolicyType.fromCode("auto")).isEqualTo(CatchUpPolicyType.AUTO);
+    assertThat(CatchUpPolicyType.fromCode("Manual_Approval"))
+        .isEqualTo(CatchUpPolicyType.MANUAL_APPROVAL);
+  }
 
-    @Test
-    void fromCode_nullOrBlank_returnsNone() {
-        assertThat(CatchUpPolicyType.fromCode(null)).isEqualTo(CatchUpPolicyType.NONE);
-        assertThat(CatchUpPolicyType.fromCode("")).isEqualTo(CatchUpPolicyType.NONE);
-        assertThat(CatchUpPolicyType.fromCode("  ")).isEqualTo(CatchUpPolicyType.NONE);
-    }
+  @Test
+  void fromCode_nullOrBlank_returnsNone() {
+    assertThat(CatchUpPolicyType.fromCode(null)).isEqualTo(CatchUpPolicyType.NONE);
+    assertThat(CatchUpPolicyType.fromCode("")).isEqualTo(CatchUpPolicyType.NONE);
+    assertThat(CatchUpPolicyType.fromCode("  ")).isEqualTo(CatchUpPolicyType.NONE);
+  }
 
-    @Test
-    void fromCode_unknownCode_throwsIllegalArgument() {
-        assertThatThrownBy(() -> CatchUpPolicyType.fromCode("UNKNOWN"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("UNKNOWN");
-    }
+  @Test
+  void fromCode_unknownCode_throwsIllegalArgument() {
+    assertThatThrownBy(() -> CatchUpPolicyType.fromCode("UNKNOWN"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("UNKNOWN");
+  }
 
-    @Test
-    void fromCodeOrDefault_unknownCode_returnsNone() {
-        assertThat(CatchUpPolicyType.fromCodeOrDefault("GARBAGE")).isEqualTo(CatchUpPolicyType.NONE);
-    }
+  @Test
+  void fromCodeOrDefault_unknownCode_returnsNone() {
+    assertThat(CatchUpPolicyType.fromCodeOrDefault("GARBAGE")).isEqualTo(CatchUpPolicyType.NONE);
+  }
 
-    @Test
-    void fromCodeOrDefault_nullOrBlank_returnsNone() {
-        assertThat(CatchUpPolicyType.fromCodeOrDefault(null)).isEqualTo(CatchUpPolicyType.NONE);
-        assertThat(CatchUpPolicyType.fromCodeOrDefault("")).isEqualTo(CatchUpPolicyType.NONE);
-    }
+  @Test
+  void fromCodeOrDefault_nullOrBlank_returnsNone() {
+    assertThat(CatchUpPolicyType.fromCodeOrDefault(null)).isEqualTo(CatchUpPolicyType.NONE);
+    assertThat(CatchUpPolicyType.fromCodeOrDefault("")).isEqualTo(CatchUpPolicyType.NONE);
+  }
 
-    @Test
-    void codeAndLabel_notBlank() {
-        for (CatchUpPolicyType type : CatchUpPolicyType.values()) {
-            assertThat(type.code()).isNotBlank();
-            assertThat(type.label()).isNotBlank();
-        }
+  @Test
+  void codeAndLabel_notBlank() {
+    for (CatchUpPolicyType type : CatchUpPolicyType.values()) {
+      assertThat(type.code()).isNotBlank();
+      assertThat(type.label()).isNotBlank();
     }
+  }
 }

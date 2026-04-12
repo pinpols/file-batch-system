@@ -1,11 +1,8 @@
 package com.example.batch.console.web;
 
 import com.example.batch.console.application.ConsoleFileDownloadApplicationService;
-
 import jakarta.validation.constraints.NotNull;
-
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -22,23 +19,23 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleFileDownloadController {
 
-    private final ConsoleFileDownloadApplicationService applicationService;
+  private final ConsoleFileDownloadApplicationService applicationService;
 
-    /** 下载文件二进制流。 */
-    @GetMapping("/{fileId}/download")
-    public ResponseEntity<InputStreamResource> download(
-            @PathVariable Long fileId,
-            @RequestParam @NotNull String tenantId,
-            @RequestParam(required = false) String approvalId) {
-        return applicationService.download(tenantId, fileId, approvalId);
-    }
+  /** 下载文件二进制流。 */
+  @GetMapping("/{fileId}/download")
+  public ResponseEntity<InputStreamResource> download(
+      @PathVariable Long fileId,
+      @RequestParam @NotNull String tenantId,
+      @RequestParam(required = false) String approvalId) {
+    return applicationService.download(tenantId, fileId, approvalId);
+  }
 
-    /** 导出文件错误记录为 CSV。 */
-    @GetMapping("/{fileId}/errors/export")
-    public ResponseEntity<InputStreamResource> exportFileErrors(
-            @PathVariable Long fileId,
-            @RequestParam @NotNull String tenantId,
-            @RequestParam(required = false) String errorStage) {
-        return applicationService.exportFileErrors(tenantId, fileId, errorStage);
-    }
+  /** 导出文件错误记录为 CSV。 */
+  @GetMapping("/{fileId}/errors/export")
+  public ResponseEntity<InputStreamResource> exportFileErrors(
+      @PathVariable Long fileId,
+      @RequestParam @NotNull String tenantId,
+      @RequestParam(required = false) String errorStage) {
+    return applicationService.exportFileErrors(tenantId, fileId, errorStage);
+  }
 }

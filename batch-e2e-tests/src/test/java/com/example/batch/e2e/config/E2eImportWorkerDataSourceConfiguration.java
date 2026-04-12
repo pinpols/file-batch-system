@@ -8,13 +8,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class E2eImportWorkerDataSourceConfiguration {
 
-    @Bean(name = "importPlatformDataSource")
-    public DataSource importPlatformDataSource(@Qualifier("dataSource") DataSource dataSource) {
-        return dataSource;
-    }
+  @Bean(name = "importPlatformDataSource")
+  public DataSource importPlatformDataSource(@Qualifier("dataSource") DataSource dataSource) {
+    return dataSource;
+  }
 
-    @Bean(name = "importBusinessDataSource")
-    public DataSource importBusinessDataSource(@Qualifier("dataSource") DataSource dataSource) {
-        return dataSource;
-    }
+  @Bean(name = "importBusinessDataSource")
+  public DataSource importBusinessDataSource(@Qualifier("dataSource") DataSource dataSource) {
+    return dataSource;
+  }
 }

@@ -10,31 +10,31 @@ import org.springframework.stereotype.Service;
 @Service
 public class ImportWorkerLoop extends AbstractWorkerLoop {
 
-    private final ImportWorkerConfiguration configuration;
+  private final ImportWorkerConfiguration configuration;
 
-    public ImportWorkerLoop(WorkerRuntimeFacade workerRuntimeFacade,
-                            ImportWorkerConfiguration configuration) {
-        super(workerRuntimeFacade);
-        this.configuration = configuration;
-    }
+  public ImportWorkerLoop(
+      WorkerRuntimeFacade workerRuntimeFacade, ImportWorkerConfiguration configuration) {
+    super(workerRuntimeFacade);
+    this.configuration = configuration;
+  }
 
-    @Override
-    protected WorkerConfiguration workerConfiguration() {
-        return configuration;
-    }
+  @Override
+  protected WorkerConfiguration workerConfiguration() {
+    return configuration;
+  }
 
-    @Override
-    protected String workerGroup() {
-        return "import";
-    }
+  @Override
+  protected String workerGroup() {
+    return "import";
+  }
 
-    @Override
-    protected int workerPort() {
-        return 8083;
-    }
+  @Override
+  protected int workerPort() {
+    return 8083;
+  }
 
-    @Scheduled(fixedDelayString = "${batch.worker.import.heartbeat-interval-millis:15000}")
-    public void heartbeat() {
-        doHeartbeat();
-    }
+  @Scheduled(fixedDelayString = "${batch.worker.import.heartbeat-interval-millis:15000}")
+  public void heartbeat() {
+    doHeartbeat();
+  }
 }

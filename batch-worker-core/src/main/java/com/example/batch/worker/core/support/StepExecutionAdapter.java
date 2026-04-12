@@ -5,5 +5,5 @@ import com.example.batch.worker.core.domain.StepExecutionResponse;
 
 public interface StepExecutionAdapter {
 
-    StepExecutionResponse execute(StepExecutionRequest request);
+  StepExecutionResponse execute(StepExecutionRequest request);
 }
