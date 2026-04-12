@@ -288,6 +288,52 @@ public CommonResponse<...> delete(
 
 请求类使用 `@Data`（Lombok）以支持 Spring MVC 参数绑定；响应/命令类使用 `record` 以保证不可变性。
 
+### 8.1 Query Record 工厂方法规约
+
+Query record 字段数 ≥ 5 时，**内部调用者常常只传 1–3 个字段、其余传 null**。此时必须在 record 内定义静态工厂方法，禁止在调用处写出 null 参数。
+
+**命名约定：**
+
+| 工厂方法签名 | 语义 |
+|-------------|------|
+| `ofTenant(String tenantId, PageRequest page)` | 按租户查全量 |
+| `ofDefinition(Long definitionId, PageRequest page)` | 按定义 ID 查关联记录 |
+| `ofDefinition(String tenantId, Long definitionId, PageRequest page)` | 租户 + 定义 ID 双约束 |
+
+**实现示例（WorkflowNodeQuery）：**
+
+```java
+public record WorkflowNodeQuery(
+        String tenantId,
+        Long workflowDefinitionId,
+        String workflowCode,
+        String nodeCode,
+        String nodeType,
+        Boolean enabled,
+        PageRequest pageRequest) {
+
+    public static WorkflowNodeQuery ofDefinition(Long workflowDefinitionId, PageRequest pageRequest) {
+        return new WorkflowNodeQuery(null, workflowDefinitionId, null, null, null, null, pageRequest);
+    }
+
+    public static WorkflowNodeQuery ofDefinition(String tenantId, Long workflowDefinitionId, PageRequest pageRequest) {
+        return new WorkflowNodeQuery(tenantId, workflowDefinitionId, null, null, null, null, pageRequest);
+    }
+}
+```
+
+**调用侧对比：**
+
+```java
+// ❌ 禁止：null 参数暴露在调用处，可读性差且易出错
+nodeMapper.selectByQuery(new WorkflowNodeQuery(tenantId, def.getId(), null, null, null, null, pageReq));
+
+// ✅ 正确：工厂方法隐藏无关字段
+nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, def.getId(), pageReq));
+```
+
+**已有工厂方法的 Query 类：**`JobDefinitionQuery.ofTenant`、`WorkflowDefinitionQuery.ofTenant`、`WorkflowNodeQuery.ofDefinition`、`WorkflowEdgeQuery.ofDefinition`
+
 ---
 
 ## 9. 持久层规范
@@ -531,3 +577,33 @@ batch-worker-export     ← 文件导出 Worker
 batch-worker-dispatch   ← 文件分发 Worker
 batch-console-api       ← 控制台 BFF（面向前端）
 ```
+
+---
+
+## 18. 领域数据字典
+
+所有枚举值定义在 `batch-common/.../enums/` 下，**字段值必须使用枚举 `.code()`，禁止硬编码字符串**。
+
+### 18.1 配置域（Console / 定义态）
+
+| 字段 | 枚举类 | 允许值 |
+|------|-------|--------|
+| `job_definition.job_type` | `JobType` | `GENERAL` / `IMPORT` / `EXPORT` / `DISPATCH` / `WORKFLOW` |
+| `job_definition.schedule_type` | — | `CRON` / `FIXED_RATE` / `MANUAL` / `EVENT` / `ONE_TIME` |
+| `job_definition.retry_policy` | `RetryPolicyType` | `NONE` / `FIXED` / `EXPONENTIAL` |
+| `job_definition.catch_up_policy` | `CatchUpPolicyType` | `NONE` / `AUTO` / `MANUAL_APPROVAL` |
+| `workflow_definition.workflow_type` | `WorkflowType` | `DAG` / `PIPELINE` / `MIXED` |
+| `workflow_node.node_type` | `WorkflowNodeType` | `START` / `END` / `TASK` / `GATEWAY` / `FILE_STEP` / `JOB` |
+| `workflow_edge.edge_type` | `WorkflowEdgeType` | `SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS` |
+| `file_channel_config.channel_type` | `FileChannelType` | `SFTP` / `API` / `API_PUSH` / `EMAIL` / `NAS` / `OSS` / `LOCAL` |
+| `file_channel_config.auth_type` | `FileChannelAuthType` | `NONE` / `PASSWORD` / `KEY_PAIR` / `TOKEN` / `OAUTH2` / `CUSTOM` |
+
+### 18.2 运行域（Orchestrator / 运行态）
+
+| 字段 | 枚举类 | 允许值 |
+|------|-------|--------|
+| `outbox_event.publish_status` | `OutboxPublishStatus` | `NEW` / `PUBLISHING` / `PUBLISHED` / `FAILED` / `GIVE_UP` |
+| `trigger_request.trigger_type` | `TriggerType` | `API` / `MANUAL` / `EVENT` / `CATCH_UP` / `SCHEDULED` |
+| `job_instance.status` | `JobInstanceStatus` | `CREATED` / `WAITING` / `READY` / `RUNNING` / `PARTIAL_FAILED` / `SUCCESS` / `FAILED` / `CANCELLED` / `TERMINATED` |
+| `workflow_run.status` | `WorkflowRunStatus` | `CREATED` / `RUNNING` / `SUCCESS` / `FAILED` / `TERMINATED` |
+| `file_record.status` | `FileStatus` | `RECEIVED` / `PARSING` / `PARSED` / `VALIDATED` / `LOADED` / `GENERATED` / `DISPATCHING` / `DISPATCHED` / `ARCHIVED` / `FAILED` / `DELETED` |

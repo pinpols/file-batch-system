@@ -114,7 +114,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
 
         // 4) Worker reports success (progress complete)
         taskExecutionService.applyTaskOutcome(new TaskOutcomeCommand(
-                TENANT, task.getId(), true, "{\"records\":100,\"status\":\"processed\"}", null, null));
+                TENANT, task.getId(), null, true, "{\"records\":100,\"status\":\"processed\"}", null, null));
 
         // 5) Verify task SUCCESS
         JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());

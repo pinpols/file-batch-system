@@ -1,5 +1,5 @@
-.PHONY: dev-build dev-start dev-stop dev-restart
-.PHONY: test test-unit test-it test-e2e
+.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-one
+.PHONY: test test-unit test-it test-e2e test-all
 .PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
 .PHONY: ops-inspect ops-heal-stuck ops-heal-dead ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate
@@ -30,6 +30,13 @@ dev-restart:
 	bash scripts/local/build-apps.sh
 	bash scripts/local/start-all.sh
 
+# 重启单个或多个模块（不重建其他模块）
+# 用法: make dev-restart-one M="trigger"
+#       make dev-restart-one M="orchestrator trigger"
+#       make dev-restart-one M="console" BUILD=1
+dev-restart-one:
+	bash scripts/local/restart.sh $(M)
+
 ## ── 测试 ──────────────────────────────────────────────────────────────────────
 
 # 单元 + 集成测试（默认，跳过 E2E）
@@ -47,6 +54,10 @@ test-it:
 # E2E 测试
 test-e2e:
 	bash scripts/local/run-tests.sh --e2e
+
+# 全量测试（单元 + 集成 + E2E）
+test-all:
+	bash scripts/local/run-tests.sh --all
 
 ## ── 测试数据 ──────────────────────────────────────────────────────────────────
 

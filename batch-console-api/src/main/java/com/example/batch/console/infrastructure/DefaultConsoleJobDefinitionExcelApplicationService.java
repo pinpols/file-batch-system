@@ -11,7 +11,10 @@ import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.JobType;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.RetryPolicyType;
+import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
@@ -106,12 +109,10 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
                     "enabled",
                     "description");
     private static final Set<String> HEADERS = Set.copyOf(COLUMNS);
-    private static final Set<String> JOB_TYPES =
-            Set.of("GENERAL", "IMPORT", "EXPORT", "DISPATCH", "WORKFLOW");
-    private static final Set<String> SCHEDULE_TYPES =
-            Set.of("CRON", "FIXED_RATE", "MANUAL", "EVENT", "ONE_TIME");
-    private static final Set<String> RETRY_POLICIES = Set.of("NONE", "FIXED", "EXPONENTIAL");
-    private static final Set<String> SHARD_STRATEGIES = Set.of("NONE", "STATIC", "DYNAMIC", "AUTO");
+    private static final Set<String> JOB_TYPES = JobType.codes();
+    private static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
+    private static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
+    private static final Set<String> SHARD_STRATEGIES = ShardStrategy.codes();
     private static final Set<String> ENABLED_VALUES = Set.of("TRUE", "FALSE");
     private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
             Map.ofEntries(

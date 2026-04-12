@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# =============================================================
+# restart.sh - 单个或多个模块热重启
+#
+# 用法：
+#   ./scripts/local/restart.sh <module> [module...]
+#
+# 支持的模块名：
+#   orchestrator  trigger  console
+#   worker-import  worker-export  worker-dispatch
+#
+# 示例：
+#   ./scripts/local/restart.sh trigger
+#   ./scripts/local/restart.sh orchestrator trigger
+#   ./scripts/local/restart.sh console
+#   BUILD=1 ./scripts/local/restart.sh trigger   # 重启前先重新打包
+#
+# 说明：
+#   - 按依赖顺序重启：orchestrator 必须在 trigger/console/worker 之前就绪
+#   - 若 orchestrator 在重启列表中，等它 UP 后再启动其他服务
+#   - 每次重启会覆盖对应模块日志（logs/app/<module>.log）
+# =============================================================
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+
+LOG_DIR="$ROOT/logs/app"
+RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
+PID_FILE="$ROOT/logs/start-all.pids"
+mkdir -p "$LOG_DIR"
+
+# ── 端口映射 ──────────────────────────────────────────────────
+port_for() {
+  case "$1" in
+    orchestrator)    echo "${BATCH_ORCHESTRATOR_PORT:-18082}" ;;
+    trigger)         echo "${BATCH_TRIGGER_PORT:-18081}" ;;
+    console)         echo "${BATCH_CONSOLE_PORT:-18080}" ;;
+    worker-import)   echo "${BATCH_WORKER_IMPORT_PORT:-18083}" ;;
+    worker-export)   echo "${BATCH_WORKER_EXPORT_PORT:-18084}" ;;
+    worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-18085}" ;;
+    *) echo "ERROR: 未知模块 '$1'" >&2; exit 1 ;;
+  esac
+}
+
+# ── Maven 模块名（用于 build） ────────────────────────────────
+maven_module_for() {
+  case "$1" in
+    orchestrator)    echo "batch-orchestrator" ;;
+    trigger)         echo "batch-trigger" ;;
+    console)         echo "batch-console-api" ;;
+    worker-import)   echo "batch-worker-import" ;;
+    worker-export)   echo "batch-worker-export" ;;
+    worker-dispatch) echo "batch-worker-dispatch" ;;
+  esac
+}
+
+# ── 停止：kill 端口上的进程 ───────────────────────────────────
+stop_module() {
+  local name="$1"
+  local port
+  port="$(port_for "$name")"
+  local pids
+  pids="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
+  if [ -n "$pids" ]; then
+    echo "  停止 $name（端口 $port，pid=$pids）"
+    # shellcheck disable=SC2086
+    kill -9 $pids 2>/dev/null || true
+  else
+    echo "  $name 未运行（端口 $port 空闲）"
+  fi
+}
+
+# ── 构建单个模块 ──────────────────────────────────────────────
+build_module() {
+  local name="$1"
+  local mod
+  mod="$(maven_module_for "$name")"
+  echo "  构建 $mod ..."
+  ./mvnw -pl "$mod" -am clean package -DskipTests -q
+  cp "$mod/target/$mod"-*.jar "$RUNTIME_JAR_DIR/$name.jar"
+  echo "  构建完成 → build/runtime-jars/$name.jar"
+}
+
+# ── 启动模块 ──────────────────────────────────────────────────
+start_module() {
+  local name="$1"
+  local jar="$RUNTIME_JAR_DIR/$name.jar"
+  if [ ! -f "$jar" ]; then
+    echo "ERROR: 未找到 $jar，请先执行 ./scripts/local/build-apps.sh" >&2
+    exit 1
+  fi
+  nohup java --enable-native-access=ALL-UNNAMED ${JAVA_OPTS:-} \
+    -jar "$jar" --spring.profiles.active=local \
+    >"$LOG_DIR/$name.log" 2>&1 &
+  local pid=$!
+  echo "  已启动 $name pid=$pid → logs/app/$name.log"
+
+  # 更新 PID 文件（若存在）
+  if [ -f "$PID_FILE" ]; then
+    # 先删除旧条目，再追加新条目
+    local tmp
+    tmp="$(mktemp)"
+    grep -v "^$name	" "$PID_FILE" > "$tmp" 2>/dev/null || true
+    printf '%s\t%s\t%s\n' "$name" "$pid" "$jar" >> "$tmp"
+    mv "$tmp" "$PID_FILE"
+  fi
+}
+
+# ── 等待 orchestrator 健康 ────────────────────────────────────
+wait_orchestrator() {
+  local port="${BATCH_ORCHESTRATOR_PORT:-18082}"
+  local url="http://127.0.0.1:${port}/actuator/health"
+  echo "  等待 orchestrator 就绪（$url）..."
+  for i in $(seq 1 60); do
+    sleep 3
+    if curl -sf --connect-timeout 2 --max-time 5 "$url" 2>/dev/null \
+        | grep -q '"status":"UP"'; then
+      echo "  orchestrator 已就绪"
+      return 0
+    fi
+  done
+  echo "ERROR: orchestrator 在超时时间内未就绪，请检查 logs/app/orchestrator.log" >&2
+  exit 1
+}
+
+# ══════════════════════════════════════════════════════════════
+# 主流程
+# ══════════════════════════════════════════════════════════════
+
+if [ $# -eq 0 ]; then
+  echo "用法: $0 <module> [module...]"
+  echo "支持: orchestrator trigger console worker-import worker-export worker-dispatch"
+  exit 1
+fi
+
+TARGETS=("$@")
+
+# 校验所有模块名合法
+for name in "${TARGETS[@]}"; do
+  port_for "$name" >/dev/null
+done
+
+echo "==> 停止目标模块..."
+for name in "${TARGETS[@]}"; do
+  stop_module "$name"
+done
+
+sleep 2
+
+# 构建（BUILD=1 时）
+if [ "${BUILD:-0}" == "1" ]; then
+  echo "==> 构建目标模块（BUILD=1）..."
+  for name in "${TARGETS[@]}"; do
+    build_module "$name"
+  done
+fi
+
+echo "==> 按依赖顺序启动..."
+
+# 定义全局启动顺序
+ORDERED=(orchestrator trigger console worker-import worker-export worker-dispatch)
+
+need_wait_orch=false
+for name in "${TARGETS[@]}"; do
+  [ "$name" == "orchestrator" ] && need_wait_orch=true && break
+done
+
+for name in "${ORDERED[@]}"; do
+  # 判断是否在本次重启列表中
+  in_targets=false
+  for t in "${TARGETS[@]}"; do
+    [ "$t" == "$name" ] && in_targets=true && break
+  done
+  $in_targets || continue
+
+  start_module "$name"
+
+  # orchestrator 启动后必须等它 UP，再启动下游
+  if [ "$name" == "orchestrator" ] && $need_wait_orch; then
+    wait_orchestrator
+  fi
+done
+
+echo ""
+echo "重启完成。"

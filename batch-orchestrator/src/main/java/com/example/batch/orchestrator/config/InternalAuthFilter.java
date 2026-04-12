@@ -1,0 +1,52 @@
+package com.example.batch.orchestrator.config;
+
+import com.example.batch.common.config.BatchSecurityProperties;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+/**
+ * 内部接口共享密钥校验过滤器。
+ *
+ * <p>注册于 {@code /internal/**}，校验客户端通过 {@code X-Internal-Secret} header 携带的密钥。
+ * 当 {@code batch.security.testing-open=true} 时跳过校验，保持本地联调体验不变。
+ */
+@RequiredArgsConstructor
+public class InternalAuthFilter extends OncePerRequestFilter {
+
+    private static final String HEADER_NAME = "X-Internal-Secret";
+    private static final String UNAUTHORIZED_BODY =
+            "{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid X-Internal-Secret\"}";
+
+    private final BatchSecurityProperties securityProperties;
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+
+        if (securityProperties.isTestingOpen()) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        String header = request.getHeader(HEADER_NAME);
+        if (securityProperties.getInternalSecret().equals(header)) {
+            chain.doFilter(request, response);
+        } else {
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write(UNAUTHORIZED_BODY);
+        }
+    }
+}

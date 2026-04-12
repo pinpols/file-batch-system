@@ -41,6 +41,7 @@ public class TaskControllerApplicationService {
                 new TaskOutcomeCommand(
                         request.getTenantId(),
                         taskId,
+                        request.getWorkerId(),
                         request.isSuccess(),
                         request.getResultSummary(),
                         errorCode,

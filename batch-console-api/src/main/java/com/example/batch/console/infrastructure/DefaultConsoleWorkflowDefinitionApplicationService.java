@@ -56,13 +56,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
                         definitionMapper.selectById(resolvedTenant, id),
                         "Workflow definition not found: " + id);
         List<WorkflowNodeEntity> nodes =
-                nodeMapper.selectByQuery(
-                        new WorkflowNodeQuery(
-                                resolvedTenant, def.getId(), null, null, null, null, null));
+                nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));
         List<WorkflowEdgeEntity> edges =
-                edgeMapper.selectByQuery(
-                        new WorkflowEdgeQuery(
-                                resolvedTenant, def.getId(), null, null, null, null, null, null));
+                edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(resolvedTenant, def.getId(), null));
         return toDetailResponse(def, nodes, edges);
     }
 
@@ -144,13 +140,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
                         "Workflow definition not found: " + id);
 
         List<WorkflowNodeEntity> nodes =
-                nodeMapper.selectByQuery(
-                        new WorkflowNodeQuery(
-                                resolvedTenant, def.getId(), null, null, null, null, null));
+                nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));
         List<WorkflowEdgeEntity> edges =
-                edgeMapper.selectByQuery(
-                        new WorkflowEdgeQuery(
-                                resolvedTenant, def.getId(), null, null, null, null, null, null));
+                edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(resolvedTenant, def.getId(), null));
 
         List<String> errors = validateDag(nodes, edges);
         return new DagValidationResult(errors.isEmpty(), errors);
@@ -196,11 +188,9 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     private WorkflowDefinitionDetailResponse loadDetail(String tenantId, Long id) {
         WorkflowDefinitionEntity def = definitionMapper.selectById(tenantId, id);
         List<WorkflowNodeEntity> nodes =
-                nodeMapper.selectByQuery(
-                        new WorkflowNodeQuery(tenantId, id, null, null, null, null, null));
+                nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(tenantId, id, null));
         List<WorkflowEdgeEntity> edges =
-                edgeMapper.selectByQuery(
-                        new WorkflowEdgeQuery(tenantId, id, null, null, null, null, null, null));
+                edgeMapper.selectByQuery(WorkflowEdgeQuery.ofDefinition(tenantId, id, null));
         return toDetailResponse(def, nodes, edges);
     }
 

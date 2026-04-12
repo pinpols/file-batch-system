@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.service;
 
 import com.example.batch.common.constants.BatchStatusConstants;
 import com.example.batch.common.dto.LaunchRequest;
+import com.example.batch.common.enums.JobType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
@@ -43,14 +44,18 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
             throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
         }
 
-        WorkflowDefinitionRecord workflowDefinition =
-                configCacheService.findEnabledWorkflowDefinition(
-                        request.tenantId(), request.jobCode());
-        if (workflowDefinition == null) {
-            triggerRequestMapper.updateAcceptance(
-                    request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
-            throw new BizException(
-                    ResultCode.NOT_FOUND, "workflow definition not found for job code");
+        // workflow definition 仅对 WORKFLOW 类型 job 必须存在；IMPORT/EXPORT/DISPATCH/GENERAL 无需关联 workflow definition
+        WorkflowDefinitionRecord workflowDefinition = null;
+        if (JobType.WORKFLOW.code().equals(jobDefinition.jobType())) {
+            workflowDefinition =
+                    configCacheService.findEnabledWorkflowDefinition(
+                            request.tenantId(), request.jobCode());
+            if (workflowDefinition == null) {
+                triggerRequestMapper.updateAcceptance(
+                        request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
+                throw new BizException(
+                        ResultCode.NOT_FOUND, "workflow definition not found for job code");
+            }
         }
 
         JobInstanceEntity existingInstance =

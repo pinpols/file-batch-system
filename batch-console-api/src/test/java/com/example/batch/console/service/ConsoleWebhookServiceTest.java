@@ -11,9 +11,12 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
+import com.example.batch.console.support.CallbackUrlValidator;
 import com.example.batch.console.support.ConsoleTenantGuard;
+
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +25,7 @@ class ConsoleWebhookServiceTest {
     private ConsoleWebhookSubscriptionRepository subscriptionRepository;
     private ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
     private ConsoleTenantGuard tenantGuard;
+    private CallbackUrlValidator callbackUrlValidator;
     private ConsoleWebhookService service;
 
     @BeforeEach
@@ -29,7 +33,9 @@ class ConsoleWebhookServiceTest {
         subscriptionRepository = mock(ConsoleWebhookSubscriptionRepository.class);
         deliveryLogRepository = mock(ConsoleWebhookDeliveryLogRepository.class);
         tenantGuard = mock(ConsoleTenantGuard.class);
-        service = new ConsoleWebhookService(subscriptionRepository, deliveryLogRepository, tenantGuard);
+        callbackUrlValidator = mock(CallbackUrlValidator.class);
+        service = new ConsoleWebhookService(
+                subscriptionRepository, deliveryLogRepository, tenantGuard, callbackUrlValidator);
         when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     }
 

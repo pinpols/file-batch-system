@@ -43,6 +43,34 @@
 - `docs/api/console-api.openapi.yaml`：补齐对应 path、schema 定义，确保无悬空 `$ref`
 - `docs/api/console-api-protocol.md`：在 Changelog 表追加一行，填写日期和变更摘要
 
+## Query Record 工厂方法规约
+
+Query record 字段数 ≥ 5 且内部调用者只传少数字段（其余为 null）时，**必须**在 record 内定义静态工厂方法，禁止在调用处写出 null 参数。
+
+- `ofTenant(String tenantId, PageRequest page)` — 按租户全量查
+- `ofDefinition(Long definitionId, PageRequest page)` — 按定义 ID 查关联记录
+- `ofDefinition(String tenantId, Long definitionId, PageRequest page)` — 双约束版本
+
+已有工厂方法：`JobDefinitionQuery.ofTenant`、`WorkflowDefinitionQuery.ofTenant`、`WorkflowNodeQuery.ofDefinition`、`WorkflowEdgeQuery.ofDefinition`
+
+## 领域数据字典
+
+所有枚举值定义在 `batch-common/.../enums/`，字段值必须使用枚举 `.code()`。核心字典：
+
+- `schedule_type`：`CRON` / `FIXED_RATE` / `MANUAL` / `EVENT` / `ONE_TIME`
+- `job_type`：`GENERAL` / `IMPORT` / `EXPORT` / `DISPATCH` / `WORKFLOW`（`JobType`）
+- `retry_policy`：`NONE` / `FIXED` / `EXPONENTIAL`（`RetryPolicyType`）
+- `catch_up_policy`：`NONE` / `AUTO` / `MANUAL_APPROVAL`（`CatchUpPolicyType`）
+- `workflow_type`：`DAG` / `PIPELINE` / `MIXED`（`WorkflowType`）
+- `workflow_node.node_type`：`START` / `END` / `TASK` / `GATEWAY` / `FILE_STEP` / `JOB`（`WorkflowNodeType`）
+- `workflow_edge.edge_type`：`SUCCESS` / `FAILURE` / `CONDITION` / `ALWAYS`（`WorkflowEdgeType`）
+- `file_channel.channel_type`：`SFTP` / `API` / `API_PUSH` / `EMAIL` / `NAS` / `OSS` / `LOCAL`（`FileChannelType`）
+- `outbox_event.publish_status`：`NEW` / `PUBLISHING` / `PUBLISHED` / `FAILED` / `GIVE_UP`（`OutboxPublishStatus`）
+- `job_instance.status`：`CREATED` / `WAITING` / `READY` / `RUNNING` / `PARTIAL_FAILED` / `SUCCESS` / `FAILED` / `CANCELLED` / `TERMINATED`（`JobInstanceStatus`）
+- `workflow_run.status`：`CREATED` / `RUNNING` / `SUCCESS` / `FAILED` / `TERMINATED`（`WorkflowRunStatus`）
+
+详见 `docs/coding-conventions.md` §18。
+
 ## 架构硬约束
 
 - 任务分发主链：`DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT`

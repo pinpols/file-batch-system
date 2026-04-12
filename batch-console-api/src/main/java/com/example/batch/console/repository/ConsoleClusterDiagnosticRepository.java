@@ -27,7 +27,7 @@ public interface ConsoleClusterDiagnosticRepository
     @Query(
             """
             SELECT count(*) FROM batch.outbox_event
-             WHERE tenant_id = :tenantId AND status = 'PENDING'
+             WHERE tenant_id = :tenantId AND publish_status = 'NEW'
             """)
     Long countPendingOutboxEvents(@Param("tenantId") String tenantId);
 

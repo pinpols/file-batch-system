@@ -6,6 +6,7 @@ import com.example.batch.trigger.domain.TriggerStatusInfo;
 import com.example.batch.trigger.support.TriggerDescriptor;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 
@@ -31,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.TimeZone;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TriggerSchedulerFacade implements TriggerRegistrationService {
@@ -170,18 +172,24 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     }
 
     private void scheduleDescriptor(TriggerDescriptor descriptor) {
-        String scheduleType = descriptor.getScheduleType();
-        if ("CRON".equalsIgnoreCase(scheduleType)) {
-            scheduleCronDescriptor(descriptor);
-        } else if ("FIXED_RATE".equalsIgnoreCase(scheduleType)) {
-            scheduleFixedRateDescriptor(descriptor);
+        try {
+            String scheduleType = descriptor.getScheduleType();
+            if ("CRON".equalsIgnoreCase(scheduleType)) {
+                scheduleCronDescriptor(descriptor);
+            } else if ("FIXED_RATE".equalsIgnoreCase(scheduleType)) {
+                scheduleFixedRateDescriptor(descriptor);
+            }
+            // EVENT / MANUAL: 无 Quartz 注册，静默跳过
+        } catch (IllegalArgumentException e) {
+            log.warn("skipping invalid trigger descriptor for job={}/{}: {}",
+                    descriptor.getTenantId(), descriptor.getJobCode(), e.getMessage());
         }
-        // EVENT / MANUAL: 无 Quartz 注册，静默跳过
     }
 
     private void scheduleCronDescriptor(TriggerDescriptor descriptor) {
         String expression = descriptor.getScheduleExpression();
-        if (!CronExpression.isValidExpression(expression)) {
+        if (expression == null || expression.isBlank()
+                || !CronExpression.isValidExpression(expression)) {
             throw new IllegalArgumentException(
                     "invalid cron expression for job "
                             + descriptor.getJobCode()

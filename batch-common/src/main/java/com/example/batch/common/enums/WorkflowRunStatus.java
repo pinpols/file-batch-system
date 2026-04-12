@@ -1,5 +1,9 @@
 package com.example.batch.common.enums;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum WorkflowRunStatus {
     CREATED("CREATED", "已创建"),
     RUNNING("RUNNING", "执行中"),
@@ -21,5 +25,9 @@ public enum WorkflowRunStatus {
 
     public String label() {
         return label;
+    }
+
+    public static Set<String> codes() {
+        return Arrays.stream(values()).map(WorkflowRunStatus::code).collect(Collectors.toUnmodifiableSet());
     }
 }

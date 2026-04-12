@@ -158,6 +158,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         if (!TaskStatus.RUNNING.code().equals(task.getTaskStatus())) {
             return task;
         }
+        // workerId 非空时校验 worker 归属，防止恶意/错误 worker 伪造回报。
+        if (command.workerId() != null
+                && !command.workerId().equals(task.getAssignedWorkerCode())) {
+            throw new BizException(ResultCode.FORBIDDEN, "worker not owner of this task");
+        }
         Instant finishedAt = finishedAtOrNow();
         JobPartitionEntity partition =
                 jobMappers.jobPartitionMapper.selectById(
@@ -551,6 +556,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 new TaskOutcomeCommand(
                         childJobInstance.getTenantId(),
                         parentVirtualTaskId,
+                        null,
                         nodeSuccess,
                         JsonUtils.toJson(Map.of("childInstanceStatus", childInstanceStatus)),
                         nodeSuccess ? null : childCommand.errorCode(),

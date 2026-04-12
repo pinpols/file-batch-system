@@ -9,36 +9,36 @@
 -- ── tenant ta: 零售业务 ────────────────────────────────────────────────────────
 
 INSERT INTO batch.job_definition
-  (tenant_id, job_code, job_name, job_type, schedule_type, trigger_mode, timezone,
+  (tenant_id, job_code, job_name, job_type, schedule_type, schedule_expr, trigger_mode, timezone,
    retry_policy, retry_max_count, created_at, updated_at)
 VALUES
-  ('ta', 'TA_IMPORT_CUSTOMER', 'TA Customer Import',   'IMPORT',   'CRON',        'SCHEDULED', 'Asia/Shanghai',
+  ('ta', 'TA_IMPORT_CUSTOMER', 'TA Customer Import',    'IMPORT',   'CRON',       '0 2 * * * ?', 'SCHEDULED', 'Asia/Shanghai',
    'EXPONENTIAL', 3, now(), now()),
-  ('ta', 'TA_EXPORT_REPORT',   'TA Report Export',     'EXPORT',   'MANUAL',      'MANUAL',    'Asia/Shanghai',
+  ('ta', 'TA_EXPORT_REPORT',   'TA Report Export',      'EXPORT',   'MANUAL',     NULL,           'MANUAL',    'Asia/Shanghai',
    'FIXED',       2, now(), now()),
-  ('ta', 'TA_DISPATCH_ORDER',  'TA Order Dispatch',    'DISPATCH', 'FIXED_RATE',  'SCHEDULED', 'Asia/Shanghai',
+  ('ta', 'TA_DISPATCH_ORDER',  'TA Order Dispatch',     'DISPATCH', 'FIXED_RATE', '300',          'SCHEDULED', 'Asia/Shanghai',
    'FIXED',       1, now(), now()),
-  ('ta', 'TA_WF_SETTLEMENT',   'TA Settlement Workflow','WORKFLOW', 'CRON',       'SCHEDULED', 'Asia/Shanghai',
+  ('ta', 'TA_WF_SETTLEMENT',   'TA Settlement Workflow','WORKFLOW', 'CRON',       '0 22 * * * ?', 'SCHEDULED', 'Asia/Shanghai',
    'EXPONENTIAL', 3, now(), now()),
 
 -- ── tenant tb: 金融业务 ────────────────────────────────────────────────────────
 
-  ('tb', 'TB_IMPORT_TRANSACTION', 'TB Transaction Import',   'IMPORT',   'CRON',   'SCHEDULED', 'Asia/Shanghai',
+  ('tb', 'TB_IMPORT_TRANSACTION', 'TB Transaction Import',  'IMPORT',   'CRON',   '0 1 * * * ?',    'SCHEDULED', 'Asia/Shanghai',
    'EXPONENTIAL', 3, now(), now()),
-  ('tb', 'TB_EXPORT_STATEMENT',   'TB Statement Export',     'EXPORT',   'CRON',   'SCHEDULED', 'Asia/Shanghai',
+  ('tb', 'TB_EXPORT_STATEMENT',   'TB Statement Export',    'EXPORT',   'CRON',   '0 30 6 * * ?',   'SCHEDULED', 'Asia/Shanghai',
    'FIXED',       2, now(), now()),
-  ('tb', 'TB_WF_RECONCILE',       'TB Reconcile Workflow',   'WORKFLOW', 'CRON',   'SCHEDULED', 'Asia/Shanghai',
+  ('tb', 'TB_WF_RECONCILE',       'TB Reconcile Workflow',  'WORKFLOW', 'CRON',   '0 0 7 * * ?',    'SCHEDULED', 'Asia/Shanghai',
    'EXPONENTIAL', 3, now(), now()),
 
 -- ── tenant tc: 风控业务 ────────────────────────────────────────────────────────
 
-  ('tc', 'TC_IMPORT_RISK_SCORE',   'TC Risk Score Import',     'IMPORT',   'EVENT',  'EVENT',   'Asia/Shanghai',
+  ('tc', 'TC_IMPORT_RISK_SCORE',  'TC Risk Score Import',     'IMPORT',   'EVENT',  NULL,           'EVENT',   'Asia/Shanghai',
    'EXPONENTIAL', 5, now(), now()),
-  ('tc', 'TC_EXPORT_RISK_ALERT',   'TC Risk Alert Export',     'EXPORT',   'CRON',   'SCHEDULED','Asia/Shanghai',
+  ('tc', 'TC_EXPORT_RISK_ALERT',  'TC Risk Alert Export',     'EXPORT',   'CRON',   '0 */30 * * * ?','SCHEDULED','Asia/Shanghai',
    'FIXED',       3, now(), now()),
-  ('tc', 'TC_DISPATCH_REVIEW',     'TC Review Dispatch',       'DISPATCH', 'MANUAL', 'MANUAL',  'Asia/Shanghai',
+  ('tc', 'TC_DISPATCH_REVIEW',    'TC Review Dispatch',       'DISPATCH', 'MANUAL', NULL,           'MANUAL',  'Asia/Shanghai',
    'NONE',        0, now(), now()),
-  ('tc', 'TC_WF_RISK_PIPELINE',    'TC Risk Pipeline Workflow','WORKFLOW', 'EVENT',  'EVENT',   'Asia/Shanghai',
+  ('tc', 'TC_WF_RISK_PIPELINE',   'TC Risk Pipeline Workflow','WORKFLOW', 'EVENT',  NULL,           'EVENT',   'Asia/Shanghai',
    'EXPONENTIAL', 5, now(), now())
 ON CONFLICT DO NOTHING;
 

@@ -93,7 +93,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
 
         // 3) Report success
         taskExecutionService.applyTaskOutcome(new TaskOutcomeCommand(
-                TENANT, task.getId(), true, "{\"status\":\"processed ok\"}", null, null));
+                TENANT, task.getId(), null, true, "{\"status\":\"processed ok\"}", null, null));
 
         // 4) Verify final task status
         JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());
@@ -127,7 +127,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
 
         // 上报失败（测试夹具中未配置重试策略：retry_max_count = 0）
         taskExecutionService.applyTaskOutcome(new TaskOutcomeCommand(
-                TENANT, task.getId(), false, null, "TEST_FAILURE", "simulated error"));
+                TENANT, task.getId(), null, false, null, "TEST_FAILURE", "simulated error"));
 
         JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());
         assertThat(finishedTask.getTaskStatus()).isEqualTo(TaskStatus.FAILED.code());

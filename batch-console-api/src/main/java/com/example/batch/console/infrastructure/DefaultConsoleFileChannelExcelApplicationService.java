@@ -9,6 +9,9 @@ import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.FileChannelAuthType;
+import com.example.batch.common.enums.FileChannelType;
+import com.example.batch.common.enums.FileReceiptPolicy;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -88,11 +91,9 @@ public class DefaultConsoleFileChannelExcelApplicationService
                     "timeout_seconds",
                     "enabled");
     private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
-    private static final Set<String> CHANNEL_TYPES =
-            Set.of("SFTP", "API", "EMAIL", "NAS", "OSS", "LOCAL");
-    private static final Set<String> AUTH_TYPES =
-            Set.of("NONE", "PASSWORD", "KEY_PAIR", "TOKEN", "OAUTH2", "CUSTOM");
-    private static final Set<String> RECEIPT_POLICIES = Set.of("NONE", "SYNC", "ASYNC", "POLLING");
+    private static final Set<String> CHANNEL_TYPES = FileChannelType.codes();
+    private static final Set<String> AUTH_TYPES = FileChannelAuthType.codes();
+    private static final Set<String> RECEIPT_POLICIES = FileReceiptPolicy.codes();
     private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
             Map.ofEntries(
                     Map.entry(

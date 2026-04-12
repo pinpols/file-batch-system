@@ -6,6 +6,9 @@ spring:
   application:
     # Spring 应用名（用于日志/链路追踪/注册等）
     name: batch-console-api
+  flyway:
+    # console 不拥有平台 schema，DB 版本由 batch-orchestrator / batch-trigger 管理；此处关闭避免双写 flyway_schema_history 及重复执行迁移脚本。
+    enabled: false
   config:
     # 引入共享默认配置基线（来自 batch-common 的 resources）
     import: "classpath:batch-defaults.yml"

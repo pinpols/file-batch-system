@@ -15,12 +15,15 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 | 2026-04-11 | 删除 `POST /api/console/users`（独立创建账号）：每个租户仅一个运营账号，由建租户接口统一创建，后续通过 `PUT /api/console/users/{id}` 调整权限 |
 | 2026-04-12 | 新增 `GET /api/console/config/tenant-package/excel/export`：导出当前租户全量配置包为 8-Sheet xlsx（job_definition / file_channel / alert_routing / pipeline / pipeline_step / workflow_definition / workflow_node / workflow_edge），文件可直接回灌至合包导入接口 |
 | 2026-04-12 | 10 个独立 Excel 导入 Controller 的 upload / preview / previewWorkbook / apply 端点标注 `deprecated`；export / template 端点不受影响；推荐改用 `/api/console/config/tenant-package/excel` 系列接口 |
+| 2026-04-12 | `GET /api/console/meta/enums` 新增三个 key：`operationType`（文件审计操作类型，10 个值）、`operationResult`（SUCCESS / FAILED）、`fileStatus`（文件状态，11 个值）|
+| 2026-04-12 | 新增 `GET /api/console/meta/biz-types?tenantId=`：按租户动态返回 `file_record` 中已有的 distinct `biz_type` 值，用于文件列表业务类型下拉筛选 |
 | 2026-04-12 | 新增 `GET /api/console/config/tenant-package/excel/template`、`POST /upload`、`GET /preview/{token}`、`GET /preview/{token}/workbook`、`POST /apply/{token}`：8-Sheet 租户配置包 Excel 导入（job_definition / file_channel / alert_routing / pipeline / workflow，单事务，含跨 Sheet 依赖校验） |
 | 2026-04-12 | `POST /api/console/tenants/batch`：`initConfigFrom` 不传时默认使用 `default` 模板租户（原逻辑：不传则跳过配置初始化） |
 | 2026-04-12 | `POST /api/console/tenants/batch` 新增可选字段 `initConfigFrom`（源租户 ID）和 `initMode`（默认 `SKIP_EXISTING`）：非空时建完租户后自动复制源租户全部配置，响应体从 `List<ConsoleTenantResponse>` 改为 `{tenants, configInit}`（`configInit` 在未传 `initConfigFrom` 时为 null） |
 | 2026-04-12 | 补齐 OpenAPI 缺失接口 `GET /api/console/config/file-templates/excel/preview/{uploadToken}/workbook`；修正 18 处 CRUD 创建/更新/复制响应体错误类型（`CommonResponseLong`/`CommonResponseString` → `CommonResponseObject`）；协议正文同步 PATCH 改造、移除已删除的 user create/delete 和 POST files/delete 接口描述 |
 | 2026-04-11 | 新增 `POST /api/console/tenants/batch` 批量建租户端点，共享密码（≥12位）+ 用户名前缀（默认 `op-`），单事务 |
 | 2026-04-11 | `POST /api/console/tenants` 新增必填字段 `username`/`password`，建租户时同步创建 `ROLE_TENANT_USER` 操作账号 |
+| 2026-04-12 | `GET /api/console/meta/enums` 新增 6 个字典 key：`taskStatus` / `partitionStatus` / `workflowRunStatus` / `approvalType` / `outboxPublishStatus` / `aiPromptCategory`；OpenAPI 响应 schema 由 `CommonResponseObject` 改为精确的 `CommonResponseMetaEnums`，补全所有 34 个 key 的 schema 定义 |
 | 2026-04-11 | 补齐 5 个新域（BatchWindow/BusinessCalendar/PipelineDefinition/TenantQuotaPolicy/ResourceQueue）Excel Upload/Preview/Apply 全套 schema（共 47 个），消除所有悬空 $ref；添加 Changelog 标识 |
 
 ## Common Headers
@@ -495,7 +498,44 @@ Deployment note:
 - `GET /api/console/meta/calendars`
 - `GET /api/console/meta/windows`
 - `GET /api/console/meta/worker-groups`
-- `enums` returns all platform enum dictionaries: `triggerType`, `jobType`, `scheduleType`, `triggerMode`, `shardStrategy`, `retryPolicy`, `instanceStatus`, `workflowNodeType`, `channelType`.
+- `enums` returns all platform enum dictionaries. Each key maps to an ordered `[{code, label}]` list:
+
+  | Key | 说明 |
+  |---|---|
+  | `triggerType` | 触发类型 |
+  | `scheduleType` | 调度类型（CRON / FIXED_RATE / MANUAL）|
+  | `triggerMode` | 触发模式（SCHEDULED / API / MANUAL / EVENT / MIXED）|
+  | `catchUpPolicy` | 补跑策略 |
+  | `jobType` | 作业类型 |
+  | `shardStrategy` | 分片策略 |
+  | `retryPolicy` | 重试策略 |
+  | `taskStatus` | 任务状态 |
+  | `partitionStatus` | 分区状态 |
+  | `instanceStatus` | 作业实例状态 |
+  | `workflowType` | 工作流类型 |
+  | `workflowNodeType` | 工作流节点类型 |
+  | `edgeType` | 工作流边类型 |
+  | `workflowRunStatus` | 工作流运行状态 |
+  | `pipelineType` | 流水线类型 |
+  | `channelType` | 文件通道类型 |
+  | `authType` | 通道认证类型 |
+  | `receiptPolicy` | 回执策略 |
+  | `fileTemplateType` | 文件模板类型 |
+  | `fileTemplateFormat` | 文件格式 |
+  | `endStrategy` | 批量窗口结束策略 |
+  | `outOfWindowAction` | 窗口外动作 |
+  | `holidayStrategy` | 节假日顺延规则 |
+  | `dayType` | 日历日类型 |
+  | `queueType` | 资源队列类型 |
+  | `priorityPolicy` | 优先级策略 |
+  | `severity` | 告警级别 |
+  | `alertStatus` | 告警状态（OPEN / ACKED / SUPPRESSED / CLOSED）|
+  | `approvalStatus` | 审批状态 |
+  | `approvalType` | 审批类型（CATCH_UP / COMPENSATION / DLQ_REPLAY / DOWNLOAD）|
+  | `configStatus` | 配置发布状态 |
+  | `workerStatus` | Worker 注册状态 |
+  | `outboxPublishStatus` | Outbox 投递状态 |
+  | `aiPromptCategory` | AI Prompt 分类 |
 - `queues`, `calendars`, and `windows` return simplified lists (`code` + `name`) for use as dropdown options; all require `tenantId` query param.
 - `worker-groups` returns deduplicated group codes from active worker registrations.
 - All meta endpoints allow `ROLE_ADMIN`, `ROLE_AUDITOR`, `ROLE_CONFIG_ADMIN`, and `ROLE_TENANT_USER`.

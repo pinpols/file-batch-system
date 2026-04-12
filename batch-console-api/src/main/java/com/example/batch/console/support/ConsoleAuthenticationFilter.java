@@ -75,7 +75,11 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
                 try {
                     String username = resolveUsername(request);
                     String tenantId = resolveTenant(request);
-                    Set<SimpleGrantedAuthority> authorities = resolveAuthorities(request);
+                    // 生产 legacy 模式：角色由服务端配置决定，不信任请求侧 X-Console-Roles header
+                    Set<SimpleGrantedAuthority> authorities =
+                            properties.getDefaultAuthorities().stream()
+                                    .map(SimpleGrantedAuthority::new)
+                                    .collect(Collectors.toCollection(LinkedHashSet::new));
                     ConsolePrincipal principal =
                             new ConsolePrincipal(
                                     username,

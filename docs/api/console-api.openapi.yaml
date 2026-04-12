@@ -4608,7 +4608,50 @@ paths:
   /api/console/meta/enums:
     get:
       tags: [Meta]
-      summary: Get all system enum values
+      summary: Get all system enum dictionaries
+      description: |
+        Returns a map of all platform enum dictionaries. Each key maps to an ordered list of
+        `{ code, label }` items. The following keys are available:
+
+        | Key | 说明 |
+        |---|---|
+        | `triggerType` | 触发类型 |
+        | `scheduleType` | 调度类型（CRON / FIXED_RATE / MANUAL）|
+        | `triggerMode` | 触发模式（SCHEDULED / API / MANUAL / EVENT / MIXED）|
+        | `catchUpPolicy` | 补跑策略 |
+        | `jobType` | 作业类型 |
+        | `shardStrategy` | 分片策略 |
+        | `retryPolicy` | 重试策略 |
+        | `taskStatus` | 任务状态 |
+        | `partitionStatus` | 分区状态 |
+        | `instanceStatus` | 作业实例状态 |
+        | `workflowType` | 工作流类型 |
+        | `workflowNodeType` | 工作流节点类型 |
+        | `edgeType` | 工作流边类型 |
+        | `workflowRunStatus` | 工作流运行状态 |
+        | `pipelineType` | 流水线类型 |
+        | `channelType` | 文件通道类型 |
+        | `authType` | 通道认证类型 |
+        | `receiptPolicy` | 回执策略 |
+        | `fileTemplateType` | 文件模板类型 |
+        | `fileTemplateFormat` | 文件格式 |
+        | `endStrategy` | 批量窗口结束策略 |
+        | `outOfWindowAction` | 窗口外动作 |
+        | `holidayStrategy` | 节假日顺延规则 |
+        | `dayType` | 日历日类型 |
+        | `queueType` | 资源队列类型 |
+        | `priorityPolicy` | 优先级策略 |
+        | `severity` | 告警级别 |
+        | `alertStatus` | 告警状态（OPEN / ACKED / SUPPRESSED / CLOSED）|
+        | `approvalStatus` | 审批状态 |
+        | `approvalType` | 审批类型（CATCH_UP / COMPENSATION / DLQ_REPLAY / DOWNLOAD）|
+        | `configStatus` | 配置发布状态 |
+        | `workerStatus` | Worker 注册状态 |
+        | `outboxPublishStatus` | Outbox 投递状态 |
+        | `aiPromptCategory` | AI Prompt 分类 |
+        | `operationType` | 文件审计操作类型（ARRIVAL_REGISTER / RECEIVE_SCAN / IMPORT_FEEDBACK / BAD_RECORD_GOVERNANCE / EXPORT_REGISTER / EXPORT_COMPLETE / DISPATCH_COMPLETE / DISPATCH_COMPENSATE / CATCH_UP_APPROVAL / BATCH_DAY_CATCH_UP）|
+        | `operationResult` | 审计操作结果（SUCCESS / FAILED）|
+        | `fileStatus` | 文件状态（RECEIVED / PARSING / PARSED / VALIDATED / LOADED / GENERATED / DISPATCHING / DISPATCHED / ARCHIVED / FAILED / DELETED）|
       operationId: getMetaEnums
       security:
         - bearerAuth: []
@@ -4618,7 +4661,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseMetaEnums'
   /api/console/meta/queues:
     get:
       tags: [Meta]
@@ -4695,6 +4738,29 @@ paths:
       responses:
         '200':
           description: Worker group list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/meta/biz-types:
+    get:
+      tags: [Meta]
+      summary: List distinct biz types for metadata selection
+      description: |
+        Returns distinct `biz_type` values present in `file_record` for the given tenant.
+        Used as dropdown options for file list filtering. Values are free-text and tenant-specific.
+      operationId: getMetaBizTypes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Biz type list
           content:
             application/json:
               schema:
@@ -8380,6 +8446,59 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/ConsolePresignDownloadResponse'
+    MetaEnumItem:
+      type: object
+      required: [code, label]
+      properties:
+        code:
+          type: string
+          example: CRON
+        label:
+          type: string
+          example: Cron 表达式
+    CommonResponseMetaEnums:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: object
+              description: Map of enum-group key → ordered list of { code, label } items
+              properties:
+                triggerType:        { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                scheduleType:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                triggerMode:        { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                catchUpPolicy:      { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                jobType:            { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                shardStrategy:      { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                retryPolicy:        { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                taskStatus:         { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                partitionStatus:    { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                instanceStatus:     { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                workflowType:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                workflowNodeType:   { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                edgeType:           { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                workflowRunStatus:  { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                pipelineType:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                channelType:        { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                authType:           { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                receiptPolicy:      { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                fileTemplateType:   { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                fileTemplateFormat: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                endStrategy:        { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                outOfWindowAction:  { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                holidayStrategy:    { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                dayType:            { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                queueType:          { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                priorityPolicy:     { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                severity:           { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                alertStatus:        { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                approvalStatus:     { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                approvalType:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                configStatus:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                workerStatus:       { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                outboxPublishStatus: { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
+                aiPromptCategory:   { type: array, items: { $ref: '#/components/schemas/MetaEnumItem' } }
     CommonResponseObject:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'

@@ -9,6 +9,9 @@ import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.CalendarDayType;
+import com.example.batch.common.enums.CatchUpPolicyType;
+import com.example.batch.common.enums.HolidayRollRule;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -96,10 +99,9 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
             List.of("calendar_code", "biz_date", "day_type", "holiday_name", "description");
     private static final Set<String> HOLIDAY_REQUIRED_HEADERS = Set.copyOf(HOLIDAY_COLUMNS);
 
-    private static final Set<String> HOLIDAY_ROLL_RULES =
-            Set.of("SKIP", "NEXT_WORKDAY", "PREV_WORKDAY");
-    private static final Set<String> CATCH_UP_POLICIES = Set.of("NONE", "AUTO", "MANUAL_APPROVAL");
-    private static final Set<String> DAY_TYPES = Set.of("HOLIDAY", "WORKDAY_OVERRIDE");
+    private static final Set<String> HOLIDAY_ROLL_RULES = HolidayRollRule.codes();
+    private static final Set<String> CATCH_UP_POLICIES = CatchUpPolicyType.codes();
+    private static final Set<String> DAY_TYPES = CalendarDayType.codes();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private static final Map<String, ConsoleExcelStyles.ColumnGuide> CALENDAR_COLUMN_GUIDES =

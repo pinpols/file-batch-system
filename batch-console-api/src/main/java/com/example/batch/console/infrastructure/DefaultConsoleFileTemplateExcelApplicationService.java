@@ -9,6 +9,11 @@ import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.FileChecksumType;
+import com.example.batch.common.enums.FileCompressType;
+import com.example.batch.common.enums.FileEncryptType;
+import com.example.batch.common.enums.FileTemplateFormat;
+import com.example.batch.common.enums.FileTemplateType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -121,12 +126,11 @@ public class DefaultConsoleFileTemplateExcelApplicationService
                     "version",
                     "description");
     private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
-    private static final Set<String> FILE_FORMAT_TYPES =
-            Set.of("DELIMITED", "FIXED_WIDTH", "EXCEL", "XML", "JSON", "BINARY");
-    private static final Set<String> TEMPLATE_TYPES = Set.of("IMPORT", "EXPORT", "SHARED");
-    private static final Set<String> CHECKSUM_TYPES = Set.of("NONE", "MD5", "SHA-256");
-    private static final Set<String> COMPRESS_TYPES = Set.of("NONE", "ZIP", "GZIP");
-    private static final Set<String> ENCRYPT_TYPES = Set.of("NONE", "AES", "PGP", "CUSTOM");
+    private static final Set<String> FILE_FORMAT_TYPES = FileTemplateFormat.codes();
+    private static final Set<String> TEMPLATE_TYPES = FileTemplateType.codes();
+    private static final Set<String> CHECKSUM_TYPES = FileChecksumType.codes();
+    private static final Set<String> COMPRESS_TYPES = FileCompressType.codes();
+    private static final Set<String> ENCRYPT_TYPES = FileEncryptType.codes();
     private static final int[] BOOLEAN_VALIDATION_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
     private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
             Map.ofEntries(

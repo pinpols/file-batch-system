@@ -60,6 +60,10 @@ batch:
         # 允许访问的业务 schema 白名单
         allowed-schemas:
           - biz
+      sql-template:
+        # 允许引用的 schema 白名单，防止 SQL 模板越权访问 batch/quartz 等内部 schema
+        allowed-schemas:
+          - biz
 
   datasource:
     hikari:

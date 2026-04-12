@@ -9,6 +9,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.AlertSeverity;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -89,7 +90,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
                     "enabled",
                     "description");
     private static final Set<String> REQUIRED_HEADERS = Set.copyOf(COLUMNS);
-    private static final Set<String> SEVERITIES = Set.of("INFO", "WARN", "ERROR", "CRITICAL");
+    private static final Set<String> SEVERITIES = AlertSeverity.codes();
     private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
             Map.ofEntries(
                     Map.entry(

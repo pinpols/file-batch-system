@@ -1,23 +1,28 @@
 package com.example.batch.worker.core.infrastructure;
 
-import com.example.batch.worker.core.config.OrchestratorWorkerClientProperties;
-import com.example.batch.worker.core.domain.WorkerRegistration;
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.WorkerHeartbeatDto;
 import com.example.batch.common.enums.WorkerRegistryStatus;
-import java.time.Instant;
+import com.example.batch.worker.core.config.OrchestratorWorkerClientProperties;
+import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.WorkerRegistryClient;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
+import java.time.Instant;
+
 @Component
 @RequiredArgsConstructor
 public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
     private final OrchestratorWorkerClientProperties properties;
+    private final BatchSecurityProperties securityProperties;
     private final RestClient.Builder builder;
     private final Environment environment;
     private RestClient restClient;
@@ -66,7 +71,10 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         }
         synchronized (this) {
             if (this.restClient == null) {
-                this.restClient = builder.baseUrl(resolveBaseUrl()).build();
+                this.restClient = builder
+                        .baseUrl(resolveBaseUrl())
+                        .defaultHeader("X-Internal-Secret", securityProperties.getInternalSecret())
+                        .build();
             }
             return this.restClient;
         }

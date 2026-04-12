@@ -11,7 +11,18 @@ import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.AlertSeverity;
+import com.example.batch.common.enums.FileChannelAuthType;
+import com.example.batch.common.enums.FileChannelType;
+import com.example.batch.common.enums.FileReceiptPolicy;
+import com.example.batch.common.enums.JobType;
+import com.example.batch.common.enums.PipelineType;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.RetryPolicyType;
+import com.example.batch.common.enums.ShardStrategy;
+import com.example.batch.common.enums.WorkflowEdgeType;
+import com.example.batch.common.enums.WorkflowNodeType;
+import com.example.batch.common.enums.WorkflowType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -149,27 +160,21 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
             "from_node_code", "to_node_code", "edge_type", "condition_expr", "enabled");
 
     // ── enum sets ─────────────────────────────────────────────────────────────
-    private static final Set<String> JOB_TYPES =
-            Set.of("GENERAL", "IMPORT", "EXPORT", "DISPATCH", "WORKFLOW");
-    private static final Set<String> SCHEDULE_TYPES =
-            Set.of("CRON", "FIXED_RATE", "MANUAL", "EVENT", "ONE_TIME");
-    private static final Set<String> RETRY_POLICIES = Set.of("NONE", "FIXED", "EXPONENTIAL");
-    private static final Set<String> SHARD_STRATEGIES = Set.of("NONE", "STATIC", "DYNAMIC", "AUTO");
-    private static final Set<String> CHANNEL_TYPES =
-            Set.of("SFTP", "API", "EMAIL", "NAS", "OSS", "LOCAL", "API_PUSH");
-    private static final Set<String> AUTH_TYPES =
-            Set.of("NONE", "PASSWORD", "KEY_PAIR", "TOKEN", "OAUTH2", "CUSTOM");
-    private static final Set<String> RECEIPT_POLICIES = Set.of("NONE", "SYNC", "ASYNC", "POLLING");
-    private static final Set<String> SEVERITIES = Set.of("INFO", "WARN", "ERROR", "CRITICAL");
-    private static final Set<String> PIPELINE_TYPES = Set.of("IMPORT", "EXPORT", "DISPATCH");
+    private static final Set<String> JOB_TYPES = JobType.codes();
+    private static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
+    private static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
+    private static final Set<String> SHARD_STRATEGIES = ShardStrategy.codes();
+    private static final Set<String> CHANNEL_TYPES = FileChannelType.codes();
+    private static final Set<String> AUTH_TYPES = FileChannelAuthType.codes();
+    private static final Set<String> RECEIPT_POLICIES = FileReceiptPolicy.codes();
+    private static final Set<String> SEVERITIES = AlertSeverity.codes();
+    private static final Set<String> PIPELINE_TYPES = PipelineType.codes();
     private static final Set<String> STAGE_CODES = Set.of(
             "RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD",
             "GENERATE", "TRANSFER", "DISPATCH", "ACK");
-    private static final Set<String> WORKFLOW_TYPES = Set.of("DAG", "PIPELINE", "MIXED");
-    private static final Set<String> NODE_TYPES =
-            Set.of("TASK", "GATEWAY", "FILE_STEP", "START", "END", "JOB");
-    private static final Set<String> EDGE_TYPES =
-            Set.of("SUCCESS", "FAILURE", "CONDITION", "ALWAYS");
+    private static final Set<String> WORKFLOW_TYPES = WorkflowType.codes();
+    private static final Set<String> NODE_TYPES = WorkflowNodeType.codes();
+    private static final Set<String> EDGE_TYPES = WorkflowEdgeType.codes();
 
     private static final MediaType XLSX_MEDIA_TYPE =
             MediaType.parseMediaType(
@@ -196,7 +201,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         String tid = tenantGuard.resolveTenant(tenantId);
         List<Map<String, Object>> jobs = toJobRows(
                 jobDefinitionMapper.selectByQuery(
-                        new JobDefinitionQuery(tid, null, null, null, null, null, null, null, null)));
+                        JobDefinitionQuery.ofTenant(tid, null)));
         List<Map<String, Object>> channels =
                 fileChannelConfigMapper.selectByQuery(tid, null, null, null, null);
         List<Map<String, Object>> routings =
@@ -205,7 +210,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
                 pipelineDefinitionMapper.selectByQuery(tid, null, null, null, null);
         List<Map<String, Object>> steps = collectPipelineSteps(pipelines);
         List<WorkflowDefinitionEntity> wfEntities = workflowDefinitionMapper.selectByQuery(
-                new WorkflowDefinitionQuery(tid, null, null, null, null, null, null));
+                WorkflowDefinitionQuery.ofTenant(tid, null));
         List<Map<String, Object>> wfDefs = toWfDefRows(wfEntities);
         List<Map<String, Object>> wfNodes = collectWorkflowNodes(tid, wfEntities);
         List<Map<String, Object>> wfEdges = collectWorkflowEdges(tid, wfEntities);

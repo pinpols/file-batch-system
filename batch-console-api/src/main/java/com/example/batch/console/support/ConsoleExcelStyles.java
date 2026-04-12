@@ -206,11 +206,27 @@ public final class ConsoleExcelStyles {
         } else if (value instanceof Boolean bool) {
             cell.setCellValue(bool);
         } else {
-            cell.setCellValue(String.valueOf(value));
+            cell.setCellValue(escapeFormula(String.valueOf(value)));
         }
         if (style != null) {
             cell.setCellStyle(style);
         }
+    }
+
+    /**
+     * 防止 Excel 公式注入（CSV Injection / Formula Injection）。
+     *
+     * <p>以 {@code = + - @} 开头的单元格值会被 Excel 解析为公式；加前缀 {@code '} 强制按文本处理。
+     */
+    static String escapeFormula(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        char first = value.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@') {
+            return "'" + value;
+        }
+        return value;
     }
 
     /** 自适应列宽（基于表头长度）。 */
