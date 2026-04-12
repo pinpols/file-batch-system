@@ -4,34 +4,54 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
-    <!-- 前端遥测专属文件 appender（所有 profile 均生效） -->
-    <appender name="FRONTEND_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <springProfile name="local">
+    <!-- 前端遥测专属文件 appender - local profile -->
+    <springProfile name="local">
+        <appender name="FRONTEND_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>logs/app/frontend.log</file>
             <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
                 <fileNamePattern>logs/app/frontend.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
                 <maxFileSize>50MB</maxFileSize>
                 <maxHistory>7</maxHistory>
             </rollingPolicy>
-        </springProfile>
-        <springProfile name="!local">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{frontendApp}][%X{frontendUserId}][%X{frontendPage}] %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <logger name="com.example.batch.console.web.ConsoleTelemetryController"
+                level="INFO" additivity="false">
+            <appender-ref ref="FRONTEND_FILE"/>
+        </logger>
+    </springProfile>
+
+    <!-- 前端遥测专属文件 appender - 生产部署（非 local、非 test、非 e2e） -->
+    <!-- 使用 & 表达式确保测试环境不尝试创建 /logs/ 绝对路径 -->
+    <springProfile name="!local &amp; !test &amp; !e2e">
+        <appender name="FRONTEND_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>/logs/frontend.log</file>
             <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
                 <fileNamePattern>/logs/frontend.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
                 <maxFileSize>100MB</maxFileSize>
                 <maxHistory>14</maxHistory>
             </rollingPolicy>
-        </springProfile>
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{frontendApp}][%X{frontendUserId}][%X{frontendPage}] %msg%n</pattern>
-        </encoder>
-    </appender>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{frontendApp}][%X{frontendUserId}][%X{frontendPage}] %msg%n</pattern>
+            </encoder>
+        </appender>
 
-    <!-- ConsoleTelemetryController 日志只写前端专属文件，不冒泡到主日志 -->
-    <logger name="com.example.batch.console.web.ConsoleTelemetryController"
-            level="INFO" additivity="false">
-        <appender-ref ref="FRONTEND_FILE"/>
-    </logger>
+        <logger name="com.example.batch.console.web.ConsoleTelemetryController"
+                level="INFO" additivity="false">
+            <appender-ref ref="FRONTEND_FILE"/>
+        </logger>
+    </springProfile>
+
+    <!-- 测试环境（test / e2e profile）：前端遥测日志退化到控制台，不写文件 -->
+    <springProfile name="test,e2e">
+        <logger name="com.example.batch.console.web.ConsoleTelemetryController"
+                level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
+        </logger>
+    </springProfile>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

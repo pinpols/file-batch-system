@@ -10,6 +10,7 @@ import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.trigger.config.TriggerRuntimeProperties;
 import com.example.batch.trigger.domain.MisfireHandler;
+import com.example.batch.trigger.domain.TriggerRegistrationService;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.service.TriggerService;
 import java.time.Instant;
@@ -28,6 +29,7 @@ class QuartzLaunchJobTest {
 
   @Mock private TriggerService triggerService;
   @Mock private MisfireHandler misfireHandler;
+  @Mock private TriggerRegistrationService triggerRegistrationService;
   @Mock private JobExecutionContext context;
 
   private QuartzLaunchJob job;
@@ -36,7 +38,9 @@ class QuartzLaunchJobTest {
   void setUp() {
     TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
     properties.setMisfireCatchUpThresholdSeconds(60L);
-    job = new QuartzLaunchJob(triggerService, misfireHandler, properties);
+    job =
+        new QuartzLaunchJob(
+            triggerService, misfireHandler, properties, triggerRegistrationService);
   }
 
   @Test

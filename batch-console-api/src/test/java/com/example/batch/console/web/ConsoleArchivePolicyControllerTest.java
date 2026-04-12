@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
+import com.example.batch.console.repository.ArchivePolicyUpsertParam;
 import com.example.batch.console.service.ConsoleArchivePolicyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
@@ -99,6 +100,8 @@ class ConsoleArchivePolicyControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
     verify(archivePolicyService)
-        .upsert("t1", "job_instance", 90, true, false, 1000, "Archive job instances", "operator-1");
+        .upsert(
+            new ArchivePolicyUpsertParam(
+                "t1", "job_instance", 90, true, false, 1000, "Archive job instances", "operator-1"));
   }
 }
