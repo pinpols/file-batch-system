@@ -142,7 +142,8 @@ public class DefaultLaunchService implements LaunchService {
     // workflow，跳过。
     Instant startedAt = Instant.now();
     if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {
-      return prepareWorkflowRunAndNodes(request, loaded, effectiveParams, traceId, jobInstance, startedAt);
+      return prepareWorkflowRunAndNodes(
+          request, loaded, effectiveParams, traceId, jobInstance, startedAt);
     }
     return new PreparedLaunch(jobInstance, null, List.of(), startedAt);
   }

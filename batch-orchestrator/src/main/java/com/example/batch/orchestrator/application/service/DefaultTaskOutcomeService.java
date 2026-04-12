@@ -358,13 +358,19 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     ctx.activeNodes().remove(ctx.currentNodeCode());
     recordNodeRunFinish(
         NodeRunFinishCommand.of(
-            new NodeRunKey(ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task())),
+            new NodeRunKey(
+                ctx.workflowRun().getId(),
+                ctx.currentNodeCode(),
+                resolveCurrentNodeType(ctx.task())),
             new NodeRunOutcome(
                 ctx.nodeProgress().failedCount() == 0,
                 ctx.command().errorCode(),
                 ctx.command().errorMessage(),
                 resolveNodeStartedAt(
-                    ctx.workflowRun().getId(), ctx.currentNodeCode(), ctx.workflowRun().getStartedAt(), ctx.finishedAt()),
+                    ctx.workflowRun().getId(),
+                    ctx.currentNodeCode(),
+                    ctx.workflowRun().getStartedAt(),
+                    ctx.finishedAt()),
                 ctx.finishedAt())));
     List<WorkflowDagService.DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodes(
@@ -383,10 +389,14 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             nextNode.nodeCode(),
             ctx.task().getTaskPayload())) {
           recordNodeRunStart(
-              ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType(), ctx.finishedAt());
+              ctx.workflowRun().getId(),
+              nextNode.nodeCode(),
+              nextNode.nodeType(),
+              ctx.finishedAt());
           recordNodeRunFinish(
               NodeRunFinishCommand.of(
-                  new NodeRunKey(ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType()),
+                  new NodeRunKey(
+                      ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType()),
                   new NodeRunOutcome(
                       ctx.nodeProgress().failedCount() == 0,
                       ctx.command().errorCode(),
@@ -399,7 +409,11 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       workflowNodeDispatchServiceProvider
           .getObject()
           .dispatchNode(
-              ctx.jobInstance(), ctx.workflowRun(), nextNode, ctx.task().getTaskPayload(), ctx.jobInstance().getTraceId());
+              ctx.jobInstance(),
+              ctx.workflowRun(),
+              nextNode,
+              ctx.task().getTaskPayload(),
+              ctx.jobInstance().getTraceId());
       if (isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode())) {
         ctx.activeNodes().add(nextNode.nodeCode());
       }
