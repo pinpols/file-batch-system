@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.ArchivePolicyEntity;
+import com.example.batch.console.repository.ArchivePolicyUpsertParam;
 import com.example.batch.console.repository.ConsoleArchivePolicyRepository;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
@@ -40,15 +41,19 @@ class ConsoleArchivePolicyServiceTest {
 
   @Test
   void shouldUpsertValidTable() {
-    service.upsert("t1", "job_instance", 30, true, false, 500, "desc", "admin");
+    service.upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 500, "desc", "admin"));
 
-    verify(repository).upsert("t1", "job_instance", 30, true, false, 500, "desc", "admin");
+    verify(repository)
+        .upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 500, "desc", "admin"));
   }
 
   @Test
   void shouldRejectInvalidTable() {
     assertThatThrownBy(
-            () -> service.upsert("t1", "unknown_table", 30, true, false, 500, "desc", "admin"))
+            () ->
+                service.upsert(
+                    new ArchivePolicyUpsertParam(
+                        "t1", "unknown_table", 30, true, false, 500, "desc", "admin")))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("target_table must be one of");
   }
@@ -56,22 +61,27 @@ class ConsoleArchivePolicyServiceTest {
   @Test
   void shouldRejectRetentionDaysLessThan1() {
     assertThatThrownBy(
-            () -> service.upsert("t1", "job_instance", 0, true, false, 500, "desc", "admin"))
+            () ->
+                service.upsert(
+                    new ArchivePolicyUpsertParam(
+                        "t1", "job_instance", 0, true, false, 500, "desc", "admin")))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("retention_days must be >= 1");
   }
 
   @Test
   void shouldNormalizeTableToLowercase() {
-    service.upsert("t1", "JOB_INSTANCE", 30, true, false, 500, "desc", "admin");
+    service.upsert(new ArchivePolicyUpsertParam("t1", "JOB_INSTANCE", 30, true, false, 500, "desc", "admin"));
 
-    verify(repository).upsert("t1", "job_instance", 30, true, false, 500, "desc", "admin");
+    verify(repository)
+        .upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 500, "desc", "admin"));
   }
 
   @Test
   void shouldEnforceBatchSizeMinimum() {
-    service.upsert("t1", "job_instance", 30, true, false, 50, "desc", "admin");
+    service.upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 50, "desc", "admin"));
 
-    verify(repository).upsert("t1", "job_instance", 30, true, false, 100, "desc", "admin");
+    verify(repository)
+        .upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 100, "desc", "admin"));
   }
 }

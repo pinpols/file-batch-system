@@ -73,10 +73,10 @@ pr-gate 会根据 PR 变更文件范围决定 Maven 构建粒度：
 > `test` 阶段无法正确从 reactor 解析跨模块依赖，会回退到 `~/.m2` 的旧版 JAR，
 > 导致编译失败或测试运行时出现 `NoClassDefFoundError`。
 >
-> `run-tests.sh`（`--unit` / `--it` / `--default`）通过在 `clean test` 前执行
-> `install -DskipTests -pl batch-common,batch-orchestrator,batch-worker-core`
-> 将最新 JAR 写入 `~/.m2` 来规避此问题。
-> `--e2e` 和 `--all` 模式已包含全量 `clean install`，不受影响。
+> `run-tests.sh` 所有模式在执行测试前均会先运行 `clean install -DskipTests`（通过
+> `maybe_build()` 函数），将最新 JAR 写入 `~/.m2` 来规避此问题。
+> 使用 `--skip-build` 标志可跳过此步骤（仅用于 `make test-parallel` 并行场景，
+> 此时由 `--build-only` 统一完成一次构建）。
 >
 > 若切换至标准 `mvn`，可移除该预装步骤。
 
@@ -96,6 +96,9 @@ make test               # 单元 + 集成（默认）
 make test-unit          # 仅单元，秒级无容器
 make test-it            # 仅集成，需 Docker
 make test-e2e           # E2E 套件
+make test-all           # 单元 + 集成 + E2E（串行）
+make test-build         # 仅构建，不跑测试
+make test-parallel      # 三类测试并行执行（构建一次，unit/it/e2e 并发）
 ```
 
 ### CI 回归

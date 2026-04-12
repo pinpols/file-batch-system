@@ -13,6 +13,7 @@ import com.example.batch.console.mapper.FilePipelineMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.TenantMapper;
 import com.example.batch.console.mapper.WorkflowRunMapper;
+import com.example.batch.console.application.ConsoleTriggerProxyService;
 import com.example.batch.console.support.ConsolePasswordHasher;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,7 @@ class ConsoleTenantApplicationServiceTest {
   @Mock private JobInstanceMapper jobInstanceMapper;
   @Mock private FilePipelineMapper filePipelineMapper;
   @Mock private WorkflowRunMapper workflowRunMapper;
+  @Mock private ConsoleTriggerProxyService triggerProxyService;
 
   private ConsoleTenantApplicationService service;
 
@@ -54,7 +56,8 @@ class ConsoleTenantApplicationServiceTest {
             passwordHasher,
             jobInstanceMapper,
             filePipelineMapper,
-            workflowRunMapper);
+            workflowRunMapper,
+            triggerProxyService);
   }
 
   @Test
@@ -110,6 +113,7 @@ class ConsoleTenantApplicationServiceTest {
     service.suspendTenant("tenant-a");
 
     verify(tenantMapper).updateStatus("tenant-a", "SUSPENDED");
+    verify(triggerProxyService).pauseByTenant("tenant-a");
   }
 
   @Test

@@ -1,5 +1,5 @@
 .PHONY: dev-build dev-start dev-stop dev-restart dev-restart-one
-.PHONY: test test-unit test-it test-e2e test-all
+.PHONY: test test-unit test-it test-e2e test-all test-build test-parallel
 .PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
 .PHONY: ops-inspect ops-heal-stuck ops-heal-dead ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate
@@ -58,6 +58,17 @@ test-e2e:
 # 全量测试（单元 + 集成 + E2E）
 test-all:
 	bash scripts/local/run-tests.sh --all
+
+# 仅构建（不跑测试），为 test-parallel 提供前置步骤
+test-build:
+	bash scripts/local/run-tests.sh --build-only
+
+# 并行跑三类测试（先构建一次，再并发执行）
+test-parallel: test-build
+	bash scripts/local/run-tests.sh --unit --skip-build & \
+	bash scripts/local/run-tests.sh --it   --skip-build & \
+	bash scripts/local/run-tests.sh --e2e  --skip-build & \
+	wait
 
 ## ── 测试数据 ──────────────────────────────────────────────────────────────────
 

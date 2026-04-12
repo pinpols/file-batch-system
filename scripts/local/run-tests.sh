@@ -3,12 +3,23 @@
 # run-tests.sh — 本地一键测试入口
 #
 # 用法：
-#   bash scripts/local/run-tests.sh            # 默认：单元 + 集成（跳过 E2E）
-#   bash scripts/local/run-tests.sh --unit     # 仅单元测试（秒级，无容器）
-#   bash scripts/local/run-tests.sh --it       # 仅集成测试（需 Docker）
-#   bash scripts/local/run-tests.sh --e2e      # 仅 E2E 测试（需 Docker）
-#   bash scripts/local/run-tests.sh --all      # 单元 + 集成 + E2E
+#   bash scripts/local/run-tests.sh               # 默认：单元 + 集成（跳过 E2E）
+#   bash scripts/local/run-tests.sh --unit        # 仅单元测试（秒级，无容器）
+#   bash scripts/local/run-tests.sh --it          # 仅集成测试（需 Docker）
+#   bash scripts/local/run-tests.sh --e2e         # 仅 E2E 测试（需 Docker）
+#   bash scripts/local/run-tests.sh --all         # 单元 + 集成 + E2E（串行）
+#   bash scripts/local/run-tests.sh --build-only  # 仅构建（clean install -DskipTests），不跑任何测试
+#   bash scripts/local/run-tests.sh --unit --skip-build  # 跳过构建，直接跑测试（并行场景专用）
 #   bash scripts/local/run-tests.sh -- -pl batch-orchestrator -am  # 透传 Maven 参数
+#
+# 并行执行三类测试（推荐用 make test-parallel）：
+#   bash scripts/local/run-tests.sh --build-only           # 第一步：构建一次
+#   bash scripts/local/run-tests.sh --unit --skip-build &  # 第二步：并发执行
+#   bash scripts/local/run-tests.sh --it   --skip-build &
+#   bash scripts/local/run-tests.sh --e2e  --skip-build &
+#   wait
+#
+# --skip-build 会同时跳过 cleanup_test_reports，避免并发时互删报告目录。
 #
 # 环境变量（可覆盖）：
 #   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE  Docker socket 路径（macOS 默认已设置）
@@ -17,6 +28,8 @@
 # =============================================================
 
 set -uo pipefail
+
+SKIP_BUILD=false
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
@@ -67,14 +80,18 @@ declare -a CORE_TEST_MODULES=(
 usage() {
   cat <<'EOF'
 用法：
-  bash scripts/local/run-tests.sh [mode] [-- <extra maven args>]
+  bash scripts/local/run-tests.sh [mode] [--skip-build] [-- <extra maven args>]
 
 模式：
-  --default   单元测试 + 集成测试（跳过 E2E）
-  --unit      仅单元测试
-  --it        仅集成测试
-  --e2e       仅 E2E 测试
-  --all       单元 + 集成 + E2E
+  --default     单元测试 + 集成测试（跳过 E2E）
+  --unit        仅单元测试
+  --it          仅集成测试
+  --e2e         仅 E2E 测试
+  --all         单元 + 集成 + E2E（串行）
+  --build-only  仅构建核心模块，不跑任何测试
+
+选项：
+  --skip-build  跳过 clean install 和 cleanup_test_reports（并行场景专用）
 
 示例：
   bash scripts/local/run-tests.sh
@@ -82,17 +99,28 @@ usage() {
   bash scripts/local/run-tests.sh --it
   bash scripts/local/run-tests.sh --e2e
   bash scripts/local/run-tests.sh --all
+  bash scripts/local/run-tests.sh --build-only
+  bash scripts/local/run-tests.sh --unit --skip-build
   bash scripts/local/run-tests.sh -- -pl batch-orchestrator -am
+
+并行执行（推荐 make test-parallel）：
+  bash scripts/local/run-tests.sh --build-only
+  bash scripts/local/run-tests.sh --unit --skip-build &
+  bash scripts/local/run-tests.sh --it   --skip-build &
+  bash scripts/local/run-tests.sh --e2e  --skip-build &
+  wait
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --default) MODE="default"; shift ;;
-    --unit)    MODE="unit"; shift ;;
-    --it)      MODE="it"; shift ;;
-    --e2e)     MODE="e2e"; shift ;;
-    --all)     MODE="all"; shift ;;
+    --default)     MODE="default"; shift ;;
+    --unit)        MODE="unit"; shift ;;
+    --it)          MODE="it"; shift ;;
+    --e2e)         MODE="e2e"; shift ;;
+    --all)         MODE="all"; shift ;;
+    --build-only)  MODE="build-only"; shift ;;
+    --skip-build)  SKIP_BUILD=true; shift ;;
     --help|-h) usage; exit 0 ;;
     --)        shift; EXTRA_MVN_ARGS=("$@"); break ;;
     *)
@@ -229,10 +257,17 @@ cleanup_test_reports() {
   find "$ROOT_DIR" -type d \( -path "*/target/surefire-reports" -o -path "*/target/failsafe-reports" \) -prune -exec rm -rf {} + 2>/dev/null || true
 }
 
+# extract_test_results <log> <passed> <failed> [scan_dir...]
+# scan_dir 默认为 ROOT_DIR；并行执行时传入各 mode 对应的模块目录，避免扫到其他模式的报告
 extract_test_results() {
   local log_file=$1
   local passed_file=$2
   local failed_file=$3
+  shift 3
+  local -a scan_dirs=("$@")
+  if (( ${#scan_dirs[@]} == 0 )); then
+    scan_dirs=("$ROOT_DIR")
+  fi
 
   printf '' > "$passed_file"
   printf '' > "$failed_file"
@@ -263,7 +298,7 @@ extract_test_results() {
     else
       echo "❌ $class_name" >> "$failed_file"
     fi
-  done < <(find "$ROOT_DIR" \( -path "*/target/surefire-reports/TEST-*.xml" -o -path "*/target/failsafe-reports/TEST-*.xml" \) | sort)
+  done < <(find "${scan_dirs[@]}" \( -path "*/target/surefire-reports/TEST-*.xml" -o -path "*/target/failsafe-reports/TEST-*.xml" \) | sort)
 
   if [ "$found_any" -eq 0 ]; then
     echo "未找到测试报告文件" >> "$failed_file"
@@ -274,16 +309,30 @@ extract_test_results() {
   grep -E -A 10 "\[ERROR\]|\[FAILURE\]" "$log_file" 2>/dev/null >> "$failed_file" || true
 }
 
+# 将核心模块目录写入给定数组名（bash 3 兼容，避免 mapfile）
+# 用法：build_core_dirs _core_dirs
+build_core_dirs() {
+  local _arr_name=$1
+  local _m
+  eval "${_arr_name}=()"
+  for _m in "${CORE_TEST_MODULES[@]}"; do
+    eval "${_arr_name}+=(\"\$ROOT_DIR/\$_m\")"
+  done
+}
+
 case "$MODE" in
-  unit)    truncate_logs "$LOG_UNIT"         "$LOG_UNIT_PASSED"         "$LOG_UNIT_FAILED" ;;
-  it)      truncate_logs "$LOG_IT"           "$LOG_IT_PASSED"           "$LOG_IT_FAILED" ;;
-  e2e)     truncate_logs "$LOG_E2E"          "$LOG_E2E_PASSED"          "$LOG_E2E_FAILED" ;;
-  default) truncate_logs "$LOG_DEFAULT"      "$LOG_DEFAULT_PASSED"      "$LOG_DEFAULT_FAILED" ;;
-  all)     truncate_logs "$LOG_ALL_UNIT_IT"  "$LOG_ALL_UNIT_IT_PASSED"  "$LOG_ALL_UNIT_IT_FAILED" \
-                         "$LOG_ALL_E2E"      "$LOG_ALL_E2E_PASSED"      "$LOG_ALL_E2E_FAILED" ;;
+  unit)       truncate_logs "$LOG_UNIT"         "$LOG_UNIT_PASSED"         "$LOG_UNIT_FAILED" ;;
+  it)         truncate_logs "$LOG_IT"           "$LOG_IT_PASSED"           "$LOG_IT_FAILED" ;;
+  e2e)        truncate_logs "$LOG_E2E"          "$LOG_E2E_PASSED"          "$LOG_E2E_FAILED" ;;
+  default)    truncate_logs "$LOG_DEFAULT"      "$LOG_DEFAULT_PASSED"      "$LOG_DEFAULT_FAILED" ;;
+  build-only) ;;
+  all)        truncate_logs "$LOG_ALL_UNIT_IT"  "$LOG_ALL_UNIT_IT_PASSED"  "$LOG_ALL_UNIT_IT_FAILED" \
+                            "$LOG_ALL_E2E"      "$LOG_ALL_E2E_PASSED"      "$LOG_ALL_E2E_FAILED" ;;
 esac
 
-cleanup_test_reports
+if ! $SKIP_BUILD; then
+  cleanup_test_reports
+fi
 
 # -------------------------------------------------------------
 # mvnd / 多模块测试说明
@@ -301,13 +350,31 @@ cleanup_test_reports
 # 真实的模块自身，而不是 Maven / mvnd 的聚合执行副作用。
 # -------------------------------------------------------------
 
+build_core_modules() {
+  run_mvn clean install \
+    -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
+    -DskipTests
+}
+
+# 仅在未设置 --skip-build 时执行构建；已构建时直接返回 0
+maybe_build() {
+  if $SKIP_BUILD; then
+    return 0
+  fi
+  build_core_modules
+}
+
 case "$MODE" in
+  build-only)
+    banner "构建所有核心模块（跳过测试）"
+    build_core_modules
+    exit $?
+    ;;
+
   unit)
     banner "单元测试"
     {
-      run_mvn clean install \
-        -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
-        -DskipTests && \
+      maybe_build && \
       run_module_tests '!*IntegrationTest,!*IT,!PartitionLeaseReclaimSchedulerTest' \
         "${CORE_TEST_MODULES[@]}"
     } 2>&1 | tee "$LOG_UNIT"
@@ -316,15 +383,14 @@ case "$MODE" in
     else
       record_test_result "UNIT_TESTS" "FAILED"
     fi
-    extract_test_results "$LOG_UNIT" "$LOG_UNIT_PASSED" "$LOG_UNIT_FAILED"
+    build_core_dirs _core_dirs
+    extract_test_results "$LOG_UNIT" "$LOG_UNIT_PASSED" "$LOG_UNIT_FAILED" "${_core_dirs[@]}"
     ;;
 
   it)
     banner "集成测试（*IntegrationTest / *IT）"
     {
-      run_mvn clean install \
-        -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
-        -DskipTests && \
+      maybe_build && \
       run_module_tests '*IntegrationTest,*IT' \
         "${CORE_TEST_MODULES[@]}"
     } 2>&1 | tee "$LOG_IT"
@@ -333,15 +399,14 @@ case "$MODE" in
     else
       record_test_result "INTEGRATION_TESTS" "FAILED"
     fi
-    extract_test_results "$LOG_IT" "$LOG_IT_PASSED" "$LOG_IT_FAILED"
+    build_core_dirs _core_dirs
+    extract_test_results "$LOG_IT" "$LOG_IT_PASSED" "$LOG_IT_FAILED" "${_core_dirs[@]}"
     ;;
 
   e2e)
     banner "E2E 测试（*E2eIT）"
     {
-      run_mvn clean install \
-        -pl batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-        -DskipTests && \
+      maybe_build && \
       run_mvn test -pl batch-e2e-tests \
         -Dsurefire.failIfNoSpecifiedTests=false
     } 2>&1 | tee "$LOG_E2E"
@@ -350,15 +415,13 @@ case "$MODE" in
     else
       record_test_result "E2E_TESTS" "FAILED"
     fi
-    extract_test_results "$LOG_E2E" "$LOG_E2E_PASSED" "$LOG_E2E_FAILED"
+    extract_test_results "$LOG_E2E" "$LOG_E2E_PASSED" "$LOG_E2E_FAILED" "$ROOT_DIR/batch-e2e-tests"
     ;;
 
   default)
     banner "单元 + 集成测试（跳过 E2E）"
     {
-      run_mvn clean install \
-        -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
-        -DskipTests && \
+      maybe_build && \
       run_module_tests "" "${CORE_TEST_MODULES[@]}"
     } 2>&1 | tee "$LOG_DEFAULT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
@@ -366,16 +429,15 @@ case "$MODE" in
     else
       record_test_result "DEFAULT_TESTS" "FAILED"
     fi
-    extract_test_results "$LOG_DEFAULT" "$LOG_DEFAULT_PASSED" "$LOG_DEFAULT_FAILED"
+    build_core_dirs _core_dirs
+    extract_test_results "$LOG_DEFAULT" "$LOG_DEFAULT_PASSED" "$LOG_DEFAULT_FAILED" "${_core_dirs[@]}"
     ;;
 
   all)
     banner "全量测试：单元 + 集成 + E2E"
 
     {
-      run_mvn clean install \
-        -pl "$(IFS=,; echo "${CORE_TEST_MODULES[*]}")" \
-        -DskipTests && \
+      maybe_build && \
       run_module_tests "" "${CORE_TEST_MODULES[@]}"
     } 2>&1 | tee "$LOG_ALL_UNIT_IT"
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
@@ -383,7 +445,8 @@ case "$MODE" in
     else
       record_test_result "UNIT_INTEGRATION_TESTS" "FAILED"
     fi
-    extract_test_results "$LOG_ALL_UNIT_IT" "$LOG_ALL_UNIT_IT_PASSED" "$LOG_ALL_UNIT_IT_FAILED"
+    build_core_dirs _core_dirs
+    extract_test_results "$LOG_ALL_UNIT_IT" "$LOG_ALL_UNIT_IT_PASSED" "$LOG_ALL_UNIT_IT_FAILED" "${_core_dirs[@]}"
 
     banner "E2E 测试（*E2eIT）"
     {
@@ -395,7 +458,7 @@ case "$MODE" in
     else
       record_test_result "E2E_TESTS" "FAILED"
     fi
-    extract_test_results "$LOG_ALL_E2E" "$LOG_ALL_E2E_PASSED" "$LOG_ALL_E2E_FAILED"
+    extract_test_results "$LOG_ALL_E2E" "$LOG_ALL_E2E_PASSED" "$LOG_ALL_E2E_FAILED" "$ROOT_DIR/batch-e2e-tests"
     ;;
 esac
 
