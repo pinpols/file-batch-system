@@ -12,6 +12,7 @@ import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -115,6 +116,10 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             });
   }
 
+  // #5-2: 敏感字段关键词，delivery log 中的 payload 需对这些字段脱敏
+  private static final List<String> SENSITIVE_KEYS =
+      List.of("password", "secret", "token", "credential", "apiKey", "api_key", "accessKey");
+
   private void recordDelivery(
       OutboxEventEntity event,
       String targetTopic,
@@ -133,10 +138,43 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put("aggregateType", event.getAggregateType());
     summary.put("aggregateId", event.getAggregateId());
-    summary.put("payloadPreview", event.getPayloadJson());
+    summary.put("payloadPreview", sanitizePayload(event.getPayloadJson()));
     log.setDeliverySummary(JsonUtils.toJson(summary));
     log.setErrorMessage(errorMessage);
     log.setTraceId(event.getTraceId());
     eventDeliveryLogMapper.insert(log);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String sanitizePayload(String payloadJson) {
+    if (payloadJson == null || payloadJson.isBlank()) {
+      return payloadJson;
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(payloadJson, Object.class);
+      if (parsed instanceof Map<?, ?> map) {
+        Map<String, Object> sanitized = new LinkedHashMap<>((Map<String, Object>) map);
+        sanitized
+            .entrySet()
+            .forEach(
+                entry -> {
+                  if (isSensitiveKey(entry.getKey())) {
+                    entry.setValue("***");
+                  }
+                });
+        return JsonUtils.toJson(sanitized);
+      }
+    } catch (RuntimeException ignored) {
+      // payload 不是合法 JSON，原样返回
+    }
+    return payloadJson;
+  }
+
+  private static boolean isSensitiveKey(String key) {
+    if (key == null) {
+      return false;
+    }
+    String lower = key.toLowerCase();
+    return SENSITIVE_KEYS.stream().anyMatch(s -> lower.contains(s.toLowerCase()));
   }
 }

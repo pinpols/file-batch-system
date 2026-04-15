@@ -482,7 +482,8 @@ public class DefaultConsoleTenantConfigInitApplicationService
     params.put(
         "worker_group",
         spec.getWorkerGroup() != null ? spec.getWorkerGroup() : existing.get("worker_group"));
-    params.put(KEY_ENABLED, spec.getEnabled() != null ? spec.getEnabled() : existing.get(KEY_ENABLED));
+    params.put(
+        KEY_ENABLED, spec.getEnabled() != null ? spec.getEnabled() : existing.get(KEY_ENABLED));
     params.put(
         "description",
         spec.getDescription() != null ? spec.getDescription() : existing.get("description"));

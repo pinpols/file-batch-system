@@ -38,6 +38,14 @@ public class OutboxProperties {
    *
    * <p>部署时每个 Orchestrator 副本须设置不同的 BATCH_OUTBOX_SHARD_INDEX（0 到 shardTotal-1）。
    */
+  /**
+   * PUBLISHING 状态最大驻留时长（秒）。
+   *
+   * <p>若 outbox_event 在 PUBLISHING 状态超过此阈值，说明上一轮 markPublishing 后 Kafka 投递失败
+   * 且未能正常回退状态。轮询器会在每轮开始前将这些滞留事件重置为 FAILED，避免永久卡死。
+   */
+  private long publishingTimeoutSeconds = 120L;
+
   private int shardTotal = 1;
 
   private int shardIndex = 0;

@@ -175,7 +175,9 @@ public class DefaultConsoleFileTemplateExcelApplicationService
                   "BINARY")),
           Map.entry("charset", optionalColumn("文本类文件的源字符集。", GUIDE_STR, "UTF-8")),
           Map.entry("target_charset", optionalColumn("导出转换时的目标字符集。", GUIDE_STR, "GBK")),
-          Map.entry(COL_WITH_BOM, optionalColumn("文本文件是否写入 BOM。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(
+              COL_WITH_BOM,
+              optionalColumn("文本文件是否写入 BOM。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry("line_separator", optionalColumn("文本输出使用的换行符。", GUIDE_STR, "\\n")),
           Map.entry("delimiter", optionalColumn("分隔文本使用的列分隔符。", GUIDE_STR, ",")),
           Map.entry("quote_char", optionalColumn("分隔文本使用的引号字符。", GUIDE_STR, "\"")),
@@ -193,10 +195,12 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               COL_CHECKSUM_TYPE,
               requiredColumn("文件使用的校验算法。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA-256")),
           Map.entry(
-              COL_COMPRESS_TYPE, requiredColumn("文件使用的压缩算法。", GUIDE_ENUM, "ZIP", GUIDE_NONE, "ZIP", "GZIP")),
+              COL_COMPRESS_TYPE,
+              requiredColumn("文件使用的压缩算法。", GUIDE_ENUM, "ZIP", GUIDE_NONE, "ZIP", "GZIP")),
           Map.entry(
               COL_ENCRYPT_TYPE,
-              requiredColumn("文件使用的加密算法。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AES", "PGP", "CUSTOM")),
+              requiredColumn(
+                  "文件使用的加密算法。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AES", "PGP", "CUSTOM")),
           Map.entry("naming_rule", optionalColumn("文件命名规则或命名模板。", "表达式", "${bizDate}_${seq}.csv")),
           Map.entry(
               "field_mappings",
@@ -244,9 +248,13 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               COL_DOWNLOAD_REQUIRES_APPROVAL,
               optionalColumn("下载前是否需要人工审批。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(
-              "masking_rule_set", optionalColumn("脱敏规则集标识或表达式。", GUIDE_STR, "MASK_RULE_SETTLEMENT")),
-          Map.entry(COL_ENABLED, optionalColumn("文件模板是否启用。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-          Map.entry("version", optionalColumn("模板版本号，template_code + version 必须唯一。", GUIDE_INT, "1")),
+              "masking_rule_set",
+              optionalColumn("脱敏规则集标识或表达式。", GUIDE_STR, "MASK_RULE_SETTLEMENT")),
+          Map.entry(
+              COL_ENABLED,
+              optionalColumn("文件模板是否启用。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(
+              "version", optionalColumn("模板版本号，template_code + version 必须唯一。", GUIDE_INT, "1")),
           Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "清算导出模板")));
 
   private final ConsoleTenantGuard tenantGuard;
@@ -791,9 +799,12 @@ public class DefaultConsoleFileTemplateExcelApplicationService
                     "reason", ConsoleTextSanitizer.safeInput(reason, 512),
                     "detail",
                         mapOf(
-                            "templateName", row.templateName(),
-                            COL_ENABLED, row.enabled(),
-                            "fileFormatType", row.fileFormatType())))));
+                            "templateName",
+                            row.templateName(),
+                            COL_ENABLED,
+                            row.enabled(),
+                            "fileFormatType",
+                            row.fileFormatType())))));
   }
 
   private Map<String, Object> mapOf(Object... pairs) {

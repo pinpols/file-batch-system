@@ -102,6 +102,13 @@ class ConsoleArchivePolicyControllerTest {
     verify(archivePolicyService)
         .upsert(
             new ArchivePolicyUpsertParam(
-                "t1", "job_instance", 90, true, false, 1000, "Archive job instances", "operator-1"));
+                "t1",
+                "job_instance",
+                90,
+                true,
+                false,
+                1000,
+                "Archive job instances",
+                "operator-1"));
   }
 }

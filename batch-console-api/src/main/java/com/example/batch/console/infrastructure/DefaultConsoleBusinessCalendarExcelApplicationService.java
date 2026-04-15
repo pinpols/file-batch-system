@@ -118,8 +118,10 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> CALENDAR_COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry(COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry(COL_CALENDAR_CODE, requiredColumn("日历唯一编码，作为导入匹配键。", GUIDE_STR, "CAL_CN_STOCK")),
+          Map.entry(
+              COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry(
+              COL_CALENDAR_CODE, requiredColumn("日历唯一编码，作为导入匹配键。", GUIDE_STR, "CAL_CN_STOCK")),
           Map.entry(COL_CALENDAR_NAME, requiredColumn("控制台展示的日历名称。", GUIDE_STR, "中国A股交易日历")),
           Map.entry("timezone", requiredColumn("日历时区。", "时区ID", "Asia/Shanghai")),
           Map.entry(
@@ -129,7 +131,8 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
               COL_CATCH_UP_POLICY,
               requiredColumn("补跑策略。", "枚举", "NONE", "NONE", "AUTO", "MANUAL_APPROVAL")),
           Map.entry(COL_CATCH_UP_MAX_DAYS, requiredColumn("补跑最大天数，必须大于等于 0。", "整数", "0")),
-          Map.entry(COL_ENABLED, optionalColumn("日历是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
+          Map.entry(
+              COL_ENABLED, optionalColumn("日历是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> HOLIDAY_COLUMN_GUIDES =
       Map.ofEntries(
@@ -141,7 +144,8 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
                   "CAL_CN_STOCK")),
           Map.entry(COL_BIZ_DATE, requiredColumn("日期，格式 yyyy-MM-dd。", "日期", "2026-01-01")),
           Map.entry(
-              COL_DAY_TYPE, requiredColumn("日期类型。", "枚举", "HOLIDAY", "HOLIDAY", "WORKDAY_OVERRIDE")),
+              COL_DAY_TYPE,
+              requiredColumn("日期类型。", "枚举", "HOLIDAY", "HOLIDAY", "WORKDAY_OVERRIDE")),
           Map.entry(COL_HOLIDAY_NAME, optionalColumn("假日名称。", GUIDE_STR, "元旦")),
           Map.entry(COL_DESCRIPTION, optionalColumn("备注说明。", GUIDE_STR, "元旦法定假日")));
 
@@ -261,7 +265,9 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     String operatorId = metadata.operatorId();
     String traceId = metadata.traceId();
 
-    int[] calendarCounts = applyCalendarRows(result.calendarRows(), session.tenantId(), request.getReason(), operatorId, traceId);
+    int[] calendarCounts =
+        applyCalendarRows(
+            result.calendarRows(), session.tenantId(), request.getReason(), operatorId, traceId);
     int appliedHolidayRows = applyHolidayRows(result.holidayRows(), session.tenantId());
 
     importStore.remove(uploadToken);

@@ -308,3 +308,34 @@ VALUES
    true, 'risk-key-ref', true, true,
    true, 1, 'test')
 ON CONFLICT DO NOTHING;
+
+-- ── workflow definitions (与上方 WORKFLOW 类型的 job_definition 对应) ────────────
+
+INSERT INTO batch.workflow_definition
+  (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at)
+VALUES
+  ('ta', 'TA_WF_SETTLEMENT',    'TA Settlement Workflow',    'DAG',      1, true, 'TA retail settlement workflow',        'test', 'test', now(), now()),
+  ('tb', 'TB_WF_RECONCILE',     'TB Reconcile Workflow',     'DAG',      1, true, 'TB finance reconciliation workflow',   'test', 'test', now(), now()),
+  ('tc', 'TC_WF_RISK_PIPELINE', 'TC Risk Pipeline Workflow', 'PIPELINE', 1, true, 'TC risk management pipeline workflow', 'test', 'test', now(), now())
+ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
+
+INSERT INTO batch.workflow_node
+  (workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
+SELECT d.id, 'START', 'Start', 'START', 0, 'NONE', 0, 0, true, now(), now()
+  FROM batch.workflow_definition d
+ WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
+ON CONFLICT (workflow_definition_id, node_code) DO NOTHING;
+
+INSERT INTO batch.workflow_node
+  (workflow_definition_id, node_code, node_name, node_type, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, created_at, updated_at)
+SELECT d.id, 'END', 'End', 'END', 1, 'NONE', 0, 0, true, now(), now()
+  FROM batch.workflow_definition d
+ WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
+ON CONFLICT (workflow_definition_id, node_code) DO NOTHING;
+
+INSERT INTO batch.workflow_edge
+  (workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+SELECT d.id, 'START', 'END', 'SUCCESS', true, now(), now()
+  FROM batch.workflow_definition d
+ WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
+ON CONFLICT (workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING;

@@ -79,7 +79,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
   private static final String COL_ENABLED = "enabled";
   private static final String GUIDE_STR = "字符串";
 
-
   private static final String SHEET_NAME = "resource_queue";
   private static final List<String> COLUMNS =
       List.of(

@@ -135,7 +135,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     try {
       JSch jsch = new JSch();
       // H-6: 默认启用主机密钥检查；允许通过 channel 配置显式关闭
-      String strictHostKeyChecking = stringProp(ctx.channelConfig(), "sftp_strict_host_key_checking");
+      String strictHostKeyChecking =
+          stringProp(ctx.channelConfig(), "sftp_strict_host_key_checking");
       boolean strictMode = !"no".equalsIgnoreCase(strictHostKeyChecking);
       if (!strictMode) {
         log.warn(
@@ -147,7 +148,9 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
           jsch.setKnownHosts(knownHostsPath);
         }
       }
-      session = jsch.getSession(ctx.connConfig().user(), ctx.connConfig().host(), ctx.connConfig().port());
+      session =
+          jsch.getSession(
+              ctx.connConfig().user(), ctx.connConfig().host(), ctx.connConfig().port());
       // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
       session.setPassword(ctx.connConfig().password());
       session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");

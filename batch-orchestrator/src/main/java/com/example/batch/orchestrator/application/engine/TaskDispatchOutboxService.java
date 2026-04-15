@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.application.engine;
 import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.RunMode;
+import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -146,20 +147,22 @@ public class TaskDispatchOutboxService {
     return instanceNo + ":task:" + task.getId();
   }
 
+  // #4-1: idempotencyKey 包含 task version 维度，避免重试场景下 Worker 幂等去重静默跳过重试消息
   private static String resolveIdempotencyKeyWithoutPartition(JobTaskEntity task, String eventKey) {
     if (eventKey != null && !eventKey.isBlank()) {
       return eventKey;
     }
-    return task.getTenantId() + ":task:" + task.getId();
+    long version = task.getVersion() == null ? 0L : task.getVersion();
+    return task.getTenantId() + ":task:" + task.getId() + ":v:" + version;
   }
 
   private String resolvePriorityBand(Integer priority) {
     if (priority == null || priority <= 3) {
-      return com.example.batch.common.enums.SchedulingPriorityBand.HIGH.code();
+      return SchedulingPriorityBand.HIGH.code();
     }
     if (priority <= 6) {
-      return com.example.batch.common.enums.SchedulingPriorityBand.MEDIUM.code();
+      return SchedulingPriorityBand.MEDIUM.code();
     }
-    return com.example.batch.common.enums.SchedulingPriorityBand.LOW.code();
+    return SchedulingPriorityBand.LOW.code();
   }
 }

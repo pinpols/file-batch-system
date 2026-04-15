@@ -35,7 +35,6 @@ public class DefaultConsoleConfigSyncApplicationService
   private static final String KEY_SUMMARY = "summary";
   private static final String KEY_TENANT_ID = "tenantId";
 
-
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleTenantConfigCopyService tenantConfigCopyService;
   private final ConsoleTenantConfigInitApplicationService initApplicationService;
@@ -49,11 +48,16 @@ public class DefaultConsoleConfigSyncApplicationService
     ConfigSyncBundlePayload bundle =
         tenantConfigCopyService.buildBundle(tenantId, request.getConfigTypes());
     return mapOf(
-        "sourceTenantId", tenantId,
-        "sourceEnv", request.getSourceEnv(),
-        "targetEnv", request.getTargetEnv(),
-        KEY_SUMMARY, summarize(bundle),
-        "bundle", bundle);
+        "sourceTenantId",
+        tenantId,
+        "sourceEnv",
+        request.getSourceEnv(),
+        "targetEnv",
+        request.getTargetEnv(),
+        KEY_SUMMARY,
+        summarize(bundle),
+        "bundle",
+        bundle);
   }
 
   @Override
@@ -63,11 +67,16 @@ public class DefaultConsoleConfigSyncApplicationService
     ConfigSyncBundlePayload bundle =
         tenantConfigCopyService.buildBundle(sourceTenantId, request.getConfigTypes());
     return mapOf(
-        KEY_TENANT_ID, tenantId,
-        "sourceTenantId", sourceTenantId,
-        "sourceEnv", request.getSourceEnv(),
-        "targetEnv", request.getTargetEnv(),
-        KEY_SUMMARY, summarize(bundle));
+        KEY_TENANT_ID,
+        tenantId,
+        "sourceTenantId",
+        sourceTenantId,
+        "sourceEnv",
+        request.getSourceEnv(),
+        "targetEnv",
+        request.getTargetEnv(),
+        KEY_SUMMARY,
+        summarize(bundle));
   }
 
   @Override
@@ -88,9 +97,7 @@ public class DefaultConsoleConfigSyncApplicationService
           initApplicationService.batchInit(initRequest, operator, UUID.randomUUID().toString());
       updateLog(logId, tenantId, response);
       return mapOf(
-          "syncLogId", logId,
-          KEY_SUMMARY, summarize(request.getBundle()),
-          "result", response);
+          "syncLogId", logId, KEY_SUMMARY, summarize(request.getBundle()), "result", response);
     } catch (RuntimeException ex) {
       markLogFailed(tenantId, logId, totalCount(request.getBundle()), ex.getMessage());
       throw ex;
@@ -167,13 +174,20 @@ public class DefaultConsoleConfigSyncApplicationService
     int failed = response.failureTenants();
     configSyncLogMapper.updateResult(
         mapOf(
-            KEY_TENANT_ID, tenantId,
-            "id", logId,
-            "syncStatus", failed > 0 ? "PARTIAL_FAILED" : "SUCCESS",
-            "successItems", success,
-            "failedItems", failed,
-            "skippedItems", Math.max(total - success - failed, 0),
-            "detailJson", JsonUtils.toJson(response)));
+            KEY_TENANT_ID,
+            tenantId,
+            "id",
+            logId,
+            "syncStatus",
+            failed > 0 ? "PARTIAL_FAILED" : "SUCCESS",
+            "successItems",
+            success,
+            "failedItems",
+            failed,
+            "skippedItems",
+            Math.max(total - success - failed, 0),
+            "detailJson",
+            JsonUtils.toJson(response)));
   }
 
   private TenantConfigBatchInitRequest toInitRequest(ConfigSyncImportRequest request) {

@@ -114,8 +114,11 @@ public class DefaultConsoleBatchWindowExcelApplicationService
                   "窗口结束策略。", "枚举", "FINISH_RUNNING", "STOP", "FINISH_RUNNING", "CONTINUE")),
           Map.entry(
               COL_OUT_OF_WINDOW_ACTION, requiredColumn("窗口外操作策略。", "枚举", "WAIT", "WAIT", "FAIL")),
-          Map.entry(COL_ALLOW_CROSS_DAY, optionalColumn("是否允许跨天。", "布尔值", GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
-          Map.entry(COL_ENABLED, optionalColumn("窗口是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(
+              COL_ALLOW_CROSS_DAY,
+              optionalColumn("是否允许跨天。", "布尔值", GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(
+              COL_ENABLED, optionalColumn("窗口是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(COL_DESCRIPTION, optionalColumn("窗口描述信息。", GUIDE_STR, "用于清算批处理的执行窗口")));
 
   private final ConsoleTenantGuard tenantGuard;
@@ -315,7 +318,8 @@ public class DefaultConsoleBatchWindowExcelApplicationService
                 .endTime(requireTime(values, "end_time", issues))
                 .endStrategy(requireEnum(values, COL_END_STRATEGY, END_STRATEGIES, 32, issues))
                 .outOfWindowAction(
-                    requireEnum(values, COL_OUT_OF_WINDOW_ACTION, OUT_OF_WINDOW_ACTIONS, 32, issues))
+                    requireEnum(
+                        values, COL_OUT_OF_WINDOW_ACTION, OUT_OF_WINDOW_ACTIONS, 32, issues))
                 .build())
         .settings(
             WindowSettings.builder()
@@ -558,12 +562,18 @@ public class DefaultConsoleBatchWindowExcelApplicationService
                     "reason", ConsoleTextSanitizer.safeInput(reason, 512),
                     "detail",
                         mapOf(
-                            "windowName", row.windowName(),
-                            COL_TIMEZONE, row.timezone(),
-                            "startTime", row.startTime(),
-                            "endTime", row.endTime(),
-                            "endStrategy", row.endStrategy(),
-                            "outOfWindowAction", row.outOfWindowAction())))));
+                            "windowName",
+                            row.windowName(),
+                            COL_TIMEZONE,
+                            row.timezone(),
+                            "startTime",
+                            row.startTime(),
+                            "endTime",
+                            row.endTime(),
+                            "endStrategy",
+                            row.endStrategy(),
+                            "outOfWindowAction",
+                            row.outOfWindowAction())))));
   }
 
   private Map<String, Object> mapOf(Object... pairs) {

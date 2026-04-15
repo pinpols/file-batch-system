@@ -15,6 +15,7 @@ import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,7 +64,8 @@ class DefaultTaskOutcomeServiceTest {
             retryGovernanceService,
             stateMachine,
             workflowDagService,
-            workflowNodeDispatchServiceProvider);
+            workflowNodeDispatchServiceProvider,
+            new SimpleMeterRegistry());
   }
 
   @Test

@@ -110,11 +110,16 @@ public class ParseStep implements ImportStageStep {
           runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
           "PARSED",
           Map.of(
-              KEY_PARSED_COUNT, numberValue(context.getAttributes().get(KEY_PARSED_COUNT)),
-              "totalCount", totalCount,
-              "skippedCount", numberValue(context.getAttributes().get("skippedCount")),
-              "badRecordCount", badRecordCount(context),
-              "parsedRecordsPath", stagingFile.toString()));
+              KEY_PARSED_COUNT,
+              numberValue(context.getAttributes().get(KEY_PARSED_COUNT)),
+              "totalCount",
+              totalCount,
+              "skippedCount",
+              numberValue(context.getAttributes().get("skippedCount")),
+              "badRecordCount",
+              badRecordCount(context),
+              "parsedRecordsPath",
+              stagingFile.toString()));
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
       deleteQuietly(stagingFile);
@@ -665,7 +670,8 @@ public class ParseStep implements ImportStageStep {
       throws Exception {
     // 遍历根对象的字段，查找 KEY_RECORDS 数组
     while (parser.nextToken() != JsonToken.END_OBJECT) {
-      if (parser.currentToken() == JsonToken.FIELD_NAME && KEY_RECORDS.equals(parser.currentName())) {
+      if (parser.currentToken() == JsonToken.FIELD_NAME
+          && KEY_RECORDS.equals(parser.currentName())) {
         JsonToken arrayToken = parser.nextToken();
         if (arrayToken == JsonToken.START_ARRAY) {
           return parseJsonArray(context, parser, writer, preserveLogicalRow);

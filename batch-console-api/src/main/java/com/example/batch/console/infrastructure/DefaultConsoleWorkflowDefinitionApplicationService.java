@@ -53,8 +53,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
     WorkflowDefinitionEntity def =
         Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id),
-            ERR_WORKFLOW_NOT_FOUND + id);
+            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
     List<WorkflowNodeEntity> nodes =
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));
     List<WorkflowEdgeEntity> edges =
@@ -97,8 +96,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
 
     WorkflowDefinitionEntity def =
         Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id),
-            ERR_WORKFLOW_NOT_FOUND + id);
+            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
 
     definitionMapper.updateWorkflowDefinition(
         resolvedTenant,
@@ -135,8 +133,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
     WorkflowDefinitionEntity def =
         Guard.requireFound(
-            definitionMapper.selectById(resolvedTenant, id),
-            ERR_WORKFLOW_NOT_FOUND + id);
+            definitionMapper.selectById(resolvedTenant, id), ERR_WORKFLOW_NOT_FOUND + id);
 
     List<WorkflowNodeEntity> nodes =
         nodeMapper.selectByQuery(WorkflowNodeQuery.ofDefinition(resolvedTenant, def.getId(), null));

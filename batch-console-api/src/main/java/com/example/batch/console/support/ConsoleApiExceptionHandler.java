@@ -20,9 +20,11 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 @RequiredArgsConstructor
@@ -134,6 +136,28 @@ public class ConsoleApiExceptionHandler {
             responseFactory.failure(
                 ResultCode.SYSTEM_ERROR,
                 body == null || body.isBlank() ? exception.getMessage() : body));
+  }
+
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<?> handleNoResourceFound(NoResourceFoundException exception) {
+    log.warn("console resource not found: {}", exception.getMessage());
+    return ResponseEntity.status(404)
+        .body(responseFactory.failure(ResultCode.NOT_FOUND, exception.getMessage()));
+  }
+
+  @ExceptionHandler(MissingServletRequestParameterException.class)
+  public ResponseEntity<?> handleMissingParam(MissingServletRequestParameterException exception) {
+    log.warn("console missing request param: {}", exception.getMessage());
+    return ResponseEntity.badRequest()
+        .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+  }
+
+  @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+  public ResponseEntity<?> handleMessageNotReadable(
+      org.springframework.http.converter.HttpMessageNotReadableException exception) {
+    log.warn("console message not readable: {}", exception.getMessage());
+    return ResponseEntity.badRequest()
+        .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
   }
 
   @ExceptionHandler(Exception.class)

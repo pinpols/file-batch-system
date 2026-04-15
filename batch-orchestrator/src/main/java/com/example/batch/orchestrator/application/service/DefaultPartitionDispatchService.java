@@ -79,6 +79,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
 
   private record TaskBuildContext(TaskCreationContext creation, JobPartitionEntity partition) {}
 
+  // D-2-1: dispatch() 的 @Transactional 保证 createPartitions + createTasks + writeDispatchEvent
+  // 在同一个数据库事务内原子提交。createPartitions 使用默认 REQUIRED（加入调用方事务），
+  // writeDispatchEvent 使用 MANDATORY（必须在调用方事务内执行）。三者不会分别提交。
   @Override
   @Transactional
   public void dispatch(DispatchContext context) {

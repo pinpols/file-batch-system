@@ -79,7 +79,6 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
   private static final String GUIDE_STR = "字符串";
   private static final String COL_ENABLED = "enabled";
 
-
   private static final String SHEET_NAME = "alert_routing_config";
   private static final List<String> COLUMNS =
       List.of(
@@ -115,7 +114,8 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
               "group_interval_seconds", optionalColumn("两次聚合通知之间的最小间隔，必须大于等于 0。", "整数", "300")),
           Map.entry(
               "repeat_interval_seconds", optionalColumn("持续告警的重复通知间隔，必须大于等于 0。", "整数", "3600")),
-          Map.entry(COL_ENABLED, optionalColumn("告警路由是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
+          Map.entry(
+              COL_ENABLED, optionalColumn("告警路由是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
           Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "批处理失败默认路由")));
 
   private static final MediaType XLSX_MEDIA_TYPE =
@@ -540,10 +540,14 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
                     "reason", ConsoleTextSanitizer.safeInput(reason, 512),
                     "detail",
                         mapOf(
-                            "routeName", row.routeName(),
-                            COL_TEAM, row.team(),
-                            COL_SEVERITY, row.severity(),
-                            COL_RECEIVER, row.receiver())))));
+                            "routeName",
+                            row.routeName(),
+                            COL_TEAM,
+                            row.team(),
+                            COL_SEVERITY,
+                            row.severity(),
+                            COL_RECEIVER,
+                            row.receiver())))));
   }
 
   private Map<String, Object> mapOf(Object... pairs) {

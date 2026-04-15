@@ -82,7 +82,6 @@ public class DefaultConsoleFileChannelExcelApplicationService
   private static final String COL_RECEIPT_POLICY = "receipt_policy";
   private static final String COL_ENABLED = "enabled";
 
-
   private static final String SHEET_NAME = "file_channel_config";
   private static final List<String> COLUMNS =
       List.of(
@@ -129,9 +128,11 @@ public class DefaultConsoleFileChannelExcelApplicationService
               requiredColumn("通道专属连接配置，请保持为合法 JSON。", "JSON", "{\"token\":\"xxx\"}")),
           Map.entry(
               COL_RECEIPT_POLICY,
-              requiredColumn("文件投递后的回执或回调策略。", "枚举", "SYNC", GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
+              requiredColumn(
+                  "文件投递后的回执或回调策略。", "枚举", "SYNC", GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
           Map.entry("timeout_seconds", requiredColumn("超时时间（秒），必须大于等于 0。", "整数", "30")),
-          Map.entry(COL_ENABLED, optionalColumn("文件通道是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
+          Map.entry(
+              COL_ENABLED, optionalColumn("文件通道是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -337,7 +338,8 @@ public class DefaultConsoleFileChannelExcelApplicationService
         .delivery(
             ChannelDelivery.builder()
                 .configJson(requireJson(values, "config_json", issues))
-                .receiptPolicy(requireEnum(values, COL_RECEIPT_POLICY, RECEIPT_POLICIES, 32, issues))
+                .receiptPolicy(
+                    requireEnum(values, COL_RECEIPT_POLICY, RECEIPT_POLICIES, 32, issues))
                 .timeoutSeconds(requireInteger(values, "timeout_seconds", 0, issues))
                 .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
                 .build())

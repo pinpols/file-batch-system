@@ -159,7 +159,9 @@ public class PrepareStep implements ExportStageStep {
     snap.put(
         KEY_SNAPSHOT_MODE,
         firstNonBlank(
-            stringHint(hints, KEY_SNAPSHOT_MODE), stringMeta(meta, KEY_SNAPSHOT_MODE), "AS_OF_BATCH"));
+            stringHint(hints, KEY_SNAPSHOT_MODE),
+            stringMeta(meta, KEY_SNAPSHOT_MODE),
+            "AS_OF_BATCH"));
     snap.put(
         KEY_SNAPSHOT_TS,
         firstNonBlank(

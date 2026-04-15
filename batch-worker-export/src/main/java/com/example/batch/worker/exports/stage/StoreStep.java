@@ -63,8 +63,7 @@ public class StoreStep implements ExportStageStep {
               tempObjectName,
               uploadPath,
               encrypt ? BatchFileConstants.CONTENT_TYPE_OCTET_STREAM : contentType);
-      ExportStageResult partVerification =
-          verifyPartUpload(expectedSha, tempKey, encryptedPath);
+      ExportStageResult partVerification = verifyPartUpload(expectedSha, tempKey, encryptedPath);
       if (partVerification != null) {
         return partVerification;
       }
@@ -120,8 +119,7 @@ public class StoreStep implements ExportStageStep {
         .put("downloadRequiresApproval", security.get("download_requires_approval"));
     boolean encrypt = cryptoService.shouldEncrypt(security);
     if (encrypt) {
-      Path encryptedPath =
-          Files.createTempFile(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, ".bin");
+      Path encryptedPath = Files.createTempFile(BatchFileConstants.ENCRYPTED_EXPORT_PREFIX, ".bin");
       cryptoService.encrypt(generatedFile, encryptedPath, cryptoService.resolveKeyRef(security));
       context.getAttributes().put("contentEncryptionEnabled", Boolean.TRUE);
       context.getAttributes().put("encryptionKeyRef", cryptoService.resolveKeyRef(security));
@@ -132,8 +130,8 @@ public class StoreStep implements ExportStageStep {
     return new EncryptionOutcome(generatedFile, null, false);
   }
 
-  private ExportStageResult verifyPartUpload(
-      String expectedSha, String tempKey, Path encryptedPath) throws Exception {
+  private ExportStageResult verifyPartUpload(String expectedSha, String tempKey, Path encryptedPath)
+      throws Exception {
     String remotePartSha = minioExportStorage.sha256Hex(tempKey);
     if (!expectedSha.equalsIgnoreCase(remotePartSha)) {
       minioExportStorage.removeObject(tempKey);
@@ -141,9 +139,7 @@ public class StoreStep implements ExportStageStep {
         Files.deleteIfExists(encryptedPath);
       }
       return ExportStageResult.failure(
-          stage(),
-          "EXPORT_STORE_PART_DIGEST_MISMATCH",
-          "temp object digest mismatch after upload");
+          stage(), "EXPORT_STORE_PART_DIGEST_MISMATCH", "temp object digest mismatch after upload");
     }
     return null;
   }

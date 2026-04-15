@@ -90,8 +90,10 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
           jobPartitionMapper.selectById(tenantId, current.getJobPartitionId());
       if (partition == null) {
         // 这里回滚而不是抛异常：语义上属于并发/状态漂移（可重试），不应该把 worker 侧认领请求打成”系统故障”。
+        // 返回 current（回滚前的状态，即 READY）而非重读 DB（重读会看到事务内未提交的 RUNNING，
+        // 与最终 DB 实际状态不符，会误导调用方认为认领已成功）。
         TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-        return jobTaskMapper.selectById(tenantId, taskId);
+        return current;
       }
       int claimed =
           jobPartitionMapper.claimPartition(
@@ -107,8 +109,9 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                   .build());
       if (claimed <= 0) {
         // 避免出现 “task 已 RUNNING 但 partition 未 RUNNING” 的中间态：回滚本事务，让下一次认领重试来收敛。
+        // 同理返回 current（READY），不重读 DB。
         TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-        return jobTaskMapper.selectById(tenantId, taskId);
+        return current;
       }
     }
     JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);

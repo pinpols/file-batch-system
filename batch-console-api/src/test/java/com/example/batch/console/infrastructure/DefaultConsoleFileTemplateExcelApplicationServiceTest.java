@@ -74,8 +74,7 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
     row.put("encrypt_type", "NONE");
     row.put("enabled", true);
     row.put("version", 1);
-    when(fileTemplateConfigMapper.selectByQuery(any()))
-        .thenReturn(List.of(row));
+    when(fileTemplateConfigMapper.selectByQuery(any())).thenReturn(List.of(row));
 
     ResponseEntity<InputStreamResource> response =
         service.exportFileTemplates(new FileTemplateQueryRequest());

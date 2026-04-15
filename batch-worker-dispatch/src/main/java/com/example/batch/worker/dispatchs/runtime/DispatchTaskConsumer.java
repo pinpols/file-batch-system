@@ -6,6 +6,8 @@ import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import com.example.batch.worker.core.support.AbstractTaskConsumer;
 import com.example.batch.worker.core.support.AbstractWorkerLoop;
 import com.example.batch.worker.dispatchs.config.DispatchWorkerConfiguration;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
@@ -25,8 +27,9 @@ public class DispatchTaskConsumer extends AbstractTaskConsumer {
       DispatchWorkerConfiguration configuration,
       TaskDispatchExecutor taskDispatchExecutor,
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
-      DeadLetterPublisher deadLetterPublisher) {
-    super(kafkaListenerEndpointRegistry);
+      DeadLetterPublisher deadLetterPublisher,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    super(kafkaListenerEndpointRegistry, meterRegistryProvider);
     this.workerLoop = workerLoop;
     this.configuration = configuration;
     this.taskDispatchExecutor = taskDispatchExecutor;

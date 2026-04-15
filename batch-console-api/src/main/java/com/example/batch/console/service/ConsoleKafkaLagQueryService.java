@@ -54,9 +54,15 @@ public class ConsoleKafkaLagQueryService {
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new RuntimeException("Kafka admin query interrupted", e);
+      log.error("Kafka consumer group 查询被中断", e);
+      Map<String, Object> errorEntry = new LinkedHashMap<>();
+      errorEntry.put("error", "Kafka admin query interrupted: " + e.getMessage());
+      result.add(errorEntry);
     } catch (ExecutionException | TimeoutException e) {
-      throw new RuntimeException("Failed to list consumer groups", e);
+      log.error("Kafka consumer group 列表查询失败（Kafka 可能不可达）", e);
+      Map<String, Object> errorEntry = new LinkedHashMap<>();
+      errorEntry.put("error", "Failed to list consumer groups: " + e.getMessage());
+      result.add(errorEntry);
     }
     return result;
   }

@@ -1,10 +1,15 @@
 package com.example.batch.console.web.request;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.Data;
 
 /**
@@ -45,6 +50,35 @@ public class TenantConfigCopyRequest {
     BATCH_WINDOW,
     BUSINESS_CALENDAR,
     QUOTA_POLICY,
-    ALERT_ROUTING
+    ALERT_ROUTING;
+
+    // 兼容前端简写："JOB" → JOB_DEFINITION, "WORKFLOW" → WORKFLOW_DEFINITION 等
+    private static final Map<String, ConfigType> ALIAS_MAP =
+        Stream.of(values())
+            .collect(
+                Collectors.toMap(
+                    v -> v.name().replace("_DEFINITION", ""), Function.identity(), (a, b) -> a));
+
+    @JsonCreator
+    public static ConfigType fromValue(String value) {
+      if (value == null) {
+        return null;
+      }
+      String upper = value.trim().toUpperCase();
+      try {
+        return ConfigType.valueOf(upper);
+      } catch (IllegalArgumentException ignored) {
+        ConfigType alias = ALIAS_MAP.get(upper);
+        if (alias != null) {
+          return alias;
+        }
+        throw new IllegalArgumentException(
+            "Unknown ConfigType: '"
+                + value
+                + "'. Accepted values: "
+                + ALIAS_MAP.keySet()
+                + " or full names like JOB_DEFINITION");
+      }
+    }
   }
 }
