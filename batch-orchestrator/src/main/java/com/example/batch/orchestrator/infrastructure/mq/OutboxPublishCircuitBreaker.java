@@ -4,6 +4,7 @@ import com.example.batch.common.redis.BatchRedisKeys;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.stereotype.Component;
 
 /** Outbox 投递的全局熔断器：当持续出现投递失败时，暂时停止推进 outbox， 防止失败重试造成的雪崩式数据库/消息堆积。 */
@@ -49,8 +50,8 @@ public class OutboxPublishCircuitBreaker {
   private volatile long cachedOpenUntilMs = 0;
   // 关闭状态缓存的到期时间；到期后需重新查询 Redis 确认状态
   private volatile long closedCacheExpiresAt = 0;
-  // #4-2: 半开探测标记——冷却期过后只允许一次探测请求，成功才完全关闭
-  private volatile boolean halfOpenProbing = false;
+  // C-5.1: 用 AtomicBoolean.compareAndSet 保证只有一个线程进入半开探测
+  private final AtomicBoolean halfOpenProbing = new AtomicBoolean(false);
 
   public OutboxPublishCircuitBreaker(
       BatchOrchestratorGovernanceProperties governance, OrchestratorRedisSupport redis) {
@@ -72,9 +73,10 @@ public class OutboxPublishCircuitBreaker {
     if (cachedOpenUntilMs > now) {
       return false;
     }
-    // #4-2: 冷却期结束时进入半开状态，仅放行一次探测请求
-    if (cachedOpenUntilMs > 0 && cachedOpenUntilMs <= now && !halfOpenProbing) {
-      halfOpenProbing = true;
+    // C-5.1: 冷却期结束时进入半开状态，CAS 保证仅一个线程执行探测
+    if (cachedOpenUntilMs > 0
+        && cachedOpenUntilMs <= now
+        && halfOpenProbing.compareAndSet(false, true)) {
       return true;
     }
     // 快速路径 2：本地已知熔断关闭，且关闭缓存仍有效
@@ -110,13 +112,10 @@ public class OutboxPublishCircuitBreaker {
     // 用 Redis 返回的最新值刷新本地缓存
     cachedOpenUntilMs = openUntilMs != null ? openUntilMs : 0;
     closedCacheExpiresAt = now + outboxProperties.getPollIntervalMillis();
-    // #4-2: 探测完成后重置半开标记
-    if (halfOpenProbing) {
-      halfOpenProbing = false;
-      if (publishFailed > 0) {
-        // 探测失败：熔断器仍处于打开状态（Redis 脚本已更新 openUntilMs）
-      }
+    // C-5.1: 探测完成后重置半开标记
+    if (halfOpenProbing.compareAndSet(true, false)) {
       // 探测成功：cachedOpenUntilMs 已为 0，自然进入关闭状态
+      // 探测失败：Redis 脚本已更新 openUntilMs，下次 allowNow 会拒绝
     }
   }
 }

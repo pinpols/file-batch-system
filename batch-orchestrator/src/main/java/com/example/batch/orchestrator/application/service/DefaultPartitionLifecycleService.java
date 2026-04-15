@@ -149,10 +149,13 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
             TaskStatus.READY.code(),
             task.getVersion());
     if (taskUpdated <= 0) {
-      // 分片与任务是“必须一起推进”的原子语义：
+      // 分片与任务是”必须一起推进”的原子语义：
       // - partition 已 READY 但 task 还没 READY，会导致派发链路选择/查询出现不一致
       // 因此这里宁可回滚重试，也不要留下半推进状态。
       TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+      // C-2.3: 事务回滚后 DB 状态不变，必须同步还原内存对象，避免调用方持有”已推进”的脏状态
+      partition.setPartitionStatus(fromPartitionStatus);
+      task.setTaskStatus(fromTaskStatus);
       return false;
     }
     partition.setPartitionStatus(PartitionStatus.READY.code());

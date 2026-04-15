@@ -42,6 +42,11 @@ public class BatchSecurityProperties {
     }
     if (prod) {
       validateNotPlaceholder("batch.security.internal-secret", internalSecret);
+      if ("internal-secret".equals(internalSecret)) {
+        throw new IllegalStateException(
+            "FATAL: 生产环境 batch.security.internal-secret 仍为默认值 'internal-secret'，"
+                + "请通过 secret manager 或环境变量注入强密钥");
+      }
       validateNotPlaceholder(
           "POSTGRES_PASSWORD", environment.getProperty("spring.datasource.password"));
     }

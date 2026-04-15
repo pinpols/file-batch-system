@@ -185,7 +185,8 @@ public class QuotaRuntimeStateService {
             0,
             null,
             ctx.now(),
-            ctx.now());
+            ctx.now(),
+            null);
     created =
         refreshState(
             created,

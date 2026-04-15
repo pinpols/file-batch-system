@@ -21,15 +21,16 @@ public class ActiveTaskLeaseRegistry {
   // 避免 shutdown 期间 snapshot 看到空集合而提前退出（TOCTOU）。
   private final ReadWriteLock shutdownLock = new ReentrantReadWriteLock();
 
+  // C-1.1: register/remove 修改状态 → 写锁；snapshot 只读 → 读锁
   public void register(String taskId, String tenantId, String workerId) {
     if (taskId == null || tenantId == null || workerId == null) {
       return;
     }
-    shutdownLock.readLock().lock();
+    shutdownLock.writeLock().lock();
     try {
       activeTaskLeases.put(taskId, new ActiveTaskLease(taskId, tenantId, workerId));
     } finally {
-      shutdownLock.readLock().unlock();
+      shutdownLock.writeLock().unlock();
     }
   }
 
@@ -37,25 +38,25 @@ public class ActiveTaskLeaseRegistry {
     if (taskId == null) {
       return;
     }
-    shutdownLock.readLock().lock();
+    shutdownLock.writeLock().lock();
     try {
       activeTaskLeases.remove(taskId);
     } finally {
-      shutdownLock.readLock().unlock();
+      shutdownLock.writeLock().unlock();
     }
   }
 
   /**
    * 获取当前活跃租约的一致快照。
    *
-   * <p>写锁保证在快照期间没有并发的 register/remove 操作，避免 TOCTOU。
+   * <p>读锁保证快照期间不会有并发的 register/remove 操作，返回防御性拷贝确保线程安全。
    */
   public Collection<ActiveTaskLease> snapshot() {
-    shutdownLock.writeLock().lock();
+    shutdownLock.readLock().lock();
     try {
       return new ArrayList<>(activeTaskLeases.values());
     } finally {
-      shutdownLock.writeLock().unlock();
+      shutdownLock.readLock().unlock();
     }
   }
 

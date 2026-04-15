@@ -292,7 +292,8 @@ class QuotaRuntimeStateServiceTest {
             1,
             null,
             Instant.now(),
-            Instant.now());
+            Instant.now(),
+            null);
     // 窗口仍然有效（远未到期）
 
     when(quotaRuntimeStateRepository.findFirstByTenantIdAndQuotaScopeAndOwnerCode(
@@ -388,7 +389,8 @@ class QuotaRuntimeStateServiceTest {
             5,
             null,
             Instant.now(),
-            Instant.now()); // already expired
+            Instant.now(),
+            null); // already expired
 
     when(quotaRuntimeStateRepository.findExpired(any(Instant.class))).thenReturn(List.of(expired));
     when(quotaRuntimeStateRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

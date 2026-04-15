@@ -796,9 +796,9 @@ public class DefaultConsoleWorkflowExcelApplicationService
       Sheet definitionSheet = workbook.createSheet(DEF_SHEET);
       Sheet nodeSheet = workbook.createSheet(NODE_SHEET);
       Sheet edgeSheet = workbook.createSheet(EDGE_SHEET);
-      definitionSheet.createFreezePane(0, 1);
-      nodeSheet.createFreezePane(0, 1);
-      edgeSheet.createFreezePane(0, 1);
+      definitionSheet.createFreezePane(0, 1, 0, 1);
+      nodeSheet.createFreezePane(0, 1, 0, 1);
+      edgeSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(definitionSheet, DEF_COLUMNS, DEF_COLUMN_GUIDES, workbook);
       writeTemplateHeaders(nodeSheet, NODE_COLUMNS, NODE_COLUMN_GUIDES, workbook);
       writeTemplateHeaders(edgeSheet, EDGE_COLUMNS, EDGE_COLUMN_GUIDES, workbook);
@@ -908,9 +908,9 @@ public class DefaultConsoleWorkflowExcelApplicationService
       Sheet definitionSheet = workbook.createSheet(DEF_SHEET);
       Sheet nodeSheet = workbook.createSheet(NODE_SHEET);
       Sheet edgeSheet = workbook.createSheet(EDGE_SHEET);
-      definitionSheet.createFreezePane(0, 1);
-      nodeSheet.createFreezePane(0, 1);
-      edgeSheet.createFreezePane(0, 1);
+      definitionSheet.createFreezePane(0, 1, 0, 1);
+      nodeSheet.createFreezePane(0, 1, 0, 1);
+      edgeSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(definitionSheet, DEF_COLUMNS, DEF_COLUMN_GUIDES, workbook);
       writeTemplateHeaders(nodeSheet, NODE_COLUMNS, NODE_COLUMN_GUIDES, workbook);
       writeTemplateHeaders(edgeSheet, EDGE_COLUMNS, EDGE_COLUMN_GUIDES, workbook);
@@ -931,7 +931,6 @@ public class DefaultConsoleWorkflowExcelApplicationService
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
-      workbook.dispose();
       return out.toByteArray();
     } catch (IOException exception) {
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
@@ -1062,7 +1061,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
 
   private void createDictSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet("DICT");
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {

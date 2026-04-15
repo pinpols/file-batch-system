@@ -94,9 +94,6 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
               CommonErrorMessages.TENANT_MISMATCH);
           return;
         }
-      } else if (StringUtils.hasText(sharedToken)) {
-        filterChain.doFilter(request, response);
-        return;
       }
 
       if (batchSecurityProperties.isTestingOpen()) {

@@ -73,7 +73,6 @@ import org.springframework.web.multipart.MultipartFile;
 /** {@link ConsoleBusinessCalendarExcelApplicationService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("deprecation")
 public class DefaultConsoleBusinessCalendarExcelApplicationService
     implements ConsoleBusinessCalendarExcelApplicationService {
 
@@ -696,7 +695,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       // Sheet 1: business_calendar
       Sheet calendarSheet = workbook.createSheet(CALENDAR_SHEET_NAME);
-      calendarSheet.createFreezePane(0, 1);
+      calendarSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(calendarSheet, CALENDAR_COLUMNS, CALENDAR_COLUMN_GUIDES, workbook);
       int rowIndex = 1;
       for (Map<String, Object> row : calendars) {
@@ -713,7 +712,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
       // Sheet 2: calendar_holiday
       Sheet holidaySheet = workbook.createSheet(HOLIDAY_SHEET_NAME);
-      holidaySheet.createFreezePane(0, 1);
+      holidaySheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(holidaySheet, HOLIDAY_COLUMNS, HOLIDAY_COLUMN_GUIDES, workbook);
       int holidayRowIndex = 1;
       for (Map<String, Object> row : holidays) {
@@ -732,7 +731,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
-      workbook.dispose();
       return out.toByteArray();
     } catch (IOException exception) {
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
@@ -765,7 +763,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       // Sheet 1: business_calendar
       Sheet calendarSheet = workbook.createSheet(CALENDAR_SHEET_NAME);
-      calendarSheet.createFreezePane(0, 1);
+      calendarSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(calendarSheet, CALENDAR_COLUMNS, CALENDAR_COLUMN_GUIDES, workbook);
       int rowIndex = 1;
       for (Map<String, String> rawRow : session.calendarRows()) {
@@ -781,7 +779,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
       // Sheet 2: calendar_holiday
       Sheet holidaySheet = workbook.createSheet(HOLIDAY_SHEET_NAME);
-      holidaySheet.createFreezePane(0, 1);
+      holidaySheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(holidaySheet, HOLIDAY_COLUMNS, HOLIDAY_COLUMN_GUIDES, workbook);
       int holidayRowIndex = 1;
       for (Map<String, String> rawRow : session.holidayRows()) {
@@ -874,7 +872,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
   private void createDictSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet("DICT");
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {

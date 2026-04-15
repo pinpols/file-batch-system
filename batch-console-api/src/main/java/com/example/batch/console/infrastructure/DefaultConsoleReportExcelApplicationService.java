@@ -224,7 +224,7 @@ public class DefaultConsoleReportExcelApplicationService
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet dataSheet = workbook.createSheet(sheetName);
-      dataSheet.createFreezePane(0, 1);
+      dataSheet.createFreezePane(0, 1, 0, 1);
       CellStyle headerStyle = createHeaderStyle(workbook);
       List<String> headers = extractHeaders(rowType, rows);
       writeHeaders(dataSheet, headers, headerStyle);
@@ -239,7 +239,6 @@ public class DefaultConsoleReportExcelApplicationService
       setWidths(dataSheet, headers);
       createReadmeSheet(workbook, title);
       workbook.write(out);
-      workbook.dispose();
       return out.toByteArray();
     } catch (Exception exception) {
       throw new IllegalStateException("failed to generate report excel workbook", exception);

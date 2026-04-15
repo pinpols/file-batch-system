@@ -68,7 +68,6 @@ import org.springframework.web.multipart.MultipartFile;
 /** {@link ConsolePipelineDefinitionExcelApplicationService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("deprecation")
 public class DefaultConsolePipelineDefinitionExcelApplicationService
     implements ConsolePipelineDefinitionExcelApplicationService {
 
@@ -707,7 +706,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
-      workbook.dispose();
       return out.toByteArray();
     } catch (IOException exception) {
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
@@ -716,7 +714,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private void writePipelineSheet(SXSSFWorkbook workbook, List<Map<String, Object>> rows) {
     Sheet sheet = workbook.createSheet(PIPELINE_SHEET_NAME);
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, PIPELINE_COLUMNS, PIPELINE_COLUMN_GUIDES, workbook);
     int rowIndex = 1;
     for (Map<String, Object> row : rows) {
@@ -734,7 +732,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private void writeStepSheet(SXSSFWorkbook workbook, List<Map<String, Object>> rows) {
     Sheet sheet = workbook.createSheet(STEP_SHEET_NAME);
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, STEP_COLUMNS, STEP_COLUMN_GUIDES, workbook);
     int rowIndex = 1;
     for (Map<String, Object> row : rows) {
@@ -753,7 +751,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private byte[] writePreviewWorkbook(ParsedSession session, ValidationResult result) {
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       Sheet pipelineSheet = workbook.createSheet(PIPELINE_SHEET_NAME);
-      pipelineSheet.createFreezePane(0, 1);
+      pipelineSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(pipelineSheet, PIPELINE_COLUMNS, PIPELINE_COLUMN_GUIDES, workbook);
       int rowIndex = 1;
       for (Map<String, String> rawRow : session.pipelineRows()) {
@@ -768,7 +766,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       setWidths(pipelineSheet, PIPELINE_COLUMNS);
 
       Sheet stepSheet = workbook.createSheet(STEP_SHEET_NAME);
-      stepSheet.createFreezePane(0, 1);
+      stepSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(stepSheet, STEP_COLUMNS, STEP_COLUMN_GUIDES, workbook);
       rowIndex = 1;
       for (Map<String, String> rawRow : session.stepRows()) {
@@ -855,7 +853,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private void createDictSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet("DICT");
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {

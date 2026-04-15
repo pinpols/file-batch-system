@@ -197,6 +197,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     // 只处理 RUNNING → terminal 的一次性回报；重复回报直接返回当前状态，保证幂等。
     if (!TaskStatus.RUNNING.code().equals(task.getTaskStatus())) {
+      log.info(
+          "task outcome ignored (already {}): taskId={}", task.getTaskStatus(), command.taskId());
       return task;
     }
     // workerId 非空时校验 worker 归属，防止恶意/错误 worker 伪造回报。
@@ -371,6 +373,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // #3-1: 重新读取 instance 获取最新 version，避免并发 outcome 间版本冲突导致永久循环。
     // 此时分区行已被 FOR UPDATE 锁住，保证了分区计数的串行性，
     // 但 job_instance 本身可能被其他已完成的 outcome 更新了 version。
+    // C-2.2: 重新读取 instance 获取最新 version 和状态，直接用 freshInstance 做状态机转换，
+    // 避免 jobInstance 上残留过期字段导致 stateMachine 基于错误状态计算转换结果
     JobInstanceEntity freshInstance =
         jobMappers.jobInstanceMapper.selectById(command.tenantId(), jobInstance.getId());
     if (freshInstance != null) {
@@ -379,7 +383,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     String instanceEvent =
         resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
-    String instanceStatus = stateMachine.transition(jobInstance, instanceEvent).toState();
+    String instanceStatus =
+        stateMachine
+            .transition(freshInstance != null ? freshInstance : jobInstance, instanceEvent)
+            .toState();
     int progressUpdated =
         jobMappers.jobInstanceMapper.updateProgress(
             UpdateInstanceProgressParam.builder()

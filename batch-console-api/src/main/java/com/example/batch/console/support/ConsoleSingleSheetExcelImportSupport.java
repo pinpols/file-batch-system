@@ -153,7 +153,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
     String systemErrorMessage = param.systemErrorMessage();
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       Sheet dataSheet = workbook.createSheet(session.sheetName());
-      dataSheet.createFreezePane(0, 1);
+      dataSheet.createFreezePane(0, 1, 0, 1);
       ConsoleExcelStyles.writeTemplateHeaders(dataSheet, columns, guides, workbook);
       int rowIndex = 1;
       for (Map<String, String> rawRow : session.rows()) {

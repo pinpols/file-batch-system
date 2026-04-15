@@ -258,7 +258,8 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
             5,
             null,
             Instant.now(),
-            Instant.now());
+            Instant.now(),
+            null);
     quotaRuntimeStateRepository.save(expiredState);
 
     quotaRuntimeStateService.reconcileExpiredStates(2);
@@ -287,7 +288,8 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
             3,
             null,
             Instant.now(),
-            Instant.now());
+            Instant.now(),
+            null);
     quotaRuntimeStateRepository.save(state);
 
     List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateRepository.findExpired(Instant.now());

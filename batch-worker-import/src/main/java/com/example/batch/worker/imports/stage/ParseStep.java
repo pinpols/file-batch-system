@@ -122,7 +122,9 @@ public class ParseStep implements ImportStageStep {
               stagingFile.toString()));
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
-      deleteQuietly(stagingFile);
+      if (stagingFile != null) {
+        deleteQuietly(stagingFile);
+      }
       log.error(
           "parse stage failed: tenantId={}, fileId={}, message={}",
           context == null ? null : context.getTenantId(),
@@ -268,12 +270,16 @@ public class ParseStep implements ImportStageStep {
     }
   }
 
+  // A-3.2: 最大列数限制，防止恶意超宽文件导致 OOM
+  private static final int MAX_EXCEL_COLUMNS = 1000;
+
   private List<String> readExcelHeader(Row headerRow, DataFormatter formatter) {
     List<String> headers = new ArrayList<>();
     if (headerRow == null) {
       return defaultHeaders();
     }
-    for (int c = 0; c < headerRow.getLastCellNum(); c++) {
+    int lastCell = Math.min(headerRow.getLastCellNum(), MAX_EXCEL_COLUMNS);
+    for (int c = 0; c < lastCell; c++) {
       Cell cell = headerRow.getCell(c);
       headers.add(cell == null ? "" : formatter.formatCellValue(cell).trim());
     }

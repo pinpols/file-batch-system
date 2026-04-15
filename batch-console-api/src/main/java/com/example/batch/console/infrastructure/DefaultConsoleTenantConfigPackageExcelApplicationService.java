@@ -101,7 +101,6 @@ import org.springframework.web.multipart.MultipartFile;
 /** 租户配置包 Excel 导入服务：8 sheet 单事务写库，含跨 sheet 依赖校验。 */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("deprecation")
 public class DefaultConsoleTenantConfigPackageExcelApplicationService
     implements ConsoleTenantConfigPackageExcelApplicationService {
 
@@ -1387,7 +1386,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
-      wb.dispose();
       return out.toByteArray();
     } catch (IOException e) {
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate export workbook");
@@ -1449,7 +1447,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       createFieldGuideSheet(wb);
       ConsoleExcelStyles.createValidationSheet(wb);
       wb.write(out);
-      wb.dispose();
       return out.toByteArray();
     } catch (IOException e) {
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate template workbook");
@@ -1529,7 +1526,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       List<Map<String, Object>> dataRows,
       java.util.function.Consumer<Sheet> validationApplier) {
     Sheet sheet = wb.createSheet(sheetName);
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, columns, guides, wb);
     int idx = 1;
     for (Map<String, Object> row : dataRows) {
@@ -1551,7 +1548,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       List<WorkbookIssue> sheetIssues,
       java.util.function.Consumer<Sheet> validationApplier) {
     Sheet sheet = wb.createSheet(sheetName);
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
     writeHeaders(sheet, columns, headerStyle);
     int idx = 1;

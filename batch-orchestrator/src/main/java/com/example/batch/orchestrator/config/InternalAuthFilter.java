@@ -6,6 +6,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -37,7 +39,10 @@ public class InternalAuthFilter extends OncePerRequestFilter {
     }
 
     String header = request.getHeader(HEADER_NAME);
-    if (securityProperties.getInternalSecret().equals(header)) {
+    if (header != null
+        && MessageDigest.isEqual(
+            securityProperties.getInternalSecret().getBytes(StandardCharsets.UTF_8),
+            header.getBytes(StandardCharsets.UTF_8))) {
       chain.doFilter(request, response);
     } else {
       response.setStatus(HttpStatus.UNAUTHORIZED.value());

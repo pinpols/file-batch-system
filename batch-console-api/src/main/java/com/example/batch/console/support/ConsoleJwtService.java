@@ -7,16 +7,19 @@ import com.example.batch.common.utils.Guard;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.web.response.ConsoleAuthTokenResponse;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -41,6 +44,28 @@ public class ConsoleJwtService {
 
   private final ConsoleSecurityProperties properties;
   private final ConsoleSessionRegistry sessionRegistry;
+  private final Environment environment;
+
+  @PostConstruct
+  void validateJwtSecret() {
+    String secret = properties.getJwtSecret();
+    if (secret != null && isProductionProfile()) {
+      String lower = secret.toLowerCase(Locale.ROOT);
+      if (lower.contains("change-me") || lower.contains("change_me")) {
+        throw new IllegalStateException(
+            "FATAL: batch.console.security.jwt-secret 仍包含默认占位符，" + "生产环境必须通过环境变量或密钥管理注入真实密钥");
+      }
+    }
+  }
+
+  private boolean isProductionProfile() {
+    for (String profile : environment.getActiveProfiles()) {
+      if ("prod".equalsIgnoreCase(profile) || "production".equalsIgnoreCase(profile)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /** 签发访问令牌及过期时间。 */
   public ConsoleAuthTokenResponse issueToken(

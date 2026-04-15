@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.domain.entity;
 
 import java.time.Instant;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -17,7 +18,8 @@ public record QuotaRuntimeStateRecord(
     @Column("peak_borrowed_count") Integer peakBorrowedCount,
     @Column("last_reset_at") Instant lastResetAt,
     @Column("created_at") Instant createdAt,
-    @Column("updated_at") Instant updatedAt) {
+    @Column("updated_at") Instant updatedAt,
+    @Version Long version) {
   /** 更新峰值和最后时间戳（由 evaluateAndReserve 调用）。 */
   public QuotaRuntimeStateRecord withPeakAndTimestamps(
       int newPeak, Instant lastResetAt, Instant updatedAt) {
@@ -32,7 +34,8 @@ public record QuotaRuntimeStateRecord(
         newPeak,
         lastResetAt,
         createdAt,
-        updatedAt);
+        updatedAt,
+        version);
   }
 
   /** 完整窗口刷新（由 reconcileExpiredStates / refreshState 调用）。 */
@@ -53,6 +56,7 @@ public record QuotaRuntimeStateRecord(
         peakBorrowedCount,
         lastResetAt,
         createdAt,
-        Instant.now());
+        Instant.now(),
+        version);
   }
 }

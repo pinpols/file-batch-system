@@ -10,7 +10,7 @@ import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -33,8 +33,8 @@ public class ConsoleKafkaLagQueryService {
   public List<Map<String, Object>> consumerGroupLags(String groupIdFilter) {
     List<Map<String, Object>> result = new ArrayList<>();
     try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
-      var groups = admin.listConsumerGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-      for (ConsumerGroupListing group : groups) {
+      var groups = admin.listGroups().all().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      for (GroupListing group : groups) {
         String groupId = group.groupId();
         if (groupIdFilter != null && !groupIdFilter.isEmpty() && !groupId.contains(groupIdFilter)) {
           continue;
