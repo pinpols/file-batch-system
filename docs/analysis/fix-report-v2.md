@@ -122,21 +122,18 @@
 
 ---
 
-## 暂缓项跟踪（13 项，需后续专项处理）
+## 暂缓项跟踪（7 项，需后续专项处理）
 
 | 编号 | 原因 | 建议时间 |
 |------|------|----------|
 | ~~S-2.5 分布式限流~~ | **误报** — 现有 `SlidingWindowRateLimiter` 已基于 Redis Sorted Set + Lua 脚本实现分布式限流 | 无需修改 |
-| S-2.6 DNS rebinding | 需调度时二次 DNS 解析 | 下个迭代 |
+| ~~S-2.6 DNS rebinding~~ | **已完成** — `DnsResolveGuard` resolve-then-connect，所有出站连接点（SFTP/HTTP/Webhook/探针）建连前校验解析后 IP | 无需修改 |
 | ~~A-1.1 console 解耦 orchestrator~~ | ~~架构调整影响面大~~ | **已完成** — 删除 pom 依赖，反序列化改用 console 自有 record |
-| A-6.1 God Class 拆分 | 2207 行，需专项 | 专项重构 |
-| A-6.2 ParseStep Strategy | 1085 行，需专项 | 专项重构 |
-| A-4.3 Kafka trace 传播 | 需 interceptor | 下个迭代 |
+| ~~A-6.1 God Class 拆分~~ | **已完成** — `DefaultConsoleTenantConfigPackageExcelApplicationService`(2204→783 行) 拆为主类 + `ConfigPackageExcelValidator`(655) + `ConfigPackageExcelWorkbookWriter`(606) | 无需修改 |
+| ~~A-6.2 ParseStep Strategy~~ | **已完成** — `ParseStep`(1091→274 行) 拆为主类 + 5 个 `FormatParser` 策略 + `ParseSupport` 共享工具，`Map<String, FormatParser>` 路由表替代 if-chain | 无需修改 |
+| ~~A-4.3 Kafka trace 传播~~ | **已完成** — `KafkaTemplate` / `ConcurrentKafkaListenerContainerFactory` 注入 `ObservationRegistry`，启用 `observationEnabled`，自动 header 级 W3C Trace Context 传播 | 无需修改 |
 | A-3.4 锁争用优化 | 需压测确认 | 性能优化周期 |
 | T-2 console-api 覆盖率 | 15.8%→50% | 持续补充 |
 | T-3 REQUIRES_NEW 测试 | 56 个方法 | 持续补充 |
-| T-4 Redis 故障测试 | 需 chao
+| T-4 Redis 故障测试 | 需 chaos 环境模拟 Redis 宕机/超时降级 | 下个迭代 |
 | T-5 重试风暴测试 | 需模拟万级失败 | 下个迭代 |
-| T-6~T-9 | 连接池/并发/部署 | 持续补充 |
-| C-1.3 DCL 优化 | 影响极低 | 低优先级 |
-| C-7.1 version 溢出 | 概率极低 | 不处理 |

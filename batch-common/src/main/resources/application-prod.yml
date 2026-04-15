@@ -11,6 +11,9 @@ spring:
     timeout-per-shutdown-phase: ${BATCH_SHUTDOWN_TIMEOUT:180s}
 
 management:
+  # S-3.4: 生产环境管理端口隔离，不暴露到业务端口
+  server:
+    port: ${BATCH_MANAGEMENT_PORT:0}
   tracing:
     sampling:
       # 生产采样率 10%，避免链路追踪数据量过大

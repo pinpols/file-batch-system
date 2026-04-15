@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -177,7 +178,8 @@ final class RemoteFilesystemDispatchSupport {
     }
   }
 
-  static DispatchChannelProbeResult probeSftp(Map<String, Object> channelConfig) {
+  static DispatchChannelProbeResult probeSftp(
+      Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
     try {
       String host = stringProp(channelConfig, "sftp_host");
       if (!StringUtils.hasText(host)) {
@@ -187,8 +189,13 @@ final class RemoteFilesystemDispatchSupport {
         return new DispatchChannelProbeResult(false, "sftp_host missing", null);
       }
       int port = intProp(channelConfig, "sftp_port", 22);
+      // S-2.6: resolve-then-connect — 用已校验的 IP 建连
+      InetSocketAddress target =
+          dnsGuardEnabled
+              ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
+              : new InetSocketAddress(host, port);
       try (Socket socket = new Socket()) {
-        socket.connect(new InetSocketAddress(host, port), 5_000);
+        socket.connect(target, 5_000);
       }
       return new DispatchChannelProbeResult(true, "sftp probe ok", host + ":" + port);
     } catch (Exception ex) {
@@ -196,7 +203,8 @@ final class RemoteFilesystemDispatchSupport {
     }
   }
 
-  static DispatchChannelProbeResult probeSmtp(Map<String, Object> channelConfig) {
+  static DispatchChannelProbeResult probeSmtp(
+      Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
     try {
       String host = stringProp(channelConfig, "smtp_host");
       if (!StringUtils.hasText(host)) {
@@ -206,8 +214,13 @@ final class RemoteFilesystemDispatchSupport {
         return new DispatchChannelProbeResult(false, "smtp_host missing", null);
       }
       int port = intProp(channelConfig, "smtp_port", 25);
+      // S-2.6: resolve-then-connect — 用已校验的 IP 建连
+      InetSocketAddress target =
+          dnsGuardEnabled
+              ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
+              : new InetSocketAddress(host, port);
       try (Socket socket = new Socket()) {
-        socket.connect(new InetSocketAddress(host, port), 5_000);
+        socket.connect(target, 5_000);
       }
       return new DispatchChannelProbeResult(true, "smtp probe ok", host + ":" + port);
     } catch (Exception ex) {
@@ -215,11 +228,17 @@ final class RemoteFilesystemDispatchSupport {
     }
   }
 
-  static DispatchChannelProbeResult probeHttp(Map<String, Object> channelConfig) {
+  static DispatchChannelProbeResult probeHttp(
+      Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
     try {
       String endpoint = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       if (!StringUtils.hasText(endpoint)) {
         return new DispatchChannelProbeResult(false, "target_endpoint missing", null);
+      }
+      // S-2.6: resolve-then-validate — 校验目标 IP 不在受限网段
+      if (dnsGuardEnabled) {
+        String probeHost = URI.create(endpoint).getHost();
+        DnsResolveGuard.resolveAndValidate(probeHost);
       }
       HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
       HttpRequest request =
@@ -244,15 +263,16 @@ final class RemoteFilesystemDispatchSupport {
   static DispatchChannelProbeResult probeChannel(
       Map<String, Object> channelConfig,
       MinioStorageProperties minioProperties,
-      MinioClient minioClient) {
+      MinioClient minioClient,
+      boolean dnsGuardEnabled) {
     String channelType =
         String.valueOf(channelConfig.getOrDefault("channel_type", "")).toUpperCase(Locale.ROOT);
     return switch (channelType) {
       case "NAS" -> probeNas(channelConfig);
       case "OSS" -> probeOss(channelConfig, minioProperties, minioClient);
-      case "SFTP" -> probeSftp(channelConfig);
-      case "EMAIL" -> probeSmtp(channelConfig);
-      case "API", "API_PUSH" -> probeHttp(channelConfig);
+      case "SFTP" -> probeSftp(channelConfig, dnsGuardEnabled);
+      case "EMAIL" -> probeSmtp(channelConfig, dnsGuardEnabled);
+      case "API", "API_PUSH" -> probeHttp(channelConfig, dnsGuardEnabled);
       default ->
           new DispatchChannelProbeResult(
               false, "unsupported health probe channel type: " + channelType, null);

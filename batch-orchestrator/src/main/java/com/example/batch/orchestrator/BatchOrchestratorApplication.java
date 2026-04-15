@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(
@@ -53,7 +54,11 @@ public class BatchOrchestratorApplication {
 
   @Bean
   public KafkaTemplate<String, String> kafkaTemplate(
-      ProducerFactory<String, String> producerFactory) {
-    return new KafkaTemplate<>(producerFactory);
+      ProducerFactory<String, String> producerFactory,
+      ObservationRegistry observationRegistry) {
+    KafkaTemplate<String, String> template = new KafkaTemplate<>(producerFactory);
+    template.setObservationEnabled(true);
+    template.setObservationRegistry(observationRegistry);
+    return template;
   }
 }
