@@ -63,11 +63,11 @@ stop_module() {
   local pids
   pids="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
   if [ -n "$pids" ]; then
-    echo "  停止 $name（端口 $port，pid=$pids）"
+    echo "  停止 ${name}（端口 ${port}，pid=${pids}）"
     # shellcheck disable=SC2086
     kill -9 $pids 2>/dev/null || true
   else
-    echo "  $name 未运行（端口 $port 空闲）"
+    echo "  ${name} 未运行（端口 ${port} 空闲）"
   fi
 }
 
@@ -95,7 +95,7 @@ start_module() {
   local name="$1"
   local jar="$RUNTIME_JAR_DIR/$name.jar"
   if [ ! -f "$jar" ]; then
-    echo "ERROR: 未找到 $jar，请先执行 ./scripts/local/build-apps.sh" >&2
+    echo "ERROR: 未找到 ${jar}，请先执行 ./scripts/local/build-apps.sh" >&2
     exit 1
   fi
   nohup java --enable-native-access=ALL-UNNAMED ${JAVA_OPTS:-} \
@@ -119,7 +119,7 @@ start_module() {
 wait_orchestrator() {
   local port="${BATCH_ORCHESTRATOR_PORT:-18082}"
   local url="http://127.0.0.1:${port}/actuator/health"
-  echo "  等待 orchestrator 就绪（$url）..."
+  echo "  等待 orchestrator 就绪（${url}）..."
   for i in $(seq 1 60); do
     sleep 3
     if curl -sf --connect-timeout 2 --max-time 5 "$url" 2>/dev/null \

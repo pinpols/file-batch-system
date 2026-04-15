@@ -1,11 +1,13 @@
 package com.example.batch.console.service;
 
+import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import com.example.batch.console.repository.WebhookDeliveryLogInsertParam;
 import jakarta.annotation.PreDestroy;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
@@ -136,7 +138,12 @@ public class WebhookDispatcher {
   }
 
   private void deliver(
-      WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson) {
+      WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson)
+      throws java.net.UnknownHostException {
+    // S-2.6: 分发前二次 DNS 解析并校验 IP，防止 rebinding 到内网
+    String callbackHost = URI.create(subscription.getCallbackUrl()).getHost();
+    DnsResolveGuard.resolveAndValidate(callbackHost);
+
     RestClient client = restClientBuilder.build();
     RestClient.RequestBodySpec spec =
         client

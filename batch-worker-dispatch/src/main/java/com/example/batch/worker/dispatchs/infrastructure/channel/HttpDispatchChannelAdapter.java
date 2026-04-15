@@ -1,8 +1,13 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.dispatchs.config.HttpDispatchChannelProperties;
+import java.net.InetAddress;
+import java.net.URI;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -21,8 +26,11 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
   private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
   private final OkHttpClient okHttpClient;
+  private final BatchSecurityProperties securityProperties;
 
-  public HttpDispatchChannelAdapter(HttpDispatchChannelProperties properties) {
+  public HttpDispatchChannelAdapter(
+      HttpDispatchChannelProperties properties, BatchSecurityProperties securityProperties) {
+    this.securityProperties = securityProperties;
     this.okHttpClient =
         new OkHttpClient.Builder()
             .connectTimeout(properties.getConnectTimeoutMillis(), TimeUnit.MILLISECONDS)
@@ -88,25 +96,34 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
       }
     }
     Request request = builder.build();
-    try (Response response = okHttpClient.newCall(request).execute()) {
-      if (!response.isSuccessful()) {
+    try {
+      // S-2.6: resolve-then-connect — 解析 endpoint 主机名并校验 IP，通过 OkHttp Dns 钉住解析结果
+      OkHttpClient client = okHttpClient;
+      if (!securityProperties.isTestingOpen()) {
+        String targetHost = URI.create(endpoint).getHost();
+        InetAddress resolved = DnsResolveGuard.resolveAndValidate(targetHost);
+        client = okHttpClient.newBuilder().dns(hostname -> List.of(resolved)).build();
+      }
+      try (Response response = client.newCall(request).execute()) {
+        if (!response.isSuccessful()) {
+          return new DispatchResult(
+              false,
+              externalRequestId,
+              receiptCode,
+              false,
+              false,
+              "dispatch api responded " + response.code(),
+              null);
+        }
         return new DispatchResult(
-            false,
+            true,
             externalRequestId,
             receiptCode,
-            false,
-            false,
-            "dispatch api responded " + response.code(),
-            null);
+            acknowledged,
+            pending,
+            "dispatched via http adapter",
+            endpoint);
       }
-      return new DispatchResult(
-          true,
-          externalRequestId,
-          receiptCode,
-          acknowledged,
-          pending,
-          "dispatched via http adapter",
-          endpoint);
     } catch (Exception ex) {
       return new DispatchResult(
           false, externalRequestId, receiptCode, false, false, ex.getMessage(), endpoint);

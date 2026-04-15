@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import com.example.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
@@ -30,6 +31,7 @@ public class DispatchChannelHealthService {
   private final DispatchChannelHealthProperties properties;
   private final DispatchCircuitBreakerProperties circuitBreakerProperties;
   private final MinioStorageProperties minioStorageProperties;
+  private final BatchSecurityProperties securityProperties;
   private final ObjectMapper objectMapper;
   private final MeterRegistry meterRegistry;
   private MinioClient minioClient;
@@ -165,7 +167,10 @@ public class DispatchChannelHealthService {
     }
     DispatchChannelProbeResult result =
         RemoteFilesystemDispatchSupport.probeChannel(
-            channelConfig, minioStorageProperties, minioClient);
+            channelConfig,
+            minioStorageProperties,
+            minioClient,
+            !securityProperties.isTestingOpen());
     recordProbeResult(channelConfig, result);
     if (result.success()) {
       probeSuccessCount.incrementAndGet();

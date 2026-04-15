@@ -1,10 +1,13 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
+import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.security.DnsResolveGuard;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,7 @@ import org.springframework.util.StringUtils;
 public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private final DispatchFileContentResolver fileContentResolver;
+  private final BatchSecurityProperties securityProperties;
 
   @Override
   public boolean supports(String channelType) {
@@ -148,9 +152,15 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
           jsch.setKnownHosts(knownHostsPath);
         }
       }
-      session =
-          jsch.getSession(
-              ctx.connConfig().user(), ctx.connConfig().host(), ctx.connConfig().port());
+      // S-2.6: resolve-then-connect — 用解析后的 IP 建连，防止 DNS rebinding
+      String connectHost = ctx.connConfig().host();
+      if (!securityProperties.isTestingOpen()) {
+        InetAddress resolved = DnsResolveGuard.resolveAndValidate(connectHost);
+        connectHost = resolved.getHostAddress();
+      }
+      session = jsch.getSession(ctx.connConfig().user(), connectHost, ctx.connConfig().port());
+      // 保留原始 hostname 用于 StrictHostKeyChecking 匹配 known_hosts
+      session.setConfig("HostKeyAlias", ctx.connConfig().host());
       // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
       session.setPassword(ctx.connConfig().password());
       session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");

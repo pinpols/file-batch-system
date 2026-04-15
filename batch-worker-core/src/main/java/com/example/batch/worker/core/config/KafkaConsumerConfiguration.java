@@ -16,6 +16,7 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import io.micrometer.observation.ObservationRegistry;
 
 @Configuration(proxyBeanMethods = false)
 public class KafkaConsumerConfiguration {
@@ -51,8 +52,12 @@ public class KafkaConsumerConfiguration {
 
   @Bean
   public KafkaTemplate<String, String> kafkaTemplate(
-      ProducerFactory<String, String> kafkaProducerFactory) {
-    return new KafkaTemplate<>(kafkaProducerFactory);
+      ProducerFactory<String, String> kafkaProducerFactory,
+      ObservationRegistry observationRegistry) {
+    KafkaTemplate<String, String> template = new KafkaTemplate<>(kafkaProducerFactory);
+    template.setObservationEnabled(true);
+    template.setObservationRegistry(observationRegistry);
+    return template;
   }
 
   @Bean
@@ -71,11 +76,14 @@ public class KafkaConsumerConfiguration {
 
   @Bean(name = "kafkaListenerContainerFactory")
   public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory(
-      ConsumerFactory<String, String> kafkaConsumerFactory) {
+      ConsumerFactory<String, String> kafkaConsumerFactory,
+      ObservationRegistry observationRegistry) {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(kafkaConsumerFactory);
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+    factory.getContainerProperties().setObservationEnabled(true);
+    factory.getContainerProperties().setObservationRegistry(observationRegistry);
     return factory;
   }
 }

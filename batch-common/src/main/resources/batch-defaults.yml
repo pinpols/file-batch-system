@@ -68,9 +68,10 @@ mybatis:
 # Actuator / 可观测性
 # ------------------------------------------------------------------
 management:
-  # S-3.4: 管理端点隔离到独立端口，不暴露到业务端口
+  # S-3.4: 管理端点隔离——生产环境通过 BATCH_MANAGEMENT_PORT 或 application-prod.yml 设独立端口
+  # 默认不设（与业务端口共享），保证本地开发脚本健康检查可用
   server:
-    port: ${BATCH_MANAGEMENT_PORT:0}
+    port: ${BATCH_MANAGEMENT_PORT:}
   endpoints:
     web:
       exposure:
