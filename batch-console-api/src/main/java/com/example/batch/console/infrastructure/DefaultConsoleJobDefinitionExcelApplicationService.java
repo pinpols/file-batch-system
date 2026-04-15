@@ -517,7 +517,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
   private byte[] writePreviewWorkbook(ParsedSession session, ValidationResult validationResult) {
     try (Workbook workbook = ConsoleExcelPreviewWorkbookSupport.createWorkbook()) {
       Sheet dataSheet = workbook.createSheet(SHEET);
-      dataSheet.createFreezePane(0, 1);
+      dataSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
       int rowIndex = 1;
       for (JobDefinitionRow rowData : session.rows()) {
@@ -568,7 +568,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet dataSheet = workbook.createSheet(SHEET);
-      dataSheet.createFreezePane(0, 1);
+      dataSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
       int rowIndex = 1;
       for (JobDefinitionEntity entity : rows) {
@@ -599,7 +599,6 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
-      workbook.dispose();
       return out.toByteArray();
     } catch (IOException exception) {
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
@@ -655,7 +654,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
 
   private void createDictSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet("DICT");
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {

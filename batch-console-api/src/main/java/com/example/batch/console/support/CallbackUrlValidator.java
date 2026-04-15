@@ -3,8 +3,11 @@ package com.example.batch.console.support;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -59,9 +62,14 @@ public class CallbackUrlValidator {
     }
     // IPv4 解析
     int[] octets = parseIpv4(lower);
-    if (octets == null) {
-      return false;
+    if (octets != null) {
+      return isBlockedIpv4(octets);
     }
+    // IPv6 地址检测（含方括号剥离）
+    return isBlockedIpv6(lower);
+  }
+
+  private boolean isBlockedIpv4(int[] octets) {
     // 127.0.0.0/8
     if (octets[0] == 127) {
       return true;
@@ -83,6 +91,49 @@ public class CallbackUrlValidator {
       return true;
     }
     return false;
+  }
+
+  private boolean isBlockedIpv6(String host) {
+    String normalized =
+        host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
+    InetAddress addr;
+    try {
+      addr = InetAddress.getByName(normalized);
+    } catch (UnknownHostException e) {
+      return false;
+    }
+    if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress()) {
+      return true;
+    }
+    if (addr instanceof Inet6Address) {
+      byte[] bytes = addr.getAddress();
+      // ::ffff:0:0/96 — IPv4-mapped IPv6: extract embedded IPv4 and re-check
+      if (isIpv4MappedIpv6(bytes)) {
+        int[] octets = {bytes[12] & 0xFF, bytes[13] & 0xFF, bytes[14] & 0xFF, bytes[15] & 0xFF};
+        return isBlockedIpv4(octets);
+      }
+      // fc00::/7 (unique local, covers fd00::/8)
+      if ((bytes[0] & 0xFE) == 0xFC) {
+        return true;
+      }
+      // fe80::/10 (link-local)
+      if ((bytes[0] & 0xFF) == 0xFE && (bytes[1] & 0xC0) == 0x80) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean isIpv4MappedIpv6(byte[] bytes) {
+    if (bytes.length != 16) {
+      return false;
+    }
+    for (int i = 0; i < 10; i++) {
+      if (bytes[i] != 0) {
+        return false;
+      }
+    }
+    return (bytes[10] & 0xFF) == 0xFF && (bytes[11] & 0xFF) == 0xFF;
   }
 
   private int[] parseIpv4(String host) {

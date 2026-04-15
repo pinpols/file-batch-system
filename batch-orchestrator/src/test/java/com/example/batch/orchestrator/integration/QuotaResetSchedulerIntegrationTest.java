@@ -61,7 +61,8 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
             7,
             null,
             Instant.now(),
-            Instant.now());
+            Instant.now(),
+            null);
     quotaRuntimeStateRepository.save(expired);
 
     // 直接触发调度器（调度间隔为 600 秒，测试中不会自动触发）
@@ -92,7 +93,8 @@ class QuotaResetSchedulerIntegrationTest extends AbstractIntegrationTest {
             3,
             null,
             Instant.now(),
-            Instant.now());
+            Instant.now(),
+            null);
     quotaRuntimeStateRepository.save(active);
 
     // reconcile() should not touch non-expired states

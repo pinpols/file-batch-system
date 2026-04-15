@@ -66,7 +66,6 @@ import org.springframework.web.multipart.MultipartFile;
 /** {@link ConsoleResourceQueueExcelApplicationService} 的默认实现。 */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("deprecation")
 public class DefaultConsoleResourceQueueExcelApplicationService
     implements ConsoleResourceQueueExcelApplicationService {
 
@@ -421,7 +420,7 @@ public class DefaultConsoleResourceQueueExcelApplicationService
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       Sheet dataSheet = workbook.createSheet(SHEET_NAME);
-      dataSheet.createFreezePane(0, 1);
+      dataSheet.createFreezePane(0, 1, 0, 1);
       writeTemplateHeaders(dataSheet, COLUMNS, COLUMN_GUIDES, workbook);
       int rowIndex = 1;
       for (Map<String, Object> row : rows) {
@@ -439,7 +438,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
       createDictSheet(workbook);
       createValidationSheet(workbook);
       workbook.write(out);
-      workbook.dispose();
       return out.toByteArray();
     } catch (IOException exception) {
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
@@ -510,7 +508,7 @@ public class DefaultConsoleResourceQueueExcelApplicationService
 
   private void createDictSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet("DICT");
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
     String[][] rows = {

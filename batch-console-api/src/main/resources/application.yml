@@ -70,7 +70,8 @@ batch:
       # JWT 对称签名密钥（生产环境务必使用环境变量或密钥管理注入）
       jwt-secret: ${BATCH_CONSOLE_JWT_SECRET:console-jwt-secret-change-me}
       # JWT 有效期
-      jwt-ttl: ${BATCH_CONSOLE_JWT_TTL:PT8H}
+      # S-3.1: 默认 2 小时（原 8h），减少 token 泄露后的风险窗口
+      jwt-ttl: ${BATCH_CONSOLE_JWT_TTL:PT2H}
       # Redis 中会话状态保留时长
       session-state-ttl: ${BATCH_CONSOLE_SESSION_STATE_TTL:P30D}
     ai:

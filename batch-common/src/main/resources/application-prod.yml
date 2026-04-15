@@ -1,0 +1,28 @@
+# ==========================================================
+# application-prod.yml — 生产环境配置覆盖
+#
+# 激活方式：SPRING_PROFILES_ACTIVE=prod
+# 本文件只包含与 batch-defaults.yml 不同的生产特化值。
+# ==========================================================
+
+spring:
+  lifecycle:
+    # A-5.4: 生产环境优雅关闭超时加长
+    timeout-per-shutdown-phase: ${BATCH_SHUTDOWN_TIMEOUT:180s}
+
+management:
+  tracing:
+    sampling:
+      # 生产采样率 10%，避免链路追踪数据量过大
+      probability: ${OTEL_SAMPLING_PROBABILITY:0.1}
+
+logging:
+  structured:
+    format:
+      # 生产输出 ECS JSON 格式，便于 Loki / Elasticsearch 解析
+      console: ${BATCH_LOG_FORMAT:ecs}
+
+batch:
+  security:
+    # 生产环境强制关闭测试模式
+    testing-open: false

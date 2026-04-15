@@ -11,7 +11,6 @@ import com.example.batch.console.web.request.DrainWorkerRequest;
 import com.example.batch.console.web.request.ForceOfflineWorkerRequest;
 import com.example.batch.console.web.response.ConsoleWorkerClaimedTaskResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
-import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -120,7 +119,7 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
     ConsoleRequestMetadata meta = requestMetadataResolver.current();
     RestClient client =
         restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
-    List<JobTaskEntity> tasks =
+    List<ConsoleWorkerClaimedTaskResponse> tasks =
         client
             .get()
             .uri(
@@ -132,8 +131,8 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
             .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, meta.requestId())
             .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, meta.traceId())
             .retrieve()
-            .body(new ParameterizedTypeReference<List<JobTaskEntity>>() {});
-    return tasks == null ? List.of() : tasks.stream().map(this::toResponse).toList();
+            .body(new ParameterizedTypeReference<List<ConsoleWorkerClaimedTaskResponse>>() {});
+    return tasks == null ? List.of() : tasks;
   }
 
   @Override
@@ -160,29 +159,6 @@ public class DefaultConsoleWorkerApplicationService implements ConsoleWorkerAppl
 
   private ConsoleWorkerRegistryResponse toResponse(ConsoleWorkerRegistryResponse response) {
     return response;
-  }
-
-  private ConsoleWorkerClaimedTaskResponse toResponse(JobTaskEntity task) {
-    if (task == null) {
-      return null;
-    }
-    return new ConsoleWorkerClaimedTaskResponse(
-        task.getId(),
-        task.getTenantId(),
-        task.getJobInstanceId(),
-        task.getJobPartitionId(),
-        task.getTaskType(),
-        task.getTaskSeq(),
-        task.getTaskStatus(),
-        task.getAssignedWorkerCode(),
-        task.getTaskPayload(),
-        task.getResultSummary(),
-        task.getErrorCode(),
-        task.getErrorMessage(),
-        task.getStartedAt(),
-        task.getFinishedAt(),
-        task.getCreatedAt(),
-        task.getUpdatedAt());
   }
 
   private String resolveUrl(String url) {

@@ -13,7 +13,8 @@ server:
   shutdown: graceful
 spring:
   lifecycle:
-    timeout-per-shutdown-phase: ${BATCH_SHUTDOWN_TIMEOUT:30s}
+    # A-5.4: Worker 长任务需要更多时间完成；各模块可在自身 application.yml 中覆盖
+    timeout-per-shutdown-phase: ${BATCH_SHUTDOWN_TIMEOUT:120s}
 
 # ------------------------------------------------------------------
 # 平台数据库（Platform PostgreSQL，所有服务模块共用）
@@ -24,7 +25,7 @@ spring:
     # 平台库用户名
     username: ${BATCH_PLATFORM_DB_USERNAME:batch_user}
     # 平台库密码（生产请通过环境变量/密钥管理注入）
-    password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
+    password: ${BATCH_PLATFORM_DB_PASSWORD:}
     # JDBC 驱动类
     driver-class-name: org.postgresql.Driver
   kafka:
@@ -67,6 +68,9 @@ mybatis:
 # Actuator / 可观测性
 # ------------------------------------------------------------------
 management:
+  # S-3.4: 管理端点隔离到独立端口，不暴露到业务端口
+  server:
+    port: ${BATCH_MANAGEMENT_PORT:0}
   endpoints:
     web:
       exposure:
@@ -75,10 +79,17 @@ management:
     health:
       probes:
         enabled: true
+      # A-4.1: 健康检查显示详情（仅管理端口可见）
+      show-details: always
   health:
     livenessstate:
       enabled: true
     readinessstate:
+      enabled: true
+    # A-4.1: 启用 DB / Redis / Kafka 运行时健康检查
+    db:
+      enabled: true
+    redis:
       enabled: true
   # ── 分布式追踪 ──────────────────────────────────────────────────
   tracing:
@@ -127,7 +138,7 @@ batch:
       # MinIO 访问密钥 ID
       access-key: ${BATCH_MINIO_ACCESS_KEY:minioadmin}
       # MinIO 秘密访问密钥
-      secret-key: ${BATCH_MINIO_SECRET_KEY:minioadmin123}
+      secret-key: ${BATCH_MINIO_SECRET_KEY:}
       # 默认 bucket
       bucket: ${BATCH_MINIO_BUCKET:batch-dev}
 
@@ -144,7 +155,7 @@ batch:
       # 业务库用户名
       username: ${BATCH_BUSINESS_DB_USERNAME:batch_user}
       # 业务库密码（生产请通过环境变量/密钥管理注入）
-      password: ${BATCH_BUSINESS_DB_PASSWORD:batch_pass_123}
+      password: ${BATCH_BUSINESS_DB_PASSWORD:}
       # 业务 schema（用于 SQL 拼接/校验等）
       schema: ${BATCH_BUSINESS_DB_SCHEMA:biz}
 

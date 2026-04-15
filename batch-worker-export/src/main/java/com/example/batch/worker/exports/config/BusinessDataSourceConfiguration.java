@@ -36,6 +36,19 @@ public class BusinessDataSourceConfiguration {
     if (hikariConfig.getDriverClassName() == null || hikariConfig.getDriverClassName().isBlank()) {
       hikariConfig.setDriverClassName("org.postgresql.Driver");
     }
+    // A-3.3: 业务库连接池显式配置
+    if (hikariConfig.getMaximumPoolSize() <= 1) {
+      hikariConfig.setMaximumPoolSize(properties.getMaximumPoolSize());
+    }
+    if (hikariConfig.getMinimumIdle() < 0) {
+      hikariConfig.setMinimumIdle(properties.getMinimumIdle());
+    }
+    if (hikariConfig.getConnectionTimeout() <= 0) {
+      hikariConfig.setConnectionTimeout(properties.getConnectionTimeoutMs());
+    }
+    if (hikariConfig.getLeakDetectionThreshold() <= 0) {
+      hikariConfig.setLeakDetectionThreshold(properties.getLeakDetectionThresholdMs());
+    }
     return new HikariDataSource(hikariConfig);
   }
 

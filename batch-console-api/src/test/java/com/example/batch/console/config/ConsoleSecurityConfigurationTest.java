@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.core.env.Environment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -48,7 +49,9 @@ class ConsoleSecurityConfigurationTest {
     batchSecurityProperties = new BatchSecurityProperties();
     batchSecurityProperties.setTestingOpen(false);
     sessionRegistry = Mockito.mock(ConsoleSessionRegistry.class);
-    jwtService = new ConsoleJwtService(properties, sessionRegistry);
+    Environment environment = Mockito.mock(Environment.class);
+    Mockito.when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
+    jwtService = new ConsoleJwtService(properties, sessionRegistry, environment);
     filter =
         new ConsoleAuthenticationFilter(
             properties,

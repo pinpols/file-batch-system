@@ -147,13 +147,12 @@ public class TaskDispatchOutboxService {
     return instanceNo + ":task:" + task.getId();
   }
 
-  // #4-1: idempotencyKey 包含 task version 维度，避免重试场景下 Worker 幂等去重静默跳过重试消息
+  // C-9.1: idempotencyKey 不含 version，避免 Kafka 投递成功但 DB 回滚时因 version 变化生成新幂等键导致重复执行
   private static String resolveIdempotencyKeyWithoutPartition(JobTaskEntity task, String eventKey) {
     if (eventKey != null && !eventKey.isBlank()) {
       return eventKey;
     }
-    long version = task.getVersion() == null ? 0L : task.getVersion();
-    return task.getTenantId() + ":task:" + task.getId() + ":v:" + version;
+    return task.getTenantId() + ":task:" + task.getId() + ":instance:" + task.getJobInstanceId();
   }
 
   private String resolvePriorityBand(Integer priority) {

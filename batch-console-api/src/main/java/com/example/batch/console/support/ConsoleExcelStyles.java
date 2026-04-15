@@ -273,7 +273,7 @@ public final class ConsoleExcelStyles {
   /** 创建 VALIDATION sheet 标准结构。 */
   public static void createValidationSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet("VALIDATION");
-    sheet.createFreezePane(0, 1);
+    sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = createHeaderStyle(workbook);
     Row header = sheet.createRow(0);
     header.setHeightInPoints(22);
