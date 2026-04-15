@@ -16,8 +16,10 @@ import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -228,6 +230,8 @@ class AbstractTaskConsumerTest {
       DeadLetterPublisher dlqArg,
       String workerCode) {
     KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
     WorkerRegistration registration = mock(WorkerRegistration.class);
     when(registration.getWorkerId()).thenReturn(workerCode != null ? workerCode : "w-default");
@@ -236,7 +240,7 @@ class AbstractTaskConsumerTest {
     WorkerConfiguration cfg = workerConfiguration(workerType, workerCode);
 
     AbstractTaskConsumer consumer =
-        new AbstractTaskConsumer(registry) {
+        new AbstractTaskConsumer(registry, meterRegistryProvider) {
           @Override
           protected AbstractWorkerLoop workerLoop() {
             return new AbstractWorkerLoop(runtimeFacade) {

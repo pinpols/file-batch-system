@@ -15,6 +15,7 @@ import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -63,8 +65,10 @@ class AbstractTaskConsumerBackpressureTest {
     WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
     when(runtimeFacade.start(any())).thenAnswer(inv -> inv.getArgument(0));
 
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     AbstractTaskConsumer consumer =
-        new AbstractTaskConsumer(registry) {
+        new AbstractTaskConsumer(registry, meterRegistryProvider) {
           @Override
           protected AbstractWorkerLoop workerLoop() {
             return new AbstractWorkerLoop(runtimeFacade) {
@@ -164,8 +168,10 @@ class AbstractTaskConsumerBackpressureTest {
               return new WorkerExecutionResult("1", true, "ok");
             });
 
+    @SuppressWarnings("unchecked")
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     AbstractTaskConsumer consumer =
-        new AbstractTaskConsumer(registry) {
+        new AbstractTaskConsumer(registry, meterRegistryProvider) {
           @Override
           protected AbstractWorkerLoop workerLoop() {
             return new AbstractWorkerLoop(runtimeFacade) {

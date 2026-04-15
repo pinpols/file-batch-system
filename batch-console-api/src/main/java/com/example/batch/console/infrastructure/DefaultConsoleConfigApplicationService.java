@@ -82,24 +82,39 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     Integer latestVersionNo =
         configReleaseMapper.selectLatestVersionNo(
             mapOf(
-                KEY_TENANT_ID, tenantId,
-                KEY_CONFIG_TYPE, request.getConfigType(),
-                "configKey", request.getConfigKey()));
+                KEY_TENANT_ID,
+                tenantId,
+                KEY_CONFIG_TYPE,
+                request.getConfigType(),
+                "configKey",
+                request.getConfigKey()));
     int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo + 1;
     configReleaseMapper.insertConfigRelease(
         mapOf(
-            KEY_TENANT_ID, tenantId,
-            KEY_CONFIG_TYPE, ConsoleTextSanitizer.safeInput(request.getConfigType(), 64),
-            "configKey", ConsoleTextSanitizer.safeInput(request.getConfigKey(), 128),
-            "configName", ConsoleTextSanitizer.safeInput(request.getConfigName(), 256),
-            "configStatus", ConfigLifecycleStatus.DRAFT.code(),
-            "versionNo", nextVersionNo,
-            KEY_GRAY_SCOPE_JSON, request.getGrayScopeJson(),
-            "configPayloadJson", request.getConfigPayloadJson(),
-            KEY_EFFECTIVE_FROM_AT, parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT),
-            KEY_EFFECTIVE_TO_AT, parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT),
-            "createdBy", ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-            "updatedBy", ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
+            KEY_TENANT_ID,
+            tenantId,
+            KEY_CONFIG_TYPE,
+            ConsoleTextSanitizer.safeInput(request.getConfigType(), 64),
+            "configKey",
+            ConsoleTextSanitizer.safeInput(request.getConfigKey(), 128),
+            "configName",
+            ConsoleTextSanitizer.safeInput(request.getConfigName(), 256),
+            "configStatus",
+            ConfigLifecycleStatus.DRAFT.code(),
+            "versionNo",
+            nextVersionNo,
+            KEY_GRAY_SCOPE_JSON,
+            request.getGrayScopeJson(),
+            "configPayloadJson",
+            request.getConfigPayloadJson(),
+            KEY_EFFECTIVE_FROM_AT,
+            parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT),
+            KEY_EFFECTIVE_TO_AT,
+            parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT),
+            "createdBy",
+            ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+            "updatedBy",
+            ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
     logChange(
         new ChangeLogCommand(
             new ChangeLogContext(
@@ -171,22 +186,34 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             : ConfigLifecycleStatus.PUBLISHED.code();
     secretVersionMapper.insertSecretVersion(
         mapOf(
-            KEY_TENANT_ID, tenantId,
-            "secretRef", ConsoleTextSanitizer.safeInput(request.getSecretRef(), 128),
-            "secretName", ConsoleTextSanitizer.safeInput(request.getSecretName(), 256),
-            "versionNo", nextVersionNo,
-            "secretStatus", nextStatus,
-            "currentVersion", true,
+            KEY_TENANT_ID,
+            tenantId,
+            "secretRef",
+            ConsoleTextSanitizer.safeInput(request.getSecretRef(), 128),
+            "secretName",
+            ConsoleTextSanitizer.safeInput(request.getSecretName(), 256),
+            "versionNo",
+            nextVersionNo,
+            "secretStatus",
+            nextStatus,
+            "currentVersion",
+            true,
             "rotationWindowStartAt",
-                parseInstant(request.getRotationWindowStartAt(), "rotationWindowStartAt"),
+            parseInstant(request.getRotationWindowStartAt(), "rotationWindowStartAt"),
             "rotationWindowEndAt",
-                parseInstant(request.getRotationWindowEndAt(), "rotationWindowEndAt"),
-            KEY_EFFECTIVE_FROM_AT, parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT),
-            KEY_EFFECTIVE_TO_AT, parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT),
-            "secretPayloadJson", request.getSecretPayloadJson(),
-            "rotationReason", ConsoleTextSanitizer.safeInput(request.getReason(), 512),
-            "createdBy", ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
-            "updatedBy", ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
+            parseInstant(request.getRotationWindowEndAt(), "rotationWindowEndAt"),
+            KEY_EFFECTIVE_FROM_AT,
+            parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT),
+            KEY_EFFECTIVE_TO_AT,
+            parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT),
+            "secretPayloadJson",
+            request.getSecretPayloadJson(),
+            "rotationReason",
+            ConsoleTextSanitizer.safeInput(request.getReason(), 512),
+            "createdBy",
+            ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64),
+            "updatedBy",
+            ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64)));
     logChange(
         new ChangeLogCommand(
             new ChangeLogContext(
@@ -266,20 +293,29 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   private void logChange(ChangeLogCommand command) {
     configChangeLogMapper.insertConfigChangeLog(
         mapOf(
-            KEY_TENANT_ID, command.context().tenantId(),
-            KEY_CONFIG_TYPE, command.target().configType(),
-            "configKey", command.target().configKey(),
-            "versionNo", command.target().versionNo(),
-            "changeAction", command.change().action(),
-            "changeResult", command.change().result(),
-            "operatorType", "API",
-            "operatorId", ConsoleTextSanitizer.safeInput(command.context().operatorId(), 64),
-            "traceId", ConsoleTextSanitizer.safeInput(command.context().traceId(), 128),
+            KEY_TENANT_ID,
+            command.context().tenantId(),
+            KEY_CONFIG_TYPE,
+            command.target().configType(),
+            "configKey",
+            command.target().configKey(),
+            "versionNo",
+            command.target().versionNo(),
+            "changeAction",
+            command.change().action(),
+            "changeResult",
+            command.change().result(),
+            "operatorType",
+            "API",
+            "operatorId",
+            ConsoleTextSanitizer.safeInput(command.context().operatorId(), 64),
+            "traceId",
+            ConsoleTextSanitizer.safeInput(command.context().traceId(), 128),
             "changeSummaryJson",
-                JsonUtils.toJson(
-                    detailOf(
-                        ConsoleTextSanitizer.safeInput(command.context().reason(), 512),
-                        command.change().detail()))));
+            JsonUtils.toJson(
+                detailOf(
+                    ConsoleTextSanitizer.safeInput(command.context().reason(), 512),
+                    command.change().detail()))));
   }
 
   private String resolveTenant(String requestTenantId) {
@@ -351,9 +387,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     SecretVersionEntity entity =
         Guard.requireFound(
             secretVersionMapper.selectById(
-                mapOf(
-                    KEY_TENANT_ID, resolved,
-                    "secretVersionId", secretVersionId)),
+                mapOf(KEY_TENANT_ID, resolved, "secretVersionId", secretVersionId)),
             "secret version not found: " + secretVersionId);
     return toSecretVersionResponse(entity);
   }

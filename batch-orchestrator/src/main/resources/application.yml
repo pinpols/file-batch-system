@@ -39,6 +39,8 @@ spring:
       maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:30}
       minimum-idle: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MIN_IDLE:5}
       connection-timeout: ${BATCH_ORCHESTRATOR_PLATFORM_DB_CONNECTION_TIMEOUT_MS:5000}
+      # #7-2: 连接泄漏检测阈值（毫秒），超过此时间未归还的连接会产生警告日志
+      leak-detection-threshold: ${BATCH_ORCHESTRATOR_PLATFORM_DB_LEAK_DETECTION_MS:30000}
 
 mybatis:
   # MyBatis domain 的别名包路径（用于 mapper XML 简化类型引用）
@@ -91,6 +93,8 @@ batch:
     retry-delay-seconds: ${BATCH_OUTBOX_RETRY_DELAY_SECONDS:60}
     # Outbox 最大重试次数
     max-retry-attempts: ${BATCH_OUTBOX_MAX_RETRY_ATTEMPTS:5}
+    # PUBLISHING 状态最大驻留时长（秒），超时自动回退为 FAILED
+    publishing-timeout-seconds: ${BATCH_OUTBOX_PUBLISHING_TIMEOUT_SECONDS:120}
     # Outbox 投递熔断（全局）：连续若干轮推进失败后进入 cooldown
     circuit-breaker-enabled: ${BATCH_OUTBOX_CIRCUIT_BREAKER_ENABLED:true}
     circuit-breaker-failure-threshold-consecutive-polls: ${BATCH_OUTBOX_CIRCUIT_BREAKER_FAILURE_THRESHOLD_CONSECUTIVE_POLLS:3}

@@ -10,12 +10,21 @@ import org.springframework.data.repository.query.Param;
 public interface ConsoleClusterDiagnosticRepository
     extends Repository<ConsoleJdbcQueryAnchor, Long> {
 
-  @Query("SELECT name, lock_until, locked_at, locked_by FROM batch.shedlock ORDER BY name")
+  @Query(
+      """
+      SELECT name,
+             lock_until AS "lockUntil",
+             locked_at  AS "lockedAt",
+             locked_by  AS "lockedBy"
+        FROM batch.shedlock
+       ORDER BY name
+      """)
   List<ShedLockView> shedlockAll();
 
   @Query(
       """
-      SELECT delivery_status, count(*) AS cnt
+      SELECT delivery_status AS "deliveryStatus",
+             count(*)        AS cnt
         FROM batch.event_delivery_log
        WHERE tenant_id = :tenantId
        GROUP BY delivery_status
@@ -29,19 +38,33 @@ public interface ConsoleClusterDiagnosticRepository
       """)
   Long countPendingOutboxEvents(@Param("tenantId") String tenantId);
 
-  interface ShedLockView {
-    String getName();
+  record ShedLockView(String name, Instant lockUntil, Instant lockedAt, String lockedBy) {
 
-    Instant getLockUntil();
+    public String getName() {
+      return name;
+    }
 
-    Instant getLockedAt();
+    public Instant getLockUntil() {
+      return lockUntil;
+    }
 
-    String getLockedBy();
+    public Instant getLockedAt() {
+      return lockedAt;
+    }
+
+    public String getLockedBy() {
+      return lockedBy;
+    }
   }
 
-  interface DeliveryStatusCountView {
-    String getDeliveryStatus();
+  record DeliveryStatusCountView(String deliveryStatus, Long cnt) {
 
-    Long getCnt();
+    public String getDeliveryStatus() {
+      return deliveryStatus;
+    }
+
+    public Long getCnt() {
+      return cnt;
+    }
   }
 }

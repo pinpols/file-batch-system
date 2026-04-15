@@ -43,9 +43,12 @@ public class ConsoleDashboardQueryService {
             .map(
                 row ->
                     Map.of(
-                        KEY_DAY, row.getDay(),
-                        "status", row.getStatus(),
-                        KEY_COUNT, row.getCount() == null ? 0L : row.getCount()))
+                        KEY_DAY,
+                        row.getDay(),
+                        "status",
+                        row.getStatus(),
+                        KEY_COUNT,
+                        row.getCount() == null ? 0L : row.getCount()))
             .toList());
     return result;
   }
@@ -70,7 +73,10 @@ public class ConsoleDashboardQueryService {
             .map(
                 row ->
                     Map.of(
-                        KEY_DAY, row.getDay(), KEY_COUNT, row.getCount() == null ? 0L : row.getCount()))
+                        KEY_DAY,
+                        row.getDay(),
+                        KEY_COUNT,
+                        row.getCount() == null ? 0L : row.getCount()))
             .toList());
     return result;
   }
@@ -95,9 +101,12 @@ public class ConsoleDashboardQueryService {
             .map(
                 row ->
                     Map.of(
-                        "workerGroup", row.getWorkerGroup(),
-                        "status", row.getStatus(),
-                        KEY_COUNT, row.getCount() == null ? 0L : row.getCount()))
+                        "workerGroup",
+                        row.getWorkerGroup(),
+                        "status",
+                        row.getStatus(),
+                        KEY_COUNT,
+                        row.getCount() == null ? 0L : row.getCount()))
             .toList());
     result.put(
         "activePartitionsByWorker",
@@ -133,9 +142,12 @@ public class ConsoleDashboardQueryService {
             .map(
                 row ->
                     Map.of(
-                        KEY_DAY, row.getDay(),
-                        "severity", row.getSeverity(),
-                        KEY_COUNT, row.getCount() == null ? 0L : row.getCount()))
+                        KEY_DAY,
+                        row.getDay(),
+                        "severity",
+                        row.getSeverity(),
+                        KEY_COUNT,
+                        row.getCount() == null ? 0L : row.getCount()))
             .toList());
     return result;
   }
@@ -229,9 +241,12 @@ public class ConsoleDashboardQueryService {
             .map(
                 row ->
                     Map.of(
-                        KEY_DAY, row.getDay(),
-                        "breached", row.getBreached() == null ? 0L : row.getBreached(),
-                        "onTime", row.getOnTime() == null ? 0L : row.getOnTime()))
+                        KEY_DAY,
+                        row.getDay(),
+                        "breached",
+                        row.getBreached() == null ? 0L : row.getBreached(),
+                        "onTime",
+                        row.getOnTime() == null ? 0L : row.getOnTime()))
             .toList());
     return result;
   }

@@ -129,7 +129,8 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry("job_code", requiredColumn("作业唯一编码，用于匹配已有作业定义。", GUIDE_STR, "JOB_SETTLEMENT_001")),
+          Map.entry(
+              "job_code", requiredColumn("作业唯一编码，用于匹配已有作业定义。", GUIDE_STR, "JOB_SETTLEMENT_001")),
           Map.entry("job_name", optionalColumn("控制台展示的作业名称。", GUIDE_STR, "清算作业")),
           Map.entry(
               COL_JOB_TYPE,
@@ -183,7 +184,8 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
           Map.entry(
               COL_DEFAULT_PARAMS,
               readOnlyColumn("默认启动参数。该维护模板中请保持导出的 JSON 不变。", "JSON", "{\"batchSize\":1000}")),
-          Map.entry(COL_ENABLED, optionalColumn("作业定义是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(
+              COL_ENABLED, optionalColumn("作业定义是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "夜间清算处理链路")));
 
   private final ConsoleTenantGuard tenantGuard;
@@ -436,7 +438,10 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
         checkReadOnly(row.jobType(), existing.getJobType(), COL_JOB_TYPE, rowIssues);
         checkReadOnly(row.scheduleType(), existing.getScheduleType(), COL_SCHEDULE_TYPE, rowIssues);
         checkReadOnly(
-            row.executionHandler(), existing.getExecutionHandler(), COL_EXECUTION_HANDLER, rowIssues);
+            row.executionHandler(),
+            existing.getExecutionHandler(),
+            COL_EXECUTION_HANDLER,
+            rowIssues);
         checkReadOnly(row.paramSchema(), existing.getParamSchema(), COL_PARAM_SCHEMA, rowIssues);
         checkReadOnly(
             row.defaultParams(), existing.getDefaultParams(), COL_DEFAULT_PARAMS, rowIssues);
@@ -711,19 +716,24 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
                     "reason", ConsoleTextSanitizer.safeInput(reason, 512),
                     "detail",
                         mapOf(
-                            "jobName", effective(row.jobName(), existing.getJobName()),
-                            "queueCode", effective(row.queueCode(), existing.getQueueCode()),
-                            "workerGroup", effective(row.workerGroup(), existing.getWorkerGroup()),
+                            "jobName",
+                            effective(row.jobName(), existing.getJobName()),
+                            "queueCode",
+                            effective(row.queueCode(), existing.getQueueCode()),
+                            "workerGroup",
+                            effective(row.workerGroup(), existing.getWorkerGroup()),
                             "scheduleExpr",
-                                effective(row.scheduleExpr(), existing.getScheduleExpr()),
-                            "retryPolicy", effective(row.retryPolicy(), existing.getRetryPolicy()),
+                            effective(row.scheduleExpr(), existing.getScheduleExpr()),
+                            "retryPolicy",
+                            effective(row.retryPolicy(), existing.getRetryPolicy()),
                             "retryMaxCount",
-                                effective(row.retryMaxCount(), existing.getRetryMaxCount()),
+                            effective(row.retryMaxCount(), existing.getRetryMaxCount()),
                             "timeoutSeconds",
-                                effective(row.timeoutSeconds(), existing.getTimeoutSeconds()),
+                            effective(row.timeoutSeconds(), existing.getTimeoutSeconds()),
                             "shardStrategy",
-                                effective(row.shardStrategy(), existing.getShardStrategy()),
-                            COL_ENABLED, effective(row.enabled(), existing.getEnabled()))))));
+                            effective(row.shardStrategy(), existing.getShardStrategy()),
+                            COL_ENABLED,
+                            effective(row.enabled(), existing.getEnabled()))))));
   }
 
   private Map<String, Object> mapOf(Object... pairs) {

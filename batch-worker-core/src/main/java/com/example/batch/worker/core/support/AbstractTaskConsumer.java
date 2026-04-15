@@ -11,10 +11,12 @@ import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
@@ -66,10 +68,15 @@ public abstract class AbstractTaskConsumer {
   private int maxConcurrentTasks;
 
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
+  // #6-2: 注入 MeterRegistry 用于暴露信号量可用许可数
+  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
   private volatile Semaphore semaphore;
 
-  protected AbstractTaskConsumer(KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
+  protected AbstractTaskConsumer(
+      KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
+    this.meterRegistryProvider = meterRegistryProvider;
   }
 
   /**
@@ -118,13 +125,14 @@ public abstract class AbstractTaskConsumer {
           message.taskId(),
           ex.getMessage(),
           ex);
-      DeadLetterPublisher dlq = deadLetterPublisher();
-      if (dlq != null) {
-        dlq.publish(
-            payload,
-            workerConfiguration().topic(),
+      // #4-3: 先确认 DLQ 写入成功再提交偏移量，避免消息双重丢失
+      if (!publishToDlqSafely(payload, ex.getMessage())) {
+        // DLQ 写入失败：不提交偏移量，Kafka 将重新投递该消息
+        log.error(
+            "{} DLQ 写入失败，不提交偏移量以便消息重新投递: taskId={}",
             workerConfiguration().workerType(),
-            ex.getMessage());
+            message.taskId());
+        return false;
       }
       return true;
     } finally {
@@ -142,6 +150,26 @@ public abstract class AbstractTaskConsumer {
     }
   }
 
+  /** #4-3: 安全发布到 DLQ，返回是否成功。DLQ 写入失败时返回 false，调用方据此决定是否提交偏移量。 */
+  private boolean publishToDlqSafely(String payload, String errorMessage) {
+    DeadLetterPublisher dlq = deadLetterPublisher();
+    if (dlq == null) {
+      return true; // 无 DLQ 配置，视为成功（避免无限重投递）
+    }
+    try {
+      dlq.publish(
+          payload, workerConfiguration().topic(), workerConfiguration().workerType(), errorMessage);
+      return true;
+    } catch (Exception dlqEx) {
+      log.error(
+          "{} DLQ 发布失败: dlqError={}",
+          workerConfiguration().workerType(),
+          dlqEx.getMessage(),
+          dlqEx);
+      return false;
+    }
+  }
+
   private Semaphore ensureSemaphore() {
     Semaphore local = semaphore;
     if (local != null) {
@@ -151,6 +179,17 @@ public abstract class AbstractTaskConsumer {
       if (semaphore == null) {
         int permits = Math.max(1, maxConcurrentTasks);
         semaphore = new Semaphore(permits);
+        // #6-2: 暴露信号量可用许可数到 Actuator/Prometheus
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (registry != null) {
+          Semaphore captured = semaphore;
+          registry.gauge(
+              "batch.worker.semaphore.available",
+              io.micrometer.core.instrument.Tags.of(
+                  "workerType", workerConfiguration().workerType()),
+              captured,
+              Semaphore::availablePermits);
+        }
       }
       return semaphore;
     }

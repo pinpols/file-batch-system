@@ -16,6 +16,14 @@ public record FilePipelineQuery(
 
   public FilePipelineQuery withoutPage() {
     return new FilePipelineQuery(
-        tenantId, fileId, pipelineInstanceId, pipelineType, runStatus, traceId, fromTime, toTime, null);
+        tenantId,
+        fileId,
+        pipelineInstanceId,
+        pipelineType,
+        runStatus,
+        traceId,
+        fromTime,
+        toTime,
+        null);
   }
 }

@@ -30,4 +30,14 @@ public interface OutboxEventMapper {
 
   int markGiveUp(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("status") String status);
+
+  /**
+   * 将滞留在 PUBLISHING 状态超过指定时长的事件重置为 FAILED，防止事件永久卡死。
+   *
+   * @return 被重置的记录数
+   */
+  int resetStalePublishing(
+      @Param("publishingStatus") String publishingStatus,
+      @Param("failedStatus") String failedStatus,
+      @Param("timeoutSeconds") long timeoutSeconds);
 }

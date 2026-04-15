@@ -93,7 +93,9 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
           Map.entry("max_partitions_per_tenant", requiredColumn("租户最大分区数，必须 >= 0。", "整数", "100")),
           Map.entry("max_qps_per_tenant", requiredColumn("租户最大 QPS，必须 >= 0。", "整数", "50")),
           Map.entry("fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", "整数", "1")),
-          Map.entry(COL_ENABLED, optionalColumn("策略是否启用，默认 TRUE。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
+          Map.entry(
+              COL_ENABLED,
+              optionalColumn("策略是否启用，默认 TRUE。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
           Map.entry(COL_DESCRIPTION, optionalColumn("策略描述信息。", "字符串", "默认配额策略")));
 
   private final ConsoleTenantGuard tenantGuard;

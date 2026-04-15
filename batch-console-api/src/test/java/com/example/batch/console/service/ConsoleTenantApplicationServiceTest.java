@@ -8,12 +8,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.exception.BizException;
+import com.example.batch.console.application.ConsoleTriggerProxyService;
 import com.example.batch.console.mapper.ConsoleUserAccountMapper;
 import com.example.batch.console.mapper.FilePipelineMapper;
 import com.example.batch.console.mapper.JobInstanceMapper;
 import com.example.batch.console.mapper.TenantMapper;
 import com.example.batch.console.mapper.WorkflowRunMapper;
-import com.example.batch.console.application.ConsoleTriggerProxyService;
 import com.example.batch.console.support.ConsolePasswordHasher;
 import java.util.List;
 import java.util.Map;

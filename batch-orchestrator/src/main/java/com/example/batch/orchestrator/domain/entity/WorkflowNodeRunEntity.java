@@ -1,10 +1,12 @@
 package com.example.batch.orchestrator.domain.entity;
 
+import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.time.Instant;
 import lombok.Data;
 
+// #8-1: 实现 Stateful 接口，消除 DefaultStateMachine 中的反射兜底路径
 @Data
-public class WorkflowNodeRunEntity {
+public class WorkflowNodeRunEntity implements Stateful {
 
   private Long id;
   private Long workflowRunId;
@@ -28,4 +30,9 @@ public class WorkflowNodeRunEntity {
   private Instant startedAt;
   private Instant finishedAt;
   private Long durationMs;
+
+  @Override
+  public String getStatus() {
+    return nodeStatus;
+  }
 }

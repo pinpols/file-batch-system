@@ -39,7 +39,8 @@ public class PlatformFileRuntimeRepository {
       return Map.of();
     }
     Map<String, Object> fileRecord =
-        platformFileRuntimeMapper.selectFileRecord(params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId));
+        platformFileRuntimeMapper.selectFileRecord(
+            params(KEY_TENANT_ID, tenantId, KEY_FILE_ID, fileId));
     return fileRecord == null ? Map.of() : fileRecord;
   }
 
@@ -51,7 +52,12 @@ public class PlatformFileRuntimeRepository {
     Long count =
         platformFileRuntimeMapper.countFileRecordByStoragePath(
             params(
-                KEY_TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
+                KEY_TENANT_ID,
+                tenantId,
+                "storageBucket",
+                storageBucket,
+                "storagePath",
+                storagePath));
     return count != null && count > 0;
   }
 
@@ -63,7 +69,12 @@ public class PlatformFileRuntimeRepository {
     Map<String, Object> row =
         platformFileRuntimeMapper.selectFileRecordByStoragePath(
             params(
-                KEY_TENANT_ID, tenantId, "storageBucket", storageBucket, "storagePath", storagePath));
+                KEY_TENANT_ID,
+                tenantId,
+                "storageBucket",
+                storageBucket,
+                "storagePath",
+                storagePath));
     return row == null ? Map.of() : row;
   }
 
@@ -75,7 +86,12 @@ public class PlatformFileRuntimeRepository {
     Map<String, Object> templateConfig =
         platformFileRuntimeMapper.selectLatestTemplateConfig(
             params(
-                KEY_TENANT_ID, tenantId, "templateCode", templateCode, "templateType", templateType));
+                KEY_TENANT_ID,
+                tenantId,
+                "templateCode",
+                templateCode,
+                "templateType",
+                templateType));
     return templateConfig == null ? Map.of() : templateConfig;
   }
 
@@ -107,12 +123,18 @@ public class PlatformFileRuntimeRepository {
     if (pipelineDefinitionId == null) {
       Map<String, Object> paramMap =
           params(
-              KEY_TENANT_ID, tenantId,
-              "jobCode", jobCode,
-              "pipelineName", jobCode,
-              "pipelineType", pipelineType,
-              "workerGroup", workerGroup,
-              "description", description);
+              KEY_TENANT_ID,
+              tenantId,
+              "jobCode",
+              jobCode,
+              "pipelineName",
+              jobCode,
+              "pipelineType",
+              pipelineType,
+              "workerGroup",
+              workerGroup,
+              "description",
+              description);
       platformFileRuntimeMapper.insertPipelineDefinition(paramMap);
       pipelineDefinitionId = toLong(paramMap.get(KEY_ID));
     }
@@ -146,15 +168,24 @@ public class PlatformFileRuntimeRepository {
     }
     Map<String, Object> paramMap =
         params(
-            KEY_TENANT_ID, p.tenantId(),
-            KEY_PIPELINE_DEFINITION_ID, p.pipelineDefinitionId(),
-            "jobCode", p.jobCode(),
-            "pipelineType", p.pipelineType(),
-            KEY_FILE_ID, p.fileId(),
-            "relatedJobInstanceId", p.relatedJobInstanceId(),
-            KEY_CURRENT_STAGE, p.currentStage(),
-            "traceId", p.traceId(),
-            "runStatus", com.example.batch.common.enums.PipelineRunStatus.RUNNING.name());
+            KEY_TENANT_ID,
+            p.tenantId(),
+            KEY_PIPELINE_DEFINITION_ID,
+            p.pipelineDefinitionId(),
+            "jobCode",
+            p.jobCode(),
+            "pipelineType",
+            p.pipelineType(),
+            KEY_FILE_ID,
+            p.fileId(),
+            "relatedJobInstanceId",
+            p.relatedJobInstanceId(),
+            KEY_CURRENT_STAGE,
+            p.currentStage(),
+            "traceId",
+            p.traceId(),
+            "runStatus",
+            com.example.batch.common.enums.PipelineRunStatus.RUNNING.name());
     platformFileRuntimeMapper.insertPipelineInstance(paramMap);
     return toLong(paramMap.get(KEY_ID));
   }
@@ -315,30 +346,54 @@ public class PlatformFileRuntimeRepository {
         StringUtils.hasText(fileVersion) ? fileVersion : "v" + finalNextGenerationNo;
     Map<String, Object> paramMap =
         params(
-            KEY_TENANT_ID, tenantId,
-            "fileCode", fileCode,
-            "bizType", bizType,
-            "fileCategory", fileCategory,
-            "fileName", fileName,
-            "originalFileName", originalFileName,
-            "fileExt", resolveFileExt(fileName),
-            "fileFormatType", fileFormatType,
-            "charset", charset,
-            "mimeType", resolveMimeType(fileFormatType),
-            "fileSizeBytes", Math.max(fileSizeBytes, 0L),
-            "checksumType", defaultText(checksumType, "NONE"),
-            "checksumValue", checksumValue,
-            "storageType", storageType,
-            "storagePath", storagePath,
-            "storageBucket", storageBucket,
-            "fileVersion", resolvedFileVersion,
-            "fileGenerationNo", finalNextGenerationNo,
-            "sourceType", sourceType,
-            "sourceRef", sourceRef,
-            "fileStatus", fileStatus,
-            "bizDate", bizDate,
-            "traceId", traceId,
-            "metadataJson", toJson(metadata));
+            KEY_TENANT_ID,
+            tenantId,
+            "fileCode",
+            fileCode,
+            "bizType",
+            bizType,
+            "fileCategory",
+            fileCategory,
+            "fileName",
+            fileName,
+            "originalFileName",
+            originalFileName,
+            "fileExt",
+            resolveFileExt(fileName),
+            "fileFormatType",
+            fileFormatType,
+            "charset",
+            charset,
+            "mimeType",
+            resolveMimeType(fileFormatType),
+            "fileSizeBytes",
+            Math.max(fileSizeBytes, 0L),
+            "checksumType",
+            defaultText(checksumType, "NONE"),
+            "checksumValue",
+            checksumValue,
+            "storageType",
+            storageType,
+            "storagePath",
+            storagePath,
+            "storageBucket",
+            storageBucket,
+            "fileVersion",
+            resolvedFileVersion,
+            "fileGenerationNo",
+            finalNextGenerationNo,
+            "sourceType",
+            sourceType,
+            "sourceRef",
+            sourceRef,
+            "fileStatus",
+            fileStatus,
+            "bizDate",
+            bizDate,
+            "traceId",
+            traceId,
+            "metadataJson",
+            toJson(metadata));
     platformFileRuntimeMapper.insertFileRecord(paramMap);
     return toLong(paramMap.get(KEY_ID));
   }
@@ -367,17 +422,28 @@ public class PlatformFileRuntimeRepository {
   public Long insertFileErrorRecord(FileErrorRecordParam p) {
     Map<String, Object> paramMap =
         params(
-            KEY_TENANT_ID, p.getTenantId(),
-            KEY_FILE_ID, p.getFileId(),
-            KEY_PIPELINE_INSTANCE_ID, p.getPipelineInstanceId(),
-            "pipelineStepRunId", p.getPipelineStepRunId(),
-            "recordNo", p.getRecordNo(),
-            "errorCode", p.getErrorCode(),
-            "errorMessage", truncate(p.getErrorMessage(), 1024),
-            "errorStage", p.getErrorStage(),
-            "isSkipped", p.isSkipped(),
-            "skipAction", p.getSkipAction(),
-            "rawRecordJson", toJson(p.getRawRecord()));
+            KEY_TENANT_ID,
+            p.getTenantId(),
+            KEY_FILE_ID,
+            p.getFileId(),
+            KEY_PIPELINE_INSTANCE_ID,
+            p.getPipelineInstanceId(),
+            "pipelineStepRunId",
+            p.getPipelineStepRunId(),
+            "recordNo",
+            p.getRecordNo(),
+            "errorCode",
+            p.getErrorCode(),
+            "errorMessage",
+            truncate(p.getErrorMessage(), 1024),
+            "errorStage",
+            p.getErrorStage(),
+            "isSkipped",
+            p.isSkipped(),
+            "skipAction",
+            p.getSkipAction(),
+            "rawRecordJson",
+            toJson(p.getRawRecord()));
     platformFileRuntimeMapper.insertFileErrorRecord(paramMap);
     return toLong(paramMap.get(KEY_ID));
   }
@@ -389,11 +455,16 @@ public class PlatformFileRuntimeRepository {
     }
     return platformFileRuntimeMapper.selectFileErrorRecords(
         params(
-            KEY_TENANT_ID, tenantId,
-            KEY_FILE_ID, fileId,
-            "errorCode", errorCode,
-            "errorStage", errorStage,
-            "limit", limit));
+            KEY_TENANT_ID,
+            tenantId,
+            KEY_FILE_ID,
+            fileId,
+            "errorCode",
+            errorCode,
+            "errorStage",
+            errorStage,
+            "limit",
+            limit));
   }
 
   public void appendAudit(FileAuditParam p) {
@@ -405,15 +476,24 @@ public class PlatformFileRuntimeRepository {
     }
     platformFileRuntimeMapper.insertFileAuditLog(
         params(
-            KEY_TENANT_ID, p.getTenantId(),
-            KEY_FILE_ID, p.getFileId(),
-            "operationType", p.getOperationType(),
-            "operationResult", p.getOperationResult(),
-            "operatorType", defaultText(p.getOperatorType(), "SYSTEM"),
-            "operatorId", p.getOperatorId(),
-            "traceId", p.getTraceId(),
-            "evidenceRef", p.getEvidenceRef(),
-            "detailSummaryJson", toJson(p.getDetailSummary())));
+            KEY_TENANT_ID,
+            p.getTenantId(),
+            KEY_FILE_ID,
+            p.getFileId(),
+            "operationType",
+            p.getOperationType(),
+            "operationResult",
+            p.getOperationResult(),
+            "operatorType",
+            defaultText(p.getOperatorType(), "SYSTEM"),
+            "operatorId",
+            p.getOperatorId(),
+            "traceId",
+            p.getTraceId(),
+            "evidenceRef",
+            p.getEvidenceRef(),
+            "detailSummaryJson",
+            toJson(p.getDetailSummary())));
   }
 
   public Long toLong(Object value) {
@@ -459,17 +539,28 @@ public class PlatformFileRuntimeRepository {
       }
       platformFileRuntimeMapper.insertPipelineStepDefinition(
           params(
-              KEY_PIPELINE_DEFINITION_ID, pipelineDefinitionId,
-              "stepCode", template.stepCode(),
-              "stepName", defaultText(template.stepName(), template.stepCode()),
-              "stageCode", template.stageCode(),
-              "stepOrder", template.stepOrder() == null ? 0 : template.stepOrder(),
-              "implCode", template.implCode(),
-              "stepParamsJson", toJson(template.stepParams()),
-              "timeoutSeconds", template.timeoutSeconds() == null ? 0 : template.timeoutSeconds(),
-              "retryPolicy", defaultText(template.retryPolicy(), "NONE"),
-              "retryMaxCount", template.retryMaxCount() == null ? 0 : template.retryMaxCount(),
-              "enabled", template.enabled()));
+              KEY_PIPELINE_DEFINITION_ID,
+              pipelineDefinitionId,
+              "stepCode",
+              template.stepCode(),
+              "stepName",
+              defaultText(template.stepName(), template.stepCode()),
+              "stageCode",
+              template.stageCode(),
+              "stepOrder",
+              template.stepOrder() == null ? 0 : template.stepOrder(),
+              "implCode",
+              template.implCode(),
+              "stepParamsJson",
+              toJson(template.stepParams()),
+              "timeoutSeconds",
+              template.timeoutSeconds() == null ? 0 : template.timeoutSeconds(),
+              "retryPolicy",
+              defaultText(template.retryPolicy(), "NONE"),
+              "retryMaxCount",
+              template.retryMaxCount() == null ? 0 : template.retryMaxCount(),
+              "enabled",
+              template.enabled()));
     }
   }
 

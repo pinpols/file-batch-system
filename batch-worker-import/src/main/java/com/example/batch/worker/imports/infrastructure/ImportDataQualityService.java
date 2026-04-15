@@ -283,9 +283,17 @@ public class ImportDataQualityService {
           new ValidationIssue(
               null,
               "IMPORT_VALIDATE_CHECKSUM",
-              "checksum mismatch, expected=" + expectedChecksum + MSG_ACTUAL_SUFFIX + actualChecksum,
+              "checksum mismatch, expected="
+                  + expectedChecksum
+                  + MSG_ACTUAL_SUFFIX
+                  + actualChecksum,
               Map.of(
-                  "algorithm", algorithm, "expected", expectedChecksum, KEY_ACTUAL, actualChecksum)));
+                  "algorithm",
+                  algorithm,
+                  "expected",
+                  expectedChecksum,
+                  KEY_ACTUAL,
+                  actualChecksum)));
     }
   }
 
@@ -517,7 +525,8 @@ public class ImportDataQualityService {
 
   private Map<String, Object> defaultRuleSet() {
     Map<String, Object> fieldRules = new LinkedHashMap<>();
-    fieldRules.put("customerNo", Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
+    fieldRules.put(
+        "customerNo", Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
     fieldRules.put(
         "customerName", Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
     fieldRules.put(

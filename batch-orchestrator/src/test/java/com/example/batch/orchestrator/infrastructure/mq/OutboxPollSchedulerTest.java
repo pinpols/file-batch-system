@@ -14,6 +14,7 @@ import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,8 @@ class OutboxPollSchedulerTest {
 
   @Mock private OrchestratorGracefulShutdown gracefulShutdown;
 
+  @Mock private OutboxEventMapper outboxEventMapper;
+
   private OutboxPollScheduler scheduler;
 
   @BeforeEach
@@ -53,7 +56,8 @@ class OutboxPollSchedulerTest {
             outboxPublishCircuitBreaker,
             governance,
             lockingTaskExecutor,
-            gracefulShutdown);
+            gracefulShutdown,
+            outboxEventMapper);
     // 不调用 start()，避免后台线程干扰单元测试
   }
 

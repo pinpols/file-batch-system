@@ -49,6 +49,8 @@ public class OutboxPublishCircuitBreaker {
   private volatile long cachedOpenUntilMs = 0;
   // 关闭状态缓存的到期时间；到期后需重新查询 Redis 确认状态
   private volatile long closedCacheExpiresAt = 0;
+  // #4-2: 半开探测标记——冷却期过后只允许一次探测请求，成功才完全关闭
+  private volatile boolean halfOpenProbing = false;
 
   public OutboxPublishCircuitBreaker(
       BatchOrchestratorGovernanceProperties governance, OrchestratorRedisSupport redis) {
@@ -70,8 +72,13 @@ public class OutboxPublishCircuitBreaker {
     if (cachedOpenUntilMs > now) {
       return false;
     }
+    // #4-2: 冷却期结束时进入半开状态，仅放行一次探测请求
+    if (cachedOpenUntilMs > 0 && cachedOpenUntilMs <= now && !halfOpenProbing) {
+      halfOpenProbing = true;
+      return true;
+    }
     // 快速路径 2：本地已知熔断关闭，且关闭缓存仍有效
-    if (now < closedCacheExpiresAt) {
+    if (cachedOpenUntilMs == 0 && now < closedCacheExpiresAt) {
       return true;
     }
     // 慢速路径：查询 Redis，刷新本地缓存
@@ -103,5 +110,13 @@ public class OutboxPublishCircuitBreaker {
     // 用 Redis 返回的最新值刷新本地缓存
     cachedOpenUntilMs = openUntilMs != null ? openUntilMs : 0;
     closedCacheExpiresAt = now + outboxProperties.getPollIntervalMillis();
+    // #4-2: 探测完成后重置半开标记
+    if (halfOpenProbing) {
+      halfOpenProbing = false;
+      if (publishFailed > 0) {
+        // 探测失败：熔断器仍处于打开状态（Redis 脚本已更新 openUntilMs）
+      }
+      // 探测成功：cachedOpenUntilMs 已为 0，自然进入关闭状态
+    }
   }
 }

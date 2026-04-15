@@ -1,9 +1,12 @@
 package com.example.batch.worker.core.infrastructure;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,22 +17,51 @@ public class ActiveTaskLeaseRegistry {
 
   private final Map<String, ActiveTaskLease> activeTaskLeases = new ConcurrentHashMap<>();
 
+  // #1-3: 读写锁保护 register/remove 与 snapshot 的原子性，
+  // 避免 shutdown 期间 snapshot 看到空集合而提前退出（TOCTOU）。
+  private final ReadWriteLock shutdownLock = new ReentrantReadWriteLock();
+
   public void register(String taskId, String tenantId, String workerId) {
     if (taskId == null || tenantId == null || workerId == null) {
       return;
     }
-    activeTaskLeases.put(taskId, new ActiveTaskLease(taskId, tenantId, workerId));
+    shutdownLock.readLock().lock();
+    try {
+      activeTaskLeases.put(taskId, new ActiveTaskLease(taskId, tenantId, workerId));
+    } finally {
+      shutdownLock.readLock().unlock();
+    }
   }
 
   public void remove(String taskId) {
     if (taskId == null) {
       return;
     }
-    activeTaskLeases.remove(taskId);
+    shutdownLock.readLock().lock();
+    try {
+      activeTaskLeases.remove(taskId);
+    } finally {
+      shutdownLock.readLock().unlock();
+    }
   }
 
+  /**
+   * 获取当前活跃租约的一致快照。
+   *
+   * <p>写锁保证在快照期间没有并发的 register/remove 操作，避免 TOCTOU。
+   */
   public Collection<ActiveTaskLease> snapshot() {
-    return activeTaskLeases.values();
+    shutdownLock.writeLock().lock();
+    try {
+      return new ArrayList<>(activeTaskLeases.values());
+    } finally {
+      shutdownLock.writeLock().unlock();
+    }
+  }
+
+  /** 返回当前活跃任务数（轻量级，不获取写锁）。 */
+  public int size() {
+    return activeTaskLeases.size();
   }
 
   /**

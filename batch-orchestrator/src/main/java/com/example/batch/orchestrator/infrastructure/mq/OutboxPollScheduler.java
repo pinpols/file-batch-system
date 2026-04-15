@@ -1,11 +1,13 @@
 package com.example.batch.orchestrator.infrastructure.mq;
 
+import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.orchestrator.application.engine.DefaultScheduleForwarder;
 import com.example.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
@@ -19,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -47,6 +50,7 @@ public class OutboxPollScheduler {
   private final BatchOrchestratorGovernanceProperties governance;
   private final LockingTaskExecutor lockingTaskExecutor;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final OutboxEventMapper outboxEventMapper;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong currentIntervalMillis = new AtomicLong(0);
@@ -55,6 +59,16 @@ public class OutboxPollScheduler {
 
   @PostConstruct
   public void start() {
+    // #10-2: 启动时校验分片配置合法性
+    OutboxProperties outbox = governance.outbox();
+    if (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal()) {
+      throw new IllegalStateException(
+          "Outbox 分片配置非法：shardIndex="
+              + outbox.getShardIndex()
+              + " 必须在 [0, shardTotal="
+              + outbox.getShardTotal()
+              + ") 范围内");
+    }
     executor =
         Executors.newSingleThreadScheduledExecutor(
             r -> {
@@ -62,21 +76,33 @@ public class OutboxPollScheduler {
               t.setDaemon(true);
               return t;
             });
-    OutboxProperties outbox = governance.outbox();
     long initialDelay = outbox.getMinPollIntervalMillis();
     currentIntervalMillis.set(initialDelay);
     executor.schedule(this::pollAndReschedule, initialDelay, TimeUnit.MILLISECONDS);
     log.info(
-        "OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x",
+        "OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x shard={}/{}",
         outbox.getMinPollIntervalMillis(),
         outbox.getPollIntervalMillis(),
-        outbox.getBackoffMultiplier());
+        outbox.getBackoffMultiplier(),
+        outbox.getShardIndex(),
+        outbox.getShardTotal());
   }
 
   @PreDestroy
   public void stop() {
-    if (executor != null) {
-      executor.shutdown();
+    if (executor == null) {
+      return;
+    }
+    executor.shutdown();
+    try {
+      if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
+        log.warn("OutboxPollScheduler 未在 30s 内完成关闭，强制中断");
+        executor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      log.warn("OutboxPollScheduler awaitTermination 被中断，强制中断");
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
     }
   }
 
@@ -107,8 +133,16 @@ public class OutboxPollScheduler {
     try {
       lockingTaskExecutor.executeWithLock(
           (LockingTaskExecutor.Task) () -> holder[0] = executeAdvance(), lockConfig());
+    } catch (DataAccessException dae) {
+      // #7-1: 数据库连接/查询异常 — 可能是瞬时故障，下轮退避重试
+      log.error("Outbox 轮询数据库异常（瞬时故障，等待退避重试）", dae);
+    } catch (OutOfMemoryError oom) {
+      // #7-1: 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管
+      log.error("Outbox 轮询遭遇 OOM，进程可能需要重启", oom);
+      throw oom;
     } catch (Throwable t) {
-      log.error("Outbox 轮询异常", t);
+      // #7-1: 其他异常（Kafka 故障、序列化错误等）
+      log.error("Outbox 轮询异常（非数据库类）", t);
     } finally {
       running.set(false);
       scheduleNext(holder[0]);
@@ -125,12 +159,29 @@ public class OutboxPollScheduler {
       return null;
     }
     OutboxProperties outbox = governance.outbox();
+    // #1-1: 每轮开始前将超时的 PUBLISHING 事件重置为 FAILED，防止 Kafka 投递失败后事件永久卡死
+    resetStalePublishingEvents(outbox);
     SchedulePlan plan = new SchedulePlan();
     plan.setShardTotal(outbox.getShardTotal());
     plan.setShardIndex(outbox.getShardIndex());
     ScheduleForwarderResult result = scheduleForwarder.advance(plan);
     outboxPublishCircuitBreaker.onAdvanceResult(result == null ? 0 : result.totalFailures());
     return result;
+  }
+
+  private void resetStalePublishingEvents(OutboxProperties outbox) {
+    try {
+      int reset =
+          outboxEventMapper.resetStalePublishing(
+              OutboxPublishStatus.PUBLISHING.code(),
+              OutboxPublishStatus.FAILED.code(),
+              outbox.getPublishingTimeoutSeconds());
+      if (reset > 0) {
+        log.warn("重置 {} 条滞留 PUBLISHING 状态的 outbox 事件为 FAILED", reset);
+      }
+    } catch (DataAccessException ex) {
+      log.error("重置滞留 PUBLISHING 事件失败（数据库异常，下轮重试）", ex);
+    }
   }
 
   private void doPoll() {

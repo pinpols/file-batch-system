@@ -36,7 +36,11 @@ class HttpTaskExecutionClientTest {
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
-              props, new BatchSecurityProperties(), jsonRestClientBuilder(), new MockEnvironment(), registry);
+              props,
+              new BatchSecurityProperties(),
+              jsonRestClientBuilder(),
+              new MockEnvironment(),
+              registry);
 
       TaskExecutionReport report = report(42L);
       client.report(report);
@@ -67,7 +71,11 @@ class HttpTaskExecutionClientTest {
       SimpleMeterRegistry registry = new SimpleMeterRegistry();
       HttpTaskExecutionClient client =
           new HttpTaskExecutionClient(
-              props, new BatchSecurityProperties(), jsonRestClientBuilder(), new MockEnvironment(), registry);
+              props,
+              new BatchSecurityProperties(),
+              jsonRestClientBuilder(),
+              new MockEnvironment(),
+              registry);
 
       assertThatThrownBy(() -> client.report(report(7L)))
           .isInstanceOf(HttpClientErrorException.class);

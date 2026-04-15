@@ -100,16 +100,6 @@ class ConsoleClusterDiagnosticServiceTest {
   }
 
   private static DeliveryStatusCountView deliveryView(String status, long cnt) {
-    return new DeliveryStatusCountView() {
-      @Override
-      public String getDeliveryStatus() {
-        return status;
-      }
-
-      @Override
-      public Long getCnt() {
-        return cnt;
-      }
-    };
+    return new DeliveryStatusCountView(status, cnt);
   }
 }

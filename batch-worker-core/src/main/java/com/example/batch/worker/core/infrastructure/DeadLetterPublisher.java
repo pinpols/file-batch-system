@@ -20,28 +20,25 @@ public class DeadLetterPublisher {
     this.kafkaTemplate = kafkaTemplate;
   }
 
-  /** 将失败消息发布到死信 topic。 */
+  /**
+   * 将失败消息发布到死信 topic。
+   *
+   * <p>#4-3: 发送失败时抛出异常（而非静默吞噬），让调用方决定是否提交偏移量。
+   */
   public void publish(
       String originalPayload, String sourceTopic, String workerType, String errorMessage) {
-    try {
-      Map<String, Object> envelope = new LinkedHashMap<>();
-      envelope.put("originalPayload", originalPayload);
-      envelope.put("sourceTopic", sourceTopic);
-      envelope.put("workerType", workerType);
-      envelope.put("errorMessage", truncate(errorMessage, 2000));
-      envelope.put("failedAt", Instant.now().toString());
-      String value = JsonUtils.toJson(envelope);
-      kafkaTemplate.send(BatchTopics.TASK_DEAD_LETTER, value);
-      log.info("published to DLQ: sourceTopic={}, workerType={}", sourceTopic, workerType);
-    } catch (Exception ex) {
-      // DLQ 发布失败不能掩盖原始错误，仅记录日志后继续
-      log.error(
-          "failed to publish to DLQ: sourceTopic={}, workerType={}, dlqError={}",
-          sourceTopic,
-          workerType,
-          ex.getMessage(),
-          ex);
+    Map<String, Object> envelope = new LinkedHashMap<>();
+    envelope.put("originalPayload", originalPayload);
+    envelope.put("sourceTopic", sourceTopic);
+    envelope.put("workerType", workerType);
+    envelope.put("errorMessage", truncate(errorMessage, 2000));
+    envelope.put("failedAt", Instant.now().toString());
+    String value = JsonUtils.toJson(envelope);
+    var future = kafkaTemplate.send(BatchTopics.TASK_DEAD_LETTER, value);
+    if (future != null) {
+      future.join();
     }
+    log.info("published to DLQ: sourceTopic={}, workerType={}", sourceTopic, workerType);
   }
 
   private static String truncate(String value, int maxLength) {

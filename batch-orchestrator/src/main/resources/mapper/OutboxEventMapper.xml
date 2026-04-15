@@ -103,4 +103,13 @@
         where tenant_id = #{tenantId}
           and id = #{id}
     </update>
+
+    <update id="resetStalePublishing">
+        update batch.outbox_event
+        set publish_status = #{failedStatus},
+            next_publish_at = current_timestamp,
+            updated_at = current_timestamp
+        where publish_status = #{publishingStatus}
+          and updated_at &lt; current_timestamp - (#{timeoutSeconds} || ' seconds')::interval
+    </update>
 </mapper>

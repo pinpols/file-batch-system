@@ -25,6 +25,9 @@ import com.example.batch.orchestrator.mapper.MarkPartitionStatusParam;
 import com.example.batch.orchestrator.mapper.UpdateInstanceProgressParam;
 import com.example.batch.orchestrator.mapper.UpdateNodeRunStatusParam;
 import com.example.batch.orchestrator.mapper.UpdateStepProgressParam;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -33,9 +36,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,7 +63,6 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
@@ -70,6 +72,40 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private final StateMachine<Object> stateMachine;
   private final WorkflowDagService workflowDagService;
   private final ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider;
+  // #1-2: CAS 冲突计数器，用于监控并发更新频率
+  private final Counter casMissCounter;
+
+  public DefaultTaskOutcomeService(
+      OrchestratorJobMappers jobMappers,
+      OrchestratorWorkflowMappers workflowMappers,
+      RetryGovernanceService retryGovernanceService,
+      StateMachine<Object> stateMachine,
+      WorkflowDagService workflowDagService,
+      ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider,
+      MeterRegistry meterRegistry) {
+    this.jobMappers = jobMappers;
+    this.workflowMappers = workflowMappers;
+    this.retryGovernanceService = retryGovernanceService;
+    this.stateMachine = stateMachine;
+    this.workflowDagService = workflowDagService;
+    this.workflowNodeDispatchServiceProvider = workflowNodeDispatchServiceProvider;
+    this.casMissCounter =
+        Counter.builder("batch.orchestrator.cas.miss")
+            .description("CAS miss count during optimistic locking updates")
+            .register(meterRegistry);
+  }
+
+  // #8-3: 启动时验证 ObjectProvider 可正常解析，将循环依赖暴露在启动阶段而非运行时
+  @PostConstruct
+  void verifyLazyDependencies() {
+    try {
+      workflowNodeDispatchServiceProvider.getIfAvailable();
+    } catch (Exception ex) {
+      log.error("WorkflowNodeDispatchService 延迟注入解析失败，可能存在循环依赖: {}", ex.getMessage());
+      throw new IllegalStateException(
+          "WorkflowNodeDispatchService ObjectProvider 解析失败，请检查循环依赖", ex);
+    }
+  }
 
   @Override
   @Transactional
@@ -83,7 +119,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     entity.setNodeStatus(WorkflowNodeRunStatus.READY.code());
     entity.setRetryCount(0);
     entity.setDurationMs(0L);
-    workflowMappers.workflowNodeRunMapper.insert(entity);
+    // #3-2: 并发安全——唯一约束冲突时返回已有记录而非报错
+    try {
+      workflowMappers.workflowNodeRunMapper.insert(entity);
+    } catch (DuplicateKeyException ignored) {
+      return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+          workflowRunId, nodeCode);
+    }
     return entity;
   }
 
@@ -100,7 +142,13 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     entity.setRetryCount(0);
     entity.setStartedAt(startedAt);
     entity.setDurationMs(0L);
-    workflowMappers.workflowNodeRunMapper.insert(entity);
+    // #3-2: 并发安全——唯一约束冲突时返回已有记录而非报错
+    try {
+      workflowMappers.workflowNodeRunMapper.insert(entity);
+    } catch (DuplicateKeyException ignored) {
+      return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+          workflowRunId, nodeCode);
+    }
     return entity;
   }
 
@@ -205,6 +253,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   private void warnIfCasMiss(int updated, String context, long partitionId) {
     if (updated <= 0) {
+      // #1-2: 指标上报，方便监控告警
+      casMissCounter.increment();
       log.warn(
           "{} CAS miss - concurrent update likely already advanced: partitionId={}",
           context,
@@ -318,6 +368,15 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
     boolean dagContinues = workflowRun != null && !activeNodes.isEmpty();
     boolean jobFullyComplete = allPartitionsFinished && !dagContinues;
+    // #3-1: 重新读取 instance 获取最新 version，避免并发 outcome 间版本冲突导致永久循环。
+    // 此时分区行已被 FOR UPDATE 锁住，保证了分区计数的串行性，
+    // 但 job_instance 本身可能被其他已完成的 outcome 更新了 version。
+    JobInstanceEntity freshInstance =
+        jobMappers.jobInstanceMapper.selectById(command.tenantId(), jobInstance.getId());
+    if (freshInstance != null) {
+      jobInstance.setVersion(freshInstance.getVersion());
+      jobInstance.setInstanceStatus(freshInstance.getInstanceStatus());
+    }
     String instanceEvent =
         resolveInstanceEvent(successCount, failedCount, allPartitionsFinished, dagContinues);
     String instanceStatus = stateMachine.transition(jobInstance, instanceEvent).toState();

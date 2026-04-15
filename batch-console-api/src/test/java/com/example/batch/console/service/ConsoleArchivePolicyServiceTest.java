@@ -41,10 +41,13 @@ class ConsoleArchivePolicyServiceTest {
 
   @Test
   void shouldUpsertValidTable() {
-    service.upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 500, "desc", "admin"));
+    service.upsert(
+        new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 500, "desc", "admin"));
 
     verify(repository)
-        .upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 500, "desc", "admin"));
+        .upsert(
+            new ArchivePolicyUpsertParam(
+                "t1", "job_instance", 30, true, false, 500, "desc", "admin"));
   }
 
   @Test
@@ -71,17 +74,23 @@ class ConsoleArchivePolicyServiceTest {
 
   @Test
   void shouldNormalizeTableToLowercase() {
-    service.upsert(new ArchivePolicyUpsertParam("t1", "JOB_INSTANCE", 30, true, false, 500, "desc", "admin"));
+    service.upsert(
+        new ArchivePolicyUpsertParam("t1", "JOB_INSTANCE", 30, true, false, 500, "desc", "admin"));
 
     verify(repository)
-        .upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 500, "desc", "admin"));
+        .upsert(
+            new ArchivePolicyUpsertParam(
+                "t1", "job_instance", 30, true, false, 500, "desc", "admin"));
   }
 
   @Test
   void shouldEnforceBatchSizeMinimum() {
-    service.upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 50, "desc", "admin"));
+    service.upsert(
+        new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 50, "desc", "admin"));
 
     verify(repository)
-        .upsert(new ArchivePolicyUpsertParam("t1", "job_instance", 30, true, false, 100, "desc", "admin"));
+        .upsert(
+            new ArchivePolicyUpsertParam(
+                "t1", "job_instance", 30, true, false, 100, "desc", "admin"));
   }
 }

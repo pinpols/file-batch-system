@@ -1,12 +1,8 @@
 package com.example.batch.orchestrator.domain.statemachine;
 
 /**
- * 携带显式状态字段的实体标记接口，替代 {@link
- * com.example.batch.orchestrator.infrastructure.statemachine.DefaultStateMachine}
- * 中基于反射的状态解析。实现此接口可保证状态查找在编译期安全，字段重命名将触发编译错误而非静默回退。
+ * 向后兼容别名——实际接口已移至 {@link com.example.batch.common.persistence.Stateful}。
+ *
+ * <p>orchestrator 内部的实体和状态机可继续使用此包路径，编译器通过继承关系自动桥接。
  */
-public interface Stateful {
-
-  /** 返回当前实体的状态字符串。 */
-  String getStatus();
-}
+public interface Stateful extends com.example.batch.common.persistence.Stateful {}

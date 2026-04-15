@@ -683,7 +683,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       List<Map<String, String>> rows, List<Map<String, String>> validPipelineRows) {
     Set<String> pipelineKeys =
         validPipelineRows.stream()
-            .map(r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
+            .map(
+                r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
             .collect(Collectors.toSet());
     List<WorkbookIssue> issues = new ArrayList<>();
     List<Map<String, String>> valid = new ArrayList<>();
@@ -742,7 +743,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
           ri.add("version must be integer");
         }
       }
-      if (hasText(wfCode) && hasText(version) && !seen.add(tenantId + KEY_SEP_HASH + wfCode + KEY_SEP_COLON + version))
+      if (hasText(wfCode)
+          && hasText(version)
+          && !seen.add(tenantId + KEY_SEP_HASH + wfCode + KEY_SEP_COLON + version))
         ri.add("duplicate workflow definition: " + wfCode + KEY_SEP_COLON + version);
       addIssues(ri, WF_DEF_SHEET, rowNo, issues);
       if (ri.isEmpty()) valid.add(row);
@@ -755,7 +758,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       String tenantId, List<Map<String, String>> rows, List<Map<String, String>> validWfDefs) {
     Set<String> wfKeys =
         validWfDefs.stream()
-            .map(r -> normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
+            .map(
+                r ->
+                    normalize(r.get(COL_WORKFLOW_CODE))
+                        + KEY_SEP_COLON
+                        + normalize(r.get(COL_VERSION)))
             .collect(Collectors.toSet());
     List<WorkbookIssue> issues = new ArrayList<>();
     List<Map<String, String>> valid = new ArrayList<>();
@@ -806,7 +813,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       List<Map<String, String>> validNodes) {
     Set<String> wfKeys =
         validWfDefs.stream()
-            .map(r -> normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
+            .map(
+                r ->
+                    normalize(r.get(COL_WORKFLOW_CODE))
+                        + KEY_SEP_COLON
+                        + normalize(r.get(COL_VERSION)))
             .collect(Collectors.toSet());
     Set<String> nodeKeys =
         validNodes.stream()
@@ -1043,7 +1054,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         stepRows.stream()
             .collect(
                 Collectors.groupingBy(
-                    r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION))));
+                    r ->
+                        normalize(r.get(COL_JOB_CODE))
+                            + KEY_SEP_COLON
+                            + normalize(r.get(COL_VERSION))));
     int inserted = 0, updated = 0;
     for (Map<String, String> row : pipelineRows) {
       String jobCode = normalize(row.get(COL_JOB_CODE));
@@ -1062,7 +1076,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         updated++;
       }
       pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(pipelineId);
-      for (Map<String, String> step : stepsByKey.getOrDefault(jobCode + KEY_SEP_COLON + version, List.of())) {
+      for (Map<String, String> step :
+          stepsByKey.getOrDefault(jobCode + KEY_SEP_COLON + version, List.of())) {
         pipelineStepDefinitionMapper.insert(buildStepInsertParams(pipelineId, step));
       }
     }
@@ -1722,42 +1737,74 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         Map.entry(
             COL_JOB_TYPE,
             requiredColumn(
-                "作业类型。", GUIDE_ENUM, GUIDE_IMPORT, "GENERAL", GUIDE_IMPORT, "EXPORT", GUIDE_DISPATCH, "WORKFLOW")),
+                "作业类型。",
+                GUIDE_ENUM,
+                GUIDE_IMPORT,
+                "GENERAL",
+                GUIDE_IMPORT,
+                "EXPORT",
+                GUIDE_DISPATCH,
+                "WORKFLOW")),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "CUSTOMER")),
         Map.entry(COL_QUEUE_CODE, optionalColumn("资源队列编码。", GUIDE_STR, "import-queue")),
         Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
         Map.entry(
             COL_SCHEDULE_TYPE,
             requiredColumn(
-                "调度类型。", GUIDE_ENUM, "MANUAL", "CRON", "FIXED_RATE", "MANUAL", "EVENT", "ONE_TIME")),
+                "调度类型。",
+                GUIDE_ENUM,
+                "MANUAL",
+                "CRON",
+                "FIXED_RATE",
+                "MANUAL",
+                "EVENT",
+                "ONE_TIME")),
         Map.entry(COL_SCHEDULE_EXPR, optionalColumn("调度表达式，CRON 时填写。", GUIDE_STR, "0 2 * * *")),
         Map.entry(COL_CALENDAR_CODE, optionalColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
         Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
         Map.entry(
-            COL_RETRY_POLICY, optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
+            COL_RETRY_POLICY,
+            optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
         Map.entry(COL_RETRY_MAX_COUNT, optionalColumn("最大重试次数。", GUIDE_INT, "3")),
         Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "3600")),
         Map.entry(
             COL_SHARD_STRATEGY,
-            optionalColumn("分片策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "STATIC", "DYNAMIC", "AUTO")),
+            optionalColumn(
+                "分片策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "STATIC", "DYNAMIC", "AUTO")),
         Map.entry(
             COL_EXECUTION_HANDLER,
             optionalColumn("执行处理器 Bean 名称（新建时设置，更新时忽略）。", GUIDE_STR, "importJobHandler")),
-        Map.entry(COL_PARAM_SCHEMA, optionalColumn("参数 JSON Schema（新建时设置，更新时忽略）。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
-        Map.entry(COL_DEFAULT_PARAMS, optionalColumn("默认参数 JSON（新建时设置，更新时忽略）。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
-        Map.entry(COL_ENABLED, optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_PARAM_SCHEMA,
+            optionalColumn("参数 JSON Schema（新建时设置，更新时忽略）。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+        Map.entry(
+            COL_DEFAULT_PARAMS,
+            optionalColumn("默认参数 JSON（新建时设置，更新时忽略）。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户文件导入作业")));
   }
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildChannelGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(COL_CHANNEL_CODE, requiredColumn("通道唯一编码。", GUIDE_STR, "sftp_inbound")),
         Map.entry(COL_CHANNEL_NAME, requiredColumn("通道名称。", GUIDE_STR, "SFTP 入站通道")),
         Map.entry(
             COL_CHANNEL_TYPE,
             requiredColumn(
-                "通道类型。", GUIDE_ENUM, "SFTP", "SFTP", "API", "EMAIL", "NAS", "OSS", "LOCAL", "API_PUSH")),
+                "通道类型。",
+                GUIDE_ENUM,
+                "SFTP",
+                "SFTP",
+                "API",
+                "EMAIL",
+                "NAS",
+                "OSS",
+                "LOCAL",
+                "API_PUSH")),
         Map.entry("target_endpoint", optionalColumn("目标地址。", GUIDE_STR, "sftp.example.com")),
         Map.entry(
             COL_AUTH_TYPE,
@@ -1774,14 +1821,18 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         Map.entry(COL_CONFIG_JSON, requiredColumn("通道配置 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
         Map.entry(
             COL_RECEIPT_POLICY,
-            requiredColumn("回执策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
+            requiredColumn(
+                "回执策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
         Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "30")),
-        Map.entry(COL_ENABLED, optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
   }
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildRoutingGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(COL_ROUTE_CODE, requiredColumn("路由唯一编码。", GUIDE_STR, "RT_BATCH_ERROR")),
         Map.entry(COL_ROUTE_NAME, requiredColumn("路由名称。", GUIDE_STR, "批处理异常路由")),
         Map.entry(COL_TEAM, requiredColumn("负责团队。", GUIDE_STR, "ops")),
@@ -1794,23 +1845,30 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         Map.entry("group_wait_seconds", optionalColumn("聚合等待秒数。", GUIDE_INT, "30")),
         Map.entry("group_interval_seconds", optionalColumn("聚合间隔秒数。", GUIDE_INT, "300")),
         Map.entry("repeat_interval_seconds", optionalColumn("重复通知间隔秒数。", GUIDE_INT, "3600")),
-        Map.entry(COL_ENABLED, optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "批处理失败默认路由")));
   }
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildPipelineGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(
             COL_JOB_CODE, requiredColumn("关联作业编码，与 version 组成联合键。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
         Map.entry(COL_PIPELINE_NAME, requiredColumn("流水线名称。", GUIDE_STR, "客户导入流水线")),
         Map.entry(
             COL_PIPELINE_TYPE,
-            requiredColumn("流水线类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", GUIDE_DISPATCH)),
+            requiredColumn(
+                "流水线类型。", GUIDE_ENUM, GUIDE_IMPORT, GUIDE_IMPORT, "EXPORT", GUIDE_DISPATCH)),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
         Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
-        Map.entry(COL_VERSION, requiredColumn("版本号，与 job_code 组成联合键。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(COL_ENABLED, optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_VERSION, requiredColumn("版本号，与 job_code 组成联合键。", GUIDE_INT, GUIDE_VERSION_ONE)),
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户文件导入流水线")));
   }
 
@@ -1840,27 +1898,36 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         Map.entry("step_params", optionalColumn("步骤参数 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
         Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "300")),
         Map.entry(
-            COL_RETRY_POLICY, optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
+            COL_RETRY_POLICY,
+            optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
         Map.entry(COL_RETRY_MAX_COUNT, optionalColumn("最大重试次数。", GUIDE_INT, "0")),
-        Map.entry(COL_ENABLED, optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
   }
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildWfDefGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(
-            COL_WORKFLOW_CODE, requiredColumn("工作流唯一编码，三个工作流 sheet 共用此键。", GUIDE_STR, "WF_SETTLEMENT")),
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_WORKFLOW_CODE,
+            requiredColumn("工作流唯一编码，三个工作流 sheet 共用此键。", GUIDE_STR, "WF_SETTLEMENT")),
         Map.entry(COL_WORKFLOW_NAME, requiredColumn("工作流名称。", GUIDE_STR, "清算工作流")),
         Map.entry(
-            COL_WORKFLOW_TYPE, requiredColumn("工作流拓扑类型。", GUIDE_ENUM, "DAG", "DAG", "PIPELINE", "MIXED")),
+            COL_WORKFLOW_TYPE,
+            requiredColumn("工作流拓扑类型。", GUIDE_ENUM, "DAG", "DAG", "PIPELINE", "MIXED")),
         Map.entry(COL_VERSION, requiredColumn("版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(COL_ENABLED, optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "清算批量工作流")));
   }
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildWfNodeGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
         Map.entry(COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry(COL_NODE_CODE, requiredColumn("节点唯一编码。", GUIDE_STR, "NODE_IMPORT")),
@@ -1883,25 +1950,32 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
         Map.entry(COL_NODE_ORDER, optionalColumn("节点顺序号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry(
-            COL_RETRY_POLICY, optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
+            COL_RETRY_POLICY,
+            optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
         Map.entry(COL_RETRY_MAX_COUNT, optionalColumn("最大重试次数。", GUIDE_INT, "0")),
         Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "3600")),
         Map.entry(COL_NODE_PARAMS, optionalColumn("节点参数 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
-        Map.entry(COL_ENABLED, optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
   }
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildWfEdgeGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
         Map.entry(COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry(COL_FROM_NODE_CODE, requiredColumn("源节点编码。", GUIDE_STR, "NODE_IMPORT")),
         Map.entry(COL_TO_NODE_CODE, requiredColumn("目标节点编码。", GUIDE_STR, "NODE_EXPORT")),
         Map.entry(
             COL_EDGE_TYPE,
-            requiredColumn("边类型。", GUIDE_ENUM, "SUCCESS", "SUCCESS", "FAILURE", "CONDITION", "ALWAYS")),
+            requiredColumn(
+                "边类型。", GUIDE_ENUM, "SUCCESS", "SUCCESS", "FAILURE", "CONDITION", "ALWAYS")),
         Map.entry(COL_CONDITION_EXPR, optionalColumn("CONDITION 类型的条件表达式。", GUIDE_STR, EMPTY)),
-        Map.entry(COL_ENABLED, optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
+        Map.entry(
+            COL_ENABLED,
+            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
   }
 
   // ── response builders ─────────────────────────────────────────────────────

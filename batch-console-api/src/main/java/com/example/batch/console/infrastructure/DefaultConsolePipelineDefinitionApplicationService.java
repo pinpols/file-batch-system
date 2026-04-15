@@ -41,7 +41,6 @@ public class DefaultConsolePipelineDefinitionApplicationService
   private static final String KEY_ID = "id";
   private static final String KEY_ENABLED = "enabled";
 
-
   private final PipelineDefinitionMapper pipelineDefinitionMapper;
   private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final ConsoleTenantGuard tenantGuard;
@@ -115,15 +114,21 @@ public class DefaultConsolePipelineDefinitionApplicationService
             ? request.getPipelineType()
             : existing.get(KEY_PIPELINE_TYPE));
     params.put(
-        KEY_BIZ_TYPE, request.getBizType() != null ? request.getBizType() : existing.get(KEY_BIZ_TYPE));
+        KEY_BIZ_TYPE,
+        request.getBizType() != null ? request.getBizType() : existing.get(KEY_BIZ_TYPE));
     params.put(
         KEY_WORKER_GROUP,
-        request.getWorkerGroup() != null ? request.getWorkerGroup() : existing.get(KEY_WORKER_GROUP));
+        request.getWorkerGroup() != null
+            ? request.getWorkerGroup()
+            : existing.get(KEY_WORKER_GROUP));
     params.put(
-        KEY_ENABLED, request.getEnabled() != null ? request.getEnabled() : existing.get(KEY_ENABLED));
+        KEY_ENABLED,
+        request.getEnabled() != null ? request.getEnabled() : existing.get(KEY_ENABLED));
     params.put(
         KEY_DESCRIPTION,
-        request.getDescription() != null ? request.getDescription() : existing.get(KEY_DESCRIPTION));
+        request.getDescription() != null
+            ? request.getDescription()
+            : existing.get(KEY_DESCRIPTION));
     pipelineDefinitionMapper.update(params);
 
     pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);

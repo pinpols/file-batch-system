@@ -148,7 +148,8 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> PIPELINE_COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry(COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry(
+              COL_TENANT_ID, optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
               COL_JOB_CODE,
               requiredColumn("作业唯一编码，与 version 组成联合键。", GUIDE_STR, "JOB_IMPORT_SETTLEMENT")),
@@ -159,13 +160,15 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
           Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "SETTLEMENT")),
           Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组名称。", GUIDE_STR, "default")),
           Map.entry(COL_VERSION, requiredColumn("版本号，与 job_code 组成联合键。", GUIDE_INT, "1")),
-          Map.entry(COL_ENABLED, optionalColumn("是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(
+              COL_ENABLED, optionalColumn("是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(COL_DESCRIPTION, optionalColumn("流水线描述。", GUIDE_STR, "用于清算文件导入")));
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> STEP_COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
-              COL_JOB_CODE, requiredColumn("关联的 pipeline job_code。", GUIDE_STR, "JOB_IMPORT_SETTLEMENT")),
+              COL_JOB_CODE,
+              requiredColumn("关联的 pipeline job_code。", GUIDE_STR, "JOB_IMPORT_SETTLEMENT")),
           Map.entry(COL_VERSION, requiredColumn("关联的 pipeline version。", GUIDE_INT, "1")),
           Map.entry(COL_STEP_CODE, requiredColumn("步骤唯一编码。", GUIDE_STR, "STEP_PARSE_CSV")),
           Map.entry(COL_STEP_NAME, requiredColumn("步骤名称。", GUIDE_STR, "解析CSV文件")),
@@ -193,7 +196,8 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
               COL_RETRY_POLICY,
               requiredColumn("重试策略。", "枚举", "NONE", "NONE", "FIXED", "EXPONENTIAL")),
           Map.entry(COL_RETRY_MAX_COUNT, requiredColumn("最大重试次数，必须 >= 0。", GUIDE_INT, "0")),
-          Map.entry(COL_ENABLED, optionalColumn("是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
+          Map.entry(
+              COL_ENABLED, optionalColumn("是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;

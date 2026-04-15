@@ -93,7 +93,8 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     List<ColumnLayout> inferred = new ArrayList<>();
     for (String key : firstPage.get(0).keySet()) {
-      inferred.add(new ColumnLayout(key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' '));
+      inferred.add(
+          new ColumnLayout(key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' '));
     }
     return inferred;
   }
