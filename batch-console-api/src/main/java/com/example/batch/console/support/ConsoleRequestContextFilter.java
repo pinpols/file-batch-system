@@ -76,6 +76,13 @@ public class ConsoleRequestContextFilter extends OncePerRequestFilter {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication != null
         && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+      // 全局角色（ADMIN / AUDITOR / CONFIG_ADMIN）允许通过请求头指定目标租户
+      if (ConsoleRoles.hasGlobalRole(principal.authorities())) {
+        return (requestedTenantId != null && !requestedTenantId.isBlank())
+            ? requestedTenantId
+            : principal.tenantId();
+      }
+      // 租户角色：严格匹配
       if (requestedTenantId != null
           && !requestedTenantId.isBlank()
           && !requestedTenantId.equals(principal.tenantId())) {

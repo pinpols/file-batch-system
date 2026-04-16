@@ -33,13 +33,13 @@ class ConsoleRequestContextFilterTest {
   }
 
   @Test
-  void shouldRejectTenantMismatchWhenAuthenticatedPrincipalIsPresent() throws Exception {
+  void shouldRejectTenantMismatchForTenantUser() throws Exception {
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_ADMIN")),
+                new ConsolePrincipal("bob", "tenant-a", Set.of("ROLE_TENANT_USER")),
                 "secret",
-                Set.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+                Set.of(new SimpleGrantedAuthority("ROLE_TENANT_USER"))));
 
     MockHttpServletRequest request = baseRequest();
     request.addHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER, "tenant-b");
@@ -51,6 +51,50 @@ class ConsoleRequestContextFilterTest {
     assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
     assertThat(response.getContentAsString()).contains(ResultCode.FORBIDDEN.name());
     assertThat(response.getContentAsString()).contains(CommonErrorMessages.TENANT_MISMATCH);
+  }
+
+  @Test
+  void shouldAllowGlobalRoleToCrossTenant() throws Exception {
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")),
+                "secret",
+                Set.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+    MockHttpServletRequest request = baseRequest();
+    request.addHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER, "tenant-a");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+    filter.doFilter(request, response, noOpChain(chainCalled));
+    assertThat(chainCalled).isTrue();
+    assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
+    ConsoleRequestMetadata metadata =
+        (ConsoleRequestMetadata)
+            request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
+    assertThat(metadata.tenantId()).isEqualTo("tenant-a");
+  }
+
+  @Test
+  void shouldFallbackToOwnTenantWhenGlobalRoleOmitsHeader() throws Exception {
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")),
+                "secret",
+                Set.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+    MockHttpServletRequest request = baseRequest();
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+    filter.doFilter(request, response, noOpChain(chainCalled));
+    assertThat(chainCalled).isTrue();
+    ConsoleRequestMetadata metadata =
+        (ConsoleRequestMetadata)
+            request.getAttribute(ConsoleRequestContextFilter.REQUEST_METADATA_ATTRIBUTE);
+    assertThat(metadata.tenantId()).isEqualTo("system");
   }
 
   private MockHttpServletRequest baseRequest() {

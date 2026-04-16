@@ -16,6 +16,15 @@ public class ConsoleTenantGuard {
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   public String resolveTenant(String requestTenantId) {
+    // 全局角色（ADMIN / AUDITOR / CONFIG_ADMIN）：必须显式指定目标租户
+    if (isCurrentUserGlobal()) {
+      if (requestTenantId == null || requestTenantId.isBlank()) {
+        throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.TENANT_REQUIRED);
+      }
+      return requestTenantId;
+    }
+
+    // 租户角色：原有逻辑，严格匹配
     ConsoleRequestMetadata metadata = currentMetadataOrNull();
     String authenticatedTenantId = authenticatedTenantId();
     String effectiveTenantId =
@@ -48,6 +57,15 @@ public class ConsoleTenantGuard {
     } catch (ScopeNotActiveException exception) {
       return null;
     }
+  }
+
+  private boolean isCurrentUserGlobal() {
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    if (authentication != null
+        && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+      return ConsoleRoles.hasGlobalRole(principal.authorities());
+    }
+    return false;
   }
 
   private String authenticatedTenantId() {
