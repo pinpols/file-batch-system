@@ -7,6 +7,9 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-04-16 | 6 个 Excel 控制器（file-templates/file-channels/alert-routings/batch-windows/quota-policies/resource-queues）的 upload/apply 请求响应统一为共享类型 `ExcelUploadResponse`/`ExcelApplyResponse`/`ExcelApplyRequest`/`ExcelRowIssue`，旧 per-entity schema 改为 `$ref` 别名 |
+| 2026-04-16 | `ExcelApplyResponse` 新增 `skippedRows` 字段；`ExcelPreviewResponse`（6 个 per-entity 变体）新增 `previewWorkbookUrl` 字段 |
+| 2026-04-16 | 新增 `POST /api/console/config/alert-routings/excel/quick-import`：一键导入（upload + validate + apply 合并），无错误自动 apply（`applied=true`），有错误返回 preview + workbook URL（`applied=false`）；支持 `skipInvalid` 参数跳过无效行 |
 | 2026-04-11 | list 查询 `enabled` 参数默认值改为 `true`：job-definitions / workflow-definitions / file-channels / file-templates 四类列表接口（含 `/queries/` 前缀版本），不传 `enabled` 时只返回已启用记录，需查禁用记录需显式传 `enabled=false` |
 | 2026-04-11 | 软删除改 `PATCH`：`POST /{id}/toggle?enabled=` 及 `POST /batch-toggle` 统一改为 `PATCH /{id}`（body: `EnabledPatchRequest`）和 `PATCH /batch`（body: `BatchEnabledPatchRequest`），适用于 job-definitions / workflow-definitions / file-channels / file-templates |
 | 2026-04-11 | `POST /api/console/files/delete` 改为 `DELETE /api/console/files/{fileId}`，请求体拆为 path/query 参数，统一物理删除走 `DELETE` 方法 |

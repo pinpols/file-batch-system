@@ -7,8 +7,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 
+/** 基于 ConcurrentHashMap 的单 sheet Excel 导入会话存储（开发/单机部署）。 */
 @Component
-public class InMemoryFileTemplateExcelImportStore implements FileTemplateExcelImportStore {
+public class InMemoryExcelImportStore implements ExcelImportStore {
 
   private final ConcurrentHashMap<String, ExcelImportSession> sessions = new ConcurrentHashMap<>();
 
@@ -31,4 +32,12 @@ public class InMemoryFileTemplateExcelImportStore implements FileTemplateExcelIm
   public void remove(String uploadToken) {
     sessions.remove(uploadToken);
   }
+
+  record ExcelImportSession(
+      String fileName,
+      String tenantId,
+      String sheetName,
+      Instant uploadedAt,
+      List<Map<String, String>> rows)
+      implements ConsoleSingleSheetExcelImportSupport.SingleSheetImportSession {}
 }

@@ -20,9 +20,9 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.excel.ConsoleTenantQuotaPolicyExcelController;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelUploadResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -73,18 +73,16 @@ class ConsoleTenantQuotaPolicyExcelControllerTest {
         .thenReturn(
             ResponseEntity.ok(new InputStreamResource(new ByteArrayInputStream(templateBytes))));
     when(excelService.upload(any()))
-        .thenReturn(
-            new ConsoleTenantQuotaPolicyExcelUploadResponse(
-                "token-1", "quota.xlsx", "tenant_quota_policy", 1));
+        .thenReturn(new ExcelUploadResponse("token-1", "quota.xlsx", "tenant_quota_policy", 1));
     when(excelService.preview(anyString()))
         .thenReturn(
-            new ConsoleTenantQuotaPolicyExcelPreviewResponse(
+            new ExcelPreviewResponse<>(
                 "token-1", "quota.xlsx", "tenant_quota_policy", 1, 1, 0, List.of(), List.of()));
     when(excelService.downloadPreviewWorkbook(anyString()))
         .thenReturn(
             ResponseEntity.ok(new InputStreamResource(new ByteArrayInputStream(workbookBytes))));
     when(excelService.apply(anyString(), any()))
-        .thenReturn(new ConsoleTenantQuotaPolicyExcelApplyResponse("token-1", "t1", 1, 1, 0));
+        .thenReturn(new ExcelApplyResponse("token-1", "t1", 1, 1, 0));
 
     mockMvc
         .perform(

@@ -1,9 +1,10 @@
 package com.example.batch.console.application;
 
-import com.example.batch.console.web.request.TenantQuotaPolicyExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelUploadResponse;
+import com.example.batch.console.web.request.ExcelApplyRequest;
+import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
@@ -20,15 +21,14 @@ public interface ConsoleTenantQuotaPolicyExcelApplicationService {
   ResponseEntity<InputStreamResource> downloadTemplate();
 
   /** 上传 Excel 并返回 uploadToken。 */
-  ConsoleTenantQuotaPolicyExcelUploadResponse upload(MultipartFile file) throws IOException;
+  ExcelUploadResponse upload(MultipartFile file) throws IOException;
 
   /** 预览解析结果。 */
-  ConsoleTenantQuotaPolicyExcelPreviewResponse preview(String uploadToken);
+  ExcelPreviewResponse<ConsoleTenantQuotaPolicyResponse> preview(String uploadToken);
 
   /** 下载带校验问题明细的预览 workbook。 */
   ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
 
   /** 确认导入并更新配额策略配置。 */
-  ConsoleTenantQuotaPolicyExcelApplyResponse apply(
-      String uploadToken, TenantQuotaPolicyExcelApplyRequest request);
+  ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request);
 }

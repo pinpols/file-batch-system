@@ -4,10 +4,11 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleTenantQuotaPolicyExcelApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.web.request.TenantQuotaPolicyExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyExcelUploadResponse;
+import com.example.batch.console.web.request.ExcelApplyRequest;
+import com.example.batch.console.web.response.ConsoleTenantQuotaPolicyResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
@@ -70,8 +71,8 @@ public class ConsoleTenantQuotaPolicyExcelController {
   @Deprecated
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ConsoleTenantQuotaPolicyExcelUploadResponse> upload(
-      @RequestParam("file") MultipartFile file) throws IOException {
+  public CommonResponse<ExcelUploadResponse> upload(@RequestParam("file") MultipartFile file)
+      throws IOException {
     return responseFactory.success(applicationService.upload(file));
   }
 
@@ -82,7 +83,7 @@ public class ConsoleTenantQuotaPolicyExcelController {
   @Deprecated
   @GetMapping("/preview/{uploadToken}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ConsoleTenantQuotaPolicyExcelPreviewResponse> preview(
+  public CommonResponse<ExcelPreviewResponse<ConsoleTenantQuotaPolicyResponse>> preview(
       @PathVariable String uploadToken) {
     return responseFactory.success(applicationService.preview(uploadToken));
   }
@@ -103,10 +104,10 @@ public class ConsoleTenantQuotaPolicyExcelController {
   @Deprecated
   @PostMapping("/apply/{uploadToken}")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<ConsoleTenantQuotaPolicyExcelApplyResponse> apply(
+  public CommonResponse<ExcelApplyResponse> apply(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String uploadToken,
-      @Valid @RequestBody TenantQuotaPolicyExcelApplyRequest request) {
+      @Valid @RequestBody ExcelApplyRequest request) {
     return responseFactory.success(applicationService.apply(uploadToken, request));
   }
 }

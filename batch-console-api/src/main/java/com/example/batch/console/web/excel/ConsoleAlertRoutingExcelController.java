@@ -6,10 +6,12 @@ import com.example.batch.console.application.ConsoleAlertRoutingExcelApplication
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.ConsoleTenantConfigPackageExcelController;
 import com.example.batch.console.web.query.AlertRoutingQueryRequest;
-import com.example.batch.console.web.request.AlertRoutingExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleAlertRoutingExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleAlertRoutingExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleAlertRoutingExcelUploadResponse;
+import com.example.batch.console.web.request.ExcelApplyRequest;
+import com.example.batch.console.web.response.ConsoleAlertRoutingResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelQuickImportResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
@@ -66,7 +68,7 @@ public class ConsoleAlertRoutingExcelController {
   @Deprecated
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ConsoleAlertRoutingExcelUploadResponse> upload(
+  public CommonResponse<ExcelUploadResponse> upload(
       @RequestParam("file") MultipartFile file) throws IOException {
     return responseFactory.success(applicationService.upload(file));
   }
@@ -77,7 +79,7 @@ public class ConsoleAlertRoutingExcelController {
   @Deprecated
   @GetMapping("/preview/{uploadToken}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ConsoleAlertRoutingExcelPreviewResponse> preview(
+  public CommonResponse<ExcelPreviewResponse<ConsoleAlertRoutingResponse>> preview(
       @PathVariable String uploadToken) {
     return responseFactory.success(applicationService.preview(uploadToken));
   }
@@ -98,10 +100,21 @@ public class ConsoleAlertRoutingExcelController {
   @Deprecated
   @PostMapping("/apply/{uploadToken}")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<ConsoleAlertRoutingExcelApplyResponse> apply(
+  public CommonResponse<ExcelApplyResponse> apply(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String uploadToken,
-      @Valid @RequestBody AlertRoutingExcelApplyRequest request) {
+      @Valid @RequestBody ExcelApplyRequest request) {
     return responseFactory.success(applicationService.apply(uploadToken, request));
+  }
+
+  /** 一键导入：上传 + 校验 + 应用合并为一次调用。无错误自动 apply，有错误返回 preview 和错误 workbook URL。 */
+  @PostMapping(value = "/quick-import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+  public CommonResponse<ExcelQuickImportResponse<ConsoleAlertRoutingResponse>> quickImport(
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(value = "reason", required = false) String reason,
+      @RequestParam(value = "skipInvalid", defaultValue = "false") boolean skipInvalid)
+      throws IOException {
+    return responseFactory.success(applicationService.quickImport(file, reason, skipInvalid));
   }
 }

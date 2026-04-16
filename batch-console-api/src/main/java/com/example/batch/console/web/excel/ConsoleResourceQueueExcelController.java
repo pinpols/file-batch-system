@@ -4,10 +4,11 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleResourceQueueExcelApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.web.request.ResourceQueueExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleResourceQueueExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleResourceQueueExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleResourceQueueExcelUploadResponse;
+import com.example.batch.console.web.request.ExcelApplyRequest;
+import com.example.batch.console.web.response.ConsoleResourceQueueResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
@@ -71,7 +72,7 @@ public class ConsoleResourceQueueExcelController {
   @Deprecated
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ConsoleResourceQueueExcelUploadResponse> upload(
+  public CommonResponse<ExcelUploadResponse> upload(
       @RequestParam("file") MultipartFile file) throws IOException {
     return responseFactory.success(applicationService.upload(file));
   }
@@ -83,7 +84,7 @@ public class ConsoleResourceQueueExcelController {
   @Deprecated
   @GetMapping("/preview/{uploadToken}")
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ConsoleResourceQueueExcelPreviewResponse> preview(
+  public CommonResponse<ExcelPreviewResponse<ConsoleResourceQueueResponse>> preview(
       @PathVariable String uploadToken) {
     return responseFactory.success(applicationService.preview(uploadToken));
   }
@@ -104,10 +105,10 @@ public class ConsoleResourceQueueExcelController {
   @Deprecated
   @PostMapping("/apply/{uploadToken}")
   @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<ConsoleResourceQueueExcelApplyResponse> apply(
+  public CommonResponse<ExcelApplyResponse> apply(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @PathVariable String uploadToken,
-      @Valid @RequestBody ResourceQueueExcelApplyRequest request) {
+      @Valid @RequestBody ExcelApplyRequest request) {
     return responseFactory.success(applicationService.apply(uploadToken, request));
   }
 }

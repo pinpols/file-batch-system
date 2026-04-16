@@ -19,9 +19,9 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.excel.ConsoleFileTemplateExcelController;
-import com.example.batch.console.web.response.ConsoleFileTemplateExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleFileTemplateExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleFileTemplateExcelUploadResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,14 +60,14 @@ class ConsoleFileTemplateExcelControllerTest {
   void shouldUploadPreviewAndApplyExcelTemplate() throws Exception {
     when(excelService.upload(any()))
         .thenReturn(
-            new ConsoleFileTemplateExcelUploadResponse(
+            new ExcelUploadResponse(
                 "token-1", "template.xlsx", "file_template_config", 1));
     when(excelService.preview(anyString()))
         .thenReturn(
-            new ConsoleFileTemplateExcelPreviewResponse(
+            new ExcelPreviewResponse<>(
                 "token-1", "template.xlsx", "file_template_config", 1, 1, 0, List.of(), List.of()));
     when(excelService.apply(anyString(), any()))
-        .thenReturn(new ConsoleFileTemplateExcelApplyResponse("token-1", "t1", 1, 1, 0));
+        .thenReturn(new ExcelApplyResponse("token-1", "t1", 1, 1, 0));
 
     mockMvc
         .perform(

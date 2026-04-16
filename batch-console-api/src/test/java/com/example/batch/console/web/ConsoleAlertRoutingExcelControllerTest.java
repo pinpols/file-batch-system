@@ -19,9 +19,9 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.excel.ConsoleAlertRoutingExcelController;
-import com.example.batch.console.web.response.ConsoleAlertRoutingExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleAlertRoutingExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleAlertRoutingExcelUploadResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.util.List;
@@ -63,14 +63,13 @@ class ConsoleAlertRoutingExcelControllerTest {
   void shouldUploadPreviewAndApplyAlertRoutingExcel() throws Exception {
     when(excelService.upload(any()))
         .thenReturn(
-            new ConsoleAlertRoutingExcelUploadResponse(
-                "token-1", "routing.xlsx", "alert_routing_config", 1));
+            new ExcelUploadResponse("token-1", "routing.xlsx", "alert_routing_config", 1));
     when(excelService.preview(anyString()))
         .thenReturn(
-            new ConsoleAlertRoutingExcelPreviewResponse(
+            new ExcelPreviewResponse<>(
                 "token-1", "routing.xlsx", "alert_routing_config", 1, 1, 0, List.of(), List.of()));
     when(excelService.apply(anyString(), any()))
-        .thenReturn(new ConsoleAlertRoutingExcelApplyResponse("token-1", "t1", 1, 1, 0));
+        .thenReturn(new ExcelApplyResponse("token-1", "t1", 1, 1, 0));
 
     mockMvc
         .perform(

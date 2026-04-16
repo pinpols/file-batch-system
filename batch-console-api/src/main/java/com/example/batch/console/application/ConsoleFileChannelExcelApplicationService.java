@@ -1,10 +1,11 @@
 package com.example.batch.console.application;
 
 import com.example.batch.console.web.query.FileChannelQueryRequest;
-import com.example.batch.console.web.request.FileChannelExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleFileChannelExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleFileChannelExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleFileChannelExcelUploadResponse;
+import com.example.batch.console.web.request.ExcelApplyRequest;
+import com.example.batch.console.web.response.ConsoleFileChannelResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import java.io.IOException;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
@@ -20,15 +21,14 @@ public interface ConsoleFileChannelExcelApplicationService {
   ResponseEntity<InputStreamResource> downloadTemplate();
 
   /** 上传 Excel 并返回 uploadToken。 */
-  ConsoleFileChannelExcelUploadResponse upload(MultipartFile file) throws IOException;
+  ExcelUploadResponse upload(MultipartFile file) throws IOException;
 
   /** 预览解析结果。 */
-  ConsoleFileChannelExcelPreviewResponse preview(String uploadToken);
+  ExcelPreviewResponse<ConsoleFileChannelResponse> preview(String uploadToken);
 
   /** 下载带校验问题明细的预览 workbook。 */
   ResponseEntity<InputStreamResource> downloadPreviewWorkbook(String uploadToken);
 
   /** 确认导入并更新通道配置。 */
-  ConsoleFileChannelExcelApplyResponse apply(
-      String uploadToken, FileChannelExcelApplyRequest request);
+  ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request);
 }

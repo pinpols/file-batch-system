@@ -20,9 +20,9 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.excel.ConsoleResourceQueueExcelController;
-import com.example.batch.console.web.response.ConsoleResourceQueueExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleResourceQueueExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleResourceQueueExcelUploadResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -73,18 +73,16 @@ class ConsoleResourceQueueExcelControllerTest {
         .thenReturn(
             ResponseEntity.ok(new InputStreamResource(new ByteArrayInputStream(templateBytes))));
     when(excelService.upload(any()))
-        .thenReturn(
-            new ConsoleResourceQueueExcelUploadResponse(
-                "token-1", "queue.xlsx", "resource_queue", 1));
+        .thenReturn(new ExcelUploadResponse("token-1", "queue.xlsx", "resource_queue", 1));
     when(excelService.preview(anyString()))
         .thenReturn(
-            new ConsoleResourceQueueExcelPreviewResponse(
+            new ExcelPreviewResponse<>(
                 "token-1", "queue.xlsx", "resource_queue", 1, 1, 0, List.of(), List.of()));
     when(excelService.downloadPreviewWorkbook(anyString()))
         .thenReturn(
             ResponseEntity.ok(new InputStreamResource(new ByteArrayInputStream(workbookBytes))));
     when(excelService.apply(anyString(), any()))
-        .thenReturn(new ConsoleResourceQueueExcelApplyResponse("token-1", "t1", 1, 1, 0));
+        .thenReturn(new ExcelApplyResponse("token-1", "t1", 1, 1, 0));
 
     mockMvc
         .perform(
