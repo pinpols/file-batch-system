@@ -10,13 +10,13 @@ import static org.mockito.Mockito.when;
 
 import com.example.batch.console.mapper.AlertRoutingConfigMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
-import com.example.batch.console.support.AlertRoutingExcelImportStore;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.support.InMemoryAlertRoutingExcelImportStore;
+import com.example.batch.console.support.ExcelImportStore;
+import com.example.batch.console.support.InMemoryExcelImportStore;
 import com.example.batch.console.web.query.AlertRoutingQueryRequest;
-import com.example.batch.console.web.request.AlertRoutingExcelApplyRequest;
+import com.example.batch.console.web.request.ExcelApplyRequest;
 import com.example.batch.testing.TestExcelFileBuilder;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,8 +40,7 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
   private final AlertRoutingConfigMapper alertRoutingConfigMapper =
       mock(AlertRoutingConfigMapper.class);
   private final ConfigChangeLogMapper configChangeLogMapper = mock(ConfigChangeLogMapper.class);
-  private final AlertRoutingExcelImportStore importStore =
-      new InMemoryAlertRoutingExcelImportStore();
+  private final ExcelImportStore importStore = new InMemoryExcelImportStore();
   private DefaultConsoleAlertRoutingExcelApplicationService service;
 
   @BeforeEach
@@ -50,9 +49,9 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
         new DefaultConsoleAlertRoutingExcelApplicationService(
             tenantGuard,
             requestMetadataResolver,
+            importStore,
             alertRoutingConfigMapper,
-            configChangeLogMapper,
-            importStore);
+            configChangeLogMapper);
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-1", "trace-1", "t1", "u1", "idem-1", "127.0.0.1"));
@@ -140,7 +139,7 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
     assertThat(preview.rows()).hasSize(1);
     assertThat(preview.rows().get(0).routeCode()).isEqualTo("RT1");
 
-    var applyRequest = new AlertRoutingExcelApplyRequest();
+    var applyRequest = new ExcelApplyRequest();
     applyRequest.setReason("bulk maintenance");
     var apply = service.apply(upload.uploadToken(), applyRequest);
     assertThat(apply.insertedRows()).isEqualTo(1);
@@ -172,7 +171,7 @@ class DefaultConsoleAlertRoutingExcelApplicationServiceTest {
 
     assertThat(preview.invalidRows()).isEqualTo(1);
     assertThat(preview.issues()).hasSize(1);
-    assertThat(preview.issues().get(0).messages().get(0)).contains("duplicate route code in excel");
+    assertThat(preview.issues().get(0).messages().get(0)).contains("duplicate key in excel");
   }
 
   private List<String> routingHeaders() {

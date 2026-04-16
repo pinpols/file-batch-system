@@ -13,10 +13,10 @@ import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.support.FileChannelExcelImportStore;
-import com.example.batch.console.support.InMemoryFileChannelExcelImportStore;
+import com.example.batch.console.support.ExcelImportStore;
+import com.example.batch.console.support.InMemoryExcelImportStore;
 import com.example.batch.console.web.query.FileChannelQueryRequest;
-import com.example.batch.console.web.request.FileChannelExcelApplyRequest;
+import com.example.batch.console.web.request.ExcelApplyRequest;
 import com.example.batch.testing.TestExcelFileBuilder;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,7 +39,7 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
   private final FileChannelConfigMapper fileChannelConfigMapper =
       mock(FileChannelConfigMapper.class);
   private final ConfigChangeLogMapper configChangeLogMapper = mock(ConfigChangeLogMapper.class);
-  private final FileChannelExcelImportStore importStore = new InMemoryFileChannelExcelImportStore();
+  private final ExcelImportStore importStore = new InMemoryExcelImportStore();
   private DefaultConsoleFileChannelExcelApplicationService service;
 
   @BeforeEach
@@ -48,9 +48,9 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
         new DefaultConsoleFileChannelExcelApplicationService(
             tenantGuard,
             requestMetadataResolver,
+            importStore,
             fileChannelConfigMapper,
-            configChangeLogMapper,
-            importStore);
+            configChangeLogMapper);
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-1", "trace-1", "t1", "u1", "idem-1", "127.0.0.1"));
@@ -120,7 +120,7 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
     assertThat(preview.rows()).hasSize(1);
     assertThat(preview.rows().get(0).channelCode()).isEqualTo("CH1");
 
-    var applyRequest = new FileChannelExcelApplyRequest();
+    var applyRequest = new ExcelApplyRequest();
     applyRequest.setReason("bulk maintenance");
     var apply = service.apply(upload.uploadToken(), applyRequest);
     assertThat(apply.insertedRows()).isEqualTo(1);
@@ -154,8 +154,7 @@ class DefaultConsoleFileChannelExcelApplicationServiceTest {
 
     assertThat(preview.invalidRows()).isEqualTo(1);
     assertThat(preview.issues()).hasSize(1);
-    assertThat(preview.issues().get(0).messages().get(0))
-        .contains("duplicate channel code in excel");
+    assertThat(preview.issues().get(0).messages().get(0)).contains("duplicate key in excel");
   }
 
   private List<String> channelHeaders() {

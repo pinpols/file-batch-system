@@ -1,8 +1,15 @@
 package com.example.batch.console.support;
 
+import java.io.ByteArrayInputStream;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -34,11 +41,40 @@ import org.apache.poi.xssf.usermodel.XSSFFont;
  */
 public final class ConsoleExcelStyles {
 
+  /** XLSX Content-Type。 */
+  public static final MediaType XLSX_MEDIA_TYPE =
+      MediaType.parseMediaType(
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
   private static final byte[] HEADER_RGB = {0x1F, 0x4E, 0x78};
   private static final byte[] REQUIRED_HEADER_RGB = {(byte) 0xC6, 0x59, 0x11};
   private static final byte[] READ_ONLY_HEADER_RGB = {0x5B, 0x6B, 0x7A};
 
   private ConsoleExcelStyles() {}
+
+  /** 构造 Excel 数据导出下载响应。 */
+  public static ResponseEntity<InputStreamResource> excelResponse(
+      byte[] workbookBytes, String fileNamePrefix, String tenantId) {
+    String fileName =
+        fileNamePrefix + "-" + tenantId + "-" + Instant.now().toEpochMilli() + ".xlsx";
+    return ResponseEntity.ok()
+        .header(
+            HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.attachment().filename(fileName).build().toString())
+        .contentType(XLSX_MEDIA_TYPE)
+        .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
+  }
+
+  /** 构造 Excel 模板下载响应。 */
+  public static ResponseEntity<InputStreamResource> templateResponse(
+      byte[] workbookBytes, String templateFileName) {
+    return ResponseEntity.ok()
+        .header(
+            HttpHeaders.CONTENT_DISPOSITION,
+            ContentDisposition.attachment().filename(templateFileName).build().toString())
+        .contentType(XLSX_MEDIA_TYPE)
+        .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
+  }
 
   public record ColumnGuide(
       boolean required,

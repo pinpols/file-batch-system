@@ -20,9 +20,9 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.excel.ConsoleBatchWindowExcelController;
-import com.example.batch.console.web.response.ConsoleBatchWindowExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleBatchWindowExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleBatchWindowExcelUploadResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -73,17 +73,16 @@ class ConsoleBatchWindowExcelControllerTest {
         .thenReturn(
             ResponseEntity.ok(new InputStreamResource(new ByteArrayInputStream(templateBytes))));
     when(excelService.upload(any()))
-        .thenReturn(
-            new ConsoleBatchWindowExcelUploadResponse("token-1", "window.xlsx", "batch_window", 1));
+        .thenReturn(new ExcelUploadResponse("token-1", "window.xlsx", "batch_window", 1));
     when(excelService.preview(anyString()))
         .thenReturn(
-            new ConsoleBatchWindowExcelPreviewResponse(
+            new ExcelPreviewResponse<>(
                 "token-1", "window.xlsx", "batch_window", 1, 1, 0, List.of(), List.of()));
     when(excelService.downloadPreviewWorkbook(anyString()))
         .thenReturn(
             ResponseEntity.ok(new InputStreamResource(new ByteArrayInputStream(workbookBytes))));
     when(excelService.apply(anyString(), any()))
-        .thenReturn(new ConsoleBatchWindowExcelApplyResponse("token-1", "t1", 1, 1, 0));
+        .thenReturn(new ExcelApplyResponse("token-1", "t1", 1, 1, 0));
 
     mockMvc
         .perform(get("/api/console/config/batch-windows/excel/export").param("tenantId", "t1"))

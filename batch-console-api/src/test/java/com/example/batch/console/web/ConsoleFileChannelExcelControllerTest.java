@@ -19,9 +19,9 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.excel.ConsoleFileChannelExcelController;
-import com.example.batch.console.web.response.ConsoleFileChannelExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleFileChannelExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleFileChannelExcelUploadResponse;
+import com.example.batch.console.web.response.ExcelApplyResponse;
+import com.example.batch.console.web.response.ExcelPreviewResponse;
+import com.example.batch.console.web.response.ExcelUploadResponse;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,15 +59,13 @@ class ConsoleFileChannelExcelControllerTest {
   @Test
   void shouldUploadPreviewAndApplyChannelExcel() throws Exception {
     when(excelService.upload(any()))
-        .thenReturn(
-            new ConsoleFileChannelExcelUploadResponse(
-                "token-1", "channel.xlsx", "file_channel_config", 1));
+        .thenReturn(new ExcelUploadResponse("token-1", "channel.xlsx", "file_channel_config", 1));
     when(excelService.preview(anyString()))
         .thenReturn(
-            new ConsoleFileChannelExcelPreviewResponse(
+            new ExcelPreviewResponse<>(
                 "token-1", "channel.xlsx", "file_channel_config", 1, 1, 0, List.of(), List.of()));
     when(excelService.apply(anyString(), any()))
-        .thenReturn(new ConsoleFileChannelExcelApplyResponse("token-1", "t1", 1, 1, 0));
+        .thenReturn(new ExcelApplyResponse("token-1", "t1", 1, 1, 0));
 
     mockMvc
         .perform(

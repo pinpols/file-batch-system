@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-04-12"
+  x-last-updated: "2026-04-16"
   x-changelog:
+    - date: "2026-04-16"
+      summary: "6 个 Excel 控制器（file-templates/file-channels/alert-routings/batch-windows/quota-policies/resource-queues）的 upload/apply 请求响应统一为共享类型 ExcelUploadResponse/ExcelApplyResponse/ExcelApplyRequest/ExcelRowIssue，旧 per-entity schema 改为 $ref 别名"
     - date: "2026-04-11"
       summary: "POST /api/console/files/delete 改为 DELETE /api/console/files/{fileId}，请求体拆为 path/query 参数，统一物理删除走 DELETE 方法"
     - date: "2026-04-11"
@@ -1540,7 +1542,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleFileTemplateExcelUpload'
+                $ref: '#/components/schemas/CommonResponseExcelUpload'
   /api/console/config/file-templates/excel/preview/{uploadToken}:
     get:
       tags: [Config]
@@ -1600,14 +1602,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FileTemplateExcelApplyRequest'
+              $ref: '#/components/schemas/ExcelApplyRequest'
       responses:
         '200':
           description: Apply result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleFileTemplateExcelApply'
+                $ref: '#/components/schemas/CommonResponseExcelApply'
   /api/console/config/file-channels/excel/template:
     get:
       tags: [Config]
@@ -1674,7 +1676,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleFileChannelExcelUpload'
+                $ref: '#/components/schemas/CommonResponseExcelUpload'
   /api/console/config/file-channels/excel/preview/{uploadToken}:
     get:
       tags: [Config]
@@ -1732,14 +1734,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FileChannelExcelApplyRequest'
+              $ref: '#/components/schemas/ExcelApplyRequest'
       responses:
         '200':
           description: Apply result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleFileChannelExcelApply'
+                $ref: '#/components/schemas/CommonResponseExcelApply'
   /api/console/config/workflows/excel/template:
     get:
       tags: [Config]
@@ -2082,7 +2084,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleAlertRoutingExcelUpload'
+                $ref: '#/components/schemas/CommonResponseExcelUpload'
   /api/console/config/alert-routings/excel/preview/{uploadToken}:
     get:
       tags: [AlertRoutings]
@@ -2140,14 +2142,47 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AlertRoutingExcelApplyRequest'
+              $ref: '#/components/schemas/ExcelApplyRequest'
       responses:
         '200':
           description: Apply result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleAlertRoutingExcelApply'
+                $ref: '#/components/schemas/CommonResponseExcelApply'
+  /api/console/config/alert-routings/excel/quick-import:
+    post:
+      tags: [AlertRoutings]
+      summary: One-click import alert routing Excel (upload + validate + apply)
+      operationId: quickImportAlertRoutingExcel
+      description: >
+        合并上传、校验、应用为一次调用。无校验错误时自动 apply 并返回结果（applied=true）；
+        有校验错误时返回 preview 和带批注 workbook 下载 URL（applied=false），不执行 apply。
+        当 skipInvalid=true 时，跳过无效行仅导入有效行。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                reason:
+                  type: string
+                  maxLength: 512
+                skipInvalid:
+                  type: boolean
+                  default: false
+              required: [file]
+      responses:
+        '200':
+          description: Quick import result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseExcelQuickImportAlertRouting'
   /api/console/config/batch-windows/excel/template:
     get:
       tags: [Config]
@@ -2199,7 +2234,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleBatchWindowExcelUpload'
+                $ref: '#/components/schemas/CommonResponseExcelUpload'
   /api/console/config/batch-windows/excel/preview/{uploadToken}:
     get:
       tags: [Config]
@@ -2257,14 +2292,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BatchWindowExcelApplyRequest'
+              $ref: '#/components/schemas/ExcelApplyRequest'
       responses:
         '200':
           description: Apply result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleBatchWindowExcelApply'
+                $ref: '#/components/schemas/CommonResponseExcelApply'
   /api/console/config/business-calendars/excel/template:
     get:
       tags: [Config]
@@ -2575,7 +2610,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleTenantQuotaPolicyExcelUpload'
+                $ref: '#/components/schemas/CommonResponseExcelUpload'
   /api/console/config/quota-policies/excel/preview/{uploadToken}:
     get:
       tags: [Config]
@@ -2633,14 +2668,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TenantQuotaPolicyExcelApplyRequest'
+              $ref: '#/components/schemas/ExcelApplyRequest'
       responses:
         '200':
           description: Apply result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleTenantQuotaPolicyExcelApply'
+                $ref: '#/components/schemas/CommonResponseExcelApply'
   /api/console/config/resource-queues/excel/template:
     get:
       tags: [Config]
@@ -2707,7 +2742,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleResourceQueueExcelUpload'
+                $ref: '#/components/schemas/CommonResponseExcelUpload'
   /api/console/config/resource-queues/excel/preview/{uploadToken}:
     get:
       tags: [Config]
@@ -2765,14 +2800,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ResourceQueueExcelApplyRequest'
+              $ref: '#/components/schemas/ExcelApplyRequest'
       responses:
         '200':
           description: Apply result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseConsoleResourceQueueExcelApply'
+                $ref: '#/components/schemas/CommonResponseExcelApply'
   /api/console/reports/excel/config-releases:
     get:
       tags: [Reports]
@@ -8889,6 +8924,27 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    CommonResponseExcelUpload:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ExcelUploadResponse'
+    CommonResponseExcelApply:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ExcelApplyResponse'
+    CommonResponseExcelQuickImportAlertRouting:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ExcelQuickImportResponse'
     CommonResponseConsoleFileTemplateExcelUpload:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -9364,17 +9420,9 @@ components:
           type: string
       required: [tenantId, secretRef, secretName]
     FileTemplateExcelApplyRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-      required: []
+      $ref: '#/components/schemas/ExcelApplyRequest'
     FileChannelExcelApplyRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-      required: []
+      $ref: '#/components/schemas/ExcelApplyRequest'
     WorkflowExcelApplyRequest:
       type: object
       properties:
@@ -9388,17 +9436,9 @@ components:
           type: string
       required: []
     AlertRoutingExcelApplyRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-      required: []
+      $ref: '#/components/schemas/ExcelApplyRequest'
     BatchWindowExcelApplyRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-      required: []
+      $ref: '#/components/schemas/ExcelApplyRequest'
     BusinessCalendarExcelApplyRequest:
       type: object
       properties:
@@ -9412,17 +9452,101 @@ components:
           type: string
       required: []
     TenantQuotaPolicyExcelApplyRequest:
-      type: object
-      properties:
-        reason:
-          type: string
-      required: []
+      $ref: '#/components/schemas/ExcelApplyRequest'
     ResourceQueueExcelApplyRequest:
+      $ref: '#/components/schemas/ExcelApplyRequest'
+    ExcelApplyRequest:
       type: object
       properties:
         reason:
           type: string
-      required: []
+          maxLength: 512
+    ExcelUploadResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        sheetName:
+          type: string
+        rowCount:
+          type: integer
+          format: int32
+      required: [uploadToken, fileName, sheetName, rowCount]
+    ExcelApplyResponse:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+        tenantId:
+          type: string
+        appliedRows:
+          type: integer
+          format: int32
+        insertedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+        skippedRows:
+          type: integer
+          format: int32
+      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows, skippedRows]
+    ExcelQuickImportResponse:
+      type: object
+      description: 一键导入响应。applied=true 表示无错误已自动 apply；applied=false 表示有校验错误未执行 apply。
+      properties:
+        applied:
+          type: boolean
+        uploadToken:
+          type: string
+        fileName:
+          type: string
+        totalRows:
+          type: integer
+          format: int32
+        validRows:
+          type: integer
+          format: int32
+        invalidRows:
+          type: integer
+          format: int32
+        insertedRows:
+          type: integer
+          format: int32
+        updatedRows:
+          type: integer
+          format: int32
+        skippedRows:
+          type: integer
+          format: int32
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExcelRowIssue'
+        previewWorkbookUrl:
+          type: string
+          description: 有校验错误时返回的带批注 workbook 下载 URL（applied=true 时为 null）
+      required: [applied, uploadToken, fileName, totalRows, validRows, invalidRows, insertedRows, updatedRows, skippedRows, issues]
+    ExcelRowIssue:
+      type: object
+      properties:
+        sheetName:
+          type: string
+        rowNo:
+          type: integer
+          format: int32
+        rowKey:
+          type: string
+        entityCode:
+          type: string
+        messages:
+          type: array
+          items:
+            type: string
+      required: [rowNo, entityCode, messages]
     DrainWorkerRequest:
       type: object
       properties:
@@ -11294,36 +11418,9 @@ components:
           format: date-time
       required: [id, tenantId, templateCode, templateName, templateType, bizType, fileFormatType, charset, targetCharset, withBom, lineSeparator, delimiter, quoteChar, escapeChar, recordLength, headerRows, footerRows, headerTemplate, trailerTemplate, checksumType, compressType, encryptType, namingRule, fieldMappings, validationRuleSet, defaultQueryCode, defaultQuerySql, queryParamSchema, streamingEnabled, pageSize, fetchSize, chunkSize, previewMaskingEnabled, errorLineMaskingEnabled, logMaskingEnabled, contentEncryptionEnabled, encryptionKeyRef, downloadRequiresApproval, maskingRuleSet, enabled, version, description, createdBy, updatedBy, createdAt, updatedAt]
     ConsoleExcelRowIssueResponse:
-      type: object
-      properties:
-        rowNo:
-          type: integer
-          format: int32
-        rowKey:
-          type: string
-        templateCode:
-          type: string
-        version:
-          type: integer
-          format: int32
-        messages:
-          type: array
-          items:
-            type: string
-      required: [rowNo, rowKey, templateCode, version, messages]
+      $ref: '#/components/schemas/ExcelRowIssue'
     ConsoleFileTemplateExcelUploadResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        fileName:
-          type: string
-        sheetName:
-          type: string
-        rowCount:
-          type: integer
-          format: int32
-      required: [uploadToken, fileName, sheetName, rowCount]
+      $ref: '#/components/schemas/ExcelUploadResponse'
     ConsoleFileTemplateExcelPreviewResponse:
       type: object
       properties:
@@ -11349,38 +11446,14 @@ components:
         issues:
           type: array
           items:
-            $ref: '#/components/schemas/ConsoleExcelRowIssueResponse'
+            $ref: '#/components/schemas/ExcelRowIssue'
+        previewWorkbookUrl:
+          type: string
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleFileTemplateExcelApplyResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        tenantId:
-          type: string
-        appliedRows:
-          type: integer
-          format: int32
-        insertedRows:
-          type: integer
-          format: int32
-        updatedRows:
-          type: integer
-          format: int32
-      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+      $ref: '#/components/schemas/ExcelApplyResponse'
     ConsoleFileChannelExcelUploadResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        fileName:
-          type: string
-        sheetName:
-          type: string
-        rowCount:
-          type: integer
-          format: int32
-      required: [uploadToken, fileName, sheetName, rowCount]
+      $ref: '#/components/schemas/ExcelUploadResponse'
     ConsoleFileChannelExcelPreviewResponse:
       type: object
       properties:
@@ -11406,25 +11479,12 @@ components:
         issues:
           type: array
           items:
-            $ref: '#/components/schemas/ConsoleFileChannelExcelRowIssueResponse'
+            $ref: '#/components/schemas/ExcelRowIssue'
+        previewWorkbookUrl:
+          type: string
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleFileChannelExcelApplyResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        tenantId:
-          type: string
-        appliedRows:
-          type: integer
-          format: int32
-        insertedRows:
-          type: integer
-          format: int32
-        updatedRows:
-          type: integer
-          format: int32
-      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+      $ref: '#/components/schemas/ExcelApplyResponse'
     ConsoleWorkflowExcelUploadResponse:
       type: object
       properties:
@@ -11734,20 +11794,7 @@ components:
           type: boolean
       required: [tenantId, workflowCode, workflowVersion, fromNodeCode, toNodeCode, edgeType, conditionExpr, enabled]
     ConsoleFileChannelExcelRowIssueResponse:
-      type: object
-      properties:
-        rowNo:
-          type: integer
-          format: int32
-        rowKey:
-          type: string
-        channelCode:
-          type: string
-        messages:
-          type: array
-          items:
-            type: string
-      required: [rowNo, rowKey, channelCode, messages]
+      $ref: '#/components/schemas/ExcelRowIssue'
     ConsoleOutboxRetryLogResponse:
       type: object
       properties:
@@ -11849,18 +11896,7 @@ components:
           format: date-time
       required: [tenantId, routeCode, routeName, team, alertGroup, severity, receiver, enabled]
     ConsoleAlertRoutingExcelUploadResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        fileName:
-          type: string
-        sheetName:
-          type: string
-        rowCount:
-          type: integer
-          format: int32
-      required: [uploadToken, fileName, sheetName, rowCount]
+      $ref: '#/components/schemas/ExcelUploadResponse'
     ConsoleAlertRoutingExcelPreviewResponse:
       type: object
       properties:
@@ -11886,40 +11922,14 @@ components:
         issues:
           type: array
           items:
-            $ref: '#/components/schemas/ConsoleAlertRoutingExcelRowIssueResponse'
+            $ref: '#/components/schemas/ExcelRowIssue'
+        previewWorkbookUrl:
+          type: string
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleAlertRoutingExcelApplyResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        tenantId:
-          type: string
-        appliedRows:
-          type: integer
-          format: int32
-        insertedRows:
-          type: integer
-          format: int32
-        updatedRows:
-          type: integer
-          format: int32
-      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+      $ref: '#/components/schemas/ExcelApplyResponse'
     ConsoleAlertRoutingExcelRowIssueResponse:
-      type: object
-      properties:
-        rowNo:
-          type: integer
-          format: int32
-        rowKey:
-          type: string
-        routeCode:
-          type: string
-        messages:
-          type: array
-          items:
-            type: string
-      required: [rowNo, routeCode, messages]
+      $ref: '#/components/schemas/ExcelRowIssue'
     ConsoleBatchWindowResponse:
       type: object
       properties:
@@ -11956,18 +11966,7 @@ components:
           format: date-time
       required: [id, tenantId, windowCode, windowName, timezone, startTime, endTime, endStrategy, outOfWindowAction, allowCrossDay, enabled, createdAt, updatedAt]
     ConsoleBatchWindowExcelUploadResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        fileName:
-          type: string
-        sheetName:
-          type: string
-        rowCount:
-          type: integer
-          format: int32
-      required: [uploadToken, fileName, sheetName, rowCount]
+      $ref: '#/components/schemas/ExcelUploadResponse'
     ConsoleBatchWindowExcelPreviewResponse:
       type: object
       properties:
@@ -11993,40 +11992,14 @@ components:
         issues:
           type: array
           items:
-            $ref: '#/components/schemas/ConsoleBatchWindowExcelRowIssueResponse'
+            $ref: '#/components/schemas/ExcelRowIssue'
+        previewWorkbookUrl:
+          type: string
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleBatchWindowExcelApplyResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        tenantId:
-          type: string
-        appliedRows:
-          type: integer
-          format: int32
-        insertedRows:
-          type: integer
-          format: int32
-        updatedRows:
-          type: integer
-          format: int32
-      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+      $ref: '#/components/schemas/ExcelApplyResponse'
     ConsoleBatchWindowExcelRowIssueResponse:
-      type: object
-      properties:
-        rowNo:
-          type: integer
-          format: int32
-        rowKey:
-          type: string
-        windowCode:
-          type: string
-        messages:
-          type: array
-          items:
-            type: string
-      required: [rowNo, windowCode, messages]
+      $ref: '#/components/schemas/ExcelRowIssue'
     ConsoleBusinessCalendarResponse:
       type: object
       properties:
@@ -12358,18 +12331,7 @@ components:
           format: date-time
       required: [id, tenantId, policyCode, enabled, createdAt, updatedAt]
     ConsoleTenantQuotaPolicyExcelUploadResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        fileName:
-          type: string
-        sheetName:
-          type: string
-        rowCount:
-          type: integer
-          format: int32
-      required: [uploadToken, fileName, sheetName, rowCount]
+      $ref: '#/components/schemas/ExcelUploadResponse'
     ConsoleTenantQuotaPolicyExcelPreviewResponse:
       type: object
       properties:
@@ -12395,40 +12357,14 @@ components:
         issues:
           type: array
           items:
-            $ref: '#/components/schemas/ConsoleTenantQuotaPolicyExcelRowIssueResponse'
+            $ref: '#/components/schemas/ExcelRowIssue'
+        previewWorkbookUrl:
+          type: string
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleTenantQuotaPolicyExcelApplyResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        tenantId:
-          type: string
-        appliedRows:
-          type: integer
-          format: int32
-        insertedRows:
-          type: integer
-          format: int32
-        updatedRows:
-          type: integer
-          format: int32
-      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+      $ref: '#/components/schemas/ExcelApplyResponse'
     ConsoleTenantQuotaPolicyExcelRowIssueResponse:
-      type: object
-      properties:
-        rowNo:
-          type: integer
-          format: int32
-        rowKey:
-          type: string
-        policyCode:
-          type: string
-        messages:
-          type: array
-          items:
-            type: string
-      required: [rowNo, policyCode, messages]
+      $ref: '#/components/schemas/ExcelRowIssue'
     ConsoleResourceQueueResponse:
       type: object
       properties:
@@ -12473,18 +12409,7 @@ components:
           format: date-time
       required: [id, tenantId, queueCode, queueName, queueType, enabled, createdAt, updatedAt]
     ConsoleResourceQueueExcelUploadResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        fileName:
-          type: string
-        sheetName:
-          type: string
-        rowCount:
-          type: integer
-          format: int32
-      required: [uploadToken, fileName, sheetName, rowCount]
+      $ref: '#/components/schemas/ExcelUploadResponse'
     ConsoleResourceQueueExcelPreviewResponse:
       type: object
       properties:
@@ -12510,40 +12435,14 @@ components:
         issues:
           type: array
           items:
-            $ref: '#/components/schemas/ConsoleResourceQueueExcelRowIssueResponse'
+            $ref: '#/components/schemas/ExcelRowIssue'
+        previewWorkbookUrl:
+          type: string
       required: [uploadToken, fileName, sheetName, totalRows, validRows, invalidRows, rows, issues]
     ConsoleResourceQueueExcelApplyResponse:
-      type: object
-      properties:
-        uploadToken:
-          type: string
-        tenantId:
-          type: string
-        appliedRows:
-          type: integer
-          format: int32
-        insertedRows:
-          type: integer
-          format: int32
-        updatedRows:
-          type: integer
-          format: int32
-      required: [uploadToken, tenantId, appliedRows, insertedRows, updatedRows]
+      $ref: '#/components/schemas/ExcelApplyResponse'
     ConsoleResourceQueueExcelRowIssueResponse:
-      type: object
-      properties:
-        rowNo:
-          type: integer
-          format: int32
-        rowKey:
-          type: string
-        queueCode:
-          type: string
-        messages:
-          type: array
-          items:
-            type: string
-      required: [rowNo, queueCode, messages]
+      $ref: '#/components/schemas/ExcelRowIssue'
 
     ConsoleTenantResponse:
       type: object

@@ -15,10 +15,10 @@ import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
-import com.example.batch.console.support.FileTemplateExcelImportStore;
-import com.example.batch.console.support.InMemoryFileTemplateExcelImportStore;
+import com.example.batch.console.support.ExcelImportStore;
+import com.example.batch.console.support.InMemoryExcelImportStore;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
-import com.example.batch.console.web.request.FileTemplateExcelApplyRequest;
+import com.example.batch.console.web.request.ExcelApplyRequest;
 import com.example.batch.testing.TestExcelFileBuilder;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,8 +41,7 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
   private final FileTemplateConfigMapper fileTemplateConfigMapper =
       mock(FileTemplateConfigMapper.class);
   private final ConfigChangeLogMapper configChangeLogMapper = mock(ConfigChangeLogMapper.class);
-  private final FileTemplateExcelImportStore importStore =
-      new InMemoryFileTemplateExcelImportStore();
+  private final ExcelImportStore importStore = new InMemoryExcelImportStore();
   private DefaultConsoleFileTemplateExcelApplicationService service;
 
   @BeforeEach
@@ -51,9 +50,9 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
         new DefaultConsoleFileTemplateExcelApplicationService(
             tenantGuard,
             requestMetadataResolver,
+            importStore,
             fileTemplateConfigMapper,
-            configChangeLogMapper,
-            importStore);
+            configChangeLogMapper);
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-1", "trace-1", "t1", "u1", "idem-1", "127.0.0.1"));
@@ -123,7 +122,7 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
     assertThat(preview.rows()).hasSize(1);
     assertThat(preview.rows().get(0).templateCode()).isEqualTo("TPL1");
 
-    var applyRequest = new FileTemplateExcelApplyRequest();
+    var applyRequest = new ExcelApplyRequest();
     applyRequest.setReason("bulk maintenance");
     var apply = service.apply(upload.uploadToken(), applyRequest);
     assertThat(apply.insertedRows()).isEqualTo(1);
