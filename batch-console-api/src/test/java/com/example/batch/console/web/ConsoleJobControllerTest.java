@@ -14,7 +14,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.ResponseMeta;
-import com.example.batch.console.application.ConsoleJobApplicationService;
+import com.example.batch.console.application.ConsoleJobApprovalService;
+import com.example.batch.console.application.ConsoleJobRecoveryService;
+import com.example.batch.console.application.ConsoleJobTriggerService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -29,8 +31,9 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 class ConsoleJobControllerTest {
 
-  private final ConsoleJobApplicationService applicationService =
-      mock(ConsoleJobApplicationService.class);
+  private final ConsoleJobTriggerService triggerService = mock(ConsoleJobTriggerService.class);
+  private final ConsoleJobRecoveryService recoveryService = mock(ConsoleJobRecoveryService.class);
+  private final ConsoleJobApprovalService approvalService = mock(ConsoleJobApprovalService.class);
   private final ConsoleRequestMetadataResolver requestMetadataResolver =
       mock(ConsoleRequestMetadataResolver.class);
   private MockMvc mockMvc;
@@ -49,7 +52,8 @@ class ConsoleJobControllerTest {
 
     mockMvc =
         MockMvcBuilders.standaloneSetup(
-                new ConsoleJobController(applicationService, responseFactory))
+                new ConsoleJobController(
+                    triggerService, recoveryService, approvalService, responseFactory))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
@@ -68,12 +72,12 @@ class ConsoleJobControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("MISSING_IDEMPOTENCY_KEY"));
 
-    verifyNoInteractions(applicationService);
+    verifyNoInteractions(triggerService);
   }
 
   @Test
   void shouldTriggerAndReturnCommonResponseOnSuccess() throws Exception {
-    when(applicationService.trigger(any(), anyString())).thenReturn("OK");
+    when(triggerService.trigger(any(), anyString())).thenReturn("OK");
 
     mockMvc
         .perform(
@@ -91,7 +95,7 @@ class ConsoleJobControllerTest {
 
   @Test
   void shouldAllowDryRunWithoutIdempotencyHeader() throws Exception {
-    when(applicationService.dryRunTrigger(any())).thenReturn(Map.of("dryRun", true, "valid", true));
+    when(triggerService.dryRunTrigger(any())).thenReturn(Map.of("dryRun", true, "valid", true));
 
     mockMvc
         .perform(
@@ -106,12 +110,12 @@ class ConsoleJobControllerTest {
         .andExpect(jsonPath("$.data.dryRun").value(true))
         .andExpect(jsonPath("$.data.valid").value(true));
 
-    verify(applicationService).dryRunTrigger(any());
+    verify(triggerService).dryRunTrigger(any());
   }
 
   @Test
   void shouldBatchTriggerJobs() throws Exception {
-    when(applicationService.batchTrigger(any(), anyString()))
+    when(triggerService.batchTrigger(any(), anyString()))
         .thenReturn(List.of(Map.of("index", 0, "status", "SUCCESS", "instanceNo", "INS-1")));
 
     mockMvc

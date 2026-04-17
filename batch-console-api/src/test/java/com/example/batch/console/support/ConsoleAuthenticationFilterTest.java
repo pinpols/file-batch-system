@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.common.config.BatchSecurityProperties;
@@ -180,10 +181,8 @@ class ConsoleAuthenticationFilterTest {
   }
 
   @Test
-  void filter_resolvesBearerTokenFromQueryParam() throws Exception {
-    ConsolePrincipal principal = new ConsolePrincipal("bob", "t1", Set.of("ROLE_ADMIN"));
-    when(jwtService.authenticate("query-jwt")).thenReturn(principal);
-
+  void filter_ignoresQueryParamToken() throws Exception {
+    // 5.4: URL query token 已移除，?token= 不再作为 JWT 来源
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.setParameter("token", "query-jwt");
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -191,7 +190,7 @@ class ConsoleAuthenticationFilterTest {
 
     filter.doFilterInternal(request, response, chain);
 
-    verify(jwtService).authenticate("query-jwt");
+    verifyNoInteractions(jwtService);
     verify(chain).doFilter(request, response);
   }
 
