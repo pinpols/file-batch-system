@@ -62,7 +62,8 @@ batch:
         - ROLE_AUDITOR
         - ROLE_CONFIG_ADMIN
       # 是否保留旧的 X-Console-Token 鉴权兼容路径
-      legacy-header-auth-enabled: ${BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:true}
+      # 5.2: 默认关闭旧式 X-Console-Token 鉴权，需要时显式开启
+      legacy-header-auth-enabled: ${BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:false}
       # 单账号单会话：新登录会顶掉旧 JWT
       single-session-enabled: ${BATCH_CONSOLE_SINGLE_SESSION_ENABLED:true}
       # JWT 签发者

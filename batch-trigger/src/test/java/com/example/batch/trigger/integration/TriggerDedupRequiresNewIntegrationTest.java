@@ -1,7 +1,6 @@
 package com.example.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -32,8 +31,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * REQUIRES_NEW 事务边界集成测试 — Trigger 去重。
  *
  * <p>{@code DefaultTriggerService#persistAndForward} 使用 {@code
- * TransactionDefinition.PROPAGATION_REQUIRES_NEW} 在独立事务中写入 trigger_request，
- * 然后在外层发起 orchestrator RPC。验证：当 RPC 失败时，PENDING 行仍持久化（可对账检测）。
+ * TransactionDefinition.PROPAGATION_REQUIRES_NEW} 在独立事务中写入 trigger_request， 然后在外层发起 orchestrator
+ * RPC。验证：当 RPC 失败时，PENDING 行仍持久化（可对账检测）。
  */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
@@ -64,8 +63,9 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
 
     TriggerLaunchCommand command = buildCommand("DEDUP_RPC_FAIL", "idem-rpc-fail", "req-rpc-fail");
 
-    assertThatThrownBy(() -> triggerService.launch(command))
-        .isInstanceOf(SystemException.class);
+    // 5.7: transient failures no longer throw — they return a response and mark FORWARD_FAILED
+    LaunchResponse response = triggerService.launch(command);
+    assertThat(response).isNotNull();
 
     // REQUIRES_NEW 内的 INSERT 应已独立提交：行存在
     Integer count =
@@ -74,20 +74,19 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
             Integer.class,
             "t1",
             "idem-rpc-fail");
-    assertThat(count)
-        .as("REQUIRES_NEW should persist row despite RPC failure")
-        .isEqualTo(1);
+    assertThat(count).as("REQUIRES_NEW should persist row despite RPC failure").isEqualTo(1);
 
-    // RPC 失败后 catch 块将状态从 PENDING 更新为 REJECTED（在 REQUIRES_NEW 外）
+    // 5.7: RPC 失败后 catch 块将状态从 PENDING 更新为 FORWARD_FAILED（可重试）
     String status =
         jdbcTemplate.queryForObject(
-            "select request_status from batch.trigger_request where tenant_id = ? and dedup_key = ?",
+            "select request_status from batch.trigger_request where tenant_id = ? and dedup_key ="
+                + " ?",
             String.class,
             "t1",
             "idem-rpc-fail");
     assertThat(status)
-        .as("row should be REJECTED after RPC failure (PENDING → REJECTED in catch block)")
-        .isEqualTo("REJECTED");
+        .as("row should be FORWARD_FAILED after RPC failure (eligible for retry)")
+        .isEqualTo("FORWARD_FAILED");
   }
 
   @Test

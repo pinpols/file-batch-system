@@ -17,6 +17,7 @@ public class TriggerRequestEntity {
   private String requestStatus;
   private Long relatedJobInstanceId;
   private String traceId;
+  private int forwardRetryCount;
   private Instant createdAt;
   private Instant updatedAt;
 }

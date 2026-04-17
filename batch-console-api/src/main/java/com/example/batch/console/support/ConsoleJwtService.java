@@ -47,14 +47,24 @@ public class ConsoleJwtService {
   private final Environment environment;
 
   @PostConstruct
-  void validateJwtSecret() {
-    String secret = properties.getJwtSecret();
-    if (secret != null && isProductionProfile()) {
-      String lower = secret.toLowerCase(Locale.ROOT);
+  void validateSecuritySecrets() {
+    if (!isProductionProfile()) {
+      return;
+    }
+    String jwtSecret = properties.getJwtSecret();
+    if (jwtSecret != null) {
+      String lower = jwtSecret.toLowerCase(Locale.ROOT);
       if (lower.contains("change-me") || lower.contains("change_me")) {
         throw new IllegalStateException(
             "FATAL: batch.console.security.jwt-secret 仍包含默认占位符，" + "生产环境必须通过环境变量或密钥管理注入真实密钥");
       }
+    }
+    // 5.3: 生产环境校验 shared-secret 不是默认值
+    String sharedSecret = properties.getSharedSecret();
+    if ("console-secret".equals(sharedSecret)) {
+      throw new IllegalStateException(
+          "FATAL: batch.console.security.shared-secret 仍为默认值 'console-secret'，"
+              + "生产环境必须通过环境变量注入强密钥或关闭 legacy-header-auth");
     }
   }
 

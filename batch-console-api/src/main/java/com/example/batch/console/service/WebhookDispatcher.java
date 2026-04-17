@@ -15,7 +15,9 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -27,9 +29,17 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * Webhook 异步分发器。
+ * Webhook 异步分发器（Best-Effort 语义）。
  *
- * <p>MVP 版本：进程内异步线程池 + 最多 3 次重试；每次尝试都落 delivery log。
+ * <p>进程内有界队列 + 最多 3 次重试 + delivery log 审计。
+ *
+ * <p><strong>注意</strong>：本实现为 best-effort 通知，不保证可靠交付：
+ *
+ * <ul>
+ *   <li>进程重启时未消费的 webhook 会丢失
+ *   <li>队列满时新 webhook 会被丢弃（记录 WARN 日志）
+ *   <li>如需可靠交付，应改用 outbox + 持久化队列
+ * </ul>
  */
 @Slf4j
 @Service
@@ -37,13 +47,20 @@ import org.springframework.web.client.RestClientResponseException;
 public class WebhookDispatcher {
 
   private static final int MAX_ATTEMPTS = 3;
+  /** 有界队列容量 — 防止流量尖峰下内存积压。 */
+  private static final int QUEUE_CAPACITY = 1024;
 
   private final ConsoleWebhookService webhookService;
   private final ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
   private final RestClient.Builder restClientBuilder;
+  // 5.11: 改用有界队列 + CallerRunsPolicy 替代无界队列
   private final ExecutorService executor =
-      Executors.newFixedThreadPool(
+      new ThreadPoolExecutor(
           4,
+          4,
+          60L,
+          TimeUnit.SECONDS,
+          new LinkedBlockingQueue<>(QUEUE_CAPACITY),
           runnable -> {
             Thread thread = new Thread(runnable, "console-webhook-dispatch");
             thread.setDaemon(true);
@@ -57,7 +74,12 @@ public class WebhookDispatcher {
       String cursor,
       Object data,
       Instant emittedAt) {
-    executor.submit(() -> dispatch(tenantId, eventType, stream, cursor, data, emittedAt));
+    try {
+      executor.submit(() -> dispatch(tenantId, eventType, stream, cursor, data, emittedAt));
+    } catch (RejectedExecutionException e) {
+      log.warn(
+          "webhook dispatch queue full, dropping event: tenant={}, eventType={}", tenantId, eventType);
+    }
   }
 
   @PreDestroy
@@ -144,7 +166,17 @@ public class WebhookDispatcher {
     String callbackHost = URI.create(subscription.getCallbackUrl()).getHost();
     DnsResolveGuard.resolveAndValidate(callbackHost);
 
-    RestClient client = restClientBuilder.build();
+    // 5.11: 显式设置 HTTP 超时，避免慢回调长期占用线程
+    RestClient client =
+        restClientBuilder
+            .requestFactory(
+                new org.springframework.http.client.SimpleClientHttpRequestFactory() {
+                  {
+                    setConnectTimeout(java.time.Duration.ofSeconds(5));
+                    setReadTimeout(java.time.Duration.ofSeconds(10));
+                  }
+                })
+            .build();
     RestClient.RequestBodySpec spec =
         client
             .post()

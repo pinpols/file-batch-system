@@ -137,12 +137,12 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
   }
 
   private String resolveBearerToken(HttpServletRequest request) {
+    // 5.4: 仅从 Authorization header 读取 JWT，不再接受 URL query token（防止日志/Referer 泄露）
     String authorization = request.getHeader("Authorization");
     if (StringUtils.hasText(authorization) && authorization.startsWith("Bearer ")) {
       return authorization.substring(7).trim();
     }
-    String queryToken = request.getParameter("token");
-    return StringUtils.hasText(queryToken) ? queryToken.trim() : null;
+    return null;
   }
 
   private String resolveUsername(HttpServletRequest request) {

@@ -17,14 +17,15 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * POST 幂等去重拦截器。
+ * POST 幂等去重拦截器（5.5 重写版）。
  *
- * <p>当请求携带 {@code Idempotency-Key} header 时执行 Redis 去重（TTL 24 小时）：
+ * <p>Redis key 绑定 {@code tenant + method + uri + idempotencyKey}，避免跨接口/跨租户的假冲突。
+ *
+ * <p>两阶段占坑：preHandle 写入 {@code PENDING} 标记，afterCompletion 根据响应状态决定：
  *
  * <ul>
- *   <li>首次请求：写入占位标记，放行。
- *   <li>重复请求（key 已存在）：返回 409 CONFLICT，阻止重复写库。
- *   <li>未携带 header：直接放行，由控制器的 {@code @RequestHeader} 注解决定是否拒绝。
+ *   <li>2xx 成功：标记改为 {@code DONE}，TTL 24 小时（阻止重复提交）。
+ *   <li>非 2xx 失败：删除占位，允许调用方安全重试。
  * </ul>
  */
 @Component
@@ -34,10 +35,14 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
   private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
   private static final String KEY_PREFIX = "console:idempotency:";
+  private static final String PENDING = "PENDING";
+  private static final String DONE = "DONE";
   private static final String CONFLICT_BODY =
       "{\"code\":\""
           + ResultCode.CONFLICT.code()
           + "\",\"message\":\"duplicate request, same Idempotency-Key already processed\"}";
+  /** Request attribute：记录本次请求使用的 Redis key，afterCompletion 时读取。 */
+  private static final String ATTR_REDIS_KEY = "console.idempotency.redisKey";
 
   private final StringRedisTemplate redisTemplate;
   private final BatchSecurityProperties securityProperties;
@@ -56,27 +61,62 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
     String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
     if (!StringUtils.hasText(idempotencyKey)) {
-      // 无 header：放行，由 @RequestHeader 注解或业务逻辑决定是否拒绝
       return true;
     }
 
-    String redisKey = KEY_PREFIX + idempotencyKey;
-    Boolean isNew = redisTemplate.opsForValue().setIfAbsent(redisKey, "1", IDEMPOTENCY_TTL);
-    if (Boolean.FALSE.equals(isNew)) {
+    String tenantId = resolveTenantId(request);
+    String redisKey =
+        KEY_PREFIX + tenantId + ":" + request.getMethod() + ":" + request.getRequestURI() + ":"
+            + idempotencyKey.trim();
+
+    String existing = redisTemplate.opsForValue().get(redisKey);
+    if (DONE.equals(existing)) {
       log.warn(
-          "duplicate idempotency key rejected: key={}, uri={}",
-          idempotencyKey,
-          request.getRequestURI());
+          "duplicate idempotency key rejected: key={}, uri={}, tenant={}",
+          idempotencyKey, request.getRequestURI(), tenantId);
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_BODY);
       return false;
     }
 
+    // PENDING 也占坑（防并发双提交），但短 TTL（30s），超时自动释放
+    Boolean isNew = redisTemplate.opsForValue().setIfAbsent(redisKey, PENDING, Duration.ofSeconds(30));
+    if (Boolean.FALSE.equals(isNew)) {
+      log.warn(
+          "concurrent idempotency key rejected: key={}, uri={}, tenant={}",
+          idempotencyKey, request.getRequestURI(), tenantId);
+      writeJson(response, HttpStatus.CONFLICT, CONFLICT_BODY);
+      return false;
+    }
+
+    request.setAttribute(ATTR_REDIS_KEY, redisKey);
     return true;
   }
 
-  private void writeJson(HttpServletResponse response, HttpStatus status, String body)
+  @Override
+  public void afterCompletion(
+      HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+    String redisKey = (String) request.getAttribute(ATTR_REDIS_KEY);
+    if (redisKey == null) {
+      return;
+    }
+    int status = response.getStatus();
+    if (status >= 200 && status < 300 && ex == null) {
+      // 成功：升级为 DONE，长 TTL 阻止重复提交
+      redisTemplate.opsForValue().set(redisKey, DONE, IDEMPOTENCY_TTL);
+    } else {
+      // 失败：删除占位，允许安全重试
+      redisTemplate.delete(redisKey);
+    }
+  }
+
+  private String resolveTenantId(HttpServletRequest request) {
+    String tenantId = request.getHeader("X-Tenant-Id");
+    return StringUtils.hasText(tenantId) ? tenantId.trim() : "_";
+  }
+
+  private void writeJson(HttpServletResponse response, HttpStatus httpStatus, String body)
       throws IOException {
-    response.setStatus(status.value());
+    response.setStatus(httpStatus.value());
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     response.getWriter().write(body);
   }

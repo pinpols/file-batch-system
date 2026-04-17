@@ -373,3 +373,4 @@ password: ${BATCH_PLATFORM_DB_PASSWORD:batch_pass_123}
 | 日期 | 变更内容 |
 |------|----------|
 | 2026-04-15 | V2 初版，四维度 69 项问题全量录入 |
+| 2026-04-17 | 核查校准：S-2.5 标注为误报（已有 Redis 分布式限流）；S-2.6 已修复（DnsResolveGuard）；A-6.1 已拆分（2207→783 行）；A-6.2 已拆分（1085→274 行 + 5 FormatParser）；A-4.3 已完成（Kafka observation）；部分文件路径因重构变更，以 fix-report-v2.md 为准 |
