@@ -14,7 +14,9 @@ import com.example.batch.console.application.ConsoleApprovalApplicationService;
 import com.example.batch.console.application.ConsoleConfigApplicationService;
 import com.example.batch.console.application.ConsoleFileApplicationService;
 import com.example.batch.console.application.ConsoleFileDownloadApplicationService;
-import com.example.batch.console.application.ConsoleJobApplicationService;
+import com.example.batch.console.application.ConsoleJobApprovalService;
+import com.example.batch.console.application.ConsoleJobRecoveryService;
+import com.example.batch.console.application.ConsoleJobTriggerService;
 import com.example.batch.console.application.ConsoleJobDefinitionExcelApplicationService;
 import com.example.batch.console.application.ConsoleReportExcelApplicationService;
 import com.example.batch.console.application.ConsoleWorkerApplicationService;
@@ -48,7 +50,9 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
   private WebTestClient webTestClient;
 
-  @MockitoBean private ConsoleJobApplicationService jobApplicationService;
+  @MockitoBean private ConsoleJobTriggerService jobTriggerService;
+  @MockitoBean private ConsoleJobRecoveryService jobRecoveryService;
+  @MockitoBean private ConsoleJobApprovalService jobApprovalService;
 
   @MockitoBean
   private ConsoleJobDefinitionExcelApplicationService jobDefinitionExcelApplicationService;
@@ -80,7 +84,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
   @Test
   void shouldTriggerJobViaHttp() {
-    when(jobApplicationService.trigger(any(), anyString())).thenReturn("job-instance-001");
+    when(jobTriggerService.trigger(any(), anyString())).thenReturn("job-instance-001");
 
     webTestClient
         .post()
@@ -101,7 +105,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
               assertThat(body).contains("\"job-instance-001\"");
             });
 
-    verify(jobApplicationService).trigger(any(), anyString());
+    verify(jobTriggerService).trigger(any(), anyString());
   }
 
   @Test
@@ -172,7 +176,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         .expectBody(String.class)
         .value(body -> assertThat(body).contains("\"code\":\"VALIDATION_ERROR\""));
 
-    verifyNoInteractions(jobApplicationService);
+    verifyNoInteractions(jobTriggerService);
   }
 
   @Test
