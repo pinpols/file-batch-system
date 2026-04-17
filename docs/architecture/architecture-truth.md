@@ -31,7 +31,10 @@
 - **文件治理**：延迟告警、到达组聚合、归档清理、SLA 监控
 - **可观测性**：结构化日志（MDC 7 字段）、Prometheus 指标、Grafana 仪表盘、AlertManager 告警
 
-**生产就绪状态**：核心功能链路完整，单元/集成/E2E 测试体系建立，设计模式规范，主要技术债已清零。
+**核心链路状态**：核心功能链路完整，单元/集成/E2E 测试体系建立，设计模式规范。
+
+> **注意**：控制平面（Trigger 入口鉴权、Console 幂等设计、Webhook 可靠性）和运维平面的硬化程度
+> 仍落后于核心执行链路。详见 `深度分析报告.md` §5 仍开放问题清单和 `docs/analysis/fix-report-v2.md`。
 
 ---
 
@@ -271,7 +274,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 
 - 已合理使用设计模式：**15 个**
 - P1/P2 模式引入：**6 处，全部完成**
-- 反模式：**7 处，全部清零（2026-03-25）**
+- 反模式：**7 处核心链路反模式已清零（2026-03-25）；控制平面仍有开放项**
   - God Class 拆分（TaskExecution → 3 子服务 + Facade；Launch → ValidationService + DispatchService）
   - 大事务拆分（T1/T2 独立提交）
   - `@Transactional(REQUIRES_NEW)` 补偿链隔离

@@ -5,7 +5,9 @@ import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.console.application.ConsoleJobApplicationService;
+import com.example.batch.console.application.ConsoleJobApprovalService;
+import com.example.batch.console.application.ConsoleJobRecoveryService;
+import com.example.batch.console.application.ConsoleJobTriggerService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.BatchDayCatchUpRequest;
 import com.example.batch.console.web.request.CompensateRequest;
@@ -44,7 +46,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleJobController {
 
-  private final ConsoleJobApplicationService applicationService;
+  private final ConsoleJobTriggerService triggerService;
+  private final ConsoleJobRecoveryService recoveryService;
+  private final ConsoleJobApprovalService approvalService;
   private final ConsoleResponseFactory responseFactory;
 
   /** 手工触发作业运行（所有已认证用户均可触发）。dryRun=true 时仅校验不执行。 */
@@ -55,10 +59,10 @@ public class ConsoleJobController {
           String idempotencyKey,
       @Valid @RequestBody TriggerRequest request) {
     if (request.isDryRun()) {
-      return responseFactory.success(applicationService.dryRunTrigger(request));
+      return responseFactory.success(triggerService.dryRunTrigger(request));
     }
     requireIdempotencyKey(idempotencyKey);
-    return responseFactory.success(applicationService.trigger(request, idempotencyKey));
+    return responseFactory.success(triggerService.trigger(request, idempotencyKey));
   }
 
   /** 批量触发多个作业。 */
@@ -67,7 +71,7 @@ public class ConsoleJobController {
   public CommonResponse<List<Map<String, Object>>> batchTrigger(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @RequestBody @NotEmpty @Size(max = 50) List<@Valid TriggerRequest> items) {
-    return responseFactory.success(applicationService.batchTrigger(items, idempotencyKey));
+    return responseFactory.success(triggerService.batchTrigger(items, idempotencyKey));
   }
 
   /** 登记补偿命令。 */
@@ -76,7 +80,7 @@ public class ConsoleJobController {
   public CommonResponse<String> compensation(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody CompensationCommandRequest request) {
-    return responseFactory.success(applicationService.compensation(request, idempotencyKey));
+    return responseFactory.success(recoveryService.compensation(request, idempotencyKey));
   }
 
   /** 执行补偿。 */
@@ -85,7 +89,7 @@ public class ConsoleJobController {
   public CommonResponse<String> compensate(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody CompensateRequest request) {
-    return responseFactory.success(applicationService.compensate(request, idempotencyKey));
+    return responseFactory.success(recoveryService.compensate(request, idempotencyKey));
   }
 
   /** 重跑实例或分区。 */
@@ -94,7 +98,7 @@ public class ConsoleJobController {
   public CommonResponse<String> rerun(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody RerunRequest request) {
-    return responseFactory.success(applicationService.rerun(request, idempotencyKey));
+    return responseFactory.success(recoveryService.rerun(request, idempotencyKey));
   }
 
   /** 死信重放。 */
@@ -103,7 +107,7 @@ public class ConsoleJobController {
   public CommonResponse<String> replayDeadLetter(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody DeadLetterReplayRequest request) {
-    return responseFactory.success(applicationService.replayDeadLetter(request, idempotencyKey));
+    return responseFactory.success(recoveryService.replayDeadLetter(request, idempotencyKey));
   }
 
   /** 任务重放（job_task 粒度）。 */
@@ -112,7 +116,7 @@ public class ConsoleJobController {
   public CommonResponse<String> replayTask(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody TaskReplayRequest request) {
-    return responseFactory.success(applicationService.replayTask(request, idempotencyKey));
+    return responseFactory.success(recoveryService.replayTask(request, idempotencyKey));
   }
 
   /** 分区重放（job_partition 粒度）。 */
@@ -121,7 +125,7 @@ public class ConsoleJobController {
   public CommonResponse<String> replayPartition(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody PartitionReplayRequest request) {
-    return responseFactory.success(applicationService.replayPartition(request, idempotencyKey));
+    return responseFactory.success(recoveryService.replayPartition(request, idempotencyKey));
   }
 
   /** 审批通过 Catch-Up 请求。 */
@@ -130,7 +134,7 @@ public class ConsoleJobController {
   public CommonResponse<String> approveCatchUp(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody ConsoleCatchUpApprovalRequest request) {
-    return responseFactory.success(applicationService.approveCatchUp(request, idempotencyKey));
+    return responseFactory.success(approvalService.approveCatchUp(request, idempotencyKey));
   }
 
   /** 按批量日发起 catch-up。 */
@@ -141,7 +145,7 @@ public class ConsoleJobController {
       @PathVariable String bizDate,
       @Valid @RequestBody BatchDayCatchUpRequest request) {
     return responseFactory.success(
-        applicationService.catchUpBatchDay(bizDate, request, idempotencyKey));
+        approvalService.catchUpBatchDay(bizDate, request, idempotencyKey));
   }
 
   private void requireIdempotencyKey(String idempotencyKey) {

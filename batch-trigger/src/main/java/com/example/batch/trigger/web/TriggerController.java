@@ -58,6 +58,7 @@ public class TriggerController {
     command.setTenantId(request.getTenantId());
     command.setRequestId(request.getRequestId());
     command.setReason(request.getReason());
+    command.setIdempotencyKey(idempotencyKey);
     return CommonResponse.success(triggerService.approvePendingCatchUp(command));
   }
 }

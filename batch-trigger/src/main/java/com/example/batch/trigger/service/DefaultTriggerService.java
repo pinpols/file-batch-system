@@ -81,54 +81,75 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   @Override
-  @Transactional
   public LaunchResponse approvePendingCatchUp(PendingCatchUpApprovalCommand command) {
     validatePendingApproval(command);
     assertTenantActive(command.getTenantId());
-    TriggerRequestEntity pendingRequest =
-        triggerRequestMapper.selectByTenantAndRequestId(
-            command.getTenantId(), command.getRequestId());
-    Guard.requireFound(pendingRequest, "pending catch-up request not found");
-    if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
-      throw new BizException(ResultCode.BUSINESS_ERROR, "request is not a catch-up request");
+
+    // 5.6: idempotency — if a request with this key was already launched, return early
+    if (command.getIdempotencyKey() != null && !command.getIdempotencyKey().isBlank()) {
+      TriggerRequestEntity existing =
+          triggerRequestMapper.selectByTenantAndDedupKey(
+              command.getTenantId(), command.getIdempotencyKey());
+      if (existing != null && "LAUNCHED".equalsIgnoreCase(existing.getRequestStatus())) {
+        return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
+      }
     }
-    if ("REJECTED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-      throw new BizException(ResultCode.BUSINESS_ERROR, "request is already rejected");
-    }
-    if ("LAUNCHED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-      return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
-    }
-    // H-5: 原子 CAS——只有一个实例可将 ACCEPTED → PROCESSING；
-    // 并发审批将看到 0 受影响行并跳过重复分发。
-    int claimed =
-        triggerRequestMapper.updateRequestStatusConditional(
-            command.getTenantId(), command.getRequestId(), "PROCESSING", "ACCEPTED");
-    if (claimed <= 0) {
-      // 另一实例已在处理，或状态已发生变化
+
+    // 5.8: DB state mutation inside programmatic transaction; HTTP call stays outside
+    TransactionTemplate tx = new TransactionTemplate(transactionManager);
+    LaunchRequest launchRequest =
+        tx.execute(
+            _ -> {
+              TriggerRequestEntity pendingRequest =
+                  triggerRequestMapper.selectByTenantAndRequestId(
+                      command.getTenantId(), command.getRequestId());
+              Guard.requireFound(pendingRequest, "pending catch-up request not found");
+              if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
+                throw new BizException(
+                    ResultCode.BUSINESS_ERROR, "request is not a catch-up request");
+              }
+              if ("REJECTED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+                throw new BizException(ResultCode.BUSINESS_ERROR, "request is already rejected");
+              }
+              if ("LAUNCHED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+                return null; // sentinel: already launched
+              }
+              // H-5: 原子 CAS——只有一个实例可将 ACCEPTED → PROCESSING；
+              // 并发审批将看到 0 受影响行并跳过重复分发。
+              int claimed =
+                  triggerRequestMapper.updateRequestStatusConditional(
+                      command.getTenantId(), command.getRequestId(), "PROCESSING", "ACCEPTED");
+              if (claimed <= 0) {
+                return null; // 另一实例已在处理，或状态已发生变化
+              }
+              return new LaunchRequest(
+                  pendingRequest.getTenantId(),
+                  pendingRequest.getJobCode(),
+                  pendingRequest.getBizDate(),
+                  TriggerType.CATCH_UP,
+                  pendingRequest.getRequestId(),
+                  pendingRequest.getTraceId(),
+                  Map.of(
+                      "operationType",
+                      "CATCH_UP_APPROVAL",
+                      "approvalMode",
+                      "MANUAL_APPROVAL",
+                      "catchUpApproved",
+                      true,
+                      "reason",
+                      command.getReason() == null ? "" : command.getReason()));
+            });
+
+    // Already launched or another instance claimed it — return current state
+    if (launchRequest == null) {
       TriggerRequestEntity current =
           triggerRequestMapper.selectByTenantAndRequestId(
               command.getTenantId(), command.getRequestId());
-      return new LaunchResponse(
-          current != null ? current.getRequestId() : pendingRequest.getRequestId(),
-          current != null ? current.getTraceId() : pendingRequest.getTraceId());
+      Guard.requireFound(current, "pending catch-up request not found");
+      return new LaunchResponse(current.getRequestId(), current.getTraceId());
     }
-    LaunchRequest launchRequest =
-        new LaunchRequest(
-            pendingRequest.getTenantId(),
-            pendingRequest.getJobCode(),
-            pendingRequest.getBizDate(),
-            TriggerType.CATCH_UP,
-            pendingRequest.getRequestId(),
-            pendingRequest.getTraceId(),
-            Map.of(
-                "operationType",
-                "CATCH_UP_APPROVAL",
-                "approvalMode",
-                "MANUAL_APPROVAL",
-                "catchUpApproved",
-                true,
-                "reason",
-                command.getReason() == null ? "" : command.getReason()));
+
+    // 5.8: HTTP call outside transaction boundary
     LaunchResponse response = orchestratorTriggerAdapter.sendTrigger(launchRequest);
     triggerRequestMapper.updateRequestStatus(
         command.getTenantId(), command.getRequestId(), "LAUNCHED");
@@ -137,7 +158,8 @@ public class DefaultTriggerService implements TriggerService {
 
   private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
     // C-6: 去重检查在 REQUIRES_NEW 事务内执行，以缩小竞态窗口。
-    // 彻底消除竞态需在 (tenant_id, dedup_key) 上添加数据库 UNIQUE 约束。
+    // 注意：trigger_request 层面的 (tenant_id, dedup_key) 唯一约束已移除（V37），
+    // 最终去重由 job_instance 层的 uk_job_instance_tenant_dedup 保证。
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
@@ -176,22 +198,43 @@ public class DefaultTriggerService implements TriggerService {
           launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
       return response;
     } catch (HttpClientErrorException e) {
-      triggerRequestMapper.updateRequestStatus(
-          launchRequest.tenantId(), launchRequest.requestId(), "REJECTED");
-      if (e.getStatusCode() == HttpStatusCode.valueOf(404)) {
-        log.warn(
-            "trigger skipped: orchestrator rejected job [{}] tenant [{}] — {}",
-            launchRequest.jobCode(),
-            launchRequest.tenantId(),
-            e.getResponseBodyAsString());
-        return null;
+      // 5.7: 4xx client errors are genuine rejections — mark REJECTED immediately.
+      // Other HTTP errors (5xx, connectivity) are transient — mark FORWARD_FAILED for retry.
+      if (e.getStatusCode().is4xxClientError()) {
+        triggerRequestMapper.updateRequestStatus(
+            launchRequest.tenantId(), launchRequest.requestId(), "REJECTED");
+        if (e.getStatusCode() == HttpStatusCode.valueOf(404)) {
+          log.warn(
+              "trigger rejected: orchestrator returned 404 for job [{}] tenant [{}] — {}",
+              launchRequest.jobCode(),
+              launchRequest.tenantId(),
+              e.getResponseBodyAsString());
+          throw new BizException(
+              ResultCode.NOT_FOUND, "orchestrator rejected trigger: job or tenant not found");
+        }
+        throw new SystemException(ResultCode.SYSTEM_ERROR, "failed to forward trigger request", e);
       }
-      throw new SystemException(ResultCode.SYSTEM_ERROR, "failed to forward trigger request", e);
-    } catch (Exception exception) {
+      // 5.7: server error — eligible for retry
       triggerRequestMapper.updateRequestStatus(
-          launchRequest.tenantId(), launchRequest.requestId(), "REJECTED");
-      throw new SystemException(
-          ResultCode.SYSTEM_ERROR, "failed to forward trigger request", exception);
+          launchRequest.tenantId(), launchRequest.requestId(), "FORWARD_FAILED");
+      log.warn(
+          "trigger forward failed (will retry): job [{}] tenant [{}] requestId [{}] — {}",
+          launchRequest.jobCode(),
+          launchRequest.tenantId(),
+          launchRequest.requestId(),
+          e.getMessage());
+      return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
+    } catch (Exception exception) {
+      // 5.7: connectivity / timeout — mark FORWARD_FAILED for retry instead of REJECTED
+      triggerRequestMapper.updateRequestStatus(
+          launchRequest.tenantId(), launchRequest.requestId(), "FORWARD_FAILED");
+      log.warn(
+          "trigger forward failed (will retry): job [{}] tenant [{}] requestId [{}] — {}",
+          launchRequest.jobCode(),
+          launchRequest.tenantId(),
+          launchRequest.requestId(),
+          exception.getMessage());
+      return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
     }
   }
 

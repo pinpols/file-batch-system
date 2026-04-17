@@ -14,7 +14,6 @@ import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.common.exception.SystemException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
@@ -105,7 +104,7 @@ class DefaultTriggerServiceTest {
   }
 
   @Test
-  void shouldMarkRequestRejectedWhenForwardingFails() {
+  void shouldMarkRequestForwardFailedWhenForwardingFails() {
     TriggerLaunchCommand command =
         new TriggerLaunchCommand(validRequest(), "idem-002", "req-002", "trace-002");
     LaunchRequest launchRequest =
@@ -123,16 +122,18 @@ class DefaultTriggerServiceTest {
     when(orchestratorTriggerAdapter.sendTrigger(launchRequest))
         .thenThrow(new IllegalStateException("orchestrator down"));
 
-    assertThatThrownBy(() -> service.launch(command))
-        .isInstanceOf(SystemException.class)
-        .hasMessageContaining("failed to forward trigger request");
+    // 5.7: transient failures now return a response instead of throwing
+    LaunchResponse response = service.launch(command);
+    assertThat(response.instanceNo()).isEqualTo("req-002");
+    assertThat(response.traceId()).isEqualTo("trace-002");
 
     ArgumentCaptor<TriggerRequestEntity> captor =
         ArgumentCaptor.forClass(TriggerRequestEntity.class);
     verify(triggerRequestMapper).insert(captor.capture());
     assertThat(captor.getValue().getRequestStatus()).isEqualTo("PENDING");
     assertThat(captor.getValue().getDedupKey()).isEqualTo("idem-002");
-    verify(triggerRequestMapper).updateRequestStatus("t1", "req-002", "REJECTED");
+    // 5.7: status is FORWARD_FAILED (retryable) instead of REJECTED
+    verify(triggerRequestMapper).updateRequestStatus("t1", "req-002", "FORWARD_FAILED");
   }
 
   @Test

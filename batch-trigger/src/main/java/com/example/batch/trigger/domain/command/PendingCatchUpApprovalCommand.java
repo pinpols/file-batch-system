@@ -8,4 +8,5 @@ public class PendingCatchUpApprovalCommand {
   private String tenantId;
   private String requestId;
   private String reason;
+  private String idempotencyKey;
 }
