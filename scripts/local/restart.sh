@@ -30,6 +30,9 @@ RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 PID_FILE="$ROOT/logs/start-all.pids"
 mkdir -p "$LOG_DIR"
 
+# 与 start-all.sh 保持一致的本地 dev 启动加速参数（说明见 start-all.sh）
+LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xverify:none}"
+
 # ── 端口映射 ──────────────────────────────────────────────────
 port_for() {
   case "$1" in
@@ -98,7 +101,7 @@ start_module() {
     echo "ERROR: 未找到 ${jar}，请先执行 ./scripts/local/build-apps.sh" >&2
     exit 1
   fi
-  nohup java --enable-native-access=ALL-UNNAMED ${JAVA_OPTS:-} \
+  nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${JAVA_OPTS:-} \
     -jar "$jar" --spring.profiles.active=local \
     >"$LOG_DIR/$name.log" 2>&1 &
   local pid=$!
