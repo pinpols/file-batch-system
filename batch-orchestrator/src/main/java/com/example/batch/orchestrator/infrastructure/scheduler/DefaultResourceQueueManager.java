@@ -10,6 +10,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 解析调度请求的目标资源队列：有显式 {@code queueCode} 时直查，否则在租户启用的所有队列里按下述优先级挑一个：
+ *
+ * <ol>
+ *   <li>{@code queueType} 精确匹配 {@code workerType} 的队列优先于 {@code MIXED} 队列（避免"混合队列"抢走本该去专用队列的作业）。
+ *   <li>{@code fairShareWeight} 倒序——权重大的队列更可能被选中。
+ *   <li>{@code maxRunningJobs} 倒序——容量大的队列优先。
+ *   <li>{@code maxRunningPartitions} 倒序——分区容量大的优先。
+ *   <li>{@code queueCode} 字典序兜底，保证挑选结果稳定（防并发下随机性）。
+ * </ol>
+ *
+ * <p>{@code fairShareWeight / maxRunningJobs / maxRunningPartitions} 的 null / ≤0 值统一规范化为 1。
+ */
 @Component
 @RequiredArgsConstructor
 public class DefaultResourceQueueManager implements ResourceQueueManager {

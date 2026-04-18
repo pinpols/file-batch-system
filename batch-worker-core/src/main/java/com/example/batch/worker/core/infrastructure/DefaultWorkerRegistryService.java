@@ -8,6 +8,12 @@ import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * Worker 自注册服务默认实现：将 {@link WorkerRegistryClient} 的远程调用封装为本地服务接口。
+ *
+ * <p>{@code register} 在远程响应缺少时间戳时以本地时间补齐，保证 {@code registeredAt} 和
+ * {@code lastHeartbeatAt} 始终非空；{@code renew} 心跳成功后刷新本地 {@code lastHeartbeatAt}。
+ */
 @Service("workerCoreWorkerRegistryService")
 @RequiredArgsConstructor
 public class DefaultWorkerRegistryService implements WorkerSelfRegistrationService {

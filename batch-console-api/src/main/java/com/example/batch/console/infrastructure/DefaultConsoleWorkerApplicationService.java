@@ -21,8 +21,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 /**
- * {@link com.example.batch.console.application.ConsoleWorkerApplicationService} 的默认实现：调用编排器 Worker
- * 运维接口。
+ * Worker 运维 BFF：把 console 的 worker 操作 HTTP 请求转发到 orchestrator
+ * {@code /internal/workers/**}，并在操作成功后广播实时事件让前端刷新。
+ *
+ * <p>提供 4 个写操作 + 1 个查询：
+ *
+ * <ul>
+ *   <li>{@code drain} — 优雅下线（允许 timeoutSeconds 覆盖默认超时）
+ *   <li>{@code forceOffline} — 强制下线（立即接管任务）
+ *   <li>{@code takeover} — 手动接管任务后标 DECOMMISSIONED
+ *   <li>{@code warmup} — 预热后重新上线
+ *   <li>{@code claimedTasks} — 查询 worker 当前 claim 的活跃任务列表
+ * </ul>
+ *
+ * <p>写操作统一广播 {@code publishChanged(workers)} + {@code publishSummaryRefresh}，
+ * 让前端 worker 列表与仪表盘实时刷新。
+ *
+ * <p>所有下游请求都带 {@code Idempotency-Key / Request-Id / Trace-Id} 三件套
+ * （与 {@link ConsoleJobOpsSupport} 保持一致的 BFF 调用协议）。
  */
 @Service
 @RequiredArgsConstructor

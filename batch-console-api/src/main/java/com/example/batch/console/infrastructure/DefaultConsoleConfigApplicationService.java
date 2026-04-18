@@ -39,8 +39,28 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * {@link com.example.batch.console.application.ConsoleConfigApplicationService} 的默认实现： 基于本地 Mapper
- * 维护配置发布单、密钥版本与变更日志。
+ * 配置发布单 + 密钥版本治理服务：通过本地 Mapper 维护租户作用域下的 config_release、secret_version
+ * 与 config_change_log 三张表。
+ *
+ * <p>ConfigRelease 状态机（{@link com.example.batch.common.enums.ConfigLifecycleStatus}）：
+ * {@code DRAFT → PUBLISHED / GRAY → ROLLED_BACK}。
+ *
+ * <ul>
+ *   <li><b>版本号自增</b>：同 {@code (tenantId, configType, configKey)} 下 {@code selectLatestVersionNo + 1}，
+ *       发布新版本不覆盖旧版本——历史版本保留便于回滚比对。
+ *   <li><b>GRAY 灰度</b>：允许变更状态时顺带更新 {@code grayScopeJson}，支持渐进式放量。
+ *   <li><b>PUBLISH / ROLLBACK 时间戳</b>：由 {@link #changeReleaseStatus} 按 {@code nextStatus} 分支自动打
+ *       {@code publishedAt} / {@code rolledBackAt}，调用方无需自己维护。
+ * </ul>
+ *
+ * <p>SecretVersion rotation：插新版前先 {@code deactivateCurrentVersion}，保证同 {@code secretRef} 只有一条
+ * {@code currentVersion=true}——严格切版不留两活。
+ *
+ * <p>所有写操作（create / publish / gray / rollback / rotate）都调 {@link #logChange} 落
+ * {@code config_change_log}（operatorId / traceId / reason / 变更摘要），提供完整审计轨迹。
+ *
+ * <p>JSON 字段（configPayloadJson / grayScopeJson / secretPayloadJson）入库前经 {@link #validateJson}
+ * 解析校验格式合法性，防止把坏 JSON 持久化到 jsonb 字段上。
  */
 @Service
 @RequiredArgsConstructor
@@ -142,6 +162,9 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     String tenantId = resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
     validateJson(request.getGrayScopeJson(), KEY_GRAY_SCOPE_JSON);
+    // 先单独更新 grayScope，再调 changeReleaseStatus 更新状态：
+    // changeReleaseStatus 内部在 GRAY 分支也会更新 scope（通用路径），
+    // 此处提前写是为了保证 scope 与状态在同一事务内同步，即便 status 已为 GRAY 也刷新 scope。
     configReleaseMapper.updateGrayScope(
         mapOf(
             KEY_TENANT_ID, tenantId,
@@ -178,6 +201,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         secretVersionMapper.selectLatestVersionNo(
             mapOf(KEY_TENANT_ID, tenantId, "secretRef", request.getSecretRef()));
     int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo + 1;
+    // 先停用当前版本再插入新版本，保证同一 secretRef 任意时刻只有一条 currentVersion=true，
+    // 两步在同一事务内执行，不会出现短暂双活窗口
     secretVersionMapper.deactivateCurrentVersion(
         mapOf(KEY_TENANT_ID, tenantId, "secretRef", request.getSecretRef()));
     String nextStatus =
@@ -247,6 +272,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
       Long releaseId, ConfigReleaseActionRequest request, String nextStatus, String changeAction) {
     String tenantId = resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
+    // publishedAt / rolledBackAt 仅在对应状态转换时打时间戳，其他状态传 null（保留历史值）；
+    // 时间戳一旦写入不再清除，回滚后仍可查到最近一次发布时间以供审计。
     Map<String, Object> params =
         mapOf(
             KEY_TENANT_ID,

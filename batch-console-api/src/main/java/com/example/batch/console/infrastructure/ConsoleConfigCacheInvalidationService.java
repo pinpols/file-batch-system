@@ -8,6 +8,24 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
+/**
+ * Console 配置变更后的 Redis 缓存失效服务：把 console 的配置写操作与 orchestrator 读热点（
+ * {@code OrchestratorConfigCacheService}）之间的缓存一致性收口到这里。
+ *
+ * <p>核心约束：
+ *
+ * <ul>
+ *   <li><b>afterCommit 执行</b>：所有 evict 都注册为事务同步的 {@code afterCommit} 钩子，事务成功提交后才 DEL——
+ *       事务未提交就 DEL 会导致"缓存先空 → 被别的并发读请求用旧 DB 数据重新填回"，反而把脏数据写进缓存。
+ *       无事务上下文时退化为立即 DEL。
+ *   <li><b>Key 约定</b>：{@code config:{tenantId}:{type}:{code}}。{@link #safe} 把 key 组件里的 {@code ':'}
+ *       替换成 {@code '_'}，防止 tenantId / code 含冒号造成 key 分段歧义。
+ *   <li><b>全租户清</b>：{@link #evictAllJobDefinitions} 走 {@code KEYS + DEL} pattern 清除——
+ *       batch toggle 等"不知道具体哪些 code 被动到"的场景下宁可全清，保证不漏。
+ *   <li><b>Meta 选项另走一路</b>：下拉选项缓存由 {@link ConsoleQueryCacheService} 维护（非 orchestrator 读热点），
+ *       {@link #evictMetaOptions} 单独清除。
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class ConsoleConfigCacheInvalidationService {

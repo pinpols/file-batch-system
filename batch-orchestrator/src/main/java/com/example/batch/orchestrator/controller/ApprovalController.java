@@ -10,6 +10,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 审批工作流内部控制器，基础路径 {@code /internal/approvals}。
+ * 支持提交审批单（{@code POST /}）、查询审批记录（{@code GET /{approvalNo}}）、
+ * 审批通过（{@code POST /{approvalNo}/approve}）、驳回（{@code POST /{approvalNo}/reject}）
+ * 以及标记执行完成（{@code POST /{approvalNo}/executed}）等全流程操作。
+ * 仅限内部服务调用，不对外暴露。
+ */
 @RestController
 @RequestMapping("/internal/approvals")
 @RequiredArgsConstructor

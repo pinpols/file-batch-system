@@ -72,7 +72,35 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-/** 租户配置包 Excel 导入服务：8 sheet 单事务写库，含跨 sheet 依赖校验。 */
+/**
+ * 租户配置包 Excel 的全生命周期管理：export / template / upload → preview → apply。
+ *
+ * <p><b>3 阶段导入流程</b>：
+ * <ol>
+ *   <li>{@link #upload} — 解析 Excel 字节流（8 sheet），构建 {@code PackageExcelSession}
+ *       存入 {@link TenantConfigPackageExcelImportStore}，返回短期 token（内存 TTL）。
+ *   <li>{@link #preview} — 用 token 取回 session，调 {@link ConfigPackageExcelValidator} 做
+ *       跨 sheet 依赖校验（如 pipelineStep 引用的 jobCode 必须存在），返回每 sheet 的
+ *       valid/invalid 统计和逐行错误列表，不写库。
+ *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内
+ *       按 job → channel → routing → pipeline+step → workflow+node+edge 顺序写库，
+ *       完成后 {@code importStore.remove(token)}。
+ * </ol>
+ *
+ * <p><b>8 sheets</b>（顺序即写库顺序）：
+ * job、file_channel、alert_routing、pipeline_definition、pipeline_step、
+ * workflow_definition、workflow_node、workflow_edge。
+ *
+ * <p><b>多级结构写法</b>：
+ * <ul>
+ *   <li>Pipeline：步骤按 {@code jobCode:version} 分组后与父行对应，apply 时先删再重插 step。
+ *   <li>Workflow：节点和边按 {@code wfCode:version} 分组，upsert 节点/边（不删旧节点，依赖
+ *       Mapper 的 ON CONFLICT UPDATE 语义）。
+ * </ul>
+ *
+ * <p><b>租户安全</b>：{@code upload} 从 header 解析租户（拒绝客户端传入），{@link #loadSession}
+ * 每次访问都调 {@link ConsoleTenantGuard#assertTenantAllowed} 确保 token 持有者与当前请求租户一致。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleTenantConfigPackageExcelApplicationService

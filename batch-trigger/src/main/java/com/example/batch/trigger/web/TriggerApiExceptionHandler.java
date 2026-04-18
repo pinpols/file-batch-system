@@ -15,6 +15,11 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/**
+ * Trigger 模块全局异常处理器，统一将业务异常、系统异常、参数校验异常及缺失请求头异常
+ * 转换为标准 {@link CommonResponse} 格式并返回对应 HTTP 状态码。
+ * 业务异常以 WARN 级别记录，系统异常和未预期异常以 ERROR 级别记录，方便日志分级告警。
+ */
 @RestControllerAdvice
 @Slf4j
 public class TriggerApiExceptionHandler {

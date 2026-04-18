@@ -9,6 +9,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 补偿任务提交内部控制器，基础路径 {@code /internal/compensations}。
+ * 提供单一端点 {@code POST /internal/compensations}，接收补偿指令（包含补偿类型、目标实例、
+ * 业务日期、审批单号等字段），返回补偿命令编号（{@code commandNo}）。
+ * 仅限内部服务或运维平台调用，不对外暴露。
+ */
 @RestController
 @RequestMapping("/internal/compensations")
 @RequiredArgsConstructor

@@ -27,6 +27,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * Import pipeline 的 LOAD 阶段：将校验通过的记录通过 {@link ImportLoadPlugin} 批量写入目标存储。
+ *
+ * <p><b>两条执行路径</b>：
+ * <ul>
+ *   <li><b>流式路径</b>：读取 {@code VALIDATED_RECORDS_PATH} 暂存文件，按 {@code chunk_size} 分块调
+ *       {@link ImportLoadPlugin#loadChunk}；完成后删除暂存文件（parse/validate 两个阶段的临时文件一并清理）。
+ *       失败时故意保留暂存文件，便于运维检查或重放。
+ *   <li><b>Legacy 路径</b>：暂存文件不存在时，从上下文 {@code customerPayloads} 列表直接加载（向后兼容旧调用方）。
+ * </ul>
+ *
+ * <p>插件由 {@code load_target_ref}（模板配置）决定，默认为 {@code IMPORT_LOAD_JDBC_MAPPED}。
+ * 完成后更新 {@code file_record} 状态为 {@code LOADED} 并写入加载统计元数据。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

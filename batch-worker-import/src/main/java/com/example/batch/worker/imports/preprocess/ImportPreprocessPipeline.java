@@ -27,8 +27,23 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.util.StringUtils;
 
 /**
- * 有序二进制预处理：unzip / gunzip / AES-GCM / 摘要校验 & RSA 验签。 当 {@code preprocess_pipeline} 不存在时，根据 {@code
- * compress_type} / {@code encrypt_type} 推导步骤。
+ * 有序二进制预处理管道（工具类，不可实例化）：对原始文件字节按步骤顺序依次执行解压、解密、摘要校验和字符集转码。
+ *
+ * <p><b>步骤解析规则</b>：优先使用模板配置中的 {@code preprocess_pipeline}（JSON 数组）；
+ * 不存在时根据 {@code compress_type}（ZIP / GZIP）和 {@code encrypt_type}（AES）隐式推导步骤。
+ * 其他加密类型在隐式模式下抛出 {@code IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED}。
+ *
+ * <p><b>支持步骤类型</b>：
+ * <ul>
+ *   <li>{@code UNZIP} — 解 ZIP，支持 {@code entryName} 指定条目
+ *   <li>{@code GUNZIP} — 解 GZIP
+ *   <li>{@code AES_GCM_DECRYPT} — AES/GCM/NoPadding 解密，需提供 {@code aesKeyBase64} / {@code aesIvBase64}
+ *   <li>{@code VERIFY_DIGEST} — SHA-256 / MD5 摘要校验，期望值来自步骤配置或 {@link ImportPayload#checksumValue()}
+ *   <li>{@code VERIFY_RSA_SHA256} — RSA 签名验证，需提供 PEM 公钥和 Base64 签名
+ *   <li>{@code CHARSET_TRANSCODE} — 字节编码转换（{@code fromCharset} / {@code toCharset}）
+ * </ul>
+ *
+ * <p>{@code testingOpen=true} 时跳过 AES 解密、摘要校验和 RSA 验签，便于测试环境无密钥运行。
  */
 public final class ImportPreprocessPipeline {
 

@@ -14,6 +14,16 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * Dispatch pipeline 的 DISPATCH 阶段：通过 {@link DispatchChannelGateway} 执行实际文件投递。
+ *
+ * <p><b>幂等写入</b>：若 {@code file_dispatch_record} 尚不存在则插入，已存在则递增投递次数，
+ * 防止重复任务创建重复记录。
+ *
+ * <p><b>结果处理</b>：投递成功时调用 {@code markSent}，回执状态取决于渠道是否即时确认（ACKED/PENDING/NONE）；
+ * 投递失败时调用 {@code markFailed}，将下一步跳转强制设为 {@code RETRY} 阶段并返回失败。
+ * 文件状态同步推进为 {@code DISPATCHING}。
+ */
 @Component
 public class DeliverDispatchStep implements DispatchStageStep {
 

@@ -27,6 +27,24 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * MinIO 入库扫描器：定时轮询对象存储 bucket，将新到达的文件自动登记为 {@code file_record}（status=RECEIVED），
+ * 为后续 Import pipeline 提供触发点。扫描器只负责"发现并登记"，不直接调度任务。
+ *
+ * <p><b>去重与稳定性</b>：
+ * <ul>
+ *   <li>已存在 {@code storage_path} 的 file_record 不重复登记（idempotent）。
+ *   <li>稳定性窗口（{@code stabilityWindowSeconds}）：size+etag 在窗口期内保持不变才视为上传完成，
+ *       防止扫描到正在写入的临时文件。
+ *   <li>{@code requireDoneFile=true} 时，须同名 {@code .done} 标记文件存在方可登记
+ *       （适用于原子性要求高的文件到达协议）。
+ * </ul>
+ *
+ * <p><b>到达组（arrival group）</b>：若配置了 {@code fileGroupCode + requiredFileSet}，
+ * 登记时写入到达组元数据并打 {@code ARRIVAL_REGISTER} 审计，用于等待一批文件全部到齐后再统一触发。
+ *
+ * <p>ShedLock（{@code import_ingress_scan}）保证多节点部署时只有一个实例执行扫描，避免重复登记竞争。
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

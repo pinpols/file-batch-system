@@ -8,6 +8,16 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 默认状态机实现。
+ *
+ * <p>将任意领域对象的当前状态与触发事件映射为目标状态三元组（{@link StateTransition}）。
+ * 状态解析优先级：{@code String} → {@code Enum.name()} → {@link Stateful#getStatus()} →
+ * 反射调用 {@code getInstanceStatus/getPartitionStatus/getTaskStatus/getRunStatus/getNodeStatus/getStatus}；
+ * 若均无法解析则快速失败抛出 {@link IllegalStateException}，避免状态静默损坏。
+ * 事件到目标状态的映射在 {@code resolveToState} 中以 switch 表达式集中维护，
+ * 未知事件保持原状态不变（NOOP 语义）。
+ */
 @Component
 public class DefaultStateMachine<T> implements StateMachine<T> {
 

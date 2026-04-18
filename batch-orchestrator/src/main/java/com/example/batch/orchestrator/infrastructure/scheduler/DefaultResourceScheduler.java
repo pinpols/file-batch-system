@@ -26,6 +26,25 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 资源调度统一收口：给定一个 {@link ResourceSchedulingRequest}，按固定 pipeline 依次判定可派发性，
+ * 任一阶段 block 即 short-circuit 返回 {@code dispatchable=false} 的决策（带 reasonCode），不再继续后续检查。
+ *
+ * <p>Pipeline 顺序：
+ *
+ * <ol>
+ *   <li>{@code resourceQueueManager.resolveQueue} — 解析租户队列配置。
+ *   <li>{@code priorityScheduler.resolvePriority / resolvePriorityBand} — 计算有效优先级与分档。
+ *   <li>{@link #checkBatchWindow} — 当前时间是否在业务窗口内。
+ *   <li>{@code concurrencyLimiter.check} — 租户/队列级并发未超限。
+ *   <li>{@code partitionThrottle.check} — 分区吞吐未触顶。
+ *   <li>{@code workerSelector.select} — 有在线 worker 匹配路由。
+ *   <li>{@code enrichFairnessScore} — 公平分数（供 {@code WaitingPartitionDispatchScheduler} 排序用）。
+ * </ol>
+ *
+ * <p>所有分支最终都产出 {@link ResourceSchedulingDecision}（包含队列码、worker route、priority band、
+ * partitionStatus / taskStatus 初始值），让 launch / retry / DAG dispatch 复用同一决策，而不各自散落判断。
+ */
 @Component
 @RequiredArgsConstructor
 public class DefaultResourceScheduler implements ResourceScheduler {

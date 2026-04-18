@@ -34,14 +34,9 @@ import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 
-/**
- * 控制台 Excel 统一样式工具：所有 Excel 导出/模板共享同一视觉风格。
- *
- * <p>普通表头：深蓝 #1F4E78；必填表头：橙色；只读表头：灰蓝；README 标题：14pt 加粗。
- */
+/** 普通表头深蓝 #1F4E78；必填橙色；只读灰蓝；README 标题 14pt 加粗。 */
 public final class ConsoleExcelStyles {
 
-  /** XLSX Content-Type。 */
   public static final MediaType XLSX_MEDIA_TYPE =
       MediaType.parseMediaType(
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -52,7 +47,6 @@ public final class ConsoleExcelStyles {
 
   private ConsoleExcelStyles() {}
 
-  /** 构造 Excel 数据导出下载响应。 */
   public static ResponseEntity<InputStreamResource> excelResponse(
       byte[] workbookBytes, String fileNamePrefix, String tenantId) {
     String fileName =
@@ -65,7 +59,6 @@ public final class ConsoleExcelStyles {
         .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
   }
 
-  /** 构造 Excel 模板下载响应。 */
   public static ResponseEntity<InputStreamResource> templateResponse(
       byte[] workbookBytes, String templateFileName) {
     return ResponseEntity.ok()
@@ -108,17 +101,14 @@ public final class ConsoleExcelStyles {
     return new ColumnGuide(true, true, description, formatHint, example, List.of(allowedValues));
   }
 
-  /** 创建表头样式：深蓝底 + 白色加粗字 + 四边细线 + 居中。 */
   public static CellStyle createHeaderStyle(Workbook workbook) {
     return createHeaderStyle(workbook, HEADER_RGB);
   }
 
-  /** 创建必填表头样式：橙底 + 白色加粗字。 */
   public static CellStyle createRequiredHeaderStyle(Workbook workbook) {
     return createHeaderStyle(workbook, REQUIRED_HEADER_RGB);
   }
 
-  /** 创建只读表头样式：灰蓝底 + 白色加粗字。 */
   public static CellStyle createReadOnlyHeaderStyle(Workbook workbook) {
     return createHeaderStyle(workbook, READ_ONLY_HEADER_RGB);
   }
@@ -148,7 +138,6 @@ public final class ConsoleExcelStyles {
     return style;
   }
 
-  /** 创建数据单元格样式：四边细线。 */
   public static CellStyle createDataStyle(Workbook workbook) {
     CellStyle style = workbook.createCellStyle();
     style.setBorderTop(BorderStyle.THIN);
@@ -159,7 +148,6 @@ public final class ConsoleExcelStyles {
     return style;
   }
 
-  /** 创建必填标记单元格样式：浅橙底（#FFE0B2）+ 四边细线，用于填写说明 sheet。 */
   public static CellStyle createRequiredMarkStyle(Workbook workbook) {
     return createFilledDataStyle(
         workbook,
@@ -167,7 +155,6 @@ public final class ConsoleExcelStyles {
         IndexedColors.LIGHT_ORANGE.getIndex());
   }
 
-  /** 创建选填标记单元格样式：浅绿底（#E8F5E9）+ 四边细线，用于填写说明 sheet。 */
   public static CellStyle createOptionalMarkStyle(Workbook workbook) {
     return createFilledDataStyle(
         workbook,
@@ -187,7 +174,6 @@ public final class ConsoleExcelStyles {
     return style;
   }
 
-  /** 写通用表头行。 */
   public static void writeHeaders(Sheet sheet, List<String> columns, CellStyle headerStyle) {
     Row headerRow = sheet.createRow(0);
     headerRow.setHeightInPoints(22);
@@ -198,7 +184,6 @@ public final class ConsoleExcelStyles {
     }
   }
 
-  /** 写面向填写的模板表头：支持自动筛选、必填/只读样式以及表头批注提示。 */
   public static void writeTemplateHeaders(
       Sheet sheet, List<String> columns, Map<String, ColumnGuide> guides, Workbook workbook) {
     Row headerRow = sheet.createRow(0);
@@ -224,12 +209,10 @@ public final class ConsoleExcelStyles {
     }
   }
 
-  /** 写单个单元格。 */
   public static void writeCell(Row row, int columnIndex, Object value) {
     writeCell(row, columnIndex, value, null);
   }
 
-  /** 写单个单元格（带样式）。 */
   public static void writeCell(Row row, int columnIndex, Object value, CellStyle style) {
     Cell cell = row.createCell(columnIndex);
     if (value == null) {
@@ -262,14 +245,12 @@ public final class ConsoleExcelStyles {
     return value;
   }
 
-  /** 自适应列宽（基于表头长度）。 */
   public static void setWidths(Sheet sheet, List<String> columns) {
     for (int i = 0; i < columns.size(); i++) {
       sheet.setColumnWidth(i, Math.min(12000, Math.max(18, columns.get(i).length() + 4) * 256));
     }
   }
 
-  /** 添加显式下拉校验，并在 Excel 中显示填写提示。 */
   public static void addDropdownValidation(
       Sheet sheet, int columnIndex, String[] values, String promptTitle, String promptText) {
     DataValidationHelper helper = sheet.getDataValidationHelper();
@@ -296,7 +277,6 @@ public final class ConsoleExcelStyles {
     }
   }
 
-  /** 创建 README 标题行样式：14pt 加粗。 */
   public static CellStyle createReadmeTitleStyle(Workbook workbook) {
     CellStyle style = workbook.createCellStyle();
     Font font = workbook.createFont();
@@ -306,7 +286,6 @@ public final class ConsoleExcelStyles {
     return style;
   }
 
-  /** 创建 VALIDATION sheet 标准结构。 */
   public static void createValidationSheet(Workbook workbook) {
     Sheet sheet = workbook.createSheet("VALIDATION");
     sheet.createFreezePane(0, 1, 0, 1);

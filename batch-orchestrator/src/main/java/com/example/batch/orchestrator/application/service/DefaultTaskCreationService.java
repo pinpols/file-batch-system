@@ -12,6 +12,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 任务创建服务的默认实现，负责持久化 {@link JobTaskEntity} 并同步创建对应的 {@link JobStepInstanceEntity}。
+ *
+ * <p>创建时会自动将任务版本号初始化为 0，并通过解析 {@code taskPayload} JSON 提取
+ * {@code workflowNodeCode}、{@code workflowNodeType} 和文件关联 ID 等字段，
+ * 以确保步骤实例能够正确反映工作流节点语义。若同一任务的步骤实例已存在则幂等跳过，
+ * 保证在重复调用场景下不产生重复记录。
+ *
+ * <p>所有写操作在同一事务内完成，保证任务与步骤实例的一致性。
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

@@ -17,7 +17,24 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** {@link ConsoleJobDefinitionApplicationService} 的默认实现。 */
+/**
+ * Job 定义的 CRUD + 批量启停 + 克隆入口。
+ *
+ * <p><b>关键缓存一致性约束</b>：orchestrator 在 launch 热路径上走 Redis 缓存读 job_definition
+ * （见 {@code OrchestratorConfigCacheService}），本类的每一个写操作都必须在提交后立即调
+ * {@link ConsoleConfigCacheInvalidationService#evictJobDefinition} 让缓存失效，否则下次 launch 会命中旧配置。
+ *
+ * <ul>
+ *   <li><b>单条写</b>（create / update / toggle / copy / copyWithOverrides）：按 {@code (tenant, jobCode)}
+ *       精准 evict。
+ *   <li><b>批量写</b>（{@link #batchToggle}）：走 {@link ConsoleConfigCacheInvalidationService#evictAllJobDefinitions}
+ *       清整租户缓存——因为 mapper 返回 rows 但不告知具体哪些 jobCode 被影响，全清比漏清安全。
+ * </ul>
+ *
+ * <p>唯一键冲突（create / copy 时同 jobCode 已存在）一律 {@code CONFLICT} 而非覆盖，强制调用方显式选择
+ * update 或换码。{@link #copyWithOverrides} 是"copy + 部分字段覆盖"的原子合成——copy 后立刻 update，但
+ * {@code shardStrategy} 被强制沿用源（不可覆盖），避免克隆出语义漂移的分片策略。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleJobDefinitionApplicationService

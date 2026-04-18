@@ -27,6 +27,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * Import pipeline 的 VALIDATE 阶段：流式读取 {@code PARSED_RECORDS_PATH} 暂存文件，
+ * 对每条记录执行数据质量校验，将通过校验的记录写入 {@code VALIDATED_RECORDS_PATH} 暂存文件。
+ *
+ * <p><b>校验流程</b>：
+ * <ol>
+ *   <li>数据集级别校验（行数、checksum、schema 字段）——任意失败且不可跳过则立即返回。
+ *   <li>逐行按 {@code chunk_size}（默认取 {@link ImportWorkerConfiguration#chunkSize()}）分块校验，
+ *       通过的记录写入输出文件，失败记录交 {@link ImportRecordGovernanceService} 处理。
+ *   <li>超过跳过阈值时删除输出文件并返回 {@code IMPORT_SKIP_THRESHOLD_EXCEEDED}。
+ * </ol>
+ *
+ * <p>校验完成后更新 {@code file_record} 状态为 {@code VALIDATED} 并写入统计元数据。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

@@ -13,6 +13,13 @@ import net.javacrumbs.shedlock.core.SimpleLock;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
+/**
+ * 基于 Redis SET NX 的 ShedLock {@link LockProvider} 实现：用随机 token 作为锁值，
+ * 解锁时通过 Lua 脚本 CAS 比较 token 再删除，防止误释放其他节点持有的锁。
+ *
+ * <p>锁键格式由 {@link com.example.batch.common.redis.BatchRedisKeys#shedLock} 生成，
+ * 包含 {@code environment} 前缀以隔离不同环境（dev/staging/prod）。
+ */
 @RequiredArgsConstructor
 public class RedisShedLockProvider implements LockProvider {
 

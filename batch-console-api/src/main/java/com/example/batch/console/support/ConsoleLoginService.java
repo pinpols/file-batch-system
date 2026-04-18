@@ -9,7 +9,21 @@ import com.example.batch.console.web.response.ConsoleAuthTokenResponse;
 import java.util.LinkedHashSet;
 import org.springframework.stereotype.Service;
 
-/** 控制台登录服务：按用户名全局查找账号、校验密码并签发 JWT。 用户名全局唯一，租户从账号记录中自动获取，前端无需传入 tenantId。 */
+/**
+ * 控制台登录服务：按用户名全局查找账号、校验密码并签发 JWT。
+ *
+ * <p>关键安全点：
+ *
+ * <ul>
+ *   <li><b>用户名全局唯一</b>：tenantId 从 {@code ConsoleUserAccount} 记录读取，<b>不接受</b>客户端请求里指定
+ *       ——防止已知账号名 + 任意租户猜测越权。
+ *   <li><b>统一错误消息</b>：账号不存在 / 账号禁用 / 密码错误都抛同一个 {@code invalidCredentials}
+ *       （{@code UNAUTHORIZED} + "invalid username or password"），不向客户端泄露"用户是否存在"——
+ *       防用户枚举攻击。
+ *   <li><b>会话版本递增</b>：登录成功立即 {@code nextSessionVersion}——单点登录开启时自动踢旧会话
+ *       （见 {@link ConsoleSessionRegistry}）。
+ * </ul>
+ */
 @Service
 public class ConsoleLoginService {
 

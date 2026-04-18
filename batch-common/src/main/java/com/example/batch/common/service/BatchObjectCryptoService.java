@@ -24,6 +24,13 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.util.StringUtils;
 
+/**
+ * 批处理对象加解密服务，基于 AES/GCM/NoPadding 算法对文件内容进行加密保护。
+ * 加密产物携带魔数（{@code BATCHENC}）、版本号、keyRef 和随机 IV，
+ * {@code decryptIfNeeded} 通过检测魔数自动判断是否需要解密，对未加密内容透传。
+ * 密钥材料通过 {@link com.example.batch.common.config.BatchKmsProperties} 以 Base64 形式配置，
+ * 当 {@code BatchSecurityProperties.isTestingOpen()} 为 {@code true} 时禁用加密（仅限测试环境）。
+ */
 public class BatchObjectCryptoService {
 
   private static final byte[] MAGIC = "BATCHENC".getBytes(StandardCharsets.US_ASCII);
@@ -83,6 +90,14 @@ public class BatchObjectCryptoService {
     }
   }
 
+  /**
+   * 加密产物的线格式（字节序）：
+   * <pre>
+   *   MAGIC(8B) | VERSION(1B) | keyRef(UTF-8 长度前缀) | ivLen(1B) | IV(12B) | ciphertext+GCM_TAG
+   * </pre>
+   * keyRef 写入归一化值（trim 或回落 defaultKeyRef），解密时用于从 KMS 查找对应密钥，
+   * 支持轮转：旧文件携带旧 keyRef，新文件携带新 keyRef，两套密钥可并存。
+   */
   public void encrypt(InputStream plainInput, OutputStream encryptedOutput, String keyRef) {
     if (plainInput == null || encryptedOutput == null) {
       throw new IllegalArgumentException("plainInput and encryptedOutput are required");
@@ -128,6 +143,8 @@ public class BatchObjectCryptoService {
       return InputStream.nullInputStream();
     }
     try {
+      // 用 PushbackInputStream 偷看头部字节，若不是魔数则 unread 还原，对调用方透明；
+      // 缓冲 64B 远大于魔数 8B，预留版本头扩展空间
       PushbackInputStream pushbackInputStream = new PushbackInputStream(inputStream, 64);
       byte[] magic = pushbackInputStream.readNBytes(MAGIC.length);
       if (magic.length < MAGIC.length || !Arrays.equals(magic, MAGIC)) {

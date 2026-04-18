@@ -12,6 +12,22 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * {@link SchedulePlan} 组装入口：从 Redis 缓存读 job_definition / workflow_definition，与 runtime params
+ * 合并后派生分区数、分区键（{@code jobCode:bizDate:partitionNo}）、worker route。
+ *
+ * <p>分区数按 {@code shardStrategy} 决定：
+ *
+ * <ul>
+ *   <li>{@code STATIC}：从 params 里读固定值。
+ *   <li>{@code DYNAMIC / AUTO}：走 {@link #resolveDynamicPartitionCount}——按 {@code @Order} 串起的
+ *       {@link PartitionCountResolver} 策略链，第一个返回正值的结果胜出。
+ *   <li>{@code NONE}：固定为 1。
+ * </ul>
+ *
+ * <p>结果统一经 {@link #normalizePartitionCount} 夹到 {@code [min, max]} 区间，{@code maxPartitionCount}
+ * 硬上限为 256 防止失控膨胀。
+ */
 @Component
 @RequiredArgsConstructor
 public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {

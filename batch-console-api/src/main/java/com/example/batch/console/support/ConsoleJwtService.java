@@ -31,7 +31,24 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-/** 控制台 JWT 签发与校验（HS256，含租户与角色声明）。 */
+/**
+ * 控制台 JWT 签发与校验（HS256，含租户与角色声明）。
+ *
+ * <p>关键安全约束：
+ *
+ * <ul>
+ *   <li><b>启动期强校验</b>（{@link #validateSecuritySecrets}）：prod profile 下拒绝启动如果
+ *       {@code jwt-secret} 仍含 "change-me" 占位或 {@code shared-secret} 仍为默认值 {@code console-secret}
+ *       （见 {@code 5.3}）——防止占位符被带上生产。
+ *   <li><b>单点登录</b>（可选，{@code singleSessionEnabled}）：token 里写入 {@code session_version}，
+ *       登录时 {@link ConsoleSessionRegistry} 递增该用户的 session 版本；旧 token 的 {@code session_version}
+ *       失效后 {@code authenticate} 拒绝，实现"新登录踢旧会话"。
+ *   <li><b>token 类型门</b>：{@code token_type="console_access"} 声明，仅接受该类型——防止其他 JWT 服务签发的
+ *       token（如内部服务间通信）被误当作控制台凭证。
+ *   <li><b>Key 派生</b>：{@code HmacSHA256(SHA-256(jwt-secret))}，先 SHA-256 把任意长度 secret 规范化成 32 字节，
+ *       避免 secret 长度不足导致 HS256 初始化失败。
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class ConsoleJwtService {

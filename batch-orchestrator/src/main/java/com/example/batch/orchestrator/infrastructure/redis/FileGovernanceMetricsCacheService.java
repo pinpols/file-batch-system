@@ -13,6 +13,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 文件治理指标缓存服务。
+ *
+ * <p>负责计算并缓存租户维度的文件到达延迟与处理延迟指标（违约数量、最大延迟秒数及延迟样本），
+ * 使用 Redis Hash 存储，TTL 固定为 60 秒（{@code METRICS_TTL}）。
+ * {@link #load} 优先从缓存读取，未命中时调用 {@link #compute} 查库计算后通过 {@link #write} 回填。
+ * 指标字段以 JSON 序列化存入 Hash，读取时按字段名反序列化为原始类型或 {@code List<Map>}。
+ */
 @Service
 @RequiredArgsConstructor
 public class FileGovernanceMetricsCacheService {

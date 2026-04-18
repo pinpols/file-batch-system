@@ -22,10 +22,34 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+/**
+ * Console API 统一异常映射：把 Spring / Jakarta Validation / 业务异常翻译为 {@code CommonResponse} 并挑 HTTP status。
+ *
+ * <p>按语义归为 4 组分支：
+ *
+ * <ul>
+ *   <li><b>业务/系统自定义异常</b>（{@code BizException} / {@code SystemException}）：直接用
+ *       {@code ResultCode.httpStatus()} 定 HTTP status，WARN/ERROR 分级 log。
+ *   <li><b>请求格式/参数错误</b>（{@code MethodArgumentNotValidException} / {@code ConstraintViolationException}
+ *       / {@code MissingRequestHeaderException} / {@code MissingServletRequestParameterException}
+ *       / {@code HttpMessageNotReadableException} / {@code HttpRequestMethodNotSupportedException}
+ *       / {@code NoResourceFoundException}）：映射到 400 / 404 / 405 + {@code VALIDATION_ERROR / INVALID_ARGUMENT}；
+ *       idempotency-key header 缺失特判为 {@code MISSING_IDEMPOTENCY_KEY}。
+ *   <li><b>权限拒绝</b>（{@code AuthorizationDeniedException} / {@code AccessDeniedException}）：
+ *       统一 403 + {@code FORBIDDEN}，避免暴露内部授权逻辑细节。
+ *   <li><b>下游调用异常</b>（{@link #handleDownstreamRestError}）：console 作为 BFF 调 orchestrator / trigger 时，
+ *       优先解析下游 {@code CommonResponse} body 透传其 code + message，解析失败至少保留真实 HTTP status
+ *       ——防止下游 409 / 404 被一律降级为 500 误导前端。
+ * </ul>
+ *
+ * <p>兜底 {@link #handleException} 捕获未显式处理的 {@code Exception}，返回 500 + {@code SYSTEM_ERROR}
+ * 并 ERROR log 带堆栈，便于线上诊断。
+ */
 @RestControllerAdvice
 @RequiredArgsConstructor
 @Slf4j
@@ -152,9 +176,8 @@ public class ConsoleApiExceptionHandler {
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
   }
 
-  @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
-  public ResponseEntity<?> handleMessageNotReadable(
-      org.springframework.http.converter.HttpMessageNotReadableException exception) {
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<?> handleMessageNotReadable(HttpMessageNotReadableException exception) {
     log.warn("console message not readable: {}", exception.getMessage());
     return ResponseEntity.badRequest()
         .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));

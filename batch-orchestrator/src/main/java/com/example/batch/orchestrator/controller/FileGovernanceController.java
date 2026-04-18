@@ -14,6 +14,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 文件治理内部控制器，基础路径 {@code /internal/files}。
+ * 支持对单个文件的归档（{@code archive}）、删除（{@code delete}）、预签名下载（{@code presign}）
+ * 和重新分发（{@code redispatch}），以及对文件到达批次组的操作（{@code /arrival-groups/{fileGroupCode}/actions}）
+ * 和治理延迟指标查询（{@code GET /governance/latency-metrics}）。仅限内部服务调用。
+ */
 @RestController
 @RequestMapping("/internal/files")
 @RequiredArgsConstructor

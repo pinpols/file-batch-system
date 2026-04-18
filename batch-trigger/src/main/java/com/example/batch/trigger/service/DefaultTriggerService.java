@@ -35,6 +35,34 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 
+/**
+ * 触发层核心服务，负责校验 → 持久化 trigger_request → 转发给 Orchestrator，提供 4 条入口：
+ *
+ * <ul>
+ *   <li>{@link #launch} — API 手工触发，校验 idempotencyKey + bizDate + triggerType 后调用
+ *       {@link #persistAndForward}。
+ *   <li>{@link #launchScheduled} — Quartz 定时触发，先解析业务日历得到 bizDate；若 bizDate=null
+ *       表示日历标记为节假日+SKIP，直接跳过不产生 trigger_request。
+ *   <li>{@link #createPendingCatchUp} — CatchUpPolicy=MANUAL_APPROVAL 路径，把请求以
+ *       {@code ACCEPTED} 状态落库等待人工审批，不立即转给 Orchestrator。
+ *   <li>{@link #approvePendingCatchUp} — 人工审批通过后补跑：CAS 将
+ *       {@code ACCEPTED → PROCESSING}（防并发双审批），再在事务外 HTTP 转发，
+ *       成功后更新为 {@code LAUNCHED}。
+ * </ul>
+ *
+ * <p><b>持久化与转发模式（{@link #persistAndForward}）</b>：
+ * <ol>
+ *   <li>在 {@code PROPAGATION_REQUIRES_NEW} 事务内以 {@code PENDING} 状态写入
+ *       trigger_request（去重检查 + INSERT 在同一小事务内，缩小竞态窗口）。
+ *   <li>事务提交后，在主线程调 {@link OrchestratorTriggerAdapter#sendTrigger}（HTTP call
+ *       在事务外，避免持锁等待网络 RTT）。
+ *   <li>HTTP 成功 → ACCEPTED；4xx → REJECTED（客户端错误，不重试）；5xx/连接异常 →
+ *       FORWARD_FAILED（由 {@code TriggerForwardRetryScheduler} 定时重试）。
+ * </ol>
+ *
+ * <p><b>最终去重</b>由 Orchestrator 侧 {@code uk_job_instance_tenant_dedup} 保证，
+ * trigger_request 层面的唯一约束已移除（V37），trigger 层只做尽力去重。
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

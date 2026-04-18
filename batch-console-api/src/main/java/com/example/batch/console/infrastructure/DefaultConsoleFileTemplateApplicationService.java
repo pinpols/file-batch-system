@@ -19,7 +19,16 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** {@link ConsoleFileTemplateApplicationService} 的默认实现。 */
+/**
+ * 文件模板配置的 CRUD：list / get / create / update / toggle。
+ *
+ * <p>唯一键：{@code (tenantId, templateCode, version)}——允许同 code 多版本并存，用于灰度发布或滚动升级。
+ * create 时若同 (code, version) 已存在抛 {@code CONFLICT}；update 默认沿用现有 version 但允许入参覆盖，
+ * 便于"就地升版"或"平移到新版号"两种语义。
+ *
+ * <p>与 {@link DefaultConsoleJobDefinitionApplicationService} 不同，本类不调 cache invalidation——
+ * 文件模板不在 orchestrator launch 热路径上读取（由 worker 导入/导出阶段按需拉取），无需前置失效 Redis 缓存。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleFileTemplateApplicationService

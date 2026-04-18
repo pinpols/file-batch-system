@@ -33,8 +33,21 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 /**
- * {@link com.example.batch.console.application.ConsoleFileDownloadApplicationService} 的默认实现：
- * 校验租户与审批上下文后，从 MinIO 流式读取对象（必要时解密）。
+ * 文件下载端点：console 侧代理 MinIO 下载，承担审批门控 + 按需解密，对应 {@code DefaultConsoleFileGovernanceService}
+ * 里加密文件"不直接 presign S3，走 console 代理 URL"的安全路径。
+ *
+ * <p>提供 2 个下载入口：
+ *
+ * <ul>
+ *   <li>{@link #download}：单文件二进制流下载。按文件模板的 {@code download_requires_approval}
+ *       或 {@code content_encryption_enabled} 标志决定是否强制 approvalId；带 approvalId 则先远程校验 APPROVED/EXECUTED
+ *       状态。响应用 {@code InputStreamResource + contentLength=-1} 实现真流式传输——避免一次性加载大文件进堆内存 OOM。
+ *   <li>{@link #exportFileErrors}：文件错误记录 CSV 导出。按 RFC 4180 规则 escape 含逗号/双引号/换行的字段
+ *       （双引号包裹 + 内部双引号转义），防 CSV 注入或解析歧义。
+ * </ul>
+ *
+ * <p>加解密路径：{@code batchSecurityProperties.testing-open=true} 时跳过审批 + 跳过解密（仅测试环境用）；
+ * 生产环境加密文件走 {@link BatchObjectCryptoService#decryptIfNeeded} 解密后再流给客户端。
  */
 @Service
 @RequiredArgsConstructor
@@ -197,8 +210,10 @@ public class DefaultConsoleFileDownloadApplicationService
             .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
             .retrieve()
             .body(ApprovalRecordResponse.class);
-    Guard.requireFound(response == null || response.record() == null, "approval request not found");
-    String status = response.record().approvalStatus();
+    ApprovalRecordResponse.ApprovalRecord record =
+        Guard.requireFound(
+            response == null ? null : response.record(), "approval request not found");
+    String status = record.approvalStatus();
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
       throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");
     }

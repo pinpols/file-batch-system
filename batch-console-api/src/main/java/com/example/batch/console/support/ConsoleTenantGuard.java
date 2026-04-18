@@ -9,6 +9,22 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+/**
+ * 租户访问守卫：所有需要落租户维度的 console 操作经此解析/校验目标租户，返回归一化的 tenantId。
+ *
+ * <p>两条路径：
+ *
+ * <ul>
+ *   <li><b>全局角色</b>（{@code ADMIN / AUDITOR / CONFIG_ADMIN}，见 {@link ConsoleRoles#hasGlobalRole}）：
+ *       跨租户操作必须<b>显式</b>传 {@code requestTenantId}；为空直接 {@code INVALID_ARGUMENT} 拒绝
+ *       ——防止全局角色因遗漏参数"默认当前租户"或"全量生效"造成意外越界。
+ *   <li><b>租户角色</b>：以 JWT 里的 {@code tenantId} 为准，{@code requestTenantId} 非空时必须匹配，
+ *       不匹配直接 {@code FORBIDDEN}——跨租户访问一律拒绝，即使是只读请求。
+ * </ul>
+ *
+ * <p>Session 未激活（例如异步上下文）时 {@code ConsoleRequestMetadata} 读取会静默降级为 null，
+ * 由上游兜底或抛 {@code UNAUTHORIZED}。
+ */
 @Component
 @RequiredArgsConstructor
 public class ConsoleTenantGuard {

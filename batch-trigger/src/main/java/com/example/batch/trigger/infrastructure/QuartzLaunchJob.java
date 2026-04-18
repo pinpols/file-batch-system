@@ -20,6 +20,25 @@ import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import org.springframework.stereotype.Component;
 
+/**
+ * Quartz Job 执行入口：从 {@link JobDataMap} 重建 {@link TriggerDescriptor}，
+ * 根据 drift（{@code actualFireTime - scheduledFireTime}）决定触发类型，再分派给 {@link TriggerService}。
+ *
+ * <p><b>drift 决策树</b>（按优先级）：
+ * <ol>
+ *   <li>drift {@code < misfireCatchUpThresholdSeconds} → 正常 {@code SCHEDULED}。
+ *   <li>drift ≥ 阈值 + {@code catchUpPolicy=MANUAL_APPROVAL} + 在 maxDays 内
+ *       → {@link TriggerService#createPendingCatchUp}（挂起等待人工审批）。
+ *   <li>drift ≥ 阈值 + {@code catchUpPolicy=AUTO} + 在 maxDays 内
+ *       → {@link TriggerService#launchScheduled} 以 {@code CATCH_UP} 类型直接触发。
+ *   <li>drift ≥ 阈值 + {@code catchUpPolicy=NONE}，或超过 maxDays → 降级为 {@code SCHEDULED}
+ *       （不追赶，视作正常触发）。
+ * </ol>
+ *
+ * <p><b>租户暂停自愈</b>：若 {@link TriggerService} 抛出"tenant is suspended"异常，
+ * 自动调用 {@link TriggerRegistrationService#pauseByJobCode} 暂停 Quartz job，
+ * 防止暂停租户的 job 持续触发产生 warn 日志风暴。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

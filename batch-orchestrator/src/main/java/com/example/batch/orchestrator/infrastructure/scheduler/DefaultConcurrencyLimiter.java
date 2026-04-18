@@ -13,6 +13,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 任务级并发闸门：按 job_instance 计数，3 层从宽到严依次短路。
+ *
+ * <ol>
+ *   <li><b>Global</b>（{@code governance.resourceScheduler.globalMaxRunningJobs}）：整个集群的活跃 job 硬上限，
+ *       防止洪峰打爆 DB/Kafka。任一轮超限即 block。
+ *   <li><b>Tenant</b>：以 {@code TenantQuotaPolicy} 为源。支持 <b>fair-share group</b> 跨租户共享配额
+ *       （同 {@code fairShareGroup} 的 job 总数封顶），再走 {@code maxRunningJobsPerTenant} 基础配额 +
+ *       {@code burstLimit} 软弹性——通过 {@link QuotaRuntimeStateService} 在 Redis 里管理预留与滑动窗口重置。
+ *   <li><b>Queue</b>：以 {@link ResourceQueueRecord} 为源，基础配额 {@code maxRunningJobs} +
+ *       队列级 burst limit，同样走 {@code QuotaRuntimeStateService} 软弹性通道。
+ * </ol>
+ *
+ * <p>本类只关心 job 级计数；分区级配额由 {@link DefaultPartitionThrottle} 负责。
+ */
 @Component
 @RequiredArgsConstructor
 public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {

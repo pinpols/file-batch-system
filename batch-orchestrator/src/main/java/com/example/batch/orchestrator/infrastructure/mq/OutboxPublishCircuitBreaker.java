@@ -7,7 +7,22 @@ import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupp
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.stereotype.Component;
 
-/** Outbox 投递的全局熔断器：当持续出现投递失败时，暂时停止推进 outbox， 防止失败重试造成的雪崩式数据库/消息堆积。 */
+/**
+ * Outbox 投递的集群级熔断器：连续投递失败累积到阈值后打开熔断，强制 {@link OutboxPollScheduler} 暂停推进，
+ * 避免失败重试造成的雪崩式 DB 写入 / Kafka 重投 / 告警轰炸。
+ *
+ * <p>状态通过 Redis Hash 共享（而非 in-process），多实例部署下所有 orchestrator 看到同一个熔断状态。
+ *
+ * <p>关键机制：
+ *
+ * <ul>
+ *   <li><b>快/慢双路径</b>：本地缓存 {@code cachedOpenUntilMs} 命中时不访问 Redis，只有缓存过期或首次查询才走 Redis Lua 脚本。
+ *   <li><b>半开探测（CAS 独占）</b>：冷却期结束时进入半开态，{@code halfOpenProbing.compareAndSet(false, true)}
+ *       保证只有一个线程执行探测轮——成功则脚本会把 openUntilMs 清 0，失败则熔断再次打开（见 {@code C-5.1}）。
+ *   <li><b>阈值计数</b>：累计失败轮达到 {@code circuitBreakerFailureThresholdConsecutivePolls} 后打开，
+ *       冷却期 {@code circuitBreakerCooldownMillis}；任一成功轮清零计数。
+ * </ul>
+ */
 @Component
 public class OutboxPublishCircuitBreaker {
 
