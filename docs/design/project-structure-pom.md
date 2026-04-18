@@ -855,7 +855,7 @@ spring:
 
     <groupId>com.example.batch</groupId>
     <artifactId>batch-platform</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
     <name>batch-platform</name>
 
@@ -873,6 +873,8 @@ spring:
     </modules>
 
     <properties>
+        <!-- Maven CI-friendly：统一版本入口，可通过 `-Drevision=X.Y.Z` 构建期覆盖 -->
+        <revision>1.0.0</revision>
         <java.version>25</java.version>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -942,7 +944,7 @@ spring:
     <parent>
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>batch-common</artifactId>
@@ -980,7 +982,7 @@ spring:
     <parent>
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>batch-trigger</artifactId>
@@ -1050,7 +1052,7 @@ spring:
     <parent>
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>batch-orchestrator</artifactId>
@@ -1143,7 +1145,7 @@ spring:
     <parent>
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>batch-worker-core</artifactId>
@@ -1195,7 +1197,7 @@ spring:
     <parent>
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>batch-worker-import</artifactId>
@@ -1265,7 +1267,7 @@ spring:
     <parent>
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>batch-worker-export</artifactId>
@@ -1327,7 +1329,7 @@ spring:
     <parent>
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>batch-worker-dispatch</artifactId>
@@ -1391,7 +1393,7 @@ spring:
     <parent>
         <groupId>com.example.batch</groupId>
         <artifactId>batch-platform</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>batch-console-api</artifactId>

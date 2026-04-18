@@ -22,7 +22,8 @@
     -->
     <groupId>com.example.batch</groupId>
     <artifactId>batch-load-tests</artifactId>
-    <version>${revision}</version>
+    <!-- 独立模块（未在根 reactor 中），无法继承根 pom 的 ${revision}；用字面量，与根版本手工保持同步。 -->
+    <version>1.0.0</version>
     <packaging>jar</packaging>
     <name>batch-load-tests</name>
     <description>Gatling load tests and capacity baseline for batch-platform</description>

@@ -44,7 +44,7 @@ java -jar security-scan/target/security-scan-1.0.0-SNAPSHOT.jar --mode=all --roo
 
 ```bash
 mvn package
-java -jar target/security-scan-1.0.0-SNAPSHOT.jar --mode=all --root=.. --target-url=http://localhost:8080
+java -jar target/security-scan-1.0.0.jar --mode=all --root=.. --target-url=http://localhost:8080
 ```
 
 ## 常用参数

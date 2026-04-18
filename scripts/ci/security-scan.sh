@@ -63,14 +63,16 @@ parse_args "$@"
 
 mkdir -p "$ROOT_DIR/target/security-scan-report"
 
-JAR_PATH="$ROOT_DIR/security-scan/target/security-scan-1.0.0-SNAPSHOT.jar"
-
 if [[ "$BUILD_MODULE" == "true" ]]; then
   mvn -f "$ROOT_DIR/security-scan/pom.xml" package
 fi
 
-if [[ ! -f "$JAR_PATH" ]]; then
-  printf 'security-scan jar not found: %s\n' "$JAR_PATH" >&2
+# 通过 glob 解析实际产物，避开硬编码版本号；${revision} 改动或 release 升版后无需同步此处。
+JAR_PATH="$(ls -1 "$ROOT_DIR/security-scan/target/security-scan-"*.jar 2>/dev/null \
+  | grep -Ev 'sources|javadoc|original' | head -n 1 || true)"
+
+if [[ -z "$JAR_PATH" || ! -f "$JAR_PATH" ]]; then
+  printf 'security-scan jar not found under %s\n' "$ROOT_DIR/security-scan/target/" >&2
   printf 'Run without --skip-build first, or build the module with mvn -f security-scan/pom.xml package.\n' >&2
   exit 1
 fi
