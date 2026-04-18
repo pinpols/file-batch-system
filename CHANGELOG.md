@@ -92,7 +92,7 @@
 
 ---
 
-## 2026-04-11 ～ 04-12 — v1-v4：格式化 & 大规模清理
+## 2026-04-11 ～ 04-12 — Spotless 格式化 & PMD 规则集 & 大规模清理
 
 ### Changed
 - 全项目 Spotless 格式化 + PMD 规则集（`build/pmd-ruleset.xml`）入库，CI 阶段强制检查
@@ -102,7 +102,7 @@
 
 ---
 
-## 2026-04-10 ～ 04-11 — 系统优化（36 次提交）
+## 2026-04-08 ～ 04-11 — 系统优化（36 次提交，跨 4 天）
 
 ### Added
 - 通知订阅中心（`ConsoleNotificationController` + V49 迁移）：channel CRUD（EMAIL / DINGTALK / WECOM / WEBHOOK / SMS）、subscription rule CRUD、delivery logs、测试通知
