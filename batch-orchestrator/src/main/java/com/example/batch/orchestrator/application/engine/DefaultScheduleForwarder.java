@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.application.engine;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
@@ -18,6 +19,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Outbox → Kafka 批量推送：把已落库的 {@code outbox_event} 分批发布，并按结果更新状态与重试记录。
+ *
+ * <p>采用三阶段批处理以解耦"DB 行锁"与"Kafka RTT"：
+ *
+ * <ol>
+ *   <li><b>阶段一：batch markPublishing</b>。逐条 CAS 推到 PUBLISHING，立刻发起异步 send；
+ *       CAS 成功即抢到独占权，天然排斥其他 forwarder 并发投递同一事件，且此时不等待 ACK，不再持有行锁过网络调用。
+ *   <li><b>阶段二：并行等 ACK</b>。{@code allOf.join()} 等本批所有 future 完成，耗时 ≈ 单条最长 RTT。
+ *       失败或超时的 future 返回 false，由阶段三统一降级，不在此处阻塞重试。
+ *   <li><b>阶段三：batch DB 更新</b>。按结果写 PUBLISHED / FAILED / GIVE_UP，并通过 {@link #recordRetry}
+ *       落 {@code event_outbox_retry}——这是"发布者级 I/O 重试"，与业务级任务重试（{@code retry_schedule}）分开管理。
+ * </ol>
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultScheduleForwarder implements ScheduleForwarder {
@@ -115,9 +130,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     retry.setEventKey(event.getEventKey());
     retry.setPublishAttempt(publishAttemptNo);
     retry.setRetryStatus(
-        nextRetryAt == null
-            ? com.example.batch.common.enums.RetryScheduleStatus.EXHAUSTED.code()
-            : com.example.batch.common.enums.RetryScheduleStatus.FAILED.code());
+        nextRetryAt == null ? RetryScheduleStatus.EXHAUSTED.code() : RetryScheduleStatus.FAILED.code());
     retry.setRetryReason(reason);
     retry.setNextRetryAt(nextRetryAt);
     retry.setTraceId(event.getTraceId());
