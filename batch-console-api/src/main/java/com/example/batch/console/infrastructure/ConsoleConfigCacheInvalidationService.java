@@ -1,5 +1,6 @@
 package com.example.batch.console.infrastructure;
 
+import com.example.batch.console.support.ConsoleQueryCacheService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.util.StringUtils;
 public class ConsoleConfigCacheInvalidationService {
 
   private final StringRedisTemplate redisTemplate;
+  private final ConsoleQueryCacheService queryCacheService;
 
   public void evictJobDefinition(String tenantId, String jobCode) {
     evictAfterCommit(configKey(tenantId, "job-definition", jobCode));
@@ -35,6 +37,11 @@ public class ConsoleConfigCacheInvalidationService {
 
   public void evictQuotaPolicies(String tenantId) {
     evictAfterCommit(configKey(tenantId, "tenant-quota-policy", "enabled-first"));
+  }
+
+  /** 配置变更后同步清除 meta 查询缓存（队列/日历/窗口等下拉选项）。 */
+  public void evictMetaOptions(String tenantId) {
+    queryCacheService.evictMetaOptions(tenantId);
   }
 
   private void evictByPatternAfterCommit(String pattern) {

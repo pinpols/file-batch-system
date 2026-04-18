@@ -1,6 +1,13 @@
 package com.example.batch.common.enums;
 
-public enum ResultCode {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum ResultCode implements DictEnum {
   SUCCESS("SUCCESS", "成功", "success", 200),
   INVALID_ARGUMENT("INVALID_ARGUMENT", "参数非法", "invalid argument", 400),
   VALIDATION_ERROR("VALIDATION_ERROR", "参数校验失败", "validation failed", 400),
@@ -19,27 +26,4 @@ public enum ResultCode {
   private final String label;
   private final String defaultMessage;
   private final int httpStatus;
-
-  ResultCode(String code, String label, String defaultMessage, int httpStatus) {
-    this.code = code;
-    this.label = label;
-    this.defaultMessage = defaultMessage;
-    this.httpStatus = httpStatus;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String defaultMessage() {
-    return defaultMessage;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public int httpStatus() {
-    return httpStatus;
-  }
 }

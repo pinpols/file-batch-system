@@ -8,6 +8,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.requiredColum
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
 import com.example.batch.common.enums.BatchWindowEndStrategy;
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.OutOfWindowAction;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.ConsoleBatchWindowExcelApplicationService;
@@ -70,8 +71,8 @@ public class DefaultConsoleBatchWindowExcelApplicationService
           COL_ALLOW_CROSS_DAY,
           COL_ENABLED,
           COL_DESCRIPTION);
-  private static final Set<String> END_STRATEGIES = BatchWindowEndStrategy.codes();
-  private static final Set<String> OUT_OF_WINDOW_ACTIONS = OutOfWindowAction.codes();
+  private static final Set<String> END_STRATEGIES = DictEnum.codes(BatchWindowEndStrategy.class);
+  private static final Set<String> OUT_OF_WINDOW_ACTIONS = DictEnum.codes(OutOfWindowAction.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(

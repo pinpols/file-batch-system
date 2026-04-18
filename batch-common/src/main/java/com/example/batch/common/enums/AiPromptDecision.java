@@ -1,6 +1,13 @@
 package com.example.batch.common.enums;
 
-public enum AiPromptDecision {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum AiPromptDecision implements DictEnum {
   APPROVED("APPROVED", "通过"),
   REJECTED_SCOPE("REJECTED_SCOPE", "超出范围"),
   REJECTED_AUTH("REJECTED_AUTH", "权限不足"),
@@ -10,17 +17,4 @@ public enum AiPromptDecision {
 
   private final String code;
   private final String label;
-
-  AiPromptDecision(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
 }

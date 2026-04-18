@@ -1,6 +1,13 @@
 package com.example.batch.common.enums;
 
-public enum FileDispatchRunStatus {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum FileDispatchRunStatus implements DictEnum {
   CREATED("CREATED", "已创建"),
   RUNNING("RUNNING", "执行中"),
   COMPENSATING("COMPENSATING", "补偿中"),
@@ -8,17 +15,4 @@ public enum FileDispatchRunStatus {
 
   private final String code;
   private final String label;
-
-  FileDispatchRunStatus(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
 }

@@ -1,10 +1,13 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum AlertSeverity {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum AlertSeverity implements DictEnum {
   INFO("INFO", "信息"),
   WARN("WARN", "警告"),
   ERROR("ERROR", "错误"),
@@ -12,21 +15,4 @@ public enum AlertSeverity {
 
   private final String code;
   private final String label;
-
-  AlertSeverity(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public static Set<String> codes() {
-    return Arrays.stream(values()).map(AlertSeverity::code).collect(Collectors.toUnmodifiableSet());
-  }
 }

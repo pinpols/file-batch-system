@@ -1,6 +1,13 @@
 package com.example.batch.common.enums;
 
-public enum JobStatus {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum JobStatus implements DictEnum {
   CREATED("CREATED", "已创建"),
   WAITING("WAITING", "等待中"),
   READY("READY", "待执行"),
@@ -13,17 +20,4 @@ public enum JobStatus {
 
   private final String code;
   private final String label;
-
-  JobStatus(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
 }

@@ -1,10 +1,13 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum FileChannelType {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum FileChannelType implements DictEnum {
   SFTP("SFTP", "SFTP"),
   API("API", "API"),
   API_PUSH("API_PUSH", "API 推送"),
@@ -15,23 +18,4 @@ public enum FileChannelType {
 
   private final String code;
   private final String label;
-
-  FileChannelType(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public static Set<String> codes() {
-    return Arrays.stream(values())
-        .map(FileChannelType::code)
-        .collect(Collectors.toUnmodifiableSet());
-  }
 }

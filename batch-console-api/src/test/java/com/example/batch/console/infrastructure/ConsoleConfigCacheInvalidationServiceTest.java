@@ -3,6 +3,7 @@ package com.example.batch.console.infrastructure;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.example.batch.console.support.ConsoleQueryCacheService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,12 +16,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 class ConsoleConfigCacheInvalidationServiceTest {
 
   @Mock private StringRedisTemplate redisTemplate;
+  @Mock private ConsoleQueryCacheService queryCacheService;
 
   private ConsoleConfigCacheInvalidationService service;
 
   @BeforeEach
   void setUp() {
-    service = new ConsoleConfigCacheInvalidationService(redisTemplate);
+    service = new ConsoleConfigCacheInvalidationService(redisTemplate, queryCacheService);
   }
 
   @Test

@@ -1,10 +1,13 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum PartitionStatus {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum PartitionStatus implements DictEnum {
   CREATED("CREATED", "已创建"),
   WAITING("WAITING", "等待中"),
   READY("READY", "待领取"),
@@ -17,23 +20,4 @@ public enum PartitionStatus {
 
   private final String code;
   private final String label;
-
-  PartitionStatus(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public static Set<String> codes() {
-    return Arrays.stream(values())
-        .map(PartitionStatus::code)
-        .collect(Collectors.toUnmodifiableSet());
-  }
 }

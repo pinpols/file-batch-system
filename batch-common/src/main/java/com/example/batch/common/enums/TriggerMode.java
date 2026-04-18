@@ -7,14 +7,13 @@ import lombok.experimental.Accessors;
 @RequiredArgsConstructor
 @Accessors(fluent = true)
 @Getter
-public enum WorkflowNodeType implements DictEnum {
-  TASK("TASK", "任务节点"),
-  GATEWAY("GATEWAY", "网关节点"),
-  FILE_STEP("FILE_STEP", "文件步骤"),
-  START("START", "开始节点"),
-  END("END", "结束节点"),
-  JOB("JOB", "作业节点");
+public enum TriggerMode implements DictEnum {
+  SCHEDULED("SCHEDULED", "定时"),
+  API("API", "API"),
+  MANUAL("MANUAL", "手动"),
+  EVENT("EVENT", "事件"),
+  MIXED("MIXED", "混合");
 
   private final String code;
   private final String label;
-}
+  public String label() { return label; }}

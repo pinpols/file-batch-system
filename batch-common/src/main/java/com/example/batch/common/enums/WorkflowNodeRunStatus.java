@@ -1,6 +1,13 @@
 package com.example.batch.common.enums;
 
-public enum WorkflowNodeRunStatus {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum WorkflowNodeRunStatus implements DictEnum {
   READY("READY", "待执行"),
   RUNNING("RUNNING", "执行中"),
   SUCCESS("SUCCESS", "成功"),
@@ -9,17 +16,4 @@ public enum WorkflowNodeRunStatus {
 
   private final String code;
   private final String label;
-
-  WorkflowNodeRunStatus(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
 }

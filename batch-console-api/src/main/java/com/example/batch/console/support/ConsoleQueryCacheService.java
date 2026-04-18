@@ -1,0 +1,98 @@
+package com.example.batch.console.support;
+
+import com.example.batch.common.utils.JsonUtils;
+import java.time.Duration;
+import java.util.function.Supplier;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+/**
+ * 控制台高频查询的 Redis 缓存层。
+ *
+ * <p>缓存策略：
+ * <ul>
+ *   <li>Meta 枚举 / 配置选项 — TTL 5 分钟，配置变更时手动 evict
+ *   <li>Dashboard 汇总 — TTL 10 秒，避免多用户同时刷导致 DB 重复聚合
+ *   <li>调度快照 — TTL 30 秒，分钟级数据无需实时
+ * </ul>
+ *
+ * <p>Redis 不可用时降级到直接查 DB，不影响功能。
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ConsoleQueryCacheService {
+
+  private static final String PREFIX = "console:cache:";
+
+  /** Meta 枚举（纯静态数据）。 */
+  public static final Duration META_ENUM_TTL = Duration.ofMinutes(30);
+  /** Meta 配置选项（队列/日历/窗口等，跟随租户配置变化���。 */
+  public static final Duration META_OPTION_TTL = Duration.ofMinutes(5);
+  /** Dashboard 汇总。 */
+  public static final Duration DASHBOARD_TTL = Duration.ofSeconds(10);
+  /** 调度快照。 */
+  public static final Duration SNAPSHOT_TTL = Duration.ofSeconds(30);
+
+  private final StringRedisTemplate redisTemplate;
+
+  /**
+   * 查询缓存：先读 Redis，miss 则执行 loader 并写入缓存。
+   *
+   * @param cacheKey 缓存键（自动加前缀）
+   * @param ttl 过期时间
+   * @param resultType 反序列化目标类型
+   * @param loader 缓存未命中时的数据加载器
+   */
+  public <T> T getOrLoad(String cacheKey, Duration ttl, Class<T> resultType, Supplier<T> loader) {
+    String fullKey = PREFIX + cacheKey;
+    try {
+      String cached = redisTemplate.opsForValue().get(fullKey);
+      if (StringUtils.hasText(cached)) {
+        return JsonUtils.fromJson(cached, resultType);
+      }
+    } catch (Exception e) {
+      log.debug("cache read failed, falling back to db: key={}", fullKey, e);
+    }
+    T result = loader.get();
+    try {
+      if (result != null) {
+        redisTemplate.opsForValue().set(fullKey, JsonUtils.toJson(result), ttl);
+      }
+    } catch (Exception e) {
+      log.debug("cache write failed: key={}", fullKey, e);
+    }
+    return result;
+  }
+
+  /** 按前缀清除缓存（配置变更时调用）。 */
+  public void evictByPrefix(String keyPrefix) {
+    try {
+      var keys = redisTemplate.keys(PREFIX + keyPrefix + "*");
+      if (keys != null && !keys.isEmpty()) {
+        redisTemplate.delete(keys);
+        log.debug("evicted {} cache keys with prefix: {}", keys.size(), keyPrefix);
+      }
+    } catch (Exception e) {
+      log.debug("cache evict failed: prefix={}", keyPrefix, e);
+    }
+  }
+
+  /** 清除指定租户的 meta 选项缓存。 */
+  public void evictMetaOptions(String tenantId) {
+    evictByPrefix("meta:" + tenantId);
+  }
+
+  /** 清除所有 meta 枚举缓存。 */
+  public void evictMetaEnums() {
+    evictByPrefix("meta:enums");
+  }
+
+  /** 清除指定租户的 dashboard 缓存。 */
+  public void evictDashboard(String tenantId) {
+    evictByPrefix("dashboard:" + tenantId);
+  }
+}

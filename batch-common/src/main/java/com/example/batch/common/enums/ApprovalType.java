@@ -7,14 +7,12 @@ import lombok.experimental.Accessors;
 @RequiredArgsConstructor
 @Accessors(fluent = true)
 @Getter
-public enum WorkflowNodeType implements DictEnum {
-  TASK("TASK", "任务节点"),
-  GATEWAY("GATEWAY", "网关节点"),
-  FILE_STEP("FILE_STEP", "文件步骤"),
-  START("START", "开始节点"),
-  END("END", "结束节点"),
-  JOB("JOB", "作业节点");
+public enum ApprovalType implements DictEnum {
+  CATCH_UP("CATCH_UP", "补跑"),
+  COMPENSATION("COMPENSATION", "补偿"),
+  DLQ_REPLAY("DLQ_REPLAY", "死信重放"),
+  DOWNLOAD("DOWNLOAD", "下载");
 
   private final String code;
   private final String label;
-}
+  public String label() { return label; }}

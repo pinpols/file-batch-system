@@ -10,6 +10,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.WorkflowEdgeType;
@@ -251,10 +252,10 @@ public class DefaultConsoleWorkflowExcelApplicationService
               COL_ENABLED,
               optionalColumn("该依赖边是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
 
-  private static final Set<String> WORKFLOW_TYPES = WorkflowType.codes();
-  private static final Set<String> NODE_TYPES = WorkflowNodeType.codes();
-  private static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
-  private static final Set<String> EDGE_TYPES = WorkflowEdgeType.codes();
+  private static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
+  private static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);
+  private static final Set<String> RETRY_POLICIES = DictEnum.codes(RetryPolicyType.class);
+  private static final Set<String> EDGE_TYPES = DictEnum.codes(WorkflowEdgeType.class);
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;

@@ -1,10 +1,13 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum ApprovalCommandStatus {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum ApprovalCommandStatus implements DictEnum {
   PENDING("PENDING", "待审批"),
   APPROVED("APPROVED", "已通过"),
   REJECTED("REJECTED", "已拒绝"),
@@ -12,23 +15,4 @@ public enum ApprovalCommandStatus {
 
   private final String code;
   private final String label;
-
-  ApprovalCommandStatus(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public static Set<String> codes() {
-    return Arrays.stream(values())
-        .map(ApprovalCommandStatus::code)
-        .collect(Collectors.toUnmodifiableSet());
-  }
 }

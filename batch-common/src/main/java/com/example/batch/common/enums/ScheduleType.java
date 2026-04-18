@@ -7,13 +7,10 @@ import lombok.experimental.Accessors;
 @RequiredArgsConstructor
 @Accessors(fluent = true)
 @Getter
-public enum WorkflowNodeType implements DictEnum {
-  TASK("TASK", "任务节点"),
-  GATEWAY("GATEWAY", "网关节点"),
-  FILE_STEP("FILE_STEP", "文件步骤"),
-  START("START", "开始节点"),
-  END("END", "结束节点"),
-  JOB("JOB", "作业节点");
+public enum ScheduleType implements DictEnum {
+  CRON("CRON", "Cron 表达式"),
+  FIXED_RATE("FIXED_RATE", "固定频率"),
+  MANUAL("MANUAL", "手动");
 
   private final String code;
   private final String label;

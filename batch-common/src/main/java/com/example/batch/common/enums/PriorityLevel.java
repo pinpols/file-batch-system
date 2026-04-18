@@ -1,6 +1,13 @@
 package com.example.batch.common.enums;
 
-public enum PriorityLevel {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum PriorityLevel implements DictEnum {
   P1("P1", "最高优先级"),
   P2("P2", "高优先级"),
   P3("P3", "较高优先级"),
@@ -13,17 +20,4 @@ public enum PriorityLevel {
 
   private final String code;
   private final String label;
-
-  PriorityLevel(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
 }

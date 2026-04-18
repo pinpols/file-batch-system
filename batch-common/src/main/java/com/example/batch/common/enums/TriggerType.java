@@ -1,6 +1,13 @@
 package com.example.batch.common.enums;
 
-public enum TriggerType {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum TriggerType implements DictEnum {
   API("API", "接口触发"),
   MANUAL("MANUAL", "手工触发"),
   EVENT("EVENT", "事件触发"),
@@ -9,17 +16,4 @@ public enum TriggerType {
 
   private final String code;
   private final String label;
-
-  TriggerType(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
 }

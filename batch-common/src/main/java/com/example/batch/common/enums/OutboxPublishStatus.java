@@ -1,10 +1,13 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum OutboxPublishStatus {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum OutboxPublishStatus implements DictEnum {
   NEW("NEW", "待发送"),
   PUBLISHING("PUBLISHING", "发送中"),
   PUBLISHED("PUBLISHED", "已发送"),
@@ -13,23 +16,4 @@ public enum OutboxPublishStatus {
 
   private final String code;
   private final String label;
-
-  OutboxPublishStatus(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public static Set<String> codes() {
-    return Arrays.stream(values())
-        .map(OutboxPublishStatus::code)
-        .collect(Collectors.toUnmodifiableSet());
-  }
 }

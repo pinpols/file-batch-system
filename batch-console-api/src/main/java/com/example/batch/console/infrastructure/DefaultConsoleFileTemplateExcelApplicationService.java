@@ -7,6 +7,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.optionalColum
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.FileChecksumType;
 import com.example.batch.common.enums.FileCompressType;
 import com.example.batch.common.enums.FileEncryptType;
@@ -116,11 +117,11 @@ public class DefaultConsoleFileTemplateExcelApplicationService
           COL_ENABLED,
           "version",
           COL_DESCRIPTION);
-  private static final Set<String> FILE_FORMAT_TYPES = FileTemplateFormat.codes();
-  private static final Set<String> TEMPLATE_TYPES = FileTemplateType.codes();
-  private static final Set<String> CHECKSUM_TYPES = FileChecksumType.codes();
-  private static final Set<String> COMPRESS_TYPES = FileCompressType.codes();
-  private static final Set<String> ENCRYPT_TYPES = FileEncryptType.codes();
+  private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
+  private static final Set<String> TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
+  private static final Set<String> CHECKSUM_TYPES = DictEnum.codes(FileChecksumType.class);
+  private static final Set<String> COMPRESS_TYPES = DictEnum.codes(FileCompressType.class);
+  private static final Set<String> ENCRYPT_TYPES = DictEnum.codes(FileEncryptType.class);
   private static final int[] BOOLEAN_VALIDATION_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
