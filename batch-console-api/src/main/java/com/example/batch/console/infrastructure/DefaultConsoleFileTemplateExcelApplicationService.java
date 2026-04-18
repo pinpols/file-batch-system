@@ -281,7 +281,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-  // ── interface delegation ──
 
   @Override
   public ResponseEntity<InputStreamResource> exportFileTemplates(
@@ -307,7 +306,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService
     return doApply(uploadToken, request.getReason());
   }
 
-  // ── abstract method implementations ──
 
   @Override
   protected String sheetName() {
@@ -547,7 +545,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-  // ── entity-specific helpers ──
 
   private static void extractBasicFields(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
@@ -685,7 +682,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService
     return param;
   }
 
-  // ── internal records ──
 
   @Getter
   @Builder

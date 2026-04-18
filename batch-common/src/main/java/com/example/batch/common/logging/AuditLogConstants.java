@@ -9,16 +9,13 @@ package com.example.batch.common.logging;
  */
 public final class AuditLogConstants {
 
-  // ---- 日志类型 ----
   public static final String LOG_TYPE_ALARM = "ALARM";
   public static final String LOG_TYPE_AUDIT = "AUDIT";
 
-  // ---- 明细引用键 ----
   public static final String DETAIL_REF_BATCH_DAY_INSTANCE = "batch_day_instance";
   public static final String DETAIL_REF_JOB_SLA = "job-sla";
   public static final String DETAIL_REF_JOB_INSTANCE_SLA_ALERTED_AT = "job_instance.sla_alerted_at";
 
-  // ---- 操作者标识/类型 ----
   public static final String OPERATOR_ID_SYSTEM = "SYSTEM";
   public static final String OPERATOR_TYPE_SYSTEM = "SYSTEM";
   public static final String OPERATOR_TYPE_REQUEST = "REQUEST";

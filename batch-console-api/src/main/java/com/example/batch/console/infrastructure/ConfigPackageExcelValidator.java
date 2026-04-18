@@ -32,7 +32,6 @@ import org.springframework.util.StringUtils;
  */
 class ConfigPackageExcelValidator {
 
-  // ── column name constants (package-private, shared with main service) ──────
   static final String COL_TENANT_ID = "tenant_id";
   static final String COL_ENABLED = "enabled";
   static final String COL_DESCRIPTION = "description";
@@ -90,7 +89,6 @@ class ConfigPackageExcelValidator {
   static final String KEY_SEP_COLON = ":";
   static final String KEY_SEP_HASH = "#";
 
-  // ── sheet names ───────────────────────────────────────────────────────────
   static final String JOB_SHEET = "job_definition";
   static final String CHANNEL_SHEET = "file_channel_config";
   static final String ROUTING_SHEET = "alert_routing_config";
@@ -100,7 +98,6 @@ class ConfigPackageExcelValidator {
   static final String WF_NODE_SHEET = "workflow_node";
   static final String WF_EDGE_SHEET = "workflow_edge";
 
-  // ── enum sets ─────────────────────────────────────────────────────────────
   static final Set<String> JOB_TYPES = DictEnum.codes(JobType.class);
   static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
   static final Set<String> RETRY_POLICIES = DictEnum.codes(RetryPolicyType.class);
@@ -128,7 +125,6 @@ class ConfigPackageExcelValidator {
     this.pipelineDefinitionMapper = pipelineDefinitionMapper;
   }
 
-  // ── inner records ─────────────────────────────────────────────────────────
 
   record SheetResult(
       String sheetName,
@@ -214,7 +210,6 @@ class ConfigPackageExcelValidator {
     }
   }
 
-  // ── orchestration ─────────────────────────────────────────────────────────
 
   PackageValidationResult validate(PackageExcelSession session) {
     String tid = session.tenantId();
@@ -239,7 +234,6 @@ class ConfigPackageExcelValidator {
         jobs, channels, routings, pipelines, steps, wfDefs, wfNodes, wfEdges, crossIssues);
   }
 
-  // ── per-sheet validators ──────────────────────────────────────────────────
 
   private SheetResult validateJobRows(String tenantId, List<Map<String, String>> rows) {
     List<WorkbookIssue> issues = new ArrayList<>();
@@ -632,7 +626,6 @@ class ConfigPackageExcelValidator {
     return issues;
   }
 
-  // ── shared utilities ──────────────────────────────────────────────────────
 
   static String normalize(String value) {
     return com.example.batch.common.utils.ConsoleTextSanitizer.normalize(value);

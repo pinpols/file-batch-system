@@ -75,7 +75,6 @@ public class DefaultImportStageExecutor
     return defaultStepDefinitions;
   }
 
-  // ─── AbstractStageExecutor template methods ──────────────────────────────
 
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(ImportJobContext context) {
@@ -176,7 +175,6 @@ public class DefaultImportStageExecutor
     return "import pipeline step flow contains a cycle";
   }
 
-  // ─── Private helpers ─────────────────────────────────────────────────────
 
   private ImportStage toStage(String stageCode) {
     try {

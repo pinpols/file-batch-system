@@ -12740,3 +12740,32 @@ components:
           type: integer
           format: int32
       required: [uploadToken, tenantId, jobInserted, jobUpdated, channelInserted, channelUpdated, routingInserted, routingUpdated, pipelineInserted, pipelineUpdated, workflowInserted, workflowUpdated]
+
+    # ── 补充枚举 schema（前端类型安全）──────────────────────────
+    TriggerStatus:
+      type: string
+      enum: [NORMAL, REGISTERED, PAUSED, UNREGISTERED, ERROR, BLOCKED, COMPLETE]
+    WebhookDeliveryStatus:
+      type: string
+      enum: [SUCCESS, FAILED, EXHAUSTED]
+    NotificationChannelType:
+      type: string
+      enum: [EMAIL, WEBHOOK, DINGTALK, WECHAT, SMS]
+    TenantStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED]
+    LogType:
+      type: string
+      enum: [SYSTEM, BUSINESS, ALARM]
+    WorkflowDefinitionStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, DISABLED]
+    TenantConfigInitAction:
+      type: string
+      enum: [CREATED, UPDATED, SKIPPED, FAILED]
+    TriggerResourceType:
+      type: string
+      enum: [JOB, WORKFLOW, FILE_CHANNEL, FILE_TEMPLATE]
+    ArrivalState:
+      type: string
+      enum: [WAITING, PARTIAL, COMPLETE, TIMEOUT, TRIGGERED]

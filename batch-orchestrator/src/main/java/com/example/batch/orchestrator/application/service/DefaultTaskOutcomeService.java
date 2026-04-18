@@ -565,8 +565,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     return JsonUtils.toJson(summary);
   }
 
-  // ── JOB 节点子 Job 完成信号 ────────────────────────────────────────
-
   /** 当 JOB 节点启动的子 Job 到达终态时，将结果应用到父 Job 中的虚拟任务， 由标准的基于分区的 DAG 推进逻辑接管后续流转。 */
   private void signalParentVirtualTask(
       JobInstanceEntity childJobInstance,

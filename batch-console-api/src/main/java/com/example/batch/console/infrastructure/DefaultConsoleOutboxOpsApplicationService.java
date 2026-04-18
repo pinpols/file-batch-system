@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure;
 
 import com.example.batch.console.application.ConsoleOutboxOpsApplicationService;
+import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.OutboxEventMapper;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.response.ConsoleOutboxCleanupResponse;
@@ -20,6 +21,7 @@ public class DefaultConsoleOutboxOpsApplicationService
 
   private final ConsoleTenantGuard tenantGuard;
   private final OutboxEventMapper outboxEventMapper;
+  private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
 
   @Override
   public ConsoleOutboxStatsResponse stats(String tenantId) {
@@ -34,6 +36,7 @@ public class DefaultConsoleOutboxOpsApplicationService
     Instant cutoff = Instant.now().minus(retainDays, ChronoUnit.DAYS);
     int pub = outboxEventMapper.deletePublishedBefore(resolved, cutoff);
     int giveUp = outboxEventMapper.deleteGiveUpBefore(resolved, cutoff);
+    domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-cleanup");
     return new ConsoleOutboxCleanupResponse(resolved, retainDays, pub, giveUp);
   }
 
@@ -42,6 +45,8 @@ public class DefaultConsoleOutboxOpsApplicationService
   public ConsoleOutboxRepublishResponse republish(String tenantId, List<Long> ids) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     int reset = outboxEventMapper.resetToNew(resolved, ids, List.of("FAILED", "GIVE_UP"));
+    domainEventPublisher.publishChanged(resolved, "outbox-retries", "outbox-republish");
+    domainEventPublisher.publishChanged(resolved, "outbox-deliveries", "outbox-republish");
     return new ConsoleOutboxRepublishResponse(resolved, ids.size(), reset);
   }
 }

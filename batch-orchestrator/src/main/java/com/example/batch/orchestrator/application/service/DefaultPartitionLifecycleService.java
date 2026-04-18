@@ -20,6 +20,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
+/**
+ * 分片生命周期的状态主机：所有 {@code job_partition} 的状态转换（CREATED → READY → RUNNING → 终态）集中在此。
+ *
+ * <p>约束：
+ *
+ * <ul>
+ *   <li>所有转换以 {@code version} 做乐观锁，CAS 失败时必须回滚或让调用方感知；不得静默吞掉。
+ *   <li>{@link #releaseForDispatch} 是 READY 出队的唯一入口——分片与任务状态须原子一起推进，
+ *       见方法内的回滚并还原内存对象逻辑。
+ *   <li>{@link #reclaimExpiredPartitions} 回收超租后一律回 {@code WAITING} 而非 {@code READY}，
+ *       走一遍正常调度与派发，避免跳过 outbox 落库导致任务永远拿不到 Kafka 消息。
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultPartitionLifecycleService implements PartitionLifecycleService {
@@ -95,6 +108,10 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
     return updated > 0 ? jobPartitionMapper.selectById(tenantId, partitionId) : existingPartition;
   }
 
+  /**
+   * 回收租约到期的分片：状态推回 {@code WAITING}（而非 {@code READY}），让分片重新走一遍调度决策 + outbox
+   * 派发，防止直接回 READY 跳过 outbox 落库导致任务没有 Kafka 消息可消费、永远无人认领。
+   */
   @Override
   @Transactional
   public int reclaimExpiredPartitions(String tenantId) {

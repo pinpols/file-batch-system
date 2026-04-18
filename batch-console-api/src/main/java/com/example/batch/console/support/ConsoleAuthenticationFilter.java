@@ -29,6 +29,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
   private final BatchSecurityProperties batchSecurityProperties;
   private final ConsoleJwtService jwtService;
   private final ConsoleSecurityResponseWriter responseWriter;
+  private final SseTicketService sseTicketService;
 
   @Override
   protected void doFilterInternal(
@@ -38,6 +39,26 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
       if (!properties.isEnabled() && !batchSecurityProperties.isTestingOpen()) {
         filterChain.doFilter(request, response);
         return;
+      }
+
+      // SSE ticket 鉴权：EventSource 不能设 header，用一次性 ticket 替代
+      String sseTicket = request.getParameter("ticket");
+      if (StringUtils.hasText(sseTicket)) {
+        String ticketValue = sseTicketService.validate(sseTicket);
+        if (ticketValue != null) {
+          String[] parts = ticketValue.split(":", 2);
+          String ticketUser = parts[0];
+          String ticketTenant = parts.length > 1 ? parts[1] : "";
+          ConsolePrincipal principal =
+              new ConsolePrincipal(
+                  ticketUser,
+                  ticketTenant,
+                  properties.getDefaultAuthorities().stream()
+                      .collect(Collectors.toCollection(LinkedHashSet::new)));
+          setAuthentication(principal, "sse-ticket");
+          filterChain.doFilter(request, response);
+          return;
+        }
       }
 
       String bearerToken = resolveBearerToken(request);

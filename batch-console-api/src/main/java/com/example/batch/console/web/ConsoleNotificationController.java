@@ -30,7 +30,6 @@ public class ConsoleNotificationController {
   private final ConsoleNotificationApplicationService service;
   private final ConsoleResponseFactory responseFactory;
 
-  // ── 通知渠道 ──
 
   @GetMapping("/channels")
   @PreAuthorize(
@@ -81,7 +80,6 @@ public class ConsoleNotificationController {
     return responseFactory.success(service.testChannel(tenantId, channelCode));
   }
 
-  // ── 订阅规则 ──
 
   @GetMapping("/rules")
   @PreAuthorize(
@@ -125,7 +123,6 @@ public class ConsoleNotificationController {
     return responseFactory.success(null);
   }
 
-  // ── 投递日志 ──
 
   @GetMapping("/delivery-logs")
   @PreAuthorize(

@@ -75,7 +75,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   private final ConsoleWorkflowQueryService workflowQueryService;
   private final ConsoleOpsQueryService opsQueryService;
 
-  // ── Ops ──────────────────────────────────────────────────────────────
 
   @Override
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
@@ -147,7 +146,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     return opsQueryService.approvals(request);
   }
 
-  // ── File ─────────────────────────────────────────────────────────────
 
   @Override
   public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
@@ -214,7 +212,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     return fileQueryService.filePipelineDetail(tenantId, id);
   }
 
-  // ── Job ──────────────────────────────────────────────────────────────
 
   @Override
   public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
@@ -249,7 +246,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     return jobQueryService.jobStepInstance(tenantId, id);
   }
 
-  // ── Workflow ─────────────────────────────────────────────────────────
 
   @Override
   public PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(

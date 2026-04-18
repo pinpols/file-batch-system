@@ -41,7 +41,6 @@ class ConfigPackageExcelWorkbookWriter {
 
   private static final String EMPTY = "";
 
-  // ── guide label constants ─────────────────────────────────────────────────
   private static final String GUIDE_IMPORT = "IMPORT";
   private static final String GUIDE_TIMEOUT_DESC = "超时秒数。";
   private static final String GUIDE_DESC_DESC = "描述。";
@@ -62,7 +61,6 @@ class ConfigPackageExcelWorkbookWriter {
   private static final String GUIDE_EMPTY_JSON = "{}";
   private static final String GUIDE_VERSION_ONE = "1";
 
-  // ── columns (reuse from validator) ────────────────────────────────────────
   static final List<String> JOB_COLUMNS =
       List.of(
           COL_TENANT_ID, COL_JOB_CODE, COL_JOB_NAME, COL_JOB_TYPE, COL_BIZ_TYPE, COL_QUEUE_CODE,
@@ -110,7 +108,6 @@ class ConfigPackageExcelWorkbookWriter {
           COL_TENANT_ID, COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION, COL_FROM_NODE_CODE,
           COL_TO_NODE_CODE, COL_EDGE_TYPE, COL_CONDITION_EXPR, COL_ENABLED);
 
-  // ── sheet definition registry ─────────────────────────────────────────────
 
   private record SheetDef(
       String name,
@@ -143,7 +140,6 @@ class ConfigPackageExcelWorkbookWriter {
                 this::applyWfEdgeValidations));
   }
 
-  // ── public workbook builders ──────────────────────────────────────────────
 
   byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50);
@@ -211,7 +207,6 @@ class ConfigPackageExcelWorkbookWriter {
     }
   }
 
-  // ── sheet writing ─────────────────────────────────────────────────────────
 
   private void writeDataSheet(
       Workbook wb, SheetDef def, List<Map<String, Object>> dataRows) {
@@ -252,7 +247,6 @@ class ConfigPackageExcelWorkbookWriter {
     setWidths(sheet, def.columns());
   }
 
-  // ── readme & guide ────────────────────────────────────────────────────────
 
   private void createReadmeSheet(Workbook wb) {
     Sheet sheet = wb.createSheet("README");
@@ -336,7 +330,6 @@ class ConfigPackageExcelWorkbookWriter {
     cell.setCellStyle(style);
   }
 
-  // ── validation appliers ───────────────────────────────────────────────────
 
   private void applyJobValidations(Sheet sheet) {
     addDropdownValidation(sheet, 3, JOB_TYPES.toArray(String[]::new), COL_JOB_TYPE, "请选择作业类型");
@@ -394,7 +387,6 @@ class ConfigPackageExcelWorkbookWriter {
     addBooleanValidation(sheet, new int[] {7}, COL_ENABLED, GUIDE_BOOL_HINT);
   }
 
-  // ── column guide builders ─────────────────────────────────────────────────
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildJobGuides() {
     return Map.ofEntries(

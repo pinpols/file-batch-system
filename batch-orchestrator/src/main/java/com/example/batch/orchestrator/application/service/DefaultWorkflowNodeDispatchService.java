@@ -37,6 +37,22 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 工作流 DAG 节点派发：按节点类型分三条路径派发，所有路径的幂等由 {@link #isNodeAlreadyActivated} 配合 {@code
+ * workflow_node_run} 行锁保证（见 {@code C-3}），防止同一节点被并发 dispatch 重复激活。
+ *
+ * <p>三种派发模式：
+ *
+ * <ul>
+ *   <li><b>GATEWAY / START</b>：本身无工作负载，合成"立即完成"的 node_run（RUNNING→SUCCESS 同事务）
+ *       后按条件解析下游节点并递归 dispatch，保证 DAG 流转不被无作业节点阻塞。
+ *   <li><b>JOB</b>：通过启动一个独立子 Job 实例来派发，在父 Job 中插入一对"虚拟"分区 + 任务
+ *       （状态直接为 RUNNING），子 Job 终态时通过 params snapshot 中的 {@code _parentVirtualTaskId}
+ *       回指父任务，复用 {@code DefaultTaskOutcomeService} 基于分区的 DAG 推进逻辑，避免再写一套子作业监听。
+ *   <li><b>TASK / FILE_STEP</b>：普通节点，走 {@code SchedulePlanBuilder} 生成分片 + 资源调度决策 +
+ *       创建任务 + 落 outbox 派发事件（同事务）。
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchService {
@@ -51,6 +67,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
   private final ObjectProvider<LaunchService> launchServiceProvider;
 
+  /**
+   * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量，
+   * 调用方据此推进 {@code job_instance.expected_partition_count}。返回 0 代表节点不具备 dispatch 条件
+   * （依赖未就绪 / 已被其他线程激活 / 节点定义缺失等），不是错误。
+   */
   @Override
   @Transactional
   public int dispatchNode(
@@ -193,6 +214,11 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     return newPartitions.size();
   }
 
+  /**
+   * GATEWAY / START 节点无实际工作负载，合成一条 RUNNING→SUCCESS 的 node_run（同事务），再按条件解析下游节点
+   * 并递归 dispatch。这样 DAG 流转不会在无作业节点处停滞等待 worker 回报。END 节点在下游解析时就地写 SUCCESS
+   * node_run，不再递归。
+   */
   private int dispatchGatewayNode(
       JobInstanceEntity jobInstance,
       WorkflowRunEntity workflowRun,

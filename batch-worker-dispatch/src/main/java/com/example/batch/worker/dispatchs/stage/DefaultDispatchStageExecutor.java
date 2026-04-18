@@ -81,7 +81,6 @@ public class DefaultDispatchStageExecutor
     return defaultStepDefinitions;
   }
 
-  // ─── AbstractStageExecutor template methods ──────────────────────────────
 
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(DispatchJobContext context) {
@@ -183,7 +182,6 @@ public class DefaultDispatchStageExecutor
     return "dispatch pipeline step flow contains a cycle";
   }
 
-  // ─── Private helpers ─────────────────────────────────────────────────────
 
   private DispatchStage toStage(String stageCode) {
     try {

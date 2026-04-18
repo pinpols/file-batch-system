@@ -144,7 +144,6 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     return new DagValidationResult(errors.isEmpty(), errors);
   }
 
-  // ---- internal helpers ----
 
   private void upsertNodesAndEdges(Long definitionId, WorkflowDefinitionSaveRequest request) {
     if (request.getNodes() != null) {

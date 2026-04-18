@@ -3,6 +3,9 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.service.ConsoleAuthApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.ConsolePrincipal;
+import com.example.batch.console.support.SseTicketService;
+import java.util.Map;
 import com.example.batch.console.web.request.ConsoleLoginRequest;
 import com.example.batch.console.web.response.ConsoleAuthProfileResponse;
 import com.example.batch.console.web.response.ConsoleAuthTokenResponse;
@@ -26,6 +29,7 @@ public class ConsoleAuthController {
 
   private final ConsoleAuthApplicationService authApplicationService;
   private final ConsoleResponseFactory responseFactory;
+  private final SseTicketService sseTicketService;
 
   /** 使用平台库中的控制台账号进行登录并签发 JWT。 */
   @PostMapping("/login")
@@ -41,10 +45,19 @@ public class ConsoleAuthController {
     return responseFactory.success(authApplicationService.issueToken(authentication));
   }
 
-  /** 当前用户画像（租户、角色等）。 */
+  /** 当前用户画像（租户、角色、菜单）。 */
   @GetMapping("/me")
   @PreAuthorize("isAuthenticated()")
   public CommonResponse<ConsoleAuthProfileResponse> me(Authentication authentication) {
     return responseFactory.success(authApplicationService.profile(authentication));
+  }
+
+  /** 签发一次性 SSE ticket（5min 有效，用于 EventSource 连接鉴权）。 */
+  @PostMapping("/stream/ticket")
+  @PreAuthorize("isAuthenticated()")
+  public CommonResponse<Map<String, String>> streamTicket(Authentication authentication) {
+    ConsolePrincipal principal = (ConsolePrincipal) authentication.getPrincipal();
+    String ticket = sseTicketService.issue(principal.username(), principal.tenantId());
+    return responseFactory.success(Map.of("ticket", ticket));
   }
 }

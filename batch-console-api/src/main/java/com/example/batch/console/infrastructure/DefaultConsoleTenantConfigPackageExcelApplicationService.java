@@ -83,7 +83,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private static final MediaType XLSX_MEDIA_TYPE =
       MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-  // ── dependencies ──────────────────────────────────────────────────────────
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final TenantConfigPackageExcelImportStore importStore;
@@ -104,7 +103,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private final ConfigPackageExcelWorkbookWriter workbookWriter =
       new ConfigPackageExcelWorkbookWriter();
 
-  // ── public API ────────────────────────────────────────────────────────────
 
   @Override
   public ResponseEntity<InputStreamResource> exportPackage(String tenantId) {
@@ -209,7 +207,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         wfStats.updated());
   }
 
-  // ── parsing ───────────────────────────────────────────────────────────────
 
   private PackageExcelSession parseWorkbook(byte[] bytes, String tenantId, String fileName) {
     try (Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
@@ -259,7 +256,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return rows;
   }
 
-  // ── apply ─────────────────────────────────────────────────────────────────
 
   private ApplyStats applyJobs(List<Map<String, String>> rows, ApplyContext ctx) {
     int inserted = 0, updated = 0;
@@ -495,7 +491,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     }
   }
 
-  // ── pipeline param builders ───────────────────────────────────────────────
 
   private Map<String, Object> buildPipelineInsertParams(Map<String, String> row, ApplyContext ctx) {
     Map<String, Object> p = new LinkedHashMap<>();
@@ -537,7 +532,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return p;
   }
 
-  // ── export helpers ────────────────────────────────────────────────────────
 
   private List<Map<String, Object>> toJobRows(List<JobDefinitionEntity> entities) {
     return entities.stream()
@@ -659,7 +653,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return result;
   }
 
-  // ── response builders ─────────────────────────────────────────────────────
 
   private TenantConfigPackageExcelPreviewResponse toPreviewResponse(
       String uploadToken, String fileName, PackageValidationResult result) {
@@ -687,7 +680,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return new SheetStats(r.sheetName(), r.total(), r.valid(), r.invalid());
   }
 
-  // ── session ───────────────────────────────────────────────────────────────
 
   private PackageExcelSession loadSession(String uploadToken) {
     PackageExcelSession session =
@@ -696,7 +688,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return session;
   }
 
-  // ── utilities ─────────────────────────────────────────────────────────────
 
   private static String normalize(String value) {
     return ConsoleTextSanitizer.normalize(value);
@@ -775,7 +766,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         .body(new InputStreamResource(new ByteArrayInputStream(bytes)));
   }
 
-  // ── internal records ──────────────────────────────────────────────────────
 
   private record ApplyContext(String tenantId, String operatorId, String reason, String traceId) {}
 

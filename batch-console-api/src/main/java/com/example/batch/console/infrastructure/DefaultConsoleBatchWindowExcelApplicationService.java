@@ -116,7 +116,6 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-  // ── interface delegation ──
 
   @Override
   public ResponseEntity<InputStreamResource> exportBatchWindows(String tenantId) {
@@ -132,7 +131,6 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     return doApply(uploadToken, request.getReason());
   }
 
-  // ── abstract method implementations ──
 
   @Override
   protected String sheetName() {
@@ -329,7 +327,6 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-  // ── entity-specific helpers ──
 
   private static String requireTime(
       Map<String, String> values, String key, List<String> issues) {
@@ -344,7 +341,6 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     return normalized;
   }
 
-  // ── internal records ──
 
   @Builder
   record WindowRow(

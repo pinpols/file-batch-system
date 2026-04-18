@@ -33,7 +33,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     this.objectMapper = objectMapper;
   }
 
-  // ─── 列布局解析 ────────────────────────────────────────────
 
   /** 解析分隔格式的列布局，优先级：模板配置 &gt; 插件描述 &gt; 首页字段推断。 */
   protected List<ColumnLayout> resolveDelimitedColumns(
@@ -99,7 +98,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return inferred;
   }
 
-  // ─── 模板配置辅助方法 ─────────────────────────────────────────────
 
   protected List<ColumnLayout> templateDelimitedColumns(Map<String, Object> templateConfig) {
     if (templateConfig == null || templateConfig.isEmpty()) {
@@ -186,7 +184,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return idx >= 0 && idx + 1 < source.length() ? source.substring(idx + 1) : source;
   }
 
-  // ─── 格式配置 ───────────────────────────────────────────────────────
 
   /** 从模板配置中解析分隔格式参数（分隔符、引号字符、引号策略、转义策略、表头行数）。 */
   protected DelimitedFormatConfig resolveDelimitedFormatConfig(Map<String, Object> templateConfig) {
@@ -240,7 +237,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return cleaned.length() > 31 ? cleaned.substring(0, 31) : cleaned;
   }
 
-  // ─── 值解析 ────────────────────────────────────────────────────
 
   protected Object resolveDelimitedValue(
       Map<String, Object> batch, Map<String, Object> detail, String source) {
@@ -272,7 +268,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return fallback;
   }
 
-  // ─── 分隔格式化 ────────────────────────────────────────────────────
 
   protected String csv(Object value, DelimitedFormatConfig formatConfig) {
     String text = textValue(value);
@@ -313,7 +308,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     };
   }
 
-  // ─── 固定宽度格式化 ──────────────────────────────────────────────
 
   protected String fixedWidthLine(
       List<ColumnLayout> columns, int recordLength, Function<ColumnLayout, String> valueMapper) {
@@ -355,7 +349,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return value + " ".repeat(length - value.length());
   }
 
-  // ─── 通用工具方法 ────────────────────────────────────────────────────
 
   protected Object firstNonNull(Object... values) {
     for (Object value : values) {
@@ -420,7 +413,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return padChar.charAt(0);
   }
 
-  // ─── 内部类型 ─────────────────────────────────────────────────────────
 
   /** 列布局描述，包含表头、数据源路径、宽度及对齐信息。 */
   public record ColumnLayout(

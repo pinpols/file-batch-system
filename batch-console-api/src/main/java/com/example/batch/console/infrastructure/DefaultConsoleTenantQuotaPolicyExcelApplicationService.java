@@ -89,7 +89,6 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-  // ── interface delegation ──
 
   @Override
   public ResponseEntity<InputStreamResource> exportQuotaPolicies(
@@ -106,7 +105,6 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
     return doApply(uploadToken, request.getReason());
   }
 
-  // ── abstract method implementations ──
 
   @Override
   protected String sheetName() {
@@ -271,7 +269,6 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-  // ── internal records ──
 
   @Builder
   record PolicyRow(

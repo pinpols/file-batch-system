@@ -185,7 +185,6 @@ public class ParseStep implements ImportStageStep {
     return parser.parse(context, request, writer);
   }
 
-  // ── format & charset resolution ───────────────────────────────────────────
 
   private String resolveFormat(
       ImportPayload importPayload, Object templateConfigObject, String payloadText) {
@@ -221,7 +220,6 @@ public class ParseStep implements ImportStageStep {
     return StandardCharsets.UTF_8;
   }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
 
   private boolean preserveLogicalRow(ImportJobContext context, Object templateConfigObject) {
     if (!(templateConfigObject instanceof Map<?, ?> templateConfig)) {
