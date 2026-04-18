@@ -338,7 +338,7 @@ class ConsoleOpsQueryService {
         display(entity.getActionType()),
         display(entity.getTargetType()),
         display(entity.getTargetId()),
-        display(entity.getPayloadJson()),
+        entity.getPayloadJson(),
         display(entity.getApprovalStatus()),
         display(entity.getRequesterId()),
         display(entity.getApproverId()),
