@@ -15,6 +15,22 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * DAG 解析层：负责工作流节点间的可达性判定，解耦状态机与拓扑。
+ *
+ * <p>两个方向：
+ *
+ * <ul>
+ *   <li><b>下游（outgoing）</b>：{@link #resolveInitialNodes} / {@link #resolveNextNodes} 按 edge 类型
+ *       筛选可 dispatch 的下游节点。edge 类型 {@code ALWAYS / SUCCESS / FAILURE / CONDITION}
+ *       决定筛选逻辑（CONDITION 走 {@link WorkflowConditionEvaluator} 解析表达式）。
+ *   <li><b>上游（incoming）</b>：{@link #isNodeReadyForDispatch} 校验所有前驱 node_run 达到终态
+ *       （{@code SUCCESS / FAILED / SKIPPED}）且满足 join 规则后方可派发。
+ * </ul>
+ *
+ * <p>Join 规则（{@code ALL / ANY / N_OF}）写入 {@code workflow_node.node_params} 的 {@code joinMode}
+ * 字段，避免为 join 配置单独扩一张表；详见 {@link #resolveJoinRule}。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultWorkflowDagService implements WorkflowDagService {

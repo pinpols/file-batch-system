@@ -34,6 +34,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 补偿指令统一入口：按 {@code compensationType} 路由到 6 种处理器（JOB / STEP / PARTITION / FILE / BATCH / DLQ），
+ * 并把命令生命周期（RUNNING → SUCCESS/FAILED）与补偿日志写入串在同一事务内。
+ *
+ * <p>关键不变量：
+ *
+ * <ul>
+ *   <li><b>防重双保险</b>：{@link #assertNoRunningConflict} 先查 RUNNING 计数，DB 还有唯一约束兜底
+ *       （{@code DataIntegrityViolationException} 转为 {@code CONFLICT}），处理并发提交的 TOCTOU。
+ *   <li><b>状态必达</b>：handler 抛异常时必须更新命令状态为 FAILED 并写 {@code job_execution_log}，
+ *       然后再 rethrow；缺任何一步会让命令停留在 RUNNING 造成"幽灵补偿"。
+ *   <li><b>路由表在构造期构建</b>：{@link #handlersByType} 是不可变 Map，避免分派时 if-chain 并保证 O(1)。
+ * </ul>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -76,6 +90,12 @@ public class DefaultCompensationService implements CompensationService {
     }
   }
 
+  /**
+   * 提交补偿指令：落库 command → 路由到 handler 执行 → 统一回写 SUCCESS/FAILED 状态与日志。
+   *
+   * <p>执行链上 handler 抛异常时，先把 FAILED 状态 + 日志写完再 rethrow——绝不能跳过，否则命令卡在 RUNNING
+   * 将永久阻塞同目标的后续补偿提交（见 {@link #assertNoRunningConflict} 与 DB 唯一约束）。
+   */
   @Override
   @Transactional
   public String submit(CompensationSubmitCommand command) {
