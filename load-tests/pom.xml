@@ -22,7 +22,7 @@
     -->
     <groupId>com.example.batch</groupId>
     <artifactId>batch-load-tests</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>${revision}</version>
     <packaging>jar</packaging>
     <name>batch-load-tests</name>
     <description>Gatling load tests and capacity baseline for batch-platform</description>
