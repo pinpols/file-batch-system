@@ -486,9 +486,9 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             .map(
                 j ->
                     Map.of(
-                        "id", j.getId(),
-                        "code", j.getCode(),
-                        "name", j.getName() != null ? j.getName() : ""))
+                        "id", j.id(),
+                        "code", j.code(),
+                        "name", j.name() != null ? j.name() : ""))
             .toList());
     result.put("dependentJobCount", dependentJobs.size());
     return result;

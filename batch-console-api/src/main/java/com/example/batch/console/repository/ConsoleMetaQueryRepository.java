@@ -58,9 +58,5 @@ public interface ConsoleMetaQueryRepository extends Repository<ConsoleJdbcQueryA
       """)
   List<SimpleOptionView> bizTypeOptions(@Param("tenantId") String tenantId);
 
-  interface SimpleOptionView {
-    String getCode();
-
-    String getLabel();
-  }
+  record SimpleOptionView(String code, String label) {}
 }

@@ -31,8 +31,8 @@ public class ConsoleDashboardQueryService {
     long total = 0L;
     for (ConsoleDashboardQueryRepository.StatusCountView row :
         repository.jobStatusCounts(resolved)) {
-      long count = row.getCount() == null ? 0L : row.getCount();
-      byStatus.put(row.getStatus(), count);
+      long count = row.count() == null ? 0L : row.count();
+      byStatus.put(row.status(), count);
       total += count;
     }
     result.put("byStatus", byStatus);
@@ -44,11 +44,11 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         KEY_DAY,
-                        row.getDay(),
+                        row.day(),
                         "status",
-                        row.getStatus(),
+                        row.status(),
                         KEY_COUNT,
-                        row.getCount() == null ? 0L : row.getCount()))
+                        row.count() == null ? 0L : row.count()))
             .toList());
     return result;
   }
@@ -63,9 +63,9 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         "type",
-                        row.getType(),
+                        row.type(),
                         KEY_COUNT,
-                        row.getCount() == null ? 0L : row.getCount()))
+                        row.count() == null ? 0L : row.count()))
             .toList());
     result.put(
         KEY_DAILY_TREND,
@@ -74,9 +74,9 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         KEY_DAY,
-                        row.getDay(),
+                        row.day(),
                         KEY_COUNT,
-                        row.getCount() == null ? 0L : row.getCount()))
+                        row.count() == null ? 0L : row.count()))
             .toList());
     return result;
   }
@@ -91,9 +91,9 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         "status",
-                        row.getStatus(),
+                        row.status(),
                         KEY_COUNT,
-                        row.getCount() == null ? 0L : row.getCount()))
+                        row.count() == null ? 0L : row.count()))
             .toList());
     result.put(
         "byWorkerGroup",
@@ -102,11 +102,11 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         "workerGroup",
-                        row.getWorkerGroup(),
+                        row.workerGroup(),
                         "status",
-                        row.getStatus(),
+                        row.status(),
                         KEY_COUNT,
-                        row.getCount() == null ? 0L : row.getCount()))
+                        row.count() == null ? 0L : row.count()))
             .toList());
     result.put(
         "activePartitionsByWorker",
@@ -115,9 +115,9 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         "workerCode",
-                        row.getWorkerCode(),
+                        row.workerCode(),
                         "activePartitions",
-                        row.getActivePartitions() == null ? 0L : row.getActivePartitions()))
+                        row.activePartitions() == null ? 0L : row.activePartitions()))
             .toList());
     return result;
   }
@@ -132,9 +132,9 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         "severity",
-                        row.getSeverity(),
+                        row.severity(),
                         KEY_COUNT,
-                        row.getCount() == null ? 0L : row.getCount()))
+                        row.count() == null ? 0L : row.count()))
             .toList());
     result.put(
         KEY_DAILY_TREND,
@@ -143,11 +143,11 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         KEY_DAY,
-                        row.getDay(),
+                        row.day(),
                         "severity",
-                        row.getSeverity(),
+                        row.severity(),
                         KEY_COUNT,
-                        row.getCount() == null ? 0L : row.getCount()))
+                        row.count() == null ? 0L : row.count()))
             .toList());
     return result;
   }
@@ -159,13 +159,13 @@ public class ConsoleDashboardQueryService {
         .map(
             row -> {
               Map<String, Object> item = new LinkedHashMap<>();
-              item.put("id", row.getId());
-              item.put("jobCode", row.getJobCode());
-              item.put("instanceNo", row.getInstanceNo());
-              item.put("instanceStatus", row.getInstanceStatus());
-              int expected = row.getExpectedPartitions() == null ? 0 : row.getExpectedPartitions();
-              int success = row.getSuccessPartitions() == null ? 0 : row.getSuccessPartitions();
-              int failed = row.getFailedPartitions() == null ? 0 : row.getFailedPartitions();
+              item.put("id", row.id());
+              item.put("jobCode", row.jobCode());
+              item.put("instanceNo", row.instanceNo());
+              item.put("instanceStatus", row.instanceStatus());
+              int expected = row.expectedPartitions() == null ? 0 : row.expectedPartitions();
+              int success = row.successPartitions() == null ? 0 : row.successPartitions();
+              int failed = row.failedPartitions() == null ? 0 : row.failedPartitions();
               item.put("expectedPartitions", expected);
               item.put("successPartitions", success);
               item.put("failedPartitions", failed);
@@ -173,8 +173,8 @@ public class ConsoleDashboardQueryService {
               item.put(
                   "progressPercent",
                   expected > 0 ? Math.round((success + failed) * 100.0 / expected) : 0);
-              item.put("startedAt", row.getStartedAt());
-              item.put("finishedAt", row.getFinishedAt());
+              item.put("startedAt", row.startedAt());
+              item.put("finishedAt", row.finishedAt());
               return item;
             })
         .toList();
@@ -210,16 +210,16 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> item = new LinkedHashMap<>();
-                  item.put("jobCode", row.getJobCode());
-                  item.put("jobName", row.getJobName());
-                  item.put("totalInstances", nullToZero(row.getTotalInstances()));
-                  item.put("successCount", nullToZero(row.getSuccessCount()));
-                  item.put("failedCount", nullToZero(row.getFailedCount()));
-                  item.put("slaBreached", nullToZero(row.getSlaBreached()));
-                  item.put("slaOnTime", nullToZero(row.getSlaOnTime()));
-                  item.put("avgDurationSeconds", row.getAvgDurationSeconds());
-                  item.put("maxDurationSeconds", row.getMaxDurationSeconds());
-                  item.put("totalPartitions", nullToZero(row.getTotalPartitions()));
+                  item.put("jobCode", row.jobCode());
+                  item.put("jobName", row.jobName());
+                  item.put("totalInstances", nullToZero(row.totalInstances()));
+                  item.put("successCount", nullToZero(row.successCount()));
+                  item.put("failedCount", nullToZero(row.failedCount()));
+                  item.put("slaBreached", nullToZero(row.slaBreached()));
+                  item.put("slaOnTime", nullToZero(row.slaOnTime()));
+                  item.put("avgDurationSeconds", row.avgDurationSeconds());
+                  item.put("maxDurationSeconds", row.maxDurationSeconds());
+                  item.put("totalPartitions", nullToZero(row.totalPartitions()));
                   return item;
                 })
             .toList());
@@ -242,11 +242,11 @@ public class ConsoleDashboardQueryService {
                 row ->
                     Map.of(
                         KEY_DAY,
-                        row.getDay(),
+                        row.day(),
                         "breached",
-                        row.getBreached() == null ? 0L : row.getBreached(),
+                        row.breached() == null ? 0L : row.breached(),
                         "onTime",
-                        row.getOnTime() == null ? 0L : row.getOnTime()))
+                        row.onTime() == null ? 0L : row.onTime()))
             .toList());
     return result;
   }
