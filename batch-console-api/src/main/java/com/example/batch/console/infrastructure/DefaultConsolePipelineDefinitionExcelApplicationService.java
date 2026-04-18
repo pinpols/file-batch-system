@@ -369,7 +369,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         appliedSteps);
   }
 
-  // ---- session loading ----
 
   private ParsedSession loadSession(String uploadToken) {
     PipelineDefinitionExcelImportStore.ExcelImportSession session =
@@ -383,7 +382,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         session.stepRows());
   }
 
-  // ---- parsing ----
 
   private ParsedWorkbook parseWorkbook(byte[] bytes, String tenantId, String originalFileName)
       throws IOException {
@@ -440,7 +438,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     return rows;
   }
 
-  // ---- validation ----
 
   private ValidationResult validateRows(ParsedSession session) {
     List<PipelineRow> validPipelines = new ArrayList<>();
@@ -543,7 +540,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         .build();
   }
 
-  // ---- field validators ----
 
   private String requireText(
       Map<String, String> values, String key, int maxLength, List<String> issues) {
@@ -639,7 +635,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     }
   }
 
-  // ---- Excel I/O helpers ----
 
   private String normalize(String value) {
     return ConsoleTextSanitizer.normalize(value);
@@ -695,7 +690,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     return fileName;
   }
 
-  // ---- workbook writing ----
 
   private byte[] writeWorkbook(
       List<Map<String, Object>> pipelines, List<Map<String, Object>> steps) {
@@ -891,7 +885,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     ConsoleExcelStyles.createValidationSheet(workbook);
   }
 
-  // ---- DB parameter building ----
 
   private Map<String, Object> buildPipelineInsertParams(String tenantId, PipelineRow row) {
     Map<String, Object> params = new LinkedHashMap<>();
@@ -936,7 +929,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     return params;
   }
 
-  // ---- response mapping ----
 
   private List<PipelineDefinitionDetailResponse> toPipelineResponses(ValidationResult result) {
     Map<String, List<StepRow>> stepsByKey =
@@ -984,7 +976,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         .toList();
   }
 
-  // ---- change log ----
 
   private void logChange(
       String tenantId,
@@ -1033,7 +1024,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     return values;
   }
 
-  // ---- internal records ----
 
   private record ParsedWorkbook(
       String fileName,

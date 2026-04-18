@@ -40,7 +40,6 @@ public class ParseSupport {
     return objectMapper;
   }
 
-  // ── config resolution ───────────────────────────────────────────────────────
 
   public Object templateFieldMappings(Object templateConfigObject) {
     if (!(templateConfigObject instanceof Map<?, ?> map)) {
@@ -104,7 +103,6 @@ public class ParseSupport {
     return defaultValue;
   }
 
-  // ── schema collection ───────────────────────────────────────────────────────
 
   public void collectSchemaFields(ImportJobContext context, JsonNode node) {
     if (context == null || node == null || !node.isObject()) {
@@ -137,7 +135,6 @@ public class ParseSupport {
     return fields;
   }
 
-  // ── record writing ──────────────────────────────────────────────────────────
 
   public void writeParsedRecord(
       ImportJobContext context,
@@ -194,7 +191,6 @@ public class ParseSupport {
     }
   }
 
-  // ── error recording ─────────────────────────────────────────────────────────
 
   public void recordParseError(
       ImportJobContext context, long recordNo, String errorCode, String message, Object rawRecord) {
@@ -214,7 +210,6 @@ public class ParseSupport {
     return recordGovernanceService.withinThreshold(context);
   }
 
-  // ── utility ─────────────────────────────────────────────────────────────────
 
   public long numberValue(Object value) {
     if (value instanceof Number number) {

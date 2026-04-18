@@ -114,7 +114,6 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-  // ── interface delegation ──
 
   @Override
   public ResponseEntity<InputStreamResource> exportAlertRoutings(
@@ -137,7 +136,6 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
     return doApply(uploadToken, request.getReason());
   }
 
-  // ── abstract method implementations ──
 
   @Override
   protected String sheetName() {
@@ -324,7 +322,6 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-  // ── internal records ──
 
   @Builder
   record RoutingRow(

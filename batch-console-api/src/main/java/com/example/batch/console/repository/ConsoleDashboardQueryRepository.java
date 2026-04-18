@@ -185,7 +185,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
     Long getCount();
   }
 
-  // ── 配置依赖分析 ──────────────────────────────────────
 
   @Query(
       """
@@ -231,7 +230,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
     String getName();
   }
 
-  // ── 执行进度查询（轻量） ──────────────────────────────
 
   @Query(
       """
@@ -275,7 +273,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
     Instant getFinishedAt();
   }
 
-  // ── 租户用量统计 ──────────────────────────────────────
 
   @Query(
       """
@@ -315,7 +312,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
       """)
   Long countFileTemplates(@Param("tenantId") String tenantId);
 
-  // ── SLA 报表（按 job 维度） ─────────────────────────────
 
   @Query(
       """

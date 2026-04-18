@@ -63,7 +63,6 @@ public class TenantConfigBatchInitRequest {
     UPSERT
   }
 
-  // ------------------------------------------------------------------ Spec types
 
   @Data
   public static class JobDefinitionSpec {

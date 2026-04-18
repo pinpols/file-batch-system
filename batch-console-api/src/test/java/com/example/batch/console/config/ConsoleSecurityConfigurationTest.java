@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.console.support.ConsoleAuthenticationFilter;
+import com.example.batch.console.support.SseTicketService;
 import com.example.batch.console.support.ConsoleJwtService;
 import com.example.batch.console.support.ConsolePrincipal;
 import com.example.batch.console.support.ConsoleSecurityResponseWriter;
@@ -57,7 +58,8 @@ class ConsoleSecurityConfigurationTest {
             properties,
             batchSecurityProperties,
             jwtService,
-            new ConsoleSecurityResponseWriter(new ObjectMapper()));
+            new ConsoleSecurityResponseWriter(new ObjectMapper()),
+            Mockito.mock(SseTicketService.class));
     SecurityContextHolder.clearContext();
   }
 

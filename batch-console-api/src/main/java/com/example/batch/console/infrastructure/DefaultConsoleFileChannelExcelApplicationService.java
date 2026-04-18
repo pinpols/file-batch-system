@@ -129,7 +129,6 @@ public class DefaultConsoleFileChannelExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-  // ── interface delegation ──
 
   @Override
   public ResponseEntity<InputStreamResource> exportFileChannels(FileChannelQueryRequest request) {
@@ -150,7 +149,6 @@ public class DefaultConsoleFileChannelExcelApplicationService
     return doApply(uploadToken, request.getReason());
   }
 
-  // ── abstract method implementations ──
 
   @Override
   protected String sheetName() {
@@ -358,7 +356,6 @@ public class DefaultConsoleFileChannelExcelApplicationService
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-  // ── field parsing helpers ──
 
   private static String requireJson(
       Map<String, String> values, String key, List<String> issues) {
@@ -376,7 +373,6 @@ public class DefaultConsoleFileChannelExcelApplicationService
     }
   }
 
-  // ── internal records ──
 
   @Builder
   record ChannelRow(

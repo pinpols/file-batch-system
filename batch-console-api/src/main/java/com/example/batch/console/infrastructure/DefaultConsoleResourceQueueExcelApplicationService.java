@@ -113,7 +113,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-  // ── interface delegation ──
 
   @Override
   public ResponseEntity<InputStreamResource> exportResourceQueues(
@@ -130,7 +129,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
     return doApply(uploadToken, request.getReason());
   }
 
-  // ── abstract method implementations ──
 
   @Override
   protected String sheetName() {
@@ -328,7 +326,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-  // ── internal records ──
 
   @Builder
   record QueueRow(

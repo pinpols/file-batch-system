@@ -46,7 +46,6 @@ public class DefaultConsoleNotificationApplicationService
   private final SubscriptionRuleMapper ruleMapper;
   private final NotificationDeliveryLogMapper deliveryLogMapper;
 
-  // ── 通知渠道 ──
 
   @Override
   public List<Map<String, Object>> listChannels(String tenantId) {
@@ -129,7 +128,6 @@ public class DefaultConsoleNotificationApplicationService
     channelMapper.deleteByCode(resolved, channelCode);
   }
 
-  // ── 订阅规则 ──
 
   @Override
   public List<Map<String, Object>> listRules(String tenantId) {
@@ -211,7 +209,6 @@ public class DefaultConsoleNotificationApplicationService
     ruleMapper.deleteById(resolved, ruleId);
   }
 
-  // ── 投递日志 ──
 
   @Override
   public List<Map<String, Object>> deliveryLogs(String tenantId, int limit) {
@@ -219,7 +216,6 @@ public class DefaultConsoleNotificationApplicationService
         tenantGuard.resolveTenant(tenantId), Math.min(limit, 500));
   }
 
-  // ── 测试通知 ──
 
   @Override
   public Map<String, Object> testChannel(String tenantId, String channelCode) {
@@ -249,7 +245,6 @@ public class DefaultConsoleNotificationApplicationService
         KEY_CHANNEL_CODE, channelCode, "status", "OK", "message", "test notification dispatched");
   }
 
-  // ── helpers ──
 
   private static String str(Map<String, Object> map, String key) {
     Object v = map.get(key);

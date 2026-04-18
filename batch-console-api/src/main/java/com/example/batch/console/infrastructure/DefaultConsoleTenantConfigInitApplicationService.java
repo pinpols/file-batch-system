@@ -275,7 +275,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     }
   }
 
-  // ------------------------------------------------------------------ job definitions
 
   private ItemStats applyJobDefinitions(List<JobDefinitionSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -351,7 +350,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
   }
 
-  // ------------------------------------------------------------------ workflow definitions
 
   private ItemStats applyWorkflowDefinitions(List<WorkflowDefinitionSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -427,7 +425,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     }
   }
 
-  // ------------------------------------------------------------------ pipeline definitions
 
   private ItemStats applyPipelineDefinitions(List<PipelineDefinitionSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -519,7 +516,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     }
   }
 
-  // ------------------------------------------------------------------ file channels
 
   private ItemStats applyFileChannels(List<FileChannelSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -551,7 +547,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     fileChannelConfigMapper.upsertFileChannelConfig(param);
   }
 
-  // ------------------------------------------------------------------ file templates
 
   private ItemStats applyFileTemplates(List<FileTemplateSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -640,7 +635,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     fileTemplateConfigMapper.upsertFileTemplateConfig(p);
   }
 
-  // ------------------------------------------------------------------ resource queues
 
   private ItemStats applyResourceQueues(List<ResourceQueueSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -674,7 +668,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     resourceQueueMapper.upsertResourceQueue(p);
   }
 
-  // ------------------------------------------------------------------ batch windows
 
   private ItemStats applyBatchWindows(List<BatchWindowSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -704,7 +697,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     batchWindowMapper.upsertBatchWindow(p);
   }
 
-  // ------------------------------------------------------------------ business calendars
 
   private ItemStats applyBusinessCalendars(List<BusinessCalendarSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -761,7 +753,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     }
   }
 
-  // ------------------------------------------------------------------ quota policies
 
   private ItemStats applyQuotaPolicies(List<TenantQuotaPolicySpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -789,7 +780,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     tenantQuotaPolicyMapper.upsertTenantQuotaPolicy(p);
   }
 
-  // ------------------------------------------------------------------ alert routings
 
   private ItemStats applyAlertRoutings(List<AlertRoutingSpec> specs, ApplyContext ctx) {
     return applySpecs(

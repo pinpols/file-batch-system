@@ -53,19 +53,16 @@ class ConsoleJobOpsSupport {
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final Environment environment;
 
-  // ── constants ──────────────────────────────────────────────────────────
 
   static String jobTypeCompensation() {
     return JOB_TYPE_COMPENSATION;
   }
 
-  // ── tenant resolution ──────────────────────────────────────────────────
 
   String resolveTenant(String requestTenantId) {
     return tenantGuard.resolveTenant(requestTenantId);
   }
 
-  // ── event publishing ───────────────────────────────────────────────────
 
   void publishRefresh(String tenantId) {
     domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");
@@ -75,7 +72,6 @@ class ConsoleJobOpsSupport {
     domainEventPublisher.publishSummaryRefresh(tenantId);
   }
 
-  // ── trigger delegation ─────────────────────────────────────────────────
 
   String delegateLaunch(
       String tenantId,
@@ -109,7 +105,6 @@ class ConsoleJobOpsSupport {
     return response.data().instanceNo();
   }
 
-  // ── compensation submission ────────────────────────────────────────────
 
   String submitCompensation(CompensationPayload payload, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
@@ -132,7 +127,6 @@ class ConsoleJobOpsSupport {
     return response.commandNo();
   }
 
-  // ── recovery trigger ───────────────────────────────────────────────────
 
   private record RecoveryOperationResponse(String operationNo) {}
 
@@ -158,7 +152,6 @@ class ConsoleJobOpsSupport {
     return response.data().operationNo();
   }
 
-  // ── approval submission ────────────────────────────────────────────────
 
   String submitApproval(ApprovalSubmitContext ctx) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
@@ -208,7 +201,6 @@ class ConsoleJobOpsSupport {
     }
   }
 
-  // ── utility methods ────────────────────────────────────────────────────
 
   boolean hasText(String text) {
     return text != null && !text.isBlank();
@@ -279,7 +271,6 @@ class ConsoleJobOpsSupport {
     return null;
   }
 
-  // ── inner DTOs ─────────────────────────────────────────────────────────
 
   record ApprovalSubmitContext(
       String approvalType,

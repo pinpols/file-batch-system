@@ -40,7 +40,6 @@ public class ConsoleTenantApplicationService {
   private final WorkflowRunMapper workflowRunMapper;
   private final ConsoleTriggerProxyService triggerProxyService;
 
-  // ── commands ──
 
   public record CreateTenantCommand(
       String tenantId,
@@ -55,7 +54,6 @@ public class ConsoleTenantApplicationService {
   public record BatchCreateTenantCommand(
       List<TenantSpec> tenants, String usernamePrefix, String plainPassword, String operator) {}
 
-  // ── query ──
 
   public PageResponse<ConsoleTenantResponse> listTenants(
       String keyword, String status, PageRequest pageRequest) {
@@ -71,7 +69,6 @@ public class ConsoleTenantApplicationService {
             tenantMapper.selectByTenantId(tenantId), "tenant not found: " + tenantId));
   }
 
-  // ── mutation ──
 
   @Transactional
   public ConsoleTenantResponse createTenant(CreateTenantCommand cmd) {
@@ -159,7 +156,6 @@ public class ConsoleTenantApplicationService {
     return toResponse(tenantMapper.selectByTenantId(tenantId));
   }
 
-  // ── internal ──
 
   private void insertTenantWithAccount(
       String tenantId,

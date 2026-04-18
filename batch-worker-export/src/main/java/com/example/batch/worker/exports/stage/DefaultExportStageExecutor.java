@@ -81,7 +81,6 @@ public class DefaultExportStageExecutor
     return defaultStepDefinitions;
   }
 
-  // ─── AbstractStageExecutor 模板方法 ──────────────────────────────
 
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(ExportJobContext context) {
@@ -180,7 +179,6 @@ public class DefaultExportStageExecutor
     return "导出 pipeline 步骤流程存在循环依赖";
   }
 
-  // ─── 私有辅助方法 ─────────────────────────────────────────────────────
 
   private ExportStage toStage(String stageCode) {
     try {

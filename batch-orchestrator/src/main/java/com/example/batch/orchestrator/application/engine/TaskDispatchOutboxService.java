@@ -58,6 +58,10 @@ public class TaskDispatchOutboxService {
     writeDispatchEvent(jobInstance, task, partition, traceId, eventKey, null);
   }
 
+  /**
+   * 带 {@code runModeOverride} 的写入重载：retry / reclaim 等再派发场景可把 run_mode 注入到任务 payload 中，
+   * worker 据此区分"首次执行"与"补偿/重放"行为；传 null 保留 payload 原状。
+   */
   @Transactional(propagation = Propagation.MANDATORY)
   public void writeDispatchEvent(
       JobInstanceEntity jobInstance,

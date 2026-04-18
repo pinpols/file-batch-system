@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.example.batch.console.support.SseTicketService;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -40,7 +41,8 @@ class ConsoleAuthControllerTest {
     mockMvc =
         MockMvcBuilders.standaloneSetup(
                 new ConsoleAuthController(
-                    authApplicationService, new ConsoleResponseFactory(requestMetadataResolver)))
+                    authApplicationService, new ConsoleResponseFactory(requestMetadataResolver),
+                    Mockito.mock(SseTicketService.class)))
             .build();
   }
 

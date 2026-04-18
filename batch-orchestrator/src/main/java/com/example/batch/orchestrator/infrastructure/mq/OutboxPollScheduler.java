@@ -120,8 +120,6 @@ public class OutboxPollScheduler {
     }
   }
 
-  // ── 内部 ──────────────────────────────────────────────────────────────────
-
   private void pollAndReschedule() {
     if (!running.compareAndSet(false, true)) {
       // 上一轮仍在执行，视为繁忙但不累积任务，退避后重试

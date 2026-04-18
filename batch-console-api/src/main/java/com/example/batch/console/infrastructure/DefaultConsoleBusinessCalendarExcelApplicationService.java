@@ -359,7 +359,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     return appliedHolidayRows;
   }
 
-  // ── session ──
 
   private ParsedSession loadSession(String uploadToken) {
     BusinessCalendarExcelImportStore.ExcelImportSession session =
@@ -373,7 +372,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         session.holidayRows());
   }
 
-  // ── parse ──
 
   private ParsedWorkbook parseWorkbook(byte[] bytes, String tenantId, String originalFileName)
       throws IOException {
@@ -444,7 +442,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     return rows;
   }
 
-  // ── validation ──
 
   private ValidationResult validateAll(ParsedSession session) {
     List<CalendarRow> calendarRows = new ArrayList<>();
@@ -543,7 +540,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         .build();
   }
 
-  // ── field validators ──
 
   private String requireText(
       Map<String, String> values, String key, int maxLength, List<String> issues) {
@@ -639,7 +635,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     }
   }
 
-  // ── Excel read helpers ──
 
   private String normalize(String value) {
     return ConsoleTextSanitizer.normalize(value);
@@ -688,7 +683,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     return cell == null ? null : formatter.formatCellValue(cell);
   }
 
-  // ── Excel write ──
 
   private byte[] writeWorkbook(
       List<Map<String, Object>> calendars, List<Map<String, Object>> holidays) {
@@ -903,7 +897,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     ConsoleExcelStyles.createValidationSheet(workbook);
   }
 
-  // ── change log ──
 
   private void logChange(
       String tenantId,
@@ -939,7 +932,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
                     "detail", mapOf("calendarCode", calendarCode)))));
   }
 
-  // ── helpers ──
 
   private Map<String, Object> mapOf(Object... pairs) {
     Map<String, Object> values = new LinkedHashMap<>();
@@ -981,7 +973,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         row.description());
   }
 
-  // ── inner records ──
 
   private record ParsedWorkbook(
       String fileName,

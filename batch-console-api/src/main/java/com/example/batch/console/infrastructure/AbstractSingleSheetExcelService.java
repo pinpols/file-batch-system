@@ -67,9 +67,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     this.importStore = importStore;
   }
 
-  // ══════════════════════════════════════════════════════════════
   // 子类必须实现的抽象方法
-  // ══════════════════════════════════════════════════════════════
 
   /** sheet 名称。 */
   protected abstract String sheetName();
@@ -110,9 +108,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   /** 创建 DICT sheet。 */
   protected abstract void createDictSheet(Workbook workbook);
 
-  // ══════════════════════════════════════════════════════════════
   // 公共端点实现（子类直接委托）
-  // ══════════════════════════════════════════════════════════════
 
   /** export 的 workbook 生成 + 下载封装（子类 export 方法调用此方法）。 */
   protected final ResponseEntity<InputStreamResource> doExport(
@@ -273,9 +269,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     // 默认空实现 — 逐行变更日志已由 doApply 中的 logChange 记录
   }
 
-  // ══════════════════════════════════════════════════════════════
   // 校验框架
-  // ══════════════════════════════════════════════════════════════
 
   protected record Validated<R>(
       int totalRows, int validRows, int invalidRows, List<R> rows, List<ExcelRowIssue> issues) {}
@@ -304,9 +298,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     return new Validated<>(total, validRows.size(), total - validRows.size(), validRows, issues);
   }
 
-  // ══════════════════════════════════════════════════════════════
   // 字段解析助手（子类在 parseRow 中使用）
-  // ══════════════════════════════════════════════════════════════
 
   protected static String normalize(String value) {
     return ConsoleTextSanitizer.normalize(value);
@@ -451,9 +443,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════
   // Workbook 生成（内部实现）
-  // ══════════════════════════════════════════════════════════════
 
   private ConsoleSingleSheetExcelImportSupport.ParsedSession loadSession(String uploadToken) {
     return ConsoleSingleSheetExcelImportSupport.loadSession(

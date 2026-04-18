@@ -138,8 +138,6 @@ public class DefaultLaunchService implements LaunchService {
     launchBatchDayService.upsertBatchDayInstance(
         request, loaded.jobDefinition(), effectiveParams, batchDaySlaDeadlineAt);
 
-    // WORKFLOW 类型：解析 DAG 初始节点并创建 workflow_run/node_run；其他类型（IMPORT/EXPORT/DISPATCH/GENERAL）无
-    // workflow，跳过。
     Instant startedAt = Instant.now();
     if (JobType.WORKFLOW.code().equals(loaded.jobDefinition().jobType())) {
       return prepareWorkflowRunAndNodes(
@@ -236,8 +234,6 @@ public class DefaultLaunchService implements LaunchService {
 
     return new PreparedLaunch(jobInstance, workflowRun, initialNodes, startedAt);
   }
-
-  // ── 辅助方法 ─────────────────────────────────────────────────────────────────
 
   private String resolveInitialCurrentNode(
       List<WorkflowDagService.DagNodeResolution> initialNodes) {

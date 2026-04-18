@@ -92,7 +92,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     WorkflowRunEntity workflowRun = context.workflowRun();
     List<WorkflowDagService.DagNodeResolution> initialNodes = context.initialNodes();
     Instant startedAt = context.startedAt();
-    // 说明：如果有 DAG 初始节点（非 START），优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
+    // 有 DAG 初始节点（非 START）时优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
     boolean dispatchable = true;
     int partitionCount;
     String sourcePayload = buildPayloadJson(effectiveParams);
@@ -136,7 +136,6 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     if (freshJobInstance != null) {
       jobInstance.setVersion(freshJobInstance.getVersion());
     }
-    // 内联调用 markLaunchRuntime
     if (dispatchable) {
       // 可派发：推进为 RUNNING，并记录 startedAt；任务派发由 outbox 驱动，避免直接 send Kafka 导致事务边界混乱。
       int updated =
