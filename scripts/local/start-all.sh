@@ -27,6 +27,13 @@ COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-local}"
 APP_NETWORK_NAME="${COMPOSE_PROJECT_NAME}_batch-network"
 
+# 本地 dev 启动加速 JVM 参数（6 个模块并发起 Spring Boot fat jar 慢的主因是类扫描+JIT）：
+#   TieredStopAtLevel=1  只做 C1 编译，跳过 C2（启动 -30~50%，稳态吞吐 -20~30%，local 无所谓）
+#   UseSerialGC          本地负载小，Serial 比 G1 启动开销更低
+#   Xverify:none         跳过字节码校验（Java 25 仍可用，会打 deprecation warn 但工作）
+# 用户可在外部 export LOCAL_FAST_JVM_OPTS="" 禁用；JAVA_OPTS 追加在后面，同 flag 以后者为准。
+LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xverify:none}"
+
 LOG_ROOT="$ROOT/logs"
 DOCKER_LOG_DIR="$LOG_ROOT/docker"
 LOG_DIR="$LOG_ROOT/app"
@@ -77,7 +84,7 @@ start_java() {
   fi
 
   # Java 25+：Netty 等会调用 System::loadLibrary；显式允许 unnamed 模块原生访问，避免启动期 WARNING
-  nohup java --enable-native-access=ALL-UNNAMED ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >"$LOG_DIR/${name}.log" 2>&1 &
+  nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >"$LOG_DIR/${name}.log" 2>&1 &
   local pid=$!
   printf '%s\t%s\t%s\n' "$name" "$pid" "$jar" >>"$PID_FILE_NEW"
   echo "  已启动 ${name} pid=${pid} 运行包 build/runtime-jars/${name}.jar 日志 logs/app/${name}.log"
