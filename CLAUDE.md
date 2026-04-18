@@ -55,7 +55,7 @@ Query record 字段数 ≥ 5 且内部调用者只传少数字段（其余为 nu
 
 ## 领域数据字典
 
-所有枚举值定义在 `batch-common/.../enums/`，字段值必须使用枚举 `.code()`。核心字典：
+所有枚举值定义在 `batch-common/.../enums/`，必须实现 `DictEnum` 接口（`code()` / `label()`），字段值使用 `.code()`。新增枚举若不对外暴露，须加入 `ConsoleMetaEnumRegistrationTest#EXCLUDED` 白名单并注明原因。核心字典：
 
 - `schedule_type`：`CRON` / `FIXED_RATE` / `MANUAL` / `EVENT` / `ONE_TIME`
 - `job_type`：`GENERAL` / `IMPORT` / `EXPORT` / `DISPATCH` / `WORKFLOW`（`JobType`）

@@ -1,10 +1,13 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum FileReceiptPolicy {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum FileReceiptPolicy implements DictEnum {
   NONE("NONE", "无回执"),
   SYNC("SYNC", "同步"),
   ASYNC("ASYNC", "异步"),
@@ -12,23 +15,4 @@ public enum FileReceiptPolicy {
 
   private final String code;
   private final String label;
-
-  FileReceiptPolicy(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public static Set<String> codes() {
-    return Arrays.stream(values())
-        .map(FileReceiptPolicy::code)
-        .collect(Collectors.toUnmodifiableSet());
-  }
 }

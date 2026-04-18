@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.infrastructure;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.ErrorSinkType;
 import com.example.batch.common.enums.SkipAction;
 import com.example.batch.common.enums.SkipThresholdMode;
@@ -174,7 +175,7 @@ public class ImportRecordGovernanceService {
             errorMessage,
             rawRecord,
             skipped,
-            resolveSkipAction().getCode(),
+            resolveSkipAction().code(),
             null);
     badRecords(context).add(badRecord);
 
@@ -222,7 +223,7 @@ public class ImportRecordGovernanceService {
             .errorMessage(safeMessage)
             .errorStage(stage == null ? null : stage.name())
             .skipped(skipped)
-            .skipAction(resolveSkipAction().getCode())
+            .skipAction(resolveSkipAction().code())
             .rawRecord(safePayload)
             .build());
 
@@ -301,17 +302,17 @@ public class ImportRecordGovernanceService {
   }
 
   private SkipThresholdMode resolveThresholdMode() {
-    SkipThresholdMode mode = SkipThresholdMode.fromCode(skipProperties.thresholdMode());
+    SkipThresholdMode mode = DictEnum.fromCode(SkipThresholdMode.class, skipProperties.thresholdMode());
     return mode == null ? SkipThresholdMode.ABSOLUTE : mode;
   }
 
   private SkipAction resolveSkipAction() {
-    SkipAction action = SkipAction.fromCode(skipProperties.skipAction());
+    SkipAction action = DictEnum.fromCode(SkipAction.class, skipProperties.skipAction());
     return action == null ? SkipAction.CONTINUE : action;
   }
 
   private ErrorSinkType resolveErrorSinkType() {
-    ErrorSinkType sinkType = ErrorSinkType.fromCode(skipProperties.errorSinkType());
+    ErrorSinkType sinkType = DictEnum.fromCode(ErrorSinkType.class, skipProperties.errorSinkType());
     return sinkType == null ? ErrorSinkType.BOTH : sinkType;
   }
 

@@ -3,6 +3,7 @@ package com.example.batch.console.service;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.example.batch.console.support.ConsoleJwtService;
 import com.example.batch.console.support.ConsoleLoginService;
+import com.example.batch.console.support.ConsoleMenuRegistry;
 import com.example.batch.console.support.ConsolePrincipal;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleRoles;
@@ -40,8 +41,10 @@ public class ConsoleAuthApplicationService {
   }
 
   public ConsoleAuthProfileResponse profile(Authentication authentication) {
+    Set<String> auths = authorities(authentication);
     return new ConsoleAuthProfileResponse(
-        username(authentication), tenantId(authentication), authorities(authentication));
+        username(authentication), tenantId(authentication), auths,
+        ConsoleMenuRegistry.filterByAuthorities(auths));
   }
 
   private String username(Authentication authentication) {

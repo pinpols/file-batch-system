@@ -1,9 +1,14 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
 import java.util.Optional;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum RunMode {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum RunMode implements DictEnum {
   NORMAL("NORMAL", "正常执行"),
   RETRY("RETRY", "系统重试"),
   RERUN("RERUN", "人工重跑"),
@@ -13,25 +18,7 @@ public enum RunMode {
   private final String code;
   private final String label;
 
-  RunMode(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
   public static Optional<RunMode> fromCode(String value) {
-    if (value == null || value.isBlank()) {
-      return Optional.empty();
-    }
-    return Arrays.stream(values())
-        .filter(candidate -> candidate.code.equalsIgnoreCase(value.trim()))
-        .findFirst();
+    return Optional.ofNullable(DictEnum.fromCode(RunMode.class, value));
   }
 }

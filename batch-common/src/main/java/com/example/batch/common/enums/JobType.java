@@ -1,10 +1,13 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum JobType {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum JobType implements DictEnum {
   GENERAL("GENERAL", "通用任务"),
   IMPORT("IMPORT", "导入任务"),
   EXPORT("EXPORT", "导出任务"),
@@ -13,21 +16,4 @@ public enum JobType {
 
   private final String code;
   private final String label;
-
-  JobType(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public static Set<String> codes() {
-    return Arrays.stream(values()).map(JobType::code).collect(Collectors.toUnmodifiableSet());
-  }
 }

@@ -1,10 +1,13 @@
 package com.example.batch.common.enums;
 
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
-public enum FileEncryptType {
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum FileEncryptType implements DictEnum {
   NONE("NONE", "无加密"),
   AES("AES", "AES"),
   PGP("PGP", "PGP"),
@@ -12,23 +15,4 @@ public enum FileEncryptType {
 
   private final String code;
   private final String label;
-
-  FileEncryptType(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
-
-  public static Set<String> codes() {
-    return Arrays.stream(values())
-        .map(FileEncryptType::code)
-        .collect(Collectors.toUnmodifiableSet());
-  }
 }

@@ -11,6 +11,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplate
 
 import com.example.batch.common.enums.CalendarDayType;
 import com.example.batch.common.enums.CatchUpPolicyType;
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.HolidayRollRule;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
@@ -110,9 +111,9 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       List.of(COL_CALENDAR_CODE, COL_BIZ_DATE, COL_DAY_TYPE, COL_HOLIDAY_NAME, COL_DESCRIPTION);
   private static final Set<String> HOLIDAY_REQUIRED_HEADERS = Set.copyOf(HOLIDAY_COLUMNS);
 
-  private static final Set<String> HOLIDAY_ROLL_RULES = HolidayRollRule.codes();
-  private static final Set<String> CATCH_UP_POLICIES = CatchUpPolicyType.codes();
-  private static final Set<String> DAY_TYPES = CalendarDayType.codes();
+  private static final Set<String> HOLIDAY_ROLL_RULES = DictEnum.codes(HolidayRollRule.class);
+  private static final Set<String> CATCH_UP_POLICIES = DictEnum.codes(CatchUpPolicyType.class);
+  private static final Set<String> DAY_TYPES = DictEnum.codes(CalendarDayType.class);
   private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> CALENDAR_COLUMN_GUIDES =

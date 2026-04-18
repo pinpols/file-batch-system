@@ -1,6 +1,7 @@
 package com.example.batch.console.infrastructure;
 
 import com.example.batch.common.enums.AlertSeverity;
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileReceiptPolicy;
@@ -100,22 +101,22 @@ class ConfigPackageExcelValidator {
   static final String WF_EDGE_SHEET = "workflow_edge";
 
   // ── enum sets ─────────────────────────────────────────────────────────────
-  static final Set<String> JOB_TYPES = JobType.codes();
+  static final Set<String> JOB_TYPES = DictEnum.codes(JobType.class);
   static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
-  static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
-  static final Set<String> SHARD_STRATEGIES = ShardStrategy.codes();
-  static final Set<String> CHANNEL_TYPES = FileChannelType.codes();
-  static final Set<String> AUTH_TYPES = FileChannelAuthType.codes();
-  static final Set<String> RECEIPT_POLICIES = FileReceiptPolicy.codes();
-  static final Set<String> SEVERITIES = AlertSeverity.codes();
-  static final Set<String> PIPELINE_TYPES = PipelineType.codes();
+  static final Set<String> RETRY_POLICIES = DictEnum.codes(RetryPolicyType.class);
+  static final Set<String> SHARD_STRATEGIES = DictEnum.codes(ShardStrategy.class);
+  static final Set<String> CHANNEL_TYPES = DictEnum.codes(FileChannelType.class);
+  static final Set<String> AUTH_TYPES = DictEnum.codes(FileChannelAuthType.class);
+  static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
+  static final Set<String> SEVERITIES = DictEnum.codes(AlertSeverity.class);
+  static final Set<String> PIPELINE_TYPES = DictEnum.codes(PipelineType.class);
   static final Set<String> STAGE_CODES =
       Set.of(
           "RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "GENERATE", "TRANSFER",
           "DISPATCH", "ACK");
-  static final Set<String> WORKFLOW_TYPES = WorkflowType.codes();
-  static final Set<String> NODE_TYPES = WorkflowNodeType.codes();
-  static final Set<String> EDGE_TYPES = WorkflowEdgeType.codes();
+  static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
+  static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);
+  static final Set<String> EDGE_TYPES = DictEnum.codes(WorkflowEdgeType.class);
 
   private final JobDefinitionMapper jobDefinitionMapper;
   private final PipelineDefinitionMapper pipelineDefinitionMapper;

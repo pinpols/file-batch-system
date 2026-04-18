@@ -9,6 +9,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.PipelineType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryPolicyType;
@@ -131,7 +132,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private static final Set<String> PIPELINE_REQUIRED_HEADERS = Set.copyOf(PIPELINE_COLUMNS);
   private static final Set<String> STEP_REQUIRED_HEADERS = Set.copyOf(STEP_COLUMNS);
 
-  private static final Set<String> PIPELINE_TYPES = PipelineType.codes();
+  private static final Set<String> PIPELINE_TYPES = DictEnum.codes(PipelineType.class);
   private static final Set<String> STAGE_CODES =
       Set.of(
           "RECEIVE",
@@ -143,7 +144,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
           "TRANSFER",
           STAGE_DISPATCH,
           "ACK");
-  private static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
+  private static final Set<String> RETRY_POLICIES = DictEnum.codes(RetryPolicyType.class);
 
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> PIPELINE_COLUMN_GUIDES =
       Map.ofEntries(

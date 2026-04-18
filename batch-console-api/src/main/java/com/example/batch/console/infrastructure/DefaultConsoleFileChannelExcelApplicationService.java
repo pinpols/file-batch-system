@@ -7,6 +7,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.optionalColum
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileReceiptPolicy;
@@ -69,9 +70,9 @@ public class DefaultConsoleFileChannelExcelApplicationService
           COL_RECEIPT_POLICY,
           "timeout_seconds",
           COL_ENABLED);
-  private static final Set<String> CHANNEL_TYPES = FileChannelType.codes();
-  private static final Set<String> AUTH_TYPES = FileChannelAuthType.codes();
-  private static final Set<String> RECEIPT_POLICIES = FileReceiptPolicy.codes();
+  private static final Set<String> CHANNEL_TYPES = DictEnum.codes(FileChannelType.class);
+  private static final Set<String> AUTH_TYPES = DictEnum.codes(FileChannelAuthType.class);
+  private static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(

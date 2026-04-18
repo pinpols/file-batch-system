@@ -1,6 +1,13 @@
 package com.example.batch.common.enums;
 
-public enum RetryScheduleStatus {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+
+@RequiredArgsConstructor
+@Accessors(fluent = true)
+@Getter
+public enum RetryScheduleStatus implements DictEnum {
   WAITING("WAITING", "待重试"),
   RUNNING("RUNNING", "执行中"),
   SUCCESS("SUCCESS", "成功"),
@@ -10,17 +17,4 @@ public enum RetryScheduleStatus {
 
   private final String code;
   private final String label;
-
-  RetryScheduleStatus(String code, String label) {
-    this.code = code;
-    this.label = label;
-  }
-
-  public String code() {
-    return code;
-  }
-
-  public String label() {
-    return label;
-  }
 }

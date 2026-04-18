@@ -8,6 +8,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.requiredColum
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
 import com.example.batch.common.enums.AlertSeverity;
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.ConsoleAlertRoutingExcelApplicationService;
 import com.example.batch.console.mapper.AlertRoutingConfigMapper;
@@ -67,7 +68,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
           "repeat_interval_seconds",
           COL_ENABLED,
           COL_DESCRIPTION);
-  private static final Set<String> SEVERITIES = AlertSeverity.codes();
+  private static final Set<String> SEVERITIES = DictEnum.codes(AlertSeverity.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(

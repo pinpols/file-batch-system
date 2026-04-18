@@ -1,5 +1,6 @@
 package com.example.batch.console.web;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,7 @@ import com.example.batch.console.application.ConsoleOutboxOpsApplicationService;
 import com.example.batch.console.service.ConsoleKafkaLagQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
+import com.example.batch.console.support.ConsoleQueryCacheService;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
 import java.time.Instant;
@@ -50,7 +52,8 @@ class ConsoleOpsControllerTest {
     mockMvc =
         MockMvcBuilders.standaloneSetup(
                 new ConsoleOpsController(
-                    opsApplicationService, outboxOpsService, responseFactory, kafkaLagQueryService))
+                    opsApplicationService, outboxOpsService, responseFactory,
+                    kafkaLagQueryService, passThroughCache()))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();
@@ -70,5 +73,13 @@ class ConsoleOpsControllerTest {
         .andExpect(jsonPath("$.data.pendingApprovals").value(1))
         .andExpect(jsonPath("$.data.openAlerts").value(2))
         .andExpect(jsonPath("$.data.criticalAlerts").value(3));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ConsoleQueryCacheService passThroughCache() {
+    ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
+    when(cache.getOrLoad(anyString(), any(), any(), any()))
+        .thenAnswer(inv -> ((java.util.function.Supplier<?>) inv.getArgument(3)).get());
+    return cache;
   }
 }

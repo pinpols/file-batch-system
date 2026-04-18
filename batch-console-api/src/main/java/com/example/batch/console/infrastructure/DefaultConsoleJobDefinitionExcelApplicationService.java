@@ -11,6 +11,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
 
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.JobType;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryPolicyType;
@@ -121,10 +122,10 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
           COL_ENABLED,
           COL_DESCRIPTION);
   private static final Set<String> HEADERS = Set.copyOf(COLUMNS);
-  private static final Set<String> JOB_TYPES = JobType.codes();
+  private static final Set<String> JOB_TYPES = DictEnum.codes(JobType.class);
   private static final Set<String> SCHEDULE_TYPES = Set.of("CRON", "FIXED_RATE", "MANUAL");
-  private static final Set<String> RETRY_POLICIES = RetryPolicyType.codes();
-  private static final Set<String> SHARD_STRATEGIES = ShardStrategy.codes();
+  private static final Set<String> RETRY_POLICIES = DictEnum.codes(RetryPolicyType.class);
+  private static final Set<String> SHARD_STRATEGIES = DictEnum.codes(ShardStrategy.class);
   private static final Set<String> ENABLED_VALUES = Set.of(GUIDE_TRUE, GUIDE_FALSE);
   private static final Map<String, ConsoleExcelStyles.ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(

@@ -7,6 +7,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.optionalColum
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
+import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.QueuePriorityPolicy;
 import com.example.batch.common.enums.ResourceQueueType;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
@@ -67,8 +68,8 @@ public class DefaultConsoleResourceQueueExcelApplicationService
           "fair_share_weight",
           COL_ENABLED,
           COL_DESCRIPTION);
-  private static final Set<String> QUEUE_TYPES = ResourceQueueType.codes();
-  private static final Set<String> PRIORITY_POLICIES = QueuePriorityPolicy.codes();
+  private static final Set<String> QUEUE_TYPES = DictEnum.codes(ResourceQueueType.class);
+  private static final Set<String> PRIORITY_POLICIES = DictEnum.codes(QueuePriorityPolicy.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
           Map.entry(
