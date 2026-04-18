@@ -59,9 +59,28 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * {@link ConsoleTenantConfigInitApplicationService} 的默认实现。
+ * 跨租户批量配置初始化入口，被 {@link DefaultConsoleConfigSyncApplicationService#importBundle} 和
+ * 直接 HTTP 入口两条路调用。
  *
- * <p>直接操作 Mapper 层，绕过租户守卫，适用于跨租户批量初始化场景。 调用方须在 Controller 层做权限校验（ROLE_ADMIN）。
+ * <p><b>权限边界</b>：直接操作 Mapper 层，主动绕过租户守卫——调用方须在进入本服务前完成 ROLE_ADMIN 校验，
+ * 本服务不再重复验证。
+ *
+ * <p><b>10 种配置类型</b>：job / workflow / pipeline / fileChannel / fileTemplate /
+ * resourceQueue / batchWindow / businessCalendar / quotaPolicy / alertRouting，
+ * 每种类型由独立的 {@link SpecHandler} 描述"如何 find / insert / update"，公共模板
+ * {@link #applySpecs} 统一驱动"查找 → 跳过/更新/创建"循环并逐项隔离异常（单项失败不中断全批）。
+ *
+ * <p><b>InitMode</b>：
+ * <ul>
+ *   <li>{@code SKIP_EXISTING}（默认）— 已存在则记为 skipped，适合首次初始化。
+ *   <li>{@code UPSERT} — 已存在则覆盖更新，适合跨环境同步。
+ * </ul>
+ *
+ * <p><b>Workflow 的特殊语义</b>：{@link #upsertWorkflowDefinition} 在 UPSERT 时先
+ * {@code deleteByWorkflowDefinitionId} 节点和边再全量重插——保证图拓扑与传入 spec 完全一致，
+ * 避免孤儿节点残留。
+ *
+ * <p><b>dryRun</b>：所有 insert/update 被跳过，仅做 find + 计数，用于 ConfigSync preview 预判结果。
  */
 @Slf4j
 @Service

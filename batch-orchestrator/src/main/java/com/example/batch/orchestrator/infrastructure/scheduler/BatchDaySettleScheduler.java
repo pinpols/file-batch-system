@@ -30,6 +30,15 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 批次日结算调度器。
+ *
+ * <p>默认每 60 秒扫描一次处于 {@code CUTOFF} 或 {@code IN_FLIGHT} 状态的批次日实例，
+ * 根据关联任务实例的运行/失败/全量计数决定将批次日推进至 {@code IN_FLIGHT}、{@code FAILED}
+ * 或 {@code SETTLED}，并在结算为 FAILED 时按业务日历的追赶策略（AUTO/MANUAL_APPROVAL）
+ * 自动发起补跑请求。ShedLock 锁名 {@code batch_day_settle}，最长持锁 3 分钟，最短持锁 30 秒。
+ * 优雅停机（draining）期间直接跳过执行。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

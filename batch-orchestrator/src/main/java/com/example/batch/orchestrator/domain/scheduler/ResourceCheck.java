@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.domain.scheduler;
 
+/** {@code waitForCapacity} 表示容量不足可重试；{@code reject} 触发 failFast 不再等待。 */
 public record ResourceCheck(
     boolean allowed, boolean failFast, String reasonCode, String reasonMessage) {
   public static ResourceCheck allow() {

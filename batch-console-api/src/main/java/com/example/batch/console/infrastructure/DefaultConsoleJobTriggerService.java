@@ -12,7 +12,20 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** 控制台作业触发服务实现：手工触发、API 触发、批量触发、dry-run 校验。 */
+/**
+ * 作业触发入口：通过 {@link ConsoleJobOpsSupport#delegateLaunch} 把 launch 请求转给 batch-trigger 服务。
+ *
+ * <p>三种入口：
+ *
+ * <ul>
+ *   <li>{@link #trigger}：单次触发。入参 triggerType 缺省为 {@code MANUAL}。
+ *   <li>{@link #dryRunTrigger}：只做前置校验（tenant / jobCode / bizDate 格式 / triggerType 合法 / job 存在且启用），
+ *       不真正落 trigger——方便 UI 在提交前预检，避免失败才报错影响用户体验。
+ *   <li>{@link #batchTrigger}：列表批量入口。逐项独立 try/catch，失败项不中断全批；支持混合 dryRun：
+ *       每项可单独带 {@code dryRun=true} 预检而其他项正常触发。每项 idempotencyKey 派生为
+ *       {@code {baseKey}:{index}}，保证批内子项幂等独立，避免全部共用同一 key 导致 trigger 服务去重误杀。
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService {

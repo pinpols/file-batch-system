@@ -9,6 +9,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 审批命令状态机：{@code PENDING → APPROVED / REJECTED → EXECUTED}。
+ *
+ * <p>所有转换以 {@code (fromStatus, toStatus)} 做 DB 级 CAS，并发重复审批天然互斥：
+ * CAS 成功者推进状态，失败者重读取当前状态返回（幂等）。{@link #markExecuted} 多一层区分——
+ * CAS 失败时"已是 EXECUTED"视为幂等重复，"当前非 APPROVED"则是非法状态转换要抛 {@link IllegalStateException}。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
@@ -79,6 +86,15 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     return toRecord(require(tenantId, approvalNo));
   }
 
+  /**
+   * 把已审批命令推进到 EXECUTED（APPROVED → EXECUTED CAS）。CAS 失败时必须区分两种语义：
+   *
+   * <ul>
+   *   <li>当前已是 EXECUTED：幂等重复调用（例如执行回调重试），直接返回当前记录。
+   *   <li>当前非 APPROVED 且非 EXECUTED：非法状态转换（如 PENDING/REJECTED），抛 {@link IllegalStateException}
+   *       防止把未审批或已拒绝的命令偷偷执行掉。
+   * </ul>
+   */
   @Override
   @Transactional
   public ApprovalRecord markExecuted(String tenantId, String approvalNo) {

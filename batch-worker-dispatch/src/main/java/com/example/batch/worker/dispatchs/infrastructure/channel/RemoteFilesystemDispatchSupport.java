@@ -27,6 +27,12 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
 
+/**
+ * 远程文件系统派发的静态工具类，封装 NAS、OSS、SFTP、SMTP（EMAIL）、HTTP 五种渠道的
+ * 文件上传（dispatch*）与连通性探测（probe*）逻辑。
+ * 所有方法均为包级静态，不持有状态，由各 ChannelDispatchHandler 按渠道类型调用；
+ * {@link #probeChannel} 提供统一入口，依据 channel_type 路由到对应探测实现。
+ */
 final class RemoteFilesystemDispatchSupport {
 
   // ── duplicate literal constants ─────────────────────────────────────────

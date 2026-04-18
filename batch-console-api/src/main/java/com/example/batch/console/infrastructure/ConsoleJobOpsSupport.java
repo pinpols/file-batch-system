@@ -35,9 +35,25 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * 作业运维操作的公共基础设施：审批提交、补偿提交、触发器委派、租户解析、事件发布。
+ * 作业运维操作的公共基础设施：审批提交、补偿提交、recovery 触发、trigger launch 委派、租户解析、事件广播。
  *
- * <p>被 trigger / recovery / approval 三个拆分服务共享，避免重复代码。
+ * <p>被 {@code ConsoleJobTriggerService} / {@code DefaultConsoleJobRecoveryService} /
+ * {@code ConsoleApprovalApplicationService} 三个拆分服务共享，避免重复代码。
+ *
+ * <p>关键约定：
+ *
+ * <ul>
+ *   <li><b>双 baseUrl 路由</b>：{@link #delegateLaunch} 走 {@code triggerClientProperties}（batch-trigger 服务），
+ *       其余（compensation / recovery / approval）走 {@code orchestratorClientProperties}（batch-orchestrator 服务）
+ *       ——console 作为 BFF 不直连 DB，一律通过内部 HTTP 调用后端服务。
+ *   <li><b>请求追踪三件套</b>：所有下游 RestClient 调用都带 {@code Idempotency-Key} / {@code X-Request-Id} /
+ *       {@code X-Trace-Id}（见 {@link CommonConstants}），用户侧重试幂等 + 全链路追踪。
+ *   <li><b>publishRefresh 批量广播</b>：触发型操作成功后一次性发 5 个领域事件
+ *       （job-instances / workflow-runs / outbox-retries / outbox-deliveries / summary），
+ *       让前端多个面板并行刷新，避免前端逐个轮询。
+ *   <li><b>审批二次校验</b>：{@link #requireApprovedApproval} 同时接受 {@code APPROVED} 与 {@code EXECUTED}
+ *       状态——已执行视为审批通过（幂等），调用方重放同一 approval 不被拒绝。
+ * </ul>
  */
 @Component
 @RequiredArgsConstructor
@@ -193,9 +209,10 @@ class ConsoleJobOpsSupport {
             .uri("/internal/approvals/{approvalNo}?tenantId={tenantId}", approvalNo, tenantId)
             .retrieve()
             .body(ApprovalRecordResponse.class);
-    Guard.requireFound(
-        response == null || response.getRecord() == null, "approval request not found");
-    String status = response.getRecord().getApprovalStatus();
+    ApprovalRecord record =
+        Guard.requireFound(
+            response == null ? null : response.getRecord(), "approval request not found");
+    String status = record.getApprovalStatus();
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
       throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");
     }

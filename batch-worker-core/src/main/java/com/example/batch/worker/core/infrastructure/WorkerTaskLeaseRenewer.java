@@ -6,6 +6,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * 定时为所有 in-flight 任务续租：从 {@link ActiveTaskLeaseRegistry#snapshot} 取出当前
+ * 活跃租约列表，逐条调 Orchestrator 的 {@code renewLease} 接口延长任务心跳超时。
+ *
+ * <p>若 Orchestrator 返回 false（如任务已被取消或超时驱逐），记录 warn 日志；
+ * 续租失败不中断执行——任务仍会继续运行并在完成时正常 report，
+ * 但 Orchestrator 侧可能已将其标记为失活并重新派发（罕见情况）。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

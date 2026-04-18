@@ -14,7 +14,29 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
 
-/** Pipeline 生命周期统一在 core 中维护，业务 worker 只关心上下文构造和阶段结果解释。 */
+/**
+ * 三条 worker 链路（import / export / dispatch）共用的 pipeline 生命周期模板：
+ * 确保 pipeline 定义存在 → 创建 pipeline 实例 → 执行各阶段 → 标记实例最终状态。
+ *
+ * <p><b>执行流程（{@link #execute} → {@link #doExecute}）</b>：
+ * <ol>
+ *   <li>通过 {@link PlatformFileRuntimeRepository#ensurePipelineDefinition} 查找或自动创建
+ *       pipeline 定义（首次运行可无需手动在控制台配置）。
+ *   <li>创建本次执行的 pipeline 实例（{@code pipeline_instance}），写入初始阶段和 traceId。
+ *   <li>将 pipelineDefinitionId、pipelineInstanceId、stepDefinitions 注入 {@code attributes}，
+ *       再构建业务上下文 {@code C}，调用子类 {@link #executeStages(Object)} 执行所有阶段。
+ *   <li>全部阶段成功 → {@code markPipelineSuccess}；任一阶段失败 → {@code markPipelineFailed}，
+ *       记录最后一个成功阶段，供运维定位断点。
+ *   <li>任何未捕获异常同样标记 pipeline 失败，不向上透传（转为 {@link StepExecutionResponse} 返回）。
+ * </ol>
+ *
+ * <p><b>子类约定</b>：
+ * <ul>
+ *   <li>必须实现 {@link #pipelineType} / {@link #defaultPipelineSteps} 等描述性方法。
+ *   <li>{@link #executeStages} 内部应捕获阶段级异常并返回失败结果，不得上抛。
+ *   <li>{@link #handlePipelineFailure} 用于在 pipeline 失败后触发补偿（如错误文件上传、状态回写）。
+ * </ul>
+ */
 public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements StepExecutionAdapter {
 
   private final PlatformFileRuntimeRepository runtimeRepository;

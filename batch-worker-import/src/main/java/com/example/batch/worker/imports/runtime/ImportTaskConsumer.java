@@ -13,6 +13,13 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
+/**
+ * Import Worker 的 Kafka 消费者：监听 {@code topics()} 主题，将消息委托给
+ * {@link AbstractTaskConsumer#doConsume} 处理（CLAIM → EXECUTE → REPORT 链路）。
+ *
+ * <p>消费成功（{@code doConsume} 返回 true）后手动提交 offset；
+ * {@code listenerId} 为 {@code "import-task-consumer"}，与 ShedLock / 指标标签一致。
+ */
 @Service
 public class ImportTaskConsumer extends AbstractTaskConsumer {
 

@@ -14,6 +14,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
+/**
+ * 基于 HTTP 的 Worker 注册中心客户端，向 Orchestrator 内部接口发送注册、心跳、状态更新和下线请求。
+ * 延迟初始化 {@link RestClient}（双重检查锁），并在测试环境下通过 {@code local.server.port} 自动
+ * 解析 base-url，无需在集成测试中额外配置。
+ */
 @Component
 @RequiredArgsConstructor
 public class HttpWorkerRegistryClient implements WorkerRegistryClient {

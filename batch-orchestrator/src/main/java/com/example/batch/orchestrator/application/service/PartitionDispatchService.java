@@ -8,20 +8,27 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 为已启动的 Job 创建分区、任务及 Outbox 事件，在独立事务（T2）中执行，与 Job 实例创建事务（T1）分离以降低锁持有时长。 从 {@link
- * com.example.batch.orchestrator.service.DefaultLaunchService} 中拆分。
+ * 为已启动的 Job 创建分区、任务及 Outbox 事件，在独立事务（T2）中执行，与 Job 实例创建事务（T1）分离以降低锁持有时长。
+ * 从 {@link com.example.batch.orchestrator.service.DefaultLaunchService} 中拆分。
  */
 public interface PartitionDispatchService {
 
+  // T1 产物：启动请求携带的调用方参数，在 T2 中只读使用
   record DispatchRequest(
       LaunchRequest request, Map<String, Object> effectiveParams, String traceId) {}
 
+  // T1 产物：T1 事务写库后得到的实体引用，T2 据此创建分区和任务
   record DispatchRuntime(
       JobInstanceEntity jobInstance,
       WorkflowRunEntity workflowRun,
       List<WorkflowDagService.DagNodeResolution> initialNodes,
       Instant startedAt) {}
 
+  /**
+   * 将 T1 的请求参数（DispatchRequest）与 T1 写库结果（DispatchRuntime）合并为单一上下文，
+   * 避免 dispatch() 方法参数列表超过 6 个。两部分分开定义是因为生命周期不同：
+   * request 来自调用方，runtime 来自 T1 事务结果。
+   */
   final class DispatchContext {
 
     private final DispatchRequest requestContext;

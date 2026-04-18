@@ -23,6 +23,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * ConfigRelease 的审批流入口（submit / approve / reject），独立于 JOB/FILE 审批链路。
+ *
+ * <p>状态机驱动：
+ *
+ * <ul>
+ *   <li>{@link #submit}：ConfigRelease 必须是 {@code DRAFT}；同一 release 不允许存在 PENDING approval
+ *       （防重复提交）。成功后 release 推进到 {@code PENDING_APPROVAL}。
+ *   <li>{@link #approve}：ApprovalEntity 必须 PENDING；mapper CAS 返回 0 行视为并发已处理，抛 {@code CONFLICT}
+ *       （防双审批）。release 推进到 {@code PUBLISHED}，打 {@code publishedAt}。
+ *   <li>{@link #reject}：类似 approve 的 CAS 保护，但 release 回退到 {@code DRAFT}（可重新编辑再提交）。
+ * </ul>
+ *
+ * <p>全程写 {@code config_change_log}（SUBMIT_APPROVAL / APPROVE / REJECT 三种 action），
+ * 带 operator / reason / detail JSON，提供完整审计轨迹。
+ *
+ * <p>submit 接收可选 {@code expiredAt}（ISO-8601 Instant），用于后续超期自动回滚的定时器钩子。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleConfigApprovalApplicationService

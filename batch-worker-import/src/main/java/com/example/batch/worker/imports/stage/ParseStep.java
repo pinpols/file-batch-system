@@ -30,6 +30,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * Import pipeline 的 PARSE 阶段：将原始 payload 按文件格式解析为 NDJSON 暂存文件。
+ *
+ * <p><b>格式路由</b>：优先取 {@link ImportPayload#fileFormatType()}，其次取模板配置 {@code file_format_type}，
+ * 最后按内容推断（{@code {}/{[} → JSON，否则 DELIMITED}）。支持 EXCEL / JSON / XML / FIXED_WIDTH / DELIMITED。
+ *
+ * <p><b>二进制 payload</b>：若上下文中存在 {@code IMPORT_BINARY_PAYLOAD}（byte[]），
+ * EXCEL 格式直接解析字节，其余格式按模板/payload 指定字符集转为字符串后再路由。
+ *
+ * <p><b>结果</b>：解析后记录路径写入 {@code PARSED_RECORDS_PATH}，文件状态推进为 {@code PARSED}。
+ * 解析记录数为 0 且无跳过记录时返回失败；超过跳过阈值时删除暂存文件并返回失败。
+ *
+ * <p>暂存文件命名前缀格式：{@code batch-<fileId>-<workerId>-parsed}，存放于 JVM 临时目录。
+ */
 @Slf4j
 @Component
 public class ParseStep implements ImportStageStep {

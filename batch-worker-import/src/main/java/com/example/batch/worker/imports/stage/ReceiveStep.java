@@ -19,6 +19,19 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * Import pipeline 的第一阶段：接收并登记文件记录。
+ *
+ * <p><b>主要职责</b>：
+ * <ul>
+ *   <li>在任何内存分配前拒绝超过 {@code batch.worker.import.max-payload-size-mb}（默认 100MB）的 payload。
+ *   <li>解析 {@link ImportPayload}（优先从上下文取，否则从 JSON rawPayload 解析；支持嵌套 {@code content} 字段回填）。
+ *   <li>若上下文中尚无 fileId，创建 {@code file_record}（status=RECEIVED），写入模板安全元数据和用户元数据，
+ *       并将文件绑定到当前 pipeline 实例。
+ * </ul>
+ *
+ * <p>保留字段（{@code templateCode}、{@code taskId} 等）不允许被用户 metadata 覆盖。
+ */
 @Component
 public class ReceiveStep implements ImportStageStep {
 

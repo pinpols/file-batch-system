@@ -16,6 +16,15 @@ import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * Launch 前置校验与配置加载：把 trigger_request / job_definition / workflow_definition / 现有 instance
+ * 一次性读齐供 {@link DefaultLaunchService} 使用；校验失败会把 {@code trigger_request} 打成 REJECTED 再抛异常，
+ * 避免请求挂在 ACCEPTED 永远没落地。
+ *
+ * <p>job_definition / workflow_definition 走 Redis 缓存（{@code OrchestratorConfigCacheService}），
+ * launch 热路径上不直连 DB 读配置。WORKFLOW 类型强制有 workflow_definition，其他类型（IMPORT/EXPORT/DISPATCH/GENERAL）
+ * 不要求。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultLaunchValidationService implements LaunchValidationService {
@@ -24,6 +33,10 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
   private final OrchestratorConfigCacheService configCacheService;
   private final JobInstanceMapper jobInstanceMapper;
 
+  /**
+   * 注意副作用：job/workflow 定义缺失时，本方法会把 trigger_request 状态更新为 REJECTED 后再抛
+   * {@code NOT_FOUND}——保证请求有终态而非停留在 ACCEPTED。调用方不需要也不应重复打 REJECTED。
+   */
   @Override
   public LaunchLoadResult load(LaunchRequest request) {
     validate(request);

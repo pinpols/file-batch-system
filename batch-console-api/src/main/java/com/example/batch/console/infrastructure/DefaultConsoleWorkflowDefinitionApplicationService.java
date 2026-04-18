@@ -32,7 +32,30 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** {@link ConsoleWorkflowDefinitionApplicationService} 的默认实现。 */
+/**
+ * Workflow 定义的 CRUD + DAG 校验入口。
+ *
+ * <p>写操作模式（create / update / toggle）：
+ *
+ * <ul>
+ *   <li>定义 + 节点 + 边在同一事务内 upsert；update 先 {@code deleteByWorkflowDefinitionId} 清空节点/边再重写，
+ *       避免遗留脏数据（调用方全量提交新 DAG 即可，不必增量 diff）。
+ *   <li>每次写都调 {@link ConsoleConfigCacheInvalidationService#evictWorkflowDefinition}，
+ *       保证 orchestrator launch 时读到最新拓扑（与 {@link DefaultConsoleJobDefinitionApplicationService} 一致的
+ *       缓存一致性协议）。
+ *   <li>通过 {@link ConsoleRealtimeDomainEventPublisher#publishChanged} 广播 {@code workflow-definitions} 事件
+ *       实时刷新前端视图。
+ * </ul>
+ *
+ * <p>{@link #validate} 执行完整 DAG 健康检查——在发布/前端可视化编辑前使用：
+ *
+ * <ol>
+ *   <li><b>节点引用</b>：唯一 START / 唯一 END；边的 fromNodeCode / toNodeCode 存在于节点集。
+ *   <li><b>无环</b>：Kahn 拓扑排序，若遍历数 &lt; 节点数则存在环。
+ *   <li><b>可达性</b>：BFS 从 START 正向遍历 / 从 END 逆向遍历，所有非起止节点必须双向可达——
+ *       孤立节点或"到不了 END"的死路都会被标记出来。
+ * </ol>
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleWorkflowDefinitionApplicationService

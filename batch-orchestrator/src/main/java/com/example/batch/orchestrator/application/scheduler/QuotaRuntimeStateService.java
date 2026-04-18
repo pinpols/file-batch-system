@@ -13,6 +13,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 配额运行时状态服务：管理租户/队列的突发配额（burst quota）窗口，支持三种重置策略。
+ *
+ * <p><b>重置策略</b>（{@link QuotaResetPolicy}）：
+ * <ul>
+ *   <li>{@code NONE} / 非运行时管理策略：直接与 baseCap+burstLimit 比较，无窗口状态
+ *   <li>{@code CALENDAR_DAY}：自然日窗口，跨日自动重置峰值借用计数
+ *   <li>{@code SLIDING_WINDOW}：滑动窗口（小时数由配置决定），窗口过期后重置
+ * </ul>
+ *
+ * <p>{@link #evaluateAndReserve} 是核心方法：判断当前活跃数+请求数是否超过 baseCap+burst，
+ * 需要 burst 时持久化峰值（{@code peakBorrowedCount}），返回 {@link ResourceCheck#allow()} 或
+ * {@link ResourceCheck#waitForCapacity(String, String)}。
+ *
+ * <p>注意：使用了突发容量后必须持久化状态，防止 {@code lastUpdatedAt} 漂移导致窗口过期误判。
+ */
 @Service
 @RequiredArgsConstructor
 public class QuotaRuntimeStateService {

@@ -25,6 +25,24 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 导入数据质量校验服务：对数据集级别和记录级别分别执行规则校验。
+ *
+ * <p><b>数据集级别校验</b>（{@link #validateDataset}）：行数检查、摘要校验（checksum_check）、
+ * schema 字段必选/允许列表。
+ *
+ * <p><b>记录级别校验</b>（{@link #validateChunkRows}）：null 字段检查、字段规则（required/
+ * minLength/maxLength/regex/allowedValues/min/max）、唯一值检查；支持流式分块调用，
+ * {@link ValidationSession} 在分块间共享 {@code seenValues} 以实现跨分块唯一性校验。
+ *
+ * <p><b>规则集合并</b>：默认规则集（customerNo/customerName 必填，customerType/status 枚举校验）
+ * 与模板配置中的 {@code validation_rule_set} 深度合并，模板配置优先。
+ * 若模板启用了 {@code IMPORT_LOAD_JDBC_MAPPED} 插件，则跳过默认规则集。
+ *
+ * <p><b>脱敏</b>：模板配置 {@code log_masking_enabled=true} 时，{@link #outcome} 在返回前
+ * 对 {@link ValidationIssue} 的错误信息和原始记录按 {@code masking_rule_set} 脱敏处理；
+ * {@code BatchSecurityProperties#isTestingOpen()} 为 true 时强制关闭脱敏。
+ */
 @Service
 @RequiredArgsConstructor
 public class ImportDataQualityService {

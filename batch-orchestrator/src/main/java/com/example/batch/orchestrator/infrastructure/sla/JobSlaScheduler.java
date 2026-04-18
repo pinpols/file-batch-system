@@ -26,6 +26,17 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+/**
+ * 任务 SLA 违约扫描调度器。
+ *
+ * <p>默认每 30 秒扫描一次尚未标记告警、但已超过截止时间（{@code deadlineAt}）或
+ * 预期执行时长（{@code expectedDurationSeconds}）的运行中任务实例，通过 CAS 更新
+ * {@code sla_alerted_at} 字段防止重复告警，并写入 WARN 级告警日志与 INFO 级审计日志，
+ * 同时向 {@link AlertEventService} 发送 {@code JOB_SLA_VIOLATION} 事件。
+ * 通过 Micrometer 指标 {@code batch.job.sla.violation.count} 暴露当前违约候选总数。
+ * ShedLock 锁名 {@code job_sla_scan}，最长持锁 2 分钟，最短持锁 15 秒；
+ * 可通过 {@code batch.sla.enabled=false} 完全关闭扫描。
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

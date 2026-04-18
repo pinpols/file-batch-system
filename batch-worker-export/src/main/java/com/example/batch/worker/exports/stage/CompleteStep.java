@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class CompleteStep implements ExportStageStep {
 
-  // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_RECORD_COUNT = "recordCount";
   private static final String KEY_OBJECT_NAME = "objectName";
 

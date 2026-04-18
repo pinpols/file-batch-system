@@ -607,3 +607,59 @@ batch-console-api       ← 控制台 BFF（面向前端）
 | `job_instance.status` | `JobInstanceStatus` | `CREATED` / `WAITING` / `READY` / `RUNNING` / `PARTIAL_FAILED` / `SUCCESS` / `FAILED` / `CANCELLED` / `TERMINATED` |
 | `workflow_run.status` | `WorkflowRunStatus` | `CREATED` / `RUNNING` / `SUCCESS` / `FAILED` / `TERMINATED` |
 | `file_record.status` | `FileStatus` | `RECEIVED` / `PARSING` / `PARSED` / `VALIDATED` / `LOADED` / `GENERATED` / `DISPATCHING` / `DISPATCHED` / `ARCHIVED` / `FAILED` / `DELETED` |
+
+---
+
+## 19. 注释规范
+
+### 19.1 原则
+
+**只注释 WHY，不注释 WHAT。** 代码本身说明做什么；注释说明为什么这样做——隐藏约束、反直觉决策、特定 bug 的绕过方案、业务语义。
+
+| 应写注释 | 不应写注释 |
+|---------|-----------|
+| 算法选择原因（如为何用 AES/GCM） | 重复方法名含义（`// 获取用户` 在 `getUser()` 上） |
+| 状态机转换的业务含义 | 解释自解释变量名 |
+| 看似多余但有原因的代码（防御性写法、幂等保护） | 每个参数的 `@param` 描述（参数名已表达） |
+| 跨事务、跨服务的协议约定 | 枚举/接口成员的字面描述 |
+
+### 19.2 类级 Javadoc
+
+复杂 Service / Executor / Handler 类必须有类级 Javadoc，说明：
+- 该类在链路中的角色与职责边界
+- 状态机或关键流程（必要时附简要流程说明）
+- 与相邻类的协议约定（如事务边界、并发安全假设）
+
+接口、简单 DTO / record、Spring 配置类、枚举不需要 Javadoc。
+
+### 19.3 方法级注释
+
+以下场景需要在方法内写内联注释或方法级 Javadoc：
+- 方法体内存在非显而易见的分支决策（如 half-open 探针放行、bizDate=null 跳过语义）
+- 有顺序约束的多步操作（如"先 deactivate 再 insert"保证单活版本）
+- 魔法常量或限制值的来源（如 `MAX_PROBE_CHANNEL_BATCH = 1000` 防 DB 扫描）
+- 与线格式、协议字节序相关的编解码逻辑
+
+辅助方法（名称已自解释的 `toXxx` / `resolveXxx` / `buildXxx` / `parseXxx`）不需要注释。
+
+### 19.4 当前覆盖基线（2026-04-18）
+
+对各模块核心逻辑类（Service / Executor / Handler 实现）的逻辑方法（≥3 行方法体）扫描结果：
+
+| 模块 | 核心类 | 逻辑方法数 | 有注释 | 覆盖率 |
+|------|--------|-----------|--------|--------|
+| batch-common | `BatchObjectCryptoService` | 9 | 6 | 67% |
+| batch-trigger | `DefaultTriggerService` | 13 | 9 | 69% |
+| batch-trigger | `DefaultLaunchAdapterService` | 3 | 3 | 100% |
+| batch-orchestrator | `DefaultTaskOutcomeService` | 35 | 14 | 40% |
+| batch-orchestrator | `DefaultTaskExecutionService` | 1 | 1 | 100%（全 delegate） |
+| batch-worker-core | `DefaultWorkerLifecycleManager` | 3 | 2 | 67% |
+| batch-worker-import | `DefaultImportStageExecutor` | 12 | 6 | 50% |
+| batch-worker-export | `DefaultExportStageExecutor` | 13 | 6 | 46% |
+| batch-worker-dispatch | `DefaultDispatchStageExecutor` | 13 | 7 | 54% |
+| batch-console-api | `DefaultConsoleJobApplicationService` | 0 | 0 | N/A（全 facade） |
+| batch-console-api | `DefaultConsoleConfigApplicationService` | 22 | 10 | 45% |
+| **全局** | | **124** | **64** | **52%** |
+
+> 未覆盖的 48% 基本为命名自解释的辅助方法（`resolveXxx` / `toXxx` / `buildXxx` 等），
+> 不应为追求覆盖率而添加无效注释。**52% 是当前合理的目标终态。**

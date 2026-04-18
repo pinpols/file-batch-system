@@ -22,7 +22,6 @@ import org.springframework.util.StringUtils;
 @Component
 public class PrepareStep implements ExportStageStep {
 
-  // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_SNAPSHOT_MODE = "snapshotMode";
   private static final String KEY_SNAPSHOT_TS = "snapshotTs";
   private static final String KEY_SOURCE_PARTITIONS = "sourcePartitions";

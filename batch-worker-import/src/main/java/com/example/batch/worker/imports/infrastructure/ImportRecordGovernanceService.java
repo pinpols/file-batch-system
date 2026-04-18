@@ -25,6 +25,23 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 导入坏记录治理服务：集中管理跳过策略、阈值判断、坏记录持久化和错误输出汇总。
+ *
+ * <p><b>跳过策略</b>（{@link SkipAction}）：{@code CONTINUE}（记录后继续）、
+ * {@code FAIL_BATCH}（触发跳过即批次失败）、{@code MANUAL_REVIEW}（标记人工审核）。
+ * 允许跳过的错误码由 {@code ImportSkipProperties#skipErrorCodes} 逗号分隔配置；空列表表示全部可跳过。
+ *
+ * <p><b>阈值</b>（{@link SkipThresholdMode}）：{@code ABSOLUTE}（最大跳过条数）或
+ * {@code PERCENTAGE}（最大跳过率），超阈值通过 {@link #recordThresholdViolation} 写入坏记录
+ * 并在上下文中标记 {@code skipThresholdExceeded=true}。
+ *
+ * <p><b>坏记录落库</b>：每条坏记录同步写入 {@code file_error_record}，
+ * 并按 {@link ErrorSinkType} 决定是否额外写入 MinIO 错误文件（{@link ImportErrorOutputStorage}）。
+ * 含 {@code error_line_masking_enabled} 配置时对错误信息和原始记录脱敏。
+ *
+ * <p>{@link #finalizeErrorOutput} 在 pipeline 结束时汇总统计并更新 {@code file_record} 元数据 + 审计。
+ */
 @Service
 @RequiredArgsConstructor
 public class ImportRecordGovernanceService {

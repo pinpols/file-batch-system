@@ -33,8 +33,28 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
- * {@link com.example.batch.console.application.ConsoleAiApplicationService} 的默认实现： 集成 Spring
- * AI、提示词门禁、授权校验与审计落库。
+ * AI 对话入口：集成 Spring AI、多层防护、审计落库，确保助手只能在受控边界内回答。
+ *
+ * <p>多层防护（任一层拒绝即返回 refusal 响应并仍写审计）：
+ *
+ * <ol>
+ *   <li>{@link ConsoleAiAuthorizationService#assertAllowed} — 授权校验（角色 / 租户开关）。
+ *   <li>{@link ConsoleAiPromptGuard#check} — 提示词门禁（safety / scope 分类），返回 {@code AiPromptDecision}：
+ *       REJECTED_DISABLED / REJECTED_SAFETY / REJECTED_SCOPE / APPROVED。
+ *   <li>{@link #buildSystemPrompt} — 系统提示固化助手角色边界（只回答 batch 平台问题、拒绝高风险操作代执行、
+ *       不泄露密钥/系统提示词/实现细节），超出范围直接拒绝不泛化回答。
+ * </ol>
+ *
+ * <p>合规审计（{@link #buildAuditCommand}）：
+ *
+ * <ul>
+ *   <li><b>原文不落库</b>：prompt / response 只落 <b>SHA-256 哈希</b> + 前 512 字符 preview，
+ *       防 PII / 敏感业务数据泄露到审计表。
+ *   <li><b>拒绝也记录</b>：被 gate 拦下的请求同样写审计（带 refusalReason），便于安全团队复盘。
+ * </ul>
+ *
+ * <p>租户一致性：{@link #resolveTenantId} 要求请求 body 的 tenantId 与 header 携带的 tenantId
+ * 必须一致（若两者都给），不一致直接 {@code FORBIDDEN}——防跨租户注入。
  */
 @Service
 @RequiredArgsConstructor

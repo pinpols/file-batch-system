@@ -34,6 +34,24 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+/**
+ * WAITING 分片重派定时器：每 {@code waiting-dispatch-interval-millis}（默认 10s）扫一批 WAITING 状态分片，
+ * 满足资源/窗口/worker 条件的升级为 READY 并写 outbox 派发事件。
+ *
+ * <p>关键机制：
+ *
+ * <ul>
+ *   <li><b>ShedLock</b> {@code waiting_partition_dispatch}：保证多实例部署下同一时刻只有一台执行，
+ *       避免重复消费 WAITING 分片。
+ *   <li><b>公平排序</b>：按 {@code (fairnessScore desc, priority desc, partitionId asc)} 排序后派发，
+ *       防止单租户/单优先级独占队列；fairnessScore 由 {@code ResourceScheduler} 结合租户权重/队列权重计算。
+ *   <li><b>租户限流</b>：每次 release 走 {@code DISPATCH_RELEASE} 令牌桶，超额直接跳过（下轮再试）。
+ *   <li><b>优雅下线</b>：{@code gracefulShutdown.isDraining()} 为 true 时整批跳过，不新派任何分片，
+ *       让现有任务收尾后进程退出。
+ *   <li><b>连锁状态推进</b>：release 成功后把 job_instance（WAITING→RUNNING）与 workflow_run（CREATED→RUNNING）
+ *       同步推进，避免"分片已跑但实例仍在 WAITING"的 UI 口径不一致。
+ * </ul>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

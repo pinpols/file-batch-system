@@ -14,6 +14,22 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * Worker 路由选择：从 ONLINE worker 中挑一个承接任务。
+ *
+ * <p>筛选链：
+ *
+ * <ol>
+ *   <li>按 {@code (tenantId, workerGroup, status=ONLINE)} 过滤——workerGroup 缺省时退化为仅按租户 + ONLINE 过滤。
+ *       <b>只选 ONLINE</b>：DRAINING / DECOMMISSIONED 状态的 worker 即使 heartbeat 仍在也不选
+ *       （与 {@link com.example.batch.orchestrator.service.DefaultWorkerRegistryService} 的"状态不回退"不变量呼应）。
+ *   <li>按 {@code resourceTag} 匹配队列要求（队列无标签则全通过）。
+ *   <li>排序 {@code (currentLoad asc, heartbeatAt desc)}：当前负载最小优先，并列时心跳最新者优先——
+ *       同时兼顾负载均衡与活跃度（最近心跳的 worker 状态最可信）。
+ * </ol>
+ *
+ * <p>找不到匹配 worker 时返回 {@code available=false} 的 route（不返回 null），让调用方拿到 reasonCode。
+ */
 @Component
 @RequiredArgsConstructor
 public class DefaultWorkerSelector implements WorkerSelector {

@@ -56,7 +56,6 @@ public class DefaultExportStageExecutor
 
   @Override
   public List<ExportStageResult> execute(ExportJobContext context) {
-    // 先执行 stage 循环；只有全部 stage 成功时才认为产物可信并记录 rows 指标。
     List<ExportStageResult> results = runStageLoop(context);
     boolean overallSuccess = results.stream().allMatch(ExportStageResult::success);
     if (overallSuccess) {
@@ -84,6 +83,8 @@ public class DefaultExportStageExecutor
 
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(ExportJobContext context) {
+    // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
+    // 无内联定义时降级到 DB 按 pipelineDefinitionId 加载（Job 级别默认配置）。
     Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
     if (definitions instanceof List<?> list) {
       List<PipelineStepDefinition> resolved = new ArrayList<>();
@@ -189,6 +190,7 @@ public class DefaultExportStageExecutor
     }
   }
 
+  // implCode 索引用于运行时按步骤定义的 implCode 查找实现 Bean（同一 stage 可有多种实现）
   private Map<String, ExportStageStep> indexByImplCode(List<ExportStageStep> steps) {
     Map<String, ExportStageStep> indexed = new LinkedHashMap<>();
     for (ExportStageStep step : steps) {
@@ -197,6 +199,7 @@ public class DefaultExportStageExecutor
     return Map.copyOf(indexed);
   }
 
+  // stage 索引用于构建默认步骤模板时按枚举顺序查找唯一实现
   private Map<ExportStage, ExportStageStep> indexByStage(List<ExportStageStep> steps) {
     Map<ExportStage, ExportStageStep> indexed = new LinkedHashMap<>();
     for (ExportStageStep step : steps) {

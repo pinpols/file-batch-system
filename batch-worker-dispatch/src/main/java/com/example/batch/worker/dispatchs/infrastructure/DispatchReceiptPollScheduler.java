@@ -22,7 +22,17 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** 定时轮询 {@code receipt_poll_url}（来自合并后的渠道配置），处理 {@code receipt_status = PENDING} 的分发记录。 */
+/**
+ * 异步回执轮询器：定时从 {@code file_dispatch_record} 中取出 {@code receipt_status=PENDING} 的记录，
+ * 向渠道配置的 {@code receipt_poll_url} 发 GET 请求查询投递确认状态。
+ *
+ * <p>若响应中 {@code acknowledged=true} / {@code status=ACKED} / {@code receipt_status=SUCCESS}，
+ * 则标记该记录为 {@code ACKED} 并将 {@code file_record.file_status} 推进为 {@code DISPATCHED}；
+ * 状态冲突（CAS 返回 0 行）记录 warn 跳过——另一节点已处理。
+ *
+ * <p>ShedLock 防止多节点重复轮询同一批记录；Micrometer 指标
+ * {@code batch.dispatch.receipt.poll.failures/successes} 用于告警监控。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

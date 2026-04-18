@@ -26,6 +26,26 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * 跨环境/跨租户的配置同步入口（export → preview → import）。
+ *
+ * <p>用途：把源租户（通常是某环境）的一批配置（job / workflow / pipeline / fileChannel / fileTemplate）
+ * 打包成 {@code ConfigSyncBundlePayload}，在目标租户侧 upsert 进去；实际 upsert 委托给
+ * {@link ConsoleTenantConfigInitApplicationService#batchInit}，支持 {@code dryRun} 预检不落库。
+ *
+ * <p>3 阶段：
+ *
+ * <ul>
+ *   <li>{@link #export} — 源租户导出完整 bundle + summary（每类 count），前端据此呈现"可同步清单"。
+ *   <li>{@link #preview} — 只返回 summary，不真正同步（比 import 轻量，用于前端挑选目标环境时的预判）。
+ *   <li>{@link #importBundle} — 真正 upsert；每次都创建一条 {@code config_sync_log} 审计记录，
+ *       成功时 {@link #updateLog} 更新结果（SUCCESS/PARTIAL_FAILED）。
+ * </ul>
+ *
+ * <p>关键容错：{@link #markLogFailed} 用 {@code PROPAGATION_REQUIRES_NEW} 提交失败日志——
+ * 即使主事务 rollback（batchInit 抛出 RuntimeException），同步日志仍保留便于事后排查根因。
+ * 失败后异常 rethrow 触发主事务回滚，保证部分失败时不会留下半上线状态。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleConfigSyncApplicationService

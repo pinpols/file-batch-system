@@ -29,8 +29,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 /**
- * {@link com.example.batch.console.application.ConsoleApprovalApplicationService} 的默认实现： 编排器审批 HTTP
- * 调用，并在涉及文件/作业联动时委托其他应用服务。
+ * 审批决策入口：approve 成功后按 {@code actionType} 自动执行下游业务。
+ *
+ * <p>核心编排（{@link #approve}）：
+ *
+ * <ol>
+ *   <li>从 orchestrator 拉审批记录，非 {@code PENDING} 直接返回 approvalNo（幂等——重复调用不二次执行业务）。
+ *   <li>远程调 {@code /internal/approvals/{no}/approve} 把状态推进为 APPROVED。
+ *   <li>按 {@code actionType} 分派到对应 application service 执行真实业务：
+ *       <ul>
+ *         <li>{@code COMPENSATION} → {@link ConsoleJobApplicationService#compensation}
+ *         <li>{@code DLQ_REPLAY} → {@link ConsoleJobApplicationService#replayDeadLetter}
+ *         <li>{@code DOWNLOAD} → {@link ConsoleFileApplicationService#presignDownload}
+ *         <li>{@code CATCH_UP} → {@link ConsoleJobApplicationService#approveCatchUp}
+ *       </ul>
+ *   <li>业务执行成功后调 {@code /executed} 把审批推进为 EXECUTED——失败则不推进，允许重试同一 approvalNo。
+ * </ol>
+ *
+ * <p>批量接口 {@link #batchApprove} / {@link #batchReject}：逐项独立 try/catch，单项失败不中断全批；
+ * 错误消息经 {@link ConsoleTextSanitizer#safeDisplay} 清洗后回传，防异常栈泄露内部细节。
  */
 @Service
 @RequiredArgsConstructor
@@ -144,7 +161,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             .retrieve()
             .body(ApprovalRecordResponse.class);
     Guard.requireFound(
-        response == null || response.getRecord() == null, "approval request not found");
+        response == null ? null : response.getRecord(), "approval request not found");
     return response;
   }
 

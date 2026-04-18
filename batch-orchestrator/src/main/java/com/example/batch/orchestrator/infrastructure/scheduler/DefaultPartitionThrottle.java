@@ -15,6 +15,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 分区级闸门：按 job_partition 计数，与 {@link DefaultConcurrencyLimiter} 平行但维度不同
+ * ——后者管 job instance 数，本类管 partition 数（一个 job 可能切成很多分区，分区数才真正决定消费压力）。
+ *
+ * <p>计数口径：活跃状态 = {@code WAITING / READY / RUNNING / RETRYING}（注意不包含 CREATED，
+ * 新建尚未进调度的分区不计入），与 {@link DefaultConcurrencyLimiter} 的 job-instance 活跃口径解耦。
+ *
+ * <p>两层闸门：
+ *
+ * <ul>
+ *   <li><b>Tenant</b>：{@code maxPartitionsPerTenant} + {@code partitionBurstLimit} 软弹性，走 {@link QuotaRuntimeStateService}。
+ *   <li><b>Queue</b>：{@code maxRunningPartitions} + {@code burstLimit}；若调度请求带 {@code workerGroup}
+ *       则把计数细化到 {@code (tenant, workerGroup)} 组合——避免多 workerGroup 共享队列时互相踩数。
+ * </ul>
+ */
 @Component
 @RequiredArgsConstructor
 public class DefaultPartitionThrottle implements PartitionThrottle {

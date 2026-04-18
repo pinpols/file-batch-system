@@ -12,6 +12,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 告警事件 emit 入口：把 orchestrator 内部各子系统（SLA / 熔断 / drain 等）的告警统一落 {@code alert_event} 表。
+ *
+ * <p>去重靠 {@code dedup_fingerprint}（{@code tenantId + alertType + resourceKey} 的哈希）——
+ * {@code insertOrMerge} 依赖 DB 唯一约束做 UPSERT，重复告警合并到同一行（更新 last_triggered_at 等），
+ * 避免同一故障刷屏污染告警表；同时在 Micrometer 上打 {@code batch.alert.events} 计数便于监控。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultAlertEventService implements AlertEventService {

@@ -41,17 +41,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * 单 sheet Excel 导入导出的模板基类。
- *
- * <p>统一实现 downloadTemplate / upload / preview / downloadPreviewWorkbook / apply 五个标准端点的样板逻辑，
- * 子类只需提供实体特有的：列定义、行解析、校验规则、upsert 操作和 Response 转换。
- *
- * <p>export 方法因各实体查询参数不同，由子类自行实现并调用 {@link #doExport} 复用 workbook 生成。
- *
- * @param <ROW> 解析后的实体行类型（如 RoutingRow）
- * @param <RESP> 预览时返回的行响应类型（如 ConsoleAlertRoutingResponse）
- */
+/** 单 sheet Excel 导入导出模板基类：export 因查询参数各异由子类实现，复用 {@link #doExport} 生成 workbook。 */
 public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
 
   protected final ConsoleTenantGuard tenantGuard;
@@ -67,50 +57,32 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     this.importStore = importStore;
   }
 
-  // 子类必须实现的抽象方法
-
-  /** sheet 名称。 */
   protected abstract String sheetName();
 
-  /** 列名列表（顺序即 Excel 列顺序）。 */
   protected abstract List<String> columns();
 
-  /** 列填写指南（悬停提示）。 */
   protected abstract Map<String, ColumnGuide> columnGuides();
 
-  /** 从 raw map 解析出实体行，校验问题写入 issues。 */
+  /** 校验问题写入 issues。 */
   protected abstract ROW parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues);
 
-  /** 提取行的唯一键（用于去重检测）。 */
   protected abstract String rowUniqueKey(ROW row);
 
-  /** 将解析后的行转换为预览响应 DTO。 */
   protected abstract RESP toResponse(ROW row);
 
-  /**
-   * 执行单行 upsert 并返回是否为新增。
-   *
-   * @return true=新增, false=更新
-   */
+  /** @return true=新增, false=更新 */
   protected abstract boolean upsertRow(ROW row, String tenantId, String operatorId);
 
-  /** 记录配置变更日志。 */
   protected abstract void logChange(
       String tenantId, ROW row, String reason, String operatorId, String traceId, String action);
 
-  /** 对 sheet 施加下拉/布尔等数据校验。 */
   protected abstract void applyValidations(Sheet sheet);
 
-  /** 创建 README sheet。 */
   protected abstract void createReadmeSheet(Workbook workbook);
 
-  /** 创建 DICT sheet。 */
   protected abstract void createDictSheet(Workbook workbook);
 
-  // 公共端点实现（子类直接委托）
-
-  /** export 的 workbook 生成 + 下载封装（子类 export 方法调用此方法）。 */
   protected final ResponseEntity<InputStreamResource> doExport(
       String tenantId, List<Map<String, Object>> rows) {
     byte[] bytes = writeWorkbook(rows);
@@ -164,20 +136,11 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
         ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), bytes);
   }
 
-  /**
-   * 执行 apply（默认模式：有无效行则拒绝全部）。
-   *
-   * @see #doApply(String, String, boolean)
-   */
   public final ExcelApplyResponse doApply(String uploadToken, String reason) {
     return doApply(uploadToken, reason, false);
   }
 
-  /**
-   * 执行 apply。
-   *
-   * @param skipInvalid true 时跳过无效行，只导入有效行；false 时有无效行则拒绝全部
-   */
+  /** skipInvalid=true 时只导入有效行；否则有无效行则整体拒绝。 */
   public final ExcelApplyResponse doApply(String uploadToken, String reason, boolean skipInvalid) {
     ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
     Validated<ROW> result = validateRows(session);
@@ -208,11 +171,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
         skipInvalid ? result.invalidRows() : 0);
   }
 
-  /**
-   * 一键导入：upload → validate → 无错误自动 apply / 有错误返回 preview + 错误 workbook URL。
-   *
-   * <p>前端只需一次调用，替代原来的 upload → preview → apply 三步。
-   */
+  /** 一键导入：upload → validate → 无错误自动 apply / 有错误返回 preview + 错误 workbook URL。 */
   public final ExcelQuickImportResponse<RESP> quickImport(
       MultipartFile file, String reason, boolean skipInvalid) throws IOException {
     ExcelUploadResponse uploaded = upload(file);
@@ -254,9 +213,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
         previewWorkbookUrl);
   }
 
-  /**
-   * 记录导入批次审计摘要。默认实现为空（已有逐行 logChange）。子类可覆盖写入批次级审计。
-   */
+  /** 默认为空（已有逐行 logChange）；子类可覆盖写入批次级审计。 */
   protected void logImportAudit(
       String tenantId,
       String fileName,

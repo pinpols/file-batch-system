@@ -16,6 +16,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * Orchestrator 配置缓存服务。
+ *
+ * <p>为作业定义、工作流定义、业务日历、批次窗口、租户配额策略提供统一的 Redis 二级缓存，
+ * 缓存 TTL 固定为 5 分钟（{@code CONFIG_CACHE_TTL}）。读取时先查 Redis，未命中再查数据库
+ * 并回填缓存；仅缓存已启用（{@code enabled=true}）的记录。提供对应的 {@code evict*} 方法
+ * 供配置变更时主动失效缓存，防止脏读。所有方法在入参为空时快速返回 {@code null}，不访问缓存。
+ */
 @Service
 @RequiredArgsConstructor
 public class OrchestratorConfigCacheService {

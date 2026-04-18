@@ -13,6 +13,13 @@ import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * Dispatch pipeline 的 RETRY 阶段：对 {@link DeliverDispatchStep} 投递失败的情况执行一次重试。
+ *
+ * <p>仅当上下文中 {@code retryRequested=true} 时执行实际重试；否则直接跳转到 {@code COMPENSATE} 阶段。
+ * 重试成功时跳转到 {@code ACK} 阶段（{@code retryRecovered=true}），失败时跳转到 {@code COMPENSATE} 阶段。
+ * 每次尝试通过 {@code incrementAttempt} 递增投递计数。
+ */
 @Component
 public class RetryDispatchStep implements DispatchStageStep {
 

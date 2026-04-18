@@ -16,6 +16,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
+/**
+ * 文件治理数据访问层：提供文件记录查询、状态更新、归档/删除、对账写入和审计追加等操作。
+ *
+ * <p>状态变更通过 {@link FileStateMachine#assertTransition} 校验合法跃迁；
+ * 文件删除操作同步更新 dispatch 记录的 {@code runningStatus} 为 {@code TERMINATED}。
+ * 内嵌 record 值对象（{@code FileIdentity}、{@code FileStorage}、{@code ReconciledFileRecordCommand} 等）
+ * 封装对账写入和审计所需的参数，避免散落的 null 参数。
+ */
 @Repository
 @RequiredArgsConstructor
 public class FileGovernanceRepository {

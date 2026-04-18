@@ -6,60 +6,40 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.Data;
 
-/**
- * 租户配置批量初始化请求。
- *
- * <p>支持一次性向多个租户推送相同的作业定义、工作流定义、流水线定义、文件通道、文件模板配置。
- * mode=SKIP_EXISTING：已存在则跳过；mode=UPSERT：存在则更新，不存在则插入。
- */
+/** mode=SKIP_EXISTING 已存在跳过；mode=UPSERT 已存在更新。dryRun=true 时只校验不落库。 */
 @Data
 public class TenantConfigBatchInitRequest {
 
-  /** 目标租户 ID 列表（最多 50 个）。 */
   @NotEmpty(message = "targetTenantIds must not be empty")
   @Size(max = 50, message = "targetTenantIds must not exceed 50")
   private List<@Size(min = 1, max = 64) String> targetTenantIds;
 
-  /** 初始化模式：SKIP_EXISTING 或 UPSERT。默认 SKIP_EXISTING。 */
   private InitMode mode = InitMode.SKIP_EXISTING;
 
-  /** 试运行模式：true 时只做查询和校验，不执行 insert/update/delete。 */
   private boolean dryRun;
 
-  /** 作业定义模板列表。 */
   @Valid private List<JobDefinitionSpec> jobDefinitions;
 
-  /** 工作流定义模板列表。 */
   @Valid private List<WorkflowDefinitionSpec> workflowDefinitions;
 
-  /** 流水线定义模板列表。 */
   @Valid private List<PipelineDefinitionSpec> pipelineDefinitions;
 
-  /** 文件通道模板列表。 */
   @Valid private List<FileChannelSpec> fileChannels;
 
-  /** 文件模板列表。 */
   @Valid private List<FileTemplateSpec> fileTemplates;
 
-  /** 资源队列列表。 */
   @Valid private List<ResourceQueueSpec> resourceQueues;
 
-  /** 批量窗口列表。 */
   @Valid private List<BatchWindowSpec> batchWindows;
 
-  /** 业务日历列表。 */
   @Valid private List<BusinessCalendarSpec> businessCalendars;
 
-  /** 租户配额策略列表。 */
   @Valid private List<TenantQuotaPolicySpec> quotaPolicies;
 
-  /** 告警路由列表。 */
   @Valid private List<AlertRoutingSpec> alertRoutings;
 
   public enum InitMode {
-    /** 已存在则跳过，不存在则创建。 */
     SKIP_EXISTING,
-    /** 已存在则更新，不存在则创建。 */
     UPSERT
   }
 
@@ -365,7 +345,7 @@ public class TenantConfigBatchInitRequest {
     private Integer catchUpMaxDays;
     private Boolean enabled;
 
-    /** 节假日列表，可选。格式：yyyy-MM-dd。 */
+    /** 格式：yyyy-MM-dd。 */
     private List<String> holidays;
   }
 

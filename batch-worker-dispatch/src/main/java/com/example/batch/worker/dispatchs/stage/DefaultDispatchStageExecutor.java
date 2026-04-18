@@ -84,6 +84,8 @@ public class DefaultDispatchStageExecutor
 
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(DispatchJobContext context) {
+    // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
+    // 无内联定义时降级到 DB 按 pipelineDefinitionId 加载（Job 级别默认配置）。
     Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
     if (definitions instanceof List<?> list) {
       List<PipelineStepDefinition> resolved = new ArrayList<>();
@@ -192,6 +194,7 @@ public class DefaultDispatchStageExecutor
     }
   }
 
+  // implCode 索引用于运行时按步骤定义的 implCode 查找实现 Bean（同一 stage 可有多种渠道实现）
   private Map<String, DispatchStageStep> indexByImplCode(List<DispatchStageStep> steps) {
     Map<String, DispatchStageStep> indexed = new LinkedHashMap<>();
     for (DispatchStageStep step : steps) {
@@ -200,6 +203,7 @@ public class DefaultDispatchStageExecutor
     return Map.copyOf(indexed);
   }
 
+  // stage 索引用于构建默认步骤模板时按枚举顺序查找唯一实现
   private Map<DispatchStage, DispatchStageStep> indexByStage(List<DispatchStageStep> steps) {
     Map<DispatchStage, DispatchStageStep> indexed = new LinkedHashMap<>();
     for (DispatchStageStep step : steps) {
@@ -226,6 +230,9 @@ public class DefaultDispatchStageExecutor
       if (step == null) {
         throw new IllegalStateException("missing dispatch step bean for stage: " + stage.name());
       }
+      // stepParams 向 AbstractStageExecutor 的状态机注入路由提示：
+      // ACK 成功后直跳 COMPLETE（跳过 RETRY/COMPENSATE），失败才进入 RETRY；
+      // RETRY 失败后走 COMPENSATE；COMPLETE/COMPENSATE 成功后终止整个 pipeline。
       Map<String, Object> stepParams =
           switch (stage) {
             case ACK -> Map.of("onSuccessNextStageCode", DispatchStage.COMPLETE.name());

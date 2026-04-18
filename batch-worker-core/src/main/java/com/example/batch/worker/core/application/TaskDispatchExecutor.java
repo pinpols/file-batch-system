@@ -6,6 +6,12 @@ import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * Kafka 消费层与 Worker 执行层之间的粘合：先向 Orchestrator CLAIM 任务所有权，
+ * 成功后再执行；CLAIM 失败（如已被其他 worker 抢占）则直接返回 null，消费层据此跳过。
+ *
+ * <p>保证 Orchestrator 是唯一状态主机：Kafka 仅负责任务路由，Worker 不能绕过 CLAIM 直接执行。
+ */
 @Service
 @RequiredArgsConstructor
 public class TaskDispatchExecutor {

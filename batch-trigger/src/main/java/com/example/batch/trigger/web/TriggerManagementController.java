@@ -9,6 +9,11 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 触发器运维管理控制器，提供触发器的注册、注销、暂停、恢复以及优雅排水（draining）等运维操作接口。
+ * 该接口仅供内部运维使用，不对外暴露；所有操作结果以 {@code Map<String,String>} 形式返回当前状态。
+ * 暂停/恢复操作同时支持单个任务维度和租户维度的批量控制。
+ */
 @RestController
 @RequestMapping("/api/triggers/management")
 @RequiredArgsConstructor

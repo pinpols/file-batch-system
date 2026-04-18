@@ -18,6 +18,23 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 通知治理服务：管理通知渠道 / 订阅规则 / 投递日志三张表的 CRUD 与查询。
+ *
+ * <p>3 块职责：
+ *
+ * <ul>
+ *   <li><b>通知渠道</b>（EMAIL / DINGTALK / WECOM / WEBHOOK / SMS）：{@link #CHANNEL_TYPES} 是白名单枚举，
+ *       创建/更新时入参 {@code channelType} 必须在集合内，否则 {@code INVALID_ARGUMENT} 拒绝。
+ *   <li><b>订阅规则</b>：按租户订阅 (eventType, severity, jobCode) 维度的告警，分发到指定渠道。
+ *   <li><b>投递日志</b>：审计用，每次通知分发的结果（成功/失败）都在此记录。
+ * </ul>
+ *
+ * <p>唯一性约束：{@code channelCode} 应用层前置查重（{@code selectByCode != null → CONFLICT}），
+ * 非 DB 唯一索引兜底——并发创建同 code 时存在 TOCTOU 窗口，但通知治理操作并发度低，可接受。
+ *
+ * <p>自由文本入参（channelName / channelCode 等）统一经 {@link ConsoleTextSanitizer#safeInput} 截断清洗。
+ */
 @Service
 @RequiredArgsConstructor
 public class DefaultConsoleNotificationApplicationService

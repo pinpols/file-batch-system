@@ -11,6 +11,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
+/**
+ * Orchestrator Redis 操作工具类：封装常用 Redis 操作，统一序列化/反序列化并提供原子化操作支持。
+ *
+ * <p>主要能力：JSON 值的 get/set/delete（反序列化失败时自动删除脏数据）、
+ * Hash 整体写入、滑动窗口计数器（{@code incrementWithinWindow}，首次写入时设置 TTL），
+ * 以及执行 Lua 脚本（{@code evalLong}）。
+ */
 @Component
 @RequiredArgsConstructor
 public class OrchestratorRedisSupport {

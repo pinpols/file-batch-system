@@ -23,7 +23,6 @@ import org.springframework.util.StringUtils;
 @Component
 public class RegisterStep implements ExportStageStep {
 
-  // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_OBJECT_NAME = "objectName";
 
   private static final Set<String> RESERVED_METADATA_KEYS =

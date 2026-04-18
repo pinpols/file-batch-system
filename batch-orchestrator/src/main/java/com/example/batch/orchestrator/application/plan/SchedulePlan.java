@@ -5,6 +5,12 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
 
+/**
+ * 调度计划：{@link SchedulePlanBuilder} 的输出产物，描述本次调度所需的作业元数据、分区列表和 Worker 路由。
+ *
+ * <p>{@code shardTotal}/{@code shardIndex} 为 Outbox 分片参数，由 OutboxPollScheduler 注入；
+ * 其他调用方无需设置，默认值为全量单片（total=1, index=0）。
+ */
 @Data
 public class SchedulePlan {
 

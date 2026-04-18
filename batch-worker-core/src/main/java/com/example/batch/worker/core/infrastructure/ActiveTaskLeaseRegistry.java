@@ -11,6 +11,19 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+/**
+ * 当前 worker 进程内 in-flight 任务的租约注册表。
+ *
+ * <p><b>两个用途</b>：
+ * <ul>
+ *   <li>{@link WorkerTaskLeaseRenewer} 定时从 {@link #snapshot()} 取出所有活跃租约并向
+ *       Orchestrator 续期，防止因 pipeline 执行时间较长被误判为失活而重新派发。
+ *   <li>优雅停机时 {@link #awaitDrain} 等待所有任务自然完成后再退出进程，保证不留中间状态。
+ * </ul>
+ *
+ * <p>{@code register}/{@code remove} 使用写锁、{@code snapshot} 使用读锁，
+ * 保证停机期间快照与写操作互斥，避免 TOCTOU 窗口导致提前放行退出。
+ */
 @Slf4j
 @Component
 public class ActiveTaskLeaseRegistry {

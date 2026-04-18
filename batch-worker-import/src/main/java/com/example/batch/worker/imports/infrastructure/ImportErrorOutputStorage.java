@@ -13,6 +13,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 导入错误输出存储：将坏记录列表序列化为 NDJSON 格式并写入 MinIO，
+ * 路径格式为 {@code <ERROR_OUTPUT_PREFIX><tenantId>/<fileId>/<fileId>.error.jsonl}。
+ *
+ * <p>供 {@link ImportRecordGovernanceService} 在 {@code ErrorSinkType.ERROR_FILE} 或
+ * {@code BOTH} 模式下调用；文件不存在时直接创建，不做幂等校验。
+ */
 @Component
 @RequiredArgsConstructor
 public class ImportErrorOutputStorage {

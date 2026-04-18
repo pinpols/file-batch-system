@@ -78,6 +78,9 @@ public class DefaultImportStageExecutor
 
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(ImportJobContext context) {
+    // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
+    // 无内联定义时降级到 DB 按 pipelineDefinitionId 加载（Job 级别默认配置）。
+    // 两级设计允许在不改动 Job 定义的情况下，对单次任务动态注入自定义 pipeline。
     Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
     if (definitions instanceof List<?> list) {
       List<PipelineStepDefinition> resolved = new ArrayList<>();
@@ -185,6 +188,7 @@ public class DefaultImportStageExecutor
     }
   }
 
+  // implCode 索引用于运行时按步骤定义的 implCode 查找实现 Bean（同一 stage 可有多种实现）
   private Map<String, ImportStageStep> indexByImplCode(List<ImportStageStep> steps) {
     Map<String, ImportStageStep> indexed = new LinkedHashMap<>();
     for (ImportStageStep step : steps) {
@@ -193,6 +197,7 @@ public class DefaultImportStageExecutor
     return Map.copyOf(indexed);
   }
 
+  // stage 索引用于构建默认步骤模板时按枚举顺序查找唯一实现，确保每个 stage 只注册一个 Bean
   private Map<ImportStage, ImportStageStep> indexByStage(List<ImportStageStep> steps) {
     Map<ImportStage, ImportStageStep> indexed = new LinkedHashMap<>();
     for (ImportStageStep step : steps) {
