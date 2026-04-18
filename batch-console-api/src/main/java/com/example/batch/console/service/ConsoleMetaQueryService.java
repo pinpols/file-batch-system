@@ -152,7 +152,7 @@ public class ConsoleMetaQueryService {
 
   private List<ConsoleMetaOption> toOptions(
       List<ConsoleMetaQueryRepository.SimpleOptionView> rows) {
-    return rows.stream().map(row -> new ConsoleMetaOption(row.getCode(), row.getLabel())).toList();
+    return rows.stream().map(row -> new ConsoleMetaOption(row.code(), row.label())).toList();
   }
 
   /** 供守护测试读取当前已注册的枚举类集合（校验新增枚举必须注册或显式排除）。 */

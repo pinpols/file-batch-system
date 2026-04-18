@@ -131,59 +131,21 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
       """)
   List<SlaDayView> slaDailyTrend(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  interface StatusCountView {
-    String getStatus();
+  record StatusCountView(String status, Long count) {}
 
-    Long getCount();
-  }
+  record DayStatusCountView(LocalDate day, String status, Long count) {}
 
-  interface DayStatusCountView {
-    LocalDate getDay();
+  record TypeCountView(String type, Long count) {}
 
-    String getStatus();
+  record DayCountView(LocalDate day, Long count) {}
 
-    Long getCount();
-  }
+  record WorkerGroupStatusCountView(String workerGroup, String status, Long count) {}
 
-  interface TypeCountView {
-    String getType();
+  record ActivePartitionView(String workerCode, Long activePartitions) {}
 
-    Long getCount();
-  }
+  record SeverityCountView(String severity, Long count) {}
 
-  interface DayCountView {
-    LocalDate getDay();
-
-    Long getCount();
-  }
-
-  interface WorkerGroupStatusCountView {
-    String getWorkerGroup();
-
-    String getStatus();
-
-    Long getCount();
-  }
-
-  interface ActivePartitionView {
-    String getWorkerCode();
-
-    Long getActivePartitions();
-  }
-
-  interface SeverityCountView {
-    String getSeverity();
-
-    Long getCount();
-  }
-
-  interface DaySeverityCountView {
-    LocalDate getDay();
-
-    String getSeverity();
-
-    Long getCount();
-  }
+  record DaySeverityCountView(LocalDate day, String severity, Long count) {}
 
 
   @Query(
@@ -222,13 +184,7 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
   List<ConfigDependentView> jobsByWorkerGroup(
       @Param("tenantId") String tenantId, @Param("configCode") String configCode);
 
-  interface ConfigDependentView {
-    Long getId();
-
-    String getCode();
-
-    String getName();
-  }
+  record ConfigDependentView(Long id, String code, String name) {}
 
 
   @Query(
@@ -253,25 +209,16 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
       @Param("jobCode") String jobCode,
       @Param("bizDate") String bizDate);
 
-  interface ExecutionProgressView {
-    Long getId();
-
-    String getJobCode();
-
-    String getInstanceNo();
-
-    String getInstanceStatus();
-
-    Integer getExpectedPartitions();
-
-    Integer getSuccessPartitions();
-
-    Integer getFailedPartitions();
-
-    Instant getStartedAt();
-
-    Instant getFinishedAt();
-  }
+  record ExecutionProgressView(
+      Long id,
+      String jobCode,
+      String instanceNo,
+      String instanceStatus,
+      Integer expectedPartitions,
+      Integer successPartitions,
+      Integer failedPartitions,
+      Instant startedAt,
+      Instant finishedAt) {}
 
 
   @Query(
@@ -335,36 +282,20 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
       """)
   List<SlaJobReportView> slaJobReport(@Param("tenantId") String tenantId, @Param("days") int days);
 
-  interface SlaJobReportView {
-    String getJobCode();
-
-    String getJobName();
-
-    Long getTotalInstances();
-
-    Long getSuccessCount();
-
-    Long getFailedCount();
-
-    Long getSlaBreached();
-
-    Long getSlaOnTime();
-
-    BigDecimal getAvgDurationSeconds();
-
-    BigDecimal getMaxDurationSeconds();
-
-    Long getTotalPartitions();
-  }
+  record SlaJobReportView(
+      String jobCode,
+      String jobName,
+      Long totalInstances,
+      Long successCount,
+      Long failedCount,
+      Long slaBreached,
+      Long slaOnTime,
+      BigDecimal avgDurationSeconds,
+      BigDecimal maxDurationSeconds,
+      Long totalPartitions) {}
 
   record SlaStatsView(
       Long breached, Long onTime, Long totalWithSla, BigDecimal avgDurationSeconds) {}
 
-  interface SlaDayView {
-    LocalDate getDay();
-
-    Long getBreached();
-
-    Long getOnTime();
-  }
+  record SlaDayView(LocalDate day, Long breached, Long onTime) {}
 }
