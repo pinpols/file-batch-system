@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-04-18 | `GET /api/console/auth/me` 响应体 `ConsoleAuthProfileResponse` 补齐 `menus` 字段（后端早已下发，OpenAPI 漏写导致前端 codegen 不可见，退化为硬编码）；新增 `ConsoleMenuGroup` / `ConsoleMenuItem` schema，字段：`key`/`title`/`icon`/`minRole`（VIEWER/OPERATOR/ADMIN）、`children`、`path`；前端应从 `menus` 渲染侧边栏，废弃本地硬编码 navigation |
 | 2026-04-18 | 新增 `POST /api/console/auth/stream/ticket` SSE 一次性 ticket 鉴权端点；SSE 连接支持 `?ticket=` 参数（替代已移除的 `?token=`）；outbox-deliveries/outbox-retries stream 补充业务事件发布；`/meta/enums` 新增 8 个字典：triggerStatus/deliveryStatus/notificationChannelType/tenantStatus/logType/workflowDefinitionStatus/tenantConfigInitAction/triggerResourceType；OpenAPI 补 9 个 enum schema |
 | 2026-04-17 | 抽取 `DictEnum` 接口（`code()` / `label()`），batch-common 下全部 60 个公共枚举统一实现；`ConsoleMetaQueryService.EnumReg` 精简为 `(key, enumClass)` 两字段，`GET /api/console/meta/enums` 新增 3 个字典 key：`fileDispatchStatus` / `fileReceiptStatus` / `pipelineRunStatus`（原为裸枚举，补齐 code/label 后对外暴露）；守护测试 EXCLUDED 白名单从 6 收窄到 3（保留 `ResultCode` / `WorkflowNodeCode` / `JobStatus`），新增 DictEnum 实现的强制断言 |
 | 2026-04-17 | `GET /api/console/meta/enums` 新增 17 个字典 key：`priorityLevel` / `aiPromptDecision` / `checksumType` / `workflowJoinMode` / `fileDispatchRunStatus` / `compensationStatus` / `retryScheduleStatus` / `encryptType` / `compressType` / `errorSinkType` / `priorityBand` / `stepInstanceStatus` / `runMode` / `skipAction` / `workflowNodeRunStatus` / `deadLetterReplayStatus` / `skipThresholdMode`；同步补齐 `CommonResponseMetaEnums` schema 定义；新增 `ConsoleMetaEnumRegistrationTest` 守护测试，强制新增枚举二选一：注册或加入显式 EXCLUDED 白名单 |
@@ -103,7 +104,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 - Single-account login is single-session by default. A fresh login invalidates older JWTs for the same username and tenant.
 - Legacy `X-Console-Token` header auth is retained for compatibility and migration.
 - `POST /api/console/auth/token` exchanges an authenticated console session for a JWT access token.
-- `GET /api/console/auth/me` returns the current authenticated principal.
+- `GET /api/console/auth/me` returns the current authenticated principal, including `menus` — the role-filtered sidebar tree produced by `ConsoleMenuRegistry`. Frontends should render navigation from this field rather than hard-coding menu items.
 - `ROLE_ADMIN` can perform all write actions.
 - `ROLE_AUDITOR` is read-only for operational views and queries.
 - `ROLE_CONFIG_ADMIN` can access config and worker operations, but not all write actions.

@@ -10467,7 +10467,48 @@ components:
           type: array
           items:
             type: string
-      required: [username, tenantId, authorities]
+        menus:
+          type: array
+          description: 按当前用户 authorities 过滤后的侧边栏菜单树，由后端 ConsoleMenuRegistry 下发，前端不再硬编码。
+          items:
+            $ref: '#/components/schemas/ConsoleMenuGroup'
+      required: [username, tenantId, authorities, menus]
+    ConsoleMenuGroup:
+      type: object
+      description: 侧边栏菜单分组。
+      properties:
+        key:
+          type: string
+          description: 分组稳定 key（路由/埋点用）
+        title:
+          type: string
+        icon:
+          type: string
+          description: 图标名（Element Plus icon 标识）
+        minRole:
+          type: string
+          enum: [VIEWER, OPERATOR, ADMIN]
+          description: 查看该分组所需最低角色等级（VIEWER < OPERATOR < ADMIN）
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleMenuItem'
+      required: [key, title, icon, minRole, children]
+    ConsoleMenuItem:
+      type: object
+      description: 菜单项（叶子节点）。
+      properties:
+        title:
+          type: string
+        path:
+          type: string
+          description: 前端路由路径
+        icon:
+          type: string
+        minRole:
+          type: string
+          enum: [VIEWER, OPERATOR, ADMIN]
+      required: [title, path, icon, minRole]
     ConsoleLoginRequest:
       type: object
       description: >
