@@ -13,7 +13,7 @@ cd "$ROOT"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 mkdir -p "$RUNTIME_JAR_DIR"
 
-echo "==> Maven 打包应用模块（clean package -Dmaven.test.skip=true）..."
+echo "==> Maven 打包应用模块（clean package -DskipTests）..."
 # 优先使用 mvnd（Maven Daemon），没装则降级到 mvn
 _MVND_BIN="${HOME}/.local/bin/mvnd"
 if [[ -x "$_MVND_BIN" ]]; then
@@ -22,7 +22,11 @@ if [[ -x "$_MVND_BIN" ]]; then
 else
   MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
 fi
-"$MVN" -q -Dmaven.test.skip=true \
+# 用 -DskipTests 而非 -Dmaven.test.skip=true：
+# 前者只跳过测试执行，保留 test-classes 和 test-jar 构建；
+# 后者会跳过 test-jar 生成，导致 worker-core/console-api/trigger/orchestrator
+# 对 batch-common:tests 的依赖解析失败。
+"$MVN" -q -DskipTests \
   -Dcyclonedx.skip=true \
   -Dlicense.skip=true \
   -Dmaven.javadoc.skip=true \
