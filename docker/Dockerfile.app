@@ -39,7 +39,9 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=builder /tmp/app.jar /app/app.jar
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 ENV JAVA_OPTS=""
 
-ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS} -jar /app/app.jar"]
+ENTRYPOINT ["/app/entrypoint.sh"]

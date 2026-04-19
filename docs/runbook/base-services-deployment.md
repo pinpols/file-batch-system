@@ -284,23 +284,35 @@ Redis / MinIO，应用进程本身零本地状态。审计证据见下表。
 | **console-api** | 完全无状态，任意副本数 | JWT 验签无共享状态；SSE 推送通过 Redis Pub/Sub 广播到所有实例 |
 | **worker-import / export / dispatch** | **HPA 已配置**，按 Kafka lag 或 CPU 自动伸缩 | Kafka partition 自动再平衡；新 Pod 加入 consumer group 自动分到任务 |
 
-### 3 个需要注意的小瑕疵
+### 多副本防重复机制（已全部落地）
 
-落地云原生部署时请留意以下点，避免踩坑：
+| 机制 | 生效模块 | 实现 |
+|---|---|---|
+| **Outbox 分片** | orchestrator | Helm template 为 StatefulSet，Pod 名带 ordinal（`batch-orchestrator-0..N-1`），`entrypoint.sh` 提取 ordinal 注入 `BATCH_OUTBOX_SHARD_INDEX`；`BATCH_OUTBOX_SHARD_TOTAL` 由 `orchestrator.replicaCount` 模板化注入 |
+| **ShedLock** | orchestrator（12 个 `@Scheduled`）、console-api | 每个业务 `@Scheduled` 方法挂 `@SchedulerLock`，Redis 存锁；确保同一时刻只有一个 Pod 执行 |
+| **Quartz 集群** | trigger | `isClustered: true`，JDBC JobStore 协调多实例抢占；多 trigger Pod 不会重复触发同一个 job |
+| **Kafka consumer group** | worker-* | 每个 worker 模块一个独立 group ID，K8s 扩容时自动 rebalance partition |
+| **PodDisruptionBudget** | 所有 replicaCount≥2 的模块 | Helm `pdb.yaml` 模板，默认 `maxUnavailable: 1`，K8s 节点维护时至少保留 N-1 个 Pod 在线 |
 
-1. **Outbox shard-index 是静态 ENV**
-   - 当前：`BATCH_OUTBOX_SHARD_TOTAL=N` 和每 Pod 单独 `BATCH_OUTBOX_SHARD_INDEX=0..N-1`，水平扩缩容时必须手动调整
-   - 更云原生的做法：把 orchestrator 从 Deployment 改为 **StatefulSet**，从 `POD_NAME` 的 ordinal 自动解析 index（`batch-orch-0` → index=0）
-   - 改造量：Helm template 改 kind + 一个 init container 注入 `SHARD_INDEX`
+### 代码强制约束：新加 `@Scheduled` 必须挂防重
 
-2. **缺 `PodDisruptionBudget`**
-   - 当前：K8s 节点维护（drain）时可能一次踢掉多个 Pod，影响 HA
-   - 建议每个模块加一个 PDB，`minAvailable: 1`（或 `maxUnavailable: 50%`）
+orchestrator / console-api 新增 `@Scheduled(fixedDelay=...)` 方法时，**必须**二选一：
 
-3. **`@Scheduled` 方法需要严格的协调机制**
-   - orchestrator 有一堆 `@Scheduled`（FileGovernance / Retry / OutboxPoll / ReconcileJob），每个 Pod 都会触发
-   - 当前防重复：Outbox 走 shard-index，其他走 ShedLock
-   - 新加 `@Scheduled` 时**必须**挂 `@SchedulerLock` 或用 shard-index 分片，否则多副本会重复工作
+- **方式 A：挂 ShedLock**（绝大多数场景）
+  ```java
+  @Scheduled(fixedDelayString = "${batch.xxx.poll-interval-millis:30000}")
+  @SchedulerLock(name = "xxx-scheduler", lockAtMostFor = "5m", lockAtLeastFor = "10s")
+  public void pollXxx() { ... }
+  ```
+
+- **方式 B：用 shard-index 手动分片**（仅 Outbox 这类高频、不能互斥执行的场景）
+  ```java
+  @Value("${batch.outbox.shard-index}")  int shardIndex;
+  @Value("${batch.outbox.shard-total}")  int shardTotal;
+  // SQL WHERE id % :shardTotal = :shardIndex
+  ```
+
+**漏挂后果**：N 副本同时跑 = N 倍无效工作，审计日志/第三方回调出现重复。
 
 ### 若只打算部署 1 个副本
 
