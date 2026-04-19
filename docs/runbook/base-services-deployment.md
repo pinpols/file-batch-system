@@ -329,3 +329,4 @@ orchestrator / console-api 新增 `@Scheduled(fixedDelay=...)` 方法时，**必
 - [本地环境变量](local-env.md) — `.env.local` 字段说明
 - [Docker 部署基线](docker-deployment.md) — `docker-compose.*.yml` 编排
 - [滚动升级 worker](rolling-upgrade-workers.md) — 生产 worker 灰度策略
+- [orchestrator 迁移到 StatefulSet](orchestrator-statefulset-migration.md) — **仅首次** 升级到新 chart 时的一次性操作步骤
