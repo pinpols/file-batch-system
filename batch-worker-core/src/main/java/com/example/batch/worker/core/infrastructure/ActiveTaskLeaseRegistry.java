@@ -34,6 +34,10 @@ public class ActiveTaskLeaseRegistry {
   // 避免 shutdown 期间 snapshot 看到空集合而提前退出（TOCTOU）。
   private final ReadWriteLock shutdownLock = new ReentrantReadWriteLock();
 
+  // R-4.5: awaitDrain 用此 monitor 做 wait/notify，避免硬编码轮询间隔
+  // （1000+ 活跃任务时 sleep(500) 会让实际等待时间远超 timeout）
+  private final Object drainMonitor = new Object();
+
   // C-1.1: register/remove 修改状态 → 写锁；snapshot 只读 → 读锁
   public void register(String taskId, String tenantId, String workerId) {
     if (taskId == null || tenantId == null || workerId == null) {
@@ -56,6 +60,13 @@ public class ActiveTaskLeaseRegistry {
       activeTaskLeases.remove(taskId);
     } finally {
       shutdownLock.writeLock().unlock();
+    }
+    // R-4.5: 每次 remove 后唤醒 awaitDrain 的等待者。放在 unlock 之后，
+    // 避免 monitor 竞争时持有 shutdownLock 产生不必要的阻塞。
+    if (activeTaskLeases.isEmpty()) {
+      synchronized (drainMonitor) {
+        drainMonitor.notifyAll();
+      }
     }
   }
 
@@ -92,19 +103,25 @@ public class ActiveTaskLeaseRegistry {
   public void awaitDrain(Duration timeout) {
     Duration effective = timeout == null ? Duration.ZERO : timeout;
     long deadline = System.currentTimeMillis() + Math.max(0L, effective.toMillis());
-    while (!snapshot().isEmpty() && System.currentTimeMillis() < deadline) {
-      try {
-        Thread.sleep(500);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        log.warn("awaitDrain interrupted; remainingLeases={}", snapshot().size());
-        return;
+    synchronized (drainMonitor) {
+      while (!activeTaskLeases.isEmpty()) {
+        long remaining = deadline - System.currentTimeMillis();
+        if (remaining <= 0L) {
+          break;
+        }
+        try {
+          drainMonitor.wait(remaining);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          log.warn("awaitDrain interrupted; remainingLeases={}", activeTaskLeases.size());
+          return;
+        }
       }
     }
-    if (!snapshot().isEmpty()) {
+    if (!activeTaskLeases.isEmpty()) {
       log.warn(
           "awaitDrain timeout; remainingLeases={}, timeoutMs={}",
-          snapshot().size(),
+          activeTaskLeases.size(),
           effective.toMillis());
     }
   }

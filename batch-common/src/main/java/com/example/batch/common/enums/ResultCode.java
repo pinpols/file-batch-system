@@ -20,6 +20,8 @@ public enum ResultCode implements DictEnum {
   RATE_LIMITED("RATE_LIMITED", "请求过于频繁", "too many requests", 429),
   BUSINESS_ERROR("BUSINESS_ERROR", "业务错误", "business error", 422),
   NOT_IMPLEMENTED("NOT_IMPLEMENTED", "未实现", "not implemented", 501),
+  // R-4.1 · 依赖组件短暂不可用（如 Redis 抖动）；表达"稍后重试安全"语义
+  SERVICE_UNAVAILABLE("SERVICE_UNAVAILABLE", "依赖组件暂不可用", "dependency temporarily unavailable", 503),
   SYSTEM_ERROR("SYSTEM_ERROR", "系统错误", "system error", 500);
 
   private final String code;

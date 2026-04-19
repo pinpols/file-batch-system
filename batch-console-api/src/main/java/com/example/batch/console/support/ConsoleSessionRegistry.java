@@ -71,16 +71,29 @@ public class ConsoleSessionRegistry {
     String key = key(username, tenantId);
     try {
       Long version = redisTemplate.opsForValue().increment(key);
-      redisTemplate.expire(key, sessionStateTtl());
+      // C-2.9: INCR 返回权威新值后立即同步到 Caffeine，再做 expire。
+      // 之前顺序是 INCR → expire → put mirror，若 expire 抛异常会走 catch 分支
+      // 用本地旧值 +1（可能落后 Redis 真实值），导致单会话判断错乱。
       long v = version == null ? 1L : version;
       localMirror.put(key, v);
+      try {
+        redisTemplate.expire(key, sessionStateTtl());
+      } catch (DataAccessException expireEx) {
+        // TTL 刷失败不影响版本号正确性，仅可能让 key 提前 / 延后到期。记 warn 不抛。
+        log.warn(
+            "Redis expire() failed for session key (value already incremented): {}",
+            expireEx.getMessage());
+      }
       return v;
     } catch (DataAccessException ex) {
-      // Redis 不可达：本地自增并返回，保证登录不被阻断
+      // Redis INCR 不可达：本地自增并返回，保证登录不被阻断。
+      // 注意：跨 Pod 单会话语义在此降级期失效，Grafana 报警应能发现。
       Long current = localMirror.getIfPresent(key);
       long v = current == null ? 1L : current + 1L;
       localMirror.put(key, v);
-      log.warn("Redis unavailable during nextSessionVersion; falling back to local mirror: {}", ex.getMessage());
+      log.warn(
+          "Redis unavailable during nextSessionVersion; falling back to local mirror: {}",
+          ex.getMessage());
       return v;
     }
   }

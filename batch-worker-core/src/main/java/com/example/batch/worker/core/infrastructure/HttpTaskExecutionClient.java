@@ -8,9 +8,12 @@ import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.support.TaskExecutionClient;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,6 +92,40 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
 
   @Override
   public void report(TaskExecutionReport report) {
+    // A-3.6 a: REPORT 不入 pipeline_step_run（保留 step_run 纯业务语义），但需要可观测性。
+    // 用 micrometer Timer 记录 REPORT 调用耗时 + 结果 tag，运维可通过
+    //   batch.worker.report.duration{tenantId=, workerType=, outcome=success|failure}
+    // 的 P95/P99 发现 Orchestrator 侧 report 瓶颈或链路中断。
+    long reportStartNanos = System.nanoTime();
+    String outcome = "success";
+    try {
+      reportInternal(report);
+    } catch (RuntimeException rex) {
+      outcome = "failure";
+      throw rex;
+    } finally {
+      recordReportDuration(report, outcome, System.nanoTime() - reportStartNanos);
+    }
+  }
+
+  private void recordReportDuration(TaskExecutionReport report, String outcome, long durationNanos) {
+    meterRegistry.ifPresent(
+        registry ->
+            Timer.builder("batch.worker.report.duration")
+                .tags(
+                    Tags.of(
+                        "tenantId",
+                        report == null || report.getTenantId() == null
+                            ? "unknown"
+                            : report.getTenantId(),
+                        "outcome",
+                        outcome))
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(registry)
+                .record(durationNanos, TimeUnit.NANOSECONDS));
+  }
+
+  private void reportInternal(TaskExecutionReport report) {
     int max = Math.max(1, properties.getReportMaxAttempts());
     long backoff = Math.max(1L, properties.getReportInitialBackoffMillis());
     long cap = Math.max(backoff, properties.getReportMaxBackoffMillis());

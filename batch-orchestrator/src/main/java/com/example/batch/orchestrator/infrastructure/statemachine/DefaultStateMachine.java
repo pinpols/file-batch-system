@@ -5,6 +5,7 @@ import com.example.batch.orchestrator.domain.statemachine.StateTransition;
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.lang.reflect.Method;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import com.example.batch.common.utils.Texts;
 
@@ -18,6 +19,7 @@ import com.example.batch.common.utils.Texts;
  * 事件到目标状态的映射在 {@code resolveToState} 中以 switch 表达式集中维护，
  * 未知事件保持原状态不变（NOOP 语义）。
  */
+@Slf4j
 @Component
 public class DefaultStateMachine<T> implements StateMachine<T> {
 
@@ -90,7 +92,16 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
       case "FAIL", "FAILED", "ERROR", "REJECT" -> "FAILED";
       case "TERMINATE", "CANCEL" -> "TERMINATED";
       case "SKIP", "SKIPPED" -> "SKIPPED";
-      default -> fromState;
+      case "NOOP" -> fromState;
+      // A-3.3: 未知事件保留 NOOP 语义不变（向后兼容），但记 WARN 日志暴露拼写错误
+      // （如 "SUCESS" vs "SUCCESS"）。生产环境检索此日志可快速定位状态机误用。
+      default -> {
+        log.warn(
+            "state machine NOOP on unknown event: fromState={}, event={} — check for typo",
+            fromState,
+            event);
+        yield fromState;
+      }
     };
   }
 }

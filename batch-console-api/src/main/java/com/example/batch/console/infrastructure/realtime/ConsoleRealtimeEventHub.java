@@ -235,16 +235,22 @@ public class ConsoleRealtimeEventHub {
     if (subscription == null || !subscription.active.compareAndSet(true, false)) {
       return;
     }
-    ScheduledFuture<?> heartbeatFuture = subscription.heartbeatFuture;
-    if (heartbeatFuture != null) {
-      heartbeatFuture.cancel(true);
-    }
-    subscriptions.remove(subscription);
-    realtimeMetrics.decrementSubscriptions();
+    // C-2.12: CAS 过关后把清理逻辑统一放进 try/finally；
+    // 之前 subscriptions.remove 在 finally 外，中间任一步骤抛异常会导致
+    // subscription 残留在列表里（active=false 但未 remove），publish() 每次遍历都做无效比对。
     try {
-      subscription.emitter.complete();
-    } catch (IllegalStateException ignored) {
-      // emitter 已完成
+      ScheduledFuture<?> heartbeatFuture = subscription.heartbeatFuture;
+      if (heartbeatFuture != null) {
+        heartbeatFuture.cancel(true);
+      }
+    } finally {
+      subscriptions.remove(subscription);
+      realtimeMetrics.decrementSubscriptions();
+      try {
+        subscription.emitter.complete();
+      } catch (IllegalStateException ignored) {
+        // emitter 已完成
+      }
     }
   }
 

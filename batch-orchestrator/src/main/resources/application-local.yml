@@ -62,7 +62,8 @@ batch:
     circuit-breaker-failure-threshold-consecutive-polls: 3
     circuit-breaker-cooldown-millis: 60000
   partition-lease:
-    expire-seconds: 60
+    # C-2.1 A: 120s 覆盖 REPORT 重试窗口（见 PartitionLeaseProperties javadoc）
+    expire-seconds: 120
     reclaim-interval-millis: 15000
   retry:
     batch-size: 100

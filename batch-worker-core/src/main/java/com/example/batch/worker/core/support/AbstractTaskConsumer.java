@@ -93,45 +93,62 @@ public abstract class AbstractTaskConsumer {
       pauseContainer();
       return false;
     }
-    TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
-    WorkerRegistration registration = workerLoop().ensureStarted();
-    if (!accepts(message, registration)) {
-      sem.release();
-      return true;
-    }
-    injectMdc(message, registration);
+    // C-2.2: 所有 acquired=true 之后的出口（包括 JSON 解析异常 / accepts 失败 / 业务异常）
+    // 都必须经过 finally 释放 permit。之前 try 从 executor 调用才起，
+    // 导致 JsonUtils.fromJson 抛异常时 permit 泄漏，多次触发后信号量耗尽 → 背压失效。
+    TaskDispatchMessage message = null;
     try {
-      WorkerExecutionResult result =
-          taskDispatchExecutor().execute(message, registration.getWorkerId());
-      if (result == null) {
-        log.info(
-            "{} task skipped after claim check: taskId={}",
-            workerConfiguration().workerType(),
-            message.taskId());
+      message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+      WorkerRegistration registration = workerLoop().ensureStarted();
+      if (!accepts(message, registration)) {
         return true;
       }
-      log.info(
-          "{} task processed: taskId={}, success={}, message={}",
-          workerConfiguration().workerType(),
-          result.taskId(),
-          result.success(),
-          result.message());
-      return true;
-    } catch (Exception ex) {
-      // D-3: 发送至 DLQ 并确认偏移量，防止毒丸消息阻塞队列；运维可从 DLQ 查看并重放
-      log.error(
-          "{} task execution failed — publishing to DLQ: taskId={}, error={}",
-          workerConfiguration().workerType(),
-          message.taskId(),
-          ex.getMessage(),
-          ex);
-      // #4-3: 先确认 DLQ 写入成功再提交偏移量，避免消息双重丢失
-      if (!publishToDlqSafely(payload, ex.getMessage())) {
-        // DLQ 写入失败：不提交偏移量，Kafka 将重新投递该消息
-        log.error(
-            "{} DLQ 写入失败，不提交偏移量以便消息重新投递: taskId={}",
+      injectMdc(message, registration);
+      try {
+        WorkerExecutionResult result =
+            taskDispatchExecutor().execute(message, registration.getWorkerId());
+        if (result == null) {
+          log.info(
+              "{} task skipped after claim check: taskId={}",
+              workerConfiguration().workerType(),
+              message.taskId());
+          return true;
+        }
+        log.info(
+            "{} task processed: taskId={}, success={}, message={}",
             workerConfiguration().workerType(),
-            message.taskId());
+            result.taskId(),
+            result.success(),
+            result.message());
+        return true;
+      } catch (Exception ex) {
+        // D-3: 发送至 DLQ 并确认偏移量，防止毒丸消息阻塞队列；运维可从 DLQ 查看并重放
+        log.error(
+            "{} task execution failed — publishing to DLQ: taskId={}, error={}",
+            workerConfiguration().workerType(),
+            message.taskId(),
+            ex.getMessage(),
+            ex);
+        // #4-3: 先确认 DLQ 写入成功再提交偏移量，避免消息双重丢失
+        if (!publishToDlqSafely(payload, ex.getMessage())) {
+          // DLQ 写入失败：不提交偏移量，Kafka 将重新投递该消息
+          log.error(
+              "{} DLQ 写入失败，不提交偏移量以便消息重新投递: taskId={}",
+              workerConfiguration().workerType(),
+              message.taskId());
+          return false;
+        }
+        return true;
+      }
+    } catch (Exception parseOrStartupEx) {
+      // 解析 / ensureStarted 阶段的异常：payload 无法反序列化或 worker 未起来。
+      // 送 DLQ 避免毒丸阻塞队列；若 DLQ 也挂了则 return false 让 Kafka 重投。
+      log.error(
+          "{} pre-dispatch failed — publishing to DLQ: error={}",
+          workerConfiguration().workerType(),
+          parseOrStartupEx.getMessage(),
+          parseOrStartupEx);
+      if (!publishToDlqSafely(payload, parseOrStartupEx.getMessage())) {
         return false;
       }
       return true;

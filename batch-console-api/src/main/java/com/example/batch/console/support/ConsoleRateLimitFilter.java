@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -55,7 +56,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
     if (HttpMethod.POST.matches(method) && LOGIN_PATH.equals(path)) {
       String ip = resolveClientIp(request);
       String key = "login:ip:" + ip;
-      if (!rateLimiter.tryAcquire(key, properties.getLoginIpLimitPerMinute())) {
+      if (!tryAcquireFailOpen(key, properties.getLoginIpLimitPerMinute(), "login", ip)) {
         log.warn("登录限流触发：ip={} path={}", ip, path);
         responseWriter.write(
             response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "登录请求过于频繁，请稍后重试");
@@ -68,7 +69,8 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       String username = resolveUsername();
       if (Texts.hasText(username)) {
         String key = "sensitive:user:" + username;
-        if (!rateLimiter.tryAcquire(key, properties.getSensitiveOpUserLimitPerMinute())) {
+        if (!tryAcquireFailOpen(
+            key, properties.getSensitiveOpUserLimitPerMinute(), "sensitive", username)) {
           log.warn("敏感操作限流触发：user={} path={}", username, path);
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
@@ -78,6 +80,26 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
     }
 
     filterChain.doFilter(request, response);
+  }
+
+  /**
+   * R-4.1：Redis 不可达时 <b>fail-open</b>（放行并记 warn），避免把限流模块的
+   * 可用性故障升级为整站不可用。业务正确性由上游 DDoS 保护 + Grafana 告警兜底。
+   *
+   * @return true 表示放行（正常通过 / Redis 故障兜底），false 表示超限拒绝
+   */
+  private boolean tryAcquireFailOpen(
+      String key, int limitPerMinute, String category, String identity) {
+    try {
+      return rateLimiter.tryAcquire(key, limitPerMinute);
+    } catch (DataAccessException ex) {
+      log.warn(
+          "rate limiter Redis unavailable — fail-open: category={}, identity={}, cause={}",
+          category,
+          identity,
+          ex.getMessage());
+      return true;
+    }
   }
 
   /**

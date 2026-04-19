@@ -138,10 +138,30 @@ public class BatchObjectCryptoService {
     }
   }
 
+  /**
+   * 流式解密：若流前缀匹配魔数则返回 {@link CipherInputStream}，否则透传明文。
+   *
+   * <p><b>S-1.1 调用契约</b>：返回的流<b>必须被完整读取后 close</b>（或用 try-with-resources），close
+   * 时 GCM 底层会校验尾部 16B tag，不匹配则抛异常。若调用方仅读部分数据后丢弃、未 close，则 tag
+   * 验证不触发，完整性保证失效。<b>生产环境严禁裸用该方法的返回值不 close</b>。
+   *
+   * <p>推荐模式：
+   * <pre>{@code
+   * try (InputStream in = cryptoService.decryptIfNeeded(raw)) {
+   *   consume(in);  // 读完后 try-with-resources 自动 close 触发 tag 校验
+   * }
+   * }</pre>
+   *
+   * <p>本方法已保证<b>setup 异常路径</b>必关闭底层 {@code inputStream}（之前存在 Cipher 初始化异常
+   * 但 inputStream 泄漏的窗口）。
+   */
   public InputStream decryptIfNeeded(InputStream inputStream) {
     if (inputStream == null) {
       return InputStream.nullInputStream();
     }
+    // S-1.1: setup 过程中任何异常都要关闭底层流，避免 MinIO 连接 / 文件句柄泄漏。
+    // 返回成功后的 close 由调用方负责（CipherInputStream.close 会级联 close 底层流 + 校验 GCM tag）。
+    boolean handedOff = false;
     try {
       // 用 PushbackInputStream 偷看头部字节，若不是魔数则 unread 还原，对调用方透明；
       // 缓冲 64B 远大于魔数 8B，预留版本头扩展空间
@@ -151,6 +171,7 @@ public class BatchObjectCryptoService {
         if (magic.length > 0) {
           pushbackInputStream.unread(magic);
         }
+        handedOff = true;
         return pushbackInputStream;
       }
       int version = pushbackInputStream.read();
@@ -166,9 +187,19 @@ public class BatchObjectCryptoService {
           Cipher.DECRYPT_MODE,
           new SecretKeySpec(resolveKeyBytes(keyRef), "AES"),
           new GCMParameterSpec(GCM_TAG_BITS, iv));
-      return new CipherInputStream(pushbackInputStream, cipher);
+      CipherInputStream cipherInputStream = new CipherInputStream(pushbackInputStream, cipher);
+      handedOff = true;
+      return cipherInputStream;
     } catch (Exception exception) {
       throw new IllegalStateException("failed to open decrypted stream", exception);
+    } finally {
+      if (!handedOff) {
+        try {
+          inputStream.close();
+        } catch (Exception ignored) {
+          // best-effort: 下游已经抛出 IllegalStateException，关闭失败不再叠加
+        }
+      }
     }
   }
 

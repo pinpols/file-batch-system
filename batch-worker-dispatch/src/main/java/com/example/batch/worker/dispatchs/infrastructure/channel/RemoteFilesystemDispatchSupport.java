@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import com.example.batch.common.utils.Texts;
 
 /**
@@ -33,11 +34,16 @@ import com.example.batch.common.utils.Texts;
  * 所有方法均为包级静态，不持有状态，由各 ChannelDispatchHandler 按渠道类型调用；
  * {@link #probeChannel} 提供统一入口，依据 channel_type 路由到对应探测实现。
  */
+@Slf4j
 final class RemoteFilesystemDispatchSupport {
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_TARGET_ENDPOINT = "target_endpoint";
   private static final String PATH_SEP = "/";
+  // R-4.2: NAS 沙箱根目录（可选）。若系统属性 batch.dispatch.nas-sandbox-root 设置，
+  // 则所有 NAS dispatch 的 realPath 必须落在该根内，否则拒绝；未设置则仅 WARN 不阻断（兼容模式）。
+  // 生产强烈建议设置此属性以彻底关闭 symlink 逃逸攻击面。
+  private static final String SANDBOX_ROOT_PROP = "batch.dispatch.nas-sandbox-root";
 
   private static final int MINIO_PART_SIZE = 10 * 1024 * 1024;
 
@@ -55,9 +61,10 @@ final class RemoteFilesystemDispatchSupport {
         return new DispatchResult(
             false, null, null, false, false, "nas_remote_directory missing", null);
       }
-      // H-10: 规范化路径以防止路径遍历攻击（与 probeNas 行为保持一致）
-      Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
-      Files.createDirectories(directory);
+      // R-4.2: normalize 只处理 . 和 ..，不解析 symlink；恶意配置 /tmp/link_to_parent
+      // 即可绕过路径遍历防线。此处额外解析 realPath，若可选的 sandbox root 配置了
+      // 则强制 realPath 必须落在沙箱内。
+      Path directory = resolveNasDirectory(remoteDir);
       String externalRequestId = resolveExternalRequestId(command);
       String receiptCode = resolveReceiptCode(command, externalRequestId);
       String remoteName =
@@ -71,6 +78,46 @@ final class RemoteFilesystemDispatchSupport {
     } catch (Exception ex) {
       return failResult(command, ex);
     }
+  }
+
+  /**
+   * R-4.2: 返回安全可写的 NAS 目录 {@link Path}。
+   *
+   * <p>流程：
+   * <ol>
+   *   <li>{@code toAbsolutePath().normalize()} 消除 . / ..
+   *   <li>{@code Files.createDirectories} 保证存在
+   *   <li>{@code toRealPath} 解析 symlink 到真实路径
+   *   <li>检查真实路径是否等于 normalize 路径；不同则记 WARN（存在 symlink）
+   *   <li>若系统属性 {@code batch.dispatch.nas-sandbox-root} 已配置，强制真实路径必须落在沙箱内
+   * </ol>
+   *
+   * <p>返回后续操作使用的真实路径。
+   */
+  private static Path resolveNasDirectory(String remoteDir) throws java.io.IOException {
+    Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
+    Files.createDirectories(directory);
+    Path realDirectory = directory.toRealPath();
+    if (!realDirectory.equals(directory)) {
+      log.warn(
+          "NAS directory contains symlink(s): configured={}, real={} — using real path;"
+              + " set -D{}=<abs-path> to enforce sandbox root and reject symlink escape",
+          directory,
+          realDirectory,
+          SANDBOX_ROOT_PROP);
+    }
+    String sandboxRootRaw = System.getProperty(SANDBOX_ROOT_PROP);
+    if (Texts.hasText(sandboxRootRaw)) {
+      Path sandboxRoot = Path.of(sandboxRootRaw).toAbsolutePath().normalize().toRealPath();
+      if (!realDirectory.startsWith(sandboxRoot)) {
+        throw new SecurityException(
+            "NAS directory escapes sandbox root: real="
+                + realDirectory
+                + ", sandboxRoot="
+                + sandboxRoot);
+      }
+    }
+    return realDirectory;
   }
 
   static DispatchResult dispatchOss(
@@ -129,10 +176,9 @@ final class RemoteFilesystemDispatchSupport {
       if (!Texts.hasText(remoteDir)) {
         return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
       }
-      Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
-      if (!Files.exists(directory)) {
-        Files.createDirectories(directory);
-      }
+      // R-4.2: probe 与 dispatch 走同一路径解析，保证两者对"可写性"的判断一致，
+      // 避免 probe 显示 OK 但 dispatch 被沙箱拒绝（或反之）。
+      Path directory = resolveNasDirectory(remoteDir);
       if (!Files.isDirectory(directory)) {
         return new DispatchChannelProbeResult(
             false, "nas path is not a directory: " + directory, null);
