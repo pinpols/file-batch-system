@@ -15,8 +15,7 @@ spring:
     listener:
       # 每实例消费者并发线程数：建议 ≤ topic partition 数，否则多余线程空转
       concurrency: ${BATCH_WORKER_DISPATCH_KAFKA_CONCURRENCY:4}
-      # 手动确认：业务处理成功后显式 ack，避免“处理失败但已提交 offset”
-      ack-mode: manual_immediate
+      # 注：ack-mode=manual_immediate 已抽到 batch-defaults.yml 统一管理
     consumer:
       # dispatch 任务通常较轻：每次 poll 拉取条数可略大，提升吞吐
       max-poll-records: ${BATCH_WORKER_DISPATCH_KAFKA_MAX_POLL_RECORDS:10}
