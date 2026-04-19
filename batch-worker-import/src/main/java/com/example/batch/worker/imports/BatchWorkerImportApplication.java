@@ -8,13 +8,15 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+// Worker 不拥有平台 schema，flyway.enabled=false；直接排除 autoconfig 跳过条件评估
 @SpringBootApplication(
     scanBasePackages = "com.example.batch",
-    exclude = MybatisAutoConfiguration.class)
+    exclude = {MybatisAutoConfiguration.class, FlywayAutoConfiguration.class})
 @ImportAutoConfiguration({
   BatchJsonAutoConfiguration.class,
   BatchObjectCryptoAutoConfiguration.class,
