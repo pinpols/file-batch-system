@@ -12,11 +12,16 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessException;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -25,6 +30,7 @@ import org.springframework.util.StringUtils;
  * 或隐式 {@code compress_type}/{@code encrypt_type}：UNZIP、GUNZIP、AES-GCM、摘要、RSA 验签、字符集转码），
  * 再归一化文本或保留二进制供 EXCEL 等格式在 PARSE 消费。
  */
+@Slf4j
 @Component
 public class PreprocessStep implements ImportStageStep {
 
@@ -93,20 +99,28 @@ public class PreprocessStep implements ImportStageStep {
         context.getAttributes().remove("normalizedPayload");
       } else {
         Charset charset = resolveCharset(importPayload, templateConfigObject);
-        String normalized = normalizeText(new String(processed, charset));
+        String normalized = decodeWithGuards(processed, charset, context);
         context.setRawPayload(normalized);
         context.getAttributes().put("normalizedPayload", normalized);
         context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
       }
 
+      Map<String, Object> fileMetadata = new LinkedHashMap<>();
+      fileMetadata.put("preprocessed", Boolean.TRUE);
+      fileMetadata.put("preprocessFormat", formatType == null ? "" : formatType);
+      // 编码守卫标记：D1 反向错怀疑 + B 残留 U+FFFD 计数，供前端 file_record 详情页/审计查询
+      Object charsetSuspect = context.getAttributes().get("charsetSuspect");
+      if (charsetSuspect != null) {
+        fileMetadata.put("charsetSuspect", charsetSuspect);
+      }
+      Object replacementMeta = context.getAttributes().get("replacementCount");
+      if (replacementMeta != null) {
+        fileMetadata.put("replacementCount", replacementMeta);
+      }
       runtimeRepository.updateFileStatus(
           runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
           "PARSING",
-          Map.of(
-              "preprocessed",
-              Boolean.TRUE,
-              "preprocessFormat",
-              formatType == null ? "" : formatType));
+          fileMetadata);
       return ImportStageResult.success(stage());
     } catch (ImportPreprocessException ex) {
       return ImportStageResult.failure(stage(), ex.errorCode(), ex.getMessage());
@@ -198,5 +212,91 @@ public class PreprocessStep implements ImportStageStep {
       return EncodingUtils.resolve(importPayload.charset());
     }
     return StandardCharsets.UTF_8;
+  }
+
+  /**
+   * 文本解码三层守卫：把原始字节变成已归一化的 UTF-16 字符串，同时把可疑信号写入 context。
+   *
+   * <ul>
+   *   <li>A — 严格解码：非法字节 / 非 mappable 字符抛 {@code IMPORT_PREPROCESS_DECODE_FAILED},
+   *       避免默认 REPLACE 让 U+FFFD 静默入库
+   *   <li>D1 — 反向错检测：声明非 UTF-8 但字节同时通过 UTF-8 严格解码 → context 写入
+   *       {@code charsetSuspect=LIKELY_UTF8}, 让下游把标记写进 {@code file_record.metadata}
+   *   <li>B — 残留 U+FFFD 扫描：解码结果仍含 U+FFFD (源文件自带 / charset 内置替换) → context
+   *       写入 {@code replacementCount}
+   * </ul>
+   */
+  private String decodeWithGuards(byte[] processed, Charset charset, ImportJobContext context) {
+    String decoded = decodeStrict(processed, charset);
+    if (!StandardCharsets.UTF_8.equals(charset)
+        && hasNonAscii(processed)
+        && looksLikeUtf8(processed)) {
+      log.warn(
+          "[ImportPreprocess] declared charset={} but bytes also pass UTF-8 strict decode;"
+              + " source may actually be UTF-8. See file_record.metadata.charsetSuspect",
+          charset);
+      context.getAttributes().put("charsetSuspect", "LIKELY_UTF8");
+    }
+    long replacementCount = countReplacement(decoded);
+    if (replacementCount > 0) {
+      log.warn(
+          "[ImportPreprocess] decoded payload contains {} U+FFFD after decoding with {};"
+              + " declared charset likely inaccurate, see file_record.metadata",
+          replacementCount,
+          charset);
+      context.getAttributes().put("replacementCount", replacementCount);
+    }
+    return normalizeText(decoded);
+  }
+
+  private static String decodeStrict(byte[] bytes, Charset charset) {
+    CharsetDecoder decoder =
+        charset
+            .newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT);
+    try {
+      return decoder.decode(ByteBuffer.wrap(bytes == null ? new byte[0] : bytes)).toString();
+    } catch (CharacterCodingException ex) {
+      throw new ImportPreprocessException(
+          "IMPORT_PREPROCESS_DECODE_FAILED",
+          "failed to decode bytes as " + charset.name() + ": " + ex.getMessage(),
+          ex);
+    }
+  }
+
+  private static long countReplacement(String text) {
+    if (text == null || text.isEmpty()) {
+      return 0L;
+    }
+    return text.chars().filter(c -> c == '\uFFFD').count();
+  }
+
+  private static boolean looksLikeUtf8(byte[] bytes) {
+    if (bytes == null || bytes.length == 0) {
+      return false;
+    }
+    try {
+      StandardCharsets.UTF_8
+          .newDecoder()
+          .onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT)
+          .decode(ByteBuffer.wrap(bytes));
+      return true;
+    } catch (CharacterCodingException e) {
+      return false;
+    }
+  }
+
+  private static boolean hasNonAscii(byte[] bytes) {
+    if (bytes == null) {
+      return false;
+    }
+    for (byte b : bytes) {
+      if ((b & 0x80) != 0) {
+        return true;
+      }
+    }
+    return false;
   }
 }
