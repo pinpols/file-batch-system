@@ -379,7 +379,7 @@ trap - EXIT
 echo ""
 echo "全部进程已在后台运行。端口（默认）："
 echo "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | dispatch 18085"
-echo "  Kafka 19092 | MinIO 19000 | Redis 16379（宿主机映射）"
+echo "  Postgres 15432 | Kafka 19092 | MinIO 19000 | Redis 16379（宿主机映射）"
 echo "停止请执行: ./scripts/local/stop-all.sh"
 
 # ─────────────────────────────────────────────
