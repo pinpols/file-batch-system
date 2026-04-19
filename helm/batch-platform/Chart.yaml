@@ -2,7 +2,10 @@ apiVersion: v2
 name: batch-platform
 description: File Batch Processing Platform — orchestrator, trigger, workers, console API
 type: application
+# chart 自身版本（修模板、values 结构、helper 时递增；不跟应用版本走）
 version: 0.1.0
+# 应用版本 —— 必须与根 pom.xml 的 <revision> 一致（镜像 tag 默认从这里取）
+# 发版流程：改 pom.xml <revision> → 改 Chart.yaml appVersion → 重新 build 镜像 tag
 appVersion: "1.0.0"
 keywords:
   - batch

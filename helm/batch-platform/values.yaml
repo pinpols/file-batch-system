@@ -2,9 +2,11 @@
 # Override with -f values-prod.yaml or --set key=value.
 
 # ── Image ─────────────────────────────────────────────────────────────────────
+# tag 留空时 fallback 到 Chart.appVersion（与 pom.xml <revision> 对齐，当前 1.0.0）
+# 仅临时覆盖才填（如 "latest" / "sha-abc123" / "1.0.1-rc1"）
 image:
   registry: ""          # e.g. registry.example.com/batch-platform
-  tag: "latest"
+  tag: ""               # 为空则用 Chart.appVersion
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []

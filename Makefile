@@ -4,7 +4,7 @@
 .PHONY: db-reset-flyway
 .PHONY: ops-inspect ops-heal-stuck ops-heal-dead ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate
 .PHONY: ci ci-pr ci-module
-.PHONY: check-openapi check-deps-boundary
+.PHONY: check-openapi check-deps-boundary check-version-alignment
 .PHONY: pmd spotless spotless-fix coverage
 .PHONY: scan-secret scan-deps scan-dast
 .PHONY: apps-build observability-up observability-down observability-status observability-logs observability-inspect
@@ -155,6 +155,10 @@ check-openapi:
 # 模块依赖边界校验
 check-deps-boundary:
 	python3 scripts/ci/check-dependency-boundaries.py
+
+# 版本对齐校验（pom.xml <revision> ↔ Chart.yaml appVersion；4 个 .env 的 *_IMAGE_TAG 一致）
+check-version-alignment:
+	bash scripts/ci/check-version-alignment.sh
 
 # PMD 代码规约（CLAUDE.md 规则）
 pmd:
