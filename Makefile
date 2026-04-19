@@ -4,7 +4,7 @@
 .PHONY: db-reset-flyway
 .PHONY: ops-inspect ops-heal-stuck ops-heal-dead ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate
 .PHONY: ci ci-pr ci-module
-.PHONY: check-openapi check-deps-boundary check-version-alignment
+.PHONY: check-openapi check-deps-boundary check-version-alignment bump-version
 .PHONY: pmd spotless spotless-fix coverage
 .PHONY: scan-secret scan-deps scan-dast
 .PHONY: apps-build observability-up observability-down observability-status observability-logs observability-inspect
@@ -159,6 +159,11 @@ check-deps-boundary:
 # 版本对齐校验（pom.xml <revision> ↔ Chart.yaml appVersion；4 个 .env 的 *_IMAGE_TAG 一致）
 check-version-alignment:
 	bash scripts/ci/check-version-alignment.sh
+
+# 一条命令升级应用版本：同步 pom.xml <revision> 和 Chart.yaml appVersion
+# 用法：make bump-version V=1.0.1
+bump-version:
+	bash scripts/ci/bump-version.sh $(V)
 
 # PMD 代码规约（CLAUDE.md 规则）
 pmd:
