@@ -106,11 +106,8 @@
                 <artifactId>okio</artifactId>
                 <version>${okio.version}</version>
             </dependency>
-            <dependency>
-                <groupId>com.squareup.okio</groupId>
-                <artifactId>okio-jvm</artifactId>
-                <version>${okio.version}</version>
-            </dependency>
+            <!-- okio-jvm 是 okio 的 JVM multi-platform 实现，由 okio 自动传递引入，不需要显式声明 -->
+
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
                 <artifactId>mockwebserver</artifactId>
