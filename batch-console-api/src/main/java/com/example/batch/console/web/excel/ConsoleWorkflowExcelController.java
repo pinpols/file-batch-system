@@ -1,41 +1,19 @@
 package com.example.batch.console.web.excel;
 
-import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleWorkflowExcelApplicationService;
-import com.example.batch.console.service.ConsoleResponseFactory;
-import com.example.batch.console.web.ConsoleTenantConfigPackageExcelController;
 import com.example.batch.console.web.query.WorkflowDefinitionQueryRequest;
-import com.example.batch.console.web.request.WorkflowExcelApplyRequest;
-import com.example.batch.console.web.response.ConsoleWorkflowExcelApplyResponse;
-import com.example.batch.console.web.response.ConsoleWorkflowExcelPreviewResponse;
-import com.example.batch.console.web.response.ConsoleWorkflowExcelUploadResponse;
 import jakarta.validation.Valid;
-import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
-/**
- * 工作流定义 Excel 导入导出 REST：导出、上传、预览、确认落库。
- *
- * @deprecated upload / preview / previewWorkbook / apply 已由 {@link
- *     ConsoleTenantConfigPackageExcelController} 合并导入替代， 请改用 {@code
- *     /api/console/config/tenant-package/excel} 系列接口；export 仍可用。
- */
+/** 工作流定义 Excel 导出与空白模板下载。回灌合并导入由 tenant-package Excel 流程承担。 */
 @RestController
 @Validated
 @RequestMapping("/api/console/config/workflows/excel")
@@ -43,7 +21,6 @@ import org.springframework.web.multipart.MultipartFile;
 public class ConsoleWorkflowExcelController {
 
   private final ConsoleWorkflowExcelApplicationService applicationService;
-  private final ConsoleResponseFactory responseFactory;
 
   /** 导出工作流 Excel。 */
   @GetMapping("/export")
@@ -58,50 +35,5 @@ public class ConsoleWorkflowExcelController {
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_AUDITOR')")
   public ResponseEntity<InputStreamResource> template() {
     return applicationService.downloadTemplate();
-  }
-
-  /**
-   * @deprecated 已废弃，请改用 {@link ConsoleTenantConfigPackageExcelController} 合并导入接口。
-   */
-  @Deprecated
-  @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ConsoleWorkflowExcelUploadResponse> upload(
-      @RequestParam("file") MultipartFile file) throws IOException {
-    return responseFactory.success(applicationService.upload(file));
-  }
-
-  /**
-   * @deprecated 已废弃，请改用 {@link ConsoleTenantConfigPackageExcelController} 合并导入接口。
-   */
-  @Deprecated
-  @GetMapping("/preview/{uploadToken}")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ConsoleWorkflowExcelPreviewResponse> preview(
-      @PathVariable String uploadToken) {
-    return responseFactory.success(applicationService.preview(uploadToken));
-  }
-
-  /**
-   * @deprecated 已废弃，请改用 {@link ConsoleTenantConfigPackageExcelController} 合并导入接口。
-   */
-  @Deprecated
-  @GetMapping("/preview/{uploadToken}/workbook")
-  @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public ResponseEntity<InputStreamResource> previewWorkbook(@PathVariable String uploadToken) {
-    return applicationService.downloadPreviewWorkbook(uploadToken);
-  }
-
-  /**
-   * @deprecated 已废弃，请改用 {@link ConsoleTenantConfigPackageExcelController} 合并导入接口。
-   */
-  @Deprecated
-  @PostMapping("/apply/{uploadToken}")
-  @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-  public CommonResponse<ConsoleWorkflowExcelApplyResponse> apply(
-      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
-      @PathVariable String uploadToken,
-      @Valid @RequestBody WorkflowExcelApplyRequest request) {
-    return responseFactory.success(applicationService.apply(uploadToken, request));
   }
 }
