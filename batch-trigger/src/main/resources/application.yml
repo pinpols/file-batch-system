@@ -40,9 +40,7 @@ spring:
       - quartz
 
 batch:
-  security:
-    # 内部接口共享密钥；生产环境必须通过 BATCH_INTERNAL_SECRET 环境变量注入强密钥
-    internal-secret: ${BATCH_INTERNAL_SECRET:internal-secret}
+  # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
   startup-self-check:
     enabled: true
     context-name: trigger

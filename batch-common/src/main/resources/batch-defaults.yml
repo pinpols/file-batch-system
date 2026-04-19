@@ -34,6 +34,10 @@ spring:
     producer:
       # 要求所有 ISR 副本确认写入后才返回成功，配合 replication-factor=3 + min.insync.replicas=2 防止数据丢失
       acks: all
+    listener:
+      # 所有 worker 统一手动确认：业务处理成功后显式 ack，避免"处理失败但已提交 offset"
+      # 非 worker 模块（不消费 Kafka）不受影响
+      ack-mode: manual_immediate
   data:
     redis:
       # Redis：本地 compose 宿主机映射 16379→6379；容器内由环境变量覆盖为 redis:6379
@@ -124,6 +128,8 @@ batch:
   security:
     # 测试模式开关：开启后可放宽部分校验（按实现约定）
     testing-open: ${BATCH_SECURITY_TESTING_OPEN:false}
+    # 内部接口（/internal/**）共享密钥；生产环境必须通过 BATCH_INTERNAL_SECRET 注入强密钥
+    internal-secret: ${BATCH_INTERNAL_SECRET:internal-secret}
     kms:
       # 默认密钥引用（key ref）
       default-key-ref: ${BATCH_SECURITY_KMS_DEFAULT_KEY_REF:DEFAULT_TEST}

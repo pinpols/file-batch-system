@@ -12,14 +12,8 @@ spring:
   config:
     # 引入共享默认配置基线（来自 batch-common 的 resources）
     import: "classpath:batch-defaults.yml"
-  autoconfigure:
-    exclude:
-      # 仅使用 RedisTemplate/Lettuce，不使用 Spring Data Redis Repository；避免 JDBC 与 Redis 混扫产生大量 INFO
-      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
-  data:
-    redis:
-      repositories:
-        enabled: false
+  # 注：DataRedisRepositoriesAutoConfiguration 已在 BatchConsoleApiApplication 主类 @SpringBootApplication(exclude=...) 排除
+  #     data.redis.repositories.enabled=false 已在 batch-defaults.yml 设置；此处不再重复
   ai:
     openai:
       # OpenAI 接入地址（可按代理/私有化环境覆盖）
