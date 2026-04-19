@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
@@ -41,6 +42,10 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       "{\"code\":\""
           + ResultCode.CONFLICT.code()
           + "\",\"message\":\"duplicate request, same Idempotency-Key already processed\"}";
+  private static final String MISSING_KEY_BODY =
+      "{\"code\":\""
+          + ResultCode.MISSING_IDEMPOTENCY_KEY.code()
+          + "\",\"message\":\"this endpoint requires Idempotency-Key header\"}";
   /** Request attribute：记录本次请求使用的 Redis key，afterCompletion 时读取。 */
   private static final String ATTR_REDIS_KEY = "console.idempotency.redisKey";
 
@@ -61,6 +66,15 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
     String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
     if (!StringUtils.hasText(idempotencyKey)) {
+      // 标了 @Idempotent 的方法 fail-close：没 header 直接 400
+      if (handler instanceof HandlerMethod hm
+          && (hm.getMethodAnnotation(Idempotent.class) != null
+              || hm.getBeanType().isAnnotationPresent(Idempotent.class))) {
+        log.warn(
+            "missing Idempotency-Key on @Idempotent endpoint: uri={}", request.getRequestURI());
+        writeJson(response, HttpStatus.BAD_REQUEST, MISSING_KEY_BODY);
+        return false;
+      }
       return true;
     }
 
