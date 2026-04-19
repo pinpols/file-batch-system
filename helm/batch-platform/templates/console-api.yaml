@@ -36,6 +36,10 @@ spec:
               containerPort: {{ $svc.port }}
               protocol: TCP
           {{- include "batch-platform.envFrom" . | nindent 10 }}
+          {{- with $svc.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             {{- toYaml $svc.livenessProbe | nindent 12 }}
           readinessProbe:
@@ -45,8 +49,15 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            # logback-spring.xml 的 prod profile 里 FRONTEND_FILE RollingFileAppender
+            # 硬编码写 /logs/frontend.log（绝对路径，根目录）；podSecurityContext 的
+            # readOnlyRootFilesystem=true 不允许根目录创建，必须挂 emptyDir
+            - name: logs
+              mountPath: /logs
       volumes:
         - name: tmp
+          emptyDir: {}
+        - name: logs
           emptyDir: {}
       {{- include "batch-platform.scheduling" . | nindent 6 }}
 ---

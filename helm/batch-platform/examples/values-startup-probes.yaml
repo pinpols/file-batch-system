@@ -1,0 +1,27 @@
+# 所有模块：加 startupProbe 给冷启动足够时间（Spring Boot 冷启动 30-60s）
+# livenessProbe/readinessProbe 启动期由 startupProbe 保护
+# 端口对齐 app 实际监听：console-api 18080 / trigger 18081 / orchestrator 18082 / workers 18083-5
+consoleApi:
+  startupProbe:   {httpGet: {path: /actuator/health/liveness,  port: 18080}, initialDelaySeconds: 20, periodSeconds: 10, failureThreshold: 18}
+  livenessProbe:  {httpGet: {path: /actuator/health/liveness,  port: 18080}, initialDelaySeconds: 0,  periodSeconds: 15, failureThreshold: 3}
+  readinessProbe: {httpGet: {path: /actuator/health/readiness, port: 18080}, initialDelaySeconds: 0,  periodSeconds: 10, failureThreshold: 3}
+trigger:
+  startupProbe:   {httpGet: {path: /actuator/health/liveness,  port: 18081}, initialDelaySeconds: 20, periodSeconds: 10, failureThreshold: 18}
+  livenessProbe:  {httpGet: {path: /actuator/health/liveness,  port: 18081}, initialDelaySeconds: 0,  periodSeconds: 15, failureThreshold: 3}
+  readinessProbe: {httpGet: {path: /actuator/health/readiness, port: 18081}, initialDelaySeconds: 0,  periodSeconds: 10, failureThreshold: 3}
+orchestrator:
+  startupProbe:   {httpGet: {path: /actuator/health/liveness,  port: 18082}, initialDelaySeconds: 20, periodSeconds: 10, failureThreshold: 18}
+  livenessProbe:  {httpGet: {path: /actuator/health/liveness,  port: 18082}, initialDelaySeconds: 0,  periodSeconds: 15, failureThreshold: 3}
+  readinessProbe: {httpGet: {path: /actuator/health/readiness, port: 18082}, initialDelaySeconds: 0,  periodSeconds: 10, failureThreshold: 3}
+workerImport:
+  startupProbe:   {httpGet: {path: /actuator/health/liveness,  port: 18083}, initialDelaySeconds: 20, periodSeconds: 10, failureThreshold: 18}
+  livenessProbe:  {httpGet: {path: /actuator/health/liveness,  port: 18083}, initialDelaySeconds: 0,  periodSeconds: 15, failureThreshold: 3}
+  readinessProbe: {httpGet: {path: /actuator/health/readiness, port: 18083}, initialDelaySeconds: 0,  periodSeconds: 10, failureThreshold: 3}
+workerExport:
+  startupProbe:   {httpGet: {path: /actuator/health/liveness,  port: 18084}, initialDelaySeconds: 20, periodSeconds: 10, failureThreshold: 18}
+  livenessProbe:  {httpGet: {path: /actuator/health/liveness,  port: 18084}, initialDelaySeconds: 0,  periodSeconds: 15, failureThreshold: 3}
+  readinessProbe: {httpGet: {path: /actuator/health/readiness, port: 18084}, initialDelaySeconds: 0,  periodSeconds: 10, failureThreshold: 3}
+workerDispatch:
+  startupProbe:   {httpGet: {path: /actuator/health/liveness,  port: 18085}, initialDelaySeconds: 20, periodSeconds: 10, failureThreshold: 18}
+  livenessProbe:  {httpGet: {path: /actuator/health/liveness,  port: 18085}, initialDelaySeconds: 0,  periodSeconds: 15, failureThreshold: 3}
+  readinessProbe: {httpGet: {path: /actuator/health/readiness, port: 18085}, initialDelaySeconds: 0,  periodSeconds: 10, failureThreshold: 3}

@@ -18,6 +18,19 @@ data:
   # ── Kafka ──────────────────────────────────────────────────────────────────
   BATCH_KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
 
+  # ── Redis（用于 ShedLock / 配置缓存 / 实时 SSE Pub-Sub）─────────────────
+  BATCH_REDIS_HOST: {{ .Values.redis.host | quote }}
+  BATCH_REDIS_PORT: {{ .Values.redis.port | quote }}
+
+  # ── 各模块 server.port 显式注入（Spring Boot 4 对 ${VAR:default} fallback
+  #    处理变严，直接显式注入避免占位符解析失败）
+  BATCH_CONSOLE_API_PORT: {{ .Values.consoleApi.port | quote }}
+  BATCH_TRIGGER_PORT: {{ .Values.trigger.port | quote }}
+  BATCH_ORCHESTRATOR_PORT: {{ .Values.orchestrator.port | quote }}
+  BATCH_WORKER_IMPORT_PORT: {{ .Values.workerImport.port | quote }}
+  BATCH_WORKER_EXPORT_PORT: {{ .Values.workerExport.port | quote }}
+  BATCH_WORKER_DISPATCH_PORT: {{ .Values.workerDispatch.port | quote }}
+
   # ── MinIO ──────────────────────────────────────────────────────────────────
   BATCH_MINIO_ENDPOINT: {{ .Values.minio.endpoint | quote }}
   BATCH_MINIO_BUCKET: {{ .Values.minio.bucket | quote }}
