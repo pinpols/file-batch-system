@@ -1,5 +1,6 @@
 package com.example.batch.console.infrastructure;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleTriggerProxyService;
 import com.example.batch.console.config.ConsoleTriggerClientProperties;
@@ -17,10 +18,25 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxyService {
 
+  /** batch-trigger / batch-orchestrator 的 /api/triggers/management/** 接口要求的 shared-secret 头名。 */
+  private static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
+
   private final ConsoleTriggerClientProperties triggerClientProperties;
   private final RestClient.Builder restClientBuilder;
   private final ConsoleTenantGuard tenantGuard;
   private final Environment environment;
+  private final BatchSecurityProperties securityProperties;
+
+  /**
+   * 构造带 X-Internal-Secret 头的 RestClient。
+   * 缺失此头，batch-trigger 侧 InternalSecretFilter 会直接 401。
+   */
+  private RestClient newClient() {
+    return restClientBuilder
+        .baseUrl(resolveUrl(triggerClientProperties.getBaseUrl()))
+        .defaultHeader(INTERNAL_SECRET_HEADER, securityProperties.getInternalSecret())
+        .build();
+  }
 
   @Override
   public Map<String, String> schedulerStatus() {
@@ -39,10 +55,8 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
 
   @Override
   public List<Object> triggerList() {
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
     CommonResponse<List<Object>> resp =
-        client
+        newClient()
             .get()
             .uri("/api/triggers/management/list")
             .retrieve()
@@ -53,10 +67,8 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
   @Override
   public Map<String, String> triggerAction(String tenantId, String jobCode, String action) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
     CommonResponse<Map<String, String>> resp =
-        client
+        newClient()
             .post()
             .uri(
                 uriBuilder ->
@@ -81,8 +93,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
   }
 
   private Map<String, String> proxyScheduler(String method, String path) {
-    RestClient client =
-        restClientBuilder.baseUrl(resolveUrl(triggerClientProperties.getBaseUrl())).build();
+    RestClient client = newClient();
     CommonResponse<Map<String, String>> resp;
     if ("GET".equals(method)) {
       resp =
