@@ -65,12 +65,16 @@ public class ConsoleTenantConfigPackageExcelController {
    * 上传租户配置包 Excel，解析 8 个 Sheet 后写入服务端临时会话，返回 {@code uploadToken}。
    *
    * @param file 表单字段名 {@code file}，内容为 xlsx
+   * @param tenantId 目标租户 id。ROLE_ADMIN / ROLE_CONFIG_ADMIN 是全局角色，必须显式指定；
+   *                 租户级账号可不传（自动沿用 JWT 内 tenantId）
    */
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
   public CommonResponse<TenantConfigPackageExcelUploadResponse> upload(
-      @RequestParam("file") MultipartFile file) throws IOException {
-    return responseFactory.success(applicationService.upload(file));
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(value = "tenantId", required = false) String tenantId)
+      throws IOException {
+    return responseFactory.success(applicationService.upload(file, tenantId));
   }
 
   /**

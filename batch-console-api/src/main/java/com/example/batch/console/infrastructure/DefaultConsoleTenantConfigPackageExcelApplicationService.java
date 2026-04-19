@@ -163,9 +163,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   @Override
-  public TenantConfigPackageExcelUploadResponse upload(MultipartFile file) throws IOException {
+  public TenantConfigPackageExcelUploadResponse upload(MultipartFile file, String requestTenantId)
+      throws IOException {
     Guard.require(file != null && !file.isEmpty(), "file is required");
-    String tenantId = tenantGuard.resolveTenant(null);
+    String tenantId = tenantGuard.resolveTenant(requestTenantId);
     String fileName = fileNameOrDefault(file.getOriginalFilename());
     PackageExcelSession session = parseWorkbook(file.getBytes(), tenantId, fileName);
     String token = importStore.save(session);

@@ -16,7 +16,8 @@ public interface ConsoleTenantConfigPackageExcelApplicationService {
 
   ResponseEntity<InputStreamResource> downloadTemplate();
 
-  TenantConfigPackageExcelUploadResponse upload(MultipartFile file) throws IOException;
+  TenantConfigPackageExcelUploadResponse upload(MultipartFile file, String tenantId)
+      throws IOException;
 
   TenantConfigPackageExcelPreviewResponse preview(String uploadToken);
 
