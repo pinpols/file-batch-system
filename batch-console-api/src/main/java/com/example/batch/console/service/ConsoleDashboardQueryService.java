@@ -32,7 +32,7 @@ public class ConsoleDashboardQueryService {
     for (ConsoleDashboardQueryRepository.StatusCountView row :
         repository.jobStatusCounts(resolved)) {
       long count = row.count() == null ? 0L : row.count();
-      byStatus.put(row.status(), count);
+      byStatus.put(row.status() == null ? "UNKNOWN" : row.status(), count);
       total += count;
     }
     result.put("byStatus", byStatus);
@@ -41,14 +41,13 @@ public class ConsoleDashboardQueryService {
         KEY_DAILY_TREND,
         repository.jobDailyTrend(resolved, days).stream()
             .map(
-                row ->
-                    Map.of(
-                        KEY_DAY,
-                        row.day(),
-                        "status",
-                        row.status(),
-                        KEY_COUNT,
-                        row.count() == null ? 0L : row.count()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put(KEY_DAY, row.day() == null ? "UNKNOWN" : row.day());
+                  m.put("status", row.status() == null ? "UNKNOWN" : row.status());
+                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+                  return m;
+                })
             .toList());
     return result;
   }
@@ -60,23 +59,23 @@ public class ConsoleDashboardQueryService {
         "byTriggerType",
         repository.triggerTypeCounts(resolved).stream()
             .map(
-                row ->
-                    Map.of(
-                        "type",
-                        row.type(),
-                        KEY_COUNT,
-                        row.count() == null ? 0L : row.count()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put("type", row.type() == null ? "UNKNOWN" : row.type());
+                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+                  return m;
+                })
             .toList());
     result.put(
         KEY_DAILY_TREND,
         repository.triggerDailyTrend(resolved, days).stream()
             .map(
-                row ->
-                    Map.of(
-                        KEY_DAY,
-                        row.day(),
-                        KEY_COUNT,
-                        row.count() == null ? 0L : row.count()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put(KEY_DAY, row.day() == null ? "UNKNOWN" : row.day());
+                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+                  return m;
+                })
             .toList());
     return result;
   }
@@ -84,40 +83,43 @@ public class ConsoleDashboardQueryService {
   public Map<String, Object> workerLoad(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> result = new LinkedHashMap<>();
+    // 以下三个聚合查询的分组列（status / workerGroup / workerCode）DB 侧允许 null，
+    // 但 Map.of(...) 禁止 null value —— 用 LinkedHashMap 容错 + "UNKNOWN" 占位。
     result.put(
         "byStatus",
         repository.workerStatusCounts(resolved).stream()
             .map(
-                row ->
-                    Map.of(
-                        "status",
-                        row.status(),
-                        KEY_COUNT,
-                        row.count() == null ? 0L : row.count()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put("status", row.status() == null ? "UNKNOWN" : row.status());
+                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+                  return m;
+                })
             .toList());
     result.put(
         "byWorkerGroup",
         repository.workerGroupStatusCounts(resolved).stream()
             .map(
-                row ->
-                    Map.of(
-                        "workerGroup",
-                        row.workerGroup(),
-                        "status",
-                        row.status(),
-                        KEY_COUNT,
-                        row.count() == null ? 0L : row.count()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put("workerGroup", row.workerGroup() == null ? "UNKNOWN" : row.workerGroup());
+                  m.put("status", row.status() == null ? "UNKNOWN" : row.status());
+                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+                  return m;
+                })
             .toList());
     result.put(
         "activePartitionsByWorker",
         repository.activePartitionsByWorker(resolved).stream()
             .map(
-                row ->
-                    Map.of(
-                        "workerCode",
-                        row.workerCode(),
-                        "activePartitions",
-                        row.activePartitions() == null ? 0L : row.activePartitions()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put("workerCode", row.workerCode() == null ? "UNKNOWN" : row.workerCode());
+                  m.put(
+                      "activePartitions",
+                      row.activePartitions() == null ? 0L : row.activePartitions());
+                  return m;
+                })
             .toList());
     return result;
   }
