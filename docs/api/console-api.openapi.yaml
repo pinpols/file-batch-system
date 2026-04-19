@@ -8028,6 +8028,15 @@ paths:
       tags: [Config]
       summary: Upload tenant config package Excel (8 sheets)
       operationId: uploadTenantConfigPackageExcel
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          description: >
+            全局角色（ROLE_ADMIN / ROLE_CONFIG_ADMIN）必须显式指定目标租户；
+            租户级账号可不传（沿用 JWT 内 tenantId）。
+          schema:
+            type: string
       requestBody:
         required: true
         content:
