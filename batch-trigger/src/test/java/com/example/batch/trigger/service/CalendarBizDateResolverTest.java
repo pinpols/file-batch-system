@@ -2,6 +2,8 @@ package com.example.batch.trigger.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.trigger.support.CalendarBizDateDefinition;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -13,7 +15,8 @@ import org.junit.jupiter.api.Test;
 
 class CalendarBizDateResolverTest {
 
-  private final CalendarBizDateResolver resolver = new CalendarBizDateResolver();
+  private final CalendarBizDateResolver resolver =
+      new CalendarBizDateResolver(new BatchTimezoneProvider(new BatchTimezoneProperties()));
 
   @Test
   void shouldUsePreviousBusinessDayWhenTriggeredBeforeCutoff() {

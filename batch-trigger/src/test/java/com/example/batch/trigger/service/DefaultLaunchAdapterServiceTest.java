@@ -2,6 +2,8 @@ package com.example.batch.trigger.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
@@ -19,8 +21,12 @@ import org.junit.jupiter.api.Test;
 
 class DefaultLaunchAdapterServiceTest {
 
+  private static final BatchTimezoneProvider TIMEZONE_PROVIDER =
+      new BatchTimezoneProvider(new BatchTimezoneProperties());
+
   private final DefaultLaunchAdapterService service =
-      new DefaultLaunchAdapterService(new CalendarBizDateResolver());
+      new DefaultLaunchAdapterService(
+          new CalendarBizDateResolver(TIMEZONE_PROVIDER), TIMEZONE_PROVIDER);
 
   @Test
   void shouldBuildApiLaunchRequestFromControllerPayload() {

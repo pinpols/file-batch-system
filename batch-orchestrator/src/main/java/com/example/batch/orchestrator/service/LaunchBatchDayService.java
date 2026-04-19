@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.service;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.AuditLogConstants;
@@ -35,6 +36,7 @@ public class LaunchBatchDayService {
   private final BatchDayInstanceRepository batchDayInstanceRepository;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final OrchestratorJobMappers jobMappers;
+  private final BatchTimezoneProvider timezoneProvider;
 
   void upsertBatchDayInstance(
       LaunchRequest request,
@@ -53,6 +55,7 @@ public class LaunchBatchDayService {
         batchDayInstanceRepository.findFirstByTenantIdAndCalendarCodeAndBizDate(
             request.tenantId(), calendarCode, request.bizDate());
     Instant cutoffAt = resolveBatchDayCutoffAt(request.tenantId(), calendarCode, request.bizDate());
+    String timezoneSnapshot = resolveCalendarTimezone(request.tenantId(), calendarCode);
     String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
     String auditOperatorId =
         Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM;
@@ -83,6 +86,8 @@ public class LaunchBatchDayService {
               batchDaySlaDeadlineAt,
               lateAccepted ? 1 : 0,
               catchUpLaunch ? 1 : 0,
+              timezoneSnapshot,
+              0L,
               now,
               now));
       appendBatchDayAuditLog(
@@ -173,11 +178,21 @@ public class LaunchBatchDayService {
     }
     LocalTime cutoffTime =
         calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
-    ZoneId zoneId =
-        Texts.hasText(calendar.timezone())
-            ? ZoneId.of(calendar.timezone())
-            : ZoneId.systemDefault();
+    ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
     return bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
+  }
+
+  /**
+   * 创建批次日实例时快照日历 timezone；日历未绑 timezone 时回退到平台默认
+   * （{@code batch.timezone.default-zone}，默认 {@code Asia/Shanghai}），避免落 'UTC' 导致事后 cutoff 回放偏差。
+   */
+  String resolveCalendarTimezone(String tenantId, String calendarCode) {
+    BusinessCalendarRecord calendar =
+        configCacheService.findEnabledBusinessCalendar(tenantId, calendarCode);
+    if (calendar != null && Texts.hasText(calendar.timezone())) {
+      return calendar.timezone();
+    }
+    return timezoneProvider.defaultZone().getId();
   }
 
   Instant resolveBatchDaySlaDeadlineAt(String tenantId, String calendarCode, LocalDate bizDate) {
@@ -188,10 +203,7 @@ public class LaunchBatchDayService {
     }
     LocalTime cutoffTime =
         calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
-    ZoneId zoneId =
-        Texts.hasText(calendar.timezone())
-            ? ZoneId.of(calendar.timezone())
-            : ZoneId.systemDefault();
+    ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
     Instant cutoffAt = bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
     return cutoffAt.plusSeconds(calendar.slaOffsetMin() * 60L);
   }
@@ -310,17 +322,34 @@ public class LaunchBatchDayService {
       routedParams.put(
           "lateArrivalToleranceMin",
           resolveLateArrivalToleranceMin(request.tenantId(), calendarCode));
-    } else {
-      routedParams.put("catchUpReason", "LATE_ARRIVAL_OR_CLOSED_BATCH_DAY");
-      loaded.triggerRequest().setTriggerType(TriggerType.CATCH_UP.code());
-      jobMappers.triggerRequestMapper.updateTriggerType(
-          request.tenantId(), request.requestId(), TriggerType.CATCH_UP.code());
+      return new LaunchRequest(
+          request.tenantId(),
+          request.jobCode(),
+          request.bizDate(),
+          TriggerType.EVENT,
+          request.requestId(),
+          request.traceId(),
+          routedParams);
     }
+    // late-rejected：先 DB CAS（仅当 trigger_type 仍为 EVENT 时才能翻为 CATCH_UP），
+    // 成功后再同步内存 LaunchRequest / triggerRequest；CAS 未命中说明并发路径已改过状态，
+    // 此时不能再覆盖内存，直接保留原 EVENT 让调用方以当前事实重新走判定。
+    routedParams.put("catchUpReason", "LATE_ARRIVAL_OR_CLOSED_BATCH_DAY");
+    int casRows =
+        jobMappers.triggerRequestMapper.updateTriggerType(
+            request.tenantId(),
+            request.requestId(),
+            TriggerType.CATCH_UP.code(),
+            TriggerType.EVENT.code());
+    if (casRows == 0) {
+      return request;
+    }
+    loaded.triggerRequest().setTriggerType(TriggerType.CATCH_UP.code());
     return new LaunchRequest(
         request.tenantId(),
         request.jobCode(),
         request.bizDate(),
-        lateAccepted ? TriggerType.EVENT : TriggerType.CATCH_UP,
+        TriggerType.CATCH_UP,
         request.requestId(),
         request.traceId(),
         routedParams);

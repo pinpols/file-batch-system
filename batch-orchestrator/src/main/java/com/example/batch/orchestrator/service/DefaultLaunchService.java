@@ -5,6 +5,7 @@ import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.JobType;
+import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
@@ -61,7 +62,10 @@ public class DefaultLaunchService implements LaunchService {
   @Override
   public LaunchResponse launch(LaunchRequest request) {
     LaunchLoadResult loaded = launchValidationService.load(request);
-    if (loaded.existingInstance() != null) {
+    // RERUN 语义：哪怕 dedup_key 命中现有实例，也要新建一条 run_attempt = max+1 的实例，
+    // 并把 parent_instance_id 指回上一次尝试；只有非 RERUN 触发类型才沿用旧的幂等短路。
+    boolean rerunMode = request.triggerType() == TriggerType.RERUN;
+    if (loaded.existingInstance() != null && !rerunMode) {
       jobMappers.triggerRequestMapper.updateAcceptance(
           request.tenantId(),
           request.requestId(),
@@ -168,12 +172,20 @@ public class DefaultLaunchService implements LaunchService {
     jobInstance.setRetryFlag(launchParamResolver.resolveRetryFlag(effectiveParams));
     jobInstance.setRerunReason(launchParamResolver.resolveRerunReason(effectiveParams));
     jobInstance.setRelatedFileId(launchParamResolver.resolveRelatedFileId(effectiveParams));
-    jobInstance.setParentInstanceId(launchParamResolver.resolveParentInstanceId(effectiveParams));
+    String dedupKey = loaded.triggerRequest().getDedupKey();
+    Integer runAttempt = nextRunAttempt(request.tenantId(), dedupKey);
+    Long explicitParent = launchParamResolver.resolveParentInstanceId(effectiveParams);
+    Long parentInstanceId =
+        explicitParent != null
+            ? explicitParent
+            : (loaded.existingInstance() == null ? null : loaded.existingInstance().getId());
+    jobInstance.setParentInstanceId(parentInstanceId);
     jobInstance.setQueueCode(loaded.jobDefinition().queueCode());
     jobInstance.setWorkerGroup(loaded.jobDefinition().workerGroup());
     jobInstance.setPriority(
         loaded.jobDefinition().priority() == null ? 5 : loaded.jobDefinition().priority());
-    jobInstance.setDedupKey(loaded.triggerRequest().getDedupKey());
+    jobInstance.setDedupKey(dedupKey);
+    jobInstance.setRunAttempt(runAttempt);
     jobInstance.setVersion(0L);
     jobInstance.setExpectedPartitionCount(0);
     jobInstance.setSuccessPartitionCount(0);
@@ -250,6 +262,17 @@ public class DefaultLaunchService implements LaunchService {
     return activeNodes.isEmpty() ? WorkflowNodeCode.START.code() : String.join(",", activeNodes);
   }
 
+  /**
+   * 计算下一个 run_attempt：查同一 (tenant_id, dedup_key) 已有 MAX+1，首次触发得 1，RERUN 递增。
+   *
+   * <p>并发 RERUN 可能两个调用都读到 MAX=N 并尝试写 N+1，其中一条会撞唯一键 (tenant_id, dedup_key,
+   * run_attempt) 抛 23505；由 {@link #launch} 的 {@code resolveConcurrentDuplicate} 路径兜底。
+   */
+  private Integer nextRunAttempt(String tenantId, String dedupKey) {
+    Integer max = jobMappers.jobInstanceMapper.selectMaxRunAttemptByDedupKey(tenantId, dedupKey);
+    return max == null ? 1 : max + 1;
+  }
+
   private static boolean hasSqlStateInChain(Throwable throwable, String sqlState) {
     for (Throwable t = throwable; t != null; t = t.getCause()) {
       if (t instanceof SQLException sql) {
@@ -271,6 +294,11 @@ public class DefaultLaunchService implements LaunchService {
         jobMappers.jobInstanceMapper.selectByTenantAndDedupKey(
             request.tenantId(), loaded.triggerRequest().getDedupKey());
     if (existingInstance == null) {
+      throw exception;
+    }
+    // RERUN 并发：两个线程拿到同样的 max 并尝试 insert run_attempt=max+1，唯一键 (tenant, dedup, run_attempt)
+    // 会打回其中一条。此处不能把 RERUN 当"重复请求"返回旧实例——那会掩盖业务意图。直接抛出，由调用方重试。
+    if (request.triggerType() == TriggerType.RERUN) {
       throw exception;
     }
     jobMappers.triggerRequestMapper.updateAcceptance(

@@ -28,6 +28,7 @@ public class JobInstanceEntity implements Stateful {
   private String workerGroup;
   private Integer priority;
   private String dedupKey;
+  private Integer runAttempt;
   private Long version;
   private Integer expectedPartitionCount;
   private Integer successPartitionCount;

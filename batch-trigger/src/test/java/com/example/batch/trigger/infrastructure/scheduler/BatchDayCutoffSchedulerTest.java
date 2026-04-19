@@ -8,6 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import com.example.batch.trigger.mapper.BatchDayInstanceMapper;
 import com.example.batch.trigger.support.BatchDayCutoffCandidate;
@@ -29,7 +31,11 @@ class BatchDayCutoffSchedulerTest {
   void setUp() {
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     triggerGracefulShutdown = mock(TriggerGracefulShutdown.class);
-    scheduler = new BatchDayCutoffScheduler(batchDayInstanceMapper, triggerGracefulShutdown);
+    scheduler =
+        new BatchDayCutoffScheduler(
+            batchDayInstanceMapper,
+            triggerGracefulShutdown,
+            new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @Test

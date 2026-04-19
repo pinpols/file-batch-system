@@ -9,6 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.TriggerType;
@@ -89,10 +91,15 @@ class DefaultLaunchServiceTest {
     batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     selfProvider = mock(ObjectProvider.class);
+    BatchTimezoneProvider timezoneProvider = new BatchTimezoneProvider(new BatchTimezoneProperties());
     launchBatchDayService =
         new LaunchBatchDayService(
-            configCacheService, batchDayInstanceRepository, jobExecutionLogMapper, jobMappers);
-    launchParamResolver = new LaunchParamResolver();
+            configCacheService,
+            batchDayInstanceRepository,
+            jobExecutionLogMapper,
+            jobMappers,
+            timezoneProvider);
+    launchParamResolver = new LaunchParamResolver(timezoneProvider);
     service =
         new DefaultLaunchService(
             launchValidationService,
@@ -228,6 +235,8 @@ class DefaultLaunchServiceTest {
             null,
             0,
             0,
+            "UTC",
+            0L,
             Instant.parse("2026-03-28T00:00:00Z"),
             Instant.parse("2026-03-28T00:10:00Z"));
 
@@ -304,6 +313,8 @@ class DefaultLaunchServiceTest {
             expectedSlaDeadline(),
             0,
             0,
+            "UTC",
+            0L,
             now.minusSeconds(3_600),
             now.minusSeconds(600));
 
@@ -317,7 +328,8 @@ class DefaultLaunchServiceTest {
 
     service.launch(request);
 
-    verify(triggerRequestMapper, never()).updateTriggerType(anyString(), anyString(), anyString());
+    verify(triggerRequestMapper, never())
+        .updateTriggerType(anyString(), anyString(), anyString(), anyString());
     ArgumentCaptor<JobInstanceEntity> jobCaptor = ArgumentCaptor.forClass(JobInstanceEntity.class);
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getTriggerType()).isEqualTo(TriggerType.EVENT.code());
@@ -381,6 +393,8 @@ class DefaultLaunchServiceTest {
             expectedSlaDeadline(),
             0,
             0,
+            "UTC",
+            0L,
             Instant.parse("2026-03-27T00:00:00Z"),
             Instant.parse("2026-03-27T06:00:00Z"));
 
@@ -391,10 +405,14 @@ class DefaultLaunchServiceTest {
             "t1", "BIZ_CAL", request.bizDate()))
         .thenReturn(existing);
     when(batchDayInstanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(triggerRequestMapper.updateTriggerType(
+            "t1", "req-004", TriggerType.CATCH_UP.code(), TriggerType.EVENT.code()))
+        .thenReturn(1);
 
     service.launch(request);
 
-    verify(triggerRequestMapper).updateTriggerType("t1", "req-004", TriggerType.CATCH_UP.code());
+    verify(triggerRequestMapper)
+        .updateTriggerType("t1", "req-004", TriggerType.CATCH_UP.code(), TriggerType.EVENT.code());
     ArgumentCaptor<JobInstanceEntity> jobCaptor = ArgumentCaptor.forClass(JobInstanceEntity.class);
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getTriggerType()).isEqualTo(TriggerType.CATCH_UP.code());

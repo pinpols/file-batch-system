@@ -1,5 +1,6 @@
 package com.example.batch.trigger.infrastructure.scheduler;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import com.example.batch.trigger.mapper.BatchDayInstanceMapper;
 import com.example.batch.trigger.support.BatchDayCutoffCandidate;
@@ -31,6 +32,7 @@ public class BatchDayCutoffScheduler {
 
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final TriggerGracefulShutdown gracefulShutdown;
+  private final BatchTimezoneProvider timezoneProvider;
 
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_cutoff", lockAtMostFor = "PT2M", lockAtLeastFor = "PT15S")
@@ -78,9 +80,6 @@ public class BatchDayCutoffScheduler {
   }
 
   private ZoneId resolveZoneId(String timezone) {
-    if (timezone == null || timezone.isBlank()) {
-      return ZoneId.systemDefault();
-    }
-    return ZoneId.of(timezone);
+    return timezoneProvider.resolveOrDefault(timezone);
   }
 }

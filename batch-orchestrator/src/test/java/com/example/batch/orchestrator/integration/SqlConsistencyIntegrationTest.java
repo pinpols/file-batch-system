@@ -49,7 +49,8 @@ class SqlConsistencyIntegrationTest {
             POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
     try {
       JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-      assertUniquePresent(jdbc, "job_instance", "uk_job_instance_tenant_dedup");
+      // V62: uk_job_instance_tenant_dedup 替换为 (tenant_id, dedup_key, run_attempt) 三元
+      assertUniquePresent(jdbc, "job_instance", "uk_job_instance_tenant_dedup_attempt");
       assertUniquePresent(jdbc, "outbox_event", "uk_outbox_event_key");
       assertUniquePresent(jdbc, "job_definition", "uk_job_definition_tenant_code");
 

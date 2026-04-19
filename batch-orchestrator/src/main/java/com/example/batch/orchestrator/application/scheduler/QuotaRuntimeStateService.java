@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.scheduler;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.domain.scheduler.QuotaResetPolicy;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
@@ -43,6 +44,7 @@ public class QuotaRuntimeStateService {
       Instant lastResetAt) {}
 
   private final QuotaRuntimeStateRepository quotaRuntimeStateRepository;
+  private final BatchTimezoneProvider timezoneProvider;
 
   public record QuotaReservationOwner(String tenantId, String quotaScope, String ownerCode) {}
 
@@ -254,7 +256,9 @@ public class QuotaRuntimeStateService {
     }
 
     if (policy == QuotaResetPolicy.CALENDAR_DAY) {
-      ZonedDateTime nowZdt = now.atZone(QuotaResetPolicy.systemZone());
+      // 自然日窗口使用平台默认时区（batch.timezone.default-zone），与调度日历时区语义一致；
+      // 避免 JVM default 在容器间漂移导致同一租户跨节点看到不同的"自然日"边界。
+      ZonedDateTime nowZdt = now.atZone(timezoneProvider.defaultZone());
       Instant windowStart = QuotaResetPolicy.startOfCalendarDay(nowZdt).toInstant();
       Instant windowEnd = windowStart.plus(Duration.ofDays(1));
       if (!windowStart.equals(state.windowStartedAt())

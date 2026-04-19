@@ -2,6 +2,8 @@ package com.example.batch.orchestrator.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TriggerType;
 import java.time.Instant;
@@ -17,7 +19,7 @@ class LaunchParamResolverTest {
 
   @BeforeEach
   void setUp() {
-    resolver = new LaunchParamResolver();
+    resolver = new LaunchParamResolver(new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @Test

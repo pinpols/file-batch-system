@@ -26,8 +26,11 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -53,6 +56,7 @@ public class BatchDaySettleScheduler {
   private final OrchestratorConfigCacheService configCacheService;
   private final LaunchService launchService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final ObjectProvider<BatchDaySettleScheduler> selfProvider;
 
   @Scheduled(fixedDelayString = "${batch.batch-day.settle-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_settle", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
@@ -60,7 +64,7 @@ public class BatchDaySettleScheduler {
     settle();
   }
 
-  @Transactional
+  /** 扫描入口：不包事务，逐条候选委派到 {@link #settleOne} 独立短事务里。 */
   public void settle() {
     if (gracefulShutdown.isDraining()) {
       return;
@@ -71,54 +75,73 @@ public class BatchDaySettleScheduler {
       return;
     }
     Instant now = Instant.now();
+    BatchDaySettleScheduler self = selfProvider.getObject();
     for (BatchDayInstanceRecord candidate : candidates) {
       if (candidate == null || candidate.id() == null) {
         continue;
       }
-      BatchDayInstanceMetrics metrics =
-          jobInstanceMapper.selectBatchDayMetrics(
-              candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
-      if (metrics == null) {
-        continue;
-      }
-      long activeCount = value(metrics.getActiveCount());
-      long failedCount = value(metrics.getFailedCount());
-      long totalCount = value(metrics.getTotalCount());
-      if (activeCount > 0) {
-        if (!"IN_FLIGHT".equals(candidate.dayStatus())) {
-          BatchDayInstanceRecord from = candidate;
-          BatchDayInstanceRecord to = candidate.withDayStatus("IN_FLIGHT", now);
-          batchDayInstanceRepository.save(to);
-          appendBatchDayAuditLog(from, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES");
-        }
-        continue;
-      }
-      if (totalCount <= 0L) {
-        continue;
-      }
-      if (failedCount > 0L) {
-        BatchDayInstanceRecord from = candidate;
-        BatchDayInstanceRecord to = candidate.withSettled("FAILED", now, now);
-        batchDayInstanceRepository.save(to);
-        appendBatchDayAuditLog(from, to, "BATCH_DAY_FAILED");
-        driveCatchUp(candidate, now);
+      try {
+        self.settleOne(candidate, now);
+      } catch (OptimisticLockingFailureException conflict) {
+        // @Version CAS 冲突：其他路径（reopen / 并发 settle）先写了，本轮跳过，下 tick 重扫。
         log.info(
-            "batch day settled as FAILED: tenantId={}, calendarCode={}, bizDate={}",
+            "batch day settle cas conflict; will retry next tick: tenantId={},"
+                + " calendarCode={}, bizDate={}, msg={}",
             candidate.tenantId(),
             candidate.calendarCode(),
-            candidate.bizDate());
-        continue;
+            candidate.bizDate(),
+            conflict.getMessage());
       }
-      BatchDayInstanceRecord from = candidate;
-      BatchDayInstanceRecord to = candidate.withSettled("SETTLED", now, now);
+    }
+  }
+
+  /**
+   * 单个候选的结算事务：REQUIRES_NEW 保证和循环解耦——某一条 CAS 冲突不影响其他候选。
+   *
+   * <p>必须是 {@code public}，且通过 self-proxy 调用才能被 Spring AOP 织入事务。
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void settleOne(BatchDayInstanceRecord candidate, Instant now) {
+    BatchDayInstanceMetrics metrics =
+        jobInstanceMapper.selectBatchDayMetrics(
+            candidate.tenantId(), candidate.calendarCode(), candidate.bizDate());
+    if (metrics == null) {
+      return;
+    }
+    long activeCount = value(metrics.getActiveCount());
+    long failedCount = value(metrics.getFailedCount());
+    long totalCount = value(metrics.getTotalCount());
+    if (activeCount > 0) {
+      if (!"IN_FLIGHT".equals(candidate.dayStatus())) {
+        BatchDayInstanceRecord to = candidate.withDayStatus("IN_FLIGHT", now);
+        batchDayInstanceRepository.save(to);
+        appendBatchDayAuditLog(candidate, to, "IN_FLIGHT_BECAUSE_ACTIVE_INSTANCES");
+      }
+      return;
+    }
+    if (totalCount <= 0L) {
+      return;
+    }
+    if (failedCount > 0L) {
+      BatchDayInstanceRecord to = candidate.withSettled("FAILED", now, now);
       batchDayInstanceRepository.save(to);
-      appendBatchDayAuditLog(from, to, "BATCH_DAY_SETTLED");
+      appendBatchDayAuditLog(candidate, to, "BATCH_DAY_FAILED");
+      driveCatchUp(candidate, now);
       log.info(
-          "batch day settled as SETTLED: tenantId={}, calendarCode={}, bizDate={}",
+          "batch day settled as FAILED: tenantId={}, calendarCode={}, bizDate={}",
           candidate.tenantId(),
           candidate.calendarCode(),
           candidate.bizDate());
+      return;
     }
+    BatchDayInstanceRecord to = candidate.withSettled("SETTLED", now, now);
+    batchDayInstanceRepository.save(to);
+    appendBatchDayAuditLog(candidate, to, "BATCH_DAY_SETTLED");
+    log.info(
+        "batch day settled as SETTLED: tenantId={}, calendarCode={}, bizDate={}",
+        candidate.tenantId(),
+        candidate.calendarCode(),
+        candidate.bizDate());
   }
 
   private long value(Long value) {
