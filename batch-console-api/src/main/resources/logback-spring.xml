@@ -5,17 +5,13 @@
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
     <!-- 前端遥测专属文件 appender - local profile -->
-    <!-- append=false：本地每次启动覆盖 frontend.log，跟 start-all.sh 的 Java 模块日志行为一致；
-         rolling 仍保留按日/按大小滚动（历史文件 frontend.YYYY-MM-DD.N.log 不受影响）。 -->
+    <!-- 用 FileAppender + append=false，与 start-all.sh 其他模块日志（shell > 重定向覆盖）行为完全对齐：
+         单文件、每次启动覆盖、不产生 frontend.YYYY-MM-DD.N.log 归档。
+         生产 profile 仍保留 RollingFileAppender 做日志审计留痕。 -->
     <springProfile name="local">
-        <appender name="FRONTEND_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <appender name="FRONTEND_FILE" class="ch.qos.logback.core.FileAppender">
             <file>logs/app/frontend.log</file>
             <append>false</append>
-            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-                <fileNamePattern>logs/app/frontend.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
-                <maxFileSize>50MB</maxFileSize>
-                <maxHistory>7</maxHistory>
-            </rollingPolicy>
             <encoder>
                 <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{frontendApp}][%X{frontendUserId}][%X{frontendPage}] %msg%n</pattern>
             </encoder>
