@@ -1,8 +1,8 @@
 package com.example.batch.worker.imports.stage.format;
 
 import com.example.batch.worker.imports.domain.ImportJobContext;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.StringReader;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.xml.XMLConstants;
@@ -27,9 +27,8 @@ public class XmlFormatParser implements FormatParser {
   @Override
   public long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer)
       throws Exception {
-    String payloadText = request.payloadText();
     boolean preserveLogicalRow = request.preserveLogicalRow();
-    if (!StringUtils.hasText(payloadText)) {
+    if (!request.hasText()) {
       return 0L;
     }
     DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -39,7 +38,10 @@ public class XmlFormatParser implements FormatParser {
     factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
     factory.setNamespaceAware(true);
     DocumentBuilder builder = factory.newDocumentBuilder();
-    Document doc = builder.parse(new InputSource(new StringReader(payloadText)));
+    Document doc;
+    try (BufferedReader reader = request.openTextReader()) {
+      doc = builder.parse(new InputSource(reader));
+    }
     String recordElement = resolveXmlRecordElement(request.templateConfig());
     NodeList nodes = doc.getElementsByTagNameNS("*", recordElement);
     if (nodes.getLength() == 0) {

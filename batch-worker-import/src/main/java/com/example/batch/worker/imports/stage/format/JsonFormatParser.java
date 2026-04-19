@@ -6,9 +6,9 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.util.Map;
-import org.springframework.util.StringUtils;
 
 /** Parses JSON payloads (array, envelope, single object) into NDJSON records. */
 public class JsonFormatParser implements FormatParser {
@@ -25,13 +25,13 @@ public class JsonFormatParser implements FormatParser {
   @Override
   public long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer)
       throws Exception {
-    String payloadText = request.payloadText();
     boolean preserveLogicalRow = request.preserveLogicalRow();
-    if (!StringUtils.hasText(payloadText)) {
+    if (!request.hasText()) {
       return 0L;
     }
     ObjectMapper mapper = support.objectMapper();
-    try (JsonParser parser = mapper.getFactory().createParser(payloadText)) {
+    try (BufferedReader textReader = request.openTextReader();
+        JsonParser parser = mapper.getFactory().createParser(textReader)) {
       JsonToken token = parser.nextToken();
       if (token == null) {
         return 0L;

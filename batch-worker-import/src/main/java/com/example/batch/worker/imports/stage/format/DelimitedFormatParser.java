@@ -4,7 +4,6 @@ import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,9 +24,8 @@ public class DelimitedFormatParser implements FormatParser {
   @Override
   public long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer)
       throws Exception {
-    String payloadText = request.payloadText();
     boolean preserveLogicalRow = request.preserveLogicalRow();
-    if (!StringUtils.hasText(payloadText)) {
+    if (!request.hasText()) {
       return 0L;
     }
     ImportPayload importPayload = request.importPayload();
@@ -52,7 +50,7 @@ public class DelimitedFormatParser implements FormatParser {
     List<String> headers = support.defaultHeaders();
     long recordNo = 0L;
     List<String> footerBuffer = footerRows > 0 ? new ArrayList<>(footerRows + 1) : List.of();
-    try (BufferedReader reader = new BufferedReader(new StringReader(payloadText))) {
+    try (BufferedReader reader = request.openTextReader()) {
       String line;
       int nonBlankLineNo = 0;
       while ((line = reader.readLine()) != null) {

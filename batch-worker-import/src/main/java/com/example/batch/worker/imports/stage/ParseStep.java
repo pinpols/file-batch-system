@@ -85,6 +85,7 @@ public class ParseStep implements ImportStageStep {
   @Override
   public ImportStageResult execute(ImportJobContext context) {
     Path stagingFile = null;
+    Path spoolFile = resolveSpoolPath(context);
     try {
       String payloadText =
           String.valueOf(
@@ -142,6 +143,15 @@ public class ParseStep implements ImportStageStep {
           ex.getMessage(),
           ex);
       return ImportStageResult.failure(stage(), "IMPORT_PARSE_FAILED", ex.getMessage());
+    } finally {
+      // spool 临时文件生命周期结束于 PARSE：下游 VALIDATE / LOAD 只消费 parsed records staging file。
+      if (spoolFile != null) {
+        deleteQuietly(spoolFile);
+        if (context != null) {
+          context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
+          context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET);
+        }
+      }
     }
   }
 
@@ -187,17 +197,58 @@ public class ParseStep implements ImportStageStep {
       boolean preserveLogicalRow,
       BufferedWriter writer)
       throws Exception {
-    String format = resolveFormat(importPayload, templateConfig, payloadText);
+    Path spoolPath = resolveSpoolPath(context);
+    Charset spoolCharset = resolveSpoolCharset(context);
+    String format =
+        spoolPath != null
+            ? resolveFormat(importPayload, templateConfig, "")
+            : resolveFormat(importPayload, templateConfig, payloadText);
     FormatParseRequest request =
-        new FormatParseRequest(payloadText, null, importPayload, templateConfig, preserveLogicalRow);
+        new FormatParseRequest(
+            payloadText,
+            null,
+            importPayload,
+            templateConfig,
+            preserveLogicalRow,
+            spoolPath,
+            spoolCharset);
     if ("EXCEL".equalsIgnoreCase(format)) {
-      byte[] bytes = payloadText.getBytes(StandardCharsets.UTF_8);
+      byte[] bytes =
+          payloadText == null ? new byte[0] : payloadText.getBytes(StandardCharsets.UTF_8);
       request =
           new FormatParseRequest(
-              payloadText, bytes, importPayload, templateConfig, preserveLogicalRow);
+              payloadText,
+              bytes,
+              importPayload,
+              templateConfig,
+              preserveLogicalRow,
+              spoolPath,
+              spoolCharset);
     }
     FormatParser parser = parsers.getOrDefault(format.toUpperCase(), defaultParser);
     return parser.parse(context, request, writer);
+  }
+
+  private static Path resolveSpoolPath(ImportJobContext context) {
+    Object v = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
+    if (v instanceof Path p) {
+      return p;
+    }
+    if (v instanceof String s && !s.isEmpty()) {
+      return Path.of(s);
+    }
+    return null;
+  }
+
+  private static Charset resolveSpoolCharset(ImportJobContext context) {
+    Object v = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET);
+    if (v instanceof Charset cs) {
+      return cs;
+    }
+    if (v instanceof String s && !s.isEmpty()) {
+      return EncodingUtils.resolve(s);
+    }
+    return null;
   }
 
 
