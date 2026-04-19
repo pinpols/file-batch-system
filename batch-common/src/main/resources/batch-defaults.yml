@@ -25,6 +25,10 @@ spring:
   # i18n / 错误消息资源统一 UTF-8 读取，避免 properties 文件在不同环境被按平台默认字符集解析。
   messages:
     encoding: UTF-8
+  # Jackson 序列化统一使用平台默认时区（见下方 batch.timezone.default-zone）；避免 API 响应里
+  # OffsetDateTime / Instant 根据 JVM default 被渲染出不一致的 offset。
+  jackson:
+    time-zone: ${BATCH_TIMEZONE_DEFAULT_ZONE:Asia/Shanghai}
 
 # ------------------------------------------------------------------
 # 平台数据库（Platform PostgreSQL，所有服务模块共用）
@@ -162,6 +166,12 @@ logging:
 # Batch 平台共享配置
 # ------------------------------------------------------------------
 batch:
+  # 全局时区（所有业务路径上的 ZoneId.systemDefault() 改走 BatchTimezoneProvider）。
+  # IANA 名，默认 Asia/Shanghai（= UTC+8），可用 BATCH_TIMEZONE_DEFAULT_ZONE 覆盖。
+  # business_calendar.timezone 仍然优先；此值只在日历未配置 timezone 时作为兜底。
+  timezone:
+    default-zone: ${BATCH_TIMEZONE_DEFAULT_ZONE:Asia/Shanghai}
+
   # 安全 / KMS（orchestrator + worker + console 共用）
   security:
     # 全链路安全旁路开关（放宽认证 / 脱敏 / 加解密 / 审批 / 渠道校验）；仅限本地 / 联调 / E2E。
