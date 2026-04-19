@@ -75,24 +75,32 @@ module_jar() {
 
 # AppCDS：首次 training run 生成 .jsa；后续启动 mmap 复用
 # 训练期禁用外部依赖（Flyway/Quartz/Kafka listener）减少失败面
-# SKIP_CDS=1 可关；jar 新于 .jsa 时自动重训
+# SKIP_CDS=1 可关；jar 内容 hash 变化时自动重训（mvn package 总会 bump mtime
+# 但 jar 字节内容通常不变，用 SHA-256 判等能跨"无改动重打包"复用 .jsa）
 __CDS_FLAG=""
 warm_cds() {
   __CDS_FLAG=""
   local name="$1" jar="$2"
   local archive="$CDS_DIR/${name}.jsa"
+  local hash_file="$archive.sha256"
 
   if [[ "${SKIP_CDS:-0}" == "1" ]]; then
     return 0
   fi
-  if [[ -f "$archive" && "$jar" -ot "$archive" ]]; then
+
+  local jar_hash
+  jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
+
+  # archive 存在且 hash 与上次训练时的 jar 一致 —— 直接用
+  if [[ -f "$archive" && -f "$hash_file" && -n "$jar_hash" \
+        && "$(cat "$hash_file" 2>/dev/null)" == "$jar_hash" ]]; then
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
     return 0
   fi
 
-  echo "  预热 CDS 缓存 ${name}（首次约 15-30s，构建后会重训）..."
+  echo "  预热 CDS 缓存 ${name}（首次约 15-30s；jar 字节变化时会重训）..."
   local warm_log="$LOG_DIR/${name}-cds-warmup.log"
-  rm -f "$archive"
+  rm -f "$archive" "$hash_file"
   java --enable-native-access=ALL-UNNAMED \
     ${LOCAL_FAST_JVM_OPTS} \
     -Dspring.context.exit=onRefresh \
@@ -107,7 +115,7 @@ warm_cds() {
   while kill -0 "$pid" 2>/dev/null; do
     if (( elapsed >= 120 )); then
       kill -9 "$pid" 2>/dev/null
-      rm -f "$archive"
+      rm -f "$archive" "$hash_file"
       echo "  ⚠  ${name} CDS 预热超时（>120s），跳过 → $warm_log"
       return 1
     fi
@@ -117,9 +125,11 @@ warm_cds() {
   wait "$pid" 2>/dev/null || true
 
   if [[ -f "$archive" ]]; then
+    echo "$jar_hash" >"$hash_file"
     echo "  ✓ ${name} CDS 缓存就绪 ($(du -h "$archive" 2>/dev/null | cut -f1))"
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
   else
+    rm -f "$hash_file"
     echo "  ⚠  ${name} CDS 预热未生成 .jsa，跳过 → $warm_log"
   fi
 }
