@@ -9,6 +9,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.config.BatchTimezoneProperties;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
@@ -96,7 +98,10 @@ class QuotaRuntimeStateServiceTest {
   @BeforeEach
   void setUp() {
     quotaRuntimeStateRepository = mock(QuotaRuntimeStateRepository.class);
-    service = new QuotaRuntimeStateService(quotaRuntimeStateRepository);
+    service =
+        new QuotaRuntimeStateService(
+            quotaRuntimeStateRepository,
+            new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   // ── evaluateAndReserve — guard conditions ─────────────────────────────────

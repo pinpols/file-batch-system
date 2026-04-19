@@ -1,5 +1,6 @@
 package com.example.batch.trigger.service;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
@@ -12,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 将触发命令翻译为 {@link LaunchRequest} 的适配器，屏蔽 API 触发与定时触发的参数差异。
@@ -31,6 +31,7 @@ import com.example.batch.common.utils.Texts;
 public class DefaultLaunchAdapterService implements LaunchAdapterService {
 
   private final CalendarBizDateResolver calendarBizDateResolver;
+  private final BatchTimezoneProvider timezoneProvider;
 
   @Override
   public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
@@ -49,12 +50,9 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   public LaunchRequest fromScheduledTrigger(
       ScheduledTriggerCommand command, CalendarBizDateDefinition calendar) {
     var descriptor = command.descriptor();
-    // timezone 未配置时 fallback 到 JVM 默认时区，而非抛异常——错误配置不应阻断所有调度触发，
-    // 但会导致 bizDate 偏移，运维应在 Job 定义上明确填写 timezone。
-    ZoneId zoneId =
-        Texts.hasText(descriptor.getTimezone())
-            ? ZoneId.of(descriptor.getTimezone())
-            : ZoneId.systemDefault();
+    // timezone 未配置时 fallback 到平台默认（batch.timezone.default-zone），而非 JVM default。
+    // 错误配置不应阻断所有调度触发，但会导致 bizDate 偏移，运维应在 Job 定义上明确填写 timezone。
+    ZoneId zoneId = timezoneProvider.resolveOrDefault(descriptor.getTimezone());
     // bizDate=null 表示日历判断为节假日且 rollRule=SKIP，调用方据此跳过本次调度
     LocalDate bizDate = calendarBizDateResolver.resolve(command.fireTime(), zoneId, calendar);
     // triggerType 为 null 时说明来自普通 Quartz 触发，catchUp 触发会被显式设置为 CATCH_UP

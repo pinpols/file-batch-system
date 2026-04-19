@@ -18,6 +18,10 @@ public interface JobInstanceMapper {
   JobInstanceEntity selectByTenantAndDedupKey(
       @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
 
+  /** 同一 dedup_key 下已用到的最大 run_attempt，未出现过则返回 null。供 RERUN 路径原子推进。 */
+  Integer selectMaxRunAttemptByDedupKey(
+      @Param("tenantId") String tenantId, @Param("dedupKey") String dedupKey);
+
   int insert(JobInstanceEntity entity);
 
   List<JobInstanceEntity> selectByQuery(JobInstanceQuery query);

@@ -68,5 +68,6 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and request_id = #{requestId}
+          and trigger_type = #{expectedTriggerType}
     </update>
 </mapper>

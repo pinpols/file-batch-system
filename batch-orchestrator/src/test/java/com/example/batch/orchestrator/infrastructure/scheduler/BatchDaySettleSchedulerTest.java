@@ -30,6 +30,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 
 class BatchDaySettleSchedulerTest {
 
@@ -51,6 +52,8 @@ class BatchDaySettleSchedulerTest {
     configCacheService = mock(OrchestratorConfigCacheService.class);
     launchService = mock(LaunchService.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<BatchDaySettleScheduler> selfProvider = mock(ObjectProvider.class);
     scheduler =
         new BatchDaySettleScheduler(
             batchDayInstanceRepository,
@@ -59,7 +62,10 @@ class BatchDaySettleSchedulerTest {
             triggerRequestMapper,
             configCacheService,
             launchService,
-            gracefulShutdown);
+            gracefulShutdown,
+            selfProvider);
+    // self-proxy 在单测里直接指向 scheduler 自身，绕开 Spring AOP；REQUIRES_NEW 事务语义在单测里不跑也没事
+    when(selfProvider.getObject()).thenReturn(scheduler);
   }
 
   @Test
@@ -192,6 +198,8 @@ class BatchDaySettleSchedulerTest {
         Instant.parse("2026-03-27T08:00:00Z"),
         0,
         0,
+        "UTC",
+        0L,
         Instant.parse("2026-03-27T00:00:00Z"),
         Instant.parse("2026-03-27T06:00:00Z"));
   }

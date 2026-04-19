@@ -1,5 +1,6 @@
 package com.example.batch.trigger.service;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.trigger.support.CalendarBizDateDefinition;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -32,6 +33,12 @@ public class CalendarBizDateResolver {
   private static final LocalTime DEFAULT_CUTOFF_TIME = LocalTime.of(6, 0);
   private static final int MAX_WORKDAY_SEARCH_DAYS = 365;
 
+  private final BatchTimezoneProvider timezoneProvider;
+
+  public CalendarBizDateResolver(BatchTimezoneProvider timezoneProvider) {
+    this.timezoneProvider = timezoneProvider;
+  }
+
   public LocalDate resolve(
       Instant fireTime, ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
     Objects.requireNonNull(fireTime, "fireTime");
@@ -50,7 +57,7 @@ public class CalendarBizDateResolver {
     if (calendar != null && calendar.timezone() != null && !calendar.timezone().isBlank()) {
       return ZoneId.of(calendar.timezone());
     }
-    return fallbackZoneId == null ? ZoneId.systemDefault() : fallbackZoneId;
+    return fallbackZoneId == null ? timezoneProvider.defaultZone() : fallbackZoneId;
   }
 
   private LocalTime resolveCutoffTime(CalendarBizDateDefinition calendar) {

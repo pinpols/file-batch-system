@@ -3,9 +3,19 @@ package com.example.batch.orchestrator.domain.entity;
 import java.time.Instant;
 import java.time.LocalDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+/**
+ * 批次日实例投影。
+ *
+ * <p>{@link #version} 是 Spring Data JDBC {@code @Version} 乐观锁列：save 时若值与 DB 不一致会抛
+ * {@code OptimisticLockingFailureException}，由 settle / reopen 调用方负责重试或跳过。
+ *
+ * <p>{@link #timezoneSnapshot} 是创建时从 business_calendar.timezone 抓的快照 —— 事后日历改时区不影响
+ * 历史批次日的 cutoff_at / sla_deadline_at 重放语义。
+ */
 @Table(schema = "batch", value = "batch_day_instance")
 public record BatchDayInstanceRecord(
     @Id Long id,
@@ -19,6 +29,8 @@ public record BatchDayInstanceRecord(
     @Column("sla_deadline_at") Instant slaDeadlineAt,
     @Column("late_count") Integer lateCount,
     @Column("catchup_count") Integer catchupCount,
+    @Column("timezone_snapshot") String timezoneSnapshot,
+    @Version @Column("version") Long version,
     @Column("created_at") Instant createdAt,
     @Column("updated_at") Instant updatedAt) {
 
@@ -35,6 +47,8 @@ public record BatchDayInstanceRecord(
         slaDeadlineAt,
         lateCount,
         catchupCount,
+        timezoneSnapshot,
+        version,
         createdAt,
         updatedAt);
   }
@@ -52,6 +66,8 @@ public record BatchDayInstanceRecord(
         slaDeadlineAt,
         lateCount,
         catchupCount,
+        timezoneSnapshot,
+        version,
         createdAt,
         updatedAt);
   }
@@ -69,6 +85,8 @@ public record BatchDayInstanceRecord(
         slaDeadlineAt,
         lateCount,
         catchupCount,
+        timezoneSnapshot,
+        version,
         createdAt,
         updatedAt);
   }
@@ -86,6 +104,8 @@ public record BatchDayInstanceRecord(
         slaDeadlineAt,
         lateCount,
         catchupCount,
+        timezoneSnapshot,
+        version,
         createdAt,
         updatedAt);
   }
@@ -103,6 +123,8 @@ public record BatchDayInstanceRecord(
         slaDeadlineAt,
         lateCount,
         catchupCount,
+        timezoneSnapshot,
+        version,
         createdAt,
         updatedAt);
   }
@@ -120,6 +142,8 @@ public record BatchDayInstanceRecord(
         slaDeadlineAt,
         lateCount,
         catchupCount,
+        timezoneSnapshot,
+        version,
         createdAt,
         updatedAt);
   }
@@ -138,6 +162,8 @@ public record BatchDayInstanceRecord(
         slaDeadlineAt,
         lateCount,
         catchupCount,
+        timezoneSnapshot,
+        version,
         createdAt,
         updatedAt);
   }
@@ -155,6 +181,8 @@ public record BatchDayInstanceRecord(
         slaDeadlineAt,
         lateCount,
         catchupCount,
+        timezoneSnapshot,
+        version,
         createdAt,
         updatedAt);
   }

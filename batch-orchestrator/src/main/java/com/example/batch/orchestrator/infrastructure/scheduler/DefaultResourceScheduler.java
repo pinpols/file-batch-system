@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.model.WorkerRouteModel;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import com.example.batch.orchestrator.application.scheduler.PartitionThrottle;
 import com.example.batch.orchestrator.application.scheduler.PriorityScheduler;
@@ -15,6 +16,7 @@ import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -24,7 +26,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 资源调度统一收口：给定一个 {@link ResourceSchedulingRequest}，按固定 pipeline 依次判定可派发性，
@@ -68,6 +69,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   private final OrchestratorConfigCacheService configCacheService;
   private final JobInstanceMapper jobInstanceMapper;
   private final JobPartitionMapper jobPartitionMapper;
+  private final BatchTimezoneProvider timezoneProvider;
 
   /** 资源调度统一收口在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
   @Override
@@ -154,10 +156,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     if (window == null || window.startTime() == null || window.endTime() == null) {
       return true;
     }
-    ZoneId zoneId =
-        Texts.hasText(window.timezone())
-            ? ZoneId.of(window.timezone())
-            : ZoneId.systemDefault();
+    ZoneId zoneId = timezoneProvider.resolveOrDefault(window.timezone());
     LocalTime now = ZonedDateTime.now(zoneId).toLocalTime();
     LocalTime start = window.startTime();
     LocalTime end = window.endTime();

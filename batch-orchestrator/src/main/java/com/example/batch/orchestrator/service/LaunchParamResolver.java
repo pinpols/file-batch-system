@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.service;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.RunMode;
@@ -10,15 +11,18 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /** 启动参数解析与合并工具：从请求参数、作业定义中提取/转换各类运行态字段。 */
 @Service
+@RequiredArgsConstructor
 public class LaunchParamResolver {
+
+  private final BatchTimezoneProvider timezoneProvider;
 
   Map<String, Object> mergeLaunchParams(
       JobDefinitionRecord jobDefinition,
@@ -191,11 +195,11 @@ public class LaunchParamResolver {
       return instant;
     }
     if (value instanceof LocalDateTime ldt) {
-      return ldt.atZone(ZoneId.systemDefault()).toInstant();
+      return ldt.atZone(timezoneProvider.defaultZone()).toInstant();
     }
     if (value instanceof LocalTime lt) {
       LocalDate d = bizDate == null ? LocalDate.now() : bizDate;
-      return d.atTime(lt).atZone(ZoneId.systemDefault()).toInstant();
+      return d.atTime(lt).atZone(timezoneProvider.defaultZone()).toInstant();
     }
     String text = String.valueOf(value).trim();
     if (text.isEmpty()) {
@@ -206,12 +210,12 @@ public class LaunchParamResolver {
     } catch (Exception ignored) {
     }
     try {
-      return LocalDateTime.parse(text).atZone(ZoneId.systemDefault()).toInstant();
+      return LocalDateTime.parse(text).atZone(timezoneProvider.defaultZone()).toInstant();
     } catch (Exception ignored) {
     }
     try {
       LocalDate d = bizDate == null ? LocalDate.now() : bizDate;
-      return d.atTime(LocalTime.parse(text)).atZone(ZoneId.systemDefault()).toInstant();
+      return d.atTime(LocalTime.parse(text)).atZone(timezoneProvider.defaultZone()).toInstant();
     } catch (Exception ignored) {
     }
     return null;

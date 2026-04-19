@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
@@ -37,6 +38,7 @@ public class BatchDayCutoffScheduler {
   private final OrchestratorConfigCacheService configCacheService;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final BatchTimezoneProvider timezoneProvider;
 
   @Scheduled(fixedDelayString = "${batch.batch-day.cutoff-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_cutoff", lockAtMostFor = "PT2M", lockAtLeastFor = "PT20S")
@@ -93,10 +95,7 @@ public class BatchDayCutoffScheduler {
     }
     LocalTime cutoffTime =
         calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
-    ZoneId zoneId =
-        Texts.hasText(calendar.timezone())
-            ? ZoneId.of(calendar.timezone())
-            : ZoneId.systemDefault();
+    ZoneId zoneId = timezoneProvider.resolveOrDefault(calendar.timezone());
     return bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
   }
 

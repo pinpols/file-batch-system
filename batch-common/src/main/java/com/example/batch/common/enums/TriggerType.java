@@ -12,7 +12,8 @@ public enum TriggerType implements DictEnum {
   MANUAL("MANUAL", "手工触发"),
   EVENT("EVENT", "事件触发"),
   CATCH_UP("CATCH_UP", "补跑触发"),
-  SCHEDULED("SCHEDULED", "定时触发");
+  SCHEDULED("SCHEDULED", "定时触发"),
+  RERUN("RERUN", "重跑触发");
 
   private final String code;
   private final String label;

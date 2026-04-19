@@ -22,6 +22,7 @@
         <result column="worker_group" property="workerGroup"/>
         <result column="priority" property="priority"/>
         <result column="dedup_key" property="dedupKey"/>
+        <result column="run_attempt" property="runAttempt"/>
         <result column="version" property="version"/>
         <result column="expected_partition_count" property="expectedPartitionCount"/>
         <result column="success_partition_count" property="successPartitionCount"/>
@@ -57,6 +58,15 @@
         from batch.job_instance
         where tenant_id = #{tenantId}
           and dedup_key = #{dedupKey}
+        order by run_attempt desc
+        limit 1
+    </select>
+
+    <select id="selectMaxRunAttemptByDedupKey" resultType="java.lang.Integer">
+        select max(run_attempt)
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and dedup_key = #{dedupKey}
     </select>
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.JobInstanceEntity"
@@ -81,6 +91,7 @@
             worker_group,
             priority,
             dedup_key,
+            run_attempt,
             version,
             expected_partition_count,
             success_partition_count,
@@ -111,6 +122,7 @@
             #{workerGroup},
             #{priority},
             #{dedupKey},
+            #{runAttempt},
             #{version},
             #{expectedPartitionCount},
             #{successPartitionCount},
