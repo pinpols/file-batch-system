@@ -17,12 +17,11 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Outbox → Kafka 批量推送：把已落库的 {@code outbox_event} 分批发布，并按结果更新状态与重试记录。
  *
- * <p>采用三阶段批处理以解耦"DB 行锁"与"Kafka RTT"：
+ * <p>采用三阶段批处理以解耦"DB 连接 + 行锁"与"Kafka RTT"：
  *
  * <ol>
  *   <li><b>阶段一：batch markPublishing</b>。逐条 CAS 推到 PUBLISHING，立刻发起异步 send；
@@ -32,6 +31,21 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li><b>阶段三：batch DB 更新</b>。按结果写 PUBLISHED / FAILED / GIVE_UP，并通过 {@link #recordRetry}
  *       落 {@code event_outbox_retry}——这是"发布者级 I/O 重试"，与业务级任务重试（{@code retry_schedule}）分开管理。
  * </ol>
+ *
+ * <p><b>事务策略</b>：本方法 <b>不</b> 用 {@code @Transactional} 包裹整个流程。原因：
+ *
+ * <ul>
+ *   <li>并发安全由 {@code markPublishing} 的 CAS 保证（单条 UPDATE 自带原子性），不依赖事务隔离；
+ *   <li>若外层统一 {@code @Transactional}，阶段二 {@code allOf.join()} 等 Kafka ACK 期间
+ *       会持住 DB 连接（但不在用），连接池连续 ≥ leak-detection-threshold（30s）即报 leak，
+ *       和"解耦 DB 连接与 Kafka RTT"的设计意图直接冲突；
+ *   <li>MyBatis 在无 Spring 事务时对每条 SQL 自动借-用-还连接，阶段一/阶段三各条 UPDATE
+ *       独立提交，连接持有时长压到单次 SQL 级别（毫秒）。
+ * </ul>
+ *
+ * <p>唯一副作用：{@link #recordRetry} 与对应的 {@code markFailed} 不再原子。JVM 恰好在两者之间
+ * 崩溃时，{@code event_outbox_retry} 审计表会丢一行（该表仅供 console-api 展示/导出，
+ * 不参与重试调度判断）—— 下一轮 {@code selectPending} 仍会按 outbox 状态重新拾起事件。
  */
 @Service
 @RequiredArgsConstructor
@@ -43,7 +57,6 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
   private final BatchOrchestratorGovernanceProperties governance;
 
   @Override
-  @Transactional
   public ScheduleForwarderResult advance(SchedulePlan plan) {
     List<OutboxEventEntity> pendingEvents =
         outboxEventMapper.selectPending(
