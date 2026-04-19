@@ -69,6 +69,10 @@ spec:
             - name: BATCH_OUTBOX_SHARD_TOTAL
               value: {{ $svc.replicaCount | quote }}
           {{- include "batch-platform.envFrom" . | nindent 10 }}
+          {{- with $svc.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             {{- toYaml $svc.livenessProbe | nindent 12 }}
           readinessProbe:

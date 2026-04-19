@@ -28,6 +28,10 @@ postgresql:
 kafka:
   bootstrapServers: "kafka:9092"
 
+redis:
+  host: "redis"
+  port: "6379"
+
 minio:
   endpoint: "http://minio:9000"
   accessKey: ""
@@ -36,7 +40,8 @@ minio:
 
 # ── Cross-service ──────────────────────────────────────────────────────────────
 
-orchestratorBaseUrl: "http://batch-orchestrator:8082"
+# orchestrator Service DNS（集群内）。端口必须和 orchestrator.port 一致，否则 worker 注册挂。
+orchestratorBaseUrl: "http://batch-orchestrator:18082"
 
 security:
   testingOpen: "false"
@@ -45,7 +50,7 @@ security:
 
 consoleApi:
   replicaCount: 2
-  port: 8080
+  port: 18080
   realtime:
     replayMaxEntries: 20000
     replayTtl: "24h"
@@ -58,7 +63,7 @@ consoleApi:
       memory: "1Gi"
   service:
     type: ClusterIP
-    port: 8080
+    port: 18080
   ingress:
     enabled: false
     className: ""
@@ -77,14 +82,14 @@ consoleApi:
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
-      port: 8080
+      port: 18080
     initialDelaySeconds: 40
     periodSeconds: 15
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /actuator/health/readiness
-      port: 8080
+      port: 18080
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
@@ -93,7 +98,7 @@ consoleApi:
 
 trigger:
   replicaCount: 1
-  port: 8081
+  port: 18081
   resources:
     requests:
       cpu: "100m"
@@ -103,18 +108,18 @@ trigger:
       memory: "768Mi"
   service:
     type: ClusterIP
-    port: 8081
+    port: 18081
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
-      port: 8081
+      port: 18081
     initialDelaySeconds: 40
     periodSeconds: 15
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /actuator/health/readiness
-      port: 8081
+      port: 18081
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
@@ -123,7 +128,7 @@ trigger:
 
 orchestrator:
   replicaCount: 2
-  port: 8082
+  port: 18082
   resources:
     requests:
       cpu: "300m"
@@ -133,18 +138,18 @@ orchestrator:
       memory: "1.5Gi"
   service:
     type: ClusterIP
-    port: 8082
+    port: 18082
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
-      port: 8082
+      port: 18082
     initialDelaySeconds: 40
     periodSeconds: 15
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /actuator/health/readiness
-      port: 8082
+      port: 18082
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
@@ -153,7 +158,7 @@ orchestrator:
 
 workerImport:
   replicaCount: 2
-  port: 8083
+  port: 18083
   resources:
     requests:
       cpu: "500m"
@@ -163,7 +168,7 @@ workerImport:
       memory: "2Gi"
   service:
     type: ClusterIP
-    port: 8083
+    port: 18083
   hpa:
     enabled: false
     minReplicas: 1
@@ -172,14 +177,14 @@ workerImport:
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
-      port: 8083
+      port: 18083
     initialDelaySeconds: 40
     periodSeconds: 15
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /actuator/health/readiness
-      port: 8083
+      port: 18083
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
@@ -188,7 +193,7 @@ workerImport:
 
 workerExport:
   replicaCount: 2
-  port: 8084
+  port: 18084
   resources:
     requests:
       cpu: "500m"
@@ -198,7 +203,7 @@ workerExport:
       memory: "2Gi"
   service:
     type: ClusterIP
-    port: 8084
+    port: 18084
   hpa:
     enabled: false
     minReplicas: 1
@@ -207,14 +212,14 @@ workerExport:
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
-      port: 8084
+      port: 18084
     initialDelaySeconds: 40
     periodSeconds: 15
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /actuator/health/readiness
-      port: 8084
+      port: 18084
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
@@ -223,7 +228,7 @@ workerExport:
 
 workerDispatch:
   replicaCount: 2
-  port: 8085
+  port: 18085
   resources:
     requests:
       cpu: "200m"
@@ -233,7 +238,7 @@ workerDispatch:
       memory: "1Gi"
   service:
     type: ClusterIP
-    port: 8085
+    port: 18085
   hpa:
     enabled: false
     minReplicas: 1
@@ -242,14 +247,14 @@ workerDispatch:
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
-      port: 8085
+      port: 18085
     initialDelaySeconds: 40
     periodSeconds: 15
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /actuator/health/readiness
-      port: 8085
+      port: 18085
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
@@ -285,7 +290,10 @@ affinity: {}
 
 # ── JVM tuning ─────────────────────────────────────────────────────────────────
 
-javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+# spring.main.lazy-initialization=true: 在 K8s 资源紧张下避免 eager 初始化所有 bean
+# 导致 HTTP 端口 bind 晚于 startupProbe，Pod 被杀进入 CrashLoop。
+# （local profile 本就有 lazy-init: true；default profile 默认没有，所以这里显式打开）
+javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Dspring.main.lazy-initialization=true"
 
 # ── OpenTelemetry Collector (sidecar-less gateway mode) ────────────
 otelCollector:

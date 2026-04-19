@@ -1,0 +1,70 @@
+fullnameOverride: "batch"
+
+# 全量部署（6 个 app 模块），连接 host 机器上的 Docker Compose base services
+image:
+  pullPolicy: IfNotPresent
+  tag: latest
+
+# Pod 从 K8s 内访问 host 机器走 host.docker.internal
+postgresql:
+  platform:
+    url: "jdbc:postgresql://host.docker.internal:15432/batch_platform"
+    username: "batch_user"
+    password: "batch_pass_123"
+  business:
+    url: "jdbc:postgresql://host.docker.internal:15432/batch_business"
+    username: "batch_user"
+    password: "batch_pass_123"
+    schema: "biz"
+kafka:
+  bootstrapServers: "host.docker.internal:19092"
+redis:
+  host: "host.docker.internal"
+  port: "16379"
+minio:
+  endpoint: "http://host.docker.internal:19000"
+  accessKey: "minioadmin"
+  secretKey: "minioadmin"
+  bucket: "batch-dev"
+
+# Worker 调 orchestrator 的内部地址（K8s Service DNS）
+orchestratorBaseUrl: "http://batch-orchestrator:18082"
+
+# 演示用，本地联调开 testing-open=true
+security:
+  testingOpen: "true"
+
+# 各模块：port=18xxx 匹配 app 实际监听 + replicaCount
+# （同一 key 只能出现一次，YAML 后定义会覆盖前定义）
+consoleApi:
+  replicaCount: 2
+  port: 18080
+  service: {port: 18080, type: ClusterIP}
+
+trigger:
+  replicaCount: 1
+  port: 18081
+  service: {port: 18081, type: ClusterIP}
+
+orchestrator:
+  replicaCount: 2          # StatefulSet，ordinal 0/1
+  port: 18082
+  service: {port: 18082, type: ClusterIP}
+
+workerImport:
+  replicaCount: 2
+  port: 18083
+  service: {port: 18083, type: ClusterIP}
+
+workerExport:
+  replicaCount: 1
+  port: 18084
+  service: {port: 18084, type: ClusterIP}
+
+workerDispatch:
+  replicaCount: 1
+  port: 18085
+  service: {port: 18085, type: ClusterIP}
+
+# Spring Boot lazy-initialization：default profile 不开会让 startupProbe 超时
+javaOpts: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom -Dspring.main.lazy-initialization=true"

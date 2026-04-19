@@ -1,0 +1,12 @@
+consoleApi:
+  replicaCount: 1
+trigger:
+  replicaCount: 1
+orchestrator:
+  replicaCount: 2    # StatefulSet 至少 2 才能演示 ordinal 0/1
+workerImport:
+  replicaCount: 1
+workerExport:
+  replicaCount: 1
+workerDispatch:
+  replicaCount: 1
