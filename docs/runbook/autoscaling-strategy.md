@@ -70,6 +70,58 @@ shardTotal=2
 
 **现状**：手工 `helm upgrade --set orchestrator.replicaCount=N` 扩容。滚动重启期间所有 Pod 拿新 `SHARD_TOTAL`，对齐后继续处理。
 
+## Option B 已落地（Phase 1+2）：动态 shard 协调
+
+**代码中已实现**（见 `batch-orchestrator/src/main/java/.../infrastructure/sharding/`），通过
+开关切换，默认保持 STATIC 模式不影响现有部署。
+
+### 新配置项
+
+```yaml
+batch:
+  outbox:
+    sharding-mode: static      # static（默认） | dynamic
+    sharding:
+      heartbeat-interval-ms: 5000
+      member-ttl-ms: 30000
+      member-id: ""            # 空则从 POD_NAME / hostname 自动解析
+```
+
+### 工作机制（dynamic 模式）
+
+```
+每个 orchestrator Pod：
+  Scheduled @ 5s: ZADD batch:orchestrator:members <pod-name> <now>
+  每轮 outbox poll 前：
+    ZREMRANGEBYSCORE members 0 (now - 30s)   ← 清死成员
+    ZRANGE members 0 -1                       ← 取活成员列表
+    排序取 index；数量为 shardTotal
+```
+
+**rebalance 触发**：任意 Pod 心跳超时（30s 未写入）或新 Pod 加入时，下一轮 poll 所有存活 Pod
+同时观察到新列表，自动重算自己的 shardIndex。
+
+### 切换步骤（零宕机灰度）
+
+1. 先 `helm upgrade --set orchestrator.replicaCount=2`（保留现状 2 副本）
+2. 灰度开启：`--set batch.outbox.shardingMode=dynamic`
+3. 观察 log 确认 "Outbox sharding mode=DYNAMIC"；`kubectl exec ... redis-cli ZRANGE batch:orchestrator:members 0 -1` 看是否 2 个成员
+4. 如果正常，保留配置；有问题 `--set batch.outbox.shardingMode=static` 秒级回退
+
+### 切换后能带来的自动化
+
+- 扩容：`kubectl scale sts batch-orchestrator --replicas=4` 后 30s 内新 Pod 心跳注册，所有 Pod 自动重算 shard
+- 缩容：Pod 优雅停机 → 心跳停 → 30s 后其他 Pod 感知，自动吸收该 shard 的数据
+- 可以开 HPA：orchestrator 理论上能接 HPA 了（用 Outbox backlog 做触发信号，类似 worker 的 KEDA 思路）
+
+### 保留 STATIC 为默认的理由
+
+- 生产线上已跑的部署是 STATIC 模式，贸然切 DYNAMIC 有 rebalance 窗口期风险
+- STATIC 行为确定性强，合规场景更好审计
+- 已验证的业务规模下 STATIC 足够
+
+待业务场景（多租户 SaaS / 峰谷 10x+）到来再把 DYNAMIC 作为默认推送。
+
 ## orchestrator 3 种可选设计对比
 
 | 维度 | A. 静态分片（当前） | B. Consumer Group 风格 | C. 无分片 + 每事件分布式锁 |

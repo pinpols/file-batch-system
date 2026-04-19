@@ -57,7 +57,9 @@ class OutboxPollSchedulerTest {
             governance,
             lockingTaskExecutor,
             gracefulShutdown,
-            outboxEventMapper);
+            outboxEventMapper,
+            new com.example.batch.orchestrator.infrastructure.sharding.StaticShardAssignmentProvider(
+                governance.outbox()));
     // 不调用 start()，避免后台线程干扰单元测试
   }
 
