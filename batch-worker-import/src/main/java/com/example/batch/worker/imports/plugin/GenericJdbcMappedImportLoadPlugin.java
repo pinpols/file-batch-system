@@ -53,7 +53,9 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
       return 0;
     }
     JdbcMappedImportSpec spec = JdbcMappedImportSpec.parse(context.templateConfig(), objectMapper);
-    spec.validateIdentifiers(securityProperties.getAllowedSchemas());
+    // A-3.5：严格幂等模式下，模板必须声明 conflictColumns；否则立即拒绝加载
+    spec.validateIdentifiers(
+        securityProperties.getAllowedSchemas(), securityProperties.isStrictIdempotency());
 
     List<String> insertCols = orderedInsertColumns(spec);
     String sql = buildSql(spec, insertCols);

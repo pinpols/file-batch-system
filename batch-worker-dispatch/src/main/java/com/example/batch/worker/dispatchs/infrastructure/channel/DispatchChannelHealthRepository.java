@@ -30,6 +30,22 @@ public class DispatchChannelHealthRepository {
     return row == null ? null : toSnapshot(row);
   }
 
+  /**
+   * A-3.9：CAS 抢占半开探针机会。委托给 Mapper 的条件 UPDATE，仅在 (next_probe_at &lt;= now &amp;&amp;
+   * health_status &lt;&gt; 'HEALTHY') 时把 next_probe_at 推到 {@code newNextProbeAt}。
+   *
+   * @return true = 本线程获得半开通行证；false = 其他线程已抢或已恢复 HEALTHY
+   */
+  public boolean tryClaimHalfOpenProbe(
+      String tenantId, String channelCode, Instant now, Instant newNextProbeAt) {
+    Map<String, Object> params = new HashMap<>();
+    params.put("tenantId", tenantId);
+    params.put("channelCode", channelCode);
+    params.put("now", toTimestamp(now));
+    params.put("newNextProbeAt", toTimestamp(newNextProbeAt));
+    return mapper.tryClaimHalfOpenProbe(params) > 0;
+  }
+
   public void upsertHealth(DispatchChannelHealthSnapshot s) {
     Map<String, Object> params = new HashMap<>();
     params.put("tenantId", s.tenantId());

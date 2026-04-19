@@ -136,6 +136,23 @@ public record JdbcMappedImportSpec(
     return out;
   }
 
+  /**
+   * A-3.5 严格幂等模式入口：strictIdempotency=true 时 conflictColumns 必须非空，
+   * 否则 {@code parse + validateIdentifiers} 阶段直接拒绝加载模板。
+   */
+  public void validateIdentifiers(Collection<String> allowedSchemas, boolean strictIdempotency) {
+    validateIdentifiers(allowedSchemas);
+    if (strictIdempotency && (conflictColumns == null || conflictColumns.isEmpty())) {
+      throw new IllegalArgumentException(
+          "jdbc-mapped-import template missing conflictColumns under strictIdempotency: "
+              + "schema="
+              + schema
+              + ", table="
+              + table
+              + " — declare unique business key columns to enable ON CONFLICT DO NOTHING");
+    }
+  }
+
   public void validateIdentifiers(Collection<String> allowedSchemas) {
     JdbcMappedSqlValidator.requireInAllowlist(schema, allowedSchemas);
     JdbcMappedSqlValidator.requireIdentifier(table, "table");

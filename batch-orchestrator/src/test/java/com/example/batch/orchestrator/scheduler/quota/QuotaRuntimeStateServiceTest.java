@@ -98,10 +98,16 @@ class QuotaRuntimeStateServiceTest {
   @BeforeEach
   void setUp() {
     quotaRuntimeStateRepository = mock(QuotaRuntimeStateRepository.class);
+    // C-2.8：selfProvider 在单测里直通（不走 REQUIRES_NEW 子事务），
+    // 等 reconcileOne 的事务语义由集成测试覆盖
+    org.springframework.beans.factory.ObjectProvider<QuotaRuntimeStateService> selfProvider =
+        mock(org.springframework.beans.factory.ObjectProvider.class);
     service =
         new QuotaRuntimeStateService(
             quotaRuntimeStateRepository,
-            new BatchTimezoneProvider(new BatchTimezoneProperties()));
+            new BatchTimezoneProvider(new BatchTimezoneProperties()),
+            selfProvider);
+    org.mockito.Mockito.when(selfProvider.getObject()).thenReturn(service);
   }
 
   // ── evaluateAndReserve — guard conditions ─────────────────────────────────
