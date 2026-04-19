@@ -131,6 +131,18 @@ public enum XxxType implements DictEnum {
 - Worker 执行前必须先 CLAIM，不能绕过
 - 禁止 JPA/Hibernate；持久层 MyBatis（运行态）/ Spring Data JDBC（配置态）不混用
 
+## 时区策略
+
+**全系统默认时区 = `batch.timezone.default-zone`（默认 `Asia/Shanghai`，UTC+8）。业务代码禁止直接调用 `ZoneId.systemDefault()`——它依赖容器 TZ / JVM `user.timezone`，不同部署环境会静默漂移。**
+
+- **读取入口**：注入 `com.example.batch.common.config.BatchTimezoneProvider`
+  - `provider.defaultZone()` — 平台默认 `ZoneId`（永远非 null）
+  - `provider.resolveOrDefault(preferred)` — 优先 IANA 字符串（如 `business_calendar.timezone`），空/非法时回退到默认
+- **业务覆盖优先级**：`business_calendar.timezone` > `batch_window.timezone` > `batch.timezone.default-zone`。`batch_day_instance.timezone_snapshot` 在创建时从日历抓快照，之后日历改 timezone 不影响历史数据回放。
+- **容器 / JVM 协同**：`docker-compose.yml` + `.env.example` 默认 `TZ=Asia/Shanghai`；`batch-defaults.yml` 加 `spring.jackson.time-zone=${BATCH_TIMEZONE_DEFAULT_ZONE:Asia/Shanghai}` 让 Jackson 序列化 `OffsetDateTime` / `Instant` 时保持一致。
+- **豁免**：`ConsoleQuerySupport.parseFlexibleInstant*`（控制台搜索框的宽松日期解析）保留 `systemDefault()`，容忍用户输入；`QuotaResetPolicy.systemZone()` 已 `@Deprecated`，仅遗留测试使用，新代码改走 provider。
+- **守护**：新增 `ZoneId.systemDefault()` 用法必须在业务路径之外且加注释说明原因；否则 PR 评审拒绝。
+
 ## 字符编码
 
 **全系统 UTF-8**：系统内部持有、传输、存储、落盘的字符串一律 UTF-8；**导入**（`PreprocessStep`）是唯一允许读非 UTF-8 源文件的边界，读入后立即转为 UTF-8 内部表示。
@@ -150,6 +162,16 @@ public enum XxxType implements DictEnum {
 ## 变更记录
 
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
+
+### 2026-04-20
+- **新增 §时区策略 + 全局时区 provider**：`BatchTimezoneProperties` (`batch.timezone.default-zone`，默认 `Asia/Shanghai`) + `BatchTimezoneProvider` bean；业务路径上的 `ZoneId.systemDefault()` 统一替换为 `provider.defaultZone()` / `provider.resolveOrDefault(tz)`，9 处调用点完成迁移（`LaunchBatchDayService` / `LaunchParamResolver` / `CalendarBizDateResolver` / `DefaultLaunchAdapterService` / `DefaultResourceScheduler` / `BatchDayCutoffScheduler`×2 / `QuotaRuntimeStateService`）。`QuotaResetPolicy.systemZone()` 打 `@Deprecated`；`ConsoleQuerySupport` 宽松日期解析作为明确豁免保留。`batch-defaults.yml` 补 `spring.jackson.time-zone`。
+- **V62 迁移：重跑语义 + 批次日并发 + 时区快照**（对齐 `docs/analysis/deep-issue-analysis-v3.md` 的五点设计灰色地带）：
+  - `job_instance` 新增 `run_attempt INT NOT NULL DEFAULT 1` + `ck_run_attempt >= 1`；唯一键由 `(tenant_id, dedup_key)` 改为 `(tenant_id, dedup_key, run_attempt)`，同一 (job, biz_date) 可持有多次 attempts。
+  - `TriggerType` 新增 `RERUN`（重跑触发）；`job_instance` / `trigger_request` 的 `ck_*_trigger_type` CHECK 同步扩展；console `/meta/enums.triggerType` 由反射自动下发不用改 schema。
+  - `batch_day_instance` 加 `version BIGINT NOT NULL DEFAULT 0`（Spring Data JDBC `@Version` 乐观锁）+ `timezone_snapshot VARCHAR(64) NOT NULL DEFAULT 'UTC'`（创建时从日历 timezone 抓快照，后续回放不受日历改 tz 影响）。
+- **`DefaultLaunchService.launch` 承认 RERUN 语义**：triggerType=RERUN 时不走"existing-instance=duplicate"短路；新建实例时 run_attempt = MAX+1，parent_instance_id 指回上次 attempt；RERUN 并发撞 23505 直接抛，不再误判为幂等重复。
+- **`BatchDaySettleScheduler` 状态机竞态收口**：`settle()` 去掉 @Transactional，改为循环内 `selfProvider.getObject().settleOne(candidate, now)`（`REQUIRES_NEW`），单条 CAS 冲突只跳过该条，其他候选不受影响；捕获 `OptimisticLockingFailureException` 日志后下 tick 重扫。
+- **`LaunchBatchDayService.routeLateArrivalIfNeeded` 原子化**：late-rejected 路径从"先改内存 → 再 UPDATE DB"改为 `updateTriggerType(..., expectedTriggerType='EVENT')` CAS；ROW=0（并发已改走）直接返回原 request，不再覆盖内存。`TriggerRequestMapper.updateTriggerType` 签名加 `expectedTriggerType` 参数，XML WHERE 带 `and trigger_type = #{expectedTriggerType}`。
 
 ### 2026-04-19
 - **新增 §字符编码 + §配置开关规范**：两节详细落地清单移到 `docs/coding-conventions.md §20 / §21`，CLAUDE.md 仅保留核心规则指针。
