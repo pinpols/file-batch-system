@@ -16,6 +16,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -57,6 +62,14 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
   private final BatchOrchestratorGovernanceProperties governance;
 
   @Override
+  @Retryable(
+      retryFor = {
+        CannotAcquireLockException.class,
+        TransientDataAccessException.class,
+        QueryTimeoutException.class
+      },
+      maxAttempts = 3,
+      backoff = @Backoff(delay = 100, multiplier = 2, maxDelay = 1000))
   public ScheduleForwarderResult advance(SchedulePlan plan) {
     List<OutboxEventEntity> pendingEvents =
         outboxEventMapper.selectPending(
