@@ -38,6 +38,7 @@ import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.support.TenantConfigPackageExcelImportStore;
+import com.example.batch.console.support.UploadFileGuard;
 import com.example.batch.console.support.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import com.example.batch.console.web.request.TenantConfigPackageExcelApplyRequest;
 import com.example.batch.console.web.response.TenantConfigPackageExcelApplyResponse;
@@ -166,6 +167,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   public TenantConfigPackageExcelUploadResponse upload(MultipartFile file, String requestTenantId)
       throws IOException {
     Guard.require(file != null && !file.isEmpty(), "file is required");
+    UploadFileGuard.requireExcel(file);
     String tenantId = tenantGuard.resolveTenant(requestTenantId);
     String fileName = fileNameOrDefault(file.getOriginalFilename());
     PackageExcelSession session = parseWorkbook(file.getBytes(), tenantId, fileName);

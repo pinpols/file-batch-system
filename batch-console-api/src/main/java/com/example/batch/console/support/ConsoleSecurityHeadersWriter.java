@@ -15,7 +15,9 @@ public class ConsoleSecurityHeadersWriter implements HeaderWriter {
   private static final String REFERRER_POLICY = "no-referrer";
   private static final String PERMISSIONS_POLICY =
       "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=()";
-  private static final String HSTS = "max-age=31536000; includeSubDomains";
+  // 63072000s = 2 年；preload 让浏览器在首次访问前也强制 HTTPS（需网站实际全站 HTTPS 才能提交
+  // 到 https://hstspreload.org/ 登记）。反代卸 TLS 时确保 X-Forwarded-Proto=https 透传才生效。
+  private static final String HSTS = "max-age=63072000; includeSubDomains; preload";
 
   @Override
   public void writeHeaders(HttpServletRequest request, HttpServletResponse response) {

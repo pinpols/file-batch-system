@@ -17,6 +17,7 @@ import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleSingleSheetExcelImportSupport;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.support.ExcelImportStore;
+import com.example.batch.console.support.UploadFileGuard;
 import com.example.batch.console.web.response.ExcelApplyResponse;
 import com.example.batch.console.web.response.ExcelPreviewResponse;
 import com.example.batch.console.web.response.ExcelQuickImportResponse;
@@ -96,6 +97,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
 
   public final ExcelUploadResponse upload(MultipartFile file) throws IOException {
     Guard.require(file != null && !file.isEmpty(), "file is required");
+    UploadFileGuard.requireExcel(file);
     String tenantId = tenantGuard.resolveTenant(null);
     ConsoleSingleSheetExcelImportSupport.ParsedWorkbook parsed =
         ConsoleSingleSheetExcelImportSupport.parseWorkbook(
