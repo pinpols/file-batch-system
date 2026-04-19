@@ -73,7 +73,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -510,7 +510,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
         && !Objects.equals(normalize(incoming), normalize(current))) {
       rowIssues.add(field + " is read-only and must match the existing job definition");
     }
-    if (incoming != null && current == null && StringUtils.hasText(incoming)) {
+    if (incoming != null && current == null && Texts.hasText(incoming)) {
       rowIssues.add(field + " is read-only and must match the existing job definition");
     }
   }
@@ -750,7 +750,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
 
   private String normalizeEnum(String value) {
     String normalized = normalize(value);
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return null;
     }
     return normalized.toUpperCase(Locale.ROOT);
@@ -758,7 +758,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
 
   private Integer parseInteger(String value) {
     String normalized = normalize(value);
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return null;
     }
     try {
@@ -770,7 +770,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
 
   private Boolean parseBoolean(String value, Boolean defaultValue) {
     String normalized = normalize(value);
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
@@ -784,26 +784,26 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
   }
 
   private boolean hasText(String value) {
-    return StringUtils.hasText(normalize(value));
+    return Texts.hasText(normalize(value));
   }
 
   private String tenantOrDefault(String value, String tenantId) {
     String normalized = normalize(value);
-    return StringUtils.hasText(normalized) ? normalized : tenantId;
+    return Texts.hasText(normalized) ? normalized : tenantId;
   }
 
   private <T> T effective(T incoming, T current) {
     if (incoming == null) {
       return current;
     }
-    if (incoming instanceof String str && !StringUtils.hasText(str)) {
+    if (incoming instanceof String str && !Texts.hasText(str)) {
       return current;
     }
     return incoming;
   }
 
   private String fileNameOrDefault(String fileName) {
-    if (!StringUtils.hasText(fileName)) {
+    if (!Texts.hasText(fileName)) {
       return "job-definition-maintenance.xlsx";
     }
     return fileName;
@@ -850,7 +850,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
         cellIndex++) {
       Cell cell = headerRow.getCell(cellIndex);
       String header = normalize(formatter.formatCellValue(cell));
-      if (StringUtils.hasText(header)) {
+      if (Texts.hasText(header)) {
         headers.put(header, cellIndex);
       }
     }
@@ -860,7 +860,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
   private boolean rowIsBlank(Row row, DataFormatter formatter) {
     for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
       String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
-      if (StringUtils.hasText(value)) {
+      if (Texts.hasText(value)) {
         return false;
       }
     }

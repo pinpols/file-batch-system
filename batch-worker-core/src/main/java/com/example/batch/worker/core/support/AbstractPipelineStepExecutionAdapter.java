@@ -12,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 三条 worker 链路（import / export / dispatch）共用的 pipeline 生命周期模板：
@@ -163,7 +163,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
 
   protected String resolveTraceId(Map<String, Object> attributes) {
     String traceId = resolveText(attributes, PipelineRuntimeKeys.TRACE_ID, "sourceTraceId");
-    return StringUtils.hasText(traceId)
+    return Texts.hasText(traceId)
         ? traceId
         : pipelineType().toLowerCase() + "-" + UUID.randomUUID();
   }
@@ -176,13 +176,13 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
             PipelineRuntimeKeys.PIPELINE_CODE,
             "jobCode",
             "pipelineCode");
-    if (StringUtils.hasText(jobCode)) {
+    if (Texts.hasText(jobCode)) {
       return jobCode;
     }
-    if (request != null && StringUtils.hasText(request.jobCode())) {
+    if (request != null && Texts.hasText(request.jobCode())) {
       return request.jobCode();
     }
-    if (request != null && StringUtils.hasText(request.stepCode())) {
+    if (request != null && Texts.hasText(request.stepCode())) {
       return request.stepCode();
     }
     return pipelineType();
@@ -191,12 +191,12 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
   protected String resolveText(Map<String, Object> attributes, String... keys) {
     for (String key : keys) {
       Object value = attributes.get(key);
-      if (value instanceof String text && StringUtils.hasText(text)) {
+      if (value instanceof String text && Texts.hasText(text)) {
         return text;
       }
       if (value != null) {
         String text = String.valueOf(value);
-        if (StringUtils.hasText(text) && !"null".equalsIgnoreCase(text)) {
+        if (Texts.hasText(text) && !"null".equalsIgnoreCase(text)) {
           return text;
         }
       }

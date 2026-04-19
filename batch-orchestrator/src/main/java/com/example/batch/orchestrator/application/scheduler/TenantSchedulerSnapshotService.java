@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 租户调度快照服务：聚合配额策略、资源队列和 Worker 负载的实时视图，供监控和运维查询。
@@ -44,7 +44,7 @@ public class TenantSchedulerSnapshotService {
   private final ResourceSchedulerProperties resourceSchedulerProperties;
 
   public SchedulerSnapshotResponse buildLive(String tenantId) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return new SchedulerSnapshotResponse(
           Instant.now(), tenantId, List.of(), List.of(), List.of());
     }
@@ -71,7 +71,7 @@ public class TenantSchedulerSnapshotService {
         tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true);
     for (TenantQuotaPolicyRecord p : quotaRows) {
       long groupJobs = 0L;
-      if (StringUtils.hasText(p.fairShareGroup())) {
+      if (Texts.hasText(p.fairShareGroup())) {
         groupJobs = jobInstanceMapper.countActiveByFairShareGroup(p.fairShareGroup());
       }
       int baseJobs = p.maxRunningJobsPerTenant() == null ? 0 : p.maxRunningJobsPerTenant();

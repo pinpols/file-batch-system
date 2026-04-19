@@ -21,7 +21,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 生成导出文件的 Pipeline 阶段。
@@ -47,7 +47,7 @@ public class GenerateStep implements ExportStageStep {
   public ExportStageResult execute(ExportJobContext context) {
     Object payload = context == null ? null : context.getAttributes().get("exportPayload");
     if (!(payload instanceof ExportPayload exportPayload)
-        || !StringUtils.hasText(exportPayload.batchNo())) {
+        || !Texts.hasText(exportPayload.batchNo())) {
       return ExportStageResult.failure(
           stage(), "EXPORT_GENERATE_NO_PAYLOAD", "export payload missing");
     }
@@ -140,7 +140,7 @@ public class GenerateStep implements ExportStageStep {
   private String resolveExportDataRef(ExportJobContext context, ExportPayload exportPayload) {
     Map<String, Object> tc = templateConfigMap(context);
     Object v = tc.get("export_data_ref");
-    if (v != null && StringUtils.hasText(String.valueOf(v))) {
+    if (v != null && Texts.hasText(String.valueOf(v))) {
       return String.valueOf(v).trim();
     }
     return null;
@@ -164,7 +164,7 @@ public class GenerateStep implements ExportStageStep {
       if (value instanceof Number number) {
         return Math.max(1, number.intValue());
       }
-      if (value != null && StringUtils.hasText(String.valueOf(value))) {
+      if (value != null && Texts.hasText(String.valueOf(value))) {
         return Math.max(1, Integer.parseInt(String.valueOf(value)));
       }
     }

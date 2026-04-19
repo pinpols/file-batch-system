@@ -10,7 +10,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 控制台单会话注册表：按 {@code (tenantId, username)} 在 Redis 记录当前有效的 session 版本号，
@@ -93,7 +93,7 @@ public class ConsoleSessionRegistry {
     try {
       ValueOperations<String, String> ops = redisTemplate.opsForValue();
       String raw = ops.get(key);
-      if (!StringUtils.hasText(raw)) {
+      if (!Texts.hasText(raw)) {
         return 0L;
       }
       try {

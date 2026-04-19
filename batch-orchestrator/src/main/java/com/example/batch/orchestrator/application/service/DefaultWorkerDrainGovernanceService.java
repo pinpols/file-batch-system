@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Worker 下线治理：状态机 {@code ONLINE → DRAINING → DECOMMISSIONED}，提供两条下线路径。
@@ -102,7 +102,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
   @Override
   @Transactional
   public void takeoverAfterDrainTimeout(String tenantId, String workerCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(workerCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(workerCode)) {
       return;
     }
     WorkerRegistryRecord registry =

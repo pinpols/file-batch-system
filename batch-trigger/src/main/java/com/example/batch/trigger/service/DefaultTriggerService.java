@@ -32,7 +32,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.client.HttpClientErrorException;
 
 /**
@@ -310,7 +310,7 @@ public class DefaultTriggerService implements TriggerService {
       return null;
     }
     String calendarCode = command.descriptor().getCalendarCode();
-    if (!StringUtils.hasText(calendarCode)) {
+    if (!Texts.hasText(calendarCode)) {
       return null;
     }
     TriggerCalendarConfig calendar =

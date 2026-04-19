@@ -21,7 +21,7 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * batch_day_instance 自动切换：OPEN -> CUTOFF（在 cutoff_time 之后）。
@@ -94,7 +94,7 @@ public class BatchDayCutoffScheduler {
     LocalTime cutoffTime =
         calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
     ZoneId zoneId =
-        StringUtils.hasText(calendar.timezone())
+        Texts.hasText(calendar.timezone())
             ? ZoneId.of(calendar.timezone())
             : ZoneId.systemDefault();
     return bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();

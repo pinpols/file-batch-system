@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 文件治理数据访问层：提供文件记录查询、状态更新、归档/删除、对账写入和审计追加等操作。
@@ -63,7 +63,7 @@ public class FileGovernanceRepository {
   private final FileGovernanceMapper fileGovernanceMapper;
 
   public Map<String, Object> loadFileRecord(String tenantId, Long fileId) {
-    if (!StringUtils.hasText(tenantId) || fileId == null) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
       return Map.of();
     }
     Map<String, Object> fileRecord =
@@ -72,7 +72,7 @@ public class FileGovernanceRepository {
   }
 
   public Map<String, Object> loadTemplateSecurityForFile(String tenantId, Long fileId) {
-    if (!StringUtils.hasText(tenantId) || fileId == null) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
       return Map.of();
     }
     Map<String, Object> security =
@@ -82,7 +82,7 @@ public class FileGovernanceRepository {
   }
 
   public long countActivePipelineInstances(String tenantId, Long fileId) {
-    if (!StringUtils.hasText(tenantId) || fileId == null) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
       return 0L;
     }
     Long count =
@@ -102,7 +102,7 @@ public class FileGovernanceRepository {
   }
 
   public long countPendingDispatchRecords(String tenantId, Long fileId) {
-    if (!StringUtils.hasText(tenantId) || fileId == null) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
       return 0L;
     }
     Long count =
@@ -123,7 +123,7 @@ public class FileGovernanceRepository {
 
   public Map<String, Object> loadLatestDispatchRecord(
       String tenantId, Long fileId, String channelCode) {
-    if (!StringUtils.hasText(tenantId) || fileId == null) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
       return Map.of();
     }
     Map<String, Object> dispatchRecord =
@@ -141,7 +141,7 @@ public class FileGovernanceRepository {
   }
 
   public void resetDispatchRecordForRedispatch(String tenantId, Long dispatchRecordId) {
-    if (!StringUtils.hasText(tenantId) || dispatchRecordId == null) {
+    if (!Texts.hasText(tenantId) || dispatchRecordId == null) {
       return;
     }
     fileGovernanceMapper.resetDispatchRecordForRedispatch(
@@ -180,7 +180,7 @@ public class FileGovernanceRepository {
   }
 
   public List<Map<String, Object>> selectArrivalGroupFiles(String tenantId, String fileGroupCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileGroupCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(fileGroupCode)) {
       return List.of();
     }
     return fileGovernanceMapper.selectArrivalGroupFiles(
@@ -188,7 +188,7 @@ public class FileGovernanceRepository {
   }
 
   public long countArrivalDelayViolations(String tenantId, long thresholdSeconds) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return 0L;
     }
     Long count =
@@ -200,7 +200,7 @@ public class FileGovernanceRepository {
   }
 
   public long maxArrivalDelaySeconds(String tenantId) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return 0L;
     }
     Long maxDelay =
@@ -210,7 +210,7 @@ public class FileGovernanceRepository {
 
   public List<Map<String, Object>> selectArrivalDelaySamples(
       String tenantId, long thresholdSeconds, int limit) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return List.of();
     }
     return fileGovernanceMapper.selectArrivalDelaySamples(
@@ -221,7 +221,7 @@ public class FileGovernanceRepository {
   }
 
   public long countProcessingDelayViolations(String tenantId, long thresholdSeconds) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return 0L;
     }
     Long count =
@@ -234,7 +234,7 @@ public class FileGovernanceRepository {
   }
 
   public long maxProcessingDelaySeconds(String tenantId) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return 0L;
     }
     Long maxDelay =
@@ -246,7 +246,7 @@ public class FileGovernanceRepository {
 
   public List<Map<String, Object>> selectProcessingDelaySamples(
       String tenantId, long thresholdSeconds, int limit) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return List.of();
     }
     return fileGovernanceMapper.selectProcessingDelaySamples(
@@ -259,7 +259,7 @@ public class FileGovernanceRepository {
 
   public boolean existsFileRecordByStoragePath(
       String tenantId, String storageBucket, String storagePath) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(storagePath)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
       return false;
     }
     Long count =
@@ -339,7 +339,7 @@ public class FileGovernanceRepository {
   }
 
   public void updateFileMetadata(String tenantId, Long fileId, Object metadata) {
-    if (!StringUtils.hasText(tenantId) || fileId == null) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
       return;
     }
     fileGovernanceMapper.updateFileMetadata(
@@ -348,10 +348,10 @@ public class FileGovernanceRepository {
 
   public void appendAudit(FileAuditCommand command) {
     if (command == null
-        || !StringUtils.hasText(command.tenantId())
+        || !Texts.hasText(command.tenantId())
         || command.fileId() == null
-        || !StringUtils.hasText(command.operationType())
-        || !StringUtils.hasText(command.operationResult())) {
+        || !Texts.hasText(command.operationType())
+        || !Texts.hasText(command.operationResult())) {
       return;
     }
     fileGovernanceMapper.insertFileAuditLog(
@@ -389,7 +389,7 @@ public class FileGovernanceRepository {
   }
 
   private String defaultText(String value, String fallback) {
-    return StringUtils.hasText(value) ? value : fallback;
+    return Texts.hasText(value) ? value : fallback;
   }
 
   private Map<String, Object> params(Object... pairs) {
@@ -412,14 +412,14 @@ public class FileGovernanceRepository {
   }
 
   private String resolveFileExt(String fileName) {
-    if (!StringUtils.hasText(fileName) || !fileName.contains(".")) {
+    if (!Texts.hasText(fileName) || !fileName.contains(".")) {
       return null;
     }
     return fileName.substring(fileName.lastIndexOf('.') + 1);
   }
 
   private String resolveMimeType(String fileFormatType) {
-    if (!StringUtils.hasText(fileFormatType)) {
+    if (!Texts.hasText(fileFormatType)) {
       return "application/octet-stream";
     }
     return switch (fileFormatType) {

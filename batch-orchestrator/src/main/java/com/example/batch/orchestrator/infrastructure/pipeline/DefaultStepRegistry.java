@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 步骤注册表默认实现：以 stepCode 为键在 Spring 容器注入的 {@code Map<String, Step>} 中查找步骤 Bean。
@@ -20,7 +20,7 @@ public class DefaultStepRegistry implements StepRegistry {
 
   @Override
   public Optional<Step> find(String stepCode) {
-    if (!StringUtils.hasText(stepCode)) {
+    if (!Texts.hasText(stepCode)) {
       return Optional.empty();
     }
     return Optional.ofNullable(steps.get(stepCode));

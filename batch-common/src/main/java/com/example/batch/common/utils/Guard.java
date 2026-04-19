@@ -2,7 +2,7 @@ package com.example.batch.common.utils;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 轻量前置校验工具。
@@ -43,7 +43,7 @@ public final class Guard {
 
   /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
   public static void requireText(String str, String message) {
-    if (!StringUtils.hasText(str)) {
+    if (!Texts.hasText(str)) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, message);
     }
   }

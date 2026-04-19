@@ -6,7 +6,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Console 配置变更后的 Redis 缓存失效服务：把 console 的配置写操作与 orchestrator 读热点（
@@ -63,7 +63,7 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   private void evictByPatternAfterCommit(String pattern) {
-    if (!StringUtils.hasText(pattern)) {
+    if (!Texts.hasText(pattern)) {
       return;
     }
     Runnable evict =
@@ -87,7 +87,7 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   private void evictAfterCommit(String key) {
-    if (!StringUtils.hasText(key)) {
+    if (!Texts.hasText(key)) {
       return;
     }
     if (TransactionSynchronizationManager.isSynchronizationActive()) {

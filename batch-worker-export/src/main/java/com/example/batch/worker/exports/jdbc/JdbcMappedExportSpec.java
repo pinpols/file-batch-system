@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 从模板配置的 {@code query_param_schema.jdbcMappedExport} 或 {@code jdbc_mapped_export} 解析而来的导出规格。 */
 public record JdbcMappedExportSpec(
@@ -86,7 +86,7 @@ public record JdbcMappedExportSpec(
 
   private static String required(Map<String, Object> root, String key) {
     Object v = root.get(key);
-    if (v == null || !StringUtils.hasText(String.valueOf(v))) {
+    if (v == null || !Texts.hasText(String.valueOf(v))) {
       throw new IllegalArgumentException("jdbc_mapped_export." + key + " is required");
     }
     return String.valueOf(v).trim();
@@ -118,7 +118,7 @@ public record JdbcMappedExportSpec(
       m.forEach((k, v) -> out.put(String.valueOf(k), v));
       return out;
     }
-    if (raw instanceof String text && StringUtils.hasText(text)) {
+    if (raw instanceof String text && Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception ignored) {
@@ -134,7 +134,7 @@ public record JdbcMappedExportSpec(
     }
     List<String> out = new ArrayList<>();
     for (Object o : list) {
-      if (o != null && StringUtils.hasText(String.valueOf(o))) {
+      if (o != null && Texts.hasText(String.valueOf(o))) {
         out.add(String.valueOf(o).trim());
       }
     }

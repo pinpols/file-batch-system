@@ -5,7 +5,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * SSE 连接的一次性 ticket 服务。
@@ -38,11 +38,11 @@ public class SseTicketService {
    * @return "username:tenantId" 或 null（无效/已过期/已使用）
    */
   public String validate(String ticket) {
-    if (!StringUtils.hasText(ticket)) {
+    if (!Texts.hasText(ticket)) {
       return null;
     }
     String key = KEY_PREFIX + ticket.trim();
     String value = redisTemplate.opsForValue().getAndDelete(key);
-    return StringUtils.hasText(value) ? value : null;
+    return Texts.hasText(value) ? value : null;
   }
 }

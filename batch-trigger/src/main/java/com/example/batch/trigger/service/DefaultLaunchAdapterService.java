@@ -12,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 将触发命令翻译为 {@link LaunchRequest} 的适配器，屏蔽 API 触发与定时触发的参数差异。
@@ -52,7 +52,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     // timezone 未配置时 fallback 到 JVM 默认时区，而非抛异常——错误配置不应阻断所有调度触发，
     // 但会导致 bizDate 偏移，运维应在 Job 定义上明确填写 timezone。
     ZoneId zoneId =
-        StringUtils.hasText(descriptor.getTimezone())
+        Texts.hasText(descriptor.getTimezone())
             ? ZoneId.of(descriptor.getTimezone())
             : ZoneId.systemDefault();
     // bizDate=null 表示日历判断为节假日且 rollRule=SKIP，调用方据此跳过本次调度

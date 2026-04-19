@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Import pipeline 的 PARSE 阶段：将原始 payload 按文件格式解析为 NDJSON 暂存文件。
@@ -254,16 +254,16 @@ public class ParseStep implements ImportStageStep {
 
   private String resolveFormat(
       ImportPayload importPayload, Object templateConfigObject, String payloadText) {
-    if (importPayload != null && StringUtils.hasText(importPayload.fileFormatType())) {
+    if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
       return importPayload.fileFormatType();
     }
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object value = templateConfig.get("file_format_type");
-      if (value != null && StringUtils.hasText(String.valueOf(value))) {
+      if (value != null && Texts.hasText(String.valueOf(value))) {
         return String.valueOf(value);
       }
     }
-    if (StringUtils.hasText(payloadText)) {
+    if (Texts.hasText(payloadText)) {
       String trim = payloadText.trim();
       if (trim.startsWith("{") || trim.startsWith("[")) {
         return "JSON";
@@ -276,11 +276,11 @@ public class ParseStep implements ImportStageStep {
       ImportPayload importPayload, Object templateConfigObject) {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object charset = templateConfig.get("charset");
-      if (charset != null && StringUtils.hasText(String.valueOf(charset))) {
+      if (charset != null && Texts.hasText(String.valueOf(charset))) {
         return EncodingUtils.resolve(String.valueOf(charset));
       }
     }
-    if (importPayload != null && StringUtils.hasText(importPayload.charset())) {
+    if (importPayload != null && Texts.hasText(importPayload.charset())) {
       return EncodingUtils.resolve(importPayload.charset());
     }
     return StandardCharsets.UTF_8;

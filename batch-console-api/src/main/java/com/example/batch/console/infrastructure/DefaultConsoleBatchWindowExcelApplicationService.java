@@ -36,7 +36,7 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** {@link ConsoleBatchWindowExcelApplicationService} 的默认实现。 */
 @Service
@@ -331,7 +331,7 @@ public class DefaultConsoleBatchWindowExcelApplicationService
   private static String requireTime(
       Map<String, String> values, String key, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       issues.add(key + " is required");
       return null;
     }

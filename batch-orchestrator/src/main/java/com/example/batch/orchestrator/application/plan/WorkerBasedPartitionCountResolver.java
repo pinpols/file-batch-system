@@ -8,7 +8,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 根据当前在线 Worker 数量解析分区数，公式为 {@code min(256, onlineWorkerCount × partitionFactor)}。 DYNAMIC 策略下
@@ -38,10 +38,10 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
 
   private long resolveOnlineWorkerCount(
       JobDefinitionRecord jobDefinition, Map<String, Object> params) {
-    if (jobDefinition == null || !StringUtils.hasText(jobDefinition.tenantId())) {
+    if (jobDefinition == null || !Texts.hasText(jobDefinition.tenantId())) {
       return firstPositiveLong(params.get("onlineWorkerCount"), params.get("workerCount"));
     }
-    if (StringUtils.hasText(jobDefinition.workerGroup())) {
+    if (Texts.hasText(jobDefinition.workerGroup())) {
       return workerRegistryRepository.countByTenantIdAndWorkerGroupAndStatus(
           jobDefinition.tenantId(),
           jobDefinition.workerGroup(),

@@ -32,7 +32,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 补偿指令统一入口：按 {@code compensationType} 路由到 6 种处理器（JOB / STEP / PARTITION / FILE / BATCH / DLQ），
@@ -104,9 +104,9 @@ public class DefaultCompensationService implements CompensationService {
     String normalizedType = normalizeType(command.compensationType());
     String resolvedTraceId = resolveTraceIdFromTarget(command, normalizedType);
     String traceId =
-        StringUtils.hasText(resolvedTraceId)
+        Texts.hasText(resolvedTraceId)
             ? resolvedTraceId
-            : (StringUtils.hasText(command.traceId())
+            : (Texts.hasText(command.traceId())
                 ? command.traceId()
                 : IdGenerator.newTraceId());
     CompensationCommandEntity entity = buildCommandEntity(command, commandNo, traceId);
@@ -159,7 +159,7 @@ public class DefaultCompensationService implements CompensationService {
 
   private String resolveTraceIdFromTarget(
       CompensationSubmitCommand command, String normalizedType) {
-    if (!StringUtils.hasText(command.tenantId()) || command.targetId() == null) {
+    if (!Texts.hasText(command.tenantId()) || command.targetId() == null) {
       return null;
     }
     return switch (normalizedType) {
@@ -327,7 +327,7 @@ public class DefaultCompensationService implements CompensationService {
       String commandNo,
       String traceId,
       CompensationCommandEntity entity) {
-    if (!StringUtils.hasText(command.jobCode()) || command.bizDate() == null) {
+    if (!Texts.hasText(command.jobCode()) || command.bizDate() == null) {
       throw new BizException(
           ResultCode.INVALID_ARGUMENT, "jobCode and bizDate are required for batch rerun");
     }
@@ -433,7 +433,7 @@ public class DefaultCompensationService implements CompensationService {
         return entity;
       }
     }
-    if (StringUtils.hasText(command.targetInstanceNo())) {
+    if (Texts.hasText(command.targetInstanceNo())) {
       JobInstanceEntity entity =
           jobMappers.jobInstanceMapper.selectByInstanceNo(
               command.tenantId(), command.targetInstanceNo());
@@ -507,10 +507,10 @@ public class DefaultCompensationService implements CompensationService {
 
   private void validate(CompensationSubmitCommand command) {
     Guard.require(command != null, "compensation command is required");
-    if (!StringUtils.hasText(command.tenantId())) {
+    if (!Texts.hasText(command.tenantId())) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
     }
-    if (!StringUtils.hasText(command.compensationType())) {
+    if (!Texts.hasText(command.compensationType())) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "compensationType is required");
     }
   }
@@ -527,7 +527,7 @@ public class DefaultCompensationService implements CompensationService {
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> extractEffectiveParams(String paramsSnapshot) {
-    if (!StringUtils.hasText(paramsSnapshot)) {
+    if (!Texts.hasText(paramsSnapshot)) {
       return new LinkedHashMap<>();
     }
     Object snapshotObject = JsonUtils.fromJson(paramsSnapshot, Object.class);
@@ -542,7 +542,7 @@ public class DefaultCompensationService implements CompensationService {
   }
 
   private String firstText(String left, String right) {
-    return StringUtils.hasText(left) ? left : right;
+    return Texts.hasText(left) ? left : right;
   }
 
   private Long firstNonNull(Long left, Long right) {

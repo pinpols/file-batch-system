@@ -18,7 +18,7 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Import pipeline 的第一阶段：接收并登记文件记录。
@@ -91,8 +91,8 @@ public class ReceiveStep implements ImportStageStep {
   @Override
   public ImportStageResult execute(ImportJobContext context) {
     if (context == null
-        || !StringUtils.hasText(context.getTenantId())
-        || !StringUtils.hasText(context.getRawPayload())) {
+        || !Texts.hasText(context.getTenantId())
+        || !Texts.hasText(context.getRawPayload())) {
       return ImportStageResult.failure(
           stage(), "IMPORT_RECEIVE_INVALID", "tenantId or payload is blank");
     }
@@ -175,7 +175,7 @@ public class ReceiveStep implements ImportStageStep {
   }
 
   private Map<String, Object> resolveTemplateSecurity(String tenantId, String templateCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(templateCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
       return Map.of();
     }
     Map<String, Object> template =
@@ -203,7 +203,7 @@ public class ReceiveStep implements ImportStageStep {
       return importPayload;
     }
     String rawPayload = context.getRawPayload();
-    if (!StringUtils.hasText(rawPayload) || !rawPayload.trim().startsWith("{")) {
+    if (!Texts.hasText(rawPayload) || !rawPayload.trim().startsWith("{")) {
       return new ImportPayload(
           null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
           null, null, null, null, null, null, null, Map.of());
@@ -217,11 +217,11 @@ public class ReceiveStep implements ImportStageStep {
       }
 
       // content 可能不在顶层（例如 params/content）。当解析出来的 content 为空时做一次递归回填。
-      if (!StringUtils.hasText(importPayload.content())
-          && !StringUtils.hasText(importPayload.contentBase64())) {
+      if (!Texts.hasText(importPayload.content())
+          && !Texts.hasText(importPayload.contentBase64())) {
         JsonNode root = objectMapper.readTree(rawPayload);
         String extracted = findFirstText(root, "content");
-        if (StringUtils.hasText(extracted)) {
+        if (Texts.hasText(extracted)) {
           String trimmed = extracted.trim();
           // 仅接受看起来像 JSON 内容（数组或对象）的提取值。
           if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
@@ -243,7 +243,7 @@ public class ReceiveStep implements ImportStageStep {
   }
 
   private String findFirstText(JsonNode node, String fieldName) {
-    if (node == null || !StringUtils.hasText(fieldName)) {
+    if (node == null || !Texts.hasText(fieldName)) {
       return null;
     }
     if (node.isObject()) {
@@ -253,14 +253,14 @@ public class ReceiveStep implements ImportStageStep {
       }
       for (JsonNode child : node) {
         String found = findFirstText(child, fieldName);
-        if (StringUtils.hasText(found)) {
+        if (Texts.hasText(found)) {
           return found;
         }
       }
     } else if (node.isArray()) {
       for (JsonNode child : node) {
         String found = findFirstText(child, fieldName);
-        if (StringUtils.hasText(found)) {
+        if (Texts.hasText(found)) {
           return found;
         }
       }
@@ -269,7 +269,7 @@ public class ReceiveStep implements ImportStageStep {
   }
 
   private String resolveFileName(ImportPayload payload, String fileFormatType, String traceId) {
-    if (StringUtils.hasText(payload.fileName())) {
+    if (Texts.hasText(payload.fileName())) {
       return payload.fileName();
     }
     return "import-"
@@ -283,7 +283,7 @@ public class ReceiveStep implements ImportStageStep {
   }
 
   private String normalizeFileFormat(String fileFormatType, String rawPayload) {
-    if (StringUtils.hasText(fileFormatType)) {
+    if (Texts.hasText(fileFormatType)) {
       return fileFormatType.toUpperCase();
     }
     if (rawPayload != null && rawPayload.trim().startsWith("{")) {
@@ -296,7 +296,7 @@ public class ReceiveStep implements ImportStageStep {
   }
 
   private LocalDate parseBizDate(String bizDate) {
-    if (!StringUtils.hasText(bizDate)) {
+    if (!Texts.hasText(bizDate)) {
       return null;
     }
     try {
@@ -307,7 +307,7 @@ public class ReceiveStep implements ImportStageStep {
   }
 
   private String defaultText(String value, String fallback) {
-    return StringUtils.hasText(value) ? value : fallback;
+    return Texts.hasText(value) ? value : fallback;
   }
 
   private void mergeUserMetadata(Map<String, Object> target, Map<String, Object> source) {

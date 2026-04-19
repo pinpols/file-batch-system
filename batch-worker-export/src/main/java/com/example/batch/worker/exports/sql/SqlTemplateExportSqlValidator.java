@@ -16,7 +16,7 @@ import net.sf.jsqlparser.statement.select.SetOperationList;
 import net.sf.jsqlparser.statement.select.SubSelect;
 import net.sf.jsqlparser.statement.select.WithItem;
 import net.sf.jsqlparser.util.TablesNamesFinder;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 使用 JSqlParser AST 分析验证模板提供的 SELECT SQL。
@@ -43,7 +43,7 @@ public class SqlTemplateExportSqlValidator {
   /** 验证并返回规范化（trim）后的 SQL；任一检查失败则抛出 {@link IllegalArgumentException}。 */
   public String validate(String raw) {
     String sql = raw == null ? "" : raw.trim();
-    if (!StringUtils.hasText(sql)) {
+    if (!Texts.hasText(sql)) {
       throw new IllegalArgumentException("default_query_sql is blank");
     }
 
@@ -157,7 +157,7 @@ public class SqlTemplateExportSqlValidator {
     List<String> required =
         security == null ? List.of("tenantId", "batchNo") : security.getRequiredParams();
     for (String param : required) {
-      if (!StringUtils.hasText(param)) {
+      if (!Texts.hasText(param)) {
         continue;
       }
       if (!sql.contains(":" + param)) {

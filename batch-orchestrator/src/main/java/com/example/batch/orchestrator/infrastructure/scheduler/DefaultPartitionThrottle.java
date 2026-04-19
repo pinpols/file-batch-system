@@ -13,7 +13,7 @@ import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 分区级闸门：按 job_partition 计数，与 {@link DefaultConcurrencyLimiter} 平行但维度不同
@@ -41,7 +41,7 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
 
   @Override
   public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
-    if (request == null || !StringUtils.hasText(request.getTenantId())) {
+    if (request == null || !Texts.hasText(request.getTenantId())) {
       return ResourceCheck.allow();
     }
     int requestedPartitions = Math.max(request.getRequestedPartitionCount(), 1);
@@ -107,10 +107,10 @@ public class DefaultPartitionThrottle implements PartitionThrottle {
   private long countQueueActivePartitions(
       ResourceSchedulingRequest request, ResourceQueueRecord queue, long tenantActivePartitions) {
     String workerGroup =
-        StringUtils.hasText(request.getWorkerGroup())
+        Texts.hasText(request.getWorkerGroup())
             ? request.getWorkerGroup()
             : queue.workerGroup();
-    if (!StringUtils.hasText(workerGroup)) {
+    if (!Texts.hasText(workerGroup)) {
       return tenantActivePartitions;
     }
     return jobPartitionMapper.countActiveByTenantAndWorkerGroup(

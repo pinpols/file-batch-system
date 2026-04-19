@@ -90,7 +90,9 @@ public final class UploadFileGuard {
       int read = 0;
       while (read < n) {
         int r = in.read(head, read, n - read);
-        if (r < 0) break;
+        if (r < 0) {
+          break;
+        }
         read += r;
       }
       if (read < n) {
@@ -103,9 +105,13 @@ public final class UploadFileGuard {
   }
 
   private static boolean startsWith(byte[] buf, byte[] prefix) {
-    if (buf.length < prefix.length) return false;
+    if (buf.length < prefix.length) {
+      return false;
+    }
     for (int i = 0; i < prefix.length; i++) {
-      if (buf[i] != prefix[i]) return false;
+      if (buf[i] != prefix[i]) {
+        return false;
+      }
     }
     return true;
   }

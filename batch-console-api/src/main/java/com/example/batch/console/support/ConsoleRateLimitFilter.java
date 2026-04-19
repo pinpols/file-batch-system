@@ -13,7 +13,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -66,7 +66,7 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
     // ── 2. 敏感操作接口：用户限流 ─────────────────────────────────────────
     if (HttpMethod.POST.matches(method) && path.startsWith(TRIGGER_PATH_PREFIX)) {
       String username = resolveUsername();
-      if (StringUtils.hasText(username)) {
+      if (Texts.hasText(username)) {
         String key = "sensitive:user:" + username;
         if (!rateLimiter.tryAcquire(key, properties.getSensitiveOpUserLimitPerMinute())) {
           log.warn("敏感操作限流触发：user={} path={}", username, path);
@@ -86,12 +86,12 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
    */
   private String resolveClientIp(HttpServletRequest request) {
     String xff = request.getHeader("X-Forwarded-For");
-    if (StringUtils.hasText(xff)) {
+    if (Texts.hasText(xff)) {
       int comma = xff.indexOf(',');
       return (comma > 0 ? xff.substring(0, comma) : xff).trim();
     }
     String realIp = request.getHeader("X-Real-IP");
-    if (StringUtils.hasText(realIp)) {
+    if (Texts.hasText(realIp)) {
       return realIp.trim();
     }
     return request.getRemoteAddr();

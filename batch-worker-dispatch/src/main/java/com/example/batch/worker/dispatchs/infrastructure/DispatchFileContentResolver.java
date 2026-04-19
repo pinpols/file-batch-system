@@ -14,7 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 解析分发文件字节：支持本地路径或对象存储（MinIO/S3 兼容）。 */
 @Component
@@ -27,9 +27,9 @@ public class DispatchFileContentResolver {
 
   @PostConstruct
   void init() {
-    if (StringUtils.hasText(minioProperties.getEndpoint())
-        && StringUtils.hasText(minioProperties.getAccessKey())
-        && StringUtils.hasText(minioProperties.getSecretKey())) {
+    if (Texts.hasText(minioProperties.getEndpoint())
+        && Texts.hasText(minioProperties.getAccessKey())
+        && Texts.hasText(minioProperties.getSecretKey())) {
       this.minioClient =
           MinioClient.builder()
               .endpoint(minioProperties.getEndpoint())
@@ -43,7 +43,7 @@ public class DispatchFileContentResolver {
     String storageType =
         String.valueOf(fileRecord.getOrDefault("storage_type", "")).toUpperCase(Locale.ROOT);
     String storagePath = String.valueOf(fileRecord.getOrDefault("storage_path", ""));
-    if (!StringUtils.hasText(storagePath)) {
+    if (!Texts.hasText(storagePath)) {
       throw new IllegalStateException("storage_path missing");
     }
     // C-4: 规范化前拒绝路径遍历序列
@@ -59,7 +59,7 @@ public class DispatchFileContentResolver {
     }
     String bucket =
         String.valueOf(fileRecord.getOrDefault("storage_bucket", minioProperties.getBucket()));
-    if (!StringUtils.hasText(bucket)) {
+    if (!Texts.hasText(bucket)) {
       bucket = minioProperties.getBucket();
     }
     // M-7: 若 decryptIfNeeded 抛异常，确保 MinIO 流被关闭
@@ -87,7 +87,7 @@ public class DispatchFileContentResolver {
       return security;
     }
     String text = metadata == null ? null : String.valueOf(metadata);
-    if (StringUtils.hasText(text)) {
+    if (Texts.hasText(text)) {
       try {
         Object parsed = JsonUtils.fromJson(text, Map.class);
         if (parsed instanceof Map<?, ?> map) {

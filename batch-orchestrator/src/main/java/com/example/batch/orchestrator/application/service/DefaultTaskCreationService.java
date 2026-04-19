@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 任务创建服务的默认实现，负责持久化 {@link JobTaskEntity} 并同步创建对应的 {@link JobStepInstanceEntity}。
@@ -72,7 +72,7 @@ public class DefaultTaskCreationService implements TaskCreationService {
     }
     String taskType = task == null ? null : task.getTaskType();
     Integer taskSeq = task == null ? null : task.getTaskSeq();
-    return StringUtils.hasText(taskType)
+    return Texts.hasText(taskType)
         ? taskType + ":" + (taskSeq == null ? 1 : taskSeq)
         : "EXECUTION:" + (taskSeq == null ? 1 : taskSeq);
   }

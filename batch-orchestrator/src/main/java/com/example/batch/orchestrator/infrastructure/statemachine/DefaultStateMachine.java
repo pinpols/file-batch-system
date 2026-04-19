@@ -6,7 +6,7 @@ import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.lang.reflect.Method;
 import java.util.List;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 默认状态机实现。
@@ -42,7 +42,7 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
     // 编译期安全路径：实现 Stateful 的实体不经反射解析。
     if (target instanceof Stateful stateful) {
       String status = stateful.getStatus();
-      if (StringUtils.hasText(status)) {
+      if (Texts.hasText(status)) {
         return status;
       }
     }
@@ -56,7 +56,7 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
             "getNodeStatus",
             "getStatus")) {
       String status = invokeStringGetter(target, methodName);
-      if (StringUtils.hasText(status)) {
+      if (Texts.hasText(status)) {
         return status;
       }
     }
@@ -78,7 +78,7 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
   }
 
   private String normalizeEvent(String event) {
-    return StringUtils.hasText(event) ? event.trim().toUpperCase() : "NOOP";
+    return Texts.hasText(event) ? event.trim().toUpperCase() : "NOOP";
   }
 
   private String resolveToState(String fromState, String event) {

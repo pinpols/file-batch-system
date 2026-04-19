@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 控制台高频查询的 Redis 缓存层。
@@ -51,7 +51,7 @@ public class ConsoleQueryCacheService {
     String fullKey = PREFIX + cacheKey;
     try {
       String cached = redisTemplate.opsForValue().get(fullKey);
-      if (StringUtils.hasText(cached)) {
+      if (Texts.hasText(cached)) {
         return JsonUtils.fromJson(cached, resultType);
       }
     } catch (Exception e) {

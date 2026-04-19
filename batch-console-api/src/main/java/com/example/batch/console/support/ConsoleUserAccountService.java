@@ -8,7 +8,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 控制台账号查询：通过 Spring Data JDBC 从平台库读取账号、密码哈希和角色列表。 */
 @Service
@@ -36,13 +36,13 @@ public class ConsoleUserAccountService {
   }
 
   private Set<String> parseAuthorities(String raw) {
-    if (!StringUtils.hasText(raw)) {
+    if (!Texts.hasText(raw)) {
       return Set.of();
     }
     Set<String> authorities = new LinkedHashSet<>();
     Arrays.stream(raw.split(","))
         .map(String::trim)
-        .filter(StringUtils::hasText)
+        .filter(Texts::hasText)
         .map(value -> value.toUpperCase(Locale.ROOT))
         .forEach(authorities::add);
     return authorities;

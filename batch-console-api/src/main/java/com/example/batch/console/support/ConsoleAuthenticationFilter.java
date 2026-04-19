@@ -18,7 +18,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -61,7 +61,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
       // SSE ticket 鉴权：EventSource 不能设 header，用一次性 ticket 替代
       String sseTicket = request.getParameter("ticket");
-      if (StringUtils.hasText(sseTicket)) {
+      if (Texts.hasText(sseTicket)) {
         String ticketValue = sseTicketService.validate(sseTicket);
         if (ticketValue != null) {
           String[] parts = ticketValue.split(":", 2);
@@ -80,7 +80,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
       }
 
       String bearerToken = resolveBearerToken(request);
-      if (StringUtils.hasText(bearerToken)) {
+      if (Texts.hasText(bearerToken)) {
         try {
           ConsolePrincipal principal = jwtService.authenticate(bearerToken);
           setAuthentication(principal, bearerToken);
@@ -97,7 +97,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
       }
 
       String sharedToken = request.getHeader(properties.getTokenHeader());
-      if (properties.isLegacyHeaderAuthEnabled() && StringUtils.hasText(sharedToken)) {
+      if (properties.isLegacyHeaderAuthEnabled() && Texts.hasText(sharedToken)) {
         if (!batchSecurityProperties.isBypassMode()
             && !sharedToken.equals(properties.getSharedSecret())) {
           responseWriter.write(
@@ -178,7 +178,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
   private String resolveBearerToken(HttpServletRequest request) {
     // 5.4: 仅从 Authorization header 读取 JWT，不再接受 URL query token（防止日志/Referer 泄露）
     String authorization = request.getHeader("Authorization");
-    if (StringUtils.hasText(authorization) && authorization.startsWith("Bearer ")) {
+    if (Texts.hasText(authorization) && authorization.startsWith("Bearer ")) {
       return authorization.substring(7).trim();
     }
     return null;
@@ -186,7 +186,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
   private String resolveUsername(HttpServletRequest request) {
     String username = request.getHeader(properties.getUserHeader());
-    if (!StringUtils.hasText(username)) {
+    if (!Texts.hasText(username)) {
       username = batchSecurityProperties.isBypassMode() ? "testing-console-user" : "console-user";
     }
     return username;
@@ -194,7 +194,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
   private String resolveTenant(HttpServletRequest request) {
     String tenantId = request.getHeader(properties.getTenantHeader());
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       tenantId = properties.getDefaultTenantId();
     }
     if (!properties.getAllowedTenants().isEmpty()
@@ -206,7 +206,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
   private Set<SimpleGrantedAuthority> resolveAuthorities(HttpServletRequest request) {
     String rolesHeader = request.getHeader(properties.getRoleHeader());
-    if (!StringUtils.hasText(rolesHeader)) {
+    if (!Texts.hasText(rolesHeader)) {
       return properties.getDefaultAuthorities().stream()
           .map(SimpleGrantedAuthority::new)
           .collect(Collectors.toCollection(LinkedHashSet::new));

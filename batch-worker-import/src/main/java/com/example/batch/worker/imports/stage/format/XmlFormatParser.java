@@ -8,7 +8,7 @@ import java.util.Map;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -84,12 +84,12 @@ public class XmlFormatParser implements FormatParser {
   private String resolveXmlRecordElement(Object templateConfigObject) {
     Map<String, Object> hints = support.parseHints(templateConfigObject);
     Object v = hints.get("xmlRecordElement");
-    if (v != null && StringUtils.hasText(String.valueOf(v))) {
+    if (v != null && Texts.hasText(String.valueOf(v))) {
       return String.valueOf(v).trim();
     }
     if (templateConfigObject instanceof Map<?, ?> map) {
       Object direct = map.get("xml_record_element");
-      if (direct != null && StringUtils.hasText(String.valueOf(direct))) {
+      if (direct != null && Texts.hasText(String.valueOf(direct))) {
         return String.valueOf(direct).trim();
       }
     }
@@ -98,7 +98,7 @@ public class XmlFormatParser implements FormatParser {
 
   private String localElementName(Element element) {
     String local = element.getLocalName();
-    if (StringUtils.hasText(local)) {
+    if (Texts.hasText(local)) {
       return local;
     }
     String tag = element.getTagName();

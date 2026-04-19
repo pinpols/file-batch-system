@@ -8,7 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 解析调度请求的目标资源队列：有显式 {@code queueCode} 时直查，否则在租户启用的所有队列里按下述优先级挑一个：
@@ -31,7 +31,7 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
 
   @Override
   public ResourceQueueRecord resolveQueue(ResourceSchedulingRequest request) {
-    if (request == null || !StringUtils.hasText(request.getTenantId())) {
+    if (request == null || !Texts.hasText(request.getTenantId())) {
       return null;
     }
     List<ResourceQueueRecord> queues =
@@ -39,7 +39,7 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
     if (queues == null || queues.isEmpty()) {
       return null;
     }
-    if (StringUtils.hasText(request.getQueueCode())) {
+    if (Texts.hasText(request.getQueueCode())) {
       return queues.stream()
           .filter(queue -> request.getQueueCode().equalsIgnoreCase(queue.queueCode()))
           .findFirst()
@@ -68,7 +68,7 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
     if (queue == null) {
       return false;
     }
-    if (!StringUtils.hasText(workerType)) {
+    if (!Texts.hasText(workerType)) {
       return true;
     }
     return workerType.equalsIgnoreCase(queue.queueType())

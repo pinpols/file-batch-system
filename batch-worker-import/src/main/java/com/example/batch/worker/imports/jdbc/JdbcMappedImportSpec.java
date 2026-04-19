@@ -9,7 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 从 {@code file_template_config.query_param_schema.jdbcMappedImport} 或顶层 {@code
@@ -47,7 +47,7 @@ public record JdbcMappedImportSpec(
 
   private static String required(Map<String, Object> root, String key) {
     Object v = root.get(key);
-    if (v == null || !StringUtils.hasText(String.valueOf(v))) {
+    if (v == null || !Texts.hasText(String.valueOf(v))) {
       throw new IllegalArgumentException("jdbc_mapped_import." + key + " is required");
     }
     return String.valueOf(v).trim();
@@ -79,7 +79,7 @@ public record JdbcMappedImportSpec(
       m.forEach((k, v) -> out.put(String.valueOf(k), v));
       return out;
     }
-    if (raw instanceof String text && StringUtils.hasText(text)) {
+    if (raw instanceof String text && Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception ignored) {
@@ -112,7 +112,7 @@ public record JdbcMappedImportSpec(
     if (raw instanceof List<?> list) {
       List<String> out = new ArrayList<>();
       for (Object o : list) {
-        if (o != null && StringUtils.hasText(String.valueOf(o))) {
+        if (o != null && Texts.hasText(String.valueOf(o))) {
           out.add(String.valueOf(o).trim());
         }
       }

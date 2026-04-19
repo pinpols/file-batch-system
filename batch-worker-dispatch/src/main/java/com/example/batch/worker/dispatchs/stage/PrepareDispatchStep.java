@@ -11,7 +11,7 @@ import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Dispatch pipeline 的 PREPARE 阶段：解析 payload，加载文件记录和渠道配置，初始化执行上下文。
@@ -44,8 +44,8 @@ public class PrepareDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     if (context == null
-        || !StringUtils.hasText(context.getTenantId())
-        || !StringUtils.hasText(context.getRawPayload())) {
+        || !Texts.hasText(context.getTenantId())
+        || !Texts.hasText(context.getRawPayload())) {
       return DispatchStageResult.failure(
           stage(), "DISPATCH_PREPARE_INVALID", "tenantId or payload is blank");
     }

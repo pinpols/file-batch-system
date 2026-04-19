@@ -11,7 +11,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 配额运行时状态服务：管理租户/队列的突发配额（burst quota）窗口，支持三种重置策略。
@@ -62,9 +62,9 @@ public class QuotaRuntimeStateService {
   public ResourceCheck evaluateAndReserve(QuotaReservationRequest request) {
     if (request == null
         || request.owner() == null
-        || !StringUtils.hasText(request.owner().tenantId())
-        || !StringUtils.hasText(request.owner().quotaScope())
-        || !StringUtils.hasText(request.owner().ownerCode())) {
+        || !Texts.hasText(request.owner().tenantId())
+        || !Texts.hasText(request.owner().quotaScope())
+        || !Texts.hasText(request.owner().ownerCode())) {
       return ResourceCheck.allow();
     }
     if (request.policy() == null || request.policy().baseCap() <= 0) {
@@ -126,9 +126,9 @@ public class QuotaRuntimeStateService {
     String quotaResetPolicy = request.quotaResetPolicy();
     int burstLimit = request.burstLimit();
     int slidingWindowHours = request.slidingWindowHours();
-    if (!StringUtils.hasText(tenantId)
-        || !StringUtils.hasText(quotaScope)
-        || !StringUtils.hasText(ownerCode)) {
+    if (!Texts.hasText(tenantId)
+        || !Texts.hasText(quotaScope)
+        || !Texts.hasText(ownerCode)) {
       return new QuotaRuntimeSnapshot(
           normalizePolicy(quotaResetPolicy),
           Math.max(0, burstLimit),

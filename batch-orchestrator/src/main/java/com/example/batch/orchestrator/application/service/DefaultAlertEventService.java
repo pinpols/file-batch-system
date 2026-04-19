@@ -10,7 +10,7 @@ import io.micrometer.core.instrument.Tags;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 告警事件 emit 入口：把 orchestrator 内部各子系统（SLA / 熔断 / drain 等）的告警统一落 {@code alert_event} 表。
@@ -30,15 +30,15 @@ public class DefaultAlertEventService implements AlertEventService {
   @Transactional
   public void emit(AlertEmitRequest request) {
     if (request == null
-        || !StringUtils.hasText(request.tenantId())
-        || !StringUtils.hasText(request.alertType())) {
+        || !Texts.hasText(request.tenantId())
+        || !Texts.hasText(request.alertType())) {
       return;
     }
     String serviceName =
-        StringUtils.hasText(request.serviceName()) ? request.serviceName() : "batch-orchestrator";
-    String severity = StringUtils.hasText(request.severity()) ? request.severity() : "WARN";
-    String title = StringUtils.hasText(request.title()) ? request.title() : request.alertType();
-    String resourceKey = StringUtils.hasText(request.resourceKey()) ? request.resourceKey() : title;
+        Texts.hasText(request.serviceName()) ? request.serviceName() : "batch-orchestrator";
+    String severity = Texts.hasText(request.severity()) ? request.severity() : "WARN";
+    String title = Texts.hasText(request.title()) ? request.title() : request.alertType();
+    String resourceKey = Texts.hasText(request.resourceKey()) ? request.resourceKey() : title;
     String fingerprint =
         AlertFingerprints.build(request.tenantId(), request.alertType(), resourceKey);
 

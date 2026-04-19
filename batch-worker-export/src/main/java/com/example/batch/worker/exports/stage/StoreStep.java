@@ -14,7 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 导出存储阶段：将生成的临时文件上传至对象存储（先写 .part 再 copy 提升），并完成 SHA-256 校验。 */
 @Component
@@ -37,7 +37,7 @@ public class StoreStep implements ExportStageStep {
   public ExportStageResult execute(ExportJobContext context) {
     Object generatedFilePath =
         context == null ? null : context.getAttributes().get("generatedFilePath");
-    if (!(generatedFilePath instanceof String pathText) || !StringUtils.hasText(pathText)) {
+    if (!(generatedFilePath instanceof String pathText) || !Texts.hasText(pathText)) {
       return ExportStageResult.failure(stage(), "EXPORT_STORE_INVALID", "export data missing");
     }
     try {
@@ -200,7 +200,7 @@ public class StoreStep implements ExportStageStep {
       return fallback;
     }
     String text = String.valueOf(value);
-    return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text : fallback;
+    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : fallback;
   }
 
   private String sha256Hex(Path path) throws Exception {

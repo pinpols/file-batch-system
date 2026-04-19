@@ -31,7 +31,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
@@ -190,7 +190,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
     if (columns.contains(COL_TENANT_ID)) {
       rowValues.put(
           COL_TENANT_ID,
-          StringUtils.hasText(rowValues.get(COL_TENANT_ID))
+          Texts.hasText(rowValues.get(COL_TENANT_ID))
               ? rowValues.get(COL_TENANT_ID)
               : tenantId);
     }
@@ -233,7 +233,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
         headerIndex = new LinkedHashMap<>();
         currentCells.forEach((colIdx, value) -> {
           String header = normalize(value);
-          if (StringUtils.hasText(header)) {
+          if (Texts.hasText(header)) {
             headerIndex.put(header, colIdx);
           }
         });
@@ -249,7 +249,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
         }
         fillTenantDefault(currentRow, columns, tenantId);
         // 跳过全空行
-        boolean allBlank = currentRow.values().stream().noneMatch(StringUtils::hasText);
+        boolean allBlank = currentRow.values().stream().noneMatch(Texts::hasText);
         if (!allBlank) {
           rows.add(currentRow);
         }
@@ -338,7 +338,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
   }
 
   private static String resolveFileName(String fileName, String defaultFileName) {
-    return StringUtils.hasText(fileName) ? fileName : defaultFileName;
+    return Texts.hasText(fileName) ? fileName : defaultFileName;
   }
 
   private static Map<String, Integer> readHeaderIndex(Row headerRow, DataFormatter formatter) {
@@ -347,7 +347,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
         cellIndex < headerRow.getLastCellNum();
         cellIndex++) {
       String header = normalize(formatter.formatCellValue(headerRow.getCell(cellIndex)));
-      if (StringUtils.hasText(header)) {
+      if (Texts.hasText(header)) {
         headerIndex.put(header, cellIndex);
       }
     }
@@ -368,7 +368,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
   private static boolean rowIsBlank(Row row, DataFormatter formatter) {
     for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
       String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
-      if (StringUtils.hasText(value)) {
+      if (Texts.hasText(value)) {
         return false;
       }
     }
@@ -386,7 +386,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
   }
 
   private static String normalize(String value) {
-    if (!StringUtils.hasText(value)) {
+    if (!Texts.hasText(value)) {
       return null;
     }
     return value.trim();

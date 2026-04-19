@@ -476,7 +476,9 @@ public class ConsoleTenantConfigCopyService {
           List<String> dates = new ArrayList<>(holidays.size());
           for (Map<String, Object> h : holidays) {
             String d = str(h, "holiday_date");
-            if (d != null) dates.add(d);
+            if (d != null) {
+              dates.add(d);
+            }
           }
           s.setHolidays(dates);
         }
@@ -537,19 +539,25 @@ public class ConsoleTenantConfigCopyService {
 
   private static Boolean bool(Map<String, Object> map, String key) {
     Object v = map.get(key);
-    if (v instanceof Boolean b) return b;
+    if (v instanceof Boolean b) {
+      return b;
+    }
     return v != null ? Boolean.valueOf(v.toString()) : null;
   }
 
   private static Long num(Map<String, Object> map, String key) {
     Object v = map.get(key);
-    if (v instanceof Number n) return n.longValue();
+    if (v instanceof Number n) {
+      return n.longValue();
+    }
     return null;
   }
 
   private static Integer intVal(Map<String, Object> map, String key) {
     Object v = map.get(key);
-    if (v instanceof Number n) return n.intValue();
+    if (v instanceof Number n) {
+      return n.intValue();
+    }
     return null;
   }
 }

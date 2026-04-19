@@ -15,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Worker 生命周期模板（所有 worker 通用骨架）。
@@ -147,10 +147,10 @@ public abstract class AbstractWorkerLoop {
   }
 
   private String buildWorkerId(WorkerConfiguration cfg) {
-    if (StringUtils.hasText(cfg.workerCode())) {
+    if (Texts.hasText(cfg.workerCode())) {
       return cfg.workerCode();
     }
-    if (StringUtils.hasText(cfg.workerType())) {
+    if (Texts.hasText(cfg.workerType())) {
       return cfg.workerType().toLowerCase() + "-" + UUID.randomUUID();
     }
     return workerGroup() + "-" + UUID.randomUUID();
@@ -170,7 +170,7 @@ public abstract class AbstractWorkerLoop {
       return "unknown";
     }
     String top = ex.getMessage();
-    if (StringUtils.hasText(top)) {
+    if (Texts.hasText(top)) {
       Throwable root = ex;
       while (root.getCause() != null) {
         root = root.getCause();
@@ -178,7 +178,7 @@ public abstract class AbstractWorkerLoop {
       if (root != ex) {
         String rm = root.getMessage();
         String rootPart =
-            StringUtils.hasText(rm)
+            Texts.hasText(rm)
                 ? root.getClass().getSimpleName() + ": " + rm
                 : root.getClass().getSimpleName();
         return top + " [" + rootPart + "]" + registrationFailureHint(ex);
@@ -192,7 +192,7 @@ public abstract class AbstractWorkerLoop {
       }
       sb.append(t.getClass().getSimpleName());
       String m = t.getMessage();
-      if (StringUtils.hasText(m)) {
+      if (Texts.hasText(m)) {
         sb.append(": ").append(m);
       }
     }

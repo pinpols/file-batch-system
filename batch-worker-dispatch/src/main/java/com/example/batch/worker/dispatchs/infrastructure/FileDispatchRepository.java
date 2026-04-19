@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 文件分发数据仓库，封装分发记录、渠道配置的增删改查操作。 */
 @Repository
@@ -27,14 +27,14 @@ public class FileDispatchRepository {
   private final FileDispatchMapper fileDispatchMapper;
 
   public Map<String, Object> loadFile(String tenantId, String fileId) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(fileId)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(fileId)) {
       return Map.of();
     }
     return loadFile(tenantId, Long.valueOf(fileId));
   }
 
   public Map<String, Object> loadFile(String tenantId, Long fileId) {
-    if (!StringUtils.hasText(tenantId) || fileId == null) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
       return Map.of();
     }
     Map<String, Object> fileRecord =
@@ -43,7 +43,7 @@ public class FileDispatchRepository {
   }
 
   public Map<String, Object> loadChannel(String tenantId, String channelCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(channelCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
       return Map.of();
     }
     Map<String, Object> channelConfig =
@@ -54,7 +54,7 @@ public class FileDispatchRepository {
 
   public Map<String, Object> loadLatestDispatchRecord(
       String tenantId, Long fileId, String channelCode) {
-    if (!StringUtils.hasText(tenantId) || fileId == null || !StringUtils.hasText(channelCode)) {
+    if (!Texts.hasText(tenantId) || fileId == null || !Texts.hasText(channelCode)) {
       return Map.of();
     }
     Map<String, Object> dispatchRecord =

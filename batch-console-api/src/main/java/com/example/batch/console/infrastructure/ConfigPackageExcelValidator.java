@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Validates rows parsed from the tenant config package Excel workbook. Extracted from
@@ -243,21 +243,34 @@ class ConfigPackageExcelValidator {
     for (Map<String, String> row : rows) {
       List<String> ri = new ArrayList<>();
       String jobCode = normalize(row.get(COL_JOB_CODE));
-      if (!hasText(jobCode)) ri.add("job_code is required");
-      if (!hasText(normalize(row.get(COL_JOB_NAME)))) ri.add("job_name is required");
+      if (!hasText(jobCode)) {
+        ri.add("job_code is required");
+      }
+      if (!hasText(normalize(row.get(COL_JOB_NAME)))) {
+        ri.add("job_name is required");
+      }
       String jobType = normalizeEnum(row.get(COL_JOB_TYPE));
-      if (!hasText(jobType)) ri.add("job_type is required");
-      else if (!JOB_TYPES.contains(jobType)) ri.add("job_type must be one of " + JOB_TYPES);
+      if (!hasText(jobType)) {
+        ri.add("job_type is required");
+      }
+      else if (!JOB_TYPES.contains(jobType)) {
+        ri.add("job_type must be one of " + JOB_TYPES);
+      }
       String scheduleType = normalizeEnum(row.get(COL_SCHEDULE_TYPE));
-      if (!hasText(scheduleType)) ri.add("schedule_type is required");
-      else if (!SCHEDULE_TYPES.contains(scheduleType))
+      if (!hasText(scheduleType)) {
+        ri.add("schedule_type is required");
+      }
+      else if (!SCHEDULE_TYPES.contains(scheduleType)) {
         ri.add("schedule_type must be one of " + SCHEDULE_TYPES);
+      }
       String retryPolicy = normalizeEnum(row.get(COL_RETRY_POLICY));
-      if (hasText(retryPolicy) && !RETRY_POLICIES.contains(retryPolicy))
+      if (hasText(retryPolicy) && !RETRY_POLICIES.contains(retryPolicy)) {
         ri.add("retry_policy must be one of " + RETRY_POLICIES);
+      }
       String shardStrategy = normalizeEnum(row.get(COL_SHARD_STRATEGY));
-      if (hasText(shardStrategy) && !SHARD_STRATEGIES.contains(shardStrategy))
+      if (hasText(shardStrategy) && !SHARD_STRATEGIES.contains(shardStrategy)) {
         ri.add("shard_strategy must be one of " + SHARD_STRATEGIES);
+      }
       String paramSchema = row.get(COL_PARAM_SCHEMA);
       if (hasText(paramSchema)) {
         try {
@@ -266,10 +279,13 @@ class ConfigPackageExcelValidator {
           ri.add("param_schema must be valid JSON");
         }
       }
-      if (hasText(jobCode) && !seen.add(tenantId + KEY_SEP_HASH + jobCode))
+      if (hasText(jobCode) && !seen.add(tenantId + KEY_SEP_HASH + jobCode)) {
         ri.add("duplicate job_code in excel: " + jobCode);
+      }
       addIssues(ri, JOB_SHEET, rowNo, issues);
-      if (ri.isEmpty()) valid.add(row);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
       rowNo++;
     }
     return new SheetResult(JOB_SHEET, rows.size(), valid, issues);
@@ -283,21 +299,37 @@ class ConfigPackageExcelValidator {
     for (Map<String, String> row : rows) {
       List<String> ri = new ArrayList<>();
       String code = normalize(row.get(COL_CHANNEL_CODE));
-      if (!hasText(code)) ri.add("channel_code is required");
-      if (!hasText(normalize(row.get(COL_CHANNEL_NAME)))) ri.add("channel_name is required");
+      if (!hasText(code)) {
+        ri.add("channel_code is required");
+      }
+      if (!hasText(normalize(row.get(COL_CHANNEL_NAME)))) {
+        ri.add("channel_name is required");
+      }
       String channelType = normalizeEnum(row.get(COL_CHANNEL_TYPE));
-      if (!hasText(channelType)) ri.add("channel_type is required");
-      else if (!CHANNEL_TYPES.contains(channelType))
+      if (!hasText(channelType)) {
+        ri.add("channel_type is required");
+      }
+      else if (!CHANNEL_TYPES.contains(channelType)) {
         ri.add("channel_type must be one of " + CHANNEL_TYPES);
+      }
       String authType = normalizeEnum(row.get(COL_AUTH_TYPE));
-      if (!hasText(authType)) ri.add("auth_type is required");
-      else if (!AUTH_TYPES.contains(authType)) ri.add("auth_type must be one of " + AUTH_TYPES);
+      if (!hasText(authType)) {
+        ri.add("auth_type is required");
+      }
+      else if (!AUTH_TYPES.contains(authType)) {
+        ri.add("auth_type must be one of " + AUTH_TYPES);
+      }
       String receiptPolicy = normalizeEnum(row.get(COL_RECEIPT_POLICY));
-      if (!hasText(receiptPolicy)) ri.add("receipt_policy is required");
-      else if (!RECEIPT_POLICIES.contains(receiptPolicy))
+      if (!hasText(receiptPolicy)) {
+        ri.add("receipt_policy is required");
+      }
+      else if (!RECEIPT_POLICIES.contains(receiptPolicy)) {
         ri.add("receipt_policy must be one of " + RECEIPT_POLICIES);
+      }
       String configJson = row.get(COL_CONFIG_JSON);
-      if (!hasText(configJson)) ri.add("config_json is required");
+      if (!hasText(configJson)) {
+        ri.add("config_json is required");
+      }
       else {
         try {
           JsonUtils.fromJson(configJson, Object.class);
@@ -305,10 +337,13 @@ class ConfigPackageExcelValidator {
           ri.add("config_json must be valid JSON");
         }
       }
-      if (hasText(code) && !seen.add(tenantId + KEY_SEP_HASH + code))
+      if (hasText(code) && !seen.add(tenantId + KEY_SEP_HASH + code)) {
         ri.add("duplicate channel_code in excel: " + code);
+      }
       addIssues(ri, CHANNEL_SHEET, rowNo, issues);
-      if (ri.isEmpty()) valid.add(row);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
       rowNo++;
     }
     return new SheetResult(CHANNEL_SHEET, rows.size(), valid, issues);
@@ -322,18 +357,35 @@ class ConfigPackageExcelValidator {
     for (Map<String, String> row : rows) {
       List<String> ri = new ArrayList<>();
       String code = normalize(row.get(COL_ROUTE_CODE));
-      if (!hasText(code)) ri.add("route_code is required");
-      if (!hasText(normalize(row.get(COL_ROUTE_NAME)))) ri.add("route_name is required");
-      if (!hasText(normalize(row.get(COL_TEAM)))) ri.add("team is required");
-      if (!hasText(normalize(row.get(COL_ALERT_GROUP)))) ri.add("alert_group is required");
+      if (!hasText(code)) {
+        ri.add("route_code is required");
+      }
+      if (!hasText(normalize(row.get(COL_ROUTE_NAME)))) {
+        ri.add("route_name is required");
+      }
+      if (!hasText(normalize(row.get(COL_TEAM)))) {
+        ri.add("team is required");
+      }
+      if (!hasText(normalize(row.get(COL_ALERT_GROUP)))) {
+        ri.add("alert_group is required");
+      }
       String severity = normalizeEnum(row.get(COL_SEVERITY));
-      if (!hasText(severity)) ri.add("severity is required");
-      else if (!SEVERITIES.contains(severity)) ri.add("severity must be one of " + SEVERITIES);
-      if (!hasText(normalize(row.get(COL_RECEIVER)))) ri.add("receiver is required");
-      if (hasText(code) && !seen.add(tenantId + KEY_SEP_HASH + code))
+      if (!hasText(severity)) {
+        ri.add("severity is required");
+      }
+      else if (!SEVERITIES.contains(severity)) {
+        ri.add("severity must be one of " + SEVERITIES);
+      }
+      if (!hasText(normalize(row.get(COL_RECEIVER)))) {
+        ri.add("receiver is required");
+      }
+      if (hasText(code) && !seen.add(tenantId + KEY_SEP_HASH + code)) {
         ri.add("duplicate route_code in excel: " + code);
+      }
       addIssues(ri, ROUTING_SHEET, rowNo, issues);
-      if (ri.isEmpty()) valid.add(row);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
       rowNo++;
     }
     return new SheetResult(ROUTING_SHEET, rows.size(), valid, issues);
@@ -348,13 +400,22 @@ class ConfigPackageExcelValidator {
       List<String> ri = new ArrayList<>();
       String jobCode = normalize(row.get(COL_JOB_CODE));
       String version = normalize(row.get(COL_VERSION));
-      if (!hasText(jobCode)) ri.add("job_code is required");
-      if (!hasText(normalize(row.get(COL_PIPELINE_NAME)))) ri.add("pipeline_name is required");
+      if (!hasText(jobCode)) {
+        ri.add("job_code is required");
+      }
+      if (!hasText(normalize(row.get(COL_PIPELINE_NAME)))) {
+        ri.add("pipeline_name is required");
+      }
       String pType = normalizeEnum(row.get(COL_PIPELINE_TYPE));
-      if (!hasText(pType)) ri.add("pipeline_type is required");
-      else if (!PIPELINE_TYPES.contains(pType))
+      if (!hasText(pType)) {
+        ri.add("pipeline_type is required");
+      }
+      else if (!PIPELINE_TYPES.contains(pType)) {
         ri.add("pipeline_type must be one of " + PIPELINE_TYPES);
-      if (!hasText(version)) ri.add("version is required");
+      }
+      if (!hasText(version)) {
+        ri.add("version is required");
+      }
       else {
         try {
           Integer.parseInt(version);
@@ -362,12 +423,13 @@ class ConfigPackageExcelValidator {
           ri.add("version must be integer");
         }
       }
-      if (hasText(jobCode)
-          && hasText(version)
-          && !seen.add(tenantId + KEY_SEP_HASH + jobCode + KEY_SEP_COLON + version))
+      if (hasText(jobCode) && hasText(version) && !seen.add(tenantId + KEY_SEP_HASH + jobCode + KEY_SEP_COLON + version)) {
         ri.add("duplicate pipeline key (job_code + version): " + jobCode + KEY_SEP_COLON + version);
+      }
       addIssues(ri, PIPELINE_SHEET, rowNo, issues);
-      if (ri.isEmpty()) valid.add(row);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
       rowNo++;
     }
     return new SheetResult(PIPELINE_SHEET, rows.size(), valid, issues);
@@ -389,27 +451,40 @@ class ConfigPackageExcelValidator {
       String jobCode = normalize(row.get(COL_JOB_CODE));
       String version = normalize(row.get(COL_VERSION));
       String stepCode = normalize(row.get(COL_STEP_CODE));
-      if (!hasText(jobCode)) ri.add("job_code is required");
-      if (!hasText(version)) ri.add("version is required");
-      if (!hasText(stepCode)) ri.add("step_code is required");
-      if (!hasText(normalize(row.get(COL_STEP_NAME)))) ri.add("step_name is required");
+      if (!hasText(jobCode)) {
+        ri.add("job_code is required");
+      }
+      if (!hasText(version)) {
+        ri.add("version is required");
+      }
+      if (!hasText(stepCode)) {
+        ri.add("step_code is required");
+      }
+      if (!hasText(normalize(row.get(COL_STEP_NAME)))) {
+        ri.add("step_name is required");
+      }
       String stageCode = normalizeEnum(row.get(COL_STAGE_CODE));
-      if (!hasText(stageCode)) ri.add("stage_code is required");
-      else if (!STAGE_CODES.contains(stageCode))
+      if (!hasText(stageCode)) {
+        ri.add("stage_code is required");
+      }
+      else if (!STAGE_CODES.contains(stageCode)) {
         ri.add("stage_code must be one of " + STAGE_CODES);
+      }
       String retryPolicy = normalizeEnum(row.get(COL_RETRY_POLICY));
-      if (hasText(retryPolicy) && !RETRY_POLICIES.contains(retryPolicy))
+      if (hasText(retryPolicy) && !RETRY_POLICIES.contains(retryPolicy)) {
         ri.add("retry_policy must be one of " + RETRY_POLICIES);
+      }
       String pipelineKey = jobCode + KEY_SEP_COLON + version;
-      if (hasText(jobCode) && hasText(version) && !pipelineKeys.contains(pipelineKey))
+      if (hasText(jobCode) && hasText(version) && !pipelineKeys.contains(pipelineKey)) {
         ri.add("no matching pipeline for job_code + version: " + pipelineKey);
-      if (hasText(jobCode)
-          && hasText(version)
-          && hasText(stepCode)
-          && !seen.add(pipelineKey + KEY_SEP_HASH + stepCode))
+      }
+      if (hasText(jobCode) && hasText(version) && hasText(stepCode) && !seen.add(pipelineKey + KEY_SEP_HASH + stepCode)) {
         ri.add("duplicate step_code in pipeline: " + stepCode);
+      }
       addIssues(ri, STEP_SHEET, rowNo, issues);
-      if (ri.isEmpty()) valid.add(row);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
       rowNo++;
     }
     return new SheetResult(STEP_SHEET, rows.size(), valid, issues);
@@ -424,13 +499,22 @@ class ConfigPackageExcelValidator {
       List<String> ri = new ArrayList<>();
       String wfCode = normalize(row.get(COL_WORKFLOW_CODE));
       String version = normalize(row.get(COL_VERSION));
-      if (!hasText(wfCode)) ri.add("workflow_code is required");
-      if (!hasText(normalize(row.get(COL_WORKFLOW_NAME)))) ri.add("workflow_name is required");
+      if (!hasText(wfCode)) {
+        ri.add("workflow_code is required");
+      }
+      if (!hasText(normalize(row.get(COL_WORKFLOW_NAME)))) {
+        ri.add("workflow_name is required");
+      }
       String wfType = normalizeEnum(row.get(COL_WORKFLOW_TYPE));
-      if (!hasText(wfType)) ri.add("workflow_type is required");
-      else if (!WORKFLOW_TYPES.contains(wfType))
+      if (!hasText(wfType)) {
+        ri.add("workflow_type is required");
+      }
+      else if (!WORKFLOW_TYPES.contains(wfType)) {
         ri.add("workflow_type must be one of " + WORKFLOW_TYPES);
-      if (!hasText(version)) ri.add("version is required");
+      }
+      if (!hasText(version)) {
+        ri.add("version is required");
+      }
       else {
         try {
           Integer.parseInt(version);
@@ -438,12 +522,13 @@ class ConfigPackageExcelValidator {
           ri.add("version must be integer");
         }
       }
-      if (hasText(wfCode)
-          && hasText(version)
-          && !seen.add(tenantId + KEY_SEP_HASH + wfCode + KEY_SEP_COLON + version))
+      if (hasText(wfCode) && hasText(version) && !seen.add(tenantId + KEY_SEP_HASH + wfCode + KEY_SEP_COLON + version)) {
         ri.add("duplicate workflow definition: " + wfCode + KEY_SEP_COLON + version);
+      }
       addIssues(ri, WF_DEF_SHEET, rowNo, issues);
-      if (ri.isEmpty()) valid.add(row);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
       rowNo++;
     }
     return new SheetResult(WF_DEF_SHEET, rows.size(), valid, issues);
@@ -468,16 +553,29 @@ class ConfigPackageExcelValidator {
       String wfCode = normalize(row.get(COL_WORKFLOW_CODE));
       String wfVersion = normalize(row.get(COL_WORKFLOW_VERSION));
       String nodeCode = normalize(row.get(COL_NODE_CODE));
-      if (!hasText(wfCode)) ri.add("workflow_code is required");
-      if (!hasText(wfVersion)) ri.add("workflow_version is required");
-      if (!hasText(nodeCode)) ri.add("node_code is required");
-      if (!hasText(normalize(row.get(COL_NODE_NAME)))) ri.add("node_name is required");
+      if (!hasText(wfCode)) {
+        ri.add("workflow_code is required");
+      }
+      if (!hasText(wfVersion)) {
+        ri.add("workflow_version is required");
+      }
+      if (!hasText(nodeCode)) {
+        ri.add("node_code is required");
+      }
+      if (!hasText(normalize(row.get(COL_NODE_NAME)))) {
+        ri.add("node_name is required");
+      }
       String nodeType = normalizeEnum(row.get(COL_NODE_TYPE));
-      if (!hasText(nodeType)) ri.add("node_type is required");
-      else if (!NODE_TYPES.contains(nodeType)) ri.add("node_type must be one of " + NODE_TYPES);
+      if (!hasText(nodeType)) {
+        ri.add("node_type is required");
+      }
+      else if (!NODE_TYPES.contains(nodeType)) {
+        ri.add("node_type must be one of " + NODE_TYPES);
+      }
       String retryPolicy = normalizeEnum(row.get(COL_RETRY_POLICY));
-      if (hasText(retryPolicy) && !RETRY_POLICIES.contains(retryPolicy))
+      if (hasText(retryPolicy) && !RETRY_POLICIES.contains(retryPolicy)) {
         ri.add("retry_policy must be one of " + RETRY_POLICIES);
+      }
       String nodeParams = row.get(COL_NODE_PARAMS);
       if (hasText(nodeParams)) {
         try {
@@ -487,15 +585,16 @@ class ConfigPackageExcelValidator {
         }
       }
       String wfKey = wfCode + KEY_SEP_COLON + wfVersion;
-      if (hasText(wfCode) && hasText(wfVersion) && !wfKeys.contains(wfKey))
+      if (hasText(wfCode) && hasText(wfVersion) && !wfKeys.contains(wfKey)) {
         ri.add("workflow node references missing definition: " + wfKey);
-      if (hasText(wfCode)
-          && hasText(wfVersion)
-          && hasText(nodeCode)
-          && !seen.add(wfKey + KEY_SEP_HASH + nodeCode))
+      }
+      if (hasText(wfCode) && hasText(wfVersion) && hasText(nodeCode) && !seen.add(wfKey + KEY_SEP_HASH + nodeCode)) {
         ri.add("duplicate node_code in workflow: " + nodeCode);
+      }
       addIssues(ri, WF_NODE_SHEET, rowNo, issues);
-      if (ri.isEmpty()) valid.add(row);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
       rowNo++;
     }
     return new SheetResult(WF_NODE_SHEET, rows.size(), valid, issues);
@@ -533,28 +632,39 @@ class ConfigPackageExcelValidator {
       String wfVersion = normalize(row.get(COL_WORKFLOW_VERSION));
       String fromNode = normalize(row.get(COL_FROM_NODE_CODE));
       String toNode = normalize(row.get(COL_TO_NODE_CODE));
-      if (!hasText(wfCode)) ri.add("workflow_code is required");
-      if (!hasText(wfVersion)) ri.add("workflow_version is required");
-      if (!hasText(fromNode)) ri.add("from_node_code is required");
-      if (!hasText(toNode)) ri.add("to_node_code is required");
+      if (!hasText(wfCode)) {
+        ri.add("workflow_code is required");
+      }
+      if (!hasText(wfVersion)) {
+        ri.add("workflow_version is required");
+      }
+      if (!hasText(fromNode)) {
+        ri.add("from_node_code is required");
+      }
+      if (!hasText(toNode)) {
+        ri.add("to_node_code is required");
+      }
       String edgeType = normalizeEnum(row.get(COL_EDGE_TYPE));
-      if (!hasText(edgeType)) ri.add("edge_type is required");
-      else if (!EDGE_TYPES.contains(edgeType)) ri.add("edge_type must be one of " + EDGE_TYPES);
+      if (!hasText(edgeType)) {
+        ri.add("edge_type is required");
+      }
+      else if (!EDGE_TYPES.contains(edgeType)) {
+        ri.add("edge_type must be one of " + EDGE_TYPES);
+      }
       String wfKey = wfCode + KEY_SEP_COLON + wfVersion;
-      if (hasText(wfCode) && hasText(wfVersion) && !wfKeys.contains(wfKey))
+      if (hasText(wfCode) && hasText(wfVersion) && !wfKeys.contains(wfKey)) {
         ri.add("workflow edge references missing definition: " + wfKey);
-      if (hasText(wfCode)
-          && hasText(wfVersion)
-          && hasText(fromNode)
-          && !nodeKeys.contains(wfKey + KEY_SEP_HASH + fromNode))
+      }
+      if (hasText(wfCode) && hasText(wfVersion) && hasText(fromNode) && !nodeKeys.contains(wfKey + KEY_SEP_HASH + fromNode)) {
         ri.add("from_node_code references unknown node: " + fromNode);
-      if (hasText(wfCode)
-          && hasText(wfVersion)
-          && hasText(toNode)
-          && !nodeKeys.contains(wfKey + KEY_SEP_HASH + toNode))
+      }
+      if (hasText(wfCode) && hasText(wfVersion) && hasText(toNode) && !nodeKeys.contains(wfKey + KEY_SEP_HASH + toNode)) {
         ri.add("to_node_code references unknown node: " + toNode);
+      }
       addIssues(ri, WF_EDGE_SHEET, rowNo, issues);
-      if (ri.isEmpty()) valid.add(row);
+      if (ri.isEmpty()) {
+        valid.add(row);
+      }
       rowNo++;
     }
     return new SheetResult(WF_EDGE_SHEET, rows.size(), valid, issues);
@@ -569,12 +679,12 @@ class ConfigPackageExcelValidator {
     Set<String> jobCodesInExcel =
         validJobs.stream()
             .map(r -> normalize(r.get(COL_JOB_CODE)))
-            .filter(StringUtils::hasText)
+            .filter(Texts::hasText)
             .collect(Collectors.toSet());
     Set<String> pipelineJobCodesInExcel =
         validPipelines.stream()
             .map(r -> normalize(r.get(COL_JOB_CODE)))
-            .filter(StringUtils::hasText)
+            .filter(Texts::hasText)
             .collect(Collectors.toSet());
     List<WorkbookIssue> issues = new ArrayList<>();
 
@@ -637,7 +747,7 @@ class ConfigPackageExcelValidator {
   }
 
   static boolean hasText(String value) {
-    return StringUtils.hasText(value);
+    return Texts.hasText(value);
   }
 
   private static void addIssues(

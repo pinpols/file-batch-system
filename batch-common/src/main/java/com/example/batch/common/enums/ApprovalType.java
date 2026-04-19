@@ -15,4 +15,4 @@ public enum ApprovalType implements DictEnum {
 
   private final String code;
   private final String label;
-  public String label() { return label; }}
+}

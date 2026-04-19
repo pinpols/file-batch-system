@@ -13,7 +13,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -65,7 +65,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     }
 
     String idempotencyKey = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
-    if (!StringUtils.hasText(idempotencyKey)) {
+    if (!Texts.hasText(idempotencyKey)) {
       // 标了 @Idempotent 的方法 fail-close：没 header 直接 400
       if (handler instanceof HandlerMethod hm
           && (hm.getMethodAnnotation(Idempotent.class) != null
@@ -125,7 +125,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
   private String resolveTenantId(HttpServletRequest request) {
     String tenantId = request.getHeader("X-Tenant-Id");
-    return StringUtils.hasText(tenantId) ? tenantId.trim() : "_";
+    return Texts.hasText(tenantId) ? tenantId.trim() : "_";
   }
 
   private void writeJson(HttpServletResponse response, HttpStatus httpStatus, String body)

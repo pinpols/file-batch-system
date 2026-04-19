@@ -70,7 +70,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -273,13 +273,15 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, String>> rows = new ArrayList<>();
     for (int i = headerRow.getRowNum() + 1; i <= sheet.getLastRowNum(); i++) {
       Row row = sheet.getRow(i);
-      if (row == null || isRowBlank(row, fmt)) continue;
+      if (row == null || isRowBlank(row, fmt)) {
+        continue;
+      }
       Map<String, String> values = new LinkedHashMap<>();
       for (String col : columns) {
         Integer colIdx = headerIndex.get(col);
         values.put(col, normalize(cellText(row, colIdx, fmt)));
       }
-      if (tenantId != null && !StringUtils.hasText(values.get(COL_TENANT_ID))) {
+      if (tenantId != null && !Texts.hasText(values.get(COL_TENANT_ID))) {
         values.put(COL_TENANT_ID, tenantId);
       }
       rows.add(values);
@@ -363,8 +365,12 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       param.setCreatedBy(safeOp(ctx.operatorId()));
       param.setUpdatedBy(safeOp(ctx.operatorId()));
       fileChannelConfigMapper.upsertFileChannelConfig(param);
-      if (existing == null || existing.isEmpty()) inserted++;
-      else updated++;
+      if (existing == null || existing.isEmpty()) {
+        inserted++;
+      }
+      else {
+        updated++;
+      }
     }
     return new ApplyStats(inserted, updated);
   }
@@ -392,8 +398,12 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       param.setCreatedBy(safeOp(ctx.operatorId()));
       param.setUpdatedBy(safeOp(ctx.operatorId()));
       alertRoutingConfigMapper.upsertAlertRoutingConfig(param);
-      if (existing == null || existing.isEmpty()) inserted++;
-      else updated++;
+      if (existing == null || existing.isEmpty()) {
+        inserted++;
+      }
+      else {
+        updated++;
+      }
     }
     return new ApplyStats(inserted, updated);
   }
@@ -474,12 +484,18 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       defParam.setCreatedBy(safeOp(ctx.operatorId()));
       defParam.setUpdatedBy(safeOp(ctx.operatorId()));
       workflowDefinitionMapper.upsertWorkflowDefinition(defParam);
-      if (existing == null) inserted++;
-      else updated++;
+      if (existing == null) {
+        inserted++;
+      }
+      else {
+        updated++;
+      }
 
       WorkflowDefinitionEntity saved =
           workflowDefinitionMapper.selectByUniqueKey(ctx.tenantId(), wfCode, version);
-      if (saved == null || saved.getId() == null) continue;
+      if (saved == null || saved.getId() == null) {
+        continue;
+      }
       Long defId = saved.getId();
       String wfKey = wfCode + KEY_SEP_COLON + version;
       applyWfNodes(defId, nodesByWf.getOrDefault(wfKey, List.of()));
@@ -734,7 +750,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   private static Integer parseInteger(String value) {
     String n = normalize(value);
-    if (!StringUtils.hasText(n)) return null;
+    if (!Texts.hasText(n)) {
+      return null;
+    }
     try {
       return Integer.parseInt(n);
     } catch (NumberFormatException e) {
@@ -744,10 +762,16 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   private static Boolean parseBoolean(String value, Boolean defaultValue) {
     String n = normalize(value);
-    if (!StringUtils.hasText(n)) return defaultValue;
+    if (!Texts.hasText(n)) {
+      return defaultValue;
+    }
     String upper = n.toUpperCase(Locale.ROOT);
-    if (Set.of("TRUE", "Y", "1", "YES").contains(upper)) return true;
-    if (Set.of("FALSE", "N", "0", "NO").contains(upper)) return false;
+    if (Set.of("TRUE", "Y", "1", "YES").contains(upper)) {
+      return true;
+    }
+    if (Set.of("FALSE", "N", "0", "NO").contains(upper)) {
+      return false;
+    }
     return defaultValue;
   }
 
@@ -759,7 +783,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     Map<String, Integer> index = new LinkedHashMap<>();
     for (int c = headerRow.getFirstCellNum(); c < headerRow.getLastCellNum(); c++) {
       String header = normalize(fmt.formatCellValue(headerRow.getCell(c)));
-      if (StringUtils.hasText(header)) index.put(header, c);
+      if (Texts.hasText(header)) {
+        index.put(header, c);
+      }
     }
     return index;
   }
@@ -776,19 +802,23 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   private static boolean isRowBlank(Row row, DataFormatter fmt) {
     for (int c = row.getFirstCellNum(); c < row.getLastCellNum(); c++) {
-      if (StringUtils.hasText(fmt.formatCellValue(row.getCell(c)))) return false;
+      if (Texts.hasText(fmt.formatCellValue(row.getCell(c)))) {
+        return false;
+      }
     }
     return true;
   }
 
   private static String cellText(Row row, Integer colIdx, DataFormatter fmt) {
-    if (colIdx == null) return null;
+    if (colIdx == null) {
+      return null;
+    }
     Cell cell = row.getCell(colIdx);
     return cell == null ? null : fmt.formatCellValue(cell);
   }
 
   private static String fileNameOrDefault(String originalFileName) {
-    return StringUtils.hasText(originalFileName) ? originalFileName : "tenant-config-package.xlsx";
+    return Texts.hasText(originalFileName) ? originalFileName : "tenant-config-package.xlsx";
   }
 
   private static ResponseEntity<InputStreamResource> excelResponse(String fileName, byte[] bytes) {

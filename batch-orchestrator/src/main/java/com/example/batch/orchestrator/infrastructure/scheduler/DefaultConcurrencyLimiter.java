@@ -11,7 +11,7 @@ import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCac
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 任务级并发闸门：按 job_instance 计数，3 层从宽到严依次短路。
@@ -39,7 +39,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
 
   @Override
   public ResourceCheck check(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
-    if (request == null || !StringUtils.hasText(request.getTenantId())) {
+    if (request == null || !Texts.hasText(request.getTenantId())) {
       return ResourceCheck.allow();
     }
 
@@ -80,7 +80,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
       return ResourceCheck.allow();
     }
 
-    if (StringUtils.hasText(quotaPolicy.fairShareGroup())
+    if (Texts.hasText(quotaPolicy.fairShareGroup())
         && quotaPolicy.groupSharedMaxRunningJobs() != null
         && quotaPolicy.groupSharedMaxRunningJobs() > 0) {
       long groupActive =
@@ -121,7 +121,7 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
   private ResourceCheck checkQueueLimit(
       ResourceSchedulingRequest request, ResourceQueueRecord queue) {
     if (queue == null
-        || !StringUtils.hasText(queue.queueCode())
+        || !Texts.hasText(queue.queueCode())
         || queue.maxRunningJobs() == null
         || queue.maxRunningJobs() <= 0) {
       return ResourceCheck.allow();

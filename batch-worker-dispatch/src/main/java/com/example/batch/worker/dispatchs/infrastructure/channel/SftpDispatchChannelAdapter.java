@@ -13,7 +13,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * SFTP 渠道分发适配器，将 {@code file_record} 引用的文件上传到 {@code sftp_remote_directory}。
@@ -63,7 +63,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     ConnectionConfig connConfig = resolveConnectionConfig(channelConfig);
     if (connConfig == null) {
       String host = stringProp(channelConfig, "sftp_host");
-      if (!StringUtils.hasText(host)) {
+      if (!Texts.hasText(host)) {
         return new DispatchResult(false, null, null, false, false, "sftp_host missing", null);
       }
       return new DispatchResult(
@@ -101,13 +101,13 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private ConnectionConfig resolveConnectionConfig(Map<String, Object> channelConfig) {
     String host = stringProp(channelConfig, "sftp_host");
-    if (!StringUtils.hasText(host)) {
+    if (!Texts.hasText(host)) {
       return null;
     }
     int port = intProp(channelConfig, "sftp_port", 22);
     String user = stringProp(channelConfig, "sftp_user");
     String password = stringProp(channelConfig, "sftp_password");
-    if (!StringUtils.hasText(user) || !StringUtils.hasText(password)) {
+    if (!Texts.hasText(user) || !Texts.hasText(password)) {
       return null;
     }
     return new ConnectionConfig(host, port, user, password);
@@ -116,14 +116,14 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
   private RemoteTarget resolveRemoteTarget(
       Map<String, Object> channelConfig, Map<String, Object> fileRecord) {
     String remoteDir = stringProp(channelConfig, "sftp_remote_directory");
-    if (!StringUtils.hasText(remoteDir)) {
+    if (!Texts.hasText(remoteDir)) {
       remoteDir = "/";
     }
     if (!remoteDir.endsWith("/")) {
       remoteDir = remoteDir + "/";
     }
     String remoteName = stringProp(channelConfig, "sftp_remote_file_name");
-    if (!StringUtils.hasText(remoteName)) {
+    if (!Texts.hasText(remoteName)) {
       remoteName =
           firstNonBlank(
               String.valueOf(fileRecord.getOrDefault("original_file_name", "")),
@@ -148,7 +148,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
             ctx.connConfig().host());
       } else {
         String knownHostsPath = stringProp(ctx.channelConfig(), "sftp_known_hosts_path");
-        if (StringUtils.hasText(knownHostsPath)) {
+        if (Texts.hasText(knownHostsPath)) {
           jsch.setKnownHosts(knownHostsPath);
         }
       }
@@ -209,17 +209,17 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     if (v instanceof Number n) {
       return n.intValue();
     }
-    if (v != null && StringUtils.hasText(String.valueOf(v))) {
+    if (v != null && Texts.hasText(String.valueOf(v))) {
       return Integer.parseInt(String.valueOf(v).trim());
     }
     return def;
   }
 
   private static String firstNonBlank(String a, String b) {
-    if (StringUtils.hasText(a)) {
+    if (Texts.hasText(a)) {
       return a.trim();
     }
-    if (StringUtils.hasText(b)) {
+    if (Texts.hasText(b)) {
       return b.trim();
     }
     return "file.bin";

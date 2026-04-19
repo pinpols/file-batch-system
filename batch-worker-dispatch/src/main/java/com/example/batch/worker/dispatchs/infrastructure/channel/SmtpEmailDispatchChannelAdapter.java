@@ -22,7 +22,7 @@ import java.util.Properties;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** SMTP 邮件分发适配器，将 {@code file_record} 中的文件作为附件通过 SMTP 发送。 */
 @Component
@@ -52,7 +52,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     MailConfig mailConfig = resolveMailConfig(channelConfig);
     if (mailConfig == null) {
       String host = stringProp(channelConfig, "smtp_host");
-      if (!StringUtils.hasText(host)) {
+      if (!Texts.hasText(host)) {
         return new DispatchResult(false, null, null, false, false, "smtp_host missing", null);
       }
       return new DispatchResult(
@@ -98,7 +98,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private MailConfig resolveMailConfig(Map<String, Object> channelConfig) {
     String host = stringProp(channelConfig, "smtp_host");
-    if (!StringUtils.hasText(host)) {
+    if (!Texts.hasText(host)) {
       return null;
     }
     int port = intProp(channelConfig, "smtp_port", 587);
@@ -110,7 +110,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     String to =
         firstNonBlank(
             stringProp(channelConfig, "mail_to"), stringProp(channelConfig, "target_endpoint"));
-    if (!StringUtils.hasText(from) || !StringUtils.hasText(to)) {
+    if (!Texts.hasText(from) || !Texts.hasText(to)) {
       return null;
     }
     return new MailConfig(host, port, smtpUser, smtpPass, startTls, from, to);
@@ -129,7 +129,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
     Map<String, Object> channelConfig = command.channelConfig();
     String subject = stringProp(channelConfig, "mail_subject");
-    if (!StringUtils.hasText(subject)) {
+    if (!Texts.hasText(subject)) {
       subject = "File dispatch " + externalRequestId;
     }
 
@@ -201,7 +201,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     if (v instanceof Number n) {
       return n.intValue();
     }
-    if (v != null && StringUtils.hasText(String.valueOf(v))) {
+    if (v != null && Texts.hasText(String.valueOf(v))) {
       return Integer.parseInt(String.valueOf(v).trim());
     }
     return def;
@@ -219,17 +219,17 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private static String firstNonBlank(String a, String b) {
-    if (StringUtils.hasText(a)) {
+    if (Texts.hasText(a)) {
       return a.trim();
     }
-    if (StringUtils.hasText(b)) {
+    if (Texts.hasText(b)) {
       return b.trim();
     }
     return "";
   }
 
   private static String sanitizeAttachmentSuffix(String fileName) {
-    if (!StringUtils.hasText(fileName)) {
+    if (!Texts.hasText(fileName)) {
       return "attachment.bin";
     }
     return fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
@@ -250,7 +250,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     private final String mimeType;
 
     private SingleMimeTypeFileTypeMap(String mimeType) {
-      this.mimeType = StringUtils.hasText(mimeType) ? mimeType : "application/octet-stream";
+      this.mimeType = Texts.hasText(mimeType) ? mimeType : "application/octet-stream";
     }
 
     @Override

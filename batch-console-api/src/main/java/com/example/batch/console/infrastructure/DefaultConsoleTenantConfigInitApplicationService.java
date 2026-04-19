@@ -226,7 +226,9 @@ public class DefaultConsoleTenantConfigInitApplicationService
 
   /** 公共 apply 模板：封装"查找 → 跳过/更新/创建"循环和异常收集，消除 10 个 apply* 方法中的重复代码。 */
   private <T, E> ItemStats applySpecs(List<T> specs, ApplyContext ctx, SpecHandler<T, E> handler) {
-    if (specs == null || specs.isEmpty()) return ItemStats.empty();
+    if (specs == null || specs.isEmpty()) {
+      return ItemStats.empty();
+    }
     ItemStatsAccumulator acc = new ItemStatsAccumulator();
     for (T spec : specs) {
       String code = handler.code(spec);
@@ -234,13 +236,17 @@ public class DefaultConsoleTenantConfigInitApplicationService
         Optional<E> existing = handler.find(ctx.tenantId(), spec);
         if (existing.isPresent()) {
           if (ctx.mode() == InitMode.UPSERT) {
-            if (!ctx.dryRun()) handler.update(ctx, spec, existing.get());
+            if (!ctx.dryRun()) {
+              handler.update(ctx, spec, existing.get());
+            }
             acc.recordUpdated(code);
           } else {
             acc.recordSkipped(code);
           }
         } else {
-          if (!ctx.dryRun()) handler.insert(ctx, spec);
+          if (!ctx.dryRun()) {
+            handler.insert(ctx, spec);
+          }
           acc.recordCreated(code);
         }
       } catch (Exception ex) {

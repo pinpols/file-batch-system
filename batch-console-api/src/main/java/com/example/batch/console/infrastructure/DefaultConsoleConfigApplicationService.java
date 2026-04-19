@@ -36,7 +36,7 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 配置发布单 + 密钥版本治理服务：通过本地 Mapper 维护租户作用域下的 config_release、secret_version
@@ -206,7 +206,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     secretVersionMapper.deactivateCurrentVersion(
         mapOf(KEY_TENANT_ID, tenantId, "secretRef", request.getSecretRef()));
     String nextStatus =
-        StringUtils.hasText(request.getSecretStatus())
+        Texts.hasText(request.getSecretStatus())
             ? request.getSecretStatus().trim().toUpperCase()
             : ConfigLifecycleStatus.PUBLISHED.code();
     secretVersionMapper.insertSecretVersion(
@@ -290,7 +290,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
             ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64));
     configReleaseMapper.updateConfigReleaseStatus(params);
     if (ConfigLifecycleStatus.GRAY.code().equals(nextStatus)
-        && StringUtils.hasText(request.getGrayScopeJson())) {
+        && Texts.hasText(request.getGrayScopeJson())) {
       validateJson(request.getGrayScopeJson(), KEY_GRAY_SCOPE_JSON);
       configReleaseMapper.updateGrayScope(
           mapOf(
@@ -350,7 +350,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   }
 
   private void validateJson(String value, String fieldName) {
-    if (!StringUtils.hasText(value)) {
+    if (!Texts.hasText(value)) {
       return;
     }
     Object parsed = JsonUtils.fromJson(value, Object.class);
@@ -360,7 +360,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   }
 
   private Instant parseInstant(String value, String fieldName) {
-    if (!StringUtils.hasText(value)) {
+    if (!Texts.hasText(value)) {
       return null;
     }
     try {

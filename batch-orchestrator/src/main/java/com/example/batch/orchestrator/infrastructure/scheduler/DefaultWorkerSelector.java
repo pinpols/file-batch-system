@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Worker 路由选择：从 ONLINE worker 中挑一个承接任务。
@@ -43,13 +43,13 @@ public class DefaultWorkerSelector implements WorkerSelector {
     route.setWorkerType(request == null ? null : request.getWorkerType());
     route.setPriority(priority);
     route.setResourceProfile(queue == null ? null : queue.resourceTag());
-    if (request == null || !StringUtils.hasText(request.getTenantId())) {
+    if (request == null || !Texts.hasText(request.getTenantId())) {
       route.setAvailable(false);
       return route;
     }
     String workerGroup = resolveWorkerGroup(request, queue);
     List<WorkerRegistryRecord> candidates =
-        StringUtils.hasText(workerGroup)
+        Texts.hasText(workerGroup)
             ? workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
                 request.getTenantId(), workerGroup, WorkerRegistryStatus.ONLINE.code())
             : workerRegistryRepository.findByTenantIdAndStatus(
@@ -74,14 +74,14 @@ public class DefaultWorkerSelector implements WorkerSelector {
   }
 
   private boolean matchesResourceTag(WorkerRegistryRecord candidate, ResourceQueueRecord queue) {
-    if (queue == null || !StringUtils.hasText(queue.resourceTag())) {
+    if (queue == null || !Texts.hasText(queue.resourceTag())) {
       return true;
     }
     return queue.resourceTag().equalsIgnoreCase(candidate.resourceTag());
   }
 
   private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
-    if (request != null && StringUtils.hasText(request.getWorkerGroup())) {
+    if (request != null && Texts.hasText(request.getWorkerGroup())) {
       return request.getWorkerGroup();
     }
     return queue == null ? null : queue.workerGroup();

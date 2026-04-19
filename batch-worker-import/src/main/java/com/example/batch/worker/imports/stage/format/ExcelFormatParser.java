@@ -19,7 +19,7 @@ import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler;
 import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler.SheetContentsHandler;
 import org.apache.poi.xssf.model.StylesTable;
 import org.apache.poi.xssf.usermodel.XSSFComment;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
@@ -163,7 +163,7 @@ public class ExcelFormatParser implements FormatParser {
     if (v instanceof Number number) {
       return Math.max(0, number.intValue());
     }
-    if (v != null && StringUtils.hasText(String.valueOf(v))) {
+    if (v != null && Texts.hasText(String.valueOf(v))) {
       return Math.max(0, Integer.parseInt(String.valueOf(v).trim()));
     }
     if (templateConfigObject instanceof Map<?, ?> map) {
@@ -292,7 +292,7 @@ public class ExcelFormatParser implements FormatParser {
 
     private boolean isAllBlank(List<String> cells) {
       for (String c : cells) {
-        if (c != null && StringUtils.hasText(c.trim())) {
+        if (c != null && Texts.hasText(c.trim())) {
           return false;
         }
       }
