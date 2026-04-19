@@ -10,7 +10,7 @@
 | **worker-import** | **KEDA** by Kafka lag | consumer lag > 20 | `enabled: false` | KEDA 直接读消费滞后，比 CPU 准 |
 | **worker-export** | **KEDA** by Kafka lag | consumer lag > 20 | `enabled: false` | 同上 |
 | **worker-dispatch** | **KEDA** by Kafka lag | consumer lag > 10 | `enabled: false` | 单 dispatch 较重，阈值更小 |
-| **orchestrator** | **静态 `replicaCount` + 手工 helm upgrade** | — | 2 副本 | Outbox 分片架构约束，下文详述 |
+| **orchestrator** | **静态分片（默认）/ DYNAMIC + CPU HPA 或 KEDA Postgres backlog** | CPU % 或 Outbox 积压 | 2 副本 | 切到 `sharding.mode=dynamic` 才能安全自动扩，下文详述 |
 | **trigger** | **静态 HA 2 副本** | — | 1 副本（生产改 2） | Quartz 集群锁天然决定 |
 
 **关键洞察**：**不是所有模块都该自动扩**。Worker / console 是纯执行/服务层，自动扩合理；orchestrator / trigger 是协调层，自动扩反而有害或无效。
@@ -112,7 +112,16 @@ batch:
 
 - 扩容：`kubectl scale sts batch-orchestrator --replicas=4` 后 30s 内新 Pod 心跳注册，所有 Pod 自动重算 shard
 - 缩容：Pod 优雅停机 → 心跳停 → 30s 后其他 Pod 感知，自动吸收该 shard 的数据
-- 可以开 HPA：orchestrator 理论上能接 HPA 了（用 Outbox backlog 做触发信号，类似 worker 的 KEDA 思路）
+- **HPA 已接入 Helm 模板**（默认 `enabled: false`，开 dynamic 后打开即可）：
+  - CPU HPA：`orchestrator.hpa.enabled=true`（min 2 / max 6 / CPU 70%）
+  - KEDA Postgres backlog：`orchestrator.keda.enabled=true`，按 `outbox_event` 中 `NEW+FAILED` 行数触发，阈值默认 200。需先创建 Secret：
+
+    ```bash
+    kubectl -n batch-prod create secret generic batch-keda-postgres \
+      --from-literal=connection='host=postgresql port=5432 user=batch_user password=<pwd> dbname=batch_business sslmode=disable'
+    ```
+
+  - 守护：模板里 `hpa` / `keda` 渲染都带 `sharding.mode=dynamic` 前置判断，static 下不会创建（避免扩容炸分片）
 
 ### 保留 STATIC 为默认的理由
 
