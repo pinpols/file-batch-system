@@ -9,8 +9,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.batch.common.utils.Texts;
 
@@ -30,8 +33,8 @@ import com.example.batch.common.utils.Texts;
  *
  * <p>注意：使用了突发容量后必须持久化状态，防止 {@code lastUpdatedAt} 漂移导致窗口过期误判。
  */
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class QuotaRuntimeStateService {
 
   public record QuotaRuntimeSnapshot(
@@ -45,6 +48,18 @@ public class QuotaRuntimeStateService {
 
   private final QuotaRuntimeStateRepository quotaRuntimeStateRepository;
   private final BatchTimezoneProvider timezoneProvider;
+  // C-2.8：自引用，供 reconcileExpiredStates 内触发 REQUIRES_NEW 子事务。
+  // 通过 ObjectProvider 打破 bean 循环依赖，并拿到 Spring 代理后的实例。
+  private final ObjectProvider<QuotaRuntimeStateService> selfProvider;
+
+  public QuotaRuntimeStateService(
+      QuotaRuntimeStateRepository quotaRuntimeStateRepository,
+      BatchTimezoneProvider timezoneProvider,
+      ObjectProvider<QuotaRuntimeStateService> selfProvider) {
+    this.quotaRuntimeStateRepository = quotaRuntimeStateRepository;
+    this.timezoneProvider = timezoneProvider;
+    this.selfProvider = selfProvider;
+  }
 
   public record QuotaReservationOwner(String tenantId, String quotaScope, String ownerCode) {}
 
@@ -168,14 +183,43 @@ public class QuotaRuntimeStateService {
         state.lastResetAt());
   }
 
-  @Transactional
+  /**
+   * C-2.8：外层方法不包事务，逐条过期状态走 REQUIRES_NEW 子事务（{@link #reconcileOne}），
+   * 单条 CAS 冲突只跳过该条，不让一次乐观锁失败扳倒整批 reconcile。
+   */
   public void reconcileExpiredStates(int slidingWindowHours) {
     Instant now = Instant.now();
     List<QuotaRuntimeStateRecord> expired = quotaRuntimeStateRepository.findExpired(now);
+    QuotaRuntimeStateService self = selfProvider.getObject();
     for (QuotaRuntimeStateRecord state : expired) {
-      QuotaResetPolicy policy = QuotaResetPolicy.from(state.quotaResetPolicy());
-      refreshState(state, policy, now, slidingWindowHours, true);
+      try {
+        self.reconcileOne(state, now, slidingWindowHours);
+      } catch (OptimisticLockingFailureException conflict) {
+        // 另一个节点刚抢先重置了该状态，下一 tick 扫不到即自愈，无需重试
+        log.debug(
+            "quota state optimistic lock conflict during reconcile; will retry next tick:"
+                + " tenantId={}, scope={}, owner={}, id={}",
+            state.tenantId(),
+            state.quotaScope(),
+            state.ownerCode(),
+            state.id());
+      } catch (RuntimeException ex) {
+        // 单条异常只影响自己；记录后继续扫其他条
+        log.warn(
+            "quota state reconcile failed: tenantId={}, scope={}, owner={}, id={}, cause={}",
+            state.tenantId(),
+            state.quotaScope(),
+            state.ownerCode(),
+            state.id(),
+            ex.getMessage());
+      }
     }
+  }
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void reconcileOne(QuotaRuntimeStateRecord state, Instant now, int slidingWindowHours) {
+    QuotaResetPolicy policy = QuotaResetPolicy.from(state.quotaResetPolicy());
+    refreshState(state, policy, now, slidingWindowHours, true);
   }
 
   private record StateContext(

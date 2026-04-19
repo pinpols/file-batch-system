@@ -21,6 +21,21 @@
            and channel_code = #{channelCode}
     </select>
 
+    <!--
+      A-3.9: 半开 CAS——原子地将 next_probe_at 推到未来（即"抢到探针机会"）。
+      仅当当前 next_probe_at <= :now 且状态非 HEALTHY 时才更新，返回受影响行数 0/1；
+      1 表示本线程获得半开通行证，可以放行一次真实分发作为隐式探针。
+    -->
+    <update id="tryClaimHalfOpenProbe" parameterType="map">
+        update batch.file_channel_health
+           set next_probe_at = #{newNextProbeAt},
+               updated_at    = current_timestamp
+         where tenant_id   = #{tenantId}
+           and channel_code = #{channelCode}
+           and (next_probe_at is null or next_probe_at &lt;= #{now})
+           and health_status &lt;&gt; 'HEALTHY'
+    </update>
+
     <insert id="upsertHealth" parameterType="map">
         insert into batch.file_channel_health (
             tenant_id, channel_code, channel_type, health_status, consecutive_failures,

@@ -68,10 +68,9 @@ public class DispatchChannelHealthService {
     if (!properties.isEnabled() || channelConfig == null || channelConfig.isEmpty()) {
       return true;
     }
-    DispatchChannelHealthSnapshot snapshot =
-        repository.findHealth(
-            stringValue(channelConfig.get("tenant_id")),
-            stringValue(channelConfig.get("channel_code")));
+    String tenantId = stringValue(channelConfig.get("tenant_id"));
+    String channelCode = stringValue(channelConfig.get("channel_code"));
+    DispatchChannelHealthSnapshot snapshot = repository.findHealth(tenantId, channelCode);
     if (snapshot == null) {
       return true;
     }
@@ -81,8 +80,22 @@ public class DispatchChannelHealthService {
     if (snapshot.nextProbeAt() == null) {
       return false;
     }
-    // backoff 到期后放行一次，让真实分发充当 half-open 探针
-    return !Instant.now().isBefore(snapshot.nextProbeAt());
+    Instant now = Instant.now();
+    if (now.isBefore(snapshot.nextProbeAt())) {
+      return false; // 仍在 backoff 窗口
+    }
+    // A-3.9：半开阶段只让一个线程拿到探针机会——CAS 把 next_probe_at 推到未来，
+    // 失败即说明另一线程已抢到通行证。holdMillis 覆盖典型 dispatch 最长耗时，
+    // 防止本线程还没 recordDispatchOutcome 就又有新线程通过。
+    Instant hold = now.plusMillis(Math.max(1_000L, properties.getHalfOpenHoldMillis()));
+    boolean claimed = repository.tryClaimHalfOpenProbe(tenantId, channelCode, now, hold);
+    if (!claimed && log.isDebugEnabled()) {
+      log.debug(
+          "half-open probe slot already taken by another worker: tenantId={}, channelCode={}",
+          tenantId,
+          channelCode);
+    }
+    return claimed;
   }
 
   public void recordDispatchOutcome(
