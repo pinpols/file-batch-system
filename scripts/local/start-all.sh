@@ -39,7 +39,8 @@ DOCKER_LOG_DIR="$LOG_ROOT/docker"
 LOG_DIR="$LOG_ROOT/app"
 mkdir -p "$LOG_DIR" "$DOCKER_LOG_DIR"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
-mkdir -p "$RUNTIME_JAR_DIR"
+CDS_DIR="$ROOT/build/cds"
+mkdir -p "$RUNTIME_JAR_DIR" "$CDS_DIR"
 PID_FILE="$LOG_ROOT/start-all.pids"
 PID_FILE_NEW="$(mktemp "$LOG_ROOT/start-all.pids.XXXXXX")"
 trap 'rm -f "$PID_FILE_NEW"' EXIT
@@ -72,6 +73,57 @@ module_jar() {
   printf '%s' "$jar"
 }
 
+# AppCDS：首次 training run 生成 .jsa；后续启动 mmap 复用
+# 训练期禁用外部依赖（Flyway/Quartz/Kafka listener）减少失败面
+# SKIP_CDS=1 可关；jar 新于 .jsa 时自动重训
+__CDS_FLAG=""
+warm_cds() {
+  __CDS_FLAG=""
+  local name="$1" jar="$2"
+  local archive="$CDS_DIR/${name}.jsa"
+
+  if [[ "${SKIP_CDS:-0}" == "1" ]]; then
+    return 0
+  fi
+  if [[ -f "$archive" && "$jar" -ot "$archive" ]]; then
+    __CDS_FLAG="-XX:SharedArchiveFile=$archive"
+    return 0
+  fi
+
+  echo "  预热 CDS 缓存 ${name}（首次约 15-30s，构建后会重训）..."
+  local warm_log="$LOG_DIR/${name}-cds-warmup.log"
+  rm -f "$archive"
+  java --enable-native-access=ALL-UNNAMED \
+    ${LOCAL_FAST_JVM_OPTS} \
+    -Dspring.context.exit=onRefresh \
+    -Dspring.main.banner-mode=off \
+    -Dspring.flyway.enabled=false \
+    -Dspring.quartz.auto-startup=false \
+    -Dspring.kafka.listener.auto-startup=false \
+    -XX:ArchiveClassesAtExit="$archive" \
+    -jar "$jar" --spring.profiles.active=local \
+    >"$warm_log" 2>&1 &
+  local pid=$! elapsed=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( elapsed >= 120 )); then
+      kill -9 "$pid" 2>/dev/null
+      rm -f "$archive"
+      echo "  ⚠  ${name} CDS 预热超时（>120s），跳过 → $warm_log"
+      return 1
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  wait "$pid" 2>/dev/null || true
+
+  if [[ -f "$archive" ]]; then
+    echo "  ✓ ${name} CDS 缓存就绪 ($(du -h "$archive" 2>/dev/null | cut -f1))"
+    __CDS_FLAG="-XX:SharedArchiveFile=$archive"
+  else
+    echo "  ⚠  ${name} CDS 预热未生成 .jsa，跳过 → $warm_log"
+  fi
+}
+
 start_java() {
   local name="$1"
   local jar="$2"
@@ -83,8 +135,10 @@ start_java() {
     return 0
   fi
 
+  warm_cds "$name" "$jar"
+
   # Java 25+：Netty 等会调用 System::loadLibrary；显式允许 unnamed 模块原生访问，避免启动期 WARNING
-  nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >"$LOG_DIR/${name}.log" 2>&1 &
+  nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${__CDS_FLAG} ${JAVA_OPTS:-} -jar "$jar" --spring.profiles.active=local >"$LOG_DIR/${name}.log" 2>&1 &
   local pid=$!
   printf '%s\t%s\t%s\n' "$name" "$pid" "$jar" >>"$PID_FILE_NEW"
   echo "  已启动 ${name} pid=${pid} 运行包 build/runtime-jars/${name}.jar 日志 logs/app/${name}.log"
