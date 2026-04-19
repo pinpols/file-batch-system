@@ -522,18 +522,20 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
 
   private Map<String, Object> buildPipelineInsertParams(Map<String, String> row, ApplyContext ctx) {
+    // PipelineDefinitionMapper.xml 的 insert/update 绑定是 snake_case（#{tenant_id} 等），
+    // 这里 key 必须与之一致，否则 MyBatis 找不到变量 → 绑 null → 撞 NOT NULL 约束 500。
     Map<String, Object> p = new LinkedHashMap<>();
-    p.put("tenantId", ctx.tenantId());
-    p.put("jobCode", normalize(row.get(COL_JOB_CODE)));
-    p.put("pipelineName", normalize(row.get(COL_PIPELINE_NAME)));
-    p.put("pipelineType", normalizeEnum(row.get(COL_PIPELINE_TYPE)));
-    p.put("bizType", normalize(row.get(COL_BIZ_TYPE)));
-    p.put("workerGroup", normalize(row.get(COL_WORKER_GROUP)));
+    p.put("tenant_id", ctx.tenantId());
+    p.put("job_code", normalize(row.get(COL_JOB_CODE)));
+    p.put("pipeline_name", normalize(row.get(COL_PIPELINE_NAME)));
+    p.put("pipeline_type", normalizeEnum(row.get(COL_PIPELINE_TYPE)));
+    p.put("biz_type", normalize(row.get(COL_BIZ_TYPE)));
+    p.put("worker_group", normalize(row.get(COL_WORKER_GROUP)));
     p.put(COL_VERSION, parseInteger(row.get(COL_VERSION)));
     p.put(COL_ENABLED, parseBoolean(row.get(COL_ENABLED), true));
     p.put(COL_DESCRIPTION, normalize(row.get(COL_DESCRIPTION)));
-    p.put("createdBy", safeOp(ctx.operatorId()));
-    p.put("updatedBy", safeOp(ctx.operatorId()));
+    p.put("created_by", safeOp(ctx.operatorId()));
+    p.put("updated_by", safeOp(ctx.operatorId()));
     p.put(KEY_ID, null);
     return p;
   }
@@ -546,17 +548,18 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   }
 
   private Map<String, Object> buildStepInsertParams(Long pipelineId, Map<String, String> step) {
+    // PipelineStepDefinitionMapper.xml 的 insert 绑定也是 snake_case
     Map<String, Object> p = new LinkedHashMap<>();
-    p.put("pipelineDefinitionId", pipelineId);
-    p.put("stepCode", normalize(step.get(COL_STEP_CODE)));
-    p.put("stepName", normalize(step.get(COL_STEP_NAME)));
-    p.put("stageCode", normalizeEnum(step.get(COL_STAGE_CODE)));
-    p.put("stepOrder", parseInteger(step.get("step_order")));
-    p.put("implCode", normalize(step.get("impl_code")));
-    p.put("stepParams", normalize(step.get("step_params")));
-    p.put("timeoutSeconds", parseInteger(step.get(COL_TIMEOUT_SECONDS)));
-    p.put("retryPolicy", normalizeEnum(step.get(COL_RETRY_POLICY)));
-    p.put("retryMaxCount", parseInteger(step.get(COL_RETRY_MAX_COUNT)));
+    p.put("pipeline_definition_id", pipelineId);
+    p.put("step_code", normalize(step.get(COL_STEP_CODE)));
+    p.put("step_name", normalize(step.get(COL_STEP_NAME)));
+    p.put("stage_code", normalizeEnum(step.get(COL_STAGE_CODE)));
+    p.put("step_order", parseInteger(step.get("step_order")));
+    p.put("impl_code", normalize(step.get("impl_code")));
+    p.put("step_params", normalize(step.get("step_params")));
+    p.put("timeout_seconds", parseInteger(step.get(COL_TIMEOUT_SECONDS)));
+    p.put("retry_policy", normalizeEnum(step.get(COL_RETRY_POLICY)));
+    p.put("retry_max_count", parseInteger(step.get(COL_RETRY_MAX_COUNT)));
     p.put(COL_ENABLED, parseBoolean(step.get(COL_ENABLED), true));
     return p;
   }
