@@ -5,6 +5,12 @@ services:
     image: postgres:${POSTGRES_IMAGE_TAG}
     container_name: batch-postgres
     restart: unless-stopped
+    # 默认 max_connections=100 不够：6 模块 × (platform + business) × Hikari 池
+    # 本地联调叠加就会炸 "too many clients already"。调到 300 留足余量。
+    command:
+      - postgres
+      - -c
+      - max_connections=300
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
