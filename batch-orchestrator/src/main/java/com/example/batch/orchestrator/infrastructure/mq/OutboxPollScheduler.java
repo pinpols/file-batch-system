@@ -7,6 +7,8 @@ import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignment;
+import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -62,6 +64,7 @@ public class OutboxPollScheduler {
   private final LockingTaskExecutor lockingTaskExecutor;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final OutboxEventMapper outboxEventMapper;
+  private final ShardAssignmentProvider shardAssignmentProvider;
 
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong currentIntervalMillis = new AtomicLong(0);
@@ -70,9 +73,10 @@ public class OutboxPollScheduler {
 
   @PostConstruct
   public void start() {
-    // #10-2: 启动时校验分片配置合法性
     OutboxProperties outbox = governance.outbox();
-    if (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal()) {
+    // STATIC 模式下校验 ENV 里的 shard 配置合法性；DYNAMIC 模式下由 ShardAssignmentProvider 保证
+    if (outbox.getShardingMode() == OutboxProperties.ShardingMode.STATIC
+        && (outbox.getShardIndex() < 0 || outbox.getShardIndex() >= outbox.getShardTotal())) {
       throw new IllegalStateException(
           "Outbox 分片配置非法：shardIndex="
               + outbox.getShardIndex()
@@ -90,13 +94,15 @@ public class OutboxPollScheduler {
     long initialDelay = outbox.getMinPollIntervalMillis();
     currentIntervalMillis.set(initialDelay);
     executor.schedule(this::pollAndReschedule, initialDelay, TimeUnit.MILLISECONDS);
+    ShardAssignment initial = shardAssignmentProvider.current();
     log.info(
-        "OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x shard={}/{}",
+        "OutboxPollScheduler 已启动（自适应模式）：min={}ms max={}ms backoff={}x mode={} shard={}/{}",
         outbox.getMinPollIntervalMillis(),
         outbox.getPollIntervalMillis(),
         outbox.getBackoffMultiplier(),
-        outbox.getShardIndex(),
-        outbox.getShardTotal());
+        outbox.getShardingMode(),
+        initial.shardIndex(),
+        initial.shardTotal());
   }
 
   @PreDestroy
@@ -170,9 +176,10 @@ public class OutboxPollScheduler {
     OutboxProperties outbox = governance.outbox();
     // #1-1: 每轮开始前将超时的 PUBLISHING 事件重置为 FAILED，防止 Kafka 投递失败后事件永久卡死
     resetStalePublishingEvents(outbox);
+    ShardAssignment assignment = shardAssignmentProvider.current();
     SchedulePlan plan = new SchedulePlan();
-    plan.setShardTotal(outbox.getShardTotal());
-    plan.setShardIndex(outbox.getShardIndex());
+    plan.setShardTotal(assignment.shardTotal());
+    plan.setShardIndex(assignment.shardIndex());
     ScheduleForwarderResult result = scheduleForwarder.advance(plan);
     outboxPublishCircuitBreaker.onAdvanceResult(result == null ? 0 : result.totalFailures());
     return result;
@@ -230,11 +237,17 @@ public class OutboxPollScheduler {
     }
   }
 
-  /** shardTotal = 1（默认）：lock name 为 "outbox_poll"，与原行为完全兼容。 shardTotal > 1：每个分片独立持锁，允许多实例并行。 */
+  /**
+   * shardTotal = 1：lock name 为 "outbox_poll"，与原行为完全兼容。 shardTotal > 1：每个分片独立持锁，允许多实例并行。
+   *
+   * <p>DYNAMIC 模式下每轮都重新查询分配；rebalance 期间可能有短暂重叠，由 Outbox 事件幂等设计兜底。
+   */
   private LockConfiguration lockConfig() {
-    int shardTotal = governance.outbox().getShardTotal();
+    ShardAssignment assignment = shardAssignmentProvider.current();
     String lockName =
-        shardTotal > 1 ? "outbox_poll_shard_" + governance.outbox().getShardIndex() : "outbox_poll";
+        assignment.shardTotal() > 1
+            ? "outbox_poll_shard_" + assignment.shardIndex()
+            : "outbox_poll";
     Instant now = Instant.now();
     return new LockConfiguration(now, lockName, LOCK_AT_MOST, LOCK_AT_LEAST);
   }

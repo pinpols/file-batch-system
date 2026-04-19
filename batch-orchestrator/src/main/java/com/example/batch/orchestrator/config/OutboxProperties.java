@@ -49,4 +49,33 @@ public class OutboxProperties {
   private int shardTotal = 1;
 
   private int shardIndex = 0;
+
+  /**
+   * Shard 分配来源：
+   *
+   * <ul>
+   *   <li>{@link ShardingMode#STATIC}（默认）：读 {@link #shardTotal} / {@link #shardIndex} ENV，
+   *       扩缩容需 helm upgrade + 滚动重启
+   *   <li>{@link ShardingMode#DYNAMIC}：Redis 协调活跃 Pod，HPA 扩缩时自动 rebalance
+   * </ul>
+   */
+  private ShardingMode shardingMode = ShardingMode.STATIC;
+
+  private Sharding sharding = new Sharding();
+
+  public enum ShardingMode {
+    STATIC,
+    DYNAMIC
+  }
+
+  /** Sharding 协调子配置（DYNAMIC 模式下生效）。 */
+  @Data
+  public static class Sharding {
+    /** 心跳间隔（毫秒），每个 Pod 按此频率把自己写进 Redis 存活集合。 */
+    private long heartbeatIntervalMs = 5000L;
+    /** 成员 TTL（毫秒）；超过此时长未心跳的 Pod 被视为死亡，从集合移除。 */
+    private long memberTtlMs = 30000L;
+    /** 当前 Pod 的稳定标识；留空时自动用 POD_NAME（K8s Downward API）或 hostname。 */
+    private String memberId = "";
+  }
 }
