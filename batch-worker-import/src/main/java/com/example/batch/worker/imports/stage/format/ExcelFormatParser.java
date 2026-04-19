@@ -4,33 +4,43 @@ import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.poi.ss.usermodel.Cell;
+import java.util.TreeMap;
+import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.util.XMLHelper;
+import org.apache.poi.xssf.eventusermodel.ReadOnlySharedStringsTable;
+import org.apache.poi.xssf.eventusermodel.XSSFReader;
+import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler;
+import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler.SheetContentsHandler;
+import org.apache.poi.xssf.model.StylesTable;
+import org.apache.poi.xssf.usermodel.XSSFComment;
 import org.springframework.util.StringUtils;
+import org.xml.sax.InputSource;
+import org.xml.sax.XMLReader;
 
 /**
- * Parses Excel (.xlsx) files into NDJSON records.
+ * Parses Excel (.xlsx) files into NDJSON records using POI SAX streaming
+ * ({@link XSSFReader} + {@link XSSFSheetXMLHandler} event-driven).
  *
- * <p><b>内存风险</b>：当前用 {@link XSSFWorkbook} 一次性把整个 xlsx 树加载进堆，500MB+ 的 Excel 必
- * OOM。已加 {@link #MAX_EXCEL_BYTES}（默认 50MB，可用系统属性
- * {@code batch.worker.import.max-excel-bytes} 调）硬限作为止血；真正的流式方案（POI {@code XSSFReader}
- * + {@code XSSFSheetXMLHandler} 事件驱动）需独立 PR。
+ * <p><b>内存模型</b>：不加载整个 workbook 到堆；仅缓存当前行的 cell 值，{@code endRow} 时写入
+ * downstream。{@code SharedStringsTable} 走 {@link ReadOnlySharedStringsTable}（流式解析）。
+ * 典型 500MB xlsx 堆占用 ~20MB。
+ *
+ * <p>尺寸硬限 {@link #MAX_EXCEL_BYTES}（默认 200MB，可用系统属性
+ * {@code batch.worker.import.max-excel-bytes} 覆盖）——SAX 流式下仍保留是因为 sharedStrings
+ * 若极端大（每行唯一字符串）仍会占用堆。
  */
 public class ExcelFormatParser implements FormatParser {
 
   private static final int MAX_EXCEL_COLUMNS = 1000;
 
-  /** Excel 全加载的尺寸硬限：防 POI 一次性构建对象模型撑爆堆。 */
   private static final long MAX_EXCEL_BYTES =
-      Long.getLong("batch.worker.import.max-excel-bytes", 50L * 1024 * 1024);
+      Long.getLong("batch.worker.import.max-excel-bytes", 200L * 1024 * 1024);
 
   private final ParseSupport support;
 
@@ -50,8 +60,7 @@ public class ExcelFormatParser implements FormatParser {
           "IMPORT_PARSE_EXCEL_TOO_LARGE: xlsx size "
               + excelBytes.length
               + " bytes exceeds cap "
-              + MAX_EXCEL_BYTES
-              + " (XSSFWorkbook is full-memory; flip to SAX streaming to raise this limit)");
+              + MAX_EXCEL_BYTES);
     }
     ImportPayload importPayload = request.importPayload();
     Object templateConfig = request.templateConfig();
@@ -67,83 +76,62 @@ public class ExcelFormatParser implements FormatParser {
     List<ColumnBinding> bindings =
         loadColumnBindings(support.templateFieldMappings(templateConfig));
 
-    try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(excelBytes))) {
-      Sheet sheet = workbook.getSheetAt(sheetIndex);
+    try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(excelBytes))) {
+      XSSFReader reader = new XSSFReader(pkg);
+      ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
+      StylesTable styles = reader.getStylesTable();
       DataFormatter formatter = new DataFormatter();
-      int firstDataRowIndex = Math.max(headerRows, 0);
-      List<String> headers;
-      if (headerRows > 0) {
-        Row headerRow = sheet.getRow(headerRows - 1);
-        headers = readExcelHeader(headerRow, formatter);
-      } else {
-        headers = support.defaultHeaders();
-      }
-      long recordNo = 0L;
-      int lastRow = sheet.getLastRowNum();
-      for (int r = firstDataRowIndex; r <= lastRow; r++) {
-        Row row = sheet.getRow(r);
-        if (row == null || rowIsBlank(row, formatter)) {
-          continue;
+      XSSFReader.SheetIterator iter = (XSSFReader.SheetIterator) reader.getSheetsData();
+      int idx = 0;
+      while (iter.hasNext()) {
+        try (InputStream sheetStream = iter.next()) {
+          if (idx == sheetIndex) {
+            SaxRowAccumulator accumulator =
+                new SaxRowAccumulator(
+                    context, writer, preserveLogicalRow, headerRows, bindings);
+            XMLReader xml = XMLHelper.newXMLReader();
+            xml.setContentHandler(
+                new XSSFSheetXMLHandler(styles, strings, accumulator, formatter, false));
+            xml.parse(new InputSource(sheetStream));
+            return accumulator.recordNo;
+          }
         }
-        recordNo++;
-        try {
-          Map<String, String> rowMap = buildExcelRowMap(row, headers, bindings, formatter);
-          support.collectSchemaFields(context, rowMap);
-          support.writeParsedRecord(
-              context,
-              writer,
-              rowMap,
-              preserveLogicalRow,
-              recordNo,
-              "IMPORT_PARSE_EXCEL_INVALID",
-              rowMap);
-        } catch (Exception exception) {
-          support.recordParseError(
-              context, recordNo, "IMPORT_PARSE_EXCEL_INVALID", exception.getMessage(), row);
-        }
-      }
-      return recordNo;
-    }
-  }
-
-  private List<String> readExcelHeader(Row headerRow, DataFormatter formatter) {
-    List<String> headers = new ArrayList<>();
-    if (headerRow == null) {
-      return support.defaultHeaders();
-    }
-    int lastCell = Math.min(headerRow.getLastCellNum(), MAX_EXCEL_COLUMNS);
-    for (int c = 0; c < lastCell; c++) {
-      Cell cell = headerRow.getCell(c);
-      headers.add(cell == null ? "" : formatter.formatCellValue(cell).trim());
-    }
-    return headers.isEmpty() ? support.defaultHeaders() : headers;
-  }
-
-  private boolean rowIsBlank(Row row, DataFormatter formatter) {
-    if (row == null) {
-      return true;
-    }
-    for (int c = 0; c < row.getLastCellNum(); c++) {
-      Cell cell = row.getCell(c);
-      if (cell != null && StringUtils.hasText(formatter.formatCellValue(cell).trim())) {
-        return false;
+        idx++;
       }
     }
-    return true;
+    return 0L;
   }
 
-  private Map<String, String> buildExcelRowMap(
-      Row row, List<String> headers, List<ColumnBinding> bindings, DataFormatter formatter) {
-    if (!bindings.isEmpty()) {
+  /** "A1"→0, "B1"→1, "Z1"→25, "AA1"→26, ...；全数字 / 未知格式 → -1。 */
+  private static int columnIndex(String cellReference) {
+    if (cellReference == null || cellReference.isEmpty()) {
+      return -1;
+    }
+    int idx = 0;
+    int i = 0;
+    while (i < cellReference.length()) {
+      char c = cellReference.charAt(i);
+      if (c < 'A' || c > 'Z') {
+        break;
+      }
+      idx = idx * 26 + (c - 'A' + 1);
+      i++;
+    }
+    return i == 0 ? -1 : idx - 1;
+  }
+
+  private Map<String, String> buildRowMapFromCells(
+      List<String> cells, List<String> headers, List<ColumnBinding> bindings) {
+    if (bindings != null && !bindings.isEmpty()) {
       Map<String, String> out = new LinkedHashMap<>();
       for (ColumnBinding binding : bindings) {
         int idx = indexOfHeader(headers, binding.source());
-        if (idx < 0) {
+        if (idx < 0 || idx >= cells.size()) {
           out.put(binding.target(), null);
           continue;
         }
-        Cell cell = row.getCell(idx);
-        out.put(binding.target(), cell == null ? null : formatter.formatCellValue(cell).trim());
+        String raw = cells.get(idx);
+        out.put(binding.target(), raw == null ? null : raw.trim());
       }
       return out;
     }
@@ -151,13 +139,16 @@ public class ExcelFormatParser implements FormatParser {
     List<String> defs = support.defaultHeaders();
     for (int i = 0; i < defs.size(); i++) {
       String field = defs.get(i);
-      Cell cell = i < row.getLastCellNum() ? row.getCell(i) : null;
-      out.put(field, cell == null ? null : formatter.formatCellValue(cell).trim());
+      String raw = i < cells.size() ? cells.get(i) : null;
+      out.put(field, raw == null ? null : raw.trim());
     }
     return out;
   }
 
   private int indexOfHeader(List<String> headers, String source) {
+    if (headers == null) {
+      return -1;
+    }
     for (int i = 0; i < headers.size(); i++) {
       if (source != null && source.equalsIgnoreCase(headers.get(i))) {
         return i;
@@ -202,4 +193,110 @@ public class ExcelFormatParser implements FormatParser {
   }
 
   private record ColumnBinding(String source, String target) {}
+
+  /**
+   * SAX 行累加器：startRow 清空缓存 → cell 按列号写入 → endRow 时判断 header / blank / record，
+   * 写入 downstream。保持和原 DOM 版相同的业务语义：headerRows 行做表头、全空行跳过、解析异常
+   * 走 {@code recordParseError} 走跳过 / 失败策略。
+   */
+  private final class SaxRowAccumulator implements SheetContentsHandler {
+
+    private final ImportJobContext context;
+    private final BufferedWriter writer;
+    private final boolean preserveLogicalRow;
+    private final int headerRows;
+    private final List<ColumnBinding> bindings;
+    private final TreeMap<Integer, String> currentRow = new TreeMap<>();
+    private int headerRowsSeen = 0;
+    private List<String> headers;
+    long recordNo = 0L;
+
+    SaxRowAccumulator(
+        ImportJobContext context,
+        BufferedWriter writer,
+        boolean preserveLogicalRow,
+        int headerRows,
+        List<ColumnBinding> bindings) {
+      this.context = context;
+      this.writer = writer;
+      this.preserveLogicalRow = preserveLogicalRow;
+      this.headerRows = Math.max(headerRows, 0);
+      this.bindings = bindings;
+    }
+
+    @Override
+    public void startRow(int rowNum) {
+      currentRow.clear();
+    }
+
+    @Override
+    public void cell(String cellReference, String formattedValue, XSSFComment comment) {
+      int col = columnIndex(cellReference);
+      if (col < 0 || col >= MAX_EXCEL_COLUMNS) {
+        return;
+      }
+      currentRow.put(col, formattedValue == null ? "" : formattedValue);
+    }
+
+    @Override
+    public void endRow(int rowNum) {
+      if (currentRow.isEmpty()) {
+        return;
+      }
+      int maxCol = currentRow.lastKey();
+      List<String> cells = new ArrayList<>(maxCol + 1);
+      for (int c = 0; c <= maxCol; c++) {
+        cells.add(currentRow.getOrDefault(c, ""));
+      }
+      if (isAllBlank(cells)) {
+        return;
+      }
+      if (headerRowsSeen < headerRows) {
+        headerRowsSeen++;
+        if (headerRowsSeen == headerRows) {
+          headers = new ArrayList<>(cells);
+          while (headers.size() > MAX_EXCEL_COLUMNS) {
+            headers.remove(headers.size() - 1);
+          }
+          if (headers.isEmpty()) {
+            headers = support.defaultHeaders();
+          }
+        }
+        return;
+      }
+      if (headers == null) {
+        headers = support.defaultHeaders();
+      }
+      recordNo++;
+      try {
+        Map<String, String> rowMap = buildRowMapFromCells(cells, headers, bindings);
+        support.collectSchemaFields(context, rowMap);
+        support.writeParsedRecord(
+            context,
+            writer,
+            rowMap,
+            preserveLogicalRow,
+            recordNo,
+            "IMPORT_PARSE_EXCEL_INVALID",
+            rowMap);
+      } catch (Exception ex) {
+        support.recordParseError(
+            context, recordNo, "IMPORT_PARSE_EXCEL_INVALID", ex.getMessage(), cells);
+      }
+    }
+
+    @Override
+    public void headerFooter(String text, boolean isHeader, String tagName) {
+      // sheet 级 header/footer（打印用）与 batch 无关，忽略
+    }
+
+    private boolean isAllBlank(List<String> cells) {
+      for (String c : cells) {
+        if (c != null && StringUtils.hasText(c.trim())) {
+          return false;
+        }
+      }
+      return true;
+    }
+  }
 }

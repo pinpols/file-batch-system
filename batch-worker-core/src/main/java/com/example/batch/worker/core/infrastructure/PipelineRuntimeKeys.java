@@ -40,6 +40,16 @@ public final class PipelineRuntimeKeys {
   /** PREPROCESS 后的原始文件字节（如 Excel .xlsx），文本转换会破坏二进制内容时使用 */
   public static final String IMPORT_BINARY_PAYLOAD = "importBinaryPayload";
 
+  /**
+   * PREPROCESS 超过堆安全阈值时不 decode 成 String，而是把原始字节 spool 到该临时文件。 PARSE 阶段通过
+   * {@code InputStreamReader(FileInputStream, charset)} 流式按行消费， 避免一次性把 byte[] 转 UTF-16
+   * String 产生 1.5-2x 内存放大。
+   */
+  public static final String IMPORT_LARGE_TEXT_PATH = "importLargeTextPath";
+
+  /** 配合 {@link #IMPORT_LARGE_TEXT_PATH}：spool 文件的原始字符集（Charset 对象）。 */
+  public static final String IMPORT_LARGE_TEXT_CHARSET = "importLargeTextCharset";
+
   /** 导出快照：snapshotMode、snapshotTs、sourcePartitions（可 JSON 序列化的 Map） */
   public static final String EXPORT_SNAPSHOT = "exportSnapshot";
 

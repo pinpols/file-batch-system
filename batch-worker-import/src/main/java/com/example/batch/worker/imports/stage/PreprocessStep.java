@@ -18,6 +18,9 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -33,6 +36,14 @@ import org.springframework.util.StringUtils;
 @Slf4j
 @Component
 public class PreprocessStep implements ImportStageStep {
+
+  /**
+   * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块
+   * UTF-16 String。默认 16 MiB，可通过系统属性 {@code batch.worker.import.preprocess-spool-bytes}
+   * 调整（设 0 关闭 spool，全部走 byte[] → String 路径）。
+   */
+  private static final int SPOOL_THRESHOLD_BYTES =
+      Integer.getInteger("batch.worker.import.preprocess-spool-bytes", 16 * 1024 * 1024);
 
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final BatchSecurityProperties batchSecurityProperties;
@@ -99,10 +110,14 @@ public class PreprocessStep implements ImportStageStep {
         context.getAttributes().remove("normalizedPayload");
       } else {
         Charset charset = resolveCharset(importPayload, templateConfigObject);
-        String normalized = decodeWithGuards(processed, charset, context);
-        context.setRawPayload(normalized);
-        context.getAttributes().put("normalizedPayload", normalized);
-        context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+        if (processed.length >= SPOOL_THRESHOLD_BYTES) {
+          spoolLargePayload(processed, charset, context);
+        } else {
+          String normalized = decodeWithGuards(processed, charset, context);
+          context.setRawPayload(normalized);
+          context.getAttributes().put("normalizedPayload", normalized);
+          context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+        }
       }
 
       Map<String, Object> fileMetadata = new LinkedHashMap<>();
@@ -226,6 +241,37 @@ public class PreprocessStep implements ImportStageStep {
    *       写入 {@code replacementCount}
    * </ul>
    */
+  /**
+   * 大文件 spool：把原始字节写临时文件，PARSE 阶段用 InputStreamReader 按 charset 流式按行解码，
+   * 避免 byte[] → UTF-16 String 的 1.5-2x 内存放大。A 严格解码在 PARSE 阶段读时隐式触发（charset
+   * decoder REPORT 行为）；B/D1 为观测层，大文件场景下跳过以换取内存。IO 错误转为
+   * {@link ImportPreprocessException} 以对齐主链路异常语义。
+   */
+  private void spoolLargePayload(
+      byte[] processed, Charset charset, ImportJobContext context) {
+    Path spool;
+    try {
+      spool = Files.createTempFile("batch-preprocess-", ".raw");
+      Files.write(
+          spool, processed, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+    } catch (java.io.IOException ex) {
+      throw new ImportPreprocessException(
+          "IMPORT_PREPROCESS_SPOOL_FAILED",
+          "failed to spool large payload to temp file: " + ex.getMessage(),
+          ex);
+    }
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
+    context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, charset);
+    context.setRawPayload("");
+    context.getAttributes().remove("normalizedPayload");
+    context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
+    log.info(
+        "[ImportPreprocess] large payload {} bytes spooled to {}; PARSE will stream decode as {}",
+        processed.length,
+        spool,
+        charset);
+  }
+
   private String decodeWithGuards(byte[] processed, Charset charset, ImportJobContext context) {
     String decoded = decodeStrict(processed, charset);
     if (!StandardCharsets.UTF_8.equals(charset)
