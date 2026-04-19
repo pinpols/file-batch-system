@@ -7,6 +7,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ConfigSyncExportRequest;
 import com.example.batch.console.web.request.ConfigSyncImportRequest;
 import com.example.batch.console.web.request.ConfigSyncPreviewRequest;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/config/sync")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleConfigSyncController {
 
   private final ConsoleConfigSyncApplicationService applicationService;

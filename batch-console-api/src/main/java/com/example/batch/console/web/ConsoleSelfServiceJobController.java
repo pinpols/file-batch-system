@@ -7,6 +7,7 @@ import com.example.batch.console.service.ConsoleSelfServiceJobService;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.CompensationParam;
 import com.example.batch.console.service.ConsoleSelfServiceJobService.RerunParam;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/self-service/jobs")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleSelfServiceJobController {
 
   private final ConsoleSelfServiceJobService selfServiceJobService;

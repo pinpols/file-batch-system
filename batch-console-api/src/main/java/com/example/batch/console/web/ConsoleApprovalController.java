@@ -7,6 +7,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ApprovalActionRequest;
 import com.example.batch.console.web.request.BatchApprovalActionRequest;
 import com.example.batch.console.web.response.ConsoleBatchApprovalResultResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/approvals")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleApprovalController {
 
   private final ConsoleApprovalApplicationService approvalApplicationService;

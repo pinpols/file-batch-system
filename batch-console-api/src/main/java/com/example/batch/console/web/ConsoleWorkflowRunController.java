@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleOrchestratorProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.Idempotent;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/console/workflow-runs")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleWorkflowRunController {
 
   private final ConsoleOrchestratorProxyService orchestratorProxyService;

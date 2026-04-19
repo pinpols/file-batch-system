@@ -6,6 +6,7 @@ import com.example.batch.console.repository.ArchivePolicyUpsertParam;
 import com.example.batch.console.service.ConsoleArchivePolicyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/ops/archive-policies")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleArchivePolicyController {
 
   private final ConsoleArchivePolicyService archivePolicyService;

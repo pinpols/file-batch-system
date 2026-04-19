@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleNotificationApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/notifications")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleNotificationController {
 
   private final ConsoleNotificationApplicationService service;

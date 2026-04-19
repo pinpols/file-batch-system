@@ -5,6 +5,7 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleTenantConfigInitApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsolePrincipal;
+import com.example.batch.console.support.Idempotent;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest;
 import com.example.batch.console.web.request.TenantConfigCopyRequest;
 import com.example.batch.console.web.response.TenantConfigBatchInitResponse;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/config")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleTenantConfigInitController {
 
   private final ConsoleTenantConfigInitApplicationService applicationService;

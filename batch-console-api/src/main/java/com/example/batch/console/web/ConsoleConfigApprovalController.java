@@ -6,6 +6,7 @@ import com.example.batch.console.application.ConsoleConfigApprovalApplicationSer
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.ConfigApprovalActionRequest;
 import com.example.batch.console.web.request.ConfigReleaseApprovalSubmitRequest;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/config")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleConfigApprovalController {
 
   private final ConsoleConfigApprovalApplicationService applicationService;

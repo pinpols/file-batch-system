@@ -6,6 +6,7 @@ import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleWebhookService;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.Idempotent;
 import com.example.batch.console.web.request.CreateWebhookRequest;
 import com.example.batch.console.web.request.UpdateWebhookRequest;
 import jakarta.validation.Valid;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/webhooks")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleWebhookController {
 
   private final ConsoleWebhookService webhookService;

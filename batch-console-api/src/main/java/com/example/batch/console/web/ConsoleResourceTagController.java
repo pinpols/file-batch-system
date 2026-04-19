@@ -5,6 +5,7 @@ import com.example.batch.console.domain.entity.ResourceTagEntity;
 import com.example.batch.console.service.ConsoleResourceTagService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/tags")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleResourceTagController {
 
   private final ConsoleResourceTagService tagService;

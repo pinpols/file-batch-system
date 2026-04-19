@@ -6,6 +6,7 @@ import com.example.batch.console.application.ConsoleBatchWindowApplicationServic
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.BatchWindowCreateRequest;
 import com.example.batch.console.web.request.BatchWindowUpdateRequest;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/console/batch-windows")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleBatchWindowController {
 
   private final ConsoleBatchWindowApplicationService batchWindowApplicationService;

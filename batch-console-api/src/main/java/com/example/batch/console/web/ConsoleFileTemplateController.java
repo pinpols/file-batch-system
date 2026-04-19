@@ -8,6 +8,7 @@ import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.request.EnabledPatchRequest;
 import com.example.batch.console.web.request.FileTemplateCreateRequest;
 import com.example.batch.console.web.request.FileTemplateUpdateRequest;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/file-templates")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleFileTemplateController {
 
   private final ConsoleFileTemplateApplicationService fileTemplateApplicationService;
