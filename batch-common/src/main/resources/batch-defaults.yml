@@ -28,6 +28,12 @@ spring:
     password: ${BATCH_PLATFORM_DB_PASSWORD:}
     # JDBC 驱动类
     driver-class-name: org.postgresql.Driver
+  servlet:
+    # 显式限制 multipart 尺寸，防止恶意大文件 DoS / 默认 10MB 对 Excel 上传太小
+    multipart:
+      max-file-size: ${BATCH_MULTIPART_MAX_FILE_SIZE:50MB}
+      max-request-size: ${BATCH_MULTIPART_MAX_REQUEST_SIZE:60MB}
+      file-size-threshold: ${BATCH_MULTIPART_FILE_SIZE_THRESHOLD:2MB}
   kafka:
     # Kafka 集群地址（逗号分隔）
     bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
