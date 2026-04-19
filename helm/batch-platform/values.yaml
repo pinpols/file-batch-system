@@ -254,6 +254,16 @@ workerDispatch:
     periodSeconds: 10
     failureThreshold: 3
 
+# ── PodDisruptionBudget ────────────────────────────────────────────────────────
+# 每个模块默认允许一次最多驱逐 1 个 Pod，保证节点维护时不会一次踢光整个模块。
+# 单副本（replicaCount=1）时 PDB 会自动跳过（minAvailable=1 会永远阻塞驱逐）。
+podDisruptionBudget:
+  enabled: true
+  # 选择"绝对最少可用数"或"最大可不用数"任一种；两者互斥
+  # 默认所有模块 maxUnavailable=1（单台受影响时继续对外服务）
+  maxUnavailable: 1
+  # minAvailable: 1          # 等价配法；启用 minAvailable 时请注释 maxUnavailable
+
 # ── Pod scheduling ─────────────────────────────────────────────────────────────
 
 podAnnotations: {}

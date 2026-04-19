@@ -1,15 +1,39 @@
 {{- $component := "orchestrator" }}
 {{- $svc := .Values.orchestrator }}
 ---
+# Headless Service：StatefulSet 必需，用于给每个 Pod 赋稳定 DNS 名（orchestrator-0.svc, orchestrator-1.svc ...）
+# Pod 间直连或调试时用；日常客户端访问走下面的 ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $svc.port }}
+      targetPort: http
+      protocol: TCP
+---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "batch-platform.fullname" . }}-{{ $component }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
 spec:
+  # StatefulSet 带 ordinal 的 Pod 名（batch-orchestrator-0..N-1）由 entrypoint.sh
+  # 自动提取为 BATCH_OUTBOX_SHARD_INDEX；多 Pod 各持一片 Outbox 分片
+  serviceName: {{ include "batch-platform.fullname" . }}-{{ $component }}-headless
   replicas: {{ $svc.replicaCount }}
+  # 并行部署/销毁：Outbox 实例互不依赖，不需要 StatefulSet 默认的 OrderedReady 串行升级
+  podManagementPolicy: Parallel
   selector:
     matchLabels:
       {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 6 }}
@@ -35,6 +59,15 @@ spec:
             - name: http
               containerPort: {{ $svc.port }}
               protocol: TCP
+          env:
+            # Downward API：POD_NAME 用于 entrypoint.sh 提取 StatefulSet ordinal
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Outbox 分片总数 = replicaCount；扩缩容时 helm upgrade 会触发滚动更新，所有 Pod 同步到新值
+            - name: BATCH_OUTBOX_SHARD_TOTAL
+              value: {{ $svc.replicaCount | quote }}
           {{- include "batch-platform.envFrom" . | nindent 10 }}
           livenessProbe:
             {{- toYaml $svc.livenessProbe | nindent 12 }}

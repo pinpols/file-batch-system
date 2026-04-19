@@ -1,0 +1,48 @@
+{{- /*
+PodDisruptionBudget for each application module.
+
+语义：
+- 仅在 .Values.podDisruptionBudget.enabled 为 true 时渲染
+- 对每个 replicaCount >= 2 的模块自动挂 PDB（单副本不挂，避免永久阻塞驱逐）
+- maxUnavailable=1 —— 节点 drain 时一次最多动一个 Pod，保证模块至少 N-1 个在线
+
+使用：
+  默认启用，如某个环境不要某模块的 PDB，设
+    podDisruptionBudget.enabled: false      # 全关
+  或直接覆盖对应模块 values：
+    orchestrator.replicaCount: 1            # 单副本自动跳过 PDB
+*/}}
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- $components := list
+    (dict "name" "console-api"     "values" .Values.consoleApi)
+    (dict "name" "trigger"         "values" .Values.trigger)
+    (dict "name" "orchestrator"    "values" .Values.orchestrator)
+    (dict "name" "worker-import"   "values" .Values.workerImport)
+    (dict "name" "worker-export"   "values" .Values.workerExport)
+    (dict "name" "worker-dispatch" "values" .Values.workerDispatch)
+}}
+{{- range $components }}
+{{- $component := .name }}
+{{- $svc := .values }}
+{{- if ge (int $svc.replicaCount) 2 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "batch-platform.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "batch-platform.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  {{- if hasKey $.Values.podDisruptionBudget "maxUnavailable" }}
+  maxUnavailable: {{ $.Values.podDisruptionBudget.maxUnavailable }}
+  {{- else if hasKey $.Values.podDisruptionBudget "minAvailable" }}
+  minAvailable: {{ $.Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "batch-platform.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+{{- end }}
+{{- end }}
+{{- end }}
