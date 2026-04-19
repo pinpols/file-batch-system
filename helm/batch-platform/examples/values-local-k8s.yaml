@@ -1,9 +1,9 @@
 fullnameOverride: "batch"
 
 # 全量部署（6 个 app 模块），连接 host 机器上的 Docker Compose base services
+# tag 留空 → 自动用 Chart.AppVersion（与 pom.xml <revision> 对齐）
 image:
   pullPolicy: IfNotPresent
-  tag: latest
 
 # Pod 从 K8s 内访问 host 机器走 host.docker.internal
 postgresql:
