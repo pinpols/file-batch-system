@@ -54,4 +54,24 @@ public final class Guard {
       throw new BizException(ResultCode.INVALID_ARGUMENT, message);
     }
   }
+
+  /**
+   * S-1.9：带错误码的通用业务条件断言。业务需要 {@link ResultCode#CONFLICT} /
+   * {@link ResultCode#STATE_CONFLICT} / {@link ResultCode#FORBIDDEN} 等非 INVALID_ARGUMENT 语义时，
+   * 通过此重载指定，避免绕过工具类直接 throw。
+   */
+  public static void require(boolean condition, ResultCode resultCode, String message) {
+    if (!condition) {
+      throw new BizException(
+          resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode, message);
+    }
+  }
+
+  /** S-1.9：带错误码的字符串非空断言。 */
+  public static void requireText(String str, ResultCode resultCode, String message) {
+    if (!Texts.hasText(str)) {
+      throw new BizException(
+          resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode, message);
+    }
+  }
 }

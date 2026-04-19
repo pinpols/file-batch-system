@@ -17,6 +17,12 @@ import com.example.batch.common.utils.Texts;
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   private static final String KEY_DETAIL_PREFIX = "detail.";
+  /**
+   * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致
+   * Excel/CSV 生成时内存爆炸。1024 列足够覆盖业务极端场景；真要超此值需显式把模板的
+   * {@code max_columns} 字段调大（见 {@link #resolveMaxColumns}）。
+   */
+  private static final int DEFAULT_MAX_COLUMNS = 1024;
 
   protected static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
@@ -33,16 +39,19 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       ExportDataPlugin dataPlugin,
       Map<String, Object> batch,
       List<Map<String, Object>> firstPage) {
+    int maxColumns = resolveMaxColumns(dataCtx.templateConfig());
     List<ColumnLayout> configured = templateDelimitedColumns(dataCtx.templateConfig());
     if (!configured.isEmpty()) {
-      return configured;
+      return enforceMaxColumns(configured, maxColumns, "delimited-template");
     }
     List<ExportDataPlugin.DelimitedColumn> pluginColumns =
         dataPlugin.describeDelimitedColumns(dataCtx, batch);
     if (!pluginColumns.isEmpty()) {
-      return pluginColumns.stream()
-          .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
-          .toList();
+      List<ColumnLayout> fromPlugin =
+          pluginColumns.stream()
+              .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
+              .toList();
+      return enforceMaxColumns(fromPlugin, maxColumns, "delimited-plugin");
     }
     if (firstPage == null || firstPage.isEmpty()) {
       return List.of();
@@ -51,7 +60,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     for (String key : firstPage.get(0).keySet()) {
       inferred.add(new ColumnLayout(key, KEY_DETAIL_PREFIX + key, null, false, ' '));
     }
-    return inferred;
+    return enforceMaxColumns(inferred, maxColumns, "delimited-inferred");
   }
 
   protected List<ColumnLayout> resolveExcelColumns(
@@ -67,16 +76,19 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       ExportDataPlugin dataPlugin,
       Map<String, Object> batch,
       List<Map<String, Object>> firstPage) {
+    int maxColumns = resolveMaxColumns(dataCtx.templateConfig());
     List<ColumnLayout> configured = templateFixedWidthColumns(dataCtx.templateConfig());
     if (!configured.isEmpty()) {
-      return configured;
+      return enforceMaxColumns(configured, maxColumns, "fixed-width-template");
     }
     List<ExportDataPlugin.DelimitedColumn> pluginColumns =
         dataPlugin.describeFixedWidthColumns(dataCtx, batch);
     if (!pluginColumns.isEmpty()) {
-      return pluginColumns.stream()
-          .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
-          .toList();
+      List<ColumnLayout> fromPlugin =
+          pluginColumns.stream()
+              .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
+              .toList();
+      return enforceMaxColumns(fromPlugin, maxColumns, "fixed-width-plugin");
     }
     if (firstPage == null || firstPage.isEmpty()) {
       return List.of();
@@ -86,7 +98,44 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       inferred.add(
           new ColumnLayout(key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' '));
     }
-    return inferred;
+    return enforceMaxColumns(inferred, maxColumns, "fixed-width-inferred");
+  }
+
+  /**
+   * A-3.12：解析模板中的 {@code max_columns} / {@code maxColumns}；未配置时走 {@link
+   * #DEFAULT_MAX_COLUMNS}。支持从 {@code query_param_schema} 继承配置。
+   */
+  protected int resolveMaxColumns(Map<String, Object> templateConfig) {
+    if (templateConfig == null || templateConfig.isEmpty()) {
+      return DEFAULT_MAX_COLUMNS;
+    }
+    Integer direct =
+        integerValue(firstNonNull(templateConfig.get("max_columns"), templateConfig.get("maxColumns")));
+    if (direct != null && direct > 0) {
+      return direct;
+    }
+    Map<String, Object> schema = toMap(templateConfig.get("query_param_schema"));
+    Integer fromSchema =
+        integerValue(firstNonNull(schema.get("maxColumns"), schema.get("max_columns")));
+    if (fromSchema != null && fromSchema > 0) {
+      return fromSchema;
+    }
+    return DEFAULT_MAX_COLUMNS;
+  }
+
+  /** A-3.12：列数超上限立即 fail-fast，避免后续 StringBuilder / workbook 爆内存。 */
+  protected <T> List<T> enforceMaxColumns(List<T> columns, int maxColumns, String source) {
+    if (columns.size() > maxColumns) {
+      throw new IllegalArgumentException(
+          "export column count "
+              + columns.size()
+              + " exceeds max_columns="
+              + maxColumns
+              + " (source="
+              + source
+              + "); declare template.max_columns to raise the limit deliberately");
+    }
+    return columns;
   }
 
 

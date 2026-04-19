@@ -1,5 +1,8 @@
 package com.example.batch.common.utils;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PushbackInputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
@@ -73,5 +76,40 @@ public final class EncodingUtils {
       throw new IllegalArgumentException(
           "only UTF-8 is allowed here (system internal contract): " + raw);
     }
+  }
+
+  /** UTF-8 BOM = EF BB BF（3 字节）。 */
+  private static final byte[] UTF8_BOM = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+
+  /**
+   * S-1.8：剥离 UTF-8 BOM 前缀。返回一个包装后的流，前 3 个字节是 BOM 就吞掉，否则透传。
+   *
+   * <p>外部导出工具（Windows Excel "CSV UTF-8"、部分文本编辑器）写出 UTF-8 文件时会自动加
+   * BOM；系统内部读取这些文件做 parse 时，若不剥 BOM 会让首字段混入 {@code \uFEFF}
+   * 字符，后续 header 匹配 / 数值解析全部失败。{@code PreprocessStep.resolveCharset} 自己
+   * 实现过一份剥 BOM 逻辑，此处抽出供其他编码转换点复用。
+   *
+   * <p>要求传入 <b>可 mark/reset 或 {@link PushbackInputStream}</b>——本方法内部用
+   * PushbackInputStream 包装；调用方不需要再关心。返回流的 close 会级联关闭底层。
+   */
+  public static InputStream stripUtf8Bom(InputStream in) throws IOException {
+    if (in == null) {
+      return InputStream.nullInputStream();
+    }
+    PushbackInputStream pb = in instanceof PushbackInputStream p ? p : new PushbackInputStream(in, 3);
+    byte[] prefix = new byte[3];
+    int read = pb.read(prefix);
+    if (read <= 0) {
+      return pb;
+    }
+    boolean isBom =
+        read == 3
+            && prefix[0] == UTF8_BOM[0]
+            && prefix[1] == UTF8_BOM[1]
+            && prefix[2] == UTF8_BOM[2];
+    if (!isBom) {
+      pb.unread(prefix, 0, read);
+    }
+    return pb;
   }
 }

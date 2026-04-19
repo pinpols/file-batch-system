@@ -50,6 +50,12 @@ public class ImportRecordGovernanceService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String KEY_SKIPPED_COUNT = "skippedCount";
+  // C-2.15：按 stage 细分的 skipped / failed 计数，独立于 KEY_SKIPPED_COUNT 兜底语义；
+  // 运维可单独看 parse vs validation 哪一步在丢数据，上层后续可引入双阈值配置
+  private static final String KEY_PARSE_SKIPPED_COUNT = "parseSkippedCount";
+  private static final String KEY_VALIDATE_SKIPPED_COUNT = "validateSkippedCount";
+  private static final String KEY_PARSE_FAILED_COUNT = "parseFailedCount";
+  private static final String KEY_VALIDATE_FAILED_COUNT = "validateFailedCount";
 
   private final ImportSkipProperties skipProperties;
   private final PlatformFileRuntimeRepository runtimeRepository;
@@ -142,6 +148,19 @@ public class ImportRecordGovernanceService {
     metadata.put(KEY_SKIPPED_COUNT, numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT)));
     metadata.put("failedCount", numberValue(context.getAttributes().get("failedCount")));
     metadata.put("totalCount", numberValue(context.getAttributes().get("totalCount")));
+    // C-2.15：把 parse / validate 两阶段的细分计数一并登记，便于问题定位
+    metadata.put(
+        KEY_PARSE_SKIPPED_COUNT,
+        numberValue(context.getAttributes().get(KEY_PARSE_SKIPPED_COUNT)));
+    metadata.put(
+        KEY_VALIDATE_SKIPPED_COUNT,
+        numberValue(context.getAttributes().get(KEY_VALIDATE_SKIPPED_COUNT)));
+    metadata.put(
+        KEY_PARSE_FAILED_COUNT,
+        numberValue(context.getAttributes().get(KEY_PARSE_FAILED_COUNT)));
+    metadata.put(
+        KEY_VALIDATE_FAILED_COUNT,
+        numberValue(context.getAttributes().get(KEY_VALIDATE_FAILED_COUNT)));
     metadata.put(
         "skipThresholdExceeded",
         Boolean.TRUE.equals(context.getAttributes().get("skipThresholdExceeded")));
@@ -165,6 +184,23 @@ public class ImportRecordGovernanceService {
             .evidenceRef("import-error-output")
             .detailSummary(metadata)
             .build());
+  }
+
+  /**
+   * C-2.15：把 stage → stage-scoped counter key 的映射放这里。
+   * PARSE 对应 parseSkippedCount/parseFailedCount；VALIDATE 对应 validateSkippedCount/
+   * validateFailedCount；其他阶段（LOAD / REPORT 等）暂不细分返回 null（不写 stage-scoped counter，
+   * KEY_SKIPPED_COUNT 仍正常累加保持总阈值语义）。
+   */
+  private String resolveStageScopedKey(ImportStage stage, boolean skipped) {
+    if (stage == null) {
+      return null;
+    }
+    return switch (stage) {
+      case PARSE -> skipped ? KEY_PARSE_SKIPPED_COUNT : KEY_PARSE_FAILED_COUNT;
+      case VALIDATE -> skipped ? KEY_VALIDATE_SKIPPED_COUNT : KEY_VALIDATE_FAILED_COUNT;
+      default -> null;
+    };
   }
 
   private record BadRecordContext(
@@ -198,8 +234,17 @@ public class ImportRecordGovernanceService {
 
     if (skipped) {
       increment(context, KEY_SKIPPED_COUNT);
+      // C-2.15：按 stage 分桶计数，便于 parse 和 validate 的阈值 / 指标分开观察
+      String stageScoped = resolveStageScopedKey(stage, true);
+      if (stageScoped != null) {
+        increment(context, stageScoped);
+      }
     } else {
       increment(context, "failedCount");
+      String stageScoped = resolveStageScopedKey(stage, false);
+      if (stageScoped != null) {
+        increment(context, stageScoped);
+      }
     }
 
     Long fileId =

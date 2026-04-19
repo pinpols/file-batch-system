@@ -17,30 +17,42 @@ class ChannelConfigMergeTest {
     assertThat(ChannelConfigMerge.merge(Map.of(), objectMapper)).isEmpty();
   }
 
+  /**
+   * S-1.5：白名单模式下，仅 ALLOWED_CONFIG_KEYS 里登记的键能从 config_json overlay；
+   * 其他键（"endpoint" 这种通用占位名，或 "tenant_id" 这种策略列）一律被拒绝，
+   * 防止渠道配置通过 config_json 绕过管理员策略。
+   */
   @Test
-  void shouldMergeConfigJsonMapAndProtectReservedKeys() {
+  void shouldOnlyOverlayWhitelistedKeysFromConfigJsonMap() {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("tenant_id", "t1");
-    row.put("endpoint", "http://legacy");
+    row.put("channel_code", "sftp-01");
+    row.put("sftp_host", "legacy.example.com");
     Map<String, Object> cj = new LinkedHashMap<>();
-    cj.put("endpoint", "http://override");
-    cj.put("tenant_id", "should-not-override-column");
-    cj.put("extra", "x");
+    cj.put("sftp_host", "override.example.com"); // 白名单内：允许覆盖
+    cj.put("sftp_port", 2222); // 白名单内：允许设置
+    cj.put("tenant_id", "should-not-override-column"); // 非白名单：忽略
+    cj.put("enabled", false); // 策略字段：必须忽略（原黑名单漏了这个）
+    cj.put("receipt_policy", "ASYNC"); // 策略字段：必须忽略
+    cj.put("random_key", "x"); // 未注册：忽略
     row.put("config_json", cj);
 
     Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
     assertThat(merged.get("tenant_id")).isEqualTo("t1");
-    assertThat(merged.get("endpoint")).isEqualTo("http://override");
-    assertThat(merged.get("extra")).isEqualTo("x");
+    assertThat(merged.get("sftp_host")).isEqualTo("override.example.com");
+    assertThat(merged.get("sftp_port")).isEqualTo(2222);
+    assertThat(merged).doesNotContainKeys("enabled", "receipt_policy", "random_key");
   }
 
   @Test
-  void shouldParseConfigJsonStringWhenMapperProvided() {
+  void shouldParseConfigJsonStringAndApplyWhitelist() {
     Map<String, Object> row = new LinkedHashMap<>();
-    row.put("config_json", "{\"timeoutMs\":5000,\"tenant_id\":\"ignored\"}");
+    row.put(
+        "config_json",
+        "{\"sftp_host\":\"example.com\",\"tenant_id\":\"ignored\",\"random_ext\":\"x\"}");
 
     Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
-    assertThat(merged.get("timeoutMs")).isEqualTo(5000);
-    assertThat(merged).doesNotContainKey("ignored");
+    assertThat(merged.get("sftp_host")).isEqualTo("example.com");
+    assertThat(merged).doesNotContainKeys("ignored", "tenant_id", "random_ext");
   }
 }
