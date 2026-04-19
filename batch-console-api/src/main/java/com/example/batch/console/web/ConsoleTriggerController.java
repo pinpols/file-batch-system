@@ -3,6 +3,7 @@ package com.example.batch.console.web;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleTriggerProxyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.Idempotent;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -10,11 +11,16 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 触发器运维：触发器的 register / unregister / pause / resume 都是状态切换动作，
+ * 重复发送会重复调用下游 orchestrator 并可能产生额外审计日志 → 类级 @Idempotent 强制幂等。
+ */
 @RestController
 @Validated
 @RequestMapping("/api/console/triggers")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleTriggerController {
 
   private final ConsoleTriggerProxyService triggerProxyService;

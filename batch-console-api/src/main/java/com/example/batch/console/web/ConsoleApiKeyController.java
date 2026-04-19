@@ -5,6 +5,7 @@ import com.example.batch.console.domain.entity.ApiKeyEntity;
 import com.example.batch.console.service.ConsoleApiKeyService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -48,8 +49,9 @@ public class ConsoleApiKeyController {
     return responseFactory.success(apiKeyService.detail(tenantId, id));
   }
 
-  /** 创建 API Key，返回明文密钥（仅此一次可见）。 */
+  /** 创建 API Key，返回明文密钥（仅此一次可见）。双击/重试可能创建多把密钥 → 强制幂等。 */
   @PostMapping
+  @Idempotent
   public CommonResponse<Map<String, Object>> create(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody CreateApiKeyRequest request) {
     String operator = requestMetadataResolver.current().operatorId();

@@ -5,6 +5,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleSystemParameterService;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -65,8 +66,9 @@ public class ConsoleGovernanceController {
     return responseFactory.success(result);
   }
 
-  /** 动态更新治理参数。 */
+  /** 动态更新治理参数（改的是全局熔断/限流阈值，误触发会影响所有租户 → 强制幂等）。 */
   @PostMapping
+  @Idempotent
   public CommonResponse<Void> update(
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody UpdateGovernanceParam param) {
     if (!param.key().startsWith(PREFIX)) {
@@ -81,8 +83,9 @@ public class ConsoleGovernanceController {
     return responseFactory.success(null);
   }
 
-  /** 重置治理参数为默认值（删除自定义覆盖）。 */
+  /** 重置治理参数为默认值（删除自定义覆盖；破坏性 → 强制幂等）。 */
   @PostMapping("/reset")
+  @Idempotent
   public CommonResponse<Void> reset(
       @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
     parameterService.delete(tenantId, key);
