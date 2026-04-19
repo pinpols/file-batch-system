@@ -34,6 +34,17 @@ spring:
     producer:
       # 要求所有 ISR 副本确认写入后才返回成功，配合 replication-factor=3 + min.insync.replicas=2 防止数据丢失
       acks: all
+      # broker 抖动 / leader 切换时生产者 in-process 重试；配合 idempotence 避免重复
+      retries: ${BATCH_KAFKA_PRODUCER_RETRIES:5}
+      properties:
+        # 幂等生产者：enable.idempotence=true 要求 acks=all + max.in.flight<=5；避免重试导致的重复
+        enable.idempotence: true
+        # 允许并发在途请求，平衡吞吐与顺序保证
+        max.in.flight.requests.per.connection: 5
+        # send → 收到 ack 的端到端总时限；超过即回调失败（由 OutboxPoll 走下一轮）
+        delivery.timeout.ms: ${BATCH_KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS:30000}
+        # 单次请求超时（与 delivery.timeout.ms 配合；小于后者，留出重试空间）
+        request.timeout.ms: ${BATCH_KAFKA_PRODUCER_REQUEST_TIMEOUT_MS:10000}
     listener:
       # 所有 worker 统一手动确认：业务处理成功后显式 ack，避免"处理失败但已提交 offset"
       # 非 worker 模块（不消费 Kafka）不受影响
@@ -86,6 +97,14 @@ management:
         enabled: true
       # A-4.1: 健康检查显示详情（仅管理端口可见）
       show-details: always
+      # readiness 组：下游全就绪才对外服务；include="*" 会自动纳入所有已注册的
+      # HealthIndicator（db/redis/kafka/minio 等，按模块 starter 实际 bean 决定）。
+      # liveness 只看 livenessState（避免下游抖动反复重启 Pod），K8s readinessProbe 应配
+      # /actuator/health/readiness
+      group:
+        readiness:
+          include: "*"
+          exclude: livenessState,ping
   health:
     livenessstate:
       enabled: true
@@ -95,6 +114,9 @@ management:
     db:
       enabled: true
     redis:
+      enabled: true
+    # Spring Boot 内置 Kafka health indicator（仅 worker / orchestrator 有 KafkaTemplate）
+    kafka:
       enabled: true
   # ── 分布式追踪 ──────────────────────────────────────────────────
   tracing:

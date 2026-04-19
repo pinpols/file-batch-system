@@ -61,6 +61,25 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-restclient</artifactId>
         </dependency>
+        <!-- 只用 HealthIndicator 接口；provided 由各应用模块的 starter-actuator 传递进来
+             （Spring Boot 4 把 HealthIndicator 从 spring-boot-actuator 拆到 spring-boot-health） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-health</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Spring Retry：关键 DB 写路径的瞬时错误（死锁 40P01 / 序列化失败 40001 / 连接抖动）
+             自动重试。@EnableRetry 在 batch-common 的 auto-config 里开启 -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+        <!-- Spring Retry 的 @Retryable 依赖 AspectJ 切面（运行期 proxy 由 spring-aop 提供，
+             但 Spring Boot 4 默认不带 aspectjweaver，@EnableRetry 会触发 AOP 初始化） -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
