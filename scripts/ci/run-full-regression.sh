@@ -90,6 +90,8 @@ on_error() {
 
 trap on_error ERR
 
+run_step "Version alignment (pom.xml / Chart.yaml / .env.*)" bash scripts/ci/check-version-alignment.sh
+
 run_step "Dependency boundary checks" python3 scripts/ci/check-dependency-boundaries.py
 
 run_step "PMD — code conventions" run_mvn pmd:check -fae || true
