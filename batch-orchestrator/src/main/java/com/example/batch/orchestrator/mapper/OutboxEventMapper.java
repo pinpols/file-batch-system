@@ -40,4 +40,12 @@ public interface OutboxEventMapper {
       @Param("publishingStatus") String publishingStatus,
       @Param("failedStatus") String failedStatus,
       @Param("timeoutSeconds") long timeoutSeconds);
+
+  /** 积压量指标：统计指定状态的 outbox 事件总数（跨租户）。供 Micrometer gauge 使用。 */
+  long countByStatuses(@Param("statuses") List<String> statuses);
+
+  /** 异常指标：统计卡在 PUBLISHING 且超期的事件数。正常情况下 resetStalePublishing 会清 0。 */
+  long countStalePublishing(
+      @Param("publishingStatus") String publishingStatus,
+      @Param("timeoutSeconds") long timeoutSeconds);
 }

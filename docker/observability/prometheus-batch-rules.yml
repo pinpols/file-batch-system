@@ -146,3 +146,52 @@ groups:
         annotations:
           summary: "Console realtime Pub/Sub handling failures detected"
           description: "Pub/Sub handling failures were observed for stream {{ $labels.stream }} eventType {{ $labels.eventType }} in the last 10 minutes."
+
+      # ── Outbox / DLQ 积压告警（BatchBacklogMetricsScheduler 每 30 秒采样） ──────────
+      # 触发 → 人工：kubectl / make ops-inspect 看堆积明细
+      #         → 无根因消退则 scripts/ops/heal-stuck-outbox.sh / heal-dead-letters.sh
+      # 禁止配自动 heal：隐藏真实故障（见 docs/runbook/troubleshooting-decision-tree.md）
+      - alert: BatchOutboxBacklogHigh
+        expr: batch_outbox_pending_events > 5000
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox pending events backlog is high"
+          description: "Outbox NEW+FAILED events stayed above 5000 for 5 minutes. Check Kafka health, circuit breaker state, and orchestrator poll scheduler."
+
+      - alert: BatchOutboxBacklogCritical
+        expr: batch_outbox_pending_events > 20000
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox pending events backlog is critical"
+          description: "Outbox NEW+FAILED events exceeded 20000 for 2 minutes — downstream workers are starving. Escalate immediately."
+
+      # resetStalePublishing 正常会每轮清 0。长期 >0 意味着 poll 本身挂了或锁永久持有。
+      - alert: BatchOutboxStalePublishingStuck
+        expr: batch_outbox_publishing_stale_events > 0
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox events stuck in PUBLISHING state"
+          description: "{{ $value }} Outbox events remain in PUBLISHING beyond timeout for 5 minutes. resetStalePublishing is not running — check orchestrator poll scheduler and ShedLock state for lock name 'outbox_poll'."
+
+      - alert: BatchDeadLetterBacklogHigh
+        expr: batch_dead_letter_tasks_pending > 100
+        for: 30m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: dlq
+        annotations:
+          summary: "Dead letter tasks backlog is growing"
+          description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Investigate root cause before running scripts/ops/heal-dead-letters.sh."

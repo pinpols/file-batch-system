@@ -112,4 +112,16 @@
         where publish_status = #{publishingStatus}
           and updated_at &lt; current_timestamp - (#{timeoutSeconds} || ' seconds')::interval
     </update>
+
+    <select id="countByStatuses" resultType="long">
+        select count(*) from batch.outbox_event
+        where publish_status in
+        <foreach collection="statuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+    </select>
+
+    <select id="countStalePublishing" resultType="long">
+        select count(*) from batch.outbox_event
+        where publish_status = #{publishingStatus}
+          and updated_at &lt; current_timestamp - (#{timeoutSeconds} || ' seconds')::interval
+    </select>
 </mapper>

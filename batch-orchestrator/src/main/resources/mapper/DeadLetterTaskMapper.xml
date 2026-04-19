@@ -81,4 +81,10 @@
         where tenant_id = #{tenantId}
           and id = #{id}
     </update>
+
+    <select id="countByReplayStatuses" resultType="long">
+        select count(*) from batch.dead_letter_task
+        where replay_status in
+        <foreach collection="statuses" item="s" open="(" separator="," close=")">#{s}</foreach>
+    </select>
 </mapper>
