@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -32,6 +33,7 @@ import org.springframework.util.StringUtils;
  *
  * <p>保留字段（{@code templateCode}、{@code taskId} 等）不允许被用户 metadata 覆盖。
  */
+@Slf4j
 @Component
 public class ReceiveStep implements ImportStageStep {
 
@@ -44,6 +46,13 @@ public class ReceiveStep implements ImportStageStep {
 
   @Value("${batch.worker.import.max-payload-size-mb:100}")
   private int maxPayloadSizeMb;
+
+  /**
+   * payload 相对堆大小的安全比例（默认 20%）。PREPROCESS 阶段会产生 byte[] + String (UTF-16) + decode
+   * 副本等多份中间态，留 80% 给 JVM / GC / 其它业务。
+   */
+  @Value("${batch.worker.import.payload-heap-ratio:0.2}")
+  private double payloadHeapRatio;
 
   private long maxPayloadSizeBytes;
 
@@ -58,8 +67,20 @@ public class ReceiveStep implements ImportStageStep {
 
   @jakarta.annotation.PostConstruct
   void init() {
-    this.maxPayloadSizeBytes =
+    long configured =
         maxPayloadSizeMb <= 0 ? Long.MAX_VALUE : (long) maxPayloadSizeMb * 1024 * 1024;
+    // 堆联动：JVM 最大堆的 payload-heap-ratio 比例，预留空间给 PREPROCESS 的 byte[] / String / decode 副本
+    long heapCap =
+        payloadHeapRatio > 0
+            ? (long) (Runtime.getRuntime().maxMemory() * payloadHeapRatio)
+            : Long.MAX_VALUE;
+    this.maxPayloadSizeBytes = Math.min(configured, heapCap);
+    log.info(
+        "[ReceiveStep] maxPayloadSizeBytes={} (configured={}MB, heap-cap={}MB @ ratio={})",
+        maxPayloadSizeBytes,
+        maxPayloadSizeMb,
+        heapCap == Long.MAX_VALUE ? -1 : heapCap / 1024 / 1024,
+        payloadHeapRatio);
   }
 
   @Override
