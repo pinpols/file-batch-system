@@ -137,6 +137,34 @@ trigger:
 orchestrator:
   replicaCount: 2
   port: 18082
+  # Outbox 分片模式。static=BATCH_OUTBOX_SHARD_TOTAL 写死（扩缩容需 helm upgrade
+  # 走滚动重启），dynamic=运行期通过 Redis 成员注册动态分配（允许 kubectl scale
+  # 或 HPA/KEDA 自动扩缩容）。
+  # 任何形式的 autoscaling（hpa / keda）必须先切到 dynamic，否则新 Pod 的 shardIndex
+  # 会越界或重复处理，数据一致性受损。
+  sharding:
+    mode: "static"              # static | dynamic
+  # CPU-based HPA。要求 sharding.mode=dynamic（否则不会渲染）。
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  # KEDA ScaledObject（Postgres Outbox backlog）。要求 sharding.mode=dynamic。
+  # 与 hpa 互斥：keda.enabled=true 时 hpa 自动跳过。
+  # 前提：KEDA operator + TriggerAuthentication（用 k8s Secret 承载 DB 连接串）。
+  keda:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    pollingInterval: 30
+    cooldownPeriod: 120
+    # Postgres scaler：统计 outbox backlog（NEW + FAILED），超过阈值扩容
+    backlogQuery: "SELECT COUNT(*) FROM biz.outbox_event WHERE publish_status IN ('NEW','FAILED')"
+    backlogThreshold: "200"
+    # TriggerAuth 的 Secret 名字（承载 POSTGRES_CONNECTION_STRING）
+    connectionStringSecretName: "batch-keda-postgres"
+    connectionStringSecretKey: "connection"
   resources:
     requests:
       cpu: "300m"

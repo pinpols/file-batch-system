@@ -31,7 +31,12 @@ spec:
   # StatefulSet 带 ordinal 的 Pod 名（batch-orchestrator-0..N-1）由 entrypoint.sh
   # 自动提取为 BATCH_OUTBOX_SHARD_INDEX；多 Pod 各持一片 Outbox 分片
   serviceName: {{ include "batch-platform.fullname" . }}-{{ $component }}-headless
+  # 启用 HPA/KEDA 时由 autoscaler 管控副本数；否则用固定 replicaCount
+  {{- $dynamic := eq (default "static" $svc.sharding.mode) "dynamic" }}
+  {{- $autoscale := and $dynamic (or $svc.hpa.enabled (and $svc.keda $svc.keda.enabled)) }}
+  {{- if not $autoscale }}
   replicas: {{ $svc.replicaCount }}
+  {{- end }}
   # 并行部署/销毁：Outbox 实例互不依赖，不需要 StatefulSet 默认的 OrderedReady 串行升级
   podManagementPolicy: Parallel
   selector:
@@ -61,13 +66,19 @@ spec:
               protocol: TCP
           env:
             # Downward API：POD_NAME 用于 entrypoint.sh 提取 StatefulSet ordinal
+            # dynamic 模式下 POD_NAME 还会被用作 Redis ZSET 里的 memberId
             - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            # Outbox 分片总数 = replicaCount；扩缩容时 helm upgrade 会触发滚动更新，所有 Pod 同步到新值
+            # 分片模式：static=env 给 SHARD_TOTAL；dynamic=应用启动时走 Redis 注册
+            - name: BATCH_OUTBOX_SHARDING_MODE
+              value: {{ default "static" $svc.sharding.mode | quote }}
+            {{- if not $dynamic }}
+            # static 模式专用：Outbox 分片总数 = replicaCount；扩缩容走 helm upgrade
             - name: BATCH_OUTBOX_SHARD_TOTAL
               value: {{ $svc.replicaCount | quote }}
+            {{- end }}
           {{- include "batch-platform.envFrom" . | nindent 10 }}
           {{- with $svc.startupProbe }}
           startupProbe:
@@ -103,3 +114,67 @@ spec:
       port: {{ $svc.service.port }}
       targetPort: http
       protocol: TCP
+{{- if and $dynamic $svc.hpa.enabled (not (and $svc.keda $svc.keda.enabled)) }}
+---
+# CPU-based HPA：仅在 sharding.mode=dynamic 时渲染（static 模式自动扩会破坏分片）
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  minReplicas: {{ $svc.hpa.minReplicas }}
+  maxReplicas: {{ $svc.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.hpa.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- if and $dynamic $svc.keda $svc.keda.enabled }}
+---
+# KEDA ScaledObject：按 Outbox backlog（NEW+FAILED 记录数）扩缩
+# 仅在 sharding.mode=dynamic 时渲染。前提：KEDA operator + 下面的 TriggerAuthentication
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}-pg
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretTargetRef:
+    - parameter: connection
+      name: {{ $svc.keda.connectionStringSecretName | quote }}
+      key: {{ $svc.keda.connectionStringSecretKey | quote }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  minReplicaCount: {{ $svc.keda.minReplicas }}
+  maxReplicaCount: {{ $svc.keda.maxReplicas }}
+  pollingInterval: {{ $svc.keda.pollingInterval | default 30 }}
+  cooldownPeriod: {{ $svc.keda.cooldownPeriod | default 120 }}
+  triggers:
+    - type: postgresql
+      metadata:
+        query: {{ $svc.keda.backlogQuery | quote }}
+        targetQueryValue: {{ $svc.keda.backlogThreshold | quote }}
+      authenticationRef:
+        name: {{ include "batch-platform.fullname" . }}-{{ $component }}-pg
+{{- end }}

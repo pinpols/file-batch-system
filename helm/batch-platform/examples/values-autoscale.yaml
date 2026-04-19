@@ -4,7 +4,9 @@
 # 策略：
 #   - Worker（import/export/dispatch）：KEDA 按 Kafka consumer lag 扩缩
 #   - Console-api：CPU HPA
-#   - Orchestrator / Trigger：保持静态 replicaCount（架构约束）
+#   - Orchestrator：sharding.mode=dynamic + CPU HPA（默认）；
+#                   或改 keda 按 Outbox backlog 扩（需先创建 Secret，见下方注释）
+#   - Trigger：保持静态 replicaCount（Quartz 集群锁天然约束）
 
 consoleApi:
   hpa:
@@ -12,6 +14,25 @@ consoleApi:
     minReplicas: 2
     maxReplicas: 6
     targetCPUUtilizationPercentage: 70
+
+orchestrator:
+  # 关键前置：切到 dynamic 才能安全扩缩；static 模式下 autoscaler 不会渲染
+  sharding:
+    mode: "dynamic"
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  # 想改用"基于 Outbox backlog"的扩缩（比 CPU 更贴近业务），先准备 Secret：
+  #   kubectl -n batch-prod create secret generic batch-keda-postgres \
+  #     --from-literal=connection='host=postgresql port=5432 user=batch_user password=<pwd> dbname=batch_business sslmode=disable'
+  # 然后把上面 hpa.enabled 改 false、下面 keda.enabled 改 true：
+  # keda:
+  #   enabled: true
+  #   minReplicas: 2
+  #   maxReplicas: 8
+  #   backlogThreshold: "200"
 
 workerImport:
   keda:
