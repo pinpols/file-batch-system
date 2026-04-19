@@ -1,4 +1,4 @@
-.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-one
+.PHONY: dev-build dev-start dev-stop dev-restart dev-restart-clean dev-restart-one
 .PHONY: test test-unit test-it test-e2e test-all test-build test-parallel
 .PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
@@ -24,10 +24,22 @@ dev-start:
 dev-stop:
 	bash scripts/local/stop-all.sh
 
-# 重新构建并启动
+# 重新构建并启动（增量构建，推荐默认使用，~30s total）
+# 增量模式覆盖 95% 日常改代码迭代：改 .java / .yml / 加类都能正确识别
 dev-restart:
 	bash scripts/local/stop-all.sh
 	bash scripts/local/build-apps.sh
+	bash scripts/local/start-all.sh
+
+# 强制 clean 重启（~80s total）；遇到以下任一情况用这个兜底：
+#   1) 删除 / 重命名 Java 类（旧 .class 可能残留在 target/classes 被打进 fat jar）
+#   2) 删除 / 重命名 resource（yml / SQL / 静态文件同上风险）
+#   3) 改了 parent pom 依赖版本，担心 .flattened-pom.xml 不同步
+#   4) 新增 Flyway migration 脚本却报"脚本缺失"
+#   5) 怀疑"幽灵 bug"、构建缓存状态不一致
+dev-restart-clean:
+	bash scripts/local/stop-all.sh
+	CLEAN=1 bash scripts/local/build-apps.sh
 	bash scripts/local/start-all.sh
 
 # 重启单个或多个模块（不重建其他模块）
