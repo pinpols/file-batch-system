@@ -31,6 +31,11 @@
     </modules>
 
     <properties>
+        <!-- Maven 可重现构建：同源码 ⇒ 同字节 jar。启用后 CDS 归档（build/cds/*.jsa）
+             能跨"无改动 make dev-restart"复用，省 ~2 分钟重训时间。
+             Spring Boot 3+ 的 repackage 插件也会读这个属性替代"now"，保证 fat jar 也可重现。
+             CI/发版时可在命令行用 -Dproject.build.outputTimestamp=${env.SOURCE_DATE_EPOCH} 覆盖。 -->
+        <project.build.outputTimestamp>2026-04-19T00:00:00Z</project.build.outputTimestamp>
         <!-- 统一版本入口：通过 `-Drevision=X.Y.Z` 构建期覆盖，默认非 SNAPSHOT 发布号。 -->
         <revision>1.0.0</revision>
         <java.version>25</java.version>

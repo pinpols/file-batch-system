@@ -34,24 +34,30 @@ mkdir -p "$LOG_DIR" "$CDS_DIR"
 # 与 start-all.sh 保持一致的本地 dev 启动加速参数（说明见 start-all.sh）
 LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xverify:none}"
 
-# AppCDS：同 start-all.sh，见那里的完整说明
+# AppCDS：同 start-all.sh，见那里的完整说明（基于 jar SHA-256 判重，避免 mtime 误伤）
 __CDS_FLAG=""
 warm_cds() {
   __CDS_FLAG=""
   local name="$1" jar="$2"
   local archive="$CDS_DIR/${name}.jsa"
+  local hash_file="$archive.sha256"
 
   if [[ "${SKIP_CDS:-0}" == "1" ]]; then
     return 0
   fi
-  if [[ -f "$archive" && "$jar" -ot "$archive" ]]; then
+
+  local jar_hash
+  jar_hash="$(shasum -a 256 "$jar" 2>/dev/null | awk '{print $1}')"
+
+  if [[ -f "$archive" && -f "$hash_file" && -n "$jar_hash" \
+        && "$(cat "$hash_file" 2>/dev/null)" == "$jar_hash" ]]; then
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
     return 0
   fi
 
-  echo "  预热 CDS 缓存 ${name}（首次约 15-30s）..."
+  echo "  预热 CDS 缓存 ${name}（首次约 15-30s；jar 字节变化时会重训）..."
   local warm_log="$LOG_DIR/${name}-cds-warmup.log"
-  rm -f "$archive"
+  rm -f "$archive" "$hash_file"
   java --enable-native-access=ALL-UNNAMED \
     ${LOCAL_FAST_JVM_OPTS} \
     -Dspring.context.exit=onRefresh \
@@ -66,7 +72,7 @@ warm_cds() {
   while kill -0 "$pid" 2>/dev/null; do
     if (( elapsed >= 120 )); then
       kill -9 "$pid" 2>/dev/null
-      rm -f "$archive"
+      rm -f "$archive" "$hash_file"
       echo "  ⚠  ${name} CDS 预热超时，跳过 → $warm_log"
       return 1
     fi
@@ -76,9 +82,11 @@ warm_cds() {
   wait "$pid" 2>/dev/null || true
 
   if [[ -f "$archive" ]]; then
+    echo "$jar_hash" >"$hash_file"
     echo "  ✓ ${name} CDS 缓存就绪"
     __CDS_FLAG="-XX:SharedArchiveFile=$archive"
   else
+    rm -f "$hash_file"
     echo "  ⚠  ${name} CDS 预热未生成 .jsa，跳过 → $warm_log"
   fi
 }
