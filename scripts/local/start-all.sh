@@ -335,13 +335,14 @@ wait_orchestrator_healthy
 [[ "${START_CONSOLE}" == "1" ]] && start_java console "$(module_jar console)"
 
 if [[ "${START_WORKERS}" == "1" ]]; then
-  local_ifs="$IFS"
-  IFS=','
-  for w in $WORKERS; do
+  # 把 WORKERS 字符串（逗号分隔）切成数组，避免在循环期间改 IFS 影响 start_java 内部
+  # 对 ${LOCAL_FAST_JVM_OPTS} 等空格分隔参数的 word-splitting
+  IFS=',' read -ra _WORKERS_ARR <<<"$WORKERS"
+  for w in "${_WORKERS_ARR[@]}"; do
     w="${w// /}"   # trim spaces
     [[ -n "$w" ]] && start_java "worker-${w}" "$(module_jar "worker-${w}")"
   done
-  IFS="$local_ifs"
+  unset _WORKERS_ARR
 fi
 
 mv "$PID_FILE_NEW" "$PID_FILE"
