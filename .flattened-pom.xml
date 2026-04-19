@@ -43,6 +43,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <minio.version>8.6.0</minio.version>
         <testcontainers.version>1.21.4</testcontainers.version>
+        <!-- testcontainers-redis 不在 testcontainers-bom 里，单独管理；子模块去版本号。 -->
+        <testcontainers-redis.version>2.2.4</testcontainers-redis.version>
         <okhttp.version>4.12.0</okhttp.version>
         <okio.version>3.16.1</okio.version>
         <lombok.version>1.18.42</lombok.version>
@@ -83,6 +85,11 @@
                 <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.redis</groupId>
+                <artifactId>testcontainers-redis</artifactId>
+                <version>${testcontainers-redis.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.projectlombok</groupId>
