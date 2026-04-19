@@ -251,6 +251,66 @@ BATCH_REDIS_PORT=16379
 
 ---
 
+## 应用云原生能力与水平扩容评估
+
+选型时常见疑问："我这套应用能不能上 K8s 直接跑？能水平扩吗？" 本节逐项审计给出明确答案。
+
+### 结论先说
+
+**完全支持云原生，所有模块都设计为无状态水平扩容**。有状态的东西全部外置到 Postgres / Kafka /
+Redis / MinIO，应用进程本身零本地状态。审计证据见下表。
+
+### 云原生 10 项能力清单（实测）
+
+| # | 能力 | 证据位置 | 状态 |
+|---|---|---|---|
+| 1 | K8s liveness / readiness 探针 | `batch-defaults.yml` + 所有 Helm templates | ✅ |
+| 2 | JWT 无状态会话（Console 层） | `ConsoleSecurityConfiguration` `SessionCreationPolicy.STATELESS` | ✅ |
+| 3 | 分布式锁 ShedLock（协调单例任务） | `ShedLockProviderFactory` + `V30__create_shedlock.sql` | ✅ |
+| 4 | Quartz JDBC 集群模式（多实例抢占） | `application.yml` `isClustered: true` | ✅ |
+| 5 | Worker 注册表（DB 驱动服务发现） | `worker_registry` 表 + `AbstractWorkerLoop` 心跳 | ✅ |
+| 6 | Outbox 分片（多副本并行消费） | `BATCH_OUTBOX_SHARD_TOTAL` / `SHARD_INDEX` 配对 | ✅ |
+| 7 | Kafka consumer group 自动再平衡 | `@EnableKafka` + 每 worker 独立 group ID | ✅ |
+| 8 | 优雅停机 + drain in-flight 任务 | `server.shutdown=graceful` + `awaitDrain(Duration)` | ✅ |
+| 9 | SSE Pub/Sub 广播（不需 sticky session） | `ConsoleRealtimeRedisPublisher` Redis 分发 | ✅ |
+| 10 | Helm 支持 replicaCount + HPA | `helm/batch-platform/values.yaml` + worker HPA 模板 | ✅ |
+
+### 各模块水平扩容机制
+
+| 模块 | 扩容方式 | 关键机制 |
+|---|---|---|
+| **orchestrator** | 分片复制（`shard-total` 控制并行度） | 每 Pod 按 `SHARD_INDEX` 只处理自己那片 outbox；ShedLock 协调"单例"定时任务 |
+| **trigger** | 完全对等复制 | Quartz 集群模式抢占触发；多实例同时跑不会重复执行 job |
+| **console-api** | 完全无状态，任意副本数 | JWT 验签无共享状态；SSE 推送通过 Redis Pub/Sub 广播到所有实例 |
+| **worker-import / export / dispatch** | **HPA 已配置**，按 Kafka lag 或 CPU 自动伸缩 | Kafka partition 自动再平衡；新 Pod 加入 consumer group 自动分到任务 |
+
+### 3 个需要注意的小瑕疵
+
+落地云原生部署时请留意以下点，避免踩坑：
+
+1. **Outbox shard-index 是静态 ENV**
+   - 当前：`BATCH_OUTBOX_SHARD_TOTAL=N` 和每 Pod 单独 `BATCH_OUTBOX_SHARD_INDEX=0..N-1`，水平扩缩容时必须手动调整
+   - 更云原生的做法：把 orchestrator 从 Deployment 改为 **StatefulSet**，从 `POD_NAME` 的 ordinal 自动解析 index（`batch-orch-0` → index=0）
+   - 改造量：Helm template 改 kind + 一个 init container 注入 `SHARD_INDEX`
+
+2. **缺 `PodDisruptionBudget`**
+   - 当前：K8s 节点维护（drain）时可能一次踢掉多个 Pod，影响 HA
+   - 建议每个模块加一个 PDB，`minAvailable: 1`（或 `maxUnavailable: 50%`）
+
+3. **`@Scheduled` 方法需要严格的协调机制**
+   - orchestrator 有一堆 `@Scheduled`（FileGovernance / Retry / OutboxPoll / ReconcileJob），每个 Pod 都会触发
+   - 当前防重复：Outbox 走 shard-index，其他走 ShedLock
+   - 新加 `@Scheduled` 时**必须**挂 `@SchedulerLock` 或用 shard-index 分片，否则多副本会重复工作
+
+### 若只打算部署 1 个副本
+
+本项目不强制多副本，单副本部署也完全跑得起来：
+- `BATCH_OUTBOX_SHARD_TOTAL=1`（默认值）
+- orchestrator / trigger / console-api：`replicaCount: 1`
+- worker-*：`replicaCount: 1`（HPA 下限设 1）
+
+所有分布式协调机制在单副本下退化为无操作（ShedLock 永远是自己拿锁），零开销。
+
 ## 相关文档
 
 - [本地开发指南](local-development.md) — 本地联调流程
