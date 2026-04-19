@@ -143,7 +143,7 @@ class ImportPreprocessPipelineRsaTest {
     assertThat(result).isEqualTo(PAYLOAD);
   }
 
-  // ── testingOpen bypasses RSA check ─────────────────────────────────────────
+  // ── bypassMode bypasses RSA check ─────────────────────────────────────────
 
   @Test
   void shouldBypassRsaVerification_whenTestingOpen() {
@@ -154,7 +154,7 @@ class ImportPreprocessPipelineRsaTest {
             "signatureBase64", "INVALID_BASE64_GARBAGE");
     Map<String, Object> template = Map.of("preprocess_pipeline", List.of(step));
 
-    // testingOpen=true 时完全跳过 RSA 校验
+    // bypassMode=true 时完全跳过 RSA 校验
     byte[] result = ImportPreprocessPipeline.run(PAYLOAD, null, template, true);
     assertThat(result).isEqualTo(PAYLOAD);
   }

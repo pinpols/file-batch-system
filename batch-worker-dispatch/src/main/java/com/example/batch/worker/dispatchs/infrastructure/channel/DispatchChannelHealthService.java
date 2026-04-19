@@ -181,7 +181,7 @@ public class DispatchChannelHealthService {
             channelConfig,
             minioStorageProperties,
             minioClient,
-            !securityProperties.isTestingOpen());
+            !securityProperties.isBypassMode());
     recordProbeResult(channelConfig, result);
     if (result.success()) {
       probeSuccessCount.incrementAndGet();

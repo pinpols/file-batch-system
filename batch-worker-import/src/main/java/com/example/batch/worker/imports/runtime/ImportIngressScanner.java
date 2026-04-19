@@ -11,6 +11,7 @@ import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
 import io.minio.Result;
 import io.minio.messages.Item;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -143,7 +144,7 @@ public class ImportIngressScanner {
                 .fileName(fileName)
                 .originalFileName(fileName)
                 .fileFormatType(resolveFileFormatType(fileName))
-                .charset("UTF-8")
+                .charset(StandardCharsets.UTF_8.name())
                 .fileSizeBytes(snapshot.size())
                 .checksumType("NONE")
                 .checksumValue(null)

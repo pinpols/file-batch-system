@@ -2,6 +2,7 @@ package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.plugin.WorkerPluginIds;
+import com.example.batch.common.utils.EncodingUtils;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -225,11 +226,11 @@ public class ParseStep implements ImportStageStep {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object charset = templateConfig.get("charset");
       if (charset != null && StringUtils.hasText(String.valueOf(charset))) {
-        return Charset.forName(String.valueOf(charset));
+        return EncodingUtils.resolve(String.valueOf(charset));
       }
     }
     if (importPayload != null && StringUtils.hasText(importPayload.charset())) {
-      return Charset.forName(importPayload.charset());
+      return EncodingUtils.resolve(importPayload.charset());
     }
     return StandardCharsets.UTF_8;
   }

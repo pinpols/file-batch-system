@@ -33,7 +33,7 @@ class BatchObjectCryptoServiceTest {
   @BeforeEach
   void setUp() {
     BatchSecurityProperties security = new BatchSecurityProperties();
-    security.setTestingOpen(false);
+    security.setBypassMode(false);
 
     BatchKmsProperties kms = new BatchKmsProperties();
     kms.setDefaultKeyRef(KEY_REF);
@@ -159,7 +159,7 @@ class BatchObjectCryptoServiceTest {
   @Test
   void shouldEncrypt_whenTestingOpen_returnsFalse() {
     BatchSecurityProperties openSecurity = new BatchSecurityProperties();
-    openSecurity.setTestingOpen(true);
+    openSecurity.setBypassMode(true);
     BatchKmsProperties kms = new BatchKmsProperties();
     kms.setDefaultKeyRef(KEY_REF);
     kms.setKeys(Map.of(KEY_REF, KEY_B64));

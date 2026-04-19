@@ -41,7 +41,7 @@ import org.springframework.util.StringUtils;
  *
  * <p><b>脱敏</b>：模板配置 {@code log_masking_enabled=true} 时，{@link #outcome} 在返回前
  * 对 {@link ValidationIssue} 的错误信息和原始记录按 {@code masking_rule_set} 脱敏处理；
- * {@code BatchSecurityProperties#isTestingOpen()} 为 true 时强制关闭脱敏。
+ * {@code BatchSecurityProperties#isBypassMode()} 为 true 时强制关闭脱敏。
  */
 @Service
 @RequiredArgsConstructor
@@ -146,7 +146,7 @@ public class ImportDataQualityService {
     if (session == null) {
       return new ValidationOutcome(Map.of(), List.of(), List.of());
     }
-    boolean logMask = logMaskingEnabled(session) && !batchSecurityProperties.isTestingOpen();
+    boolean logMask = logMaskingEnabled(session) && !batchSecurityProperties.isBypassMode();
     String ruleSet = maskingRuleSet(session);
     return new ValidationOutcome(
         maskRecordIssues(session.recordIssues(), logMask, ruleSet),

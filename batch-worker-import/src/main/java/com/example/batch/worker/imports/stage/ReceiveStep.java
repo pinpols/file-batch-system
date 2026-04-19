@@ -165,7 +165,7 @@ public class ReceiveStep implements ImportStageStep {
     Map<String, Object> security = new LinkedHashMap<>();
     security.put(
         "contentEncryptionEnabled",
-        !batchSecurityProperties.isTestingOpen()
+        !batchSecurityProperties.isBypassMode()
             && truthy(template.get("content_encryption_enabled")));
     security.put("encryptionKeyRef", template.get("encryption_key_ref"));
     security.put("downloadRequiresApproval", truthy(template.get("download_requires_approval")));

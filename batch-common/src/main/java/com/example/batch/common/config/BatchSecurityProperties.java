@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 import org.springframework.core.env.Environment;
 
 @Data
@@ -12,11 +13,18 @@ import org.springframework.core.env.Environment;
 @ConfigurationProperties(prefix = "batch.security")
 public class BatchSecurityProperties {
 
-  /** 早期测试模式：放宽认证、脱敏和解密等限制。 */
-  private boolean testingOpen = false;
+  /**
+   * 全局安全旁路总开关（`batch.security.bypass-mode`）。开启后放宽认证、脱敏、加解密、审批、渠道
+   * 校验等所有安全约束，仅供本地 / 联调 / E2E 使用。
+   *
+   * <p>Java 字段默认 {@code false}（安全默认），实际默认值由部署渠道覆盖：docker-compose 下
+   * {@code ${BATCH_SECURITY_BYPASS_MODE:-true}}、IDE 本地 {@code application-local.yml} 显式
+   * {@code false}、生产 Helm values 显式 {@code false}。见 CLAUDE.md §字符编码 下一节。
+   */
+  private boolean bypassMode = false;
 
   /**
-   * orchestrator 内部接口（/internal/**）的共享密钥。 客户端通过 X-Internal-Secret header 携带；testingOpen=true 时跳过校验。
+   * orchestrator 内部接口（/internal/**）的共享密钥。 客户端通过 X-Internal-Secret header 携带；bypassMode=true 时跳过校验。
    * 生产环境必须通过 BATCH_INTERNAL_SECRET 环境变量注入强密钥。
    */
   private String internalSecret = "internal-secret";
@@ -25,7 +33,28 @@ public class BatchSecurityProperties {
   @Autowired(required = false)
   private transient Environment environment;
 
-  // #5-1: 生产 profile 下强制禁止 testingOpen，防止误配导致认证被绕过
+  /**
+   * 兼容旧键 `batch.security.testing-open`（2026-04-19 重命名为 `bypass-mode`）。保留 setter 让
+   * Spring relaxed binding 仍能把旧键读入同一字段；启动时 @PostConstruct 打 WARN 提示迁移。
+   * 下一个 minor 版本移除。
+   */
+  @Deprecated(since = "2026-04-19", forRemoval = true)
+  public void setTestingOpen(boolean testingOpen) {
+    this.bypassMode = testingOpen;
+    this.testingOpenLegacyKeyUsed = true;
+  }
+
+  @Deprecated(since = "2026-04-19", forRemoval = true)
+  @DeprecatedConfigurationProperty(
+      replacement = "batch.security.bypass-mode",
+      reason = "语义重命名：testing-open → bypass-mode，更准确反映放宽整条安全链的副作用")
+  public boolean isTestingOpen() {
+    return bypassMode;
+  }
+
+  private transient boolean testingOpenLegacyKeyUsed = false;
+
+  // #5-1: 生产 profile 下强制禁止 bypassMode，防止误配导致认证被绕过
   // #9-1: 生产 profile 下校验密码占位符已被替换
   @PostConstruct
   void validateSecuritySettings() {
@@ -33,12 +62,17 @@ public class BatchSecurityProperties {
       return; // 纯单元测试场景，无 Spring 容器
     }
     boolean prod = isProductionProfile();
-    if (testingOpen && prod) {
+    if (bypassMode && prod) {
       throw new IllegalStateException(
-          "FATAL: batch.security.testing-open=true 在生产 profile 下被禁止。" + " 请移除该配置或使用非生产 profile。");
+          "FATAL: batch.security.bypass-mode=true 在生产 profile 下被禁止。" + " 请移除该配置或使用非生产 profile。");
     }
-    if (testingOpen) {
-      log.warn("batch.security.testing-open=true — 内部接口认证已关闭，仅限开发/测试环境使用");
+    if (bypassMode) {
+      log.warn("batch.security.bypass-mode=true — 全链路安全旁路已启用，仅限本地/联调/E2E 使用");
+    }
+    if (testingOpenLegacyKeyUsed) {
+      log.warn(
+          "batch.security.testing-open 已重命名为 batch.security.bypass-mode，"
+              + "旧键仍可用但会在下一版本移除，请尽快迁移配置");
     }
     if (prod) {
       validateNotPlaceholder("batch.security.internal-secret", internalSecret);

@@ -32,8 +32,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *   <li><b>Legacy shared-secret</b>（{@code properties.tokenHeader}）：仅当 {@code legacyHeaderAuthEnabled}
  *       为 true 时启用——<b>本分支忽略请求里的角色 header</b>，角色一律用服务端 {@code defaultAuthorities}，
  *       防止共享密钥泄露后调用方自提权。
- *   <li><b>testing-open</b>：仅测试 profile 使用，可从 header 读 username/tenant/roles，放行任意角色
- *       （生产禁用，由 {@code batchSecurityProperties.testing-open} 控制）。
+ *   <li><b>bypass-mode</b>：仅测试 profile 使用，可从 header 读 username/tenant/roles，放行任意角色
+ *       （生产禁用，由 {@code batchSecurityProperties.bypass-mode} 控制）。
  * </ol>
  *
  * <p>{@code finally clearContext()} 兜底：不论哪条认证链执行或抛异常，都清理 {@code SecurityContextHolder}，
@@ -54,7 +54,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
     try {
-      if (!properties.isEnabled() && !batchSecurityProperties.isTestingOpen()) {
+      if (!properties.isEnabled() && !batchSecurityProperties.isBypassMode()) {
         filterChain.doFilter(request, response);
         return;
       }
@@ -98,7 +98,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
 
       String sharedToken = request.getHeader(properties.getTokenHeader());
       if (properties.isLegacyHeaderAuthEnabled() && StringUtils.hasText(sharedToken)) {
-        if (!batchSecurityProperties.isTestingOpen()
+        if (!batchSecurityProperties.isBypassMode()
             && !sharedToken.equals(properties.getSharedSecret())) {
           responseWriter.write(
               response,
@@ -135,7 +135,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
         }
       }
 
-      if (batchSecurityProperties.isTestingOpen()) {
+      if (batchSecurityProperties.isBypassMode()) {
         try {
           String username = resolveUsername(request);
           String tenantId = resolveTenant(request);
@@ -147,7 +147,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
                   authorities.stream()
                       .map(SimpleGrantedAuthority::getAuthority)
                       .collect(Collectors.toCollection(LinkedHashSet::new)));
-          setAuthentication(principal, "testing-open");
+          setAuthentication(principal, "bypass-mode");
         } catch (IllegalArgumentException exception) {
           responseWriter.write(
               response,
@@ -187,7 +187,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
   private String resolveUsername(HttpServletRequest request) {
     String username = request.getHeader(properties.getUserHeader());
     if (!StringUtils.hasText(username)) {
-      username = batchSecurityProperties.isTestingOpen() ? "testing-console-user" : "console-user";
+      username = batchSecurityProperties.isBypassMode() ? "testing-console-user" : "console-user";
     }
     return username;
   }

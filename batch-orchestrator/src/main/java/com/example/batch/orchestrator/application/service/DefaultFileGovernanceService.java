@@ -77,7 +77,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
    * 生成下载链接，按文件安全策略分两条路径：
    *
    * <ul>
-   *   <li>{@code content_encryption_enabled=true}（且非 testing-open）：不能直接暴露 S3 presign URL，
+   *   <li>{@code content_encryption_enabled=true}（且非 bypass-mode）：不能直接暴露 S3 presign URL，
    *       因为原始对象是加密字节；改返回 {@code /api/console/files/{id}/download} 走 console 代理，
    *       由 console 侧解密 + 审计后再吐给前端。
    *   <li>普通文件：直连 MinIO 生成有 TTL 的 presign URL（下限 60s）。
@@ -102,7 +102,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
           ResultCode.BUSINESS_ERROR, "approvalId is required for download on this file template");
     }
     if (truthy(security.get("content_encryption_enabled"))
-        && !batchSecurityProperties.isTestingOpen()) {
+        && !batchSecurityProperties.isBypassMode()) {
       String consolePath =
           "/api/console/files/" + command.fileId() + "/download?tenantId=" + command.tenantId();
       if (StringUtils.hasText(command.approvalId())) {
@@ -316,7 +316,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   private boolean requiresDownloadApproval(Map<String, Object> security) {
-    if (batchSecurityProperties.isTestingOpen()) {
+    if (batchSecurityProperties.isBypassMode()) {
       return false;
     }
     if (security == null || security.isEmpty()) {

@@ -60,7 +60,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       return true;
     }
 
-    if (securityProperties.isTestingOpen()) {
+    if (securityProperties.isBypassMode()) {
       return true;
     }
 

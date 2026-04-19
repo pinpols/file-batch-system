@@ -32,6 +32,11 @@ RUN --mount=type=cache,target=/root/.m2 \
 
 FROM eclipse-temurin:25-jre-jammy AS runtime
 
+# 全栈 UTF-8：容器 locale 强制 C.UTF-8，避免 JVM file.encoding / 日志 / 进程 IO
+# 退化到 ANSI_X3.4-1968 导致非 ASCII 字符乱码。
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*

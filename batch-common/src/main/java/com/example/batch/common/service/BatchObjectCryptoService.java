@@ -29,7 +29,7 @@ import org.springframework.util.StringUtils;
  * 加密产物携带魔数（{@code BATCHENC}）、版本号、keyRef 和随机 IV，
  * {@code decryptIfNeeded} 通过检测魔数自动判断是否需要解密，对未加密内容透传。
  * 密钥材料通过 {@link com.example.batch.common.config.BatchKmsProperties} 以 Base64 形式配置，
- * 当 {@code BatchSecurityProperties.isTestingOpen()} 为 {@code true} 时禁用加密（仅限测试环境）。
+ * 当 {@code BatchSecurityProperties.isBypassMode()} 为 {@code true} 时禁用加密（仅限测试环境）。
  */
 public class BatchObjectCryptoService {
 
@@ -48,12 +48,12 @@ public class BatchObjectCryptoService {
     this.kmsProperties = kmsProperties;
   }
 
-  public boolean isTestingOpen() {
-    return securityProperties.isTestingOpen();
+  public boolean isBypassMode() {
+    return securityProperties.isBypassMode();
   }
 
   public boolean shouldEncrypt(Map<String, Object> security) {
-    return !securityProperties.isTestingOpen()
+    return !securityProperties.isBypassMode()
         && truthy(security == null ? null : security.get("content_encryption_enabled"));
   }
 

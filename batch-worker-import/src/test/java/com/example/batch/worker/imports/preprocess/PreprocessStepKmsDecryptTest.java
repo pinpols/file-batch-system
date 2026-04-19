@@ -40,7 +40,7 @@ class PreprocessStepKmsDecryptTest {
   @BeforeEach
   void setUp() {
     BatchSecurityProperties security = new BatchSecurityProperties();
-    security.setTestingOpen(false);
+    security.setBypassMode(false);
 
     BatchKmsProperties kms = new BatchKmsProperties();
     kms.setDefaultKeyRef(KEY_REF);

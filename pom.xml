@@ -139,6 +139,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>${maven.compiler.release}</release>
+                    <!-- 显式 UTF-8，防御 build agent 的系统默认字符集不是 UTF-8 时源码里的非 ASCII 字符（如中文注释）被按 GBK/ISO-8859-1 读入。 -->
+                    <encoding>UTF-8</encoding>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>

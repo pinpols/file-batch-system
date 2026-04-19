@@ -154,7 +154,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       }
       // S-2.6: resolve-then-connect — 用解析后的 IP 建连，防止 DNS rebinding
       String connectHost = ctx.connConfig().host();
-      if (!securityProperties.isTestingOpen()) {
+      if (!securityProperties.isBypassMode()) {
         InetAddress resolved = DnsResolveGuard.resolveAndValidate(connectHost);
         connectHost = resolved.getHostAddress();
       }

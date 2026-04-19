@@ -663,3 +663,52 @@ batch-console-api       ← 控制台 BFF（面向前端）
 
 > 未覆盖的 48% 基本为命名自解释的辅助方法（`resolveXxx` / `toXxx` / `buildXxx` 等），
 > 不应为追求覆盖率而添加无效注释。**52% 是当前合理的目标终态。**
+
+## 20. 字符编码
+
+**契约：全系统 UTF-8**。系统内部持有、传输、存储、落盘的字符串一律 UTF-8；仅"读取外部推过来的非 UTF-8 源文件"这一个导入边界允许 GBK / ISO-8859-1 等，读入时立即转为 UTF-8 内部表示。
+
+### 20.1 落地层次
+
+| 层 | 具体约束 | 代码位置 |
+|---|---|---|
+| 项目源码 / 构建 | 根 pom `project.build.sourceEncoding=UTF-8` + `maven-compiler-plugin` 显式 `<encoding>UTF-8</encoding>` | `pom.xml` |
+| 运行时容器 locale | `ENV LANG=C.UTF-8 LC_ALL=C.UTF-8`（Java 25 默认 `file.encoding=UTF-8` via JEP 400，不必再传 `-Dfile.encoding`） | `docker/Dockerfile.app` |
+| HTTP / i18n | `server.servlet.encoding.charset=UTF-8` + `force=true`；`spring.messages.encoding=UTF-8` | `batch-common/.../batch-defaults.yml` |
+| 导出（系统→外部） | 硬编码 `StandardCharsets.UTF_8`，`file_template_config.target_charset` 仅接受 `UTF-8`，其他拒绝 | `batch-worker-export/.../format/*ExportFormat.java`、`MinioExportStorage`、`RegisterStep` |
+| 导入（外部→系统） | `PreprocessStep.resolveCharset()` 按 `payload.targetCharset → template.charset → UTF-8` 三级降级，解析后全流转均为 UTF-8 | `batch-worker-import/.../PreprocessStep.java`、`ImportPreprocessPipeline`、`ParseStep` |
+| 中间件容器 locale | `docker-compose.yml` 的 `postgres` / `kafka` / `minio` / `redis` 均从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）读取 `LANG` / `LC_ALL`；`postgres` 额外 `POSTGRES_INITDB_ARGS=--encoding=UTF8`。Test profile（`sftp` / `mockserver`）同样继承 | `docker-compose.yml`、`docker-compose.test.yml` |
+
+### 20.2 Java 代码风格
+
+- **禁止** `Charset.forName("UTF-8")` / 字符串字面量 `"UTF-8"`（字符串易拼错、无法静态校验）
+- 需要 `Charset` 对象 → `StandardCharsets.UTF_8`
+- 需要字符集名（写入 `file_record.charset` 等字段） → `EncodingUtils.UTF_8`
+- 需要归一外部输入 → `EncodingUtils.normalize(raw)` / `EncodingUtils.resolve(raw)`
+- 导出路径强制断言 → `EncodingUtils.requireUtf8(raw)`
+- **禁止** 业务代码自行调用 `Charset.forName(...)`——别名差异（`utf8` / `UTF8` / `utf-8`）和非法值交给 `EncodingUtils` 处理
+
+`EncodingUtils`：`batch-common/src/main/java/com/example/batch/common/utils/EncodingUtils.java`
+
+## 21. 配置开关规范
+
+### 21.1 `batch.security.bypass-mode`（全链路安全旁路总开关）
+
+配置键 `batch.security.bypass-mode`（Java 字段 `BatchSecurityProperties.bypassMode`，方法 `isBypassMode()`）。开启后**整条安全链旁路**：认证 / 脱敏 / 加解密 / 审批 / 渠道校验全部放宽。**仅供本地 / 联调 / E2E 使用**。
+
+**默认值分级**（高优先级覆盖低优先级）：
+
+| 层 | 默认 | 场景 |
+|---|---|---|
+| Java 字段 `bypassMode` | `false` | 兜底最安全，防未知 profile 意外放开 |
+| `application-local.yml`（6 个模块） | `true` | IDE 本地跑默认旁路，开发者调试不受安全链拖累 |
+| `docker-compose.app.yml` env | `${BATCH_SECURITY_BYPASS_MODE:-false}` | docker-compose 起容器默认不旁路，环境形态贴近生产；需要旁路时显式设 env 覆盖 |
+| `.env.local` / `.env.test` / `.env.example` | `false` | 跟 compose 对齐 |
+| `.env.prod` | `false` | 生产显式关 |
+| Helm `values.yaml`（生产） | `"false"` | 默认安全 |
+| Helm `examples/values-local-k8s.yaml` | `"true"` | 本地 K8s 演示 |
+| prod profile @PostConstruct | **强制拒绝 `true`** | `BatchSecurityProperties.validateSecuritySettings()` 启动 fail-fast |
+
+**调用规范**：业务代码一律 `batchSecurityProperties.isBypassMode()`；**禁止**调已 deprecated 的 `isTestingOpen()`。
+
+**向后兼容**：旧键 `batch.security.testing-open`（2026-04-19 重命名为 `bypass-mode`）通过 `setTestingOpen` setter + `@DeprecatedConfigurationProperty` 保持可用；启动 WARN 提示迁移，**下一个 minor 版本移除**。

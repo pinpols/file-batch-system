@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 class ImportPreprocessPipelineTest {
 
   @Test
-  void testingOpenShouldSkipChecksumAndCrypto() {
+  void bypassModeShouldSkipChecksumAndCrypto() {
     byte[] out = ImportPreprocessPipeline.run(new byte[0], null, Map.of(), true);
     assertThat(out).isEmpty();
   }

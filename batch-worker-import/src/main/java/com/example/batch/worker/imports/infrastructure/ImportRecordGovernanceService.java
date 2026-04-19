@@ -219,7 +219,7 @@ public class ImportRecordGovernanceService {
       Object rule = templateMap.get("masking_rule_set");
       maskingRuleSet = rule == null ? null : String.valueOf(rule);
     }
-    if (batchSecurityProperties.isTestingOpen()) {
+    if (batchSecurityProperties.isBypassMode()) {
       errorLineMask = false;
     }
     String safeMessage =

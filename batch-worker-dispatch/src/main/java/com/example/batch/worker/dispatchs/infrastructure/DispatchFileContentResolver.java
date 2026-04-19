@@ -66,7 +66,7 @@ public class DispatchFileContentResolver {
     InputStream inputStream =
         minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(storagePath).build());
     try {
-      if (cryptoService.isTestingOpen()) {
+      if (cryptoService.isBypassMode()) {
         return inputStream;
       }
       return cryptoService.decryptIfNeeded(inputStream);

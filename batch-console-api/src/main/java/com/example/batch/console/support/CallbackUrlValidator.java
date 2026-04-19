@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
  * <p>阻止 SSRF：拒绝回环地址（localhost/127.x/::1）、RFC 1918 私有网段（10.x、172.16-31.x、192.168.x）
  * 和链路本地地址（169.254.x）。生产模式下同时强制要求 HTTPS。
  *
- * <p>{@code batch.security.testing-open=true} 时跳过全部校验，保持本地联调体验。
+ * <p>{@code batch.security.bypass-mode=true} 时跳过全部校验，保持本地联调体验。
  */
 @Component
 @RequiredArgsConstructor
@@ -26,7 +26,7 @@ public class CallbackUrlValidator {
   private final BatchSecurityProperties securityProperties;
 
   public void validate(String callbackUrl) {
-    if (securityProperties.isTestingOpen()) {
+    if (securityProperties.isBypassMode()) {
       return;
     }
 

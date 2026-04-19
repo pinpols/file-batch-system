@@ -30,9 +30,9 @@ minio:
 # Worker 调 orchestrator 的内部地址（K8s Service DNS）
 orchestratorBaseUrl: "http://batch-orchestrator:18082"
 
-# 演示用，本地联调开 testing-open=true
+# 演示用，本地联调开 bypass-mode=true
 security:
-  testingOpen: "true"
+  bypassMode: "true"
 
 # 各模块：port=18xxx 匹配 app 实际监听 + replicaCount
 # （同一 key 只能出现一次，YAML 后定义会覆盖前定义）
