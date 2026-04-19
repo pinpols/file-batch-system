@@ -3,9 +3,11 @@ package com.example.batch.console.support;
 import com.example.batch.console.config.ConsoleSecurityProperties;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -54,14 +56,43 @@ public class ConsoleSessionRegistry {
   private final Cache<String, Long> localMirror;
 
   public ConsoleSessionRegistry(
-      StringRedisTemplate redisTemplate, ConsoleSecurityProperties securityProperties) {
+      StringRedisTemplate redisTemplate,
+      ConsoleSecurityProperties securityProperties,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.redisTemplate = redisTemplate;
     this.securityProperties = securityProperties;
+    // R-4.7：显式开 recordStats 让 Caffeine 的命中率 / 驱逐计数可观测；
+    // expireAfterWrite + maximumSize 原有语义保留，运维可通过 actuator /
+    // batch.console.session.* 指标判断容量是否需要调整。
     this.localMirror =
         Caffeine.newBuilder()
             .expireAfterWrite(resolveTtl(securityProperties))
             .maximumSize(100_000)
+            .recordStats()
             .build();
+    registerCacheMetrics(meterRegistryProvider);
+  }
+
+  private void registerCacheMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry == null) {
+      return;
+    }
+    // 基础计数 gauge；更完整的 CaffeineStats / tagged metrics 可后续接 micrometer-caffeine
+    registry.gauge(
+        "batch.console.session.cache.size", localMirror, c -> c.estimatedSize());
+    registry.gauge(
+        "batch.console.session.cache.hit_count",
+        localMirror,
+        c -> c.stats().hitCount());
+    registry.gauge(
+        "batch.console.session.cache.miss_count",
+        localMirror,
+        c -> c.stats().missCount());
+    registry.gauge(
+        "batch.console.session.cache.eviction_count",
+        localMirror,
+        c -> c.stats().evictionCount());
   }
 
   public long nextSessionVersion(String username, String tenantId) {

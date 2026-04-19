@@ -3,7 +3,11 @@ package com.example.batch.worker.exports.sql;
 import com.example.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
@@ -165,5 +169,39 @@ public class SqlTemplateExportSqlValidator {
             "sql_template_export must reference named parameter :" + param);
       }
     }
+    // S-1.10：SQL 里出现的所有 :param 必须在白名单内（required + 引擎保留 + 允许扩展）。
+    // 之前仅校验必填存在，未知参数留给 NamedParameterJdbcTemplate 运行时报错——把暴露前移到模板加载阶段。
+    Set<String> allowed = new LinkedHashSet<>();
+    allowed.addAll(required);
+    // 引擎保留参数（Plugin 内部注入）
+    allowed.add("__cursor");
+    allowed.add("__limit");
+    if (security != null && security.getAllowedExtraParams() != null) {
+      allowed.addAll(security.getAllowedExtraParams());
+    }
+    Set<String> referenced = extractNamedParameters(sql);
+    for (String name : referenced) {
+      if (!allowed.contains(name)) {
+        throw new IllegalArgumentException(
+            "sql_template_export references unknown named parameter :"
+                + name
+                + " — declare it in batch.worker.export.sql-template.allowed-extra-params or"
+                + " remove the reference");
+      }
+    }
+  }
+
+  /**
+   * 提取 SQL 中所有 {@code :paramName} 引用。
+   * 简化处理：忽略字符串字面量 / 注释里的冒号；真需要全量覆盖可换用 JSqlParser 的 parameter visitor。
+   * 当前实现足以覆盖常见 SQL 模板（冒号参数不会出现在字符串里）。
+   */
+  private Set<String> extractNamedParameters(String sql) {
+    Set<String> names = new LinkedHashSet<>();
+    Matcher matcher = Pattern.compile(":([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
+    while (matcher.find()) {
+      names.add(matcher.group(1));
+    }
+    return names;
   }
 }

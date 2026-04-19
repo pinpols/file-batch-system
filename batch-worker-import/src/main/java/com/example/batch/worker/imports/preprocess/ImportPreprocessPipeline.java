@@ -370,13 +370,52 @@ public final class ImportPreprocessPipeline {
     return KeyFactory.getInstance("RSA").generatePublic(spec);
   }
 
+  /**
+   * A-3.13：CHARSET_TRANSCODE 输出大小硬上限。GBK/GB18030 → UTF-8 时字节可能膨胀到 2-3×，
+   * 无上限就能让上游构造一个接近 OOM 阈值的输入把整个 worker 拖死。
+   *
+   * <p>默认 = {@code max(inputLen × 2 + 1MB, 16MB)}；模板可通过 step.{@code outputSizeCap}
+   * 覆盖。超限抛 {@link IllegalArgumentException}，由 ReceiveStep / PreprocessStep 的 catch 兜底
+   * 落 file_record.reason_message。
+   */
+  private static final long CHARSET_TRANSCODE_MIN_CAP_BYTES = 16L * 1024L * 1024L;
+
   private static byte[] charsetTranscode(byte[] input, Map<String, Object> step) {
     String from = firstNonBlank(stringProp(step, "fromCharset"), "UTF-8");
     String to = firstNonBlank(stringProp(step, "toCharset"), "UTF-8");
     Charset fromCs = EncodingUtils.resolve(from);
     Charset toCs = EncodingUtils.resolve(to);
+    long computedCap = Math.max((long) input.length * 2L + 1_048_576L, CHARSET_TRANSCODE_MIN_CAP_BYTES);
+    long cap = parseLong(stringProp(step, "outputSizeCap"), computedCap);
     String text = new String(input, fromCs);
-    return text.getBytes(toCs);
+    byte[] output = text.getBytes(toCs);
+    if (output.length > cap) {
+      throw new IllegalArgumentException(
+          "CHARSET_TRANSCODE output exceeds cap: inputBytes="
+              + input.length
+              + ", outputBytes="
+              + output.length
+              + ", cap="
+              + cap
+              + " (from="
+              + fromCs
+              + ", to="
+              + toCs
+              + ")");
+    }
+    return output;
+  }
+
+  private static long parseLong(String raw, long fallback) {
+    if (!Texts.hasText(raw)) {
+      return fallback;
+    }
+    try {
+      long parsed = Long.parseLong(raw.trim());
+      return parsed > 0 ? parsed : fallback;
+    } catch (NumberFormatException ignored) {
+      return fallback;
+    }
   }
 
   private static String stringProp(Map<String, Object> map, String key) {
