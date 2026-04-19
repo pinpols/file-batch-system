@@ -14,7 +14,7 @@ import com.example.batch.orchestrator.repository.WorkflowDefinitionRepository;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Orchestrator 配置缓存服务。
@@ -38,7 +38,7 @@ public class OrchestratorConfigCacheService {
   private final TenantQuotaPolicyRepository tenantQuotaPolicyRepository;
 
   public JobDefinitionRecord findEnabledJobDefinition(String tenantId, String jobCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(jobCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "job-definition", jobCode);
@@ -56,7 +56,7 @@ public class OrchestratorConfigCacheService {
 
   public WorkflowDefinitionRecord findEnabledWorkflowDefinition(
       String tenantId, String workflowCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(workflowCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(workflowCode)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "workflow-definition", workflowCode);
@@ -74,7 +74,7 @@ public class OrchestratorConfigCacheService {
   }
 
   public BusinessCalendarRecord findEnabledBusinessCalendar(String tenantId, String calendarCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(calendarCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(calendarCode)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "business-calendar", calendarCode);
@@ -92,7 +92,7 @@ public class OrchestratorConfigCacheService {
   }
 
   public BatchWindowRecord findEnabledBatchWindow(String tenantId, String windowCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(windowCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(windowCode)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "batch-window", windowCode);
@@ -111,7 +111,7 @@ public class OrchestratorConfigCacheService {
   }
 
   public TenantQuotaPolicyRecord findEnabledQuotaPolicy(String tenantId) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return null;
     }
     String key = BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first");
@@ -144,14 +144,14 @@ public class OrchestratorConfigCacheService {
   }
 
   public void evictQuotaPolicies(String tenantId) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return;
     }
     redis.delete(BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first"));
   }
 
   private void evictConfig(String tenantId, String type, String code) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(code)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(code)) {
       return;
     }
     redis.delete(BatchRedisKeys.config(tenantId, type, code));

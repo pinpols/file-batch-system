@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 分发渠道健康管理服务，负责探针执行、状态更新及分发前健康门控。
@@ -50,9 +50,9 @@ public class DispatchChannelHealthService {
   @PostConstruct
   void init() {
     if (minioStorageProperties != null
-        && StringUtils.hasText(minioStorageProperties.getEndpoint())
-        && StringUtils.hasText(minioStorageProperties.getAccessKey())
-        && StringUtils.hasText(minioStorageProperties.getSecretKey())) {
+        && Texts.hasText(minioStorageProperties.getEndpoint())
+        && Texts.hasText(minioStorageProperties.getAccessKey())
+        && Texts.hasText(minioStorageProperties.getSecretKey())) {
       this.minioClient =
           MinioClient.builder()
               .endpoint(minioStorageProperties.getEndpoint())
@@ -93,7 +93,7 @@ public class DispatchChannelHealthService {
     String tenantId = stringValue(channelConfig.get("tenant_id"));
     String channelCode = stringValue(channelConfig.get("channel_code"));
     String channelType = stringValue(channelConfig.get("channel_type"));
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(channelCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
       return;
     }
     DispatchChannelHealthSnapshot snapshot = repository.findHealth(tenantId, channelCode);
@@ -164,9 +164,9 @@ public class DispatchChannelHealthService {
     String tenantId = stringValue(channelConfig.get("tenant_id"));
     String channelCode = stringValue(channelConfig.get("channel_code"));
     String channelType = stringValue(channelConfig.get("channel_type"));
-    if (!StringUtils.hasText(tenantId)
-        || !StringUtils.hasText(channelCode)
-        || !StringUtils.hasText(channelType)) {
+    if (!Texts.hasText(tenantId)
+        || !Texts.hasText(channelCode)
+        || !Texts.hasText(channelType)) {
       return new DispatchChannelProbeResult(
           false, "probe target missing tenant/channel/type", null);
     }
@@ -223,7 +223,7 @@ public class DispatchChannelHealthService {
       return null;
     }
     String text = String.valueOf(value);
-    return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text.trim() : null;
+    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text.trim() : null;
   }
 
   /** 只读挂载、权限不足等本机联调场景频发，降级为 DEBUG 避免噪音；其余情况仍使用 WARN 以便发现真实故障。 */

@@ -268,7 +268,9 @@ class ConfigPackageExcelWorkbookWriter {
       Row row = sheet.createRow(i);
       Cell cell = row.createCell(0);
       cell.setCellValue(lines[i]);
-      if (i == 0) cell.setCellStyle(title);
+      if (i == 0) {
+        cell.setCellStyle(title);
+      }
     }
   }
 

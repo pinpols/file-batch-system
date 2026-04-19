@@ -17,7 +17,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 执行模板配置的 SELECT SQL（存储于 {@code default_query_sql}）的导出插件。
@@ -61,8 +61,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   @Override
   public Map<String, Object> loadBatch(ExportDataContext context) {
     if (context == null
-        || !StringUtils.hasText(context.tenantId())
-        || !StringUtils.hasText(context.batchNo())) {
+        || !Texts.hasText(context.tenantId())
+        || !Texts.hasText(context.batchNo())) {
       return Map.of();
     }
     // 最小头部行：下游 pipeline 要求非空 batch map 及 batchId（可以是合成值）。
@@ -78,8 +78,8 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
   public DetailPage loadDetailPage(
       ExportDataContext context, Long batchId, int pageSize, Object cursor) {
     if (context == null
-        || !StringUtils.hasText(context.tenantId())
-        || !StringUtils.hasText(context.batchNo())) {
+        || !Texts.hasText(context.tenantId())
+        || !Texts.hasText(context.batchNo())) {
       return DetailPage.empty();
     }
     SqlTemplateExportSpec spec =

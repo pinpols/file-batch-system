@@ -4,7 +4,7 @@ import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.List;
 import java.util.Map;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Pipeline 步骤流转工具类：封装"确定下一步"的路由逻辑。
@@ -45,7 +45,7 @@ public final class PipelineStepFlowSupport {
       return null;
     }
     String selector = popSelector(attributes);
-    if (!StringUtils.hasText(selector) && current != null) {
+    if (!Texts.hasText(selector) && current != null) {
       selector =
           success
               ? current.textParam(
@@ -55,7 +55,7 @@ public final class PipelineStepFlowSupport {
                   "nextStageCode")
               : current.textParam("onFailureNextStepCode", "onFailureNextStageCode");
     }
-    if (StringUtils.hasText(selector)) {
+    if (Texts.hasText(selector)) {
       PipelineStepDefinition explicitNext = findByStepCodeOrStageCode(steps, selector);
       if (explicitNext != null) {
         return explicitNext;
@@ -74,7 +74,7 @@ public final class PipelineStepFlowSupport {
 
   private static String popSelector(Map<String, Object> attributes) {
     String stepCode = popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STEP_CODE);
-    return StringUtils.hasText(stepCode)
+    return Texts.hasText(stepCode)
         ? stepCode
         : popText(attributes, PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
   }
@@ -84,12 +84,12 @@ public final class PipelineStepFlowSupport {
       return null;
     }
     Object value = attributes.remove(key);
-    if (value instanceof String text && StringUtils.hasText(text)) {
+    if (value instanceof String text && Texts.hasText(text)) {
       return text;
     }
     if (value != null) {
       String text = String.valueOf(value);
-      if (StringUtils.hasText(text) && !"null".equalsIgnoreCase(text)) {
+      if (Texts.hasText(text) && !"null".equalsIgnoreCase(text)) {
         return text;
       }
     }
@@ -98,7 +98,7 @@ public final class PipelineStepFlowSupport {
 
   private static PipelineStepDefinition findByStepCodeOrStageCode(
       List<PipelineStepDefinition> steps, String selector) {
-    if (steps == null || !StringUtils.hasText(selector)) {
+    if (steps == null || !Texts.hasText(selector)) {
       return null;
     }
     for (PipelineStepDefinition step : steps) {

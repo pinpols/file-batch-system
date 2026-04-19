@@ -7,7 +7,7 @@ import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * MinIO Bucket 自动初始化辅助工具类。
@@ -25,7 +25,7 @@ public final class MinioBucketSupport {
 
   public static boolean ensureBucket(
       MinioClient minioClient, String bucket, Logger log, String componentName) {
-    if (minioClient == null || !StringUtils.hasText(bucket)) {
+    if (minioClient == null || !Texts.hasText(bucket)) {
       return false;
     }
     try {

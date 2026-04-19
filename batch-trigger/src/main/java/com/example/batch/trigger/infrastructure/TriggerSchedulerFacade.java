@@ -144,7 +144,9 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       List<TriggerStatusInfo> result = new ArrayList<>();
       for (JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(JOB_GROUP))) {
         JobDetail detail = scheduler.getJobDetail(jobKey);
-        if (detail == null) continue;
+        if (detail == null) {
+          continue;
+        }
         JobDataMap data = detail.getJobDataMap();
         String identity = jobKey.getName();
         String[] parts = identity.split(":", 2);
@@ -159,8 +161,12 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
           Trigger t = triggers.get(0);
           Trigger.TriggerState state = scheduler.getTriggerState(t.getKey());
           status = state.name();
-          if (t.getPreviousFireTime() != null) prevFire = t.getPreviousFireTime().toInstant();
-          if (t.getNextFireTime() != null) nextFire = t.getNextFireTime().toInstant();
+          if (t.getPreviousFireTime() != null) {
+            prevFire = t.getPreviousFireTime().toInstant();
+          }
+          if (t.getNextFireTime() != null) {
+            nextFire = t.getNextFireTime().toInstant();
+          }
         }
         result.add(
             new TriggerStatusInfo(
@@ -201,11 +207,17 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @Override
   public String schedulerStatus() {
     try {
-      if (scheduler.isShutdown()) return "SHUTDOWN";
-      if (scheduler.isInStandbyMode()) return "STANDBY";
+      if (scheduler.isShutdown()) {
+        return "SHUTDOWN";
+      }
+      if (scheduler.isInStandbyMode()) {
+        return "STANDBY";
+      }
       if (scheduler.isStarted()) {
         var pausedGroups = scheduler.getPausedTriggerGroups();
-        if (pausedGroups.contains(JOB_GROUP)) return "PAUSED";
+        if (pausedGroups.contains(JOB_GROUP)) {
+          return "PAUSED";
+        }
         return "STARTED";
       }
       return "UNKNOWN";

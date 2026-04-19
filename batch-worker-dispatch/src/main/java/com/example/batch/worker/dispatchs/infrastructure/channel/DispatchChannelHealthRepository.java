@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 分发渠道健康状态持久化仓库。 */
 @Repository
@@ -70,7 +70,7 @@ public class DispatchChannelHealthRepository {
       return null;
     }
     String text = String.valueOf(value);
-    return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
   }
 
   private int intValue(Object value) {

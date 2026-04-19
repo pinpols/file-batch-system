@@ -20,7 +20,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 异步回执轮询器：定时从 {@code file_dispatch_record} 中取出 {@code receipt_status=PENDING} 的记录，
@@ -84,8 +84,8 @@ public class DispatchReceiptPollScheduler {
             ? null
             : String.valueOf(row.get("external_request_id"));
     if (fileId == null
-        || !StringUtils.hasText(channelCode)
-        || !StringUtils.hasText(externalRequestId)) {
+        || !Texts.hasText(channelCode)
+        || !Texts.hasText(externalRequestId)) {
       return;
     }
     Map<String, Object> channelRow = fileDispatchRepository.loadChannel(tenantId, channelCode);
@@ -97,7 +97,7 @@ public class DispatchReceiptPollScheduler {
         channel.get("receipt_poll_url") == null
             ? null
             : String.valueOf(channel.get("receipt_poll_url"));
-    if (!StringUtils.hasText(pollUrl)) {
+    if (!Texts.hasText(pollUrl)) {
       return;
     }
     String sep = pollUrl.contains("?") ? "&" : "?";
@@ -121,7 +121,7 @@ public class DispatchReceiptPollScheduler {
         return;
       }
       String receiptCode = root.path("receiptCode").asText(null);
-      if (!StringUtils.hasText(receiptCode)) {
+      if (!Texts.hasText(receiptCode)) {
         receiptCode = externalRequestId;
       }
       int n = fileDispatchRepository.markAcked(tenantId, fileId, channelCode, receiptCode);

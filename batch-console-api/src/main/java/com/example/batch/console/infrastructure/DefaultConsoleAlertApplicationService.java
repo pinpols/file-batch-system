@@ -13,7 +13,7 @@ import com.example.batch.console.web.response.ConsoleAlertActionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** {@link ConsoleAlertApplicationService} 的默认实现： 仅执行告警状态流转，不引入额外的告警事件表。 */
 @Service
@@ -73,6 +73,6 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
   }
 
   private String normalizeStatus(String status) {
-    return StringUtils.hasText(status) ? status.toUpperCase() : STATUS_OPEN;
+    return Texts.hasText(status) ? status.toUpperCase() : STATUS_OPEN;
   }
 }

@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 文件治理指标缓存服务。
@@ -36,7 +36,7 @@ public class FileGovernanceMetricsCacheService {
       long arrivalThresholdSeconds,
       long processingThresholdSeconds,
       int sampleSize) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return Map.of();
     }
     String key = BatchRedisKeys.fileGovernanceMetrics(tenantId);
@@ -84,7 +84,7 @@ public class FileGovernanceMetricsCacheService {
   }
 
   public void write(String tenantId, Map<String, Object> metrics) {
-    if (!StringUtils.hasText(tenantId) || metrics == null || metrics.isEmpty()) {
+    if (!Texts.hasText(tenantId) || metrics == null || metrics.isEmpty()) {
       return;
     }
     Map<String, String> hash = new LinkedHashMap<>();

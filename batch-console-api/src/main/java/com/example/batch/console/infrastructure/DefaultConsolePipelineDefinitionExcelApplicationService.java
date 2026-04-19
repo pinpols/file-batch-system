@@ -63,7 +63,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 /** {@link ConsolePipelineDefinitionExcelApplicationService} 的默认实现。 */
@@ -429,7 +429,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
       }
       if (defaultTenantId != null && columns.contains(COL_TENANT_ID)) {
-        if (!StringUtils.hasText(rowValues.get(COL_TENANT_ID))) {
+        if (!Texts.hasText(rowValues.get(COL_TENANT_ID))) {
           rowValues.put(COL_TENANT_ID, defaultTenantId);
         }
       }
@@ -503,7 +503,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private PipelineRow toPipelineRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = normalize(values.get(COL_TENANT_ID));
-    if (!StringUtils.hasText(effectiveTenant)) {
+    if (!Texts.hasText(effectiveTenant)) {
       effectiveTenant = tenantId;
     } else if (!tenantId.equals(effectiveTenant)) {
       issues.add("tenant_id must match current tenant: " + tenantId);
@@ -544,7 +544,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private String requireText(
       Map<String, String> values, String key, int maxLength, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       issues.add(key + " is required");
       return null;
     }
@@ -558,7 +558,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private String optionalText(
       Map<String, String> values, String key, int maxLength, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return null;
     }
     if (normalized.length() > maxLength) {
@@ -588,7 +588,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private Integer requireInteger(
       Map<String, String> values, String key, int min, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       issues.add(key + " is required");
       return min;
     }
@@ -607,7 +607,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private Boolean optionalBoolean(
       Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
@@ -623,7 +623,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
   private String optionalJson(Map<String, String> values, String key, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return null;
     }
     try {
@@ -647,7 +647,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         cellIndex++) {
       Cell cell = headerRow.getCell(cellIndex);
       String header = normalize(formatter.formatCellValue(cell));
-      if (StringUtils.hasText(header)) {
+      if (Texts.hasText(header)) {
         headers.put(header, cellIndex);
       }
     }
@@ -668,7 +668,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   private boolean rowIsBlank(Row row, DataFormatter formatter) {
     for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
       String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
-      if (StringUtils.hasText(value)) {
+      if (Texts.hasText(value)) {
         return false;
       }
     }
@@ -684,7 +684,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   }
 
   private String fileNameOrDefault(String fileName) {
-    if (!StringUtils.hasText(fileName)) {
+    if (!Texts.hasText(fileName)) {
       return "pipeline-definition.xlsx";
     }
     return fileName;

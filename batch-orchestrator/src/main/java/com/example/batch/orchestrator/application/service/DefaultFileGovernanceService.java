@@ -28,7 +28,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 文件治理统一入口：archive / delete / presign / redispatch / 到达组（arrival group）5 类操作。
@@ -97,7 +97,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     }
     Map<String, Object> security =
         fileGovernanceRepository.loadTemplateSecurityForFile(command.tenantId(), command.fileId());
-    if (requiresDownloadApproval(security) && !StringUtils.hasText(command.approvalId())) {
+    if (requiresDownloadApproval(security) && !Texts.hasText(command.approvalId())) {
       throw new BizException(
           ResultCode.BUSINESS_ERROR, "approvalId is required for download on this file template");
     }
@@ -105,7 +105,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         && !batchSecurityProperties.isBypassMode()) {
       String consolePath =
           "/api/console/files/" + command.fileId() + "/download?tenantId=" + command.tenantId();
-      if (StringUtils.hasText(command.approvalId())) {
+      if (Texts.hasText(command.approvalId())) {
         consolePath += "&approvalId=" + command.approvalId();
       }
       Map<String, Object> auditDetail = new LinkedHashMap<>();
@@ -422,7 +422,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
   private void validateCommand(FileGovernanceCommand command) {
     Guard.require(command != null, "file governance command is required");
-    if (!StringUtils.hasText(command.tenantId())) {
+    if (!Texts.hasText(command.tenantId())) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
     }
     if (command.fileId() == null) {
@@ -432,19 +432,19 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
 
   private void validateArrivalGroupCommand(ArrivalGroupGovernanceCommand command) {
     Guard.require(command != null, "arrival group command is required");
-    if (!StringUtils.hasText(command.tenantId())) {
+    if (!Texts.hasText(command.tenantId())) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
     }
-    if (!StringUtils.hasText(command.fileGroupCode())) {
+    if (!Texts.hasText(command.fileGroupCode())) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "fileGroupCode is required");
     }
-    if (!StringUtils.hasText(command.action())) {
+    if (!Texts.hasText(command.action())) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, "action is required");
     }
   }
 
   private String resolveOperatorType(String operatorId) {
-    return StringUtils.hasText(operatorId) ? "USER" : "API";
+    return Texts.hasText(operatorId) ? "USER" : "API";
   }
 
   private Long toLong(Object value) {

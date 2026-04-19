@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * MinIO 入库扫描器：定时轮询对象存储 bucket，将新到达的文件自动登记为 {@code file_record}（status=RECEIVED），
@@ -67,7 +67,7 @@ public class ImportIngressScanner {
 
   /** 无锁入口，供测试和手动调用使用。调度逻辑留在 {@link #scheduledScan()} 中，直接调用时始终执行扫描逻辑。 */
   public void scan() {
-    if (!scannerProperties.isEnabled() || !StringUtils.hasText(workerConfiguration.tenantId())) {
+    if (!scannerProperties.isEnabled() || !Texts.hasText(workerConfiguration.tenantId())) {
       return;
     }
     if (!ensureBucket()) {
@@ -110,8 +110,8 @@ public class ImportIngressScanner {
     metadata.put("lastModified", snapshot.lastModified());
     metadata.put("detectedAt", Instant.now().toString());
     if (scannerProperties.getArrival().isEnabled()
-        && StringUtils.hasText(scannerProperties.getArrival().getFileGroupCode())
-        && StringUtils.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
+        && Texts.hasText(scannerProperties.getArrival().getFileGroupCode())
+        && Texts.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
       metadata.put("fileGroupCode", scannerProperties.getArrival().getFileGroupCode());
       metadata.put("waitFileGroupMode", scannerProperties.getArrival().getWaitFileGroupMode());
       metadata.put("requiredFileSet", scannerProperties.getArrival().getRequiredFileSet());
@@ -160,8 +160,8 @@ public class ImportIngressScanner {
                 .metadata(metadata)
                 .build());
     if (scannerProperties.getArrival().isEnabled()
-        && StringUtils.hasText(scannerProperties.getArrival().getFileGroupCode())
-        && StringUtils.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
+        && Texts.hasText(scannerProperties.getArrival().getFileGroupCode())
+        && Texts.hasText(scannerProperties.getArrival().getRequiredFileSet())) {
       runtimeRepository.appendAudit(
           FileAuditParam.builder()
               .fileId(fileId)

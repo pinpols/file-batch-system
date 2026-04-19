@@ -10,7 +10,7 @@ import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Worker 任务控制应用服务，处理 Worker 侧发起的任务认领（Claim）、结果上报（Report）和租约续期（Renew）请求。
@@ -74,10 +74,10 @@ public class TaskControllerApplicationService {
     if (success) {
       return null;
     }
-    if (StringUtils.hasText(primary)) {
+    if (Texts.hasText(primary)) {
       return primary;
     }
-    if (StringUtils.hasText(fallback)) {
+    if (Texts.hasText(fallback)) {
       return fallback;
     }
     return "UNKNOWN";

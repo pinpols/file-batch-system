@@ -29,7 +29,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -75,25 +75,25 @@ public class DefaultConsoleFileDownloadApplicationService
     }
     Map<String, Object> security = templateSecurity(effectiveTenant, fileId);
     if (requiresDownloadApproval(security)
-        && !StringUtils.hasText(approvalId)
+        && !Texts.hasText(approvalId)
         && !batchSecurityProperties.isBypassMode()) {
       throw new BizException(
           ResultCode.BUSINESS_ERROR, "approvalId is required for download on this file template");
     }
-    if (StringUtils.hasText(approvalId)) {
+    if (Texts.hasText(approvalId)) {
       requireApprovedApproval(effectiveTenant, approvalId);
     }
     String bucket = stringValue(fileRecord.get("storage_bucket"));
-    if (!StringUtils.hasText(bucket)) {
+    if (!Texts.hasText(bucket)) {
       bucket = minioStorageProperties.getBucket();
     }
     String objectName = stringValue(fileRecord.get("storage_path"));
-    if (!StringUtils.hasText(objectName)) {
+    if (!Texts.hasText(objectName)) {
       throw new BizException(ResultCode.STATE_CONFLICT, "file storage path is missing");
     }
     String fileName = stringValue(fileRecord.get("file_name"));
     String contentType = stringValue(fileRecord.get("mime_type"));
-    if (!StringUtils.hasText(contentType)) {
+    if (!Texts.hasText(contentType)) {
       contentType = "application/octet-stream";
     }
     try {
@@ -185,7 +185,7 @@ public class DefaultConsoleFileDownloadApplicationService
 
   private Map<String, Object> templateSecurity(String tenantId, Long fileId) {
     String templateCode = fileRecordMapper.selectTemplateCodeByFileId(tenantId, fileId);
-    if (!StringUtils.hasText(templateCode)) {
+    if (!Texts.hasText(templateCode)) {
       return Map.of();
     }
     Map<String, Object> security =

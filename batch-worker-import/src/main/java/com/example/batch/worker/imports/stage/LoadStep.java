@@ -25,7 +25,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Import pipeline 的 LOAD 阶段：将校验通过的记录通过 {@link ImportLoadPlugin} 批量写入目标存储。
@@ -69,7 +69,7 @@ public class LoadStep implements ImportStageStep {
   public ImportStageResult execute(ImportJobContext context) {
     String validatedRecordsPath =
         stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
-    if (StringUtils.hasText(validatedRecordsPath)) {
+    if (Texts.hasText(validatedRecordsPath)) {
       return executeStreaming(context, Path.of(validatedRecordsPath));
     }
     return executeLegacy(context);
@@ -101,7 +101,7 @@ public class LoadStep implements ImportStageStep {
         List<Map<String, Object>> chunk = new ArrayList<>(chunkSize);
         String line;
         while ((line = reader.readLine()) != null) {
-          if (!StringUtils.hasText(line)) {
+          if (!Texts.hasText(line)) {
             continue;
           }
           chunk.add(objectMapper.readValue(line, MAP_TYPE));
@@ -231,11 +231,11 @@ public class LoadStep implements ImportStageStep {
       ImportJobContext context, ImportPayload importPayload, String sourceFileName) {
     Map<String, Object> tc = templateConfigMap(context);
     String batchNo =
-        importPayload == null || !StringUtils.hasText(importPayload.batchNo())
+        importPayload == null || !Texts.hasText(importPayload.batchNo())
             ? context.getBizDate()
             : importPayload.batchNo();
     String bizType =
-        importPayload != null && StringUtils.hasText(importPayload.bizType())
+        importPayload != null && Texts.hasText(importPayload.bizType())
             ? importPayload.bizType()
             : context.getJobCode();
     String templateCode = importPayload != null ? importPayload.templateCode() : null;
@@ -257,7 +257,7 @@ public class LoadStep implements ImportStageStep {
   private String resolveLoadTargetRef(ImportJobContext context, ImportPayload importPayload) {
     Map<String, Object> tc = templateConfigMap(context);
     Object v = tc.get("load_target_ref");
-    if (v != null && StringUtils.hasText(String.valueOf(v))) {
+    if (v != null && Texts.hasText(String.valueOf(v))) {
       return String.valueOf(v).trim();
     }
     return WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED;
@@ -323,7 +323,7 @@ public class LoadStep implements ImportStageStep {
       if (value instanceof Number number) {
         return Math.max(1, number.intValue());
       }
-      if (value != null && StringUtils.hasText(String.valueOf(value))) {
+      if (value != null && Texts.hasText(String.valueOf(value))) {
         return Math.max(1, Integer.parseInt(String.valueOf(value)));
       }
     }
@@ -335,7 +335,7 @@ public class LoadStep implements ImportStageStep {
       return null;
     }
     String text = String.valueOf(value);
-    return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
   }
 
   private void deleteQuietly(Path path) {
@@ -351,7 +351,7 @@ public class LoadStep implements ImportStageStep {
 
   private Path resolvePath(Object value) {
     String text = stringValue(value);
-    if (!StringUtils.hasText(text)) {
+    if (!Texts.hasText(text)) {
       return null;
     }
     return Path.of(text);

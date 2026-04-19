@@ -139,7 +139,7 @@ public class ConsoleRealtimeEventHub {
   private boolean matches(Subscription subscription, ConsoleSseEvent event) {
     return Objects.equals(subscription.tenantId, event.tenantId())
         && (subscription.stream == null
-            || subscription.stream.equals("*")
+            || "*".equals(subscription.stream)
             || subscription.stream.equals(event.stream()))
         && (subscription.eventType == null
             || subscription.eventType.isBlank()

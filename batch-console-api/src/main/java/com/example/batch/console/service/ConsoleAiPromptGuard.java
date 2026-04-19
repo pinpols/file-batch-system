@@ -10,7 +10,7 @@ import com.example.batch.console.support.AiPromptGateResult;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +25,7 @@ public class ConsoleAiPromptGuard {
           AiPromptCategory.OUT_OF_SCOPE,
           CommonErrorMessages.AI_ASSISTANT_DISABLED);
     }
-    if (!StringUtils.hasText(prompt)) {
+    if (!Texts.hasText(prompt)) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_REQUIRED);
     }
     if (prompt.length() > properties.getMaxPromptLength()) {
@@ -53,7 +53,7 @@ public class ConsoleAiPromptGuard {
   }
 
   private boolean contains(String normalized, String lower, String keyword) {
-    if (!StringUtils.hasText(keyword)) {
+    if (!Texts.hasText(keyword)) {
       return false;
     }
     String needle = keyword.toLowerCase(Locale.ROOT);

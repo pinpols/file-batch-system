@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 导入坏记录治理服务：集中管理跳过策略、阈值判断、坏记录持久化和错误输出汇总。
@@ -61,7 +61,7 @@ public class ImportRecordGovernanceService {
   }
 
   public boolean isSkippable(String errorCode) {
-    if (!isSkipEnabled() || !StringUtils.hasText(errorCode)) {
+    if (!isSkipEnabled() || !Texts.hasText(errorCode)) {
       return false;
     }
     Set<String> allowedErrorCodes = resolveAllowedErrorCodes();
@@ -126,7 +126,7 @@ public class ImportRecordGovernanceService {
     }
     Long fileId =
         runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
-    if (fileId == null || !StringUtils.hasText(context.getTenantId())) {
+    if (fileId == null || !Texts.hasText(context.getTenantId())) {
       return;
     }
     String errorOutputPath = null;
@@ -149,7 +149,7 @@ public class ImportRecordGovernanceService {
         "manualReviewRequired",
         Boolean.TRUE.equals(context.getAttributes().get("manualReviewRequired"))
             || shouldManualReview());
-    if (StringUtils.hasText(errorOutputPath)) {
+    if (Texts.hasText(errorOutputPath)) {
       metadata.put("errorOutputPath", errorOutputPath);
     }
     runtimeRepository.updateFileMetadata(fileId, metadata);
@@ -298,20 +298,20 @@ public class ImportRecordGovernanceService {
       return 0L;
     }
     String text = String.valueOf(value);
-    if (!StringUtils.hasText(text)) {
+    if (!Texts.hasText(text)) {
       return 0L;
     }
     return Long.parseLong(text);
   }
 
   private Set<String> resolveAllowedErrorCodes() {
-    if (!StringUtils.hasText(skipProperties.skipErrorCodes())) {
+    if (!Texts.hasText(skipProperties.skipErrorCodes())) {
       return Set.of();
     }
     Set<String> codes = new HashSet<>();
     for (String item : skipProperties.skipErrorCodes().split(",")) {
       String code = item.trim();
-      if (StringUtils.hasText(code)) {
+      if (Texts.hasText(code)) {
         codes.add(code);
       }
     }

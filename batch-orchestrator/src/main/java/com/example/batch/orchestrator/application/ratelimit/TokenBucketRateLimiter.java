@@ -4,7 +4,7 @@ import com.example.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupp
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 集群级限流器：基于 Redis 固定窗口计数，非真正的 token bucket 算法——类名沿用历史命名。
@@ -27,7 +27,7 @@ public class TokenBucketRateLimiter {
     if (maxPerMinute <= 0) {
       return true;
     }
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(action)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(action)) {
       return true;
     }
     long windowStartEpochSecond = Math.floorDiv(nowEpochMillis, 60_000L) * 60L;

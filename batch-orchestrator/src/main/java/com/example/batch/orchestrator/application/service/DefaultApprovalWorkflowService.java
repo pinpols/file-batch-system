@@ -7,7 +7,7 @@ import com.example.batch.orchestrator.mapper.ApprovalCommandMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 审批命令状态机：{@code PENDING → APPROVED / REJECTED → EXECUTED}。
@@ -34,7 +34,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     entity.setTargetType(command.targetType());
     entity.setTargetId(command.targetId());
     entity.setPayloadJson(
-        StringUtils.hasText(command.payloadJson()) ? command.payloadJson() : "{}");
+        Texts.hasText(command.payloadJson()) ? command.payloadJson() : "{}");
     entity.setApprovalStatus(ApprovalCommandStatus.PENDING.code());
     entity.setRequesterId(command.requesterId());
     entity.setSourceTraceId(command.sourceTraceId());

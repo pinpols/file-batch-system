@@ -26,7 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * PREPROCESS（设计说明书 §9.3）：拉取模板、解码正文，执行 {@link ImportPreprocessPipeline} （{@code preprocess_pipeline}
@@ -72,15 +72,15 @@ public class PreprocessStep implements ImportStageStep {
         context.getAttributes().get("importPayload") instanceof ImportPayload payload
             ? payload
             : null;
-    if (!StringUtils.hasText(context.getRawPayload())
+    if (!Texts.hasText(context.getRawPayload())
         && (importPayload == null
-            || (!StringUtils.hasText(importPayload.content())
-                && !StringUtils.hasText(importPayload.contentBase64())))) {
+            || (!Texts.hasText(importPayload.content())
+                && !Texts.hasText(importPayload.contentBase64())))) {
       return ImportStageResult.failure(
           stage(), "IMPORT_PREPROCESS_INVALID", "raw payload is blank");
     }
     try {
-      if (importPayload != null && StringUtils.hasText(importPayload.templateCode())) {
+      if (importPayload != null && Texts.hasText(importPayload.templateCode())) {
         Map<String, Object> templateConfig =
             runtimeRepository.loadLatestTemplateConfig(
                 context.getTenantId(), importPayload.templateCode(), ImportWorkerType.IMPORT);
@@ -143,7 +143,7 @@ public class PreprocessStep implements ImportStageStep {
   }
 
   private static boolean isBinaryImportFormat(String formatType) {
-    if (!StringUtils.hasText(formatType)) {
+    if (!Texts.hasText(formatType)) {
       return false;
     }
     String u = formatType.trim().toUpperCase();
@@ -152,11 +152,11 @@ public class PreprocessStep implements ImportStageStep {
 
   private static String resolveFileFormatType(
       ImportPayload importPayload, Map<String, Object> templateConfig) {
-    if (importPayload != null && StringUtils.hasText(importPayload.fileFormatType())) {
+    if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
       return importPayload.fileFormatType();
     }
     Object v = templateConfig.get("file_format_type");
-    if (v != null && StringUtils.hasText(String.valueOf(v))) {
+    if (v != null && Texts.hasText(String.valueOf(v))) {
       return String.valueOf(v);
     }
     return null;
@@ -164,10 +164,10 @@ public class PreprocessStep implements ImportStageStep {
 
   private byte[] resolveRawBytes(
       ImportJobContext context, ImportPayload importPayload, Object templateConfigObject) {
-    if (importPayload != null && StringUtils.hasText(importPayload.contentBase64())) {
+    if (importPayload != null && Texts.hasText(importPayload.contentBase64())) {
       return Base64.getDecoder().decode(importPayload.contentBase64().trim());
     }
-    if (importPayload != null && StringUtils.hasText(importPayload.content())) {
+    if (importPayload != null && Texts.hasText(importPayload.content())) {
       Charset cs = resolveCharsetForContentBytes(importPayload, templateConfigObject);
       return importPayload.content().getBytes(cs);
     }
@@ -179,11 +179,11 @@ public class PreprocessStep implements ImportStageStep {
       ImportPayload importPayload, Object templateConfigObject) {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object charset = templateConfig.get("charset");
-      if (charset != null && StringUtils.hasText(String.valueOf(charset))) {
+      if (charset != null && Texts.hasText(String.valueOf(charset))) {
         return EncodingUtils.resolve(String.valueOf(charset));
       }
     }
-    if (importPayload != null && StringUtils.hasText(importPayload.charset())) {
+    if (importPayload != null && Texts.hasText(importPayload.charset())) {
       return EncodingUtils.resolve(importPayload.charset());
     }
     return StandardCharsets.UTF_8;
@@ -212,18 +212,18 @@ public class PreprocessStep implements ImportStageStep {
   private Charset resolveCharset(ImportPayload importPayload, Object templateConfigObject) {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object targetCharset = templateConfig.get("target_charset");
-      if (targetCharset != null && StringUtils.hasText(String.valueOf(targetCharset))) {
+      if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
         return EncodingUtils.resolve(String.valueOf(targetCharset));
       }
       Object charset = templateConfig.get("charset");
-      if (charset != null && StringUtils.hasText(String.valueOf(charset))) {
+      if (charset != null && Texts.hasText(String.valueOf(charset))) {
         return EncodingUtils.resolve(String.valueOf(charset));
       }
     }
-    if (importPayload != null && StringUtils.hasText(importPayload.targetCharset())) {
+    if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
       return EncodingUtils.resolve(importPayload.targetCharset());
     }
-    if (importPayload != null && StringUtils.hasText(importPayload.charset())) {
+    if (importPayload != null && Texts.hasText(importPayload.charset())) {
       return EncodingUtils.resolve(importPayload.charset());
     }
     return StandardCharsets.UTF_8;

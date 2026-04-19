@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** Parses fixed-width text files into NDJSON records. */
 public class FixedWidthFormatParser implements FormatParser {
@@ -53,7 +53,7 @@ public class FixedWidthFormatParser implements FormatParser {
       String line;
       int nonBlankLineNo = 0;
       while ((line = reader.readLine()) != null) {
-        if (!StringUtils.hasText(line)) {
+        if (!Texts.hasText(line)) {
           continue;
         }
         nonBlankLineNo++;

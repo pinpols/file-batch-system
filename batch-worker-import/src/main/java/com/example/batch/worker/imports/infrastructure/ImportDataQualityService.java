@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 导入数据质量校验服务：对数据集级别和记录级别分别执行规则校验。
@@ -282,7 +282,7 @@ public class ImportDataQualityService {
                 rule.get("checksumType"),
                 importPayload == null ? null : importPayload.checksumType()));
     String algorithm =
-        !StringUtils.hasText(configuredAlgorithm) || "NONE".equalsIgnoreCase(configuredAlgorithm)
+        !Texts.hasText(configuredAlgorithm) || "NONE".equalsIgnoreCase(configuredAlgorithm)
             ? "SHA-256"
             : configuredAlgorithm;
     String expectedChecksum =
@@ -291,7 +291,7 @@ public class ImportDataQualityService {
                 rule.get("expected"),
                 rule.get("expectedValue"),
                 importPayload == null ? null : importPayload.checksumValue()));
-    if (!StringUtils.hasText(expectedChecksum) || normalizedPayload == null) {
+    if (!Texts.hasText(expectedChecksum) || normalizedPayload == null) {
       return;
     }
     appliedChecks.add("checksum_check");
@@ -330,7 +330,7 @@ public class ImportDataQualityService {
     appliedChecks.add("schema_check");
     Set<String> actualFields = new LinkedHashSet<>();
     for (String schemaField : schemaFields) {
-      if (StringUtils.hasText(schemaField)) {
+      if (Texts.hasText(schemaField)) {
         actualFields.add(schemaField);
       }
     }
@@ -340,7 +340,7 @@ public class ImportDataQualityService {
         stringList(firstNonNull(rule.get("allowedFields"), rule.get("allowed_fields")));
     List<String> missingFields = new ArrayList<>();
     for (String requiredField : requiredFields) {
-      if (StringUtils.hasText(requiredField) && !actualFields.contains(requiredField)) {
+      if (Texts.hasText(requiredField) && !actualFields.contains(requiredField)) {
         missingFields.add(requiredField);
       }
     }
@@ -420,7 +420,7 @@ public class ImportDataQualityService {
     }
     for (String field :
         stringList(firstNonNull(nullCheck.get("fields"), nullCheck.get("requiredFields")))) {
-      if (!StringUtils.hasText(stringValue(row.get(field)))) {
+      if (!Texts.hasText(stringValue(row.get(field)))) {
         return new ValidationIssue(
             recordNo, "IMPORT_VALIDATE_NULL", field + " must not be null", row);
       }
@@ -444,11 +444,11 @@ public class ImportDataQualityService {
           defaultText(stringValue(rule.get(KEY_ERROR_CODE)), defaultErrorCode(field, rule));
       String explicitMessage = stringValue(rule.get("errorMessage"));
       if (booleanValue(firstNonNull(rule.get(KEY_REQUIRED), rule.get("notNull")), false)
-          && !StringUtils.hasText(value)) {
+          && !Texts.hasText(value)) {
         return new ValidationIssue(
             recordNo, errorCode, defaultText(explicitMessage, field + " is required"), row);
       }
-      if (!StringUtils.hasText(value)) {
+      if (!Texts.hasText(value)) {
         continue;
       }
       Integer minLength = integerValue(rule.get("minLength"));
@@ -468,7 +468,7 @@ public class ImportDataQualityService {
             row);
       }
       String pattern = stringValue(firstNonNull(rule.get("regex"), rule.get("pattern")));
-      if (StringUtils.hasText(pattern) && !value.matches(pattern)) {
+      if (Texts.hasText(pattern) && !value.matches(pattern)) {
         return new ValidationIssue(
             recordNo,
             errorCode,
@@ -512,7 +512,7 @@ public class ImportDataQualityService {
       Map<String, Set<String>> seenValues) {
     for (String field : uniqueFields) {
       String value = stringValue(row.get(field));
-      if (!StringUtils.hasText(value)) {
+      if (!Texts.hasText(value)) {
         continue;
       }
       Set<String> seen = seenValues.computeIfAbsent(field, ignored -> new LinkedHashSet<>());
@@ -649,7 +649,7 @@ public class ImportDataQualityService {
       List<String> items = new ArrayList<>();
       for (Object item : collection) {
         String text = stringValue(item);
-        if (StringUtils.hasText(text)) {
+        if (Texts.hasText(text)) {
           items.add(text);
         }
       }
@@ -659,12 +659,12 @@ public class ImportDataQualityService {
       return List.of();
     }
     String text = String.valueOf(value);
-    if (!StringUtils.hasText(text)) {
+    if (!Texts.hasText(text)) {
       return List.of();
     }
     List<String> items = new ArrayList<>();
     for (String item : text.split(",")) {
-      if (StringUtils.hasText(item)) {
+      if (Texts.hasText(item)) {
         items.add(item.trim());
       }
     }
@@ -786,7 +786,7 @@ public class ImportDataQualityService {
   }
 
   private String defaultText(String value, String fallback) {
-    return StringUtils.hasText(value) ? value : fallback;
+    return Texts.hasText(value) ? value : fallback;
   }
 
   public record ValidationIssue(

@@ -39,7 +39,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 文件相关查询子服务。 */
 @Service
@@ -281,11 +281,11 @@ class ConsoleFileQueryService {
         || rows == null
         || rows.isEmpty()
         || fileId == null
-        || !StringUtils.hasText(tenantId)) {
+        || !Texts.hasText(tenantId)) {
       return;
     }
     String templateCode = fileMappers.fileRecordMapper.selectTemplateCodeByFileId(tenantId, fileId);
-    if (!StringUtils.hasText(templateCode)) {
+    if (!Texts.hasText(templateCode)) {
       return;
     }
     Map<String, Object> sec =

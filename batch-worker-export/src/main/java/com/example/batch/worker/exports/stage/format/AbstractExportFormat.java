@@ -12,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
@@ -135,12 +135,12 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         continue;
       }
       String source = textValue(firstNonNull(map.get("source"), map.get("path"), map.get("field")));
-      if (!StringUtils.hasText(source)) {
+      if (!Texts.hasText(source)) {
         continue;
       }
       String normalizedSource = normalizeDelimitedSource(source);
       String header = textValue(firstNonNull(map.get("header"), map.get("name")));
-      if (!StringUtils.hasText(header)) {
+      if (!Texts.hasText(header)) {
         header = defaultDelimitedHeader(normalizedSource);
       }
       Integer width =
@@ -219,7 +219,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     Object v = firstNonNull(templateConfig.get("sheet_name"), templateConfig.get("sheetName"));
     String text = textValue(v);
-    return StringUtils.hasText(text) ? sanitizeSheetName(text) : "Sheet1";
+    return Texts.hasText(text) ? sanitizeSheetName(text) : "Sheet1";
   }
 
   protected String sanitizeSheetName(String value) {
@@ -230,7 +230,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   protected Object resolveDelimitedValue(
       Map<String, Object> batch, Map<String, Object> detail, String source) {
-    if (!StringUtils.hasText(source)) {
+    if (!Texts.hasText(source)) {
       return null;
     }
     if (source.startsWith("batch.")) {
@@ -251,7 +251,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       if (value instanceof Number number) {
         return Math.max(1, number.intValue());
       }
-      if (value != null && StringUtils.hasText(String.valueOf(value))) {
+      if (value != null && Texts.hasText(String.valueOf(value))) {
         return Math.max(1, Integer.parseInt(String.valueOf(value)));
       }
     }
@@ -261,7 +261,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   protected String csv(Object value, DelimitedFormatConfig formatConfig) {
     String text = textValue(value);
-    if (!StringUtils.hasText(text)) {
+    if (!Texts.hasText(text)) {
       return "";
     }
     boolean needsQuote =
@@ -354,7 +354,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       return null;
     }
     String text = String.valueOf(value);
-    return StringUtils.hasText(text) ? text.trim() : null;
+    return Texts.hasText(text) ? text.trim() : null;
   }
 
   protected Map<String, Object> toMap(Object value) {
@@ -363,7 +363,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       map.forEach((k, v) -> converted.put(String.valueOf(k), v));
       return converted;
     }
-    if (value instanceof String text && StringUtils.hasText(text)) {
+    if (value instanceof String text && Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, MAP_TYPE);
       } catch (Exception ignored) {
@@ -386,7 +386,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       return null;
     }
     String text = String.valueOf(value).trim();
-    if (!StringUtils.hasText(text)) {
+    if (!Texts.hasText(text)) {
       return null;
     }
     try {
@@ -397,7 +397,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   }
 
   protected char resolvePadChar(String padChar) {
-    if (!StringUtils.hasText(padChar)) {
+    if (!Texts.hasText(padChar)) {
       return ' ';
     }
     return padChar.charAt(0);

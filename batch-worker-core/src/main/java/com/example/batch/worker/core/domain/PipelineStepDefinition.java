@@ -1,7 +1,7 @@
 package com.example.batch.worker.core.domain;
 
 import java.util.Map;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Pipeline 单个步骤的静态定义，从配置层加载后在整个执行周期内只读。
@@ -29,12 +29,12 @@ public record PipelineStepDefinition(
     }
     for (String key : keys) {
       Object value = stepParams.get(key);
-      if (value instanceof String text && StringUtils.hasText(text)) {
+      if (value instanceof String text && Texts.hasText(text)) {
         return text;
       }
       if (value != null) {
         String text = String.valueOf(value);
-        if (StringUtils.hasText(text) && !"null".equalsIgnoreCase(text)) {
+        if (Texts.hasText(text) && !"null".equalsIgnoreCase(text)) {
           return text;
         }
       }

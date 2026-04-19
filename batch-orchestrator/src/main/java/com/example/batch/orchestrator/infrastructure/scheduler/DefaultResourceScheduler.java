@@ -24,7 +24,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 资源调度统一收口：给定一个 {@link ResourceSchedulingRequest}，按固定 pipeline 依次判定可派发性，
@@ -134,8 +134,8 @@ public class DefaultResourceScheduler implements ResourceScheduler {
 
   private ResourceCheck checkBatchWindow(ResourceSchedulingRequest request) {
     if (request == null
-        || !StringUtils.hasText(request.getTenantId())
-        || !StringUtils.hasText(request.getWindowCode())) {
+        || !Texts.hasText(request.getTenantId())
+        || !Texts.hasText(request.getWindowCode())) {
       return ResourceCheck.allow();
     }
     BatchWindowRecord window =
@@ -155,7 +155,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       return true;
     }
     ZoneId zoneId =
-        StringUtils.hasText(window.timezone())
+        Texts.hasText(window.timezone())
             ? ZoneId.of(window.timezone())
             : ZoneId.systemDefault();
     LocalTime now = ZonedDateTime.now(zoneId).toLocalTime();
@@ -172,7 +172,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   }
 
   private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
-    if (request != null && StringUtils.hasText(request.getWorkerGroup())) {
+    if (request != null && Texts.hasText(request.getWorkerGroup())) {
       return request.getWorkerGroup();
     }
     return queue == null ? null : queue.workerGroup();
@@ -212,7 +212,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   }
 
   private int resolveTenantWeight(String tenantId) {
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       return 1;
     }
     TenantQuotaPolicyRecord policy = configCacheService.findEnabledQuotaPolicy(tenantId);
@@ -232,14 +232,14 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   }
 
   private int resolveTenantActiveJobs(ResourceSchedulingRequest request) {
-    if (request == null || !StringUtils.hasText(request.getTenantId())) {
+    if (request == null || !Texts.hasText(request.getTenantId())) {
       return 0;
     }
     return (int) jobInstanceMapper.countActiveByTenant(request.getTenantId());
   }
 
   private int resolveTenantActivePartitions(ResourceSchedulingRequest request) {
-    if (request == null || !StringUtils.hasText(request.getTenantId())) {
+    if (request == null || !Texts.hasText(request.getTenantId())) {
       return 0;
     }
     return (int)
@@ -253,9 +253,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
 
   private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueRecord queue) {
     if (request == null
-        || !StringUtils.hasText(request.getTenantId())
+        || !Texts.hasText(request.getTenantId())
         || queue == null
-        || !StringUtils.hasText(queue.queueCode())) {
+        || !Texts.hasText(queue.queueCode())) {
       return 0;
     }
     return (int)
@@ -265,9 +265,9 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   private int resolveQueueActivePartitions(
       ResourceSchedulingRequest request, ResourceQueueRecord queue) {
     if (request == null
-        || !StringUtils.hasText(request.getTenantId())
+        || !Texts.hasText(request.getTenantId())
         || queue == null
-        || !StringUtils.hasText(queue.workerGroup())) {
+        || !Texts.hasText(queue.workerGroup())) {
       return 0;
     }
     return (int)

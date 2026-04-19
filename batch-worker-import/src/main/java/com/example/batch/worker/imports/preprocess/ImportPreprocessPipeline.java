@@ -27,7 +27,7 @@ import java.util.zip.ZipInputStream;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 有序二进制预处理管道（工具类，不可实例化）：对原始文件字节按步骤顺序依次执行解压、解密、摘要校验和字符集转码。
@@ -74,7 +74,7 @@ public final class ImportPreprocessPipeline {
       boolean digestVerifiedInPipeline = false;
       for (Map<String, Object> step : steps) {
         String type = stringProp(step, KEY_TYPE);
-        if (!StringUtils.hasText(type)) {
+        if (!Texts.hasText(type)) {
           continue;
         }
         switch (type.toUpperCase(Locale.ROOT)) {
@@ -132,7 +132,7 @@ public final class ImportPreprocessPipeline {
     String enc = stringProp(template, "encrypt_type");
     if ("AES".equalsIgnoreCase(enc)) {
       implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, "AES_GCM_DECRYPT")));
-    } else if (StringUtils.hasText(enc) && !POLICY_NONE.equalsIgnoreCase(enc) && !bypassMode) {
+    } else if (Texts.hasText(enc) && !POLICY_NONE.equalsIgnoreCase(enc) && !bypassMode) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED",
           "encrypt_type "
@@ -154,7 +154,7 @@ public final class ImportPreprocessPipeline {
       }
       return out;
     }
-    if (raw instanceof String text && StringUtils.hasText(text)) {
+    if (raw instanceof String text && Texts.hasText(text)) {
       try {
         return OBJECT_MAPPER.readValue(text, new TypeReference<List<Map<String, Object>>>() {});
       } catch (Exception ex) {
@@ -167,9 +167,9 @@ public final class ImportPreprocessPipeline {
 
   private static byte[] unzip(byte[] input, Map<String, Object> step, ImportPayload payload) {
     String entryName = stringProp(step, "entryName");
-    if (!StringUtils.hasText(entryName) && payload != null && payload.metadata() != null) {
+    if (!Texts.hasText(entryName) && payload != null && payload.metadata() != null) {
       Object v = payload.metadata().get("zipEntryName");
-      if (v != null && StringUtils.hasText(String.valueOf(v))) {
+      if (v != null && Texts.hasText(String.valueOf(v))) {
         entryName = String.valueOf(v);
       }
     }
@@ -179,7 +179,7 @@ public final class ImportPreprocessPipeline {
         if (entry.isDirectory()) {
           continue;
         }
-        if (StringUtils.hasText(entryName) && !entryName.equals(entry.getName())) {
+        if (Texts.hasText(entryName) && !entryName.equals(entry.getName())) {
           continue;
         }
         return boundedReadAll(zis, input.length, "UNZIP");
@@ -247,7 +247,7 @@ public final class ImportPreprocessPipeline {
         firstNonBlank(stringProp(step, "aesKeyBase64"), metaString(meta, "decryptAesKeyBase64"));
     String ivB64 =
         firstNonBlank(stringProp(step, "aesIvBase64"), metaString(meta, "decryptAesIvBase64"));
-    if (!StringUtils.hasText(keyB64) || !StringUtils.hasText(ivB64)) {
+    if (!Texts.hasText(keyB64) || !Texts.hasText(ivB64)) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_AES_KEY_MISSING",
           "AES_GCM_DECRYPT requires aesKeyBase64 and aesIvBase64 on the step or metadata"
@@ -269,7 +269,7 @@ public final class ImportPreprocessPipeline {
     String algorithm =
         firstNonBlank(stringProp(step, "algorithm"), digestAlgorithm(template, payload));
     String expected = firstNonBlank(stringProp(step, "expectedHex"), checksumExpected(payload));
-    if (!StringUtils.hasText(expected)) {
+    if (!Texts.hasText(expected)) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DIGEST_EXPECTED_MISSING",
           "VERIFY_DIGEST requires expectedHex or ImportPayload.checksumValue");
@@ -290,7 +290,7 @@ public final class ImportPreprocessPipeline {
       return;
     }
     String expected = checksumExpected(payload);
-    if (!StringUtils.hasText(expected)) {
+    if (!Texts.hasText(expected)) {
       return;
     }
     MessageDigest digest = MessageDigest.getInstance(algorithm);
@@ -304,19 +304,19 @@ public final class ImportPreprocessPipeline {
 
   private static String digestAlgorithm(Map<String, Object> template, ImportPayload payload) {
     if (payload != null
-        && StringUtils.hasText(payload.checksumType())
+        && Texts.hasText(payload.checksumType())
         && !POLICY_NONE.equalsIgnoreCase(payload.checksumType())) {
       return normalizeDigestName(payload.checksumType());
     }
     String fromTemplate = stringProp(template, "checksum_type");
-    if (StringUtils.hasText(fromTemplate) && !POLICY_NONE.equalsIgnoreCase(fromTemplate)) {
+    if (Texts.hasText(fromTemplate) && !POLICY_NONE.equalsIgnoreCase(fromTemplate)) {
       return normalizeDigestName(fromTemplate);
     }
     return POLICY_NONE;
   }
 
   private static String normalizeDigestName(String raw) {
-    if (!StringUtils.hasText(raw)) {
+    if (!Texts.hasText(raw)) {
       return POLICY_NONE;
     }
     String upper = raw.trim().toUpperCase(Locale.ROOT);
@@ -330,7 +330,7 @@ public final class ImportPreprocessPipeline {
   }
 
   private static String checksumExpected(ImportPayload payload) {
-    if (payload == null || !StringUtils.hasText(payload.checksumValue())) {
+    if (payload == null || !Texts.hasText(payload.checksumValue())) {
       return null;
     }
     return payload.checksumValue().trim();
@@ -343,7 +343,7 @@ public final class ImportPreprocessPipeline {
         firstNonBlank(
             stringProp(step, "signatureBase64"),
             metaString(payload == null ? Map.of() : payload.metadata(), "signatureBase64"));
-    if (!StringUtils.hasText(pem) || !StringUtils.hasText(signatureB64)) {
+    if (!Texts.hasText(pem) || !Texts.hasText(signatureB64)) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_RSA_CONFIG_MISSING",
           "VERIFY_RSA_SHA256 requires publicKeyPem and signatureBase64 (step or"
@@ -396,10 +396,10 @@ public final class ImportPreprocessPipeline {
   }
 
   private static String firstNonBlank(String a, String b) {
-    if (StringUtils.hasText(a)) {
+    if (Texts.hasText(a)) {
       return a;
     }
-    if (StringUtils.hasText(b)) {
+    if (Texts.hasText(b)) {
       return b;
     }
     return null;

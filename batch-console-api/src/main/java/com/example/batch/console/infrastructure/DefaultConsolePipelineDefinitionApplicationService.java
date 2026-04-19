@@ -237,11 +237,19 @@ public class DefaultConsolePipelineDefinitionApplicationService
   }
 
   private static Instant toInstant(Object v) {
-    if (v == null) return null;
-    if (v instanceof Instant i) return i;
-    if (v instanceof OffsetDateTime odt) return odt.toInstant();
+    if (v == null) {
+      return null;
+    }
+    if (v instanceof Instant i) {
+      return i;
+    }
+    if (v instanceof OffsetDateTime odt) {
+      return odt.toInstant();
+    }
     String text = v.toString().trim();
-    if (text.isEmpty()) return null;
+    if (text.isEmpty()) {
+      return null;
+    }
     try {
       return Instant.parse(text);
     } catch (DateTimeParseException ignored) {

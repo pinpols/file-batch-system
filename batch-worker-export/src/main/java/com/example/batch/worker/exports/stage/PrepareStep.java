@@ -16,7 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 导出准备阶段：解析 payload、加载模板配置、确定文件名和对象路径。 */
 @Component
@@ -42,8 +42,8 @@ public class PrepareStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     if (context == null
-        || !StringUtils.hasText(context.getTenantId())
-        || !StringUtils.hasText(context.getRawPayload())) {
+        || !Texts.hasText(context.getTenantId())
+        || !Texts.hasText(context.getRawPayload())) {
       return ExportStageResult.failure(
           stage(), "EXPORT_PREPARE_INVALID", "tenantId or payload is blank");
     }
@@ -54,7 +54,7 @@ public class PrepareStep implements ExportStageStep {
               : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
       context.getAttributes().put("exportPayload", payload);
       Map<String, Object> templateConfig = Map.of();
-      if (StringUtils.hasText(payload.templateCode())) {
+      if (Texts.hasText(payload.templateCode())) {
         templateConfig =
             runtimeRepository.loadLatestTemplateConfig(
                 context.getTenantId(), payload.templateCode(), ExportWorkerType.EXPORT);
@@ -85,7 +85,7 @@ public class PrepareStep implements ExportStageStep {
       ExportPayload payload,
       Map<String, Object> templateConfig,
       String fileFormatType) {
-    if (StringUtils.hasText(payload.fileName())) {
+    if (Texts.hasText(payload.fileName())) {
       return payload.fileName();
     }
     String namingRule =
@@ -94,7 +94,7 @@ public class PrepareStep implements ExportStageStep {
             : String.valueOf(templateConfig.get("naming_rule"));
     String bizDate = resolveBizDate(context, payload);
     String bizType =
-        StringUtils.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
+        Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
     String extension =
         switch (fileFormatType.toUpperCase()) {
           case "DELIMITED" -> ".csv";
@@ -103,7 +103,7 @@ public class PrepareStep implements ExportStageStep {
           case "XML" -> ".xml";
           default -> ".json";
         };
-    if (StringUtils.hasText(namingRule)) {
+    if (Texts.hasText(namingRule)) {
       return namingRule
           .replace("${bizDate}", bizDate)
           .replace("${tenantId}", context.getTenantId())
@@ -115,34 +115,34 @@ public class PrepareStep implements ExportStageStep {
 
   private String resolveObjectName(
       ExportJobContext context, ExportPayload payload, String fileName) {
-    if (StringUtils.hasText(payload.objectName())) {
+    if (Texts.hasText(payload.objectName())) {
       return payload.objectName();
     }
     String bizType =
-        StringUtils.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
+        Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
     String bizDate = resolveBizDate(context, payload);
     return BatchFileConstants.outboundObjectName(
         bizType, bizDate, defaultText(payload.batchNo(), "batch"), "v1", fileName);
   }
 
   private String resolveBizDate(ExportJobContext context, ExportPayload payload) {
-    if (StringUtils.hasText(payload.bizDate())) {
+    if (Texts.hasText(payload.bizDate())) {
       return payload.bizDate();
     }
-    if (StringUtils.hasText(context.getBizDate())) {
+    if (Texts.hasText(context.getBizDate())) {
       return context.getBizDate();
     }
     return LocalDate.now().toString();
   }
 
   private String resolveText(Object value, String fallback) {
-    return value == null || !StringUtils.hasText(String.valueOf(value))
+    return value == null || !Texts.hasText(String.valueOf(value))
         ? fallback
         : String.valueOf(value);
   }
 
   private String defaultText(String value, String fallback) {
-    return StringUtils.hasText(value) ? value : fallback;
+    return Texts.hasText(value) ? value : fallback;
   }
 
   /**
@@ -194,7 +194,7 @@ public class PrepareStep implements ExportStageStep {
   }
 
   private void putIfHasText(Map<String, Object> out, String key, Object value) {
-    if (value != null && StringUtils.hasText(String.valueOf(value))) {
+    if (value != null && Texts.hasText(String.valueOf(value))) {
       out.put(key, String.valueOf(value).trim());
     }
   }
@@ -210,10 +210,10 @@ public class PrepareStep implements ExportStageStep {
   }
 
   private String firstNonBlank(String a, String b, String fallback) {
-    if (StringUtils.hasText(a)) {
+    if (Texts.hasText(a)) {
       return a;
     }
-    if (StringUtils.hasText(b)) {
+    if (Texts.hasText(b)) {
       return b;
     }
     return fallback;
@@ -234,9 +234,9 @@ public class PrepareStep implements ExportStageStep {
       out.addAll(list);
       return;
     }
-    if (raw instanceof String text && StringUtils.hasText(text)) {
+    if (raw instanceof String text && Texts.hasText(text)) {
       for (String part : text.split(",")) {
-        if (StringUtils.hasText(part.trim())) {
+        if (Texts.hasText(part.trim())) {
           out.add(part.trim());
         }
       }

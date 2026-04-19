@@ -21,7 +21,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * ConfigRelease 的审批流入口（submit / approve / reject），独立于 JOB/FILE 审批链路。
@@ -267,7 +267,7 @@ public class DefaultConsoleConfigApprovalApplicationService
   }
 
   private Instant parseInstant(String text) {
-    if (!StringUtils.hasText(text)) {
+    if (!Texts.hasText(text)) {
       return null;
     }
     try {

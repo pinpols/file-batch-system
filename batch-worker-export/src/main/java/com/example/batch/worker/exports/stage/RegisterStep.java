@@ -18,7 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 导出注册阶段：在平台创建 file_record，并将文件与 pipeline 实例绑定，触发插件 onRegistered 回调。 */
 @Component
@@ -71,8 +71,8 @@ public class RegisterStep implements ExportStageStep {
       Map<String, Object> existing =
           runtimeRepository.loadFileRecordByStoragePath(context.getTenantId(), bucket, objectName);
       String existingChecksum = nullableText(existing.get("checksum_value"));
-      if (StringUtils.hasText(expectedChecksum)
-          && StringUtils.hasText(existingChecksum)
+      if (Texts.hasText(expectedChecksum)
+          && Texts.hasText(existingChecksum)
           && !expectedChecksum.equalsIgnoreCase(existingChecksum)) {
         return ExportStageResult.failure(
             stage(), "EXPORT_REGISTER_CHECKSUM_CONFLICT", "已有 file_record 的校验值不一致");
@@ -97,7 +97,7 @@ public class RegisterStep implements ExportStageStep {
                 .tenantId(context.getTenantId())
                 .fileCode(exportPayload.fileCode())
                 .bizType(
-                    StringUtils.hasText(exportPayload.bizType())
+                    Texts.hasText(exportPayload.bizType())
                         ? exportPayload.bizType()
                         : context.getJobCode())
                 .fileCategory("OUTPUT")
@@ -181,8 +181,8 @@ public class RegisterStep implements ExportStageStep {
   }
 
   private LocalDate parseBizDate(String payloadBizDate, String fallbackBizDate) {
-    String bizDate = StringUtils.hasText(payloadBizDate) ? payloadBizDate : fallbackBizDate;
-    if (!StringUtils.hasText(bizDate)) {
+    String bizDate = Texts.hasText(payloadBizDate) ? payloadBizDate : fallbackBizDate;
+    if (!Texts.hasText(bizDate)) {
       return null;
     }
     try {
@@ -197,7 +197,7 @@ public class RegisterStep implements ExportStageStep {
       return null;
     }
     String text = String.valueOf(value);
-    return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
   }
 
   private void mergeUserMetadata(Map<String, Object> target, Map<String, Object> source) {

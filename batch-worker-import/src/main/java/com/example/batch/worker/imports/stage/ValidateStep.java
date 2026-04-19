@@ -25,7 +25,7 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Import pipeline 的 VALIDATE 阶段：流式读取 {@code PARSED_RECORDS_PATH} 暂存文件，
@@ -67,7 +67,7 @@ public class ValidateStep implements ImportStageStep {
   public ImportStageResult execute(ImportJobContext context) {
     String parsedRecordsPath =
         stringValue(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH));
-    if (!StringUtils.hasText(parsedRecordsPath)) {
+    if (!Texts.hasText(parsedRecordsPath)) {
       return ImportStageResult.failure(
           stage(), "IMPORT_VALIDATE_NO_STREAM", "parsed records path missing");
     }
@@ -173,7 +173,7 @@ public class ValidateStep implements ImportStageStep {
       long chunkStartRecordNo = 1L;
       String line;
       while ((line = reader.readLine()) != null) {
-        if (!StringUtils.hasText(line)) {
+        if (!Texts.hasText(line)) {
           continue;
         }
         recordNo++;
@@ -291,7 +291,7 @@ public class ValidateStep implements ImportStageStep {
   private ImportStageResult failStreaming(
       ImportJobContext context, Path validatedRecordsPath, String errorCode, String errorMessage) {
     deleteQuietly(validatedRecordsPath);
-    if (StringUtils.hasText(errorCode) && StringUtils.hasText(errorMessage)) {
+    if (Texts.hasText(errorCode) && Texts.hasText(errorMessage)) {
       return ImportStageResult.failure(stage(), errorCode, errorMessage);
     }
     return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_FAILED", errorMessage);
@@ -331,7 +331,7 @@ public class ValidateStep implements ImportStageStep {
       return 0L;
     }
     String text = String.valueOf(value);
-    if (!StringUtils.hasText(text)) {
+    if (!Texts.hasText(text)) {
       return 0L;
     }
     return Long.parseLong(text);
@@ -341,7 +341,7 @@ public class ValidateStep implements ImportStageStep {
     if (value instanceof List<?> list) {
       List<String> result = new ArrayList<>();
       for (Object item : list) {
-        if (item != null && StringUtils.hasText(String.valueOf(item))) {
+        if (item != null && Texts.hasText(String.valueOf(item))) {
           result.add(String.valueOf(item));
         }
       }
@@ -355,7 +355,7 @@ public class ValidateStep implements ImportStageStep {
       return null;
     }
     String text = String.valueOf(value);
-    return StringUtils.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
+    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
   }
 
   private int resolveChunkSize(ImportJobContext context) {
@@ -367,7 +367,7 @@ public class ValidateStep implements ImportStageStep {
       if (value instanceof Number number) {
         return Math.max(1, number.intValue());
       }
-      if (value != null && StringUtils.hasText(String.valueOf(value))) {
+      if (value != null && Texts.hasText(String.valueOf(value))) {
         return Math.max(1, Integer.parseInt(String.valueOf(value)));
       }
     }

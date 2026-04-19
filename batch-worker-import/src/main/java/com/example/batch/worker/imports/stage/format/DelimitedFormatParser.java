@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * Parses delimited text (CSV, TSV, pipe-separated, etc.) into NDJSON records.
@@ -146,12 +146,12 @@ public class DelimitedFormatParser implements FormatParser {
   }
 
   private String resolveDelimiter(ImportPayload importPayload, Object templateConfigObject) {
-    if (importPayload != null && StringUtils.hasText(importPayload.delimiter())) {
+    if (importPayload != null && Texts.hasText(importPayload.delimiter())) {
       return importPayload.delimiter();
     }
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object value = templateConfig.get("delimiter");
-      if (value != null && StringUtils.hasText(String.valueOf(value))) {
+      if (value != null && Texts.hasText(String.valueOf(value))) {
         return String.valueOf(value);
       }
     }

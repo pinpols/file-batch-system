@@ -18,7 +18,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 所有 Worker 模块的核心数据访问层，负责 file_record、pipeline 实例、步骤运行及审计的全生命周期管理。
@@ -55,7 +55,7 @@ public class PlatformFileRuntimeRepository {
   private final PlatformFileRuntimeMapper platformFileRuntimeMapper;
 
   public Map<String, Object> loadFileRecord(String tenantId, Long fileId) {
-    if (!StringUtils.hasText(tenantId) || fileId == null) {
+    if (!Texts.hasText(tenantId) || fileId == null) {
       return Map.of();
     }
     Map<String, Object> fileRecord =
@@ -66,7 +66,7 @@ public class PlatformFileRuntimeRepository {
 
   public boolean existsFileRecordByStoragePath(
       String tenantId, String storageBucket, String storagePath) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(storagePath)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
       return false;
     }
     Long count =
@@ -83,7 +83,7 @@ public class PlatformFileRuntimeRepository {
 
   public Map<String, Object> loadFileRecordByStoragePath(
       String tenantId, String storageBucket, String storagePath) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(storagePath)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(storagePath)) {
       return Map.of();
     }
     Map<String, Object> row =
@@ -100,7 +100,7 @@ public class PlatformFileRuntimeRepository {
 
   public Map<String, Object> loadLatestTemplateConfig(
       String tenantId, String templateCode, String templateType) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(templateCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
       return Map.of();
     }
     Map<String, Object> templateConfig =
@@ -116,7 +116,7 @@ public class PlatformFileRuntimeRepository {
   }
 
   public Map<String, Object> loadChannelConfig(String tenantId, String channelCode) {
-    if (!StringUtils.hasText(tenantId) || !StringUtils.hasText(channelCode)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
       return Map.of();
     }
     Map<String, Object> channelConfig =
@@ -132,9 +132,9 @@ public class PlatformFileRuntimeRepository {
       String workerGroup,
       String description,
       List<PipelineStepTemplate> defaultSteps) {
-    if (!StringUtils.hasText(tenantId)
-        || !StringUtils.hasText(jobCode)
-        || !StringUtils.hasText(pipelineType)) {
+    if (!Texts.hasText(tenantId)
+        || !Texts.hasText(jobCode)
+        || !Texts.hasText(pipelineType)) {
       return null;
     }
     Long pipelineDefinitionId =
@@ -183,7 +183,7 @@ public class PlatformFileRuntimeRepository {
       String traceId) {}
 
   public Long createPipelineInstance(CreatePipelineInstanceParam p) {
-    if (!StringUtils.hasText(p.tenantId()) || p.pipelineDefinitionId() == null) {
+    if (!Texts.hasText(p.tenantId()) || p.pipelineDefinitionId() == null) {
       return null;
     }
     Map<String, Object> paramMap =
@@ -270,8 +270,8 @@ public class PlatformFileRuntimeRepository {
   public Long startStepRun(
       Long pipelineInstanceId, String stepCode, String stageCode, Object inputSummary) {
     if (pipelineInstanceId == null
-        || !StringUtils.hasText(stepCode)
-        || !StringUtils.hasText(stageCode)) {
+        || !Texts.hasText(stepCode)
+        || !Texts.hasText(stageCode)) {
       return null;
     }
     Integer nextExecutionSeq =
@@ -341,19 +341,19 @@ public class PlatformFileRuntimeRepository {
     String fileStatus = p.getFileStatus();
     String traceId = p.getTraceId();
     Object metadata = p.getMetadata();
-    if (!StringUtils.hasText(tenantId)
-        || !StringUtils.hasText(fileCategory)
-        || !StringUtils.hasText(fileName)
-        || !StringUtils.hasText(fileFormatType)
-        || !StringUtils.hasText(storageType)
-        || !StringUtils.hasText(storagePath)
-        || !StringUtils.hasText(sourceType)
-        || !StringUtils.hasText(fileStatus)) {
+    if (!Texts.hasText(tenantId)
+        || !Texts.hasText(fileCategory)
+        || !Texts.hasText(fileName)
+        || !Texts.hasText(fileFormatType)
+        || !Texts.hasText(storageType)
+        || !Texts.hasText(storagePath)
+        || !Texts.hasText(sourceType)
+        || !Texts.hasText(fileStatus)) {
       return null;
     }
     FileStateMachine.assertInitialStatus(fileStatus);
     int nextGenerationNo = 1;
-    if (StringUtils.hasText(fileCode)) {
+    if (Texts.hasText(fileCode)) {
       Integer maxGeneration =
           platformFileRuntimeMapper.selectMaxFileGenerationNo(
               params(KEY_TENANT_ID, tenantId, "fileCode", fileCode));
@@ -363,7 +363,7 @@ public class PlatformFileRuntimeRepository {
     }
     final int finalNextGenerationNo = nextGenerationNo;
     String resolvedFileVersion =
-        StringUtils.hasText(fileVersion) ? fileVersion : "v" + finalNextGenerationNo;
+        Texts.hasText(fileVersion) ? fileVersion : "v" + finalNextGenerationNo;
     Map<String, Object> paramMap =
         params(
             KEY_TENANT_ID,
@@ -419,11 +419,11 @@ public class PlatformFileRuntimeRepository {
   }
 
   public void updateFileStatus(Long fileId, String fileStatus, Object metadata) {
-    if (fileId == null || !StringUtils.hasText(fileStatus)) {
+    if (fileId == null || !Texts.hasText(fileStatus)) {
       return;
     }
     String currentStatus = platformFileRuntimeMapper.selectFileStatus(params(KEY_FILE_ID, fileId));
-    if (!StringUtils.hasText(currentStatus)) {
+    if (!Texts.hasText(currentStatus)) {
       return;
     }
     FileStateMachine.assertTransition(currentStatus, fileStatus);
@@ -470,7 +470,7 @@ public class PlatformFileRuntimeRepository {
 
   public List<Map<String, Object>> loadFileErrorRecords(
       String tenantId, Long fileId, String errorCode, String errorStage, int limit) {
-    if (!StringUtils.hasText(tenantId) || limit <= 0) {
+    if (!Texts.hasText(tenantId) || limit <= 0) {
       return List.of();
     }
     return platformFileRuntimeMapper.selectFileErrorRecords(
@@ -489,9 +489,9 @@ public class PlatformFileRuntimeRepository {
 
   public void appendAudit(FileAuditParam p) {
     if (p.getFileId() == null
-        || !StringUtils.hasText(p.getTenantId())
-        || !StringUtils.hasText(p.getOperationType())
-        || !StringUtils.hasText(p.getOperationResult())) {
+        || !Texts.hasText(p.getTenantId())
+        || !Texts.hasText(p.getOperationType())
+        || !Texts.hasText(p.getOperationResult())) {
       return;
     }
     platformFileRuntimeMapper.insertFileAuditLog(
@@ -639,14 +639,14 @@ public class PlatformFileRuntimeRepository {
   }
 
   private String resolveFileExt(String fileName) {
-    if (!StringUtils.hasText(fileName) || !fileName.contains(".")) {
+    if (!Texts.hasText(fileName) || !fileName.contains(".")) {
       return null;
     }
     return fileName.substring(fileName.lastIndexOf('.') + 1);
   }
 
   private String resolveMimeType(String fileFormatType) {
-    if (!StringUtils.hasText(fileFormatType)) {
+    if (!Texts.hasText(fileFormatType)) {
       return "application/octet-stream";
     }
     return switch (fileFormatType) {
@@ -659,12 +659,12 @@ public class PlatformFileRuntimeRepository {
 
   private boolean shouldSkipStepTemplate(PipelineStepTemplate template, Set<String> existingCodes) {
     return template == null
-        || !StringUtils.hasText(template.stepCode())
+        || !Texts.hasText(template.stepCode())
         || existingCodes.contains(template.stepCode());
   }
 
   private String defaultText(String value, String fallback) {
-    return StringUtils.hasText(value) ? value : fallback;
+    return Texts.hasText(value) ? value : fallback;
   }
 
   private Map<String, Object> params(Object... pairs) {

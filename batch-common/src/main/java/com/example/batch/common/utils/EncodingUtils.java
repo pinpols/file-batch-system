@@ -4,7 +4,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 字符集归一工具。配合 CLAUDE.md §字符编码 约束：全系统内部一律 UTF-8，导入边界允许外部以
@@ -33,7 +33,7 @@ public final class EncodingUtils {
    * <p>空/空白输入返回 {@link #UTF_8}；非法字符集名抛 {@link IllegalArgumentException}。
    */
   public static String normalize(String raw) {
-    if (!StringUtils.hasText(raw)) {
+    if (!Texts.hasText(raw)) {
       return UTF_8;
     }
     try {
@@ -45,7 +45,7 @@ public final class EncodingUtils {
 
   /** 归一并返回对应 {@link Charset}；空/空白返回 {@link StandardCharsets#UTF_8}。 */
   public static Charset resolve(String raw) {
-    if (!StringUtils.hasText(raw)) {
+    if (!Texts.hasText(raw)) {
       return StandardCharsets.UTF_8;
     }
     try {
@@ -57,7 +57,7 @@ public final class EncodingUtils {
 
   /** 归一后判断是否为 UTF-8；空/空白视为 UTF-8（默认值）。 */
   public static boolean isUtf8(String raw) {
-    if (!StringUtils.hasText(raw)) {
+    if (!Texts.hasText(raw)) {
       return true;
     }
     try {

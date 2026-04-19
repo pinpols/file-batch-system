@@ -4,7 +4,7 @@ import com.example.batch.common.enums.JobType;
 import com.example.batch.common.kafka.BatchTopics;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 @Data
 @ConfigurationProperties(prefix = "batch.mq.topics")
@@ -18,7 +18,7 @@ public class BatchMqTopicsProperties {
   private String taskRetry = BatchTopics.TASK_RETRY;
 
   public String resolveDispatchTopic(String workerType) {
-    if (!StringUtils.hasText(workerType)) {
+    if (!Texts.hasText(workerType)) {
       return null;
     }
     if (JobType.IMPORT.code().equalsIgnoreCase(workerType)) {

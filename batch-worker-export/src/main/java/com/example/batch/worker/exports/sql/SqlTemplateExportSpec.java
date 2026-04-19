@@ -4,7 +4,7 @@ import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 从模板配置解析而来的 SQL 模板导出规格。
@@ -34,7 +34,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
                 templateConfig.get("defaultQuerySql"),
                 templateConfig.get("detail_query_sql"),
                 templateConfig.get("detailQuerySql")));
-    if (!StringUtils.hasText(detailSql)) {
+    if (!Texts.hasText(detailSql)) {
       throw new IllegalArgumentException("default_query_sql is required for sql_template_export");
     }
 
@@ -50,7 +50,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
 
     String cursorColumn =
         textValue(firstNonNull(spec.get("cursorColumn"), spec.get("cursor_column")));
-    if (!StringUtils.hasText(cursorColumn)) {
+    if (!Texts.hasText(cursorColumn)) {
       cursorColumn = "id";
     }
     cursorColumn = JdbcMappedSqlValidator.requireIdentifier(cursorColumn, "cursorColumn");
@@ -72,7 +72,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
       return null;
     }
     String text = String.valueOf(value);
-    return StringUtils.hasText(text) ? text.trim() : null;
+    return Texts.hasText(text) ? text.trim() : null;
   }
 
   @SuppressWarnings("unchecked")
@@ -82,7 +82,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
       m.forEach((k, v) -> out.put(String.valueOf(k), v));
       return out;
     }
-    if (raw instanceof String text && StringUtils.hasText(text)) {
+    if (raw instanceof String text && Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception ignored) {

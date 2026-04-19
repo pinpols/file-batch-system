@@ -91,7 +91,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -1162,7 +1162,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
   }
 
   private String fileNameOrDefault(String fileName) {
-    if (!StringUtils.hasText(fileName)) {
+    if (!Texts.hasText(fileName)) {
       return "workflow-maintenance.xlsx";
     }
     return fileName;
@@ -1222,7 +1222,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
         cellIndex++) {
       Cell cell = headerRow.getCell(cellIndex);
       String header = normalize(formatter.formatCellValue(cell));
-      if (StringUtils.hasText(header)) {
+      if (Texts.hasText(header)) {
         headers.put(header, cellIndex);
       }
     }
@@ -1243,7 +1243,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
   private boolean rowIsBlank(Row row, DataFormatter formatter) {
     for (int cellIndex = row.getFirstCellNum(); cellIndex < row.getLastCellNum(); cellIndex++) {
       String value = normalize(formatter.formatCellValue(row.getCell(cellIndex)));
-      if (StringUtils.hasText(value)) {
+      if (Texts.hasText(value)) {
         return false;
       }
     }
@@ -1260,16 +1260,16 @@ public class DefaultConsoleWorkflowExcelApplicationService
 
   private String tenantOrDefault(String value, String tenantId) {
     String normalized = normalize(value);
-    return StringUtils.hasText(normalized) ? normalized : tenantId;
+    return Texts.hasText(normalized) ? normalized : tenantId;
   }
 
   private boolean hasText(String value) {
-    return StringUtils.hasText(normalize(value));
+    return Texts.hasText(normalize(value));
   }
 
   private String normalizeEnum(String value, Set<String> allowed) {
     String normalized = normalize(value);
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return null;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
@@ -1278,7 +1278,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
 
   private Integer parseInteger(String value) {
     String normalized = normalize(value);
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return null;
     }
     try {
@@ -1290,7 +1290,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
 
   private Boolean parseBoolean(String value, Boolean defaultValue) {
     String normalized = normalize(value);
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
@@ -1429,6 +1429,25 @@ public class DefaultConsoleWorkflowExcelApplicationService
     String display() {
       return workflowCode + "#" + version;
     }
+
+    // 显式覆写与 record 默认生成逻辑一致，仅为绕过 Alibaba 插件对 record 的识别盲区。
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (!(obj instanceof WorkflowKey that)) {
+        return false;
+      }
+      return Objects.equals(tenantId, that.tenantId)
+          && Objects.equals(workflowCode, that.workflowCode)
+          && Objects.equals(version, that.version);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(tenantId, workflowCode, version);
+    }
   }
 
   private record NodeKey(WorkflowKey workflowKey, String nodeCode) {
@@ -1438,6 +1457,23 @@ public class DefaultConsoleWorkflowExcelApplicationService
 
     String display() {
       return workflowKey.display() + "/" + nodeCode;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (!(obj instanceof NodeKey that)) {
+        return false;
+      }
+      return Objects.equals(workflowKey, that.workflowKey)
+          && Objects.equals(nodeCode, that.nodeCode);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(workflowKey, nodeCode);
     }
   }
 
@@ -1450,6 +1486,25 @@ public class DefaultConsoleWorkflowExcelApplicationService
 
     String display() {
       return workflowKey.display() + "/" + fromNodeCode + "->" + toNodeCode + "(" + edgeType + ")";
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (!(obj instanceof EdgeKey that)) {
+        return false;
+      }
+      return Objects.equals(workflowKey, that.workflowKey)
+          && Objects.equals(fromNodeCode, that.fromNodeCode)
+          && Objects.equals(toNodeCode, that.toNodeCode)
+          && Objects.equals(edgeType, that.edgeType);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(workflowKey, fromNodeCode, toNodeCode, edgeType);
     }
   }
 

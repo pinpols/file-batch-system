@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 导入错误输出存储：将坏记录列表序列化为 NDJSON 格式并写入 MinIO，
@@ -28,8 +28,8 @@ public class ImportErrorOutputStorage {
   private final MinioClient minioClient;
 
   public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
-    if (!StringUtils.hasText(tenantId)
-        || !StringUtils.hasText(fileId)
+    if (!Texts.hasText(tenantId)
+        || !Texts.hasText(fileId)
         || badRecords == null
         || badRecords.isEmpty()) {
       return null;

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 合并 {@code file_channel_config} 行数据与 {@code config_json}；JSON 中的键会覆盖同名列值。 */
 public final class ChannelConfigMerge {
@@ -42,7 +42,7 @@ public final class ChannelConfigMerge {
       mergeConfigJson(out, m);
       return out;
     }
-    if (objectMapper != null && StringUtils.hasText(String.valueOf(cj))) {
+    if (objectMapper != null && Texts.hasText(String.valueOf(cj))) {
       try {
         Map<String, Object> parsed =
             objectMapper.readValue(String.valueOf(cj), new TypeReference<>() {});

@@ -25,7 +25,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 远程文件系统派发的静态工具类，封装 NAS、OSS、SFTP、SMTP（EMAIL）、HTTP 五种渠道的
@@ -48,10 +48,10 @@ final class RemoteFilesystemDispatchSupport {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String remoteDir = stringProp(channelConfig, "nas_remote_directory");
-      if (!StringUtils.hasText(remoteDir)) {
+      if (!Texts.hasText(remoteDir)) {
         remoteDir = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       }
-      if (!StringUtils.hasText(remoteDir)) {
+      if (!Texts.hasText(remoteDir)) {
         return new DispatchResult(
             false, null, null, false, false, "nas_remote_directory missing", null);
       }
@@ -83,7 +83,7 @@ final class RemoteFilesystemDispatchSupport {
       MinioClient client = minioClient(minioProperties, minioClient);
       String bucket =
           firstText(channelConfig, "oss_bucket", "storage_bucket", minioProperties.getBucket());
-      if (!StringUtils.hasText(bucket)) {
+      if (!Texts.hasText(bucket)) {
         return new DispatchResult(false, null, null, false, false, "oss_bucket missing", null);
       }
       String objectPrefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
@@ -123,10 +123,10 @@ final class RemoteFilesystemDispatchSupport {
   static DispatchChannelProbeResult probeNas(Map<String, Object> channelConfig) {
     try {
       String remoteDir = stringProp(channelConfig, "nas_remote_directory");
-      if (!StringUtils.hasText(remoteDir)) {
+      if (!Texts.hasText(remoteDir)) {
         remoteDir = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       }
-      if (!StringUtils.hasText(remoteDir)) {
+      if (!Texts.hasText(remoteDir)) {
         return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
       }
       Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
@@ -161,7 +161,7 @@ final class RemoteFilesystemDispatchSupport {
       MinioClient client = minioClient(minioProperties, minioClient);
       String bucket =
           firstText(channelConfig, "oss_bucket", "storage_bucket", minioProperties.getBucket());
-      if (!StringUtils.hasText(bucket)) {
+      if (!Texts.hasText(bucket)) {
         return new DispatchChannelProbeResult(false, "oss_bucket missing", null);
       }
       String prefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
@@ -188,10 +188,10 @@ final class RemoteFilesystemDispatchSupport {
       Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
     try {
       String host = stringProp(channelConfig, "sftp_host");
-      if (!StringUtils.hasText(host)) {
+      if (!Texts.hasText(host)) {
         host = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       }
-      if (!StringUtils.hasText(host)) {
+      if (!Texts.hasText(host)) {
         return new DispatchChannelProbeResult(false, "sftp_host missing", null);
       }
       int port = intProp(channelConfig, "sftp_port", 22);
@@ -213,10 +213,10 @@ final class RemoteFilesystemDispatchSupport {
       Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
     try {
       String host = stringProp(channelConfig, "smtp_host");
-      if (!StringUtils.hasText(host)) {
+      if (!Texts.hasText(host)) {
         host = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
       }
-      if (!StringUtils.hasText(host)) {
+      if (!Texts.hasText(host)) {
         return new DispatchChannelProbeResult(false, "smtp_host missing", null);
       }
       int port = intProp(channelConfig, "smtp_port", 25);
@@ -238,7 +238,7 @@ final class RemoteFilesystemDispatchSupport {
       Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
     try {
       String endpoint = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
-      if (!StringUtils.hasText(endpoint)) {
+      if (!Texts.hasText(endpoint)) {
         return new DispatchChannelProbeResult(false, "target_endpoint missing", null);
       }
       // S-2.6: resolve-then-validate — 校验目标 IP 不在受限网段
@@ -319,7 +319,7 @@ final class RemoteFilesystemDispatchSupport {
   private static String resolveRemoteFileName(
       Map<String, Object> channelConfig, Map<String, Object> fileRecord, String overrideKey) {
     String explicit = firstText(channelConfig, overrideKey, null);
-    if (StringUtils.hasText(explicit)) {
+    if (Texts.hasText(explicit)) {
       return sanitizeFileName(explicit);
     }
     Object original =
@@ -362,7 +362,7 @@ final class RemoteFilesystemDispatchSupport {
   private static String firstText(
       Map<String, Object> map, String key1, String key2, String fallback) {
     String v = firstText(map, key1, null);
-    if (StringUtils.hasText(v)) {
+    if (Texts.hasText(v)) {
       return v;
     }
     return firstText(map, key2, fallback);
@@ -399,9 +399,9 @@ final class RemoteFilesystemDispatchSupport {
       return minioClient;
     }
     if (properties == null
-        || !StringUtils.hasText(properties.getEndpoint())
-        || !StringUtils.hasText(properties.getAccessKey())
-        || !StringUtils.hasText(properties.getSecretKey())) {
+        || !Texts.hasText(properties.getEndpoint())
+        || !Texts.hasText(properties.getAccessKey())
+        || !Texts.hasText(properties.getSecretKey())) {
       throw new IllegalStateException("MinIO not configured");
     }
     return MinioClient.builder()

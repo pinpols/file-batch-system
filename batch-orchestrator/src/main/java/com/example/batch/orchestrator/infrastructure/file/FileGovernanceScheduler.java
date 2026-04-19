@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
@@ -541,6 +542,28 @@ public class FileGovernanceScheduler {
 
     private static String defaultString(String value, String fallback) {
       return value == null || value.isBlank() ? fallback : value;
+    }
+
+    // 显式覆写与 record 默认生成逻辑一致，仅为绕过 Alibaba 插件对 record 的识别盲区。
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (!(obj instanceof ArrivalGroupKey that)) {
+        return false;
+      }
+      return Objects.equals(tenantId, that.tenantId)
+          && Objects.equals(fileGroupCode, that.fileGroupCode)
+          && Objects.equals(waitFileGroupMode, that.waitFileGroupMode)
+          && Objects.equals(requiredFileSet, that.requiredFileSet)
+          && Objects.equals(arrivalTimeoutAction, that.arrivalTimeoutAction);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(
+          tenantId, fileGroupCode, waitFileGroupMode, requiredFileSet, arrivalTimeoutAction);
     }
   }
 

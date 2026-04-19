@@ -29,7 +29,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 控制台 JWT 签发与校验（HS256，含租户与角色声明）。
@@ -105,7 +105,7 @@ public class ConsoleJwtService {
   public ConsoleAuthTokenResponse issueToken(
       String username, String tenantId, Set<String> authorities, long sessionVersion) {
     Guard.requireText(username, "username is required");
-    if (!StringUtils.hasText(tenantId)) {
+    if (!Texts.hasText(tenantId)) {
       throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.TENANT_REQUIRED);
     }
     Instant issuedAt = Instant.now();

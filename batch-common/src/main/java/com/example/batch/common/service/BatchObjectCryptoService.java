@@ -22,7 +22,7 @@ import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /**
  * 批处理对象加解密服务，基于 AES/GCM/NoPadding 算法对文件内容进行加密保护。
@@ -60,7 +60,7 @@ public class BatchObjectCryptoService {
   public String resolveKeyRef(Map<String, Object> security) {
     if (security != null) {
       Object keyRef = security.get("encryption_key_ref");
-      if (keyRef != null && StringUtils.hasText(String.valueOf(keyRef))) {
+      if (keyRef != null && Texts.hasText(String.valueOf(keyRef))) {
         return String.valueOf(keyRef);
       }
     }
@@ -175,14 +175,14 @@ public class BatchObjectCryptoService {
   private byte[] resolveKeyBytes(String keyRef) {
     String resolvedKeyRef = normalizedKeyRef(keyRef);
     String base64 = kmsProperties.getKeys().get(resolvedKeyRef);
-    if (!StringUtils.hasText(base64)) {
+    if (!Texts.hasText(base64)) {
       throw new IllegalStateException("missing kms key material for keyRef=" + resolvedKeyRef);
     }
     return Base64.getDecoder().decode(base64);
   }
 
   private String normalizedKeyRef(String keyRef) {
-    return StringUtils.hasText(keyRef) ? keyRef.trim() : kmsProperties.getDefaultKeyRef();
+    return Texts.hasText(keyRef) ? keyRef.trim() : kmsProperties.getDefaultKeyRef();
   }
 
   private boolean truthy(Object value) {

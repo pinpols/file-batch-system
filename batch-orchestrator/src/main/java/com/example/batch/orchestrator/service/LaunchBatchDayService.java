@@ -21,7 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** 批次日（Batch Day）生命周期管理：upsert、cutoff 判定、late arrival 路由、审计日志。 */
 @Service
@@ -45,7 +45,7 @@ public class LaunchBatchDayService {
       return;
     }
     String calendarCode = LaunchParamResolver.textValue(jobDefinition.calendarCode());
-    if (!StringUtils.hasText(calendarCode)) {
+    if (!Texts.hasText(calendarCode)) {
       return;
     }
     Instant now = Instant.now();
@@ -55,9 +55,9 @@ public class LaunchBatchDayService {
     Instant cutoffAt = resolveBatchDayCutoffAt(request.tenantId(), calendarCode, request.bizDate());
     String operatorId = LaunchParamResolver.resolveOperatorId(effectiveParams);
     String auditOperatorId =
-        StringUtils.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM;
+        Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM;
     String auditOperatorType =
-        StringUtils.hasText(operatorId)
+        Texts.hasText(operatorId)
             ? AuditLogConstants.OPERATOR_TYPE_REQUEST
             : AuditLogConstants.OPERATOR_TYPE_SYSTEM;
     if (existing == null) {
@@ -174,7 +174,7 @@ public class LaunchBatchDayService {
     LocalTime cutoffTime =
         calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
     ZoneId zoneId =
-        StringUtils.hasText(calendar.timezone())
+        Texts.hasText(calendar.timezone())
             ? ZoneId.of(calendar.timezone())
             : ZoneId.systemDefault();
     return bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
@@ -189,7 +189,7 @@ public class LaunchBatchDayService {
     LocalTime cutoffTime =
         calendar.cutoffTime() == null ? LocalTime.of(6, 0) : calendar.cutoffTime();
     ZoneId zoneId =
-        StringUtils.hasText(calendar.timezone())
+        Texts.hasText(calendar.timezone())
             ? ZoneId.of(calendar.timezone())
             : ZoneId.systemDefault();
     Instant cutoffAt = bizDate.plusDays(1).atTime(cutoffTime).atZone(zoneId).toInstant();
@@ -212,7 +212,7 @@ public class LaunchBatchDayService {
   }
 
   boolean isWithinLateArrivalTolerance(BatchDayInstanceRecord batchDay, String calendarCode) {
-    if (batchDay == null || !StringUtils.hasText(calendarCode)) {
+    if (batchDay == null || !Texts.hasText(calendarCode)) {
       return false;
     }
     Instant cutoffAt = batchDay.cutoffAt();
@@ -278,7 +278,7 @@ public class LaunchBatchDayService {
       return request;
     }
     String calendarCode = LaunchParamResolver.textValue(loaded.jobDefinition().calendarCode());
-    if (!StringUtils.hasText(calendarCode)) {
+    if (!Texts.hasText(calendarCode)) {
       return request;
     }
     BatchDayInstanceRecord batchDay =

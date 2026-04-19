@@ -19,7 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -54,7 +54,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
   @Override
   public boolean claim(String tenantId, Long taskId, String workerId) {
     String traceId = currentTraceId();
-    String resolvedTraceId = StringUtils.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+    String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
     return executeClaimLike(
         "claim",
         () ->
@@ -72,7 +72,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
   @Override
   public boolean renewLease(String tenantId, Long taskId, String workerId) {
     String traceId = currentTraceId();
-    String resolvedTraceId = StringUtils.hasText(traceId) ? traceId : IdGenerator.newTraceId();
+    String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
     return executeClaimLike(
         "renew",
         () ->
@@ -95,7 +95,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     String traceFallback = currentTraceId();
     for (int attempt = 1; attempt <= max; attempt++) {
       String traceId = firstNonBlank(report.getTraceId(), traceFallback);
-      if (!StringUtils.hasText(traceId)) {
+      if (!Texts.hasText(traceId)) {
         traceId = IdGenerator.newTraceId();
       }
       try {
@@ -219,14 +219,14 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
 
   private String currentTraceId() {
     String value = MDC.get(StructuredLogField.TRACE_ID);
-    return StringUtils.hasText(value) ? value : null;
+    return Texts.hasText(value) ? value : null;
   }
 
   private static String firstNonBlank(String value, String fallback) {
-    if (StringUtils.hasText(value)) {
+    if (Texts.hasText(value)) {
       return value;
     }
-    return StringUtils.hasText(fallback) ? fallback : null;
+    return Texts.hasText(fallback) ? fallback : null;
   }
 
   private RestClient client() {
@@ -255,11 +255,11 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
 
   private String resolveBaseUrl() {
     String configuredBaseUrl = properties.getBaseUrl();
-    if (StringUtils.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
+    if (Texts.hasText(configuredBaseUrl) && !configuredBaseUrl.contains("${")) {
       return configuredBaseUrl;
     }
     String localPort = environment.getProperty("local.server.port");
-    if (StringUtils.hasText(localPort)) {
+    if (Texts.hasText(localPort)) {
       return "http://127.0.0.1:" + localPort;
     }
     throw new IllegalStateException(

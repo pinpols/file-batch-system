@@ -17,7 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 
 /** Shared utilities used by all {@link FormatParser} implementations. */
 public class ParseSupport {
@@ -46,7 +46,7 @@ public class ParseSupport {
       return null;
     }
     Object fm = map.get("field_mappings");
-    if (fm instanceof String text && StringUtils.hasText(text)) {
+    if (fm instanceof String text && Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, new TypeReference<List<Object>>() {});
       } catch (Exception ignored) {
@@ -76,7 +76,7 @@ public class ParseSupport {
       map.forEach((k, v) -> out.put(String.valueOf(k), v));
       return out;
     }
-    if (value instanceof String text && StringUtils.hasText(text)) {
+    if (value instanceof String text && Texts.hasText(text)) {
       try {
         return objectMapper.readValue(text, new TypeReference<Map<String, Object>>() {});
       } catch (Exception ignored) {
@@ -96,7 +96,7 @@ public class ParseSupport {
       if (value instanceof Number number) {
         return number.intValue();
       }
-      if (value != null && StringUtils.hasText(String.valueOf(value))) {
+      if (value != null && Texts.hasText(String.valueOf(value))) {
         return Integer.parseInt(String.valueOf(value));
       }
     }
@@ -127,7 +127,7 @@ public class ParseSupport {
     LinkedHashSet<String> fields = new LinkedHashSet<>();
     if (existing instanceof List<?> list) {
       for (Object item : list) {
-        if (item != null && StringUtils.hasText(String.valueOf(item))) {
+        if (item != null && Texts.hasText(String.valueOf(item))) {
           fields.add(String.valueOf(item));
         }
       }
@@ -219,7 +219,7 @@ public class ParseSupport {
       return 0L;
     }
     String text = String.valueOf(value);
-    if (!StringUtils.hasText(text)) {
+    if (!Texts.hasText(text)) {
       return 0L;
     }
     return Long.parseLong(text);

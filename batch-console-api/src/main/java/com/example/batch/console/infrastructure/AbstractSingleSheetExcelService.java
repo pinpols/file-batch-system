@@ -39,7 +39,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
+import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 /** 单 sheet Excel 导入导出模板基类：export 因查询参数各异由子类实现，复用 {@link #doExport} 生成 workbook。 */
@@ -266,7 +266,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected static String requireText(
       Map<String, String> values, String key, int maxLength, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       issues.add(key + " is required");
       return null;
     }
@@ -280,7 +280,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected static String optionalText(
       Map<String, String> values, String key, int maxLength, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return null;
     }
     if (normalized.length() > maxLength) {
@@ -307,7 +307,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected static Integer optionalInteger(
       Map<String, String> values, String key, int min, int defaultValue, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return defaultValue;
     }
     try {
@@ -325,7 +325,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected static Integer requireInteger(
       Map<String, String> values, String key, int min, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       issues.add(key + " is required");
       return min;
     }
@@ -344,7 +344,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected static Boolean optionalBoolean(
       Map<String, String> values, String key, Boolean defaultValue, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return defaultValue;
     }
     String upper = normalized.toUpperCase(Locale.ROOT);
@@ -362,7 +362,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected static String resolveTenantField(
       Map<String, String> values, String tenantId, List<String> issues) {
     String effectiveTenant = normalize(values.get("tenant_id"));
-    if (!StringUtils.hasText(effectiveTenant)) {
+    if (!Texts.hasText(effectiveTenant)) {
       return tenantId;
     }
     if (!tenantId.equals(effectiveTenant)) {
@@ -390,7 +390,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   protected static String optionalJson(
       Map<String, String> values, String key, List<String> issues) {
     String normalized = normalize(values.get(key));
-    if (!StringUtils.hasText(normalized)) {
+    if (!Texts.hasText(normalized)) {
       return null;
     }
     try {
