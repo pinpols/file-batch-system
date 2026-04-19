@@ -131,25 +131,24 @@ public class ConsoleDashboardQueryService {
         "bySeverity",
         repository.alertSeverityCounts(resolved).stream()
             .map(
-                row ->
-                    Map.of(
-                        "severity",
-                        row.severity(),
-                        KEY_COUNT,
-                        row.count() == null ? 0L : row.count()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put("severity", row.severity() == null ? "UNKNOWN" : row.severity());
+                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+                  return m;
+                })
             .toList());
     result.put(
         KEY_DAILY_TREND,
         repository.alertDailyTrend(resolved, days).stream()
             .map(
-                row ->
-                    Map.of(
-                        KEY_DAY,
-                        row.day(),
-                        "severity",
-                        row.severity(),
-                        KEY_COUNT,
-                        row.count() == null ? 0L : row.count()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put(KEY_DAY, row.day() == null ? "UNKNOWN" : row.day());
+                  m.put("severity", row.severity() == null ? "UNKNOWN" : row.severity());
+                  m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
+                  return m;
+                })
             .toList());
     return result;
   }
@@ -241,14 +240,13 @@ public class ConsoleDashboardQueryService {
         KEY_DAILY_TREND,
         repository.slaDailyTrend(resolved, days).stream()
             .map(
-                row ->
-                    Map.of(
-                        KEY_DAY,
-                        row.day(),
-                        "breached",
-                        row.breached() == null ? 0L : row.breached(),
-                        "onTime",
-                        row.onTime() == null ? 0L : row.onTime()))
+                row -> {
+                  Map<String, Object> m = new LinkedHashMap<>();
+                  m.put(KEY_DAY, row.day() == null ? "UNKNOWN" : row.day());
+                  m.put("breached", row.breached() == null ? 0L : row.breached());
+                  m.put("onTime", row.onTime() == null ? 0L : row.onTime());
+                  return m;
+                })
             .toList());
     return result;
   }
