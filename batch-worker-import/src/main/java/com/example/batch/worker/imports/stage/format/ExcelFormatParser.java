@@ -16,10 +16,21 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.util.StringUtils;
 
-/** Parses Excel (.xlsx) files into NDJSON records. */
+/**
+ * Parses Excel (.xlsx) files into NDJSON records.
+ *
+ * <p><b>内存风险</b>：当前用 {@link XSSFWorkbook} 一次性把整个 xlsx 树加载进堆，500MB+ 的 Excel 必
+ * OOM。已加 {@link #MAX_EXCEL_BYTES}（默认 50MB，可用系统属性
+ * {@code batch.worker.import.max-excel-bytes} 调）硬限作为止血；真正的流式方案（POI {@code XSSFReader}
+ * + {@code XSSFSheetXMLHandler} 事件驱动）需独立 PR。
+ */
 public class ExcelFormatParser implements FormatParser {
 
   private static final int MAX_EXCEL_COLUMNS = 1000;
+
+  /** Excel 全加载的尺寸硬限：防 POI 一次性构建对象模型撑爆堆。 */
+  private static final long MAX_EXCEL_BYTES =
+      Long.getLong("batch.worker.import.max-excel-bytes", 50L * 1024 * 1024);
 
   private final ParseSupport support;
 
@@ -33,6 +44,14 @@ public class ExcelFormatParser implements FormatParser {
     byte[] excelBytes = request.binaryPayload();
     if (excelBytes == null || excelBytes.length == 0) {
       return 0L;
+    }
+    if (excelBytes.length > MAX_EXCEL_BYTES) {
+      throw new IllegalStateException(
+          "IMPORT_PARSE_EXCEL_TOO_LARGE: xlsx size "
+              + excelBytes.length
+              + " bytes exceeds cap "
+              + MAX_EXCEL_BYTES
+              + " (XSSFWorkbook is full-memory; flip to SAX streaming to raise this limit)");
     }
     ImportPayload importPayload = request.importPayload();
     Object templateConfig = request.templateConfig();

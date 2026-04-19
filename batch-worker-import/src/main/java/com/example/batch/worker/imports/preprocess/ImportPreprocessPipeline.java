@@ -5,7 +5,9 @@ import com.example.batch.worker.imports.domain.ImportPayload;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
@@ -180,7 +182,7 @@ public final class ImportPreprocessPipeline {
         if (StringUtils.hasText(entryName) && !entryName.equals(entry.getName())) {
           continue;
         }
-        return zis.readAllBytes();
+        return boundedReadAll(zis, input.length, "UNZIP");
       }
     } catch (IOException ex) {
       throw new ImportPreprocessException("IMPORT_PREPROCESS_UNZIP_FAILED", ex.getMessage(), ex);
@@ -191,10 +193,51 @@ public final class ImportPreprocessPipeline {
 
   private static byte[] gunzip(byte[] input) {
     try (GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(input))) {
-      return gis.readAllBytes();
+      return boundedReadAll(gis, input.length, "GUNZIP");
     } catch (IOException ex) {
       throw new ImportPreprocessException("IMPORT_PREPROCESS_GUNZIP_FAILED", ex.getMessage(), ex);
     }
+  }
+
+  // ── 解压尺寸闸（防 zip bomb / 压缩炸弹）────────────────────────────────
+  // 解压后字节同时受两个上限制约，取最小值：
+  //   1) 绝对上限 MAX_DECOMPRESS_BYTES（默认 1 GiB，防单文件过大拖死堆）
+  //   2) 相对输入的膨胀倍数 MAX_DECOMPRESS_RATIO（默认 50x，典型文本压缩 3-10x，50x 就是异常）
+  // 超过即抛 IMPORT_PREPROCESS_DECOMPRESS_TOO_LARGE，文件拒收而不是静默把堆写爆。
+  private static final long MAX_DECOMPRESS_BYTES =
+      Long.getLong("batch.worker.import.max-decompress-bytes", 1024L * 1024 * 1024);
+  private static final int MAX_DECOMPRESS_RATIO =
+      Integer.getInteger("batch.worker.import.max-decompress-ratio", 50);
+
+  private static byte[] boundedReadAll(InputStream in, int inputLen, String stepLabel)
+      throws IOException {
+    long capRatio = (long) Math.max(inputLen, 1) * MAX_DECOMPRESS_RATIO;
+    long cap = Math.min(MAX_DECOMPRESS_BYTES, capRatio);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream(Math.min(inputLen * 4, 1024 * 1024));
+    byte[] buf = new byte[8192];
+    long total = 0;
+    int n;
+    while ((n = in.read(buf)) > 0) {
+      total += n;
+      if (total > cap) {
+        throw new ImportPreprocessException(
+            "IMPORT_PREPROCESS_DECOMPRESS_TOO_LARGE",
+            stepLabel
+                + " output "
+                + total
+                + " bytes exceeds cap "
+                + cap
+                + " (input="
+                + inputLen
+                + ", ratio="
+                + MAX_DECOMPRESS_RATIO
+                + ", absMax="
+                + MAX_DECOMPRESS_BYTES
+                + ")");
+      }
+      baos.write(buf, 0, n);
+    }
+    return baos.toByteArray();
   }
 
   private static byte[] aesGcmDecrypt(byte[] input, Map<String, Object> step, ImportPayload payload)
