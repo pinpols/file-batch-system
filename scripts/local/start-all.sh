@@ -267,10 +267,25 @@ wait_orchestrator_healthy() {
 
 echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis）..."
 docker compose --env-file "$COMPOSE_ENV_FILE" up -d
-wait_postgres
-wait_container_healthy batch-minio "MinIO"
-wait_container_healthy batch-redis "Redis"
-wait_kafka_topics_ready
+
+# postgres / minio / redis / kafka-topics 相互无依赖，并发 wait 节省 5-10s
+# minio-init 依赖 minio，仍需串行于 minio healthy 之后
+echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics）..."
+wait_postgres & _pid_pg=$!
+wait_container_healthy batch-minio "MinIO" & _pid_minio=$!
+wait_container_healthy batch-redis "Redis" & _pid_redis=$!
+wait_kafka_topics_ready & _pid_kafka=$!
+
+_basic_failed=0
+for _pid in "$_pid_pg" "$_pid_minio" "$_pid_redis" "$_pid_kafka"; do
+  if ! wait "$_pid"; then _basic_failed=1; fi
+done
+if (( _basic_failed == 1 )); then
+  echo "ERROR: 部分基础服务等待失败，见上方日志" >&2
+  exit 1
+fi
+unset _pid_pg _pid_minio _pid_redis _pid_kafka _basic_failed _pid
+
 wait_container_exited_zero batch-minio-init "MinIO bucket init"
 
 if [[ "${BUILD:-0}" == "1" ]]; then
@@ -335,6 +350,9 @@ START_WORKERS="${START_WORKERS:-1}"
 WORKERS="${WORKERS:-import,export,dispatch}"
 
 echo "==> 启动 Spring Boot 进程（profile=local）..."
+# 实测 "orch + trigger + console 三并发" 让 orch 自己被资源竞争拖慢 ~6s（10→16s），
+# 抵消了 trigger/console 提前启动的收益。机器瓶颈在 Spring bean 单线程注入，
+# 多 JVM 同起反而互相拖累。保留原来的 orch 独占启动节奏。
 echo "  顺序：orchestrator -> 健康检查 UP -> trigger / console -> worker(s)"
 echo "  START_CONSOLE=${START_CONSOLE}  START_TRIGGER=${START_TRIGGER}  START_WORKERS=${START_WORKERS}  WORKERS=${WORKERS}"
 
