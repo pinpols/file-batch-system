@@ -74,6 +74,13 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.4.0</version>
         </dependency>
+        <!-- Univocity CSV parser: 业界性能/边界 case 覆盖最扎实的 CSV 解析库，替换 DelimitedFormatParser
+             手写的 tokenizer。零运行时依赖（自包含 ~500KB），API 流式。 -->
+        <dependency>
+            <groupId>com.univocity</groupId>
+            <artifactId>univocity-parsers</artifactId>
+            <version>2.9.1</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
