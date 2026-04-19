@@ -27,11 +27,61 @@ cd "$ROOT"
 
 LOG_DIR="$ROOT/logs/app"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
+CDS_DIR="$ROOT/build/cds"
 PID_FILE="$ROOT/logs/start-all.pids"
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$CDS_DIR"
 
 # 与 start-all.sh 保持一致的本地 dev 启动加速参数（说明见 start-all.sh）
 LOCAL_FAST_JVM_OPTS="${LOCAL_FAST_JVM_OPTS:--XX:TieredStopAtLevel=1 -XX:+UseSerialGC -Xverify:none}"
+
+# AppCDS：同 start-all.sh，见那里的完整说明
+__CDS_FLAG=""
+warm_cds() {
+  __CDS_FLAG=""
+  local name="$1" jar="$2"
+  local archive="$CDS_DIR/${name}.jsa"
+
+  if [[ "${SKIP_CDS:-0}" == "1" ]]; then
+    return 0
+  fi
+  if [[ -f "$archive" && "$jar" -ot "$archive" ]]; then
+    __CDS_FLAG="-XX:SharedArchiveFile=$archive"
+    return 0
+  fi
+
+  echo "  预热 CDS 缓存 ${name}（首次约 15-30s）..."
+  local warm_log="$LOG_DIR/${name}-cds-warmup.log"
+  rm -f "$archive"
+  java --enable-native-access=ALL-UNNAMED \
+    ${LOCAL_FAST_JVM_OPTS} \
+    -Dspring.context.exit=onRefresh \
+    -Dspring.main.banner-mode=off \
+    -Dspring.flyway.enabled=false \
+    -Dspring.quartz.auto-startup=false \
+    -Dspring.kafka.listener.auto-startup=false \
+    -XX:ArchiveClassesAtExit="$archive" \
+    -jar "$jar" --spring.profiles.active=local \
+    >"$warm_log" 2>&1 &
+  local pid=$! elapsed=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( elapsed >= 120 )); then
+      kill -9 "$pid" 2>/dev/null
+      rm -f "$archive"
+      echo "  ⚠  ${name} CDS 预热超时，跳过 → $warm_log"
+      return 1
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  wait "$pid" 2>/dev/null || true
+
+  if [[ -f "$archive" ]]; then
+    echo "  ✓ ${name} CDS 缓存就绪"
+    __CDS_FLAG="-XX:SharedArchiveFile=$archive"
+  else
+    echo "  ⚠  ${name} CDS 预热未生成 .jsa，跳过 → $warm_log"
+  fi
+}
 
 # ── 端口映射 ──────────────────────────────────────────────────
 port_for() {
@@ -101,7 +151,8 @@ start_module() {
     echo "ERROR: 未找到 ${jar}，请先执行 ./scripts/local/build-apps.sh" >&2
     exit 1
   fi
-  nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${JAVA_OPTS:-} \
+  warm_cds "$name" "$jar"
+  nohup java --enable-native-access=ALL-UNNAMED ${LOCAL_FAST_JVM_OPTS} ${__CDS_FLAG} ${JAVA_OPTS:-} \
     -jar "$jar" --spring.profiles.active=local \
     >"$LOG_DIR/$name.log" 2>&1 &
   local pid=$!
