@@ -18,7 +18,9 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoField;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -246,20 +248,22 @@ public class DefaultConsolePipelineDefinitionApplicationService
       try {
         return OffsetDateTime.parse(text).toInstant();
       } catch (DateTimeParseException ignoredToo) {
-        DateTimeFormatter[] formatters =
-            new DateTimeFormatter[] {
-              DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"),
-              DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"),
-              DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-            };
-        for (DateTimeFormatter formatter : formatters) {
-          try {
-            return LocalDateTime.parse(text, formatter).toInstant(ZoneOffset.UTC);
-          } catch (DateTimeParseException ignoredPattern) {
-            // 尝试下一个格式
-          }
+        // 宽容 fractional seconds（0-9 位）+ 可选 T 或空格分隔符，
+        // 原来枚举固定 .SSSSSS / .SSS 遇到 .SSSSS (5 位) 之类会全部挂掉。
+        DateTimeFormatter flexible =
+            new DateTimeFormatterBuilder()
+                .appendPattern("yyyy-MM-dd")
+                .appendLiteral(text.length() > 10 && text.charAt(10) == 'T' ? 'T' : ' ')
+                .appendPattern("HH:mm:ss")
+                .optionalStart()
+                .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                .optionalEnd()
+                .toFormatter();
+        try {
+          return LocalDateTime.parse(text, flexible).toInstant(ZoneOffset.UTC);
+        } catch (DateTimeParseException ignoredFlexible) {
+          throw ignoredToo;
         }
-        throw ignoredToo;
       }
     }
   }
