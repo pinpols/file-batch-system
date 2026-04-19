@@ -7,6 +7,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.CalendarSaveRequest;
 import com.example.batch.console.web.request.HolidayImportRequest;
 import com.example.batch.console.web.request.HolidaySaveRequest;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/console/calendars")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleCalendarController {
 
   private final ConsoleCalendarApplicationService calendarApplicationService;

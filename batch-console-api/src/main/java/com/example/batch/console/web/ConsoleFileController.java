@@ -11,6 +11,7 @@ import com.example.batch.console.web.request.PresignDownloadFileRequest;
 import com.example.batch.console.web.request.RedispatchFileRequest;
 import com.example.batch.console.web.response.ConsoleFileOperationResponse;
 import com.example.batch.console.web.response.ConsolePresignDownloadResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/files")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleFileController {
 
   private final ConsoleFileApplicationService applicationService;

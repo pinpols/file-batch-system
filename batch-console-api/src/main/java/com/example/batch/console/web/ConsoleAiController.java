@@ -6,6 +6,7 @@ import com.example.batch.console.application.ConsoleAiApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.AiChatRequest;
 import com.example.batch.console.web.response.AiChatResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/ai")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleAiController {
 
   private final ConsoleAiApplicationService applicationService;

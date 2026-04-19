@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/ops/governance")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleGovernanceController {
 
   private static final String PREFIX = "governance.";

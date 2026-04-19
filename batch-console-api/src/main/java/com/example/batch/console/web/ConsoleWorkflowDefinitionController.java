@@ -7,6 +7,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.EnabledPatchRequest;
 import com.example.batch.console.web.request.WorkflowDefinitionSaveRequest;
 import com.example.batch.console.web.response.WorkflowDefinitionDetailResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/workflow-definitions")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleWorkflowDefinitionController {
 
   private final ConsoleWorkflowDefinitionApplicationService workflowDefinitionApplicationService;

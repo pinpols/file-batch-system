@@ -9,6 +9,7 @@ import com.example.batch.console.web.request.JobDefinitionCopyRequest;
 import com.example.batch.console.web.request.JobDefinitionCreateRequest;
 import com.example.batch.console.web.request.JobDefinitionUpdateRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/console/job-definitions")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleJobDefinitionController {
 
   private final ConsoleJobDefinitionApplicationService jobDefinitionApplicationService;

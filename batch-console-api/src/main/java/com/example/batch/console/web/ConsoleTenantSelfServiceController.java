@@ -8,6 +8,7 @@ import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleSystemParameterService;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleTenantGuard;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/tenants")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleTenantSelfServiceController {
 
   private final ConsoleQuotaPolicyApplicationService quotaPolicyService;

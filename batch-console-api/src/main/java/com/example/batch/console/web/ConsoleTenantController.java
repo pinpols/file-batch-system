@@ -9,6 +9,7 @@ import com.example.batch.console.service.ConsoleTenantApplicationService.BatchCr
 import com.example.batch.console.service.ConsoleTenantApplicationService.CreateTenantCommand;
 import com.example.batch.console.service.ConsoleTenantApplicationService.TenantSpec;
 import com.example.batch.console.support.ConsolePrincipal;
+import com.example.batch.console.support.Idempotent;
 import com.example.batch.console.web.request.BatchCreateTenantRequest;
 import com.example.batch.console.web.request.CreateTenantRequest;
 import com.example.batch.console.web.request.TenantConfigBatchInitRequest.InitMode;
@@ -41,6 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/tenants")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleTenantController {
 
   private final ConsoleTenantApplicationService tenantService;

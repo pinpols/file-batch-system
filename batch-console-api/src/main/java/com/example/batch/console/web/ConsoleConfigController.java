@@ -13,6 +13,7 @@ import com.example.batch.console.web.request.SecretVersionRotateRequest;
 import com.example.batch.console.web.response.ConsoleConfigChangeLogResponse;
 import com.example.batch.console.web.response.ConsoleConfigReleaseResponse;
 import com.example.batch.console.web.response.ConsoleSecretVersionResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/config")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleConfigController {
 
   private final ConsoleConfigApplicationService applicationService;

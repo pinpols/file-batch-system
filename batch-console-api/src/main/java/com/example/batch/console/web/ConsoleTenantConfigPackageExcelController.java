@@ -8,6 +8,7 @@ import com.example.batch.console.web.request.TenantConfigPackageExcelApplyReques
 import com.example.batch.console.web.response.TenantConfigPackageExcelApplyResponse;
 import com.example.batch.console.web.response.TenantConfigPackageExcelPreviewResponse;
 import com.example.batch.console.web.response.TenantConfigPackageExcelUploadResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Validated
 @RequestMapping("/api/console/config/tenant-package/excel")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleTenantConfigPackageExcelController {
 
   private final ConsoleTenantConfigPackageExcelApplicationService applicationService;

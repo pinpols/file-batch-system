@@ -8,6 +8,7 @@ import com.example.batch.console.web.query.FileChannelQueryRequest;
 import com.example.batch.console.web.request.EnabledPatchRequest;
 import com.example.batch.console.web.request.FileChannelCreateRequest;
 import com.example.batch.console.web.request.FileChannelUpdateRequest;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/file-channels")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleFileChannelController {
 
   private final ConsoleFileChannelApplicationService fileChannelApplicationService;

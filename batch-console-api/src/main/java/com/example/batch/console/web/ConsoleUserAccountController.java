@@ -8,6 +8,7 @@ import com.example.batch.console.service.ConsoleUserAccountService;
 import com.example.batch.console.web.request.ResetPasswordRequest;
 import com.example.batch.console.web.request.UpdateUserAccountRequest;
 import com.example.batch.console.web.response.ConsoleUserAccountResponse;
+import com.example.batch.console.support.Idempotent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/users")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleUserAccountController {
 
   private final ConsoleUserAccountService userAccountService;

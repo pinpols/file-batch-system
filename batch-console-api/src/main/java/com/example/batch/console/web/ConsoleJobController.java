@@ -19,6 +19,7 @@ import com.example.batch.console.web.request.RerunRequest;
 import com.example.batch.console.web.request.TaskReplayRequest;
 import com.example.batch.console.web.request.TriggerRequest;
 import com.example.batch.console.web.response.ConsoleBatchDayCatchUpResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -44,6 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/jobs")
 @PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleJobController {
 
   private final ConsoleJobTriggerService triggerService;

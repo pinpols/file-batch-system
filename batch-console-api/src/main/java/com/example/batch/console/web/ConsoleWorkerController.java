@@ -8,6 +8,7 @@ import com.example.batch.console.web.request.DrainWorkerRequest;
 import com.example.batch.console.web.request.ForceOfflineWorkerRequest;
 import com.example.batch.console.web.response.ConsoleWorkerClaimedTaskResponse;
 import com.example.batch.console.web.response.ConsoleWorkerRegistryResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/workers")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleWorkerController {
 
   private final ConsoleWorkerApplicationService applicationService;

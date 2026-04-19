@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/api-keys")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_TENANT_USER')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleApiKeyController {
 
   private final ConsoleApiKeyService apiKeyService;

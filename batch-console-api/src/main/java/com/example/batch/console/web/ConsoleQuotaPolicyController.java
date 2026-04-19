@@ -5,6 +5,7 @@ import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.application.ConsoleQuotaPolicyApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.QuotaPolicySaveRequest;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/console/quota-policies")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleQuotaPolicyController {
 
   private final ConsoleQuotaPolicyApplicationService quotaPolicyApplicationService;

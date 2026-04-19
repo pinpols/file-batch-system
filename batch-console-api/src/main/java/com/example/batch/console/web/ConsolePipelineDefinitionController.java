@@ -6,6 +6,7 @@ import com.example.batch.console.application.ConsolePipelineDefinitionApplicatio
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.web.request.PipelineDefinitionSaveRequest;
 import com.example.batch.console.web.response.PipelineDefinitionDetailResponse;
+import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/pipeline-definitions")
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsolePipelineDefinitionController {
 
   private final ConsolePipelineDefinitionApplicationService pipelineDefinitionApplicationService;

@@ -6,6 +6,7 @@ import com.example.batch.console.application.ConsoleOutboxOpsApplicationService;
 import com.example.batch.console.service.ConsoleKafkaLagQueryService;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.support.ConsoleQueryCacheService;
+import com.example.batch.console.support.Idempotent;
 import com.example.batch.console.web.response.ConsoleOpsSummaryResponse;
 import com.example.batch.console.web.response.ConsoleOutboxCleanupResponse;
 import com.example.batch.console.web.response.ConsoleOutboxRepublishResponse;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/console/ops")
 @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN')")
 @RequiredArgsConstructor
+@Idempotent
 public class ConsoleOpsController {
 
   private final ConsoleOpsApplicationService opsApplicationService;
