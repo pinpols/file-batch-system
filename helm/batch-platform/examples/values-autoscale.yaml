@@ -1,0 +1,41 @@
+# 启用弹性伸缩的示例 values（叠加到 values-local-k8s.yaml）
+# 前提：集群已装 KEDA operator（helm install keda kedacore/keda -n keda）
+#
+# 策略：
+#   - Worker（import/export/dispatch）：KEDA 按 Kafka consumer lag 扩缩
+#   - Console-api：CPU HPA
+#   - Orchestrator / Trigger：保持静态 replicaCount（架构约束）
+
+consoleApi:
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+workerImport:
+  keda:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 6           # Docker Desktop 8GB 上限示例；生产可调大
+    lagThreshold: "20"
+    topic: "batch.task.dispatch.import"
+    consumerGroup: "batch-worker-import"
+
+workerExport:
+  keda:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    lagThreshold: "20"
+    topic: "batch.task.dispatch.export"
+    consumerGroup: "batch-worker-export"
+
+workerDispatch:
+  keda:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    lagThreshold: "10"
+    topic: "batch.task.dispatch.dispatch"
+    consumerGroup: "batch-worker-dispatch"

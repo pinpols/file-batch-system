@@ -52,6 +52,12 @@ security:
 
 consoleApi:
   replicaCount: 2
+  # CPU-based HPA（BFF 流量敏感，CPU 足够）。生产建议 enabled: true。
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
   port: 18080
   realtime:
     replayMaxEntries: 20000
@@ -171,11 +177,23 @@ workerImport:
   service:
     type: ClusterIP
     port: 18083
+  # CPU-based HPA（KEDA 不可用时的 fallback）
   hpa:
     enabled: false
     minReplicas: 1
     maxReplicas: 8
     targetCPUUtilizationPercentage: 70
+  # KEDA 按 Kafka consumer lag 扩缩（生产首选，需先装 keda operator）
+  # 与 hpa 互斥：keda.enabled=true 时 hpa 自动跳过
+  keda:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 8
+    pollingInterval: 30       # 轮询 lag 间隔（秒）
+    cooldownPeriod: 120       # 缩容冷却（秒）
+    topic: "batch.task.dispatch.import"
+    consumerGroup: "batch-worker-import"
+    lagThreshold: "20"        # 单 Pod 允许的最大 lag；超过就扩容
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
@@ -211,6 +229,15 @@ workerExport:
     minReplicas: 1
     maxReplicas: 8
     targetCPUUtilizationPercentage: 70
+  keda:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 8
+    pollingInterval: 30
+    cooldownPeriod: 120
+    topic: "batch.task.dispatch.export"
+    consumerGroup: "batch-worker-export"
+    lagThreshold: "20"
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
@@ -246,6 +273,15 @@ workerDispatch:
     minReplicas: 1
     maxReplicas: 6
     targetCPUUtilizationPercentage: 70
+  keda:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 6
+    pollingInterval: 30
+    cooldownPeriod: 120
+    topic: "batch.task.dispatch.dispatch"
+    consumerGroup: "batch-worker-dispatch"
+    lagThreshold: "10"        # dispatch 单次较重，阈值更小
   livenessProbe:
     httpGet:
       path: /actuator/health/liveness
