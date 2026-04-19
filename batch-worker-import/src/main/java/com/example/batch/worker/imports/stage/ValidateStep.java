@@ -80,17 +80,24 @@ public class ValidateStep implements ImportStageStep {
           stage(), "IMPORT_VALIDATE_NO_STREAM", "parsed records file missing");
     }
     Path validatedRecordsPath = null;
+    ImportStageResult result;
     try {
       ValidationSession session = openValidationSession(context);
-      ImportStageResult datasetResult =
-          processDatasetIssues(context, session, validatedRecordsPath);
+      // R-4.3: processDatasetIssues 不需要文件，单独处理不传 path
+      ImportStageResult datasetResult = processDatasetIssues(context, session);
       if (datasetResult != null) {
         return datasetResult;
       }
       validatedRecordsPath = createValidatedFile(context);
+      // R-4.3: processValidationBatch 内部的 writer 在 try-with-resources 里；
+      // 失败标记只记到 StreamingValidationResult，不在 writer 还开着时 delete 文件
+      // （旧实现 failStreaming 直接 delete 会导致 writer 还在写的 fd 被 unlink，
+      //  Linux 下数据静默丢失、Windows 下直接报错）。
       StreamingValidationResult streamResult =
           processValidationBatch(context, session, parsedRecordsPath, validatedRecordsPath);
       if (streamResult.failure() != null) {
+        // writer 此时已随 processValidationBatch 的 try-with-resources 关闭，安全 delete
+        deleteQuietly(validatedRecordsPath);
         return streamResult.failure();
       }
       writeValidationResult(
@@ -100,13 +107,12 @@ public class ValidateStep implements ImportStageStep {
           streamResult.validatedCount(),
           streamResult.loadedCandidateCount());
       if (!recordGovernanceService.withinThreshold(context)) {
-        return failStreaming(
-            context,
-            validatedRecordsPath,
-            ERR_SKIP_THRESHOLD_EXCEEDED,
-            MSG_SKIP_THRESHOLD_EXCEEDED);
+        deleteQuietly(validatedRecordsPath);
+        return ImportStageResult.failure(
+            stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED);
       }
-      return ImportStageResult.success(stage());
+      result = ImportStageResult.success(stage());
+      return result;
     } catch (Exception exception) {
       if (validatedRecordsPath != null) {
         deleteQuietly(validatedRecordsPath);
@@ -131,7 +137,9 @@ public class ValidateStep implements ImportStageStep {
   }
 
   private ImportStageResult processDatasetIssues(
-      ImportJobContext context, ValidationSession session, Path validatedRecordsPath) {
+      ImportJobContext context, ValidationSession session) {
+    // R-4.3: 数据集级校验阶段 validatedRecordsPath 尚未创建，
+    // 超阈值直接返回失败结果即可，不需要 delete（之前代码传 null 进来也是 no-op）。
     for (ValidationIssue issue : session.datasetIssues()) {
       recordValidationError(
           context,
@@ -140,11 +148,8 @@ public class ValidateStep implements ImportStageStep {
           issue.errorMessage(),
           issue.rawRecord());
       if (!recordGovernanceService.withinThreshold(context)) {
-        return failStreaming(
-            context,
-            validatedRecordsPath,
-            ERR_SKIP_THRESHOLD_EXCEEDED,
-            MSG_SKIP_THRESHOLD_EXCEEDED);
+        return ImportStageResult.failure(
+            stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED);
       }
     }
     return null;
@@ -187,11 +192,8 @@ public class ValidateStep implements ImportStageStep {
             return new StreamingValidationResult(
                 validatedCount,
                 loadedCandidateCount,
-                failStreaming(
-                    context,
-                    validatedRecordsPath,
-                    ERR_SKIP_THRESHOLD_EXCEEDED,
-                    MSG_SKIP_THRESHOLD_EXCEEDED));
+                ImportStageResult.failure(
+                    stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED));
           }
           continue;
         }
@@ -208,8 +210,7 @@ public class ValidateStep implements ImportStageStep {
             return new StreamingValidationResult(
                 validatedCount,
                 loadedCandidateCount,
-                failStreaming(
-                    context, validatedRecordsPath, result.errorCode(), result.errorMessage()));
+                ImportStageResult.failure(stage(), result.errorCode(), result.errorMessage()));
           }
           chunk.clear();
         }
@@ -223,8 +224,7 @@ public class ValidateStep implements ImportStageStep {
           return new StreamingValidationResult(
               validatedCount,
               loadedCandidateCount,
-              failStreaming(
-                  context, validatedRecordsPath, result.errorCode(), result.errorMessage()));
+              ImportStageResult.failure(stage(), result.errorCode(), result.errorMessage()));
         }
       }
     }
@@ -286,15 +286,6 @@ public class ValidateStep implements ImportStageStep {
       validCount++;
     }
     return ChunkProcessResult.success(validCount);
-  }
-
-  private ImportStageResult failStreaming(
-      ImportJobContext context, Path validatedRecordsPath, String errorCode, String errorMessage) {
-    deleteQuietly(validatedRecordsPath);
-    if (Texts.hasText(errorCode) && Texts.hasText(errorMessage)) {
-      return ImportStageResult.failure(stage(), errorCode, errorMessage);
-    }
-    return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_FAILED", errorMessage);
   }
 
   private void recordValidationError(

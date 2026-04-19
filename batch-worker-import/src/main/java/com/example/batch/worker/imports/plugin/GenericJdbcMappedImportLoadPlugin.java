@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Component;
  * {@code batchUpdate} 处理整个批次（非逐行请求）。 通过 {@code query_param_schema.jdbcMappedImport} 或 {@code
  * jdbc_mapped_import} 配置。
  */
+@Slf4j
 @Component
 public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
@@ -55,6 +57,27 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
 
     List<String> insertCols = orderedInsertColumns(spec);
     String sql = buildSql(spec, insertCols);
+    // C-2.7 b: 显式日志幂等模式——运维可按关键字 "idempotency=OFF" 扫出需要补
+    // conflict_columns 的模板（重跑安全性靠模板声明业务主键 + batch_no 唯一约束）。
+    if (spec.conflictColumns() == null || spec.conflictColumns().isEmpty()) {
+      log.warn(
+          "jdbc-mapped-import LOAD running without ON CONFLICT clause: tenantId={},"
+              + " template={}, schema={}, table={}, idempotency=OFF (重跑会重复落行)"
+              + " — add conflict_columns to template to enable UNIQUE-based dedupe",
+          context.tenantId(),
+          context.templateCode(),
+          spec.schema(),
+          spec.table());
+    } else if (log.isInfoEnabled()) {
+      log.info(
+          "jdbc-mapped-import LOAD idempotency=ON: tenantId={}, template={}, schema={},"
+              + " table={}, conflictColumns={}",
+          context.tenantId(),
+          context.templateCode(),
+          spec.schema(),
+          spec.table(),
+          spec.conflictColumns());
+    }
     int n = records.size();
     jdbcTemplate.batchUpdate(
         sql,

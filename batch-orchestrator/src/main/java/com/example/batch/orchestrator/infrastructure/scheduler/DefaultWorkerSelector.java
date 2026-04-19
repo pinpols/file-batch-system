@@ -7,10 +7,14 @@ import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import com.example.batch.common.utils.Texts;
 
@@ -30,11 +34,22 @@ import com.example.batch.common.utils.Texts;
  *
  * <p>找不到匹配 worker 时返回 {@code available=false} 的 route（不返回 null），让调用方拿到 reasonCode。
  */
+@Slf4j
 @Component
-@RequiredArgsConstructor
 public class DefaultWorkerSelector implements WorkerSelector {
 
+  // A-3.2 a: 指标名对齐 batch.scheduler.* 前缀，和现有 scheduler 指标共面板
+  private static final String METRIC_NO_MATCH = "batch.scheduler.worker_selection.no_match";
+
   private final WorkerRegistryRepository workerRegistryRepository;
+  private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+
+  public DefaultWorkerSelector(
+      WorkerRegistryRepository workerRegistryRepository,
+      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+    this.workerRegistryRepository = workerRegistryRepository;
+    this.meterRegistryProvider = meterRegistryProvider;
+  }
 
   @Override
   public WorkerRouteModel select(
@@ -65,12 +80,48 @@ public class DefaultWorkerSelector implements WorkerSelector {
                         Comparator.nullsLast(Comparator.reverseOrder())))
             .orElse(null);
     if (selected == null) {
+      // A-3.2 a: 空集不再静默阻塞——记 WARN + 计数，让 Grafana / 告警能发现：
+      //   - candidates.isEmpty 说明整组 worker 下线（或 workerGroup 配错）
+      //   - resourceTag 全不匹配说明 queue 配置与 worker 实际 tag 失配
+      // 保留阻塞语义以确保任务不会跑到错误环境（安全优先，见 v3 A-3.2）。
+      String reason =
+          candidates.isEmpty()
+              ? "no_online_workers_in_group"
+              : "no_worker_matches_resource_tag";
+      log.warn(
+          "worker selection returned no match: tenantId={}, workerGroup={}, resourceTag={},"
+              + " candidates={}, reason={} — task will block in WAITING until operator"
+              + " intervenes",
+          request.getTenantId(),
+          workerGroup,
+          queue == null ? null : queue.resourceTag(),
+          candidates.size(),
+          reason);
+      incrementNoMatchCounter(request, queue, reason);
       route.setAvailable(false);
       return route;
     }
     route.setWorkerCode(selected.workerCode());
     route.setAvailable(true);
     return route;
+  }
+
+  private void incrementNoMatchCounter(
+      ResourceSchedulingRequest request, ResourceQueueRecord queue, String reason) {
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (registry == null) {
+      return;
+    }
+    Counter.builder(METRIC_NO_MATCH)
+        .tags(
+            Tags.of(
+                "tenantId", String.valueOf(request.getTenantId()),
+                "workerType", String.valueOf(request.getWorkerType()),
+                "resourceTag",
+                    queue == null || queue.resourceTag() == null ? "none" : queue.resourceTag(),
+                "reason", reason))
+        .register(registry)
+        .increment();
   }
 
   private boolean matchesResourceTag(WorkerRegistryRecord candidate, ResourceQueueRecord queue) {

@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Service;
  * <p>Join 规则（{@code ALL / ANY / N_OF}）写入 {@code workflow_node.node_params} 的 {@code joinMode}
  * 字段，避免为 join 配置单独扩一张表；详见 {@link #resolveJoinRule}。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DefaultWorkflowDagService implements WorkflowDagService {
@@ -88,9 +90,32 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     }
     WorkflowNodeEntity currentNode =
         workflowNodeMapper.selectByWorkflowDefinitionIdAndNodeCode(workflowDefinitionId, nodeCode);
+    // A-3.4: currentNode 为 null 说明节点被中途删除，若贸然继续会在 resolveJoinRule
+    // 上 NPE；保守返回 false 避免幽灵节点被派发。
+    if (currentNode == null) {
+      log.warn(
+          "workflow node definition missing during dispatch readiness check:"
+              + " workflowRunId={}, workflowDefinitionId={}, nodeCode={} — node may have been"
+              + " deleted mid-run, refusing dispatch",
+          workflowRunId,
+          workflowDefinitionId,
+          nodeCode);
+      return false;
+    }
     List<WorkflowEdgeEntity> incomingEdges =
         workflowEdgeMapper.selectIncomingEdges(workflowDefinitionId, nodeCode);
     if (incomingEdges == null || incomingEdges.isEmpty()) {
+      // A-3.4: 无入边的节点正常情况下只能是 START；出现非-START 无入边节点
+      // 说明 workflow_edge 在 run 期间被改过（软删 / 定义变更），记 WARN 便于排查。
+      // 保持"视为就绪"的现有语义以避免工作流死锁，但运维应能从日志发现异常。
+      if (!WorkflowNodeType.START.code().equalsIgnoreCase(currentNode.getNodeType())) {
+        log.warn(
+            "non-START node {} has no incoming edges: workflowRunId={}, definitionId={} —"
+                + " workflow_edge may have been mutated after workflow_run started",
+            nodeCode,
+            workflowRunId,
+            workflowDefinitionId);
+      }
       return true;
     }
     int matchedCount = 0;

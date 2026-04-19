@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -38,10 +39,22 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   private static final String KEY_PREFIX = "console:idempotency:";
   private static final String PENDING = "PENDING";
   private static final String DONE = "DONE";
-  private static final String CONFLICT_BODY =
+  // C-2.10: 区分 DONE / PENDING 两种 CONFLICT 场景，便于前端决定是"提示已处理"还是"稍后重试"
+  private static final String CONFLICT_DONE_BODY =
       "{\"code\":\""
           + ResultCode.CONFLICT.code()
           + "\",\"message\":\"duplicate request, same Idempotency-Key already processed\"}";
+  private static final String CONFLICT_PENDING_BODY =
+      "{\"code\":\""
+          + ResultCode.CONFLICT.code()
+          + "\",\"message\":\"request currently being processed, retry after 30s with same"
+          + " Idempotency-Key\"}";
+  // R-4.1：Redis 不可达时幂等采用 fail-closed（返回 503），宁可拒绝也不双写。
+  // 与限流的 fail-open 形成对照——前者保可用，后者保安全。
+  private static final String REDIS_UNAVAILABLE_BODY =
+      "{\"code\":\""
+          + ResultCode.SERVICE_UNAVAILABLE.code()
+          + "\",\"message\":\"idempotency store temporarily unavailable, safe to retry later\"}";
   private static final String MISSING_KEY_BODY =
       "{\"code\":\""
           + ResultCode.MISSING_IDEMPOTENCY_KEY.code()
@@ -83,22 +96,60 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
         KEY_PREFIX + tenantId + ":" + request.getMethod() + ":" + request.getRequestURI() + ":"
             + idempotencyKey.trim();
 
-    String existing = redisTemplate.opsForValue().get(redisKey);
+    String existing;
+    try {
+      existing = redisTemplate.opsForValue().get(redisKey);
+    } catch (DataAccessException ex) {
+      // R-4.1 fail-closed：幂等拦截器拿不到 Redis 直接 503
+      log.warn(
+          "idempotency Redis GET unavailable — fail-closed: key={}, cause={}",
+          idempotencyKey,
+          ex.getMessage());
+      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
+      return false;
+    }
     if (DONE.equals(existing)) {
       log.warn(
-          "duplicate idempotency key rejected: key={}, uri={}, tenant={}",
+          "duplicate idempotency key rejected (already done): key={}, uri={}, tenant={}",
           idempotencyKey, request.getRequestURI(), tenantId);
-      writeJson(response, HttpStatus.CONFLICT, CONFLICT_BODY);
+      writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
       return false;
     }
 
     // PENDING 也占坑（防并发双提交），但短 TTL（30s），超时自动释放
-    Boolean isNew = redisTemplate.opsForValue().setIfAbsent(redisKey, PENDING, Duration.ofSeconds(30));
-    if (Boolean.FALSE.equals(isNew)) {
+    Boolean isNew;
+    try {
+      isNew = redisTemplate.opsForValue().setIfAbsent(redisKey, PENDING, Duration.ofSeconds(30));
+    } catch (DataAccessException ex) {
       log.warn(
-          "concurrent idempotency key rejected: key={}, uri={}, tenant={}",
-          idempotencyKey, request.getRequestURI(), tenantId);
-      writeJson(response, HttpStatus.CONFLICT, CONFLICT_BODY);
+          "idempotency Redis setIfAbsent unavailable — fail-closed: key={}, cause={}",
+          idempotencyKey,
+          ex.getMessage());
+      writeJson(response, HttpStatus.SERVICE_UNAVAILABLE, REDIS_UNAVAILABLE_BODY);
+      return false;
+    }
+    if (Boolean.FALSE.equals(isNew)) {
+      // C-2.10: setIfAbsent 失败后重新读一次，区分并发 PENDING 与刚落 DONE 两种情况。
+      // 窗口内另一请求可能刚从 PENDING 晋升为 DONE（取不到锁但已处理完），
+      // 前端应看到"已处理"而不是"稍后重试"，避免无谓轮询。
+      String current = redisTemplate.opsForValue().get(redisKey);
+      if (DONE.equals(current)) {
+        log.warn(
+            "duplicate idempotency key rejected (raced to DONE): key={}, uri={}, tenant={}",
+            idempotencyKey,
+            request.getRequestURI(),
+            tenantId);
+        writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
+      } else {
+        log.warn(
+            "concurrent idempotency key rejected (pending): key={}, uri={}, tenant={}",
+            idempotencyKey,
+            request.getRequestURI(),
+            tenantId);
+        // 给前端一个明确的 Retry-After 提示；30s 对齐 PENDING TTL
+        response.setHeader("Retry-After", "30");
+        writeJson(response, HttpStatus.CONFLICT, CONFLICT_PENDING_BODY);
+      }
       return false;
     }
 

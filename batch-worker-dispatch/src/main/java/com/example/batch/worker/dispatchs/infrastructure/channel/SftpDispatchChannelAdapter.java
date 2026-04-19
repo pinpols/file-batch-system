@@ -8,10 +8,12 @@ import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import java.io.InputStream;
 import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import com.example.batch.common.utils.Texts;
 
@@ -32,6 +34,20 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private final DispatchFileContentResolver fileContentResolver;
   private final BatchSecurityProperties securityProperties;
+  // S-1.2 a: 读 active profile 判定是否处于生产
+  private final Environment environment;
+
+  private boolean isProductionProfile() {
+    if (environment == null) {
+      return false;
+    }
+    String[] active = environment.getActiveProfiles();
+    if (active == null || active.length == 0) {
+      return false;
+    }
+    return Arrays.stream(active)
+        .anyMatch(p -> "prod".equalsIgnoreCase(p) || "production".equalsIgnoreCase(p));
+  }
 
   @Override
   public boolean supports(String channelType) {
@@ -138,15 +154,25 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     ChannelSftp sftp = null;
     try {
       JSch jsch = new JSch();
-      // H-6: 默认启用主机密钥检查；允许通过 channel 配置显式关闭
+      // S-1.2 a: 生产 profile 强制 StrictHostKeyChecking=yes，不允许渠道配置翻盘；
+      // dev/test/e2e/local 允许通过 channel 配置 sftp_strict_host_key_checking=no 关闭。
+      // 判定方式：只要当前有 "prod" / "production" active profile，则 prodMode=true。
+      boolean prodMode = isProductionProfile();
       String strictHostKeyChecking =
           stringProp(ctx.channelConfig(), "sftp_strict_host_key_checking");
-      boolean strictMode = !"no".equalsIgnoreCase(strictHostKeyChecking);
+      boolean strictMode = prodMode || !"no".equalsIgnoreCase(strictHostKeyChecking);
       if (!strictMode) {
         log.warn(
-            "SFTP StrictHostKeyChecking disabled for host {} — susceptible to MITM attacks",
+            "SFTP StrictHostKeyChecking disabled for host {} — susceptible to MITM attacks"
+                + " (allowed only outside prod profile)",
             ctx.connConfig().host());
       } else {
+        if (prodMode && "no".equalsIgnoreCase(strictHostKeyChecking)) {
+          log.warn(
+              "SFTP channel requested sftp_strict_host_key_checking=no but prod profile"
+                  + " forces strict mode — overriding to yes for host {}",
+              ctx.connConfig().host());
+        }
         String knownHostsPath = stringProp(ctx.channelConfig(), "sftp_known_hosts_path");
         if (Texts.hasText(knownHostsPath)) {
           jsch.setKnownHosts(knownHostsPath);

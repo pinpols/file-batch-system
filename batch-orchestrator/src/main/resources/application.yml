@@ -103,8 +103,9 @@ batch:
       # 是否启用 drain 机制（优雅下线/排空任务）
       enabled: ${BATCH_WORKER_DRAIN_ENABLED:true}
   partition-lease:
-    # 分区租约过期时间（秒）：过期后可被回收再分配
-    expire-seconds: ${BATCH_PARTITION_LEASE_EXPIRE_SECONDS:60}
+    # C-2.1 A: 分区租约过期时间（秒）。120s 覆盖 REPORT 重试窗口 + 最近一次续期间隔 + 业务余量。
+    # 见 PartitionLeaseProperties 类级 javadoc；调 report-max-attempts 时需同步放大该值。
+    expire-seconds: ${BATCH_PARTITION_LEASE_EXPIRE_SECONDS:120}
     # 租约回收扫描间隔（毫秒）
     reclaim-interval-millis: ${BATCH_PARTITION_LEASE_RECLAIM_INTERVAL_MILLIS:15000}
   retry:

@@ -31,34 +31,56 @@ public class ConsoleTenantGuard {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
+  /**
+   * S-1.3 加固：只允许字母 / 数字 / 下划线 / 连字符；防止 requestTenantId 带路径字符（如
+   * {@code ../x}）或特殊字符绕过后续 DB 查询语义。
+   */
+  private static final java.util.regex.Pattern TENANT_ID_PATTERN =
+      java.util.regex.Pattern.compile("^[a-zA-Z0-9_\\-]+$");
+
   public String resolveTenant(String requestTenantId) {
+    String normalized = sanitizeTenantId(requestTenantId);
     // 全局角色（ADMIN / AUDITOR / CONFIG_ADMIN）：必须显式指定目标租户
     if (isCurrentUserGlobal()) {
-      if (requestTenantId == null || requestTenantId.isBlank()) {
+      if (normalized == null) {
         throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.TENANT_REQUIRED);
       }
-      return requestTenantId;
+      return normalized;
     }
 
-    // 租户角色：原有逻辑，严格匹配
+    // 租户角色：以 JWT 为权威，requestTenantId 只做双重校验
     ConsoleRequestMetadata metadata = currentMetadataOrNull();
     String authenticatedTenantId = authenticatedTenantId();
     String effectiveTenantId =
         authenticatedTenantId != null
             ? authenticatedTenantId
             : metadata != null ? metadata.tenantId() : null;
-    if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
-      effectiveTenantId = requestTenantId;
-    }
+    // S-1.3 加固：JWT tenantId 缺失时立即 UNAUTHORIZED，不再 fallback 到 requestTenantId
+    // （旧行为允许攻击者在 JWT 解析异常 / 字段缺失时通过 ?tenantId=other_tenant 越权）
     if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
       throw new BizException(ResultCode.UNAUTHORIZED, CommonErrorMessages.TENANT_REQUIRED);
     }
-    if (requestTenantId != null
-        && !requestTenantId.isBlank()
-        && !requestTenantId.equals(effectiveTenantId)) {
+    if (normalized != null && !normalized.equals(effectiveTenantId)) {
       throw new BizException(ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
     }
     return effectiveTenantId;
+  }
+
+  /**
+   * 返回经过 trim + 格式校验的 tenantId；null / 空 / 全空白 → null；非法字符 → INVALID_ARGUMENT。
+   */
+  private String sanitizeTenantId(String raw) {
+    if (raw == null) {
+      return null;
+    }
+    String trimmed = raw.trim();
+    if (trimmed.isEmpty()) {
+      return null;
+    }
+    if (!TENANT_ID_PATTERN.matcher(trimmed).matches()) {
+      throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.TENANT_REQUIRED);
+    }
+    return trimmed;
   }
 
   public void assertTenantAllowed(String requestedTenantId) {
