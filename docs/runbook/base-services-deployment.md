@@ -1,0 +1,189 @@
+# 基础依赖部署方案（Postgres / Kafka / MinIO / Redis）
+
+应用层（orchestrator / trigger / console-api / worker × 3）完全无状态，通过 `batch-defaults.yml` 的
+几个环境变量接入 4 个基础服务。Helm chart（`helm/batch-platform/templates/`）只部署应用模块，
+基础服务按环境自行选型。本文覆盖本地开发和生产的所有主流部署方案。
+
+## 本地开发
+
+### 默认：全 Docker（`docker-compose.yml`）
+
+| 服务 | 镜像 | 宿主机端口 | 容器端口 |
+|---|---|---|---|
+| Postgres | `postgres:${POSTGRES_IMAGE_TAG}` | 15432 | 5432 |
+| Kafka (KRaft) | `apache/kafka:${KAFKA_IMAGE_TAG}` | 19092 | 9092 |
+| MinIO | `minio/minio:${MINIO_IMAGE_TAG}` | 19000 / 19001 | 9000 / 9001 |
+| Redis | `redis:7.4` | 16379 | 6379 |
+
+另有 2 个 init 容器：`batch-kafka-init` 建 topic、`batch-minio-init` 建 bucket。一键启停：
+
+```bash
+make dev-start   # 包装 scripts/local/start-all.sh：up -d 基础依赖 + 启 6 个 app JVM
+make dev-stop    # 仅停 app JVM；基础依赖保持 up
+```
+
+**优点**：团队环境一致、版本锁定、一键启停清理、跨平台。
+**代价**：Docker Desktop 驻留 2-4GB 内存，宿主机 ↔ 容器 IO 有 10-30% 惩罚。
+
+### 可选：Postgres/Redis 裸机 + Kafka/MinIO Docker（混合模式）
+
+适合场景：Docker Desktop 吃内存严重、集成测试 Postgres IO 密集、性能敏感开发。
+
+| 服务 | 建议 | 理由 |
+|---|---|---|
+| Postgres | 裸机（`brew install postgresql@16`） | 访问最频繁，fsync 裸跑快 20-30% |
+| Redis | 裸机（`brew install redis`） | 极轻，纯内存 |
+| Kafka | 保留 Docker | KRaft 配置复杂，镜像封装好 |
+| MinIO | 保留 Docker | Bucket 初始化脚本已自动化 |
+
+预期收益：启动快 ~10-15s，Docker 内存占用降 30%，Postgres IO 提升 20-30%。
+代价：新人多一步 setup，升级 Postgres 版本要双路径同步。
+
+本仓库当前不自带混合模式脚本；如需启用，建议自行在 `.env.local.bare` 覆盖 DB/Redis 连接串
+并直接跳过 docker-compose 里对应的 service。
+
+### 不推荐：全裸机
+
+Kafka KRaft 裸装维护成本（quorum controller + log dir + JVM 参数），收益不抵投入。
+
+---
+
+## 生产部署
+
+应用层已完全解耦，基础服务选型只需对应改 `.env.prod` / Helm values 里几个变量：
+
+- `BATCH_PLATFORM_DB_URL` / `BATCH_PLATFORM_DB_USERNAME` / `BATCH_PLATFORM_DB_PASSWORD`
+- `BATCH_KAFKA_BOOTSTRAP_SERVERS`
+- `BATCH_MINIO_ENDPOINT` / `BATCH_MINIO_ACCESS_KEY` / `BATCH_MINIO_SECRET_KEY`
+- `BATCH_REDIS_HOST` / `BATCH_REDIS_PORT`
+
+### 方案 1：全托管云服务（云原生首选）
+
+| 服务 | AWS | GCP | Azure | 阿里云 |
+|---|---|---|---|---|
+| Postgres | RDS / Aurora | Cloud SQL | Azure Database | RDS for PostgreSQL |
+| Kafka | MSK | Pub/Sub 或 Confluent Cloud | Event Hubs（Kafka API） | MessageQueue for Kafka |
+| 对象存储 | S3 | GCS | Blob Storage | OSS |
+| Redis | ElastiCache | Memorystore | Azure Cache for Redis | 云数据库 Redis |
+
+**优点**：零运维、SLA 99.99%、按量付费、与应用完全解耦。
+**缺点**：云厂商绑定；大规模时贵（MSK 特别贵）；出口流量费；**监管/金融/政企通常不允许**。
+
+### 方案 2：K8s Operator（云原生自建）
+
+| 服务 | Operator |
+|---|---|
+| Postgres | **Crunchy / CloudNativePG / Zalando** |
+| Kafka | **Strimzi**（事实标准） |
+| MinIO | **MinIO Operator** |
+| Redis | **Redis Operator**（Opstree / Spotahome） |
+
+跟应用同一套 K8s 集群，Helm 管理。
+
+**优点**：与应用同栈（监控/日志/secret/网络策略统一）、HA 能力完整、云中立、可混合云。
+**缺点**：运维门槛（K8s + 各服务专业知识）、持久化存储必须靠 CSI driver、Kafka 再平衡需要懂原理。
+
+### 方案 3：独立 VM / 物理机（传统运维）
+
+Postgres / Kafka / Redis 跑在单独 VM 集群，**不在 K8s 里**；应用 K8s 通过网络访问。
+
+**优点**：成熟（DBA/SRE 传统流程）、性能可预测、适合超大规模。
+**缺点**：运维双轨、弹性差。
+
+### 方案 4（反模式）：docker-compose 在单台 VM
+
+不推荐生产使用，仅适合 PoC / 内测：单点、无 HA、扩容难、备份/监控/升级全靠手工。
+唯一优点是跟本地开发同构。
+
+---
+
+## 推荐路线
+
+| 场景 | 方案 |
+|---|---|
+| 初创 / 小规模（< 100 万任务/天） | **方案 1 云托管**。运维 = 0，启动最快 |
+| 中大规模 / 需要云中立 | **方案 2 K8s Operator**。跟 app 同栈，全 Helm 托管 |
+| 金融 / 政企 / 信创 | **方案 3**：Postgres 用 DBA VM 集群（通常国产化）；Kafka 独立机房；应用只在 K8s |
+| PoC / 内测 | 方案 4（过渡用） |
+
+---
+
+## 生产硬约束（与应用架构对齐）
+
+**不论选哪种方案，下列配置必须满足**，否则应用架构的可靠性保证（Outbox / At-Least-Once /
+分布式锁 / 任务状态主机）都会被破坏：
+
+| 基础服务 | 必需配置 | 违反后果 |
+|---|---|---|
+| **Postgres** | `fsync=on`、`synchronous_commit=on`、开启 WAL 归档 | Outbox 事件和任务状态丢失 → 任务静默消失 |
+| **Postgres** | 连接池上游建议 PgBouncer `transaction` 模式 | Hikari 连接爆炸 |
+| **Kafka** | `replication-factor≥3`、`min.insync.replicas=2`、`unclean.leader.election.enable=false` | `acks=all` 配合才生效；否则消息丢失 |
+| **Kafka** | Topic 分区数足够（`batch.task.dispatch.*` 每 topic ≥ 6 分区起步） | worker 并发吃不满 |
+| **Redis** | 持久化开启（AOF everysec 或 RDB 15min），主从 + 哨兵 / Redis Sentinel | ShedLock 锁状态丢失 → 触发重复调度 |
+| **MinIO / S3** | 开启版本管理 + 对象锁（Object Lock） | 批处理文件被误覆盖后无法回溯 |
+
+## 接入配置速查
+
+统一由 `batch-common/src/main/resources/batch-defaults.yml` 消费环境变量：
+
+```yaml
+spring:
+  datasource:
+    url: ${BATCH_PLATFORM_DB_URL}
+    username: ${BATCH_PLATFORM_DB_USERNAME}
+    password: ${BATCH_PLATFORM_DB_PASSWORD}
+  kafka:
+    bootstrap-servers: ${BATCH_KAFKA_BOOTSTRAP_SERVERS}
+  data:
+    redis:
+      host: ${BATCH_REDIS_HOST}
+      port: ${BATCH_REDIS_PORT}
+batch:
+  storage:
+    minio:
+      endpoint: ${BATCH_MINIO_ENDPOINT}
+      access-key: ${BATCH_MINIO_ACCESS_KEY}
+      secret-key: ${BATCH_MINIO_SECRET_KEY}
+      bucket: ${BATCH_MINIO_BUCKET}
+```
+
+部署时填充这些变量即可，应用层不区分服务是 RDS / MSK / Operator / VM / 自建。
+
+### 示例：AWS 全托管模板
+
+```bash
+BATCH_PLATFORM_DB_URL=jdbc:postgresql://batch-prod.abc123.us-east-1.rds.amazonaws.com:5432/batch_platform
+BATCH_KAFKA_BOOTSTRAP_SERVERS=b-1.batchmsk.abc.kafka.us-east-1.amazonaws.com:9098,b-2...:9098
+BATCH_MINIO_ENDPOINT=https://s3.us-east-1.amazonaws.com        # 或自托管 MinIO 的实际地址
+BATCH_REDIS_HOST=batch-prod.abc.cache.amazonaws.com
+BATCH_REDIS_PORT=6379
+```
+
+### 示例：K8s Operator（Strimzi + CloudNativePG）模板
+
+```bash
+BATCH_PLATFORM_DB_URL=jdbc:postgresql://batch-pg-cluster-rw.batch-system.svc:5432/batch_platform
+BATCH_KAFKA_BOOTSTRAP_SERVERS=batch-kafka-bootstrap.kafka-system.svc:9092
+BATCH_MINIO_ENDPOINT=http://minio.storage-system.svc:9000
+BATCH_REDIS_HOST=batch-redis.cache-system.svc
+BATCH_REDIS_PORT=6379
+```
+
+### 示例：本地开发（docker-compose 默认）
+
+```bash
+BATCH_PLATFORM_DB_URL=jdbc:postgresql://localhost:15432/batch_platform
+BATCH_KAFKA_BOOTSTRAP_SERVERS=localhost:19092
+BATCH_MINIO_ENDPOINT=http://localhost:19000
+BATCH_REDIS_HOST=localhost
+BATCH_REDIS_PORT=16379
+```
+
+---
+
+## 相关文档
+
+- [本地开发指南](local-development.md) — 本地联调流程
+- [本地环境变量](local-env.md) — `.env.local` 字段说明
+- [Docker 部署基线](docker-deployment.md) — `docker-compose.*.yml` 编排
+- [滚动升级 worker](rolling-upgrade-workers.md) — 生产 worker 灰度策略
