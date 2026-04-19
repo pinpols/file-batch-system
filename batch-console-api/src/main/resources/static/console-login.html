@@ -181,11 +181,10 @@
     </section>
     <section class="panel">
       <h2>登录控制台</h2>
-      <p>租户默认使用账号绑定租户。只有需要显式指定时才填写。密码不会在页面或仓库中明文展示。</p>
+      <p>租户从账号绑定自动解析。密码不会在页面或仓库中明文展示。</p>
       <form id="login-form">
         <label>用户名<input id="username" autocomplete="username" value="admin" required></label>
         <label>密码<input id="password" type="password" autocomplete="current-password" required></label>
-        <label>租户（可选）<input id="tenantId" placeholder="tenant-id"></label>
         <button id="submit" type="submit">登录并获取 Token</button>
       </form>
       <div class="error" id="error"></div>
@@ -209,8 +208,7 @@
       try {
         const payload = {
           username: document.getElementById("username").value.trim(),
-          password: document.getElementById("password").value,
-          tenantId: document.getElementById("tenantId").value.trim() || null
+          password: document.getElementById("password").value
         };
         const response = await fetch("/api/console/auth/login", {
           method: "POST",
