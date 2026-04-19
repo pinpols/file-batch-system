@@ -48,7 +48,7 @@ class ConsoleSecurityConfigurationTest {
     properties.setDefaultAuthorities(new ArrayList<>(List.of("ROLE_ADMIN", "ROLE_AUDITOR")));
 
     batchSecurityProperties = new BatchSecurityProperties();
-    batchSecurityProperties.setTestingOpen(false);
+    batchSecurityProperties.setBypassMode(false);
     sessionRegistry = Mockito.mock(ConsoleSessionRegistry.class);
     Environment environment = Mockito.mock(Environment.class);
     Mockito.when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
@@ -126,7 +126,7 @@ class ConsoleSecurityConfigurationTest {
 
   @Test
   void shouldAuthenticateAsAdminInTestingOpenModeWithoutToken() throws Exception {
-    batchSecurityProperties.setTestingOpen(true);
+    batchSecurityProperties.setBypassMode(true);
     MockHttpServletRequest request = baseRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
     AtomicBoolean chainCalled = new AtomicBoolean(false);

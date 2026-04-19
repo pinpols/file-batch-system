@@ -12,6 +12,7 @@ import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -103,7 +104,7 @@ public class RegisterStep implements ExportStageStep {
                 .fileName(fileName)
                 .originalFileName(fileName)
                 .fileFormatType(fileFormatType)
-                .charset("UTF-8")
+                .charset(StandardCharsets.UTF_8.name())
                 .fileSizeBytes(
                     runtimeRepository.toLong(context.getAttributes().get("fileSizeBytes")) == null
                         ? 0L

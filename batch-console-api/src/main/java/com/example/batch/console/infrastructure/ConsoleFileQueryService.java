@@ -277,7 +277,7 @@ class ConsoleFileQueryService {
 
   private void applyErrorLineMasking(
       String tenantId, Long fileId, List<FileErrorRecordEntity> rows) {
-    if (batchSecurityProperties.isTestingOpen()
+    if (batchSecurityProperties.isBypassMode()
         || rows == null
         || rows.isEmpty()
         || fileId == null

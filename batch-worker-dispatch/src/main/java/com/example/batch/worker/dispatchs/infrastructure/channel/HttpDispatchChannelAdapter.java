@@ -99,7 +99,7 @@ public class HttpDispatchChannelAdapter implements DispatchChannelAdapter {
     try {
       // S-2.6: resolve-then-connect — 解析 endpoint 主机名并校验 IP，通过 OkHttp Dns 钉住解析结果
       OkHttpClient client = okHttpClient;
-      if (!securityProperties.isTestingOpen()) {
+      if (!securityProperties.isBypassMode()) {
         String targetHost = URI.create(endpoint).getHost();
         InetAddress resolved = DnsResolveGuard.resolveAndValidate(targetHost);
         client = okHttpClient.newBuilder().dns(hostname -> List.of(resolved)).build();

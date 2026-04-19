@@ -46,7 +46,7 @@ import org.springframework.web.client.RestClient;
  *       （双引号包裹 + 内部双引号转义），防 CSV 注入或解析歧义。
  * </ul>
  *
- * <p>加解密路径：{@code batchSecurityProperties.testing-open=true} 时跳过审批 + 跳过解密（仅测试环境用）；
+ * <p>加解密路径：{@code batchSecurityProperties.bypass-mode=true} 时跳过审批 + 跳过解密（仅测试环境用）；
  * 生产环境加密文件走 {@link BatchObjectCryptoService#decryptIfNeeded} 解密后再流给客户端。
  */
 @Service
@@ -76,7 +76,7 @@ public class DefaultConsoleFileDownloadApplicationService
     Map<String, Object> security = templateSecurity(effectiveTenant, fileId);
     if (requiresDownloadApproval(security)
         && !StringUtils.hasText(approvalId)
-        && !batchSecurityProperties.isTestingOpen()) {
+        && !batchSecurityProperties.isBypassMode()) {
       throw new BizException(
           ResultCode.BUSINESS_ERROR, "approvalId is required for download on this file template");
     }
@@ -106,7 +106,7 @@ public class DefaultConsoleFileDownloadApplicationService
       InputStream inputStream =
           client.getObject(GetObjectArgs.builder().bucket(bucket).object(objectName).build());
       InputStream payload =
-          batchSecurityProperties.isTestingOpen()
+          batchSecurityProperties.isBypassMode()
               ? inputStream
               : cryptoService.decryptIfNeeded(inputStream);
       InputStreamResource resource =
@@ -194,7 +194,7 @@ public class DefaultConsoleFileDownloadApplicationService
   }
 
   private boolean requiresDownloadApproval(Map<String, Object> security) {
-    if (batchSecurityProperties.isTestingOpen() || security == null || security.isEmpty()) {
+    if (batchSecurityProperties.isBypassMode() || security == null || security.isEmpty()) {
       return false;
     }
     return truthy(security.get("download_requires_approval"))

@@ -63,7 +63,7 @@ class ConsoleAuthenticationFilterTest {
   @Test
   void filter_passesThroughWhenAuthDisabledAndNotTestingOpen() throws Exception {
     properties.setEnabled(false);
-    batchProperties.setTestingOpen(false);
+    batchProperties.setBypassMode(false);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -77,7 +77,7 @@ class ConsoleAuthenticationFilterTest {
 
   @Test
   void filter_setsTestingAuthAndContinuesWhenTestingOpen() throws Exception {
-    batchProperties.setTestingOpen(true);
+    batchProperties.setBypassMode(true);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader(properties.getTenantHeader(), "t1");
@@ -171,7 +171,7 @@ class ConsoleAuthenticationFilterTest {
 
   @Test
   void filter_passesThroughWhenTestingOpenAndNoToken() throws Exception {
-    batchProperties.setTestingOpen(true);
+    batchProperties.setBypassMode(true);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader(properties.getTenantHeader(), "t1");
@@ -199,7 +199,7 @@ class ConsoleAuthenticationFilterTest {
 
   @Test
   void filter_clearSecurityContextInFinally() throws Exception {
-    batchProperties.setTestingOpen(true);
+    batchProperties.setBypassMode(true);
 
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader(properties.getTenantHeader(), "t1");

@@ -90,7 +90,7 @@ public enum XxxType implements DictEnum {
 - 守护测试 `ConsoleMetaEnumRegistrationTest` 强制二选一，CI 阶段拦截遗漏
 
 **核心字典：**
-- `schedule_type`：`CRON` / `FIXED_RATE` / `MANUAL` / `EVENT` / `ONE_TIME`
+- `schedule_type`：`CRON` / `FIXED_RATE` / `MANUAL`（`ScheduleType`）
 - `job_type`：`GENERAL` / `IMPORT` / `EXPORT` / `DISPATCH` / `WORKFLOW`（`JobType`）
 - `retry_policy`：`NONE` / `FIXED` / `EXPONENTIAL`（`RetryPolicyType`）
 - `catch_up_policy`：`NONE` / `AUTO` / `MANUAL_APPROVAL`（`CatchUpPolicyType`）
@@ -103,6 +103,15 @@ public enum XxxType implements DictEnum {
 - `workflow_run.status`：`CREATED` / `RUNNING` / `SUCCESS` / `FAILED` / `TERMINATED`（`WorkflowRunStatus`）
 
 详见 `docs/coding-conventions.md` §18。
+
+## 配置开关规范
+
+全局安全旁路总开关 **`batch.security.bypass-mode`**（`BatchSecurityProperties#isBypassMode`）。开启后整条安全链（认证 / 脱敏 / 加解密 / 审批 / 渠道校验）放行，仅供本地 / 联调 / E2E。
+
+- **默认**：IDE local=`true`（调试方便）、docker-compose=`false`（贴近生产）、prod profile 强制拒绝 `true`（@PostConstruct 守护）
+- **调用**：业务代码一律 `isBypassMode()`；旧键 `testing-open` / `isTestingOpen()` 已 deprecated，下一 minor 版本移除
+
+详见 `docs/coding-conventions.md §21`。
 
 ## 版本管理
 
@@ -122,6 +131,15 @@ public enum XxxType implements DictEnum {
 - Worker 执行前必须先 CLAIM，不能绕过
 - 禁止 JPA/Hibernate；持久层 MyBatis（运行态）/ Spring Data JDBC（配置态）不混用
 
+## 字符编码
+
+**全系统 UTF-8**：系统内部持有、传输、存储、落盘的字符串一律 UTF-8；**导入**（`PreprocessStep`）是唯一允许读非 UTF-8 源文件的边界，读入后立即转为 UTF-8 内部表示。
+
+- **代码**：一律 `StandardCharsets.UTF_8` 或 `EncodingUtils.resolve(raw)`，**禁止** `Charset.forName("UTF-8")` / 字面量 `"UTF-8"`
+- **中间件 locale**：`docker-compose.yml` 里 postgres / kafka / minio / redis 四个容器统一从 `.env` 的 `BATCH_LOCALE`（默认 `C.UTF-8`）读取 `LANG` / `LC_ALL`；postgres 另加 `POSTGRES_INITDB_ARGS=--encoding=UTF8`
+
+详见 `docs/coding-conventions.md §20`（含 Maven / Dockerfile / Spring Boot / Export / Import 全层落地表）。
+
 ## 模块边界
 
 模块结构固定，不可擅自增删：
@@ -132,6 +150,12 @@ public enum XxxType implements DictEnum {
 ## 变更记录
 
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
+
+### 2026-04-19
+- **新增 §字符编码 + §配置开关规范**：两节详细落地清单移到 `docs/coding-conventions.md §20 / §21`，CLAUDE.md 仅保留核心规则指针。
+- **`testing-open` → `bypass-mode`**：`BatchSecurityProperties` 字段/方法重命名，16 处业务 + 9 处测试全部迁移；保留 `setTestingOpen` setter + `@DeprecatedConfigurationProperty` 兼容旧键一个版本。默认值矩阵：IDE local=`true` / docker-compose=`false` / prod=`false` + @PostConstruct 守护。
+- **全栈 UTF-8 契约**：新建 `EncodingUtils`（10 处 `Charset.forName(...)` 迁移），`Dockerfile.app` + `batch-defaults.yml` + 根 pom 补 UTF-8 配置；`docker-compose.yml` 四个中间件统一 `BATCH_LOCALE=C.UTF-8`。导出硬编码 UTF-8，导入保留 `file_template_config.charset` 透传。
+- **§领域数据字典 `schedule_type` 与枚举对齐**：删除文档中多出的 `EVENT` / `ONE_TIME`（实际枚举仅 3 值）；起因是 tc Excel 按旧文档填 `EVENT` 被 validator 判 invalid 导致整包 apply 回退。
 
 ### 2026-04-18
 - **版本管理改 Maven CI-friendly `${revision}`**：根 pom 统一入口（默认 `1.0.0`，非 SNAPSHOT），11 个子模块改用 `${revision}`；根 pom 加 `flatten-maven-plugin` 保证 install/deploy 后下游能解析；`build-apps.sh`、`docker/Dockerfile.app` 由 `-Dmaven.test.skip=true` 改为 `-DskipTests`（前者会阻断 `batch-common:tests` 依赖链）；`scripts/ci/security-scan.sh` 硬编码 jar 路径改为 glob 匹配。文档示例（`docs/design/*.md` / `docs/runbook/security-scan.md` / `security-scan/README.md`）同步。

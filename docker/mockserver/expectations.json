@@ -1,0 +1,35 @@
+[
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/tb/callback"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {"Content-Type": ["application/json"]},
+      "body": "{\"status\":\"ok\",\"tenant\":\"tb\",\"channel\":\"tb_api_push\"}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/tc/ingest"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {"Content-Type": ["application/json"]},
+      "body": "{\"status\":\"ingested\",\"tenant\":\"tc\",\"channel\":\"tc_api_risk_push\"}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/ta/callback"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {"Content-Type": ["application/json"]},
+      "body": "{\"status\":\"ok\",\"tenant\":\"ta\"}"
+    }
+  }
+]

@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.preprocess;
 
+import com.example.batch.common.utils.EncodingUtils;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,7 +44,7 @@ import org.springframework.util.StringUtils;
  *   <li>{@code CHARSET_TRANSCODE} — 字节编码转换（{@code fromCharset} / {@code toCharset}）
  * </ul>
  *
- * <p>{@code testingOpen=true} 时跳过 AES 解密、摘要校验和 RSA 验签，便于测试环境无密钥运行。
+ * <p>{@code bypassMode=true} 时跳过 AES 解密、摘要校验和 RSA 验签，便于测试环境无密钥运行。
  */
 public final class ImportPreprocessPipeline {
 
@@ -61,12 +62,12 @@ public final class ImportPreprocessPipeline {
   }
 
   public static byte[] run(
-      byte[] input, ImportPayload payload, Map<String, Object> template, boolean testingOpen) {
+      byte[] input, ImportPayload payload, Map<String, Object> template, boolean bypassMode) {
     try {
       if (input == null) {
         input = new byte[0];
       }
-      List<Map<String, Object>> steps = resolveSteps(template, testingOpen);
+      List<Map<String, Object>> steps = resolveSteps(template, bypassMode);
       byte[] current = input;
       boolean digestVerifiedInPipeline = false;
       for (Map<String, Object> step : steps) {
@@ -78,18 +79,18 @@ public final class ImportPreprocessPipeline {
           case "UNZIP" -> current = unzip(current, step, payload);
           case "GUNZIP" -> current = gunzip(current);
           case "AES_GCM_DECRYPT" -> {
-            if (!testingOpen) {
+            if (!bypassMode) {
               current = aesGcmDecrypt(current, step, payload);
             }
           }
           case "VERIFY_DIGEST" -> {
-            if (!testingOpen) {
+            if (!bypassMode) {
               verifyDigest(current, step, payload, template);
               digestVerifiedInPipeline = true;
             }
           }
           case "VERIFY_RSA_SHA256" -> {
-            if (!testingOpen) {
+            if (!bypassMode) {
               verifyRsaSha256(current, step, payload);
             }
           }
@@ -99,7 +100,7 @@ public final class ImportPreprocessPipeline {
                   "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
         }
       }
-      if (!testingOpen && !digestVerifiedInPipeline) {
+      if (!bypassMode && !digestVerifiedInPipeline) {
         verifyImplicitChecksum(current, payload, template);
       }
       return current;
@@ -111,7 +112,7 @@ public final class ImportPreprocessPipeline {
   }
 
   private static List<Map<String, Object>> resolveSteps(
-      Map<String, Object> template, boolean testingOpen) {
+      Map<String, Object> template, boolean bypassMode) {
     Object raw = template == null ? null : template.get("preprocess_pipeline");
     if (raw != null) {
       List<Map<String, Object>> parsed = parsePipeline(raw);
@@ -129,7 +130,7 @@ public final class ImportPreprocessPipeline {
     String enc = stringProp(template, "encrypt_type");
     if ("AES".equalsIgnoreCase(enc)) {
       implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, "AES_GCM_DECRYPT")));
-    } else if (StringUtils.hasText(enc) && !POLICY_NONE.equalsIgnoreCase(enc) && !testingOpen) {
+    } else if (StringUtils.hasText(enc) && !POLICY_NONE.equalsIgnoreCase(enc) && !bypassMode) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED",
           "encrypt_type "
@@ -329,8 +330,8 @@ public final class ImportPreprocessPipeline {
   private static byte[] charsetTranscode(byte[] input, Map<String, Object> step) {
     String from = firstNonBlank(stringProp(step, "fromCharset"), "UTF-8");
     String to = firstNonBlank(stringProp(step, "toCharset"), "UTF-8");
-    Charset fromCs = Charset.forName(from);
-    Charset toCs = Charset.forName(to);
+    Charset fromCs = EncodingUtils.resolve(from);
+    Charset toCs = EncodingUtils.resolve(to);
     String text = new String(input, fromCs);
     return text.getBytes(toCs);
   }

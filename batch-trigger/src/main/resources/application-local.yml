@@ -46,7 +46,7 @@ batch:
   security:
     # 本地联调关闭 InternalSecretFilter 强制校验，与其他 5 个模块 application-local.yml 对齐
     # 否则 start-all.sh 的 /actuator/health 不带 X-Internal-Secret 会被 401，健康检查永远不通过
-    testing-open: true
+    bypass-mode: true
   orchestrator:
     base-url: http://localhost:18082
   trigger:

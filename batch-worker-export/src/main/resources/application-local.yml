@@ -26,7 +26,7 @@ batch:
   shedlock:
     auto-create: true
   security:
-    testing-open: true
+    bypass-mode: true
     kms:
       default-key-ref: DEFAULT_TEST
       keys:

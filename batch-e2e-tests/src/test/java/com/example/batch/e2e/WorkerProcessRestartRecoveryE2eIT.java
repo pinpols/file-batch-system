@@ -394,7 +394,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             "--batch.orchestrator.base-url=http://127.0.0.1:" + localServerPort,
             "--batch.worker.task-client.base-url=http://127.0.0.1:" + localServerPort,
             "--batch.worker.registry.fail-fast-on-startup=false",
-            "--batch.security.testing-open=true",
+            "--batch.security.bypass-mode=true",
             "--batch.security.kms.default-key-ref=DEFAULT_TEST",
             "--batch.security.kms.keys.DEFAULT_TEST=AAAAAAAAAAAAAAAAAAAAAA==",
             "--batch.storage.minio.endpoint=" + minioEndpoint(),

@@ -46,7 +46,7 @@ minio:
 orchestratorBaseUrl: "http://batch-orchestrator:18082"
 
 security:
-  testingOpen: "false"
+  bypassMode: "false"
 
 # ── console-api ────────────────────────────────────────────────────────────────
 

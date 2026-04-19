@@ -1,0 +1,6 @@
+[
+  {"customerNo":"TC-CUST-001","riskScore":82,"band":"HIGH","factors":["FREQUENCY","AMOUNT"],"computedAt":"2026-04-19T07:00:00Z"},
+  {"customerNo":"TC-CUST-002","riskScore":45,"band":"MEDIUM","factors":["LOCATION"],"computedAt":"2026-04-19T07:00:00Z"},
+  {"customerNo":"TC-CUST-003","riskScore":12,"band":"LOW","factors":[],"computedAt":"2026-04-19T07:00:00Z"},
+  {"customerNo":"TC-CUST-004","riskScore":91,"band":"HIGH","factors":["DEVICE","AMOUNT","FREQUENCY"],"computedAt":"2026-04-19T07:00:00Z"}
+]

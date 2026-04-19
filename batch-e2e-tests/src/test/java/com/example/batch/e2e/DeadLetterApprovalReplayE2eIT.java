@@ -48,7 +48,7 @@ import org.springframework.test.context.jdbc.Sql;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.worker.import.worker-type=IMPORT",
-      "batch.security.testing-open=true",
+      "batch.security.bypass-mode=true",
       "batch.console.security.default-tenant-id=t1",
       "batch.console.security.allowed-tenants=t1",
       "batch.console.orchestrator.base-url=http://127.0.0.1:${local.server.port}",

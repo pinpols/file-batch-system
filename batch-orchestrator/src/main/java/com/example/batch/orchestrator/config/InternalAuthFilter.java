@@ -17,7 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * 内部接口共享密钥校验过滤器。
  *
  * <p>注册于 {@code /internal/**}，校验客户端通过 {@code X-Internal-Secret} header 携带的密钥。 当 {@code
- * batch.security.testing-open=true} 时跳过校验，保持本地联调体验不变。
+ * batch.security.bypass-mode=true} 时跳过校验，保持本地联调体验不变。
  */
 @RequiredArgsConstructor
 public class InternalAuthFilter extends OncePerRequestFilter {
@@ -33,7 +33,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
 
-    if (securityProperties.isTestingOpen()) {
+    if (securityProperties.isBypassMode()) {
       chain.doFilter(request, response);
       return;
     }

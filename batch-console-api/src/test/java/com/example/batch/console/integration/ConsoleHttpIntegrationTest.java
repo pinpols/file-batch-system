@@ -43,7 +43,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"batch.security.testing-open=true", "batch.console.ai.enabled=false"})
+    properties = {"batch.security.bypass-mode=true", "batch.console.ai.enabled=false"})
 class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
   @LocalServerPort private int port;

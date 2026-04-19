@@ -68,7 +68,7 @@ final class IntegrationTestInfrastructure {
   }
 
   static void registerSecurityProperties(DynamicPropertyRegistry registry) {
-    registry.add("batch.security.testing-open", () -> true);
+    registry.add("batch.security.bypass-mode", () -> true);
     registry.add("batch.security.kms.default-key-ref", () -> DEFAULT_KMS_KEY_REF);
     registry.add("batch.security.kms.keys." + DEFAULT_KMS_KEY_REF, () -> DEFAULT_KMS_KEY_MATERIAL);
   }

@@ -28,4 +28,4 @@ logging:
 batch:
   security:
     # 生产环境强制关闭测试模式
-    testing-open: false
+    bypass-mode: false

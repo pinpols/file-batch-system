@@ -2,6 +2,7 @@ package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
+import com.example.batch.common.utils.EncodingUtils;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -78,12 +79,12 @@ public class PreprocessStep implements ImportStageStep {
       // 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）。
       // 处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，
       // 在此处透明解密后再进入预处理 pipeline。
-      if (!batchSecurityProperties.isTestingOpen()) {
+      if (!batchSecurityProperties.isBypassMode()) {
         rawBytes = cryptoService.decrypt(rawBytes);
       }
       byte[] processed =
           ImportPreprocessPipeline.run(
-              rawBytes, importPayload, templateConfig, batchSecurityProperties.isTestingOpen());
+              rawBytes, importPayload, templateConfig, batchSecurityProperties.isBypassMode());
 
       String formatType = resolveFileFormatType(importPayload, templateConfig);
       if (isBinaryImportFormat(formatType)) {
@@ -150,11 +151,11 @@ public class PreprocessStep implements ImportStageStep {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object charset = templateConfig.get("charset");
       if (charset != null && StringUtils.hasText(String.valueOf(charset))) {
-        return Charset.forName(String.valueOf(charset));
+        return EncodingUtils.resolve(String.valueOf(charset));
       }
     }
     if (importPayload != null && StringUtils.hasText(importPayload.charset())) {
-      return Charset.forName(importPayload.charset());
+      return EncodingUtils.resolve(importPayload.charset());
     }
     return StandardCharsets.UTF_8;
   }
@@ -183,18 +184,18 @@ public class PreprocessStep implements ImportStageStep {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object targetCharset = templateConfig.get("target_charset");
       if (targetCharset != null && StringUtils.hasText(String.valueOf(targetCharset))) {
-        return Charset.forName(String.valueOf(targetCharset));
+        return EncodingUtils.resolve(String.valueOf(targetCharset));
       }
       Object charset = templateConfig.get("charset");
       if (charset != null && StringUtils.hasText(String.valueOf(charset))) {
-        return Charset.forName(String.valueOf(charset));
+        return EncodingUtils.resolve(String.valueOf(charset));
       }
     }
     if (importPayload != null && StringUtils.hasText(importPayload.targetCharset())) {
-      return Charset.forName(importPayload.targetCharset());
+      return EncodingUtils.resolve(importPayload.targetCharset());
     }
     if (importPayload != null && StringUtils.hasText(importPayload.charset())) {
-      return Charset.forName(importPayload.charset());
+      return EncodingUtils.resolve(importPayload.charset());
     }
     return StandardCharsets.UTF_8;
   }
