@@ -4,6 +4,8 @@
 # Notes:
 # 1) 仅打包六个 Java 应用模块，不启动 Docker、不启动本地进程。
 # 2) 默认执行 Maven package -DskipTests，供 start-all.sh / 手工联调复用。
+# 3) 默认增量构建（不 clean），Maven 自身会基于 mtime 决定是否重编；
+#    改了 parent pom / 资源结构异常时，用 CLEAN=1 ./build-apps.sh 强制清理。
 # =========================================================
 set -euo pipefail
 
@@ -13,7 +15,6 @@ cd "$ROOT"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
 mkdir -p "$RUNTIME_JAR_DIR"
 
-echo "==> Maven 打包应用模块（clean package -DskipTests）..."
 # 优先使用 mvnd（Maven Daemon），没装则降级到 mvn
 _MVND_BIN="${HOME}/.local/bin/mvnd"
 if [[ -x "$_MVND_BIN" ]]; then
@@ -22,16 +23,29 @@ if [[ -x "$_MVND_BIN" ]]; then
 else
   MVN=$(command -v mvnd 2>/dev/null || command -v mvn)
 fi
+
+# CLEAN=1 强制清理；否则增量构建（实测未改动场景 40s → 9s）
+if [[ "${CLEAN:-0}" == "1" ]]; then
+  _CLEAN_GOAL="clean"
+  echo "==> Maven 打包应用模块（clean package -DskipTests，CLEAN=1）..."
+else
+  _CLEAN_GOAL=""
+  echo "==> Maven 打包应用模块（增量 package -DskipTests；强制清理用 CLEAN=1）..."
+fi
+
 # 用 -DskipTests 而非 -Dmaven.test.skip=true：
 # 前者只跳过测试执行，保留 test-classes 和 test-jar 构建；
 # 后者会跳过 test-jar 生成，导致 worker-core/console-api/trigger/orchestrator
 # 对 batch-common:tests 的依赖解析失败。
+# -T 2C：M 系列多核机器加倍 thread/core，实测 -16%
+# -Dflatten.skip=true：local 不 install/deploy，跳过 flatten 插件
 "$MVN" -q -DskipTests \
   -Dcyclonedx.skip=true \
   -Dlicense.skip=true \
   -Dmaven.javadoc.skip=true \
+  -Dflatten.skip=true \
   -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
-  -am clean package -T 1C
+  -am ${_CLEAN_GOAL} package -T 2C
 
 echo "==> 复制可执行 jar 到 build/runtime-jars/..."
 MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-dispatch)
