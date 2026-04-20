@@ -136,7 +136,9 @@ public class LaunchBatchDayService {
               lateAccepted ? 1 : 0,
               catchUpLaunch ? 1 : 0,
               timezoneSnapshot,
-              0L,
+              // @Version Long 字段：null 表示"新记录"触发 INSERT；0L 会被 Spring Data JDBC
+              // 当成"已存在"走 updateWithVersion，配合 id=null 抛 IllegalStateException。
+              null,
               now,
               now));
       appendBatchDayAuditLog(
