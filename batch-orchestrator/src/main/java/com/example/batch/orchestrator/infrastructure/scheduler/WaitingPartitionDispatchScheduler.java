@@ -149,16 +149,10 @@ public class WaitingPartitionDispatchScheduler {
   }
 
   /**
-   * 单个 partition 的完整 dispatch 事务：release → outbox → instance/workflow 状态推进。
-   *
-   * <p>{@code @Transactional(REQUIRES_NEW)} 保证 5 步（含下游 {@code writeDispatchEvent}
-   * 的 {@code MANDATORY} 传播需求）在同一事务内完成，符合 CLAUDE.md §架构硬约束——
-   * outbox 事件必须与状态写入同一事务，避免"partition 改了但 outbox 没写"的状态分裂。
-   *
-   * <p>public 可见性 + 通过 {@code selfProvider} 调用：绕开 Spring AOP 的 self-invocation 盲区，
-   * 让 {@code @Transactional} 真正生效。
+   * MDC 包装层：给 {@link #executeDispatch} 套上 tenantId / traceId / jobInstanceId 上下文，
+   * 事务边界由 executeDispatch 自己管。纯粹是 ThreadLocal MDC 操作，不做 DB 调用，因此本方法 <b>不挂
+   * {@code @Transactional}</b>，避免在一个只做 MDC + 代理委派的方法上空开事务。
    */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void dispatchWaitingPartition(
       JobPartitionEntity partition,
       JobTaskEntity task,
@@ -193,7 +187,7 @@ public class WaitingPartitionDispatchScheduler {
    * <p>必须是 public 且通过 {@code selfProvider} self-proxy 调用才能让 Spring AOP 织入 {@code @Transactional}；
    * 调用方负责在 MDC 上下文中调用，事务本身不关心日志 MDC。
    */
-  @Transactional
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void executeDispatch(
       JobPartitionEntity partition,
       JobTaskEntity task,
