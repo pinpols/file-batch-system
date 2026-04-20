@@ -57,6 +57,16 @@ public final class ImportPreprocessPipeline {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
 
+  /**
+   * 隐式步骤推导表：{@code compress_type} / {@code encrypt_type} 的 UPPERCASE 值 → 对应 preprocess step。
+   * 扩展新的压缩/加密算法时，在表里新增一行即可，避免散落的 if-else。
+   * {@code encrypt_type=NONE} 视为无加密，在调用端直接跳过；其他未注册的加密类型在非 bypass 模式下拒收。
+   */
+  private static final Map<String, String> IMPLICIT_COMPRESS_STEPS =
+      Map.of("ZIP", "UNZIP", "GZIP", "GUNZIP");
+
+  private static final Map<String, String> IMPLICIT_ENCRYPT_STEPS = Map.of("AES", "AES_GCM_DECRYPT");
+
   private ImportPreprocessPipeline() {}
 
   public static byte[] run(byte[] input, ImportPayload payload, Map<String, Object> template) {
@@ -123,16 +133,12 @@ public final class ImportPreprocessPipeline {
       }
     }
     List<Map<String, Object>> implicit = new ArrayList<>();
-    String compress = stringProp(template, "compress_type");
-    if ("ZIP".equalsIgnoreCase(compress)) {
-      implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, "UNZIP")));
-    } else if ("GZIP".equalsIgnoreCase(compress)) {
-      implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, "GUNZIP")));
-    }
+    appendImplicitStep(implicit, IMPLICIT_COMPRESS_STEPS, stringProp(template, "compress_type"));
     String enc = stringProp(template, "encrypt_type");
-    if ("AES".equalsIgnoreCase(enc)) {
-      implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, "AES_GCM_DECRYPT")));
-    } else if (Texts.hasText(enc) && !POLICY_NONE.equalsIgnoreCase(enc) && !bypassMode) {
+    if (!appendImplicitStep(implicit, IMPLICIT_ENCRYPT_STEPS, enc)
+        && Texts.hasText(enc)
+        && !POLICY_NONE.equalsIgnoreCase(enc)
+        && !bypassMode) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED",
           "encrypt_type "
@@ -140,6 +146,22 @@ public final class ImportPreprocessPipeline {
               + " is not supported in implicit mode; use preprocess_pipeline or NONE");
     }
     return implicit;
+  }
+
+  /**
+   * 按查表结果追加隐式 step；命中返回 true，未命中（含空值）返回 false 交由调用方决定是否报错。
+   */
+  private static boolean appendImplicitStep(
+      List<Map<String, Object>> implicit, Map<String, String> lookup, String rawType) {
+    if (!Texts.hasText(rawType)) {
+      return false;
+    }
+    String stepType = lookup.get(rawType.trim().toUpperCase(Locale.ROOT));
+    if (stepType == null) {
+      return false;
+    }
+    implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, stepType)));
+    return true;
   }
 
   private static List<Map<String, Object>> parsePipeline(Object raw) {

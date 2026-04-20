@@ -1,5 +1,7 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.enums.DictEnum;
+import com.example.batch.common.enums.WorkflowEdgeType;
 import com.example.batch.common.enums.WorkflowJoinMode;
 import com.example.batch.common.enums.WorkflowNodeCode;
 import com.example.batch.common.enums.WorkflowNodeType;
@@ -142,39 +144,33 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
 
   private boolean matchesOutgoingEdge(
       WorkflowEdgeEntity edge, boolean success, String payloadJson) {
-    String edgeType = edge.getEdgeType();
-    if ("ALWAYS".equalsIgnoreCase(edgeType)) {
-      return true;
+    WorkflowEdgeType type = DictEnum.fromCode(WorkflowEdgeType.class, edge.getEdgeType());
+    if (type == null) {
+      return false;
     }
-    if (STATUS_SUCCESS.equalsIgnoreCase(edgeType)) {
-      return success;
-    }
-    if ("FAILURE".equalsIgnoreCase(edgeType)) {
-      return !success;
-    }
-    if ("CONDITION".equalsIgnoreCase(edgeType)) {
-      return success && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
-    }
-    return false;
+    return switch (type) {
+      case ALWAYS -> true;
+      case SUCCESS -> success;
+      case FAILURE -> !success;
+      case CONDITION ->
+          success && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
+    };
   }
 
   private boolean matchesIncomingEdge(
       WorkflowEdgeEntity edge, String predecessorStatus, String payloadJson) {
-    String edgeType = edge.getEdgeType();
-    if ("ALWAYS".equalsIgnoreCase(edgeType)) {
-      return isTerminal(predecessorStatus);
+    WorkflowEdgeType type = DictEnum.fromCode(WorkflowEdgeType.class, edge.getEdgeType());
+    if (type == null) {
+      return false;
     }
-    if (STATUS_SUCCESS.equalsIgnoreCase(edgeType)) {
-      return STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus);
-    }
-    if ("FAILURE".equalsIgnoreCase(edgeType)) {
-      return "FAILED".equalsIgnoreCase(predecessorStatus);
-    }
-    if ("CONDITION".equalsIgnoreCase(edgeType)) {
-      return STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
-          && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
-    }
-    return false;
+    return switch (type) {
+      case ALWAYS -> isTerminal(predecessorStatus);
+      case SUCCESS -> STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus);
+      case FAILURE -> "FAILED".equalsIgnoreCase(predecessorStatus);
+      case CONDITION ->
+          STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
+              && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
+    };
   }
 
   private boolean isTerminal(String nodeStatus) {
