@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.MinioStorageProperties;
+import com.example.batch.common.utils.SecretMasking;
 import com.example.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import com.example.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import com.example.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
@@ -114,43 +115,40 @@ public class DispatchChannelHealthService {
     if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
       return;
     }
-    DispatchChannelHealthSnapshot snapshot = repository.findHealth(tenantId, channelCode);
+    Instant now = Instant.now();
     if (success) {
-      repository.upsertHealth(
-          new DispatchChannelHealthSnapshot(
-              tenantId,
-              channelCode,
-              channelType,
-              "HEALTHY",
-              0,
-              Instant.now(),
-              Instant.now(),
-              snapshot == null ? null : snapshot.lastFailureAt(),
-              Instant.now().plusMillis(properties.getProbeIntervalMillis()),
-              message,
-              evidence));
+      // P2：成功走原子 upsert——HEALTHY + failures=0 + next_probe=now+probeInterval
+      repository.upsertSuccess(
+          tenantId,
+          channelCode,
+          channelType,
+          now,
+          now.plusMillis(properties.getProbeIntervalMillis()),
+          message,
+          evidence);
       return;
     }
-    int failures = snapshot == null ? 1 : snapshot.consecutiveFailures() + 1;
-    long backoff = computeBackoffMillis(failures);
-    // 连续失败次数达到阈值才升级为 UNHEALTHY，未达阈值先标 DEGRADED 以触发告警但不阻断分发
-    String status =
-        failures >= Math.max(1, circuitBreakerProperties.getFailureThreshold())
-            ? "UNHEALTHY"
-            : "DEGRADED";
-    repository.upsertHealth(
-        new DispatchChannelHealthSnapshot(
-            tenantId,
-            channelCode,
-            channelType,
-            status,
-            failures,
-            Instant.now(),
-            snapshot == null ? null : snapshot.lastSuccessAt(),
-            Instant.now(),
-            Instant.now().plusMillis(backoff),
-            message,
-            evidence));
+    // P2：失败两步走。
+    // 第 1 步 upsert：先占一个条目 + failures 由 COALESCE(count,0)+1 在 SQL 侧递增，
+    // 首次失败（INSERT 路径）用 base probeInterval 做 placeholder。
+    // 第 2 步 recalcBackoff：按新的 failures 重算真实 next_probe_at（指数退避），
+    // 该 UPDATE 作用于同一行且只读自己的 consecutive_failures 字段，无竞争。
+    Instant firstFailureBackoffAt = now.plusMillis(properties.getProbeIntervalMillis());
+    repository.upsertFailureAndBump(
+        tenantId,
+        channelCode,
+        channelType,
+        now,
+        firstFailureBackoffAt,
+        Math.max(1, circuitBreakerProperties.getFailureThreshold()),
+        message,
+        evidence);
+    repository.recalcBackoff(
+        tenantId,
+        channelCode,
+        now,
+        properties.getProbeIntervalMillis(),
+        properties.getMaxBackoffMillis());
   }
 
   public void probeConfiguredChannels() {
@@ -165,10 +163,11 @@ public class DispatchChannelHealthService {
         probeOne(row);
       } catch (Exception exception) {
         probeFailureCount.incrementAndGet();
+        // R-4.10：row 可能含 password / api_key 等凭证，脱敏后再打日志
         log.warn(
             "dispatch channel probe exception: error={}, row={}",
             exception.getMessage(),
-            row,
+            SecretMasking.maskSensitiveKeys(row),
             exception);
       }
     }

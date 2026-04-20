@@ -16,7 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import lombok.RequiredArgsConstructor;
+import java.util.concurrent.Executor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -39,12 +40,28 @@ import org.springframework.stereotype.Component;
  * <p>注意：本类只负责“投递动作 + delivery log 记录”，不负责重试调度策略；重试由 outbox forwarder/调度器负责。
  */
 @Component
-@RequiredArgsConstructor
 public class KafkaOutboxPublisher implements OutboxPublisher {
 
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final BatchOrchestratorGovernanceProperties governance;
   private final EventDeliveryLogMapper eventDeliveryLogMapper;
+  /**
+   * delivery-log 写库及回调上的 executor。不能使用 CompletableFuture 默认的 ForkJoinPool.commonPool（共享全局池，
+   * 任一耗时回调都会拖累其他业务），也不能在 Kafka producer 的 IO 回调线程上做同步写库（背压风险）。
+   * 显式绑定到 Spring Boot 自动装配的 {@code applicationTaskExecutor}，池参数受 {@code spring.task.execution.*} 控制。
+   */
+  private final Executor deliveryLogExecutor;
+
+  public KafkaOutboxPublisher(
+      KafkaTemplate<String, String> kafkaTemplate,
+      BatchOrchestratorGovernanceProperties governance,
+      EventDeliveryLogMapper eventDeliveryLogMapper,
+      @Qualifier("applicationTaskExecutor") Executor deliveryLogExecutor) {
+    this.kafkaTemplate = kafkaTemplate;
+    this.governance = governance;
+    this.eventDeliveryLogMapper = eventDeliveryLogMapper;
+    this.deliveryLogExecutor = deliveryLogExecutor;
+  }
 
   @Override
   public CompletableFuture<Boolean> publish(OutboxEventEntity event) {
@@ -61,7 +78,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       return kafkaTemplate
           .send(targetTopic, event.getEventKey(), event.getPayloadJson())
           .toCompletableFuture()
-          .handle(
+          .handleAsync(
               (result, ex) -> {
                 if (ex == null) {
                   recordDelivery(
@@ -75,7 +92,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
                     OutboxPublishStatus.FAILED.code(),
                     ex.getMessage());
                 throw new CompletionException(ex);
-              });
+              },
+              deliveryLogExecutor);
     }
 
     // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
@@ -103,7 +121,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     return kafkaTemplate
         .send(fallbackTopic, event.getEventKey(), JsonUtils.toJson(message))
         .toCompletableFuture()
-        .handle(
+        .handleAsync(
             (result, ex) -> {
               if (ex == null) {
                 recordDelivery(
@@ -113,7 +131,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
               recordDelivery(
                   event, fallbackTopic, null, OutboxPublishStatus.FAILED.code(), ex.getMessage());
               throw new CompletionException(ex);
-            });
+            },
+            deliveryLogExecutor);
   }
 
   // #5-2: 敏感字段关键词，delivery log 中的 payload 需对这些字段脱敏

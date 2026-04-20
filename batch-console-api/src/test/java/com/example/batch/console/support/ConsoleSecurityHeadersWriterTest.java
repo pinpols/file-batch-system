@@ -24,6 +24,10 @@ class ConsoleSecurityHeadersWriterTest {
     assertThat(response.getHeader("X-Content-Type-Options")).isEqualTo("nosniff");
     assertThat(response.getHeader("Referrer-Policy")).isEqualTo("no-referrer");
     assertThat(response.getHeader("Permissions-Policy")).contains("camera=()");
-    assertThat(response.getHeader("Strict-Transport-Security")).contains("max-age=31536000");
+    // HSTS 已提到 63072000s（2 年）+ includeSubDomains + preload（提交 hstspreload.org 的最低要求）
+    assertThat(response.getHeader("Strict-Transport-Security"))
+        .contains("max-age=63072000")
+        .contains("includeSubDomains")
+        .contains("preload");
   }
 }

@@ -41,7 +41,8 @@ class KafkaOutboxPublisherTest {
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.mqTopics()).thenReturn(batchMqTopicsProperties);
     when(governance.outbox()).thenReturn(outboxProperties);
-    publisher = new KafkaOutboxPublisher(kafkaTemplate, governance, eventDeliveryLogMapper);
+    publisher =
+        new KafkaOutboxPublisher(kafkaTemplate, governance, eventDeliveryLogMapper, Runnable::run);
   }
 
   @Test

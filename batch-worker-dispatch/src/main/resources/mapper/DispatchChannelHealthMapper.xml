@@ -36,6 +36,81 @@
            and health_status &lt;&gt; 'HEALTHY'
     </update>
 
+    <!--
+      P2：成功结果原子 UPSERT。first insert：consecutive_failures=0；conflict 上直接清零。
+      语义与旧 upsertHealth 等价，但独立出来让成功/失败走不同路径，避免共享 count 参数。
+    -->
+    <insert id="upsertSuccess" parameterType="map">
+        insert into batch.file_channel_health (
+            tenant_id, channel_code, channel_type, health_status, consecutive_failures,
+            last_probe_at, last_success_at, last_failure_at, next_probe_at,
+            probe_message, probe_evidence, updated_at
+        ) values (
+            #{tenantId}, #{channelCode}, #{channelType}, 'HEALTHY', 0,
+            #{now}, #{now}, null, #{nextProbeAt},
+            #{probeMessage}, #{probeEvidence}, current_timestamp
+        )
+        on conflict (tenant_id, channel_code) do update set
+            channel_type          = excluded.channel_type,
+            health_status         = 'HEALTHY',
+            consecutive_failures  = 0,
+            last_probe_at         = excluded.last_probe_at,
+            last_success_at       = excluded.last_success_at,
+            next_probe_at         = excluded.next_probe_at,
+            probe_message         = excluded.probe_message,
+            probe_evidence        = excluded.probe_evidence,
+            updated_at            = current_timestamp
+    </insert>
+
+    <!--
+      P2：失败结果原子 UPSERT + 自增 counter。consecutive_failures 在数据库内以
+      COALESCE(...) + 1 递增，消除"Java 侧读-改-写"的 lost-update；health_status 按 threshold
+      动态判定 UNHEALTHY / DEGRADED。next_probe_at 按新的 failures 指数退避由调用方先行计算。
+    -->
+    <insert id="upsertFailureAndBump" parameterType="map">
+        insert into batch.file_channel_health (
+            tenant_id, channel_code, channel_type, health_status, consecutive_failures,
+            last_probe_at, last_success_at, last_failure_at, next_probe_at,
+            probe_message, probe_evidence, updated_at
+        ) values (
+            #{tenantId}, #{channelCode}, #{channelType},
+            case when 1 &gt;= #{failureThreshold} then 'UNHEALTHY' else 'DEGRADED' end,
+            1,
+            #{now}, null, #{now}, #{firstFailureBackoffAt},
+            #{probeMessage}, #{probeEvidence}, current_timestamp
+        )
+        on conflict (tenant_id, channel_code) do update set
+            channel_type         = excluded.channel_type,
+            consecutive_failures = coalesce(batch.file_channel_health.consecutive_failures, 0) + 1,
+            health_status        = case
+                when coalesce(batch.file_channel_health.consecutive_failures, 0) + 1
+                     &gt;= #{failureThreshold}
+                then 'UNHEALTHY' else 'DEGRADED' end,
+            last_probe_at        = excluded.last_probe_at,
+            last_failure_at      = excluded.last_failure_at,
+            next_probe_at        = batch.file_channel_health.next_probe_at, -- 先占位，后面再按新 count 更新
+            probe_message        = excluded.probe_message,
+            probe_evidence       = excluded.probe_evidence,
+            updated_at           = current_timestamp
+    </insert>
+
+    <!--
+      P2：失败 upsert 完成后，用真实的新 count 重算 next_probe_at 并写回。
+      这一步单行 UPDATE 无竞争（只读本行的 consecutive_failures 作为输入），
+      backoff 计算公式和 Java 侧一致（probeInterval × 2^(failures-1)，上限 maxBackoff）。
+    -->
+    <update id="recalcBackoff" parameterType="map">
+        update batch.file_channel_health
+           set next_probe_at = #{now}::timestamptz
+                               + least(
+                                   make_interval(secs =&gt; #{maxBackoffMillis} / 1000.0),
+                                   make_interval(
+                                     secs =&gt; #{probeIntervalMillis} / 1000.0
+                                       * power(2, greatest(consecutive_failures - 1, 0))))
+         where tenant_id   = #{tenantId}
+           and channel_code = #{channelCode}
+    </update>
+
     <insert id="upsertHealth" parameterType="map">
         insert into batch.file_channel_health (
             tenant_id, channel_code, channel_type, health_status, consecutive_failures,
