@@ -36,6 +36,7 @@ import com.example.batch.console.mapper.param.WorkflowNodeUpsertParam;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
+import com.example.batch.console.support.ConsoleSingleSheetExcelImportSupport;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.support.TenantConfigPackageExcelImportStore;
 import com.example.batch.console.support.UploadFileGuard;
@@ -64,9 +65,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -109,8 +107,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   private static final String KEY_ID = "id";
   private static final String EMPTY = "";
-  private static final MediaType XLSX_MEDIA_TYPE =
-      MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -154,13 +150,13 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         workbookWriter.buildExportWorkbook(
             List.of(jobs, channels, routings, pipelines, steps, wfDefs, wfNodes, wfEdges));
     String fileName = "tenant-config-package-" + tid + "-" + Instant.now().toEpochMilli() + ".xlsx";
-    return excelResponse(fileName, bytes);
+    return ConsoleSingleSheetExcelImportSupport.excelResponse(fileName, bytes);
   }
 
   @Override
   public ResponseEntity<InputStreamResource> downloadTemplate() {
     byte[] bytes = workbookWriter.buildTemplateWorkbook();
-    return excelResponse("tenant-config-package-template.xlsx", bytes);
+    return ConsoleSingleSheetExcelImportSupport.excelResponse("tenant-config-package-template.xlsx", bytes);
   }
 
   @Override
@@ -197,7 +193,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
     byte[] bytes = workbookWriter.buildPreviewWorkbook(session, result);
-    return excelResponse(
+    return ConsoleSingleSheetExcelImportSupport.excelResponse(
         ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName()), bytes);
   }
 
@@ -819,15 +815,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   private static String fileNameOrDefault(String originalFileName) {
     return Texts.hasText(originalFileName) ? originalFileName : "tenant-config-package.xlsx";
-  }
-
-  private static ResponseEntity<InputStreamResource> excelResponse(String fileName, byte[] bytes) {
-    return ResponseEntity.ok()
-        .header(
-            HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment().filename(fileName).build().toString())
-        .contentType(XLSX_MEDIA_TYPE)
-        .body(new InputStreamResource(new ByteArrayInputStream(bytes)));
   }
 
 
