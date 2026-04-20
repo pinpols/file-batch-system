@@ -5,7 +5,9 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
+import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
@@ -58,6 +60,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final WorkerRegistryRepository workerRegistryRepository;
   private final PartitionLeaseProperties partitionLeaseProperties;
+  private final ResourceSchedulerProperties resourceSchedulerProperties;
 
   @Override
   @Transactional
@@ -223,8 +226,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (workerCode == null || workerCode.isBlank()) {
       return false;
     }
-    WorkerRegistryRecord workerRegistry =
-        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+    WorkerRegistryRecord workerRegistry = resolveClaimableWorker(tenantId, workerCode);
     if (workerRegistry == null
         || !WorkerRegistryStatus.ONLINE.code().equals(workerRegistry.status())) {
       return false;
@@ -240,5 +242,41 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       return true;
     }
     return partition.getWorkerGroup().equalsIgnoreCase(workerRegistry.workerGroup());
+  }
+
+  /**
+   * 认领侧的跨租户 fallback，与 {@code DefaultWorkerSelector} 的 {@code shared-tenant-fallback} 对称：
+   * 主租户下查不到该 {@code workerCode} 注册时，再按配置的 fallback 租户查一次。
+   *
+   * <p>本地联调 / 共享 dev 环境里任务的 tenantId 可能是 {@code ta/tb/tc}，但真实跑着的只有
+   * {@code default-tenant} 的 worker；selector 做过 fallback 选中 default-tenant 的 workerCode 后
+   * 把 {@code selectedWorkerId} 塞进 outbox，worker 消费后 HTTP POST 回来 claim，如果这里不对称
+   * 处理，会卡在"主租户 worker_registry 查不到 → isWorkerClaimable=false → claim 返 409"的死角。
+   * 生产 profile 不设置此配置，严格保留 §多租户隔离。
+   */
+  private WorkerRegistryRecord resolveClaimableWorker(String tenantId, String workerCode) {
+    WorkerRegistryRecord primary =
+        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(tenantId, workerCode);
+    if (primary != null) {
+      return primary;
+    }
+    String fallbackTenant =
+        resourceSchedulerProperties == null
+            ? null
+            : resourceSchedulerProperties.getSharedTenantFallback();
+    if (!Texts.hasText(fallbackTenant) || fallbackTenant.equals(tenantId)) {
+      return null;
+    }
+    WorkerRegistryRecord fallback =
+        workerRegistryRepository.findFirstByTenantIdAndWorkerCode(fallbackTenant, workerCode);
+    if (fallback != null) {
+      log.info(
+          "worker claim resolved via shared tenant fallback: tenantId={}, fallbackTenant={},"
+              + " workerCode={}",
+          tenantId,
+          fallbackTenant,
+          workerCode);
+    }
+    return fallback;
   }
 }
