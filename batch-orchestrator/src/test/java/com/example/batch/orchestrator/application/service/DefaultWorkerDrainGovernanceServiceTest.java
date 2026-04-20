@@ -12,7 +12,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.orchestrator.config.WorkerDrainProperties;
@@ -136,12 +135,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(100L);
     task.setTenantId("t1");
-    when(jobTaskMapper.selectActiveByAssignedWorker(
-            "t1",
-            "w1",
-            TaskStatus.RUNNING.code(),
-            TaskStatus.READY.code(),
-            TaskStatus.CREATED.code()))
+    when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1"))
         .thenReturn(List.of(task));
 
     WorkerRegistryRecord result = service.forceOffline("t1", "w1");
@@ -159,12 +153,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         .thenReturn(registry)
         .thenReturn(decommissioned);
     when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
-    when(jobTaskMapper.selectActiveByAssignedWorker(
-            "t1",
-            "w1",
-            TaskStatus.RUNNING.code(),
-            TaskStatus.READY.code(),
-            TaskStatus.CREATED.code()))
+    when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1"))
         .thenReturn(List.of());
 
     WorkerRegistryRecord result = service.forceOffline("t1", "w1");
@@ -184,12 +173,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
   void shouldReturnActiveTasksForWorker() {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(200L);
-    when(jobTaskMapper.selectActiveByAssignedWorker(
-            "t1",
-            "w1",
-            TaskStatus.RUNNING.code(),
-            TaskStatus.READY.code(),
-            TaskStatus.CREATED.code()))
+    when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1"))
         .thenReturn(List.of(task));
 
     List<JobTaskEntity> tasks = service.listClaimedTasks("t1", "w1");
@@ -220,9 +204,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
     service.takeoverAfterDrainTimeout("t1", "w1");
 
-    verify(jobTaskMapper, never())
-        .selectActiveByAssignedWorker(
-            anyString(), anyString(), anyString(), anyString(), anyString());
+    verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString());
   }
 
   @Test
@@ -233,9 +215,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
 
     service.takeoverAfterDrainTimeout("t1", "w1");
 
-    verify(jobTaskMapper, never())
-        .selectActiveByAssignedWorker(
-            anyString(), anyString(), anyString(), anyString(), anyString());
+    verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString());
   }
 
   @Test
@@ -252,12 +232,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
         .thenReturn(registry)
         .thenReturn(registry);
     when(workerRegistryMapper.markDecommissioned(eq("t1"), eq("w1"), any())).thenReturn(1);
-    when(jobTaskMapper.selectActiveByAssignedWorker(
-            "t1",
-            "w1",
-            TaskStatus.RUNNING.code(),
-            TaskStatus.READY.code(),
-            TaskStatus.CREATED.code()))
+    when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1"))
         .thenReturn(List.of());
 
     service.takeoverAfterDrainTimeout("t1", "w1");
@@ -282,12 +257,7 @@ class DefaultWorkerDrainGovernanceServiceTest {
     JobTaskEntity task2 = new JobTaskEntity();
     task2.setId(302L);
     task2.setTenantId("t1");
-    when(jobTaskMapper.selectActiveByAssignedWorker(
-            "t1",
-            "w1",
-            TaskStatus.RUNNING.code(),
-            TaskStatus.READY.code(),
-            TaskStatus.CREATED.code()))
+    when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1"))
         .thenReturn(List.of(task1, task2));
     doThrow(new RuntimeException("retry failed"))
         .when(retryGovernanceService)

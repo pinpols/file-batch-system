@@ -50,22 +50,15 @@ public class DispatchChannelHealthRepository {
    * P2：原子写入"成功"结果，等价于旧 upsertHealth(HEALTHY, failures=0, ...) 但 SQL 侧一次
    * 完成，无 find-then-upsert 竞态。
    */
-  public void upsertSuccess(
-      String tenantId,
-      String channelCode,
-      String channelType,
-      Instant now,
-      Instant nextProbeAt,
-      String probeMessage,
-      String probeEvidence) {
+  public void upsertSuccess(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", tenantId);
-    params.put("channelCode", channelCode);
-    params.put("channelType", channelType);
-    params.put("now", toTimestamp(now));
-    params.put("nextProbeAt", toTimestamp(nextProbeAt));
-    params.put("probeMessage", probeMessage);
-    params.put("probeEvidence", probeEvidence);
+    params.put("tenantId", cmd.tenantId());
+    params.put("channelCode", cmd.channelCode());
+    params.put("channelType", cmd.channelType());
+    params.put("now", toTimestamp(cmd.now()));
+    params.put("nextProbeAt", toTimestamp(cmd.nextProbeAt()));
+    params.put("probeMessage", cmd.probeMessage());
+    params.put("probeEvidence", cmd.probeEvidence());
     mapper.upsertSuccess(params);
   }
 
@@ -73,40 +66,30 @@ public class DispatchChannelHealthRepository {
    * P2：原子写入"失败"结果。consecutive_failures 由 SQL {@code COALESCE(...) + 1} 递增；
    * health_status 根据 failureThreshold 自动判为 UNHEALTHY / DEGRADED。随后调用
    * {@link #recalcBackoff} 按新的 count 更新 next_probe_at，完成指数退避。
+   *
+   * <p>{@link DispatchHealthUpsertCommand#nextProbeAt()} 在失败路径上承载"首次失败 INSERT 的
+   * placeholder 回退时间"（{@code firstFailureBackoffAt}），mapper XML 字段名保持不变。
    */
-  public void upsertFailureAndBump(
-      String tenantId,
-      String channelCode,
-      String channelType,
-      Instant now,
-      Instant firstFailureBackoffAt,
-      int failureThreshold,
-      String probeMessage,
-      String probeEvidence) {
+  public void upsertFailureAndBump(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", tenantId);
-    params.put("channelCode", channelCode);
-    params.put("channelType", channelType);
-    params.put("now", toTimestamp(now));
-    params.put("firstFailureBackoffAt", toTimestamp(firstFailureBackoffAt));
-    params.put("failureThreshold", Math.max(1, failureThreshold));
-    params.put("probeMessage", probeMessage);
-    params.put("probeEvidence", probeEvidence);
+    params.put("tenantId", cmd.tenantId());
+    params.put("channelCode", cmd.channelCode());
+    params.put("channelType", cmd.channelType());
+    params.put("now", toTimestamp(cmd.now()));
+    params.put("firstFailureBackoffAt", toTimestamp(cmd.nextProbeAt()));
+    params.put("failureThreshold", Math.max(1, cmd.failureThreshold()));
+    params.put("probeMessage", cmd.probeMessage());
+    params.put("probeEvidence", cmd.probeEvidence());
     mapper.upsertFailureAndBump(params);
   }
 
-  public void recalcBackoff(
-      String tenantId,
-      String channelCode,
-      Instant now,
-      long probeIntervalMillis,
-      long maxBackoffMillis) {
+  public void recalcBackoff(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", tenantId);
-    params.put("channelCode", channelCode);
-    params.put("now", toTimestamp(now));
-    params.put("probeIntervalMillis", probeIntervalMillis);
-    params.put("maxBackoffMillis", maxBackoffMillis);
+    params.put("tenantId", cmd.tenantId());
+    params.put("channelCode", cmd.channelCode());
+    params.put("now", toTimestamp(cmd.now()));
+    params.put("probeIntervalMillis", cmd.probeIntervalMillis());
+    params.put("maxBackoffMillis", cmd.maxBackoffMillis());
     mapper.recalcBackoff(params);
   }
 

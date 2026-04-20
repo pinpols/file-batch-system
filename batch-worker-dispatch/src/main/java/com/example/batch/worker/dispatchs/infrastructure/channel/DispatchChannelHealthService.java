@@ -69,14 +69,14 @@ public class DispatchChannelHealthService {
     if (!properties.isEnabled() || channelConfig == null || channelConfig.isEmpty()) {
       return true;
     }
-    String tenantId = stringValue(channelConfig.get("tenant_id"));
-    String channelCode = stringValue(channelConfig.get("channel_code"));
+    ChannelIdentity channel = ChannelIdentity.from(channelConfig);
     // T-3：没有 tenantId/channelCode 无法查健康快照；此时放行（健康门控不适用），
     // 避免 repository.findHealth(null, null) 走 SQL 返回脏数据或 DAO 层 NPE
-    if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
+    if (!channel.isTargetable()) {
       return true;
     }
-    DispatchChannelHealthSnapshot snapshot = repository.findHealth(tenantId, channelCode);
+    DispatchChannelHealthSnapshot snapshot =
+        repository.findHealth(channel.tenantId(), channel.channelCode());
     if (snapshot == null) {
       return true;
     }
@@ -94,12 +94,13 @@ public class DispatchChannelHealthService {
     // 失败即说明另一线程已抢到通行证。holdMillis 覆盖典型 dispatch 最长耗时，
     // 防止本线程还没 recordDispatchOutcome 就又有新线程通过。
     Instant hold = now.plusMillis(Math.max(1_000L, properties.getHalfOpenHoldMillis()));
-    boolean claimed = repository.tryClaimHalfOpenProbe(tenantId, channelCode, now, hold);
+    boolean claimed =
+        repository.tryClaimHalfOpenProbe(channel.tenantId(), channel.channelCode(), now, hold);
     if (!claimed && log.isDebugEnabled()) {
       log.debug(
           "half-open probe slot already taken by another worker: tenantId={}, channelCode={}",
-          tenantId,
-          channelCode);
+          channel.tenantId(),
+          channel.channelCode());
     }
     return claimed;
   }
@@ -109,23 +110,25 @@ public class DispatchChannelHealthService {
     if (!properties.isEnabled() || channelConfig == null || channelConfig.isEmpty()) {
       return;
     }
-    String tenantId = stringValue(channelConfig.get("tenant_id"));
-    String channelCode = stringValue(channelConfig.get("channel_code"));
-    String channelType = stringValue(channelConfig.get("channel_type"));
-    if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
+    ChannelIdentity channel = ChannelIdentity.from(channelConfig);
+    if (!channel.isTargetable()) {
       return;
     }
     Instant now = Instant.now();
     if (success) {
       // P2：成功走原子 upsert——HEALTHY + failures=0 + next_probe=now+probeInterval
       repository.upsertSuccess(
-          tenantId,
-          channelCode,
-          channelType,
-          now,
-          now.plusMillis(properties.getProbeIntervalMillis()),
-          message,
-          evidence);
+          new DispatchHealthUpsertCommand(
+              channel.tenantId(),
+              channel.channelCode(),
+              channel.channelType(),
+              now,
+              now.plusMillis(properties.getProbeIntervalMillis()),
+              0,
+              0L,
+              0L,
+              message,
+              evidence));
       return;
     }
     // P2：失败两步走。
@@ -135,20 +138,29 @@ public class DispatchChannelHealthService {
     // 该 UPDATE 作用于同一行且只读自己的 consecutive_failures 字段，无竞争。
     Instant firstFailureBackoffAt = now.plusMillis(properties.getProbeIntervalMillis());
     repository.upsertFailureAndBump(
-        tenantId,
-        channelCode,
-        channelType,
-        now,
-        firstFailureBackoffAt,
-        Math.max(1, circuitBreakerProperties.getFailureThreshold()),
-        message,
-        evidence);
+        new DispatchHealthUpsertCommand(
+            channel.tenantId(),
+            channel.channelCode(),
+            channel.channelType(),
+            now,
+            firstFailureBackoffAt,
+            Math.max(1, circuitBreakerProperties.getFailureThreshold()),
+            0L,
+            0L,
+            message,
+            evidence));
     repository.recalcBackoff(
-        tenantId,
-        channelCode,
-        now,
-        properties.getProbeIntervalMillis(),
-        properties.getMaxBackoffMillis());
+        new DispatchHealthUpsertCommand(
+            channel.tenantId(),
+            channel.channelCode(),
+            channel.channelType(),
+            now,
+            null,
+            0,
+            properties.getProbeIntervalMillis(),
+            properties.getMaxBackoffMillis(),
+            null,
+            null));
   }
 
   public void probeConfiguredChannels() {
@@ -178,16 +190,13 @@ public class DispatchChannelHealthService {
     if (channelConfig.isEmpty()) {
       return new DispatchChannelProbeResult(false, "channel config missing", null);
     }
-    String tenantId = stringValue(channelConfig.get("tenant_id"));
-    String channelCode = stringValue(channelConfig.get("channel_code"));
-    String channelType = stringValue(channelConfig.get("channel_type"));
-    if (!Texts.hasText(tenantId)
-        || !Texts.hasText(channelCode)
-        || !Texts.hasText(channelType)) {
+    ChannelIdentity channel = ChannelIdentity.from(channelConfig);
+    if (!channel.isFullyIdentified()) {
       return new DispatchChannelProbeResult(
           false, "probe target missing tenant/channel/type", null);
     }
-    DispatchChannelHealthSnapshot snapshot = repository.findHealth(tenantId, channelCode);
+    DispatchChannelHealthSnapshot snapshot =
+        repository.findHealth(channel.tenantId(), channel.channelCode());
     if (snapshot != null
         && snapshot.nextProbeAt() != null
         && Instant.now().isBefore(snapshot.nextProbeAt())) {
@@ -204,7 +213,12 @@ public class DispatchChannelHealthService {
       probeSuccessCount.incrementAndGet();
     } else {
       probeFailureCount.incrementAndGet();
-      logProbeFailure(tenantId, channelCode, channelType, result.message(), result.evidenceRef());
+      logProbeFailure(
+          channel.tenantId(),
+          channel.channelCode(),
+          channel.channelType(),
+          result.message(),
+          result.evidenceRef());
     }
     return result;
   }
@@ -235,12 +249,34 @@ public class DispatchChannelHealthService {
     return backoff;
   }
 
-  private String stringValue(Object value) {
+  private static String stringValue(Object value) {
     if (value == null) {
       return null;
     }
     String text = String.valueOf(value);
     return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text.trim() : null;
+  }
+
+  /**
+   * 渠道健康路径上的身份三元组（tenantId / channelCode / channelType）。把原本在 3 个方法里重复 3 次的
+   * {@code channelConfig.get("tenant_id")} 串键提取收敛到一处，同时明确"什么叫能做健康门控"
+   * （{@link #isTargetable()}）与"什么叫探针目标完整"（{@link #isFullyIdentified()}）两种校验语义。
+   */
+  private record ChannelIdentity(String tenantId, String channelCode, String channelType) {
+    static ChannelIdentity from(Map<String, Object> channelConfig) {
+      return new ChannelIdentity(
+          stringValue(channelConfig.get("tenant_id")),
+          stringValue(channelConfig.get("channel_code")),
+          stringValue(channelConfig.get("channel_type")));
+    }
+
+    boolean isTargetable() {
+      return Texts.hasText(tenantId) && Texts.hasText(channelCode);
+    }
+
+    boolean isFullyIdentified() {
+      return isTargetable() && Texts.hasText(channelType);
+    }
   }
 
   /** 只读挂载、权限不足等本机联调场景频发，降级为 DEBUG 避免噪音；其余情况仍使用 WARN 以便发现真实故障。 */

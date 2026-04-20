@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
-import java.util.Map;
 import java.util.StringJoiner;
 import org.springframework.stereotype.Component;
 
@@ -31,12 +30,11 @@ public class DelimitedExportFormat extends AbstractExportFormat {
   @Override
   public long generate(ExportFormatContext ctx) throws Exception {
     Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
-    Object cursor = null;
-    ExportDataPlugin.DetailPage page =
-        ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
+    ExportDataPlugin.DetailPage firstPage =
+        ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
     List<ColumnLayout> columns =
-        resolveDelimitedColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), page.rows());
-    if (columns.isEmpty() && page.rows().isEmpty()) {
+        resolveDelimitedColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
+    if (columns.isEmpty() && firstPage.rows().isEmpty()) {
       return 0L;
     }
     DelimitedFormatConfig formatConfig =
@@ -50,39 +48,20 @@ public class DelimitedExportFormat extends AbstractExportFormat {
             StandardOpenOption.TRUNCATE_EXISTING,
             StandardOpenOption.WRITE)) {
       writeDelimitedHeaderRows(writer, columns, formatConfig);
-      long recordCount = 0L;
-      int pageNo = 0;
-      while (true) {
-        List<Map<String, Object>> details = page.rows();
-        if (details.isEmpty()) {
-          break;
-        }
-        for (Map<String, Object> detail : details) {
-          StringJoiner joiner = new StringJoiner(formatConfig.delimiter());
-          for (ColumnLayout column : columns) {
-            joiner.add(
-                csv(resolveDelimitedValue(ctx.batch(), detail, column.source()), formatConfig));
-          }
-          writer.write(joiner.toString());
-          writer.newLine();
-          recordCount++;
-          if (ctx.chunkSize() > 0 && recordCount % ctx.chunkSize() == 0) {
-            writer.flush();
-          }
-        }
-        cursor = page.nextCursor();
-        if (cursor == null) {
-          break;
-        }
-        // P-1 同系列防御：插件返回循环 cursor 时 fail-fast
-        if (++pageNo >= 100_000) {
-          throw new IllegalStateException(
-              "delimited export page iteration exceeded 100000; data plugin likely returning"
-                  + " stale cursor");
-        }
-        page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
-      }
-      return recordCount;
+      return generatePaged(
+          ctx,
+          firstPage,
+          (batch, detail, rowIndex) -> {
+            StringJoiner joiner = new StringJoiner(formatConfig.delimiter());
+            for (ColumnLayout column : columns) {
+              joiner.add(csv(resolveDelimitedValue(batch, detail, column.source()), formatConfig));
+            }
+            writer.write(joiner.toString());
+            writer.newLine();
+            if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
+              writer.flush();
+            }
+          });
     }
   }
 

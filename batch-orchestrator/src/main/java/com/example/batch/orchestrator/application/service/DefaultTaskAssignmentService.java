@@ -2,7 +2,6 @@ package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.ResultCode;
-import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
@@ -117,16 +116,11 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
     if (stepInstance != null
         && jobStepInstanceMapper.markRunning(
-                MarkRunningParam.builder()
+                MarkRunningParam.withDefaultStatuses()
                     .tenantId(tenantId)
                     .id(stepInstance.getId())
                     .startedAt(Instant.now())
                     .expectedVersion(stepInstance.getVersion())
-                    .runningStatus(StepInstanceStatus.RUNNING.code())
-                    .createdStatus(StepInstanceStatus.CREATED.code())
-                    .waitingStatus(StepInstanceStatus.WAITING.code())
-                    .readyStatus(StepInstanceStatus.READY.code())
-                    .retryingStatus(StepInstanceStatus.RETRYING.code())
                     .build())
             <= 0) {
       throw new BizException(ResultCode.STATE_CONFLICT, "job step instance claim conflict");
@@ -165,17 +159,13 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       return null;
     }
     jobTaskMapper.updateStatus(
-        UpdateTaskStatusParam.builder()
+        UpdateTaskStatusParam.withDefaultTerminals()
             .tenantId(tenantId)
             .id(taskId)
             .taskStatus(taskStatus)
             .resultSummary(null)
             .errorCode(errorCode)
             .errorMessage(errorMessage)
-            .terminalStatus1(TaskStatus.SUCCESS.code())
-            .terminalStatus2(TaskStatus.FAILED.code())
-            .terminalStatus3(TaskStatus.CANCELLED.code())
-            .terminalStatus4(TaskStatus.TERMINATED.code())
             .expectedVersion(current.getVersion())
             .build());
     return jobTaskMapper.selectById(tenantId, taskId);
@@ -205,32 +195,23 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     current.setStartedAt(startedAt);
     current.setTaskStatus(TaskStatus.RUNNING.code());
     jobTaskMapper.updateStatus(
-        UpdateTaskStatusParam.builder()
+        UpdateTaskStatusParam.withDefaultTerminals()
             .tenantId(tenantId)
             .id(taskId)
             .taskStatus(TaskStatus.RUNNING.code())
             .resultSummary(null)
             .errorCode(null)
             .errorMessage(null)
-            .terminalStatus1(TaskStatus.SUCCESS.code())
-            .terminalStatus2(TaskStatus.FAILED.code())
-            .terminalStatus3(TaskStatus.CANCELLED.code())
-            .terminalStatus4(TaskStatus.TERMINATED.code())
             .expectedVersion(current.getVersion())
             .build());
     JobStepInstanceEntity stepInstance = jobStepInstanceMapper.selectByJobTaskId(tenantId, taskId);
     if (stepInstance != null
         && jobStepInstanceMapper.markRunning(
-                MarkRunningParam.builder()
+                MarkRunningParam.withDefaultStatuses()
                     .tenantId(tenantId)
                     .id(stepInstance.getId())
                     .startedAt(startedAt)
                     .expectedVersion(stepInstance.getVersion())
-                    .runningStatus(StepInstanceStatus.RUNNING.code())
-                    .createdStatus(StepInstanceStatus.CREATED.code())
-                    .waitingStatus(StepInstanceStatus.WAITING.code())
-                    .readyStatus(StepInstanceStatus.READY.code())
-                    .retryingStatus(StepInstanceStatus.RETRYING.code())
                     .build())
             <= 0) {
       throw new BizException(ResultCode.STATE_CONFLICT, "job step instance running conflict");

@@ -29,6 +29,18 @@ public final class BatchMdc {
     }
   }
 
+  /** 批量移除。用于 finally 块一次性清多个字段，替代多行 remove 堆叠。 */
+  public static void removeAll(String... keys) {
+    if (keys == null) {
+      return;
+    }
+    for (String key : keys) {
+      if (key != null) {
+        MDC.remove(key);
+      }
+    }
+  }
+
   public static void clear() {
     MDC.clear();
   }

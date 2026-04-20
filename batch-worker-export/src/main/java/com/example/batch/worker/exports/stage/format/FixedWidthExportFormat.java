@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
-import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,12 +29,11 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
   @Override
   public long generate(ExportFormatContext ctx) throws Exception {
     Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
-    Object cursor = null;
-    ExportDataPlugin.DetailPage page =
-        ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
+    ExportDataPlugin.DetailPage firstPage =
+        ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
     List<ColumnLayout> columns =
-        resolveFixedWidthColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), page.rows());
-    if (columns.isEmpty() && page.rows().isEmpty()) {
+        resolveFixedWidthColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
+    if (columns.isEmpty() && firstPage.rows().isEmpty()) {
       return 0L;
     }
     int recordLength = resolveTemplateInt(ctx.jobContext(), "record_length", 0);
@@ -49,41 +47,23 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
             StandardOpenOption.TRUNCATE_EXISTING,
             StandardOpenOption.WRITE)) {
       writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows);
-      long recordCount = 0L;
-      int pageNo = 0;
-      while (true) {
-        List<Map<String, Object>> details = page.rows();
-        if (details.isEmpty()) {
-          break;
-        }
-        for (Map<String, Object> detail : details) {
-          StringBuilder line = new StringBuilder();
-          for (ColumnLayout column : columns) {
-            line.append(
-                fixedWidth(resolveDelimitedValue(ctx.batch(), detail, column.source()), column));
-          }
-          if (recordLength > 0) {
-            line = new StringBuilder(padRight(line.toString(), recordLength));
-          }
-          writer.write(line.toString());
-          writer.newLine();
-          recordCount++;
-          if (ctx.chunkSize() > 0 && recordCount % ctx.chunkSize() == 0) {
-            writer.flush();
-          }
-        }
-        cursor = page.nextCursor();
-        if (cursor == null) {
-          break;
-        }
-        if (++pageNo >= 100_000) {
-          throw new IllegalStateException(
-              "fixed-width export page iteration exceeded 100000; data plugin likely returning"
-                  + " stale cursor");
-        }
-        page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
-      }
-      return recordCount;
+      return generatePaged(
+          ctx,
+          firstPage,
+          (batch, detail, rowIndex) -> {
+            StringBuilder line = new StringBuilder();
+            for (ColumnLayout column : columns) {
+              line.append(fixedWidth(resolveDelimitedValue(batch, detail, column.source()), column));
+            }
+            if (recordLength > 0) {
+              line = new StringBuilder(padRight(line.toString(), recordLength));
+            }
+            writer.write(line.toString());
+            writer.newLine();
+            if (ctx.chunkSize() > 0 && (rowIndex + 1) % ctx.chunkSize() == 0) {
+              writer.flush();
+            }
+          });
     }
   }
 

@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.mapper;
 
+import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.query.JobTaskQuery;
 import java.util.List;
@@ -29,6 +30,16 @@ public interface JobTaskMapper {
       @Param("runningStatus") String runningStatus,
       @Param("readyStatus") String readyStatus,
       @Param("createdStatus") String createdStatus);
+
+  /** 便捷重载：RUNNING / READY / CREATED 默认集合（所有调用方均用此组合）。 */
+  default List<JobTaskEntity> selectActiveByAssignedWorker(String tenantId, String workerCode) {
+    return selectActiveByAssignedWorker(
+        tenantId,
+        workerCode,
+        TaskStatus.RUNNING.code(),
+        TaskStatus.READY.code(),
+        TaskStatus.CREATED.code());
+  }
 
   int updateStatus(UpdateTaskStatusParam param);
 
