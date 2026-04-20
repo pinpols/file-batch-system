@@ -3,7 +3,9 @@ server:
 
 spring:
   main:
-    lazy-initialization: true
+    # 关掉懒加载：@KafkaListener 的 container bean 在 lazy 模式下启动期不实例化，
+    # 导致 consumer 不订阅 topic、consumer group 永远不出现。
+    lazy-initialization: false
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user

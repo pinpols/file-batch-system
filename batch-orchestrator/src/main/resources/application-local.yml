@@ -6,7 +6,9 @@ server:
 
 spring:
   main:
-    lazy-initialization: true
+    # 关掉懒加载：@Scheduled / @KafkaListener 的 bean 在 lazy 模式下启动期可能不被实例化，
+    # 导致定时派发 tick 不触发（本地观察：SlaScheduler 会 tick，但 WaitingPartitionDispatchScheduler 不 tick）。
+    lazy-initialization: false
   datasource:
     url: jdbc:postgresql://localhost:15432/batch_platform
     username: batch_user
@@ -76,6 +78,10 @@ batch:
     waiting-dispatch-batch-size: 100
     waiting-dispatch-interval-millis: 10000
     global-max-running-jobs: ${BATCH_RESOURCE_SCHEDULER_GLOBAL_MAX_RUNNING_JOBS:0}
+    # 本地联调：worker 默认都落在 default-tenant，ta/tb/tc 租户的种子任务没有对应的租户 worker；
+    # 放开 fallback 让 selector 在主租户空集时退到 default-tenant 再查一次。
+    # 生产 profile 绝不配置此项，严格保留 §多租户隔离 原语义。
+    shared-tenant-fallback: default-tenant
   rate-limit:
     enabled: ${BATCH_RATE_LIMIT_ENABLED:false}
     max-new-requests-per-tenant-per-minute: ${BATCH_RATE_LIMIT_MAX_NEW_PER_TENANT_PER_MINUTE:0}

@@ -2,6 +2,7 @@ com.example.batch.common.logging.HttpRequestMdcAutoConfiguration
 com.example.batch.common.config.BatchStartupSelfCheckAutoConfiguration
 com.example.batch.common.config.BatchSchedulingAutoConfiguration
 com.example.batch.common.config.BatchJsonAutoConfiguration
+com.example.batch.common.config.BatchTimezoneAutoConfiguration
 com.example.batch.common.config.BatchObjectCryptoAutoConfiguration
 com.example.batch.common.config.MinioAutoConfiguration
 com.example.batch.common.config.BatchRetryAutoConfiguration
