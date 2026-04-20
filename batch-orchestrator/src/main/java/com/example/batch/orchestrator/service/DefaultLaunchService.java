@@ -28,7 +28,6 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,23 +61,12 @@ public class DefaultLaunchService implements LaunchService {
   @Override
   public LaunchResponse launch(LaunchRequest request) {
     LaunchLoadResult loaded = launchValidationService.load(request);
-    // RERUN 语义：哪怕 dedup_key 命中现有实例，也要新建一条 run_attempt = max+1 的实例，
-    // 并把 parent_instance_id 指回上一次尝试；只有非 RERUN 触发类型才沿用旧的幂等短路。
-    boolean rerunMode = request.triggerType() == TriggerType.RERUN;
-    if (loaded.existingInstance() != null && !rerunMode) {
-      jobMappers.triggerRequestMapper.updateAcceptance(
-          request.tenantId(),
-          request.requestId(),
-          BatchStatusConstants.DUPLICATE,
-          loaded.existingInstance().getId());
-      return new LaunchResponse(
-          loaded.existingInstance().getInstanceNo(), loaded.existingInstance().getTraceId());
+    LaunchResponse duplicateShortCircuit = maybeShortCircuitDuplicate(request, loaded);
+    if (duplicateShortCircuit != null) {
+      return duplicateShortCircuit;
     }
 
-    String traceId =
-        request.traceId() == null || request.traceId().isBlank()
-            ? IdGenerator.newTraceId()
-            : request.traceId();
+    String traceId = resolveTraceId(request);
     LaunchRequest routedRequest = launchBatchDayService.routeLateArrivalIfNeeded(request, loaded);
     Map<String, Object> effectiveParams =
         launchParamResolver.mergeLaunchParams(
@@ -91,9 +79,8 @@ public class DefaultLaunchService implements LaunchService {
           selfProvider
               .getObject()
               .prepareJobInstance(routedRequest, loaded, effectiveParams, traceId);
-    } catch (DuplicateKeyException exception) {
-      return resolveConcurrentDuplicate(request, loaded, exception);
     } catch (DataIntegrityViolationException exception) {
+      // DuplicateKeyException extends DataIntegrityViolationException, covered here.
       return resolveConcurrentDuplicate(request, loaded, exception);
     } catch (RuntimeException exception) {
       // PG 唯一约束等可能被包装为 TransactionSystemException / UncategorizedDataAccess 等，需沿 cause 识别
@@ -104,7 +91,41 @@ public class DefaultLaunchService implements LaunchService {
       throw exception;
     }
 
-    // T2：构建分片/任务/outbox，并推进运行态；该事务可在失败后独立重试。
+    dispatchAndMarkLaunched(request, effectiveParams, traceId, prepared);
+    return new LaunchResponse(prepared.jobInstance().getInstanceNo(), traceId);
+  }
+
+  /**
+   * RERUN 语义：哪怕 dedup_key 命中现有实例，也要新建一条 run_attempt = max+1 的实例， 并把 parent_instance_id
+   * 指回上一次尝试；只有非 RERUN 触发类型才沿用旧的幂等短路。
+   */
+  private LaunchResponse maybeShortCircuitDuplicate(
+      LaunchRequest request, LaunchLoadResult loaded) {
+    boolean rerunMode = request.triggerType() == TriggerType.RERUN;
+    if (loaded.existingInstance() == null || rerunMode) {
+      return null;
+    }
+    jobMappers.triggerRequestMapper.updateAcceptance(
+        request.tenantId(),
+        request.requestId(),
+        BatchStatusConstants.DUPLICATE,
+        loaded.existingInstance().getId());
+    return new LaunchResponse(
+        loaded.existingInstance().getInstanceNo(), loaded.existingInstance().getTraceId());
+  }
+
+  private String resolveTraceId(LaunchRequest request) {
+    return request.traceId() == null || request.traceId().isBlank()
+        ? IdGenerator.newTraceId()
+        : request.traceId();
+  }
+
+  /** T2：构建分片/任务/outbox，并推进运行态；该事务可在失败后独立重试。 */
+  private void dispatchAndMarkLaunched(
+      LaunchRequest request,
+      Map<String, Object> effectiveParams,
+      String traceId,
+      PreparedLaunch prepared) {
     partitionDispatchService.dispatch(
         PartitionDispatchService.DispatchContext.of(
             new PartitionDispatchService.DispatchRequest(request, effectiveParams, traceId),
@@ -119,7 +140,6 @@ public class DefaultLaunchService implements LaunchService {
         request.requestId(),
         BatchStatusConstants.LAUNCHED,
         prepared.jobInstance().getId());
-    return new LaunchResponse(prepared.jobInstance().getInstanceNo(), traceId);
   }
 
   /**

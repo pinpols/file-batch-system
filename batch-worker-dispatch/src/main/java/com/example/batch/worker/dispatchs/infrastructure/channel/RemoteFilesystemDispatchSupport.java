@@ -53,10 +53,7 @@ final class RemoteFilesystemDispatchSupport {
       DispatchCommand command, DispatchFileContentResolver contentResolver) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
-      String remoteDir = stringProp(channelConfig, "nas_remote_directory");
-      if (!Texts.hasText(remoteDir)) {
-        remoteDir = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
-      }
+      String remoteDir = resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(remoteDir)) {
         return new DispatchResult(
             false, null, null, false, false, "nas_remote_directory missing", null);
@@ -169,10 +166,7 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeNas(Map<String, Object> channelConfig) {
     try {
-      String remoteDir = stringProp(channelConfig, "nas_remote_directory");
-      if (!Texts.hasText(remoteDir)) {
-        remoteDir = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
-      }
+      String remoteDir = resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(remoteDir)) {
         return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
       }
@@ -233,10 +227,7 @@ final class RemoteFilesystemDispatchSupport {
   static DispatchChannelProbeResult probeSftp(
       Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
     try {
-      String host = stringProp(channelConfig, "sftp_host");
-      if (!Texts.hasText(host)) {
-        host = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
-      }
+      String host = resolveEndpointOrFail(channelConfig, "sftp_host", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(host)) {
         return new DispatchChannelProbeResult(false, "sftp_host missing", null);
       }
@@ -258,10 +249,7 @@ final class RemoteFilesystemDispatchSupport {
   static DispatchChannelProbeResult probeSmtp(
       Map<String, Object> channelConfig, boolean dnsGuardEnabled) {
     try {
-      String host = stringProp(channelConfig, "smtp_host");
-      if (!Texts.hasText(host)) {
-        host = stringProp(channelConfig, KEY_TARGET_ENDPOINT);
-      }
+      String host = resolveEndpointOrFail(channelConfig, "smtp_host", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(host)) {
         return new DispatchChannelProbeResult(false, "smtp_host missing", null);
       }
@@ -424,6 +412,22 @@ final class RemoteFilesystemDispatchSupport {
     } catch (NumberFormatException e) {
       return defaultValue;
     }
+  }
+
+  /**
+   * 渠道配置端点解析：先读 {@code primaryKey}（如 {@code nas_remote_directory} / {@code sftp_host}
+   * / {@code smtp_host}），缺失再回退到 {@code fallbackKey}（通常是 {@link #KEY_TARGET_ENDPOINT}）。
+   * 消除 NAS dispatch / NAS probe / SFTP probe / SMTP probe 四处重复的 3 行 primary→fallback 读取样板。
+   *
+   * @return 解析后的 endpoint 字符串；两键都为 null/blank 时返回 {@code null}，由调用方产出带渠道语义的错误消息。
+   */
+  private static String resolveEndpointOrFail(
+      Map<String, Object> channelConfig, String primaryKey, String fallbackKey) {
+    String value = stringProp(channelConfig, primaryKey);
+    if (Texts.hasText(value)) {
+      return value;
+    }
+    return stringProp(channelConfig, fallbackKey);
   }
 
   private static String stringProp(Map<String, Object> map, String key) {

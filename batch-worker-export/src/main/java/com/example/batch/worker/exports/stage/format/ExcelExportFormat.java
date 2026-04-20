@@ -6,7 +6,6 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
-import java.util.Map;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -16,9 +15,6 @@ import org.springframework.stereotype.Component;
 /** 生成 Excel（.xlsx）文件，使用流式 SXSSF 工作簿以控制大数据量写入时的堆内存占用。 */
 @Component
 public class ExcelExportFormat extends AbstractExportFormat {
-
-  // P-2：防御插件返回循环 cursor 导致无限分页；1M 行 / 约数 GB 已足够任何合理业务
-  private static final int MAX_PAGES = 100_000;
 
   public ExcelExportFormat(ObjectMapper objectMapper) {
     super(objectMapper);
@@ -32,10 +28,10 @@ public class ExcelExportFormat extends AbstractExportFormat {
   @Override
   public long generate(ExportFormatContext ctx) throws Exception {
     Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
-    ExportDataPlugin.DetailPage page =
+    ExportDataPlugin.DetailPage firstPage =
         ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
     List<ColumnLayout> columns =
-        resolveExcelColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), page.rows());
+        resolveExcelColumns(ctx.dataCtx(), ctx.dataPlugin(), ctx.batch(), firstPage.rows());
     DelimitedFormatConfig formatConfig =
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
 
@@ -47,37 +43,21 @@ public class ExcelExportFormat extends AbstractExportFormat {
             StandardOpenOption.TRUNCATE_EXISTING,
             StandardOpenOption.WRITE)) {
       Sheet sheet = workbook.createSheet(resolveSheetName(ctx.dataCtx().templateConfig()));
-      int rowNo = 0;
-      rowNo = writeExcelHeaderRows(sheet, columns, rowNo, formatConfig.headerRows());
-      long recordCount = 0L;
-      int pageNo = 0;
-      while (true) {
-        List<Map<String, Object>> details = page.rows();
-        if (details.isEmpty()) {
-          break;
-        }
-        for (Map<String, Object> detail : details) {
-          Row row = sheet.createRow(rowNo++);
-          for (int i = 0; i < columns.size(); i++) {
-            Cell cell = row.createCell(i);
-            cell.setCellValue(
-                textValue(resolveDelimitedValue(ctx.batch(), detail, columns.get(i).source())));
-          }
-          recordCount++;
-        }
-        Object cursor = page.nextCursor();
-        if (cursor == null) {
-          break;
-        }
-        // P-2：插件返回循环 cursor 是严重 bug；到此值即 fail-fast
-        if (++pageNo >= MAX_PAGES) {
-          throw new IllegalStateException(
-              "excel export page iteration exceeded MAX_PAGES="
-                  + MAX_PAGES
-                  + "; data plugin likely returning stale cursor");
-        }
-        page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
-      }
+      int[] rowNoHolder = {0};
+      rowNoHolder[0] =
+          writeExcelHeaderRows(sheet, columns, rowNoHolder[0], formatConfig.headerRows());
+      long recordCount =
+          generatePaged(
+              ctx,
+              firstPage,
+              (batch, detail, rowIndex) -> {
+                Row row = sheet.createRow(rowNoHolder[0]++);
+                for (int i = 0; i < columns.size(); i++) {
+                  Cell cell = row.createCell(i);
+                  cell.setCellValue(
+                      textValue(resolveDelimitedValue(batch, detail, columns.get(i).source())));
+                }
+              });
       workbook.write(outputStream);
       return recordCount;
     } finally {

@@ -157,13 +157,14 @@ public abstract class AbstractTaskConsumer {
       // 若之前触发过 pause，则在释放后尝试恢复消费。
       sem.release();
       resumeContainerIfPaused();
-      BatchMdc.remove(StructuredLogField.TENANT_ID);
-      BatchMdc.remove(StructuredLogField.TRACE_ID);
-      BatchMdc.remove(StructuredLogField.TASK_ID);
-      BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
-      BatchMdc.remove(StructuredLogField.WORKER_TYPE);
-      BatchMdc.remove(StructuredLogField.WORKER_ID);
-      BatchMdc.remove(StructuredLogField.RUN_MODE);
+      BatchMdc.removeAll(
+          StructuredLogField.TENANT_ID,
+          StructuredLogField.TRACE_ID,
+          StructuredLogField.TASK_ID,
+          StructuredLogField.JOB_INSTANCE_ID,
+          StructuredLogField.WORKER_TYPE,
+          StructuredLogField.WORKER_ID,
+          StructuredLogField.RUN_MODE);
     }
   }
 

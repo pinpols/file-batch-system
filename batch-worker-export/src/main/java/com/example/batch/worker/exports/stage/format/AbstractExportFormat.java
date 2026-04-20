@@ -24,12 +24,81 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
    */
   private static final int DEFAULT_MAX_COLUMNS = 1024;
 
+  /**
+   * P-1/P-2 同系列防御：插件返回循环 cursor 时 fail-fast。1M 行 / 约数 GB 已足够任何合理业务；
+   * 超此值即视为 data plugin 返回陈旧 cursor 的严重 bug。
+   */
+  protected static final int DEFAULT_MAX_PAGES = 100_000;
+
   protected static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
   protected final ObjectMapper objectMapper;
 
   protected AbstractExportFormat(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
+  }
+
+  /**
+   * 通用分页 generate 模板：负责 {@code loadDetailPage → iterate rows → nextCursor → MAX_PAGES} 循环骨架，
+   * 各 format 只需实现 row 写入逻辑。
+   *
+   * <p>当调用方已因 column 推断等原因预取了首页，可通过 {@code preFetchedFirstPage} 传入以避免重复
+   * 读取；为 {@code null} 时由本方法负责首次加载。
+   *
+   * @return 已处理的 row 总数
+   */
+  protected long generatePaged(
+      ExportFormatContext ctx,
+      ExportDataPlugin.DetailPage preFetchedFirstPage,
+      PageRowWriter rowWriter)
+      throws Exception {
+    Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
+    ExportDataPlugin.DetailPage page =
+        preFetchedFirstPage != null
+            ? preFetchedFirstPage
+            : ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
+    long recordCount = 0L;
+    int pageNo = 0;
+    while (true) {
+      List<Map<String, Object>> details = page.rows();
+      if (details.isEmpty()) {
+        break;
+      }
+      for (Map<String, Object> detail : details) {
+        rowWriter.writeRow(ctx.batch(), detail, recordCount);
+        recordCount++;
+      }
+      Object cursor = page.nextCursor();
+      if (cursor == null) {
+        break;
+      }
+      if (++pageNo >= DEFAULT_MAX_PAGES) {
+        throw new IllegalStateException(
+            "export page iteration exceeded MAX_PAGES="
+                + DEFAULT_MAX_PAGES
+                + "; data plugin likely returning stale cursor");
+      }
+      page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
+    }
+    return recordCount;
+  }
+
+  /** 无预取首页版本，从 {@code cursor=null} 开始加载。 */
+  protected long generatePaged(ExportFormatContext ctx, PageRowWriter rowWriter) throws Exception {
+    return generatePaged(ctx, null, rowWriter);
+  }
+
+  /**
+   * 分页模板的行写入回调。允许抛 {@link Exception}（IO / 格式转换）。
+   *
+   * @param batch batch-level 数据
+   * @param detail 当前行
+   * @param rowIndex 当前行序号（0-based），便于 format 决定是否插分隔符 / 换行 / flush
+   */
+  @FunctionalInterface
+  protected interface PageRowWriter {
+    void writeRow(Map<String, Object> batch, Map<String, Object> detail, long rowIndex)
+        throws Exception;
   }
 
 
@@ -39,28 +108,14 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       ExportDataPlugin dataPlugin,
       Map<String, Object> batch,
       List<Map<String, Object>> firstPage) {
-    int maxColumns = resolveMaxColumns(dataCtx.templateConfig());
-    List<ColumnLayout> configured = templateDelimitedColumns(dataCtx.templateConfig());
-    if (!configured.isEmpty()) {
-      return enforceMaxColumns(configured, maxColumns, "delimited-template");
-    }
-    List<ExportDataPlugin.DelimitedColumn> pluginColumns =
-        dataPlugin.describeDelimitedColumns(dataCtx, batch);
-    if (!pluginColumns.isEmpty()) {
-      List<ColumnLayout> fromPlugin =
-          pluginColumns.stream()
-              .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
-              .toList();
-      return enforceMaxColumns(fromPlugin, maxColumns, "delimited-plugin");
-    }
-    if (firstPage == null || firstPage.isEmpty()) {
-      return List.of();
-    }
-    List<ColumnLayout> inferred = new ArrayList<>();
-    for (String key : firstPage.get(0).keySet()) {
-      inferred.add(new ColumnLayout(key, KEY_DETAIL_PREFIX + key, null, false, ' '));
-    }
-    return enforceMaxColumns(inferred, maxColumns, "delimited-inferred");
+    return resolveColumns(
+        dataCtx,
+        firstPage,
+        new ColumnResolutionSpec(
+            "delimited",
+            templateDelimitedColumns(dataCtx.templateConfig()),
+            dataPlugin.describeDelimitedColumns(dataCtx, batch),
+            key -> new ColumnLayout(key, KEY_DETAIL_PREFIX + key, null, false, ' ')));
   }
 
   protected List<ColumnLayout> resolveExcelColumns(
@@ -76,30 +131,49 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       ExportDataPlugin dataPlugin,
       Map<String, Object> batch,
       List<Map<String, Object>> firstPage) {
+    return resolveColumns(
+        dataCtx,
+        firstPage,
+        new ColumnResolutionSpec(
+            "fixed-width",
+            templateFixedWidthColumns(dataCtx.templateConfig()),
+            dataPlugin.describeFixedWidthColumns(dataCtx, batch),
+            key ->
+                new ColumnLayout(
+                    key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' ')));
+  }
+
+  /** delimited / fixed-width 共享的列解析模板：按 template &gt; plugin &gt; inferred 顺序选源，并统一做 max_columns 截断。 */
+  private List<ColumnLayout> resolveColumns(
+      ExportDataContext dataCtx,
+      List<Map<String, Object>> firstPage,
+      ColumnResolutionSpec spec) {
     int maxColumns = resolveMaxColumns(dataCtx.templateConfig());
-    List<ColumnLayout> configured = templateFixedWidthColumns(dataCtx.templateConfig());
-    if (!configured.isEmpty()) {
-      return enforceMaxColumns(configured, maxColumns, "fixed-width-template");
+    if (!spec.configured().isEmpty()) {
+      return enforceMaxColumns(spec.configured(), maxColumns, spec.labelTag() + "-template");
     }
-    List<ExportDataPlugin.DelimitedColumn> pluginColumns =
-        dataPlugin.describeFixedWidthColumns(dataCtx, batch);
-    if (!pluginColumns.isEmpty()) {
+    if (!spec.pluginColumns().isEmpty()) {
       List<ColumnLayout> fromPlugin =
-          pluginColumns.stream()
+          spec.pluginColumns().stream()
               .map(col -> new ColumnLayout(col.header(), col.source(), null, false, ' '))
               .toList();
-      return enforceMaxColumns(fromPlugin, maxColumns, "fixed-width-plugin");
+      return enforceMaxColumns(fromPlugin, maxColumns, spec.labelTag() + "-plugin");
     }
     if (firstPage == null || firstPage.isEmpty()) {
       return List.of();
     }
     List<ColumnLayout> inferred = new ArrayList<>();
     for (String key : firstPage.get(0).keySet()) {
-      inferred.add(
-          new ColumnLayout(key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' '));
+      inferred.add(spec.inferredColumnFactory().apply(key));
     }
-    return enforceMaxColumns(inferred, maxColumns, "fixed-width-inferred");
+    return enforceMaxColumns(inferred, maxColumns, spec.labelTag() + "-inferred");
   }
+
+  private record ColumnResolutionSpec(
+      String labelTag,
+      List<ColumnLayout> configured,
+      List<ExportDataPlugin.DelimitedColumn> pluginColumns,
+      Function<String, ColumnLayout> inferredColumnFactory) {}
 
   /**
    * A-3.12：解析模板中的 {@code max_columns} / {@code maxColumns}；未配置时走 {@link

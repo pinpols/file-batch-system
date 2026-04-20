@@ -185,12 +185,25 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
-    // C-6: 去重检查在 REQUIRES_NEW 事务内执行，以缩小竞态窗口。
-    // 注意：trigger_request 层面的 (tenant_id, dedup_key) 唯一约束已移除（V37），
-    // 最终去重由 job_instance 层的 uk_job_instance_tenant_dedup 保证。
+    TriggerRequestEntity existing = insertPendingOrReturnExisting(launchRequest, dedupKey);
+    if (existing != null) {
+      return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
+    }
+    return forwardToOrchestrator(launchRequest);
+  }
+
+  /**
+   * C-6: 去重检查在 REQUIRES_NEW 事务内执行，以缩小竞态窗口。
+   *
+   * <p>注意：trigger_request 层面的 (tenant_id, dedup_key) 唯一约束已移除（V37）， 最终去重由 job_instance 层的
+   * uk_job_instance_tenant_dedup 保证。
+   *
+   * <p>H-4: 以 PENDING 状态插入，确保 INSERT 与 sendTrigger 之间崩溃时 记录保持 PENDING（可对账检测），而非 ACCEPTED。
+   */
+  private TriggerRequestEntity insertPendingOrReturnExisting(
+      LaunchRequest launchRequest, String dedupKey) {
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
     final TriggerRequestEntity[] existingHolder = new TriggerRequestEntity[1];
     tx.execute(
         _ -> {
@@ -200,25 +213,26 @@ public class DefaultTriggerService implements TriggerService {
             existingHolder[0] = existing;
             return null;
           }
-          // H-4: 以 PENDING 状态插入，确保 INSERT 与 sendTrigger 之间崩溃时
-          //      记录保持 PENDING（可对账检测），而非 ACCEPTED。
-          TriggerRequestEntity entity = new TriggerRequestEntity();
-          entity.setTenantId(launchRequest.tenantId());
-          entity.setRequestId(launchRequest.requestId());
-          entity.setTriggerType(launchRequest.triggerType().code());
-          entity.setJobCode(launchRequest.jobCode());
-          entity.setBizDate(launchRequest.bizDate());
-          entity.setDedupKey(dedupKey);
-          entity.setRequestStatus("PENDING");
-          entity.setTraceId(launchRequest.traceId());
-          triggerRequestMapper.insert(entity);
+          triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
           return null;
         });
+    return existingHolder[0];
+  }
 
-    if (existingHolder[0] != null) {
-      return new LaunchResponse(existingHolder[0].getRequestId(), existingHolder[0].getTraceId());
-    }
+  private TriggerRequestEntity buildPendingEntity(LaunchRequest r, String dedupKey) {
+    TriggerRequestEntity entity = new TriggerRequestEntity();
+    entity.setTenantId(r.tenantId());
+    entity.setRequestId(r.requestId());
+    entity.setTriggerType(r.triggerType().code());
+    entity.setJobCode(r.jobCode());
+    entity.setBizDate(r.bizDate());
+    entity.setDedupKey(dedupKey);
+    entity.setRequestStatus("PENDING");
+    entity.setTraceId(r.traceId());
+    return entity;
+  }
 
+  private LaunchResponse forwardToOrchestrator(LaunchRequest launchRequest) {
     try {
       LaunchResponse response = orchestratorTriggerAdapter.sendTrigger(launchRequest);
       // H-4: 仅在 Orchestrator 确认接收后标记为 ACCEPTED
@@ -226,44 +240,43 @@ public class DefaultTriggerService implements TriggerService {
           launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
       return response;
     } catch (HttpClientErrorException e) {
-      // 5.7: 4xx client errors are genuine rejections — mark REJECTED immediately.
-      // Other HTTP errors (5xx, connectivity) are transient — mark FORWARD_FAILED for retry.
-      if (e.getStatusCode().is4xxClientError()) {
-        triggerRequestMapper.updateRequestStatus(
-            launchRequest.tenantId(), launchRequest.requestId(), "REJECTED");
-        if (e.getStatusCode() == HttpStatusCode.valueOf(404)) {
-          log.warn(
-              "trigger rejected: orchestrator returned 404 for job [{}] tenant [{}] — {}",
-              launchRequest.jobCode(),
-              launchRequest.tenantId(),
-              e.getResponseBodyAsString());
-          throw new BizException(
-              ResultCode.NOT_FOUND, "orchestrator rejected trigger: job or tenant not found");
-        }
-        throw new SystemException(ResultCode.SYSTEM_ERROR, "failed to forward trigger request", e);
-      }
-      // 5.7: server error — eligible for retry
-      triggerRequestMapper.updateRequestStatus(
-          launchRequest.tenantId(), launchRequest.requestId(), "FORWARD_FAILED");
-      log.warn(
-          "trigger forward failed (will retry): job [{}] tenant [{}] requestId [{}] — {}",
-          launchRequest.jobCode(),
-          launchRequest.tenantId(),
-          launchRequest.requestId(),
-          e.getMessage());
-      return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
+      return handleHttpClientError(launchRequest, e);
     } catch (Exception exception) {
       // 5.7: connectivity / timeout — mark FORWARD_FAILED for retry instead of REJECTED
-      triggerRequestMapper.updateRequestStatus(
-          launchRequest.tenantId(), launchRequest.requestId(), "FORWARD_FAILED");
-      log.warn(
-          "trigger forward failed (will retry): job [{}] tenant [{}] requestId [{}] — {}",
-          launchRequest.jobCode(),
-          launchRequest.tenantId(),
-          launchRequest.requestId(),
-          exception.getMessage());
-      return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
+      return markForwardFailed(launchRequest, exception.getMessage());
     }
+  }
+
+  /**
+   * 5.7: 4xx client errors are genuine rejections — mark REJECTED immediately. Other HTTP errors
+   * (5xx, connectivity) are transient — mark FORWARD_FAILED for retry.
+   */
+  private LaunchResponse handleHttpClientError(LaunchRequest r, HttpClientErrorException e) {
+    if (!e.getStatusCode().is4xxClientError()) {
+      return markForwardFailed(r, e.getMessage());
+    }
+    triggerRequestMapper.updateRequestStatus(r.tenantId(), r.requestId(), "REJECTED");
+    if (e.getStatusCode() == HttpStatusCode.valueOf(404)) {
+      log.warn(
+          "trigger rejected: orchestrator returned 404 for job [{}] tenant [{}] — {}",
+          r.jobCode(),
+          r.tenantId(),
+          e.getResponseBodyAsString());
+      throw new BizException(
+          ResultCode.NOT_FOUND, "orchestrator rejected trigger: job or tenant not found");
+    }
+    throw new SystemException(ResultCode.SYSTEM_ERROR, "failed to forward trigger request", e);
+  }
+
+  private LaunchResponse markForwardFailed(LaunchRequest r, String errorMessage) {
+    triggerRequestMapper.updateRequestStatus(r.tenantId(), r.requestId(), "FORWARD_FAILED");
+    log.warn(
+        "trigger forward failed (will retry): job [{}] tenant [{}] requestId [{}] — {}",
+        r.jobCode(),
+        r.tenantId(),
+        r.requestId(),
+        errorMessage);
+    return new LaunchResponse(r.requestId(), r.traceId());
   }
 
   /** MANUAL_APPROVAL 场景先把 catch-up 请求登记为待审批，不立即转给 orchestrator。 */

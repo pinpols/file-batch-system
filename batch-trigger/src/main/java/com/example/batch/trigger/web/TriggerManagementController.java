@@ -36,32 +36,33 @@ public class TriggerManagementController {
   public CommonResponse<Map<String, String>> register(
       @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
     triggerRegistrationService.registerByJobCode(tenantId, jobCode);
-    return CommonResponse.success(
-        Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, "REGISTERED"));
+    return CommonResponse.success(jobStatus(tenantId, jobCode, "REGISTERED"));
   }
 
   @PostMapping("/unregister")
   public CommonResponse<Map<String, String>> unregister(
       @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
     triggerRegistrationService.unregisterByJobCode(tenantId, jobCode);
-    return CommonResponse.success(
-        Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, "UNREGISTERED"));
+    return CommonResponse.success(jobStatus(tenantId, jobCode, "UNREGISTERED"));
   }
 
   @PostMapping("/pause")
   public CommonResponse<Map<String, String>> pause(
       @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
     triggerRegistrationService.pauseByJobCode(tenantId, jobCode);
-    return CommonResponse.success(
-        Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, "PAUSED"));
+    return CommonResponse.success(jobStatus(tenantId, jobCode, "PAUSED"));
   }
 
   @PostMapping("/resume")
   public CommonResponse<Map<String, String>> resume(
       @RequestParam(KEY_TENANT_ID) String tenantId, @RequestParam(KEY_JOB_CODE) String jobCode) {
     triggerRegistrationService.resumeByJobCode(tenantId, jobCode);
-    return CommonResponse.success(
-        Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, "NORMAL"));
+    return CommonResponse.success(jobStatus(tenantId, jobCode, "NORMAL"));
+  }
+
+  /** {tenantId, jobCode, status} 响应体构造，register/unregister/pause/resume 共用。 */
+  private static Map<String, String> jobStatus(String tenantId, String jobCode, String status) {
+    return Map.of(KEY_TENANT_ID, tenantId, KEY_JOB_CODE, jobCode, KEY_STATUS, status);
   }
 
   @GetMapping("/scheduler-status")
