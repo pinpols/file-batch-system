@@ -88,7 +88,21 @@ public class WaitingPartitionDispatchScheduler {
             PartitionStatus.WAITING.code());
     List<WaitingDispatchCandidate> candidates = new ArrayList<>();
     for (JobPartitionEntity partition : waitingPartitions) {
-      WaitingDispatchCandidate candidate = buildCandidate(partition);
+      WaitingDispatchCandidate candidate;
+      try {
+        candidate = buildCandidate(partition);
+      } catch (RuntimeException exception) {
+        // 单个候选的资源评估失败（常见于 quota_runtime_state 的 @Version CAS 冲突）不应中断整批 tick，
+        // 否则会出现"第一条 partition 撞 OLFE → 整轮 scheduled 任务被 ErrorHandler 吞掉 → 后面几千条
+        // WAITING 永远轮不到"的级联阻塞。跳过本条，下 tick 重新评估。
+        log.warn(
+            "buildCandidate failed, skipping this tick's partition: tenantId={}, partitionId={},"
+                + " error={}",
+            partition == null ? null : partition.getTenantId(),
+            partition == null ? null : partition.getId(),
+            exception.getMessage());
+        continue;
+      }
       if (candidate != null) {
         candidates.add(candidate);
       }
