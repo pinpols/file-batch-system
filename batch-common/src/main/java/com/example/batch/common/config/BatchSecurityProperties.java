@@ -14,12 +14,19 @@ import org.springframework.core.env.Environment;
 public class BatchSecurityProperties {
 
   /**
-   * 全局安全旁路总开关（`batch.security.bypass-mode`）。开启后放宽认证、脱敏、加解密、审批、渠道
-   * 校验等所有安全约束，仅供本地 / 联调 / E2E 使用。
+   * 全局安全旁路总开关（{@code batch.security.bypass-mode}）。开启后放宽认证、脱敏、加解密、审批、
+   * 渠道校验等所有安全约束，仅供本地 / 联调 / E2E 使用。
    *
-   * <p>Java 字段默认 {@code false}（安全默认），实际默认值由部署渠道覆盖：docker-compose 下
-   * {@code ${BATCH_SECURITY_BYPASS_MODE:-true}}、IDE 本地 {@code application-local.yml} 显式
-   * {@code false}、生产 Helm values 显式 {@code false}。见 CLAUDE.md §字符编码 下一节。
+   * <p>S-1.11：Java 字段默认 {@code false}（安全默认），实际默认值由部署渠道覆盖：
+   *
+   * <ul>
+   *   <li>IDE 本地 / {@code application-local.yml}：<b>显式 {@code true}</b>（调试方便，与
+   *       CLAUDE.md §配置开关规范一致；旧注释写 {@code false} 是错的）
+   *   <li>docker-compose：{@code ${BATCH_SECURITY_BYPASS_MODE:-false}}（贴近生产；之前注释
+   *       误写 {@code -true}）
+   *   <li>prod profile：在 {@link #validateSecuritySettings()} 的 @PostConstruct 强制拒绝
+   *       {@code true}
+   * </ul>
    */
   private boolean bypassMode = false;
 

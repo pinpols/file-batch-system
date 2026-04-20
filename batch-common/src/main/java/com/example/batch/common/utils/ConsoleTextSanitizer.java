@@ -55,4 +55,50 @@ public final class ConsoleTextSanitizer {
     }
     return HtmlUtils.htmlEscape(normalized);
   }
+
+  // ── R-4.16：链式 null-safe API ─────────────────────────────────────────
+  // 静态 API 在需要组合多步清洗（如 "先 normalize，再 htmlEscape，再截断"）时
+  // 要写两三层临时变量。改用 {@code ConsoleTextSanitizer.of(raw).normalize()
+  // .htmlEscape().maxLength(64).get()} 一行表达意图，且 null 在整条链上安全透传。
+
+  /** R-4.16：进入链式清洗。传 null 返回 null-safe 的 Chain（所有操作 no-op 直到 get()）。 */
+  public static Chain of(String value) {
+    return new Chain(value);
+  }
+
+  /** 链式清洗：每步返回新 Chain，null 安全透传；末尾用 {@link #get()} / {@link #orElse} 取值。 */
+  public static final class Chain {
+    private final String value;
+
+    private Chain(String value) {
+      this.value = value;
+    }
+
+    public Chain normalize() {
+      return new Chain(ConsoleTextSanitizer.normalize(value));
+    }
+
+    public Chain htmlEscape() {
+      return new Chain(value == null ? null : HtmlUtils.htmlEscape(value));
+    }
+
+    public Chain maxLength(int maxLength) {
+      if (value == null || maxLength <= 0 || value.length() <= maxLength) {
+        return this;
+      }
+      return new Chain(value.substring(0, maxLength));
+    }
+
+    public Chain strip() {
+      return new Chain(value == null ? null : value.strip());
+    }
+
+    public String get() {
+      return value;
+    }
+
+    public String orElse(String fallback) {
+      return value == null ? fallback : value;
+    }
+  }
 }
