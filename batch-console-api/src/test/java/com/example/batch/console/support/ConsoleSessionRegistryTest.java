@@ -6,9 +6,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.batch.console.config.ConsoleSecurityProperties;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -27,7 +29,10 @@ class ConsoleSessionRegistryTest {
     ConsoleSecurityProperties properties = new ConsoleSecurityProperties();
     properties.setSingleSessionEnabled(true);
     properties.setSessionStateTtl(Duration.ofDays(30));
-    registry = new ConsoleSessionRegistry(redisTemplate, properties);
+    // R-4.7：meterRegistry 在单测里用空 provider；无 registry 时指标逻辑会跳过
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+    when(meterRegistryProvider.getIfAvailable()).thenReturn(null);
+    registry = new ConsoleSessionRegistry(redisTemplate, properties, meterRegistryProvider);
   }
 
   @Test

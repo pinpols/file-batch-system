@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
+import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import jakarta.activation.DataHandler;
 import jakarta.activation.FileDataSource;
@@ -17,19 +18,38 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import com.example.batch.common.utils.Texts;
 
-/** SMTP 邮件分发适配器，将 {@code file_record} 中的文件作为附件通过 SMTP 发送。 */
+/**
+ * SMTP 邮件邮件分发适配器，将 {@code file_record} 中的文件作为附件通过 SMTP 发送。
+ *
+ * <p><b>S-1.7 · 通道安全基线</b>：
+ *
+ * <ul>
+ *   <li>附件大小硬上限：{@value #MAX_ATTACHMENT_BYTES} 字节（25MB），超限直接拒发
+ *   <li>prod profile：强制 STARTTLS，渠道配置 {@code smtp_starttls=false} 被覆盖为 true
+ *   <li>prod profile：强制 {@code mail.smtp.ssl.checkserveridentity=true}，防止中间人
+ *   <li>mail_from / mail_to / mail_subject 做 CRLF header 注入剥离（{@link #sanitizeHeader}）
+ *   <li>{@code smtp.splitlongparameters=false} 避免长 filename 被拆包触发编码歧义
+ * </ul>
+ */
 @Component
 @RequiredArgsConstructor
 public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
+  /** S-1.7：附件大小硬上限 25MB，覆盖大多数企业 SMTP 服务器的消息上限。 */
+  private static final long MAX_ATTACHMENT_BYTES = 25L * 1024L * 1024L;
+
   private final DispatchFileContentResolver fileContentResolver;
+  private final Environment environment;
+  private final BatchSecurityProperties securityProperties;
 
   @Override
   public boolean supports(String channelType) {
@@ -105,6 +125,10 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     String smtpUser = stringProp(channelConfig, "smtp_username");
     String smtpPass = stringProp(channelConfig, "smtp_password");
     boolean startTls = boolProp(channelConfig, "smtp_starttls", true);
+    // S-1.7：prod profile 强制 STARTTLS，覆盖渠道"关掉 TLS"的配置；dev/local 允许关闭
+    if (isProductionProfile()) {
+      startTls = true;
+    }
 
     String from = firstNonBlank(stringProp(channelConfig, "mail_from"), smtpUser);
     String to =
@@ -116,27 +140,53 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     return new MailConfig(host, port, smtpUser, smtpPass, startTls, from, to);
   }
 
+  /** S-1.7：剥离 CR/LF 防 header 注入；长度截断到 RFC 5322 header 常见上限 998。 */
+  private static String sanitizeHeader(String raw) {
+    if (raw == null) {
+      return null;
+    }
+    String cleaned = raw.replace("\r", "").replace("\n", "").trim();
+    return cleaned.length() > 998 ? cleaned.substring(0, 998) : cleaned;
+  }
+
+  private boolean isProductionProfile() {
+    if (environment == null) {
+      return false;
+    }
+    return Arrays.stream(environment.getActiveProfiles())
+        .anyMatch(p -> "prod".equalsIgnoreCase(p) || "production".equalsIgnoreCase(p));
+  }
+
   private MimeMessage buildMimeMessage(
       MailConfig mailConfig, DispatchCommand command, String externalRequestId) throws Exception {
     Properties props = new Properties();
     props.put("mail.smtp.host", mailConfig.host());
     props.put("mail.smtp.port", String.valueOf(mailConfig.port()));
     props.put("mail.smtp.auth", "true");
+    // S-1.7：避免 MIME 长参数被 jakarta.mail 拆行后编码歧义
+    props.put("mail.mime.splitlongparameters", "false");
     if (mailConfig.startTls()) {
       props.put("mail.smtp.starttls.enable", "true");
+      // S-1.7：prod profile 要求 STARTTLS 成功，否则拒发（不降级为明文）
+      if (isProductionProfile()) {
+        props.put("mail.smtp.starttls.required", "true");
+        props.put("mail.smtp.ssl.checkserveridentity", "true");
+      }
     }
     Session session = Session.getInstance(props, null);
 
     Map<String, Object> channelConfig = command.channelConfig();
-    String subject = stringProp(channelConfig, "mail_subject");
+    String subject = sanitizeHeader(stringProp(channelConfig, "mail_subject"));
     if (!Texts.hasText(subject)) {
       subject = "File dispatch " + externalRequestId;
     }
 
+    // S-1.7：from / to 走 header sanitize，阻止 "victim@evil\r\nBcc: attacker@..." 注入
     MimeMessage message = new MimeMessage(session);
-    message.setFrom(new InternetAddress(mailConfig.from()));
+    message.setFrom(new InternetAddress(sanitizeHeader(mailConfig.from())));
     message.setRecipients(
-        Message.RecipientType.TO, InternetAddress.parse(mailConfig.to().replace(";", ",")));
+        Message.RecipientType.TO,
+        InternetAddress.parse(sanitizeHeader(mailConfig.to().replace(";", ","))));
     message.setSubject(subject, StandardCharsets.UTF_8.name());
 
     MimeBodyPart textPart = new MimeBodyPart();
@@ -159,6 +209,17 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         Files.createTempFile("dispatch-mail-", "-" + sanitizeAttachmentSuffix(attachName));
     try (InputStream in = fileContentResolver.openInputStream(fileRecord)) {
       Files.copy(in, attachmentFile, StandardCopyOption.REPLACE_EXISTING);
+    }
+    // S-1.7：附件大小硬上限。超限立即拒绝，避免把大文件打到 SMTP 服务器才被 reject
+    long size = Files.size(attachmentFile);
+    if (size > MAX_ATTACHMENT_BYTES) {
+      Files.deleteIfExists(attachmentFile);
+      throw new IllegalStateException(
+          "mail attachment size "
+              + size
+              + " bytes exceeds cap "
+              + MAX_ATTACHMENT_BYTES
+              + " bytes");
     }
     return attachmentFile;
   }

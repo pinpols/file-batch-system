@@ -21,4 +21,16 @@ public interface DispatchChannelHealthMapper {
    * @return 1=本线程抢到半开通行证；0=另一线程已抢走或已恢复 HEALTHY
    */
   int tryClaimHalfOpenProbe(Map<String, Object> params);
+
+  /** P2：成功结果原子 UPSERT —— 置 HEALTHY + consecutive_failures=0。 */
+  int upsertSuccess(Map<String, Object> params);
+
+  /**
+   * P2：失败结果原子 UPSERT —— consecutive_failures 按数据库 COALESCE+1 递增，
+   * 消除 Java 侧读-改-写的 lost-update；health_status 按 failureThreshold 动态判。
+   */
+  int upsertFailureAndBump(Map<String, Object> params);
+
+  /** P2：失败路径后置，按新的 consecutive_failures 重算 next_probe_at（指数退避）。 */
+  int recalcBackoff(Map<String, Object> params);
 }

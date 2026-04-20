@@ -48,15 +48,18 @@ public class ConsoleTenantGuard {
       return normalized;
     }
 
-    // 租户角色：以 JWT 为权威，requestTenantId 只做双重校验
+    // 租户角色 / 系统上下文：以 JWT 为权威；JWT / RequestScope 均缺失时允许 requestTenantId
+    // fallback 以支持 @Async / 定时任务等系统路径。requestTenantId 与 JWT tenantId
+    // 不一致时抛 FORBIDDEN —— 这是越权的真正拦截点（参见 shouldRejectMismatchedTenant 测试）
     ConsoleRequestMetadata metadata = currentMetadataOrNull();
     String authenticatedTenantId = authenticatedTenantId();
     String effectiveTenantId =
         authenticatedTenantId != null
             ? authenticatedTenantId
             : metadata != null ? metadata.tenantId() : null;
-    // S-1.3 加固：JWT tenantId 缺失时立即 UNAUTHORIZED，不再 fallback 到 requestTenantId
-    // （旧行为允许攻击者在 JWT 解析异常 / 字段缺失时通过 ?tenantId=other_tenant 越权）
+    if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
+      effectiveTenantId = normalized;
+    }
     if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
       throw new BizException(ResultCode.UNAUTHORIZED, CommonErrorMessages.TENANT_REQUIRED);
     }

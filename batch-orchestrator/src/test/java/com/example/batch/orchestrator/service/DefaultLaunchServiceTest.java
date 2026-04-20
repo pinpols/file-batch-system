@@ -66,6 +66,9 @@ class DefaultLaunchServiceTest {
   @SuppressWarnings("unchecked")
   private ObjectProvider<DefaultLaunchService> selfProvider;
 
+  @SuppressWarnings("unchecked")
+  private ObjectProvider<LaunchBatchDayService> batchDaySelfProvider;
+
   private DefaultLaunchService service;
 
   @BeforeEach
@@ -91,6 +94,7 @@ class DefaultLaunchServiceTest {
     batchDayInstanceRepository = mock(BatchDayInstanceRepository.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     selfProvider = mock(ObjectProvider.class);
+    batchDaySelfProvider = mock(ObjectProvider.class);
     BatchTimezoneProvider timezoneProvider = new BatchTimezoneProvider(new BatchTimezoneProperties());
     launchBatchDayService =
         new LaunchBatchDayService(
@@ -98,7 +102,9 @@ class DefaultLaunchServiceTest {
             batchDayInstanceRepository,
             jobExecutionLogMapper,
             jobMappers,
-            timezoneProvider);
+            timezoneProvider,
+            batchDaySelfProvider);
+    when(batchDaySelfProvider.getObject()).thenReturn(launchBatchDayService);
     launchParamResolver = new LaunchParamResolver(timezoneProvider);
     service =
         new DefaultLaunchService(

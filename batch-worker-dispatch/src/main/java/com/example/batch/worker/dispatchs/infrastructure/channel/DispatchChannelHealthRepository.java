@@ -46,6 +46,70 @@ public class DispatchChannelHealthRepository {
     return mapper.tryClaimHalfOpenProbe(params) > 0;
   }
 
+  /**
+   * P2：原子写入"成功"结果，等价于旧 upsertHealth(HEALTHY, failures=0, ...) 但 SQL 侧一次
+   * 完成，无 find-then-upsert 竞态。
+   */
+  public void upsertSuccess(
+      String tenantId,
+      String channelCode,
+      String channelType,
+      Instant now,
+      Instant nextProbeAt,
+      String probeMessage,
+      String probeEvidence) {
+    Map<String, Object> params = new HashMap<>();
+    params.put("tenantId", tenantId);
+    params.put("channelCode", channelCode);
+    params.put("channelType", channelType);
+    params.put("now", toTimestamp(now));
+    params.put("nextProbeAt", toTimestamp(nextProbeAt));
+    params.put("probeMessage", probeMessage);
+    params.put("probeEvidence", probeEvidence);
+    mapper.upsertSuccess(params);
+  }
+
+  /**
+   * P2：原子写入"失败"结果。consecutive_failures 由 SQL {@code COALESCE(...) + 1} 递增；
+   * health_status 根据 failureThreshold 自动判为 UNHEALTHY / DEGRADED。随后调用
+   * {@link #recalcBackoff} 按新的 count 更新 next_probe_at，完成指数退避。
+   */
+  public void upsertFailureAndBump(
+      String tenantId,
+      String channelCode,
+      String channelType,
+      Instant now,
+      Instant firstFailureBackoffAt,
+      int failureThreshold,
+      String probeMessage,
+      String probeEvidence) {
+    Map<String, Object> params = new HashMap<>();
+    params.put("tenantId", tenantId);
+    params.put("channelCode", channelCode);
+    params.put("channelType", channelType);
+    params.put("now", toTimestamp(now));
+    params.put("firstFailureBackoffAt", toTimestamp(firstFailureBackoffAt));
+    params.put("failureThreshold", Math.max(1, failureThreshold));
+    params.put("probeMessage", probeMessage);
+    params.put("probeEvidence", probeEvidence);
+    mapper.upsertFailureAndBump(params);
+  }
+
+  public void recalcBackoff(
+      String tenantId,
+      String channelCode,
+      Instant now,
+      long probeIntervalMillis,
+      long maxBackoffMillis) {
+    Map<String, Object> params = new HashMap<>();
+    params.put("tenantId", tenantId);
+    params.put("channelCode", channelCode);
+    params.put("now", toTimestamp(now));
+    params.put("probeIntervalMillis", probeIntervalMillis);
+    params.put("maxBackoffMillis", maxBackoffMillis);
+    mapper.recalcBackoff(params);
+  }
+
   public void upsertHealth(DispatchChannelHealthSnapshot s) {
     Map<String, Object> params = new HashMap<>();
     params.put("tenantId", s.tenantId());
