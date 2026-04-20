@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.model.WorkerRouteModel;
 import com.example.batch.orchestrator.application.scheduler.WorkerSelector;
+import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
@@ -16,6 +17,7 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Texts;
 
 /**
@@ -43,12 +45,15 @@ public class DefaultWorkerSelector implements WorkerSelector {
 
   private final WorkerRegistryRepository workerRegistryRepository;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+  private final ResourceSchedulerProperties resourceSchedulerProperties;
 
   public DefaultWorkerSelector(
       WorkerRegistryRepository workerRegistryRepository,
-      ObjectProvider<MeterRegistry> meterRegistryProvider) {
+      ObjectProvider<MeterRegistry> meterRegistryProvider,
+      ResourceSchedulerProperties resourceSchedulerProperties) {
     this.workerRegistryRepository = workerRegistryRepository;
     this.meterRegistryProvider = meterRegistryProvider;
+    this.resourceSchedulerProperties = resourceSchedulerProperties;
   }
 
   @Override
@@ -62,23 +67,36 @@ public class DefaultWorkerSelector implements WorkerSelector {
       route.setAvailable(false);
       return route;
     }
-    String workerGroup = resolveWorkerGroup(request, queue);
+    // 历史数据可能存在 IMPORT / import 大小写不一致；入口统一按大写比较兜底，
+    // 长期由 V64__normalize_code_conventions.sql 把 DB 存量归一，之后这里 toUpper 就是纯防御性动作。
+    String workerGroup = CodeNormalizer.toUpperOrNull(resolveWorkerGroup(request, queue));
     List<WorkerRegistryRecord> candidates =
-        Texts.hasText(workerGroup)
-            ? workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
-                request.getTenantId(), workerGroup, WorkerRegistryStatus.ONLINE.code())
-            : workerRegistryRepository.findByTenantIdAndStatus(
-                request.getTenantId(), WorkerRegistryStatus.ONLINE.code());
-    WorkerRegistryRecord selected =
-        candidates.stream()
-            .filter(candidate -> matchesResourceTag(candidate, queue))
-            .min(
-                Comparator.comparingInt(
-                        (WorkerRegistryRecord r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
-                    .thenComparing(
-                        WorkerRegistryRecord::heartbeatAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-            .orElse(null);
+        findCandidates(request.getTenantId(), workerGroup);
+    WorkerRegistryRecord selected = pickBest(candidates, queue);
+
+    // 共享 worker 池 fallback（仅本地联调 / 共享 dev 环境）：主租户查不到 ONLINE worker 时，
+    // 按 batch.resource-scheduler.shared-tenant-fallback 配置的租户再查一次。
+    // 生产 profile 不应设置此配置，以保留 CLAUDE.md §多租户隔离 的原严格语义。
+    String fallbackTenant = resourceSchedulerProperties.getSharedTenantFallback();
+    if (selected == null
+        && Texts.hasText(fallbackTenant)
+        && !fallbackTenant.equals(request.getTenantId())) {
+      List<WorkerRegistryRecord> fallbackCandidates = findCandidates(fallbackTenant, workerGroup);
+      WorkerRegistryRecord fallbackSelected = pickBest(fallbackCandidates, queue);
+      if (fallbackSelected != null) {
+        log.info(
+            "worker selection fell back to shared tenant: tenantId={}, fallbackTenant={},"
+                + " workerGroup={}, workerCode={}",
+            request.getTenantId(),
+            fallbackTenant,
+            workerGroup,
+            fallbackSelected.workerCode());
+        route.setWorkerCode(fallbackSelected.workerCode());
+        route.setAvailable(true);
+        return route;
+      }
+    }
+
     if (selected == null) {
       // A-3.2 a: 空集不再静默阻塞——记 WARN + 计数，让 Grafana / 告警能发现：
       //   - candidates.isEmpty 说明整组 worker 下线（或 workerGroup 配错）
@@ -104,6 +122,27 @@ public class DefaultWorkerSelector implements WorkerSelector {
     route.setWorkerCode(selected.workerCode());
     route.setAvailable(true);
     return route;
+  }
+
+  private List<WorkerRegistryRecord> findCandidates(String tenantId, String workerGroup) {
+    return Texts.hasText(workerGroup)
+        ? workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
+            tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
+        : workerRegistryRepository.findByTenantIdAndStatus(
+            tenantId, WorkerRegistryStatus.ONLINE.code());
+  }
+
+  private WorkerRegistryRecord pickBest(
+      List<WorkerRegistryRecord> candidates, ResourceQueueRecord queue) {
+    return candidates.stream()
+        .filter(candidate -> matchesResourceTag(candidate, queue))
+        .min(
+            Comparator.comparingInt(
+                    (WorkerRegistryRecord r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
+                .thenComparing(
+                    WorkerRegistryRecord::heartbeatAt,
+                    Comparator.nullsLast(Comparator.reverseOrder())))
+        .orElse(null);
   }
 
   private void incrementNoMatchCounter(

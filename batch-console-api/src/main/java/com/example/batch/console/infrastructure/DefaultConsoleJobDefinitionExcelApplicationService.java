@@ -17,6 +17,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -373,12 +374,12 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
               normalize(values.get("job_code")),
               normalize(values.get("job_name")),
               normalizeEnum(values.get(COL_JOB_TYPE)),
-              normalize(values.get("queue_code")),
-              normalize(values.get("worker_group")),
+              CodeNormalizer.toConfigFormOrNull(values.get("queue_code")),
+              CodeNormalizer.toUpperOrNull(values.get("worker_group")),
               normalizeEnum(values.get(COL_SCHEDULE_TYPE)),
               normalize(values.get("schedule_expr")),
-              normalize(values.get("calendar_code")),
-              normalize(values.get("window_code")),
+              CodeNormalizer.toConfigFormOrNull(values.get("calendar_code")),
+              CodeNormalizer.toConfigFormOrNull(values.get("window_code")),
               normalizeEnum(values.get(COL_RETRY_POLICY)),
               parseInteger(values.get("retry_max_count")),
               parseInteger(values.get("timeout_seconds")),

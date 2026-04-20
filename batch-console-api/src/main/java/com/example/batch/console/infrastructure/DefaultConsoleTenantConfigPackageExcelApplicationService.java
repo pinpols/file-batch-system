@@ -5,6 +5,7 @@ import static com.example.batch.console.infrastructure.ConfigPackageExcelWorkboo
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.ConsoleTenantConfigPackageExcelApplicationService;
@@ -298,12 +299,12 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         entity.setJobName(normalize(row.get(COL_JOB_NAME)));
         entity.setJobType(normalizeEnum(row.get(COL_JOB_TYPE)));
         entity.setBizType(normalize(row.get(COL_BIZ_TYPE)));
-        entity.setQueueCode(normalize(row.get(COL_QUEUE_CODE)));
-        entity.setWorkerGroup(normalize(row.get(COL_WORKER_GROUP)));
+        entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_QUEUE_CODE)));
+        entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
         entity.setScheduleType(normalizeEnum(row.get(COL_SCHEDULE_TYPE)));
         entity.setScheduleExpr(normalize(row.get(COL_SCHEDULE_EXPR)));
-        entity.setCalendarCode(normalize(row.get(COL_CALENDAR_CODE)));
-        entity.setWindowCode(normalize(row.get(COL_WINDOW_CODE)));
+        entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE)));
+        entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_WINDOW_CODE)));
         entity.setRetryPolicy(normalizeEnum(row.get(COL_RETRY_POLICY)));
         entity.setRetryMaxCount(parseInteger(row.get(COL_RETRY_MAX_COUNT)));
         entity.setTimeoutSeconds(parseInteger(row.get(COL_TIMEOUT_SECONDS)));
@@ -322,11 +323,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         param.setTenantId(ctx.tenantId());
         param.setJobCode(jobCode);
         param.setJobName(normalize(row.get(COL_JOB_NAME)));
-        param.setQueueCode(normalize(row.get(COL_QUEUE_CODE)));
-        param.setWorkerGroup(normalize(row.get(COL_WORKER_GROUP)));
+        param.setQueueCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_QUEUE_CODE)));
+        param.setWorkerGroup(CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
         param.setScheduleExpr(normalize(row.get(COL_SCHEDULE_EXPR)));
-        param.setCalendarCode(normalize(row.get(COL_CALENDAR_CODE)));
-        param.setWindowCode(normalize(row.get(COL_WINDOW_CODE)));
+        param.setCalendarCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_CALENDAR_CODE)));
+        param.setWindowCode(CodeNormalizer.toConfigFormOrNull(row.get(COL_WINDOW_CODE)));
         param.setRetryPolicy(normalizeEnum(row.get(COL_RETRY_POLICY)));
         param.setRetryMaxCount(parseInteger(row.get(COL_RETRY_MAX_COUNT)));
         param.setTimeoutSeconds(parseInteger(row.get(COL_TIMEOUT_SECONDS)));
@@ -509,8 +510,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       p.setNodeType(normalizeEnum(node.get(COL_NODE_TYPE)));
       p.setRelatedJobCode(normalize(node.get(COL_RELATED_JOB_CODE)));
       p.setRelatedPipelineCode(normalize(node.get(COL_RELATED_PIPELINE_CODE)));
-      p.setWorkerGroup(normalize(node.get(COL_WORKER_GROUP)));
-      p.setWindowCode(normalize(node.get(COL_WINDOW_CODE)));
+      p.setWorkerGroup(CodeNormalizer.toUpperOrNull(node.get(COL_WORKER_GROUP)));
+      p.setWindowCode(CodeNormalizer.toConfigFormOrNull(node.get(COL_WINDOW_CODE)));
       p.setNodeOrder(parseInteger(node.get(COL_NODE_ORDER)));
       p.setRetryPolicy(normalizeEnum(node.get(COL_RETRY_POLICY)));
       p.setRetryMaxCount(parseInteger(node.get(COL_RETRY_MAX_COUNT)));
@@ -544,7 +545,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     p.put("pipeline_name", normalize(row.get(COL_PIPELINE_NAME)));
     p.put("pipeline_type", normalizeEnum(row.get(COL_PIPELINE_TYPE)));
     p.put("biz_type", normalize(row.get(COL_BIZ_TYPE)));
-    p.put("worker_group", normalize(row.get(COL_WORKER_GROUP)));
+    p.put("worker_group", CodeNormalizer.toUpperOrNull(row.get(COL_WORKER_GROUP)));
     p.put(COL_VERSION, parseInteger(row.get(COL_VERSION)));
     p.put(COL_ENABLED, parseBoolean(row.get(COL_ENABLED), true));
     p.put(COL_DESCRIPTION, normalize(row.get(COL_DESCRIPTION)));

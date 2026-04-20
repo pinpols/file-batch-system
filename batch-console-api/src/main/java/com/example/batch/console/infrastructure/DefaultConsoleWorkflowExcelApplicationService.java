@@ -17,6 +17,7 @@ import com.example.batch.common.enums.WorkflowEdgeType;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowType;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
@@ -566,8 +567,8 @@ public class DefaultConsoleWorkflowExcelApplicationService
                   normalize(rowValues.get("related_job_code")),
                   normalize(rowValues.get("related_pipeline_code"))),
               new WorkflowNodeExecution(
-                  normalize(rowValues.get("worker_group")),
-                  normalize(rowValues.get("window_code")),
+                  CodeNormalizer.toUpperOrNull(rowValues.get("worker_group")),
+                  CodeNormalizer.toConfigFormOrNull(rowValues.get("window_code")),
                   parseInteger(rowValues.get("node_order"))),
               new WorkflowNodeRuntime(
                   normalizeEnum(rowValues.get(COL_RETRY_POLICY), RETRY_POLICIES),

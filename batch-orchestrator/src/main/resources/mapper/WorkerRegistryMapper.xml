@@ -27,4 +27,14 @@
            and worker_code = #{workerCode}
     </update>
 
+    <!-- 心跳超时降级：ONLINE / DRAINING 统一降为 OFFLINE。
+         不动 DECOMMISSIONED（已由运维/人工终止的不能被扫描复活）。 -->
+    <update id="markStaleHeartbeatsOffline">
+        update batch.worker_registry
+           set status     = 'OFFLINE',
+               updated_at = current_timestamp
+         where status in ('ONLINE', 'DRAINING')
+           and heartbeat_at &lt; #{cutoff}
+    </update>
+
 </mapper>

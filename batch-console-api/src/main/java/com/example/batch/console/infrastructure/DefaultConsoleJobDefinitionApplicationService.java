@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.console.application.ConsoleJobDefinitionApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
@@ -74,10 +75,10 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setTimezone(request.getTimezone() == null ? "Asia/Shanghai" : request.getTimezone());
     entity.setTriggerMode(
         request.getTriggerMode() == null ? "SCHEDULED" : request.getTriggerMode());
-    entity.setWorkerGroup(request.getWorkerGroup());
-    entity.setQueueCode(request.getQueueCode());
-    entity.setCalendarCode(request.getCalendarCode());
-    entity.setWindowCode(request.getWindowCode());
+    entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(request.getWorkerGroup()));
+    entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(request.getQueueCode()));
+    entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(request.getCalendarCode()));
+    entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(request.getWindowCode()));
     entity.setDagEnabled(request.getDagEnabled() != null && request.getDagEnabled());
     entity.setShardStrategy(
         request.getShardStrategy() == null ? "NONE" : request.getShardStrategy());
@@ -110,15 +111,23 @@ public class DefaultConsoleJobDefinitionApplicationService
     param.setJobCode(existing.getJobCode());
     param.setJobName(request.getJobName() != null ? request.getJobName() : existing.getJobName());
     param.setQueueCode(
-        request.getQueueCode() != null ? request.getQueueCode() : existing.getQueueCode());
+        request.getQueueCode() != null
+            ? CodeNormalizer.toConfigFormOrNull(request.getQueueCode())
+            : existing.getQueueCode());
     param.setWorkerGroup(
-        request.getWorkerGroup() != null ? request.getWorkerGroup() : existing.getWorkerGroup());
+        request.getWorkerGroup() != null
+            ? CodeNormalizer.toUpperOrNull(request.getWorkerGroup())
+            : existing.getWorkerGroup());
     param.setScheduleExpr(
         request.getScheduleExpr() != null ? request.getScheduleExpr() : existing.getScheduleExpr());
     param.setCalendarCode(
-        request.getCalendarCode() != null ? request.getCalendarCode() : existing.getCalendarCode());
+        request.getCalendarCode() != null
+            ? CodeNormalizer.toConfigFormOrNull(request.getCalendarCode())
+            : existing.getCalendarCode());
     param.setWindowCode(
-        request.getWindowCode() != null ? request.getWindowCode() : existing.getWindowCode());
+        request.getWindowCode() != null
+            ? CodeNormalizer.toConfigFormOrNull(request.getWindowCode())
+            : existing.getWindowCode());
     param.setRetryPolicy(
         request.getRetryPolicy() != null ? request.getRetryPolicy() : existing.getRetryPolicy());
     param.setRetryMaxCount(
@@ -203,15 +212,23 @@ public class DefaultConsoleJobDefinitionApplicationService
     param.setJobCode(request.getNewJobCode());
     param.setJobName(request.getJobName() != null ? request.getJobName() : copied.getJobName());
     param.setQueueCode(
-        request.getQueueCode() != null ? request.getQueueCode() : copied.getQueueCode());
+        request.getQueueCode() != null
+            ? CodeNormalizer.toConfigFormOrNull(request.getQueueCode())
+            : copied.getQueueCode());
     param.setWorkerGroup(
-        request.getWorkerGroup() != null ? request.getWorkerGroup() : copied.getWorkerGroup());
+        request.getWorkerGroup() != null
+            ? CodeNormalizer.toUpperOrNull(request.getWorkerGroup())
+            : copied.getWorkerGroup());
     param.setScheduleExpr(
         request.getScheduleExpr() != null ? request.getScheduleExpr() : copied.getScheduleExpr());
     param.setCalendarCode(
-        request.getCalendarCode() != null ? request.getCalendarCode() : copied.getCalendarCode());
+        request.getCalendarCode() != null
+            ? CodeNormalizer.toConfigFormOrNull(request.getCalendarCode())
+            : copied.getCalendarCode());
     param.setWindowCode(
-        request.getWindowCode() != null ? request.getWindowCode() : copied.getWindowCode());
+        request.getWindowCode() != null
+            ? CodeNormalizer.toConfigFormOrNull(request.getWindowCode())
+            : copied.getWindowCode());
     param.setRetryPolicy(
         request.getRetryPolicy() != null ? request.getRetryPolicy() : copied.getRetryPolicy());
     param.setRetryMaxCount(
