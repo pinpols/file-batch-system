@@ -31,8 +31,11 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * WAITING 分片重派定时器：每 {@code waiting-dispatch-interval-millis}（默认 10s）扫一批 WAITING 状态分片，
@@ -66,6 +69,7 @@ public class WaitingPartitionDispatchScheduler {
   private final PartitionLifecycleService partitionLifecycleService;
   private final TenantActionRateLimiter tenantActionRateLimiter;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final ObjectProvider<WaitingPartitionDispatchScheduler> selfProvider;
 
   /** WAITING partition 会在这里重新进入资源判断，只有满足窗口/并发/worker 条件才会真正出队。 */
   @Scheduled(
@@ -94,15 +98,27 @@ public class WaitingPartitionDispatchScheduler {
             .reversed()
             .thenComparing(Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
             .thenComparingLong(WaitingDispatchCandidate::partitionId);
-    candidates.stream()
-        .sorted(comparator)
-        .forEach(
-            candidate ->
-                dispatchWaitingPartition(
-                    candidate.partition(),
-                    candidate.task(),
-                    candidate.jobInstance(),
-                    candidate.decision()));
+    // 逐个 partition 走独立 REQUIRES_NEW 事务：release + outbox + instance/workflow 状态推进作为原子单元。
+    // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；self-proxy 触发 @Transactional AOP。
+    List<WaitingDispatchCandidate> sorted = candidates.stream().sorted(comparator).toList();
+    for (WaitingDispatchCandidate candidate : sorted) {
+      try {
+        selfProvider
+            .getObject()
+            .dispatchWaitingPartition(
+                candidate.partition(),
+                candidate.task(),
+                candidate.jobInstance(),
+                candidate.decision());
+      } catch (RuntimeException exception) {
+        log.warn(
+            "dispatch waiting partition failed, will retry next tick: tenantId={},"
+                + " partitionId={}, error={}",
+            candidate.partition().getTenantId(),
+            candidate.partition().getId(),
+            exception.getMessage());
+      }
+    }
   }
 
   private WaitingDispatchCandidate buildCandidate(JobPartitionEntity partition) {
@@ -132,7 +148,18 @@ public class WaitingPartitionDispatchScheduler {
     return new WaitingDispatchCandidate(partition, task, jobInstance, decision);
   }
 
-  private void dispatchWaitingPartition(
+  /**
+   * 单个 partition 的完整 dispatch 事务：release → outbox → instance/workflow 状态推进。
+   *
+   * <p>{@code @Transactional(REQUIRES_NEW)} 保证 5 步（含下游 {@code writeDispatchEvent}
+   * 的 {@code MANDATORY} 传播需求）在同一事务内完成，符合 CLAUDE.md §架构硬约束——
+   * outbox 事件必须与状态写入同一事务，避免"partition 改了但 outbox 没写"的状态分裂。
+   *
+   * <p>public 可见性 + 通过 {@code selfProvider} 调用：绕开 Spring AOP 的 self-invocation 盲区，
+   * 让 {@code @Transactional} 真正生效。
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void dispatchWaitingPartition(
       JobPartitionEntity partition,
       JobTaskEntity task,
       JobInstanceEntity jobInstance,
@@ -152,64 +179,80 @@ public class WaitingPartitionDispatchScheduler {
               StructuredLogField.JOB_INSTANCE_ID,
               jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
           try {
-            boolean allowed =
-                tenantActionRateLimiter.tryConsume(
-                    jobInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE);
-            if (!allowed) {
-              return;
-            }
-            if (!partitionLifecycleService.releaseForDispatch(
-                partition, task, PartitionStatus.WAITING.code(), TaskStatus.CREATED.code())) {
-              return;
-            }
-            taskDispatchOutboxService.writeDispatchEvent(
-                jobInstance,
-                task,
-                partition,
-                jobInstance.getTraceId(),
-                task.getTenantId() + ":" + task.getId());
-            if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
-              int updated =
-                  jobMappers.jobInstanceMapper.markRunning(
-                      MarkInstanceRunningParam.builder()
-                          .tenantId(jobInstance.getTenantId())
-                          .id(jobInstance.getId())
-                          .instanceStatus(JobInstanceStatus.RUNNING.code())
-                          .expectedPartitionCount(jobInstance.getExpectedPartitionCount())
-                          .startedAt(Instant.now())
-                          .expectedVersion(jobInstance.getVersion())
-                          .build());
-              if (updated > 0) {
-                jobInstance.setVersion(
-                    (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
-              }
-            }
-            WorkflowRunEntity workflowRun =
-                workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
-                    jobInstance.getTenantId(), jobInstance.getId());
-            if (workflowRun != null
-                && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
-              workflowMappers.workflowRunMapper.markRunning(
-                  workflowRun.getTenantId(),
-                  workflowRun.getId(),
-                  WorkflowRunStatus.RUNNING.code(),
-                  workflowRun.getCurrentNodeCode(),
-                  Instant.now());
-            }
-            log.info(
-                "waiting partition released: tenantId={}, partitionId={},"
-                    + " taskId={}, fairnessScore={}, tenantWeight={},"
-                    + " queueWeight={}",
-                partition.getTenantId(),
-                partition.getId(),
-                task.getId(),
-                decision.getFairnessScore(),
-                decision.getTenantWeight(),
-                decision.getQueueWeight());
+            selfProvider.getObject().executeDispatch(partition, task, jobInstance, decision);
           } finally {
             BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
           }
         });
+  }
+
+  /**
+   * 单条 WAITING 分片的派发事务：release partition/task → 写 outbox → 推进 job_instance / workflow_run
+   * 全部在同一事务内提交，满足 CLAUDE.md §架构硬约束 "outbox_event 必须与任务状态写入处于同一事务"。
+   *
+   * <p>必须是 public 且通过 {@code selfProvider} self-proxy 调用才能让 Spring AOP 织入 {@code @Transactional}；
+   * 调用方负责在 MDC 上下文中调用，事务本身不关心日志 MDC。
+   */
+  @Transactional
+  public void executeDispatch(
+      JobPartitionEntity partition,
+      JobTaskEntity task,
+      JobInstanceEntity jobInstance,
+      ResourceSchedulingDecision decision) {
+    boolean allowed =
+        tenantActionRateLimiter.tryConsume(
+            jobInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE);
+    if (!allowed) {
+      return;
+    }
+    if (!partitionLifecycleService.releaseForDispatch(
+        partition, task, PartitionStatus.WAITING.code(), TaskStatus.CREATED.code())) {
+      return;
+    }
+    taskDispatchOutboxService.writeDispatchEvent(
+        jobInstance,
+        task,
+        partition,
+        jobInstance.getTraceId(),
+        task.getTenantId() + ":" + task.getId());
+    if (JobInstanceStatus.WAITING.code().equals(jobInstance.getInstanceStatus())) {
+      int updated =
+          jobMappers.jobInstanceMapper.markRunning(
+              MarkInstanceRunningParam.builder()
+                  .tenantId(jobInstance.getTenantId())
+                  .id(jobInstance.getId())
+                  .instanceStatus(JobInstanceStatus.RUNNING.code())
+                  .expectedPartitionCount(jobInstance.getExpectedPartitionCount())
+                  .startedAt(Instant.now())
+                  .expectedVersion(jobInstance.getVersion())
+                  .build());
+      if (updated > 0) {
+        jobInstance.setVersion(
+            (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+      }
+    }
+    WorkflowRunEntity workflowRun =
+        workflowMappers.workflowRunMapper.selectByRelatedJobInstanceId(
+            jobInstance.getTenantId(), jobInstance.getId());
+    if (workflowRun != null
+        && WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
+      workflowMappers.workflowRunMapper.markRunning(
+          workflowRun.getTenantId(),
+          workflowRun.getId(),
+          WorkflowRunStatus.RUNNING.code(),
+          workflowRun.getCurrentNodeCode(),
+          Instant.now());
+    }
+    log.info(
+        "waiting partition released: tenantId={}, partitionId={},"
+            + " taskId={}, fairnessScore={}, tenantWeight={},"
+            + " queueWeight={}",
+        partition.getTenantId(),
+        partition.getId(),
+        task.getId(),
+        decision.getFairnessScore(),
+        decision.getTenantWeight(),
+        decision.getQueueWeight());
   }
 
   private ResourceSchedulingRequest buildRequest(
