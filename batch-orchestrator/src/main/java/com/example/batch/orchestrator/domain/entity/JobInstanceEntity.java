@@ -3,9 +3,15 @@ package com.example.batch.orchestrator.domain.entity;
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
 import java.time.Instant;
 import java.time.LocalDate;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class JobInstanceEntity implements Stateful {
 
   private Long id;

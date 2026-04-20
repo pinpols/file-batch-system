@@ -29,6 +29,7 @@ import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.mapper.param.JobDefinitionMaintenanceUpdateParam;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.ConsoleExcelStyles;
@@ -691,49 +692,35 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       String traceId,
       JobDefinitionEntity existing) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            row.tenantId(),
-            "configType",
-            "JOB_DEFINITION",
-            "configKey",
-            row.jobCode(),
-            "versionNo",
-            1,
-            "changeAction",
-            "BULK_UPDATE",
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(updatedBy, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            JsonUtils.toJson(
-                mapOf(
-                    "reason", ConsoleTextSanitizer.safeInput(reason, 512),
-                    "detail",
-                        mapOf(
-                            "jobName",
-                            effective(row.jobName(), existing.getJobName()),
-                            "queueCode",
-                            effective(row.queueCode(), existing.getQueueCode()),
-                            "workerGroup",
-                            effective(row.workerGroup(), existing.getWorkerGroup()),
-                            "scheduleExpr",
-                            effective(row.scheduleExpr(), existing.getScheduleExpr()),
-                            "retryPolicy",
-                            effective(row.retryPolicy(), existing.getRetryPolicy()),
-                            "retryMaxCount",
-                            effective(row.retryMaxCount(), existing.getRetryMaxCount()),
-                            "timeoutSeconds",
-                            effective(row.timeoutSeconds(), existing.getTimeoutSeconds()),
-                            "shardStrategy",
-                            effective(row.shardStrategy(), existing.getShardStrategy()),
-                            COL_ENABLED,
-                            effective(row.enabled(), existing.getEnabled()))))));
+        ConfigChangeLogBuilder.create(row.tenantId(), updatedBy, traceId)
+            .forType("JOB_DEFINITION")
+            .withKey(row.jobCode())
+            .action("BULK_UPDATE")
+            .summary(
+                JsonUtils.toJson(
+                    mapOf(
+                        "reason", ConsoleTextSanitizer.safeInput(reason, 512),
+                        "detail",
+                            mapOf(
+                                "jobName",
+                                effective(row.jobName(), existing.getJobName()),
+                                "queueCode",
+                                effective(row.queueCode(), existing.getQueueCode()),
+                                "workerGroup",
+                                effective(row.workerGroup(), existing.getWorkerGroup()),
+                                "scheduleExpr",
+                                effective(row.scheduleExpr(), existing.getScheduleExpr()),
+                                "retryPolicy",
+                                effective(row.retryPolicy(), existing.getRetryPolicy()),
+                                "retryMaxCount",
+                                effective(row.retryMaxCount(), existing.getRetryMaxCount()),
+                                "timeoutSeconds",
+                                effective(row.timeoutSeconds(), existing.getTimeoutSeconds()),
+                                "shardStrategy",
+                                effective(row.shardStrategy(), existing.getShardStrategy()),
+                                COL_ENABLED,
+                                effective(row.enabled(), existing.getEnabled())))))
+            .build());
   }
 
   private Map<String, Object> mapOf(Object... pairs) {

@@ -48,6 +48,7 @@ import com.example.batch.console.web.response.TenantConfigBatchInitResponse.Tena
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import com.example.batch.common.utils.Nullables;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -267,7 +268,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
   @Transactional
   protected TenantInitResult initForTenant(
       String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
-    InitMode mode = request.getMode() != null ? request.getMode() : InitMode.SKIP_EXISTING;
+    InitMode mode = Nullables.coalesce(request.getMode(), InitMode.SKIP_EXISTING);
     ApplyContext ctx = new ApplyContext(tenantId, mode, operator, dryRun);
     try {
       ItemStats jobStats = applyJobDefinitions(request.getJobDefinitions(), ctx);
@@ -323,21 +324,21 @@ public class DefaultConsoleTenantConfigInitApplicationService
     entity.setBizType(spec.getBizType());
     entity.setScheduleType(spec.getScheduleType());
     entity.setScheduleExpr(spec.getScheduleExpr());
-    entity.setTimezone(spec.getTimezone() != null ? spec.getTimezone() : "Asia/Shanghai");
-    entity.setTriggerMode(spec.getTriggerMode() != null ? spec.getTriggerMode() : "SCHEDULED");
+    entity.setTimezone(Nullables.coalesce(spec.getTimezone(), "Asia/Shanghai"));
+    entity.setTriggerMode(Nullables.coalesce(spec.getTriggerMode(), "SCHEDULED"));
     entity.setWorkerGroup(spec.getWorkerGroup());
     entity.setQueueCode(spec.getQueueCode());
     entity.setCalendarCode(spec.getCalendarCode());
     entity.setWindowCode(spec.getWindowCode());
     entity.setDagEnabled(spec.getDagEnabled() != null && spec.getDagEnabled());
-    entity.setShardStrategy(spec.getShardStrategy() != null ? spec.getShardStrategy() : "NONE");
-    entity.setRetryPolicy(spec.getRetryPolicy() != null ? spec.getRetryPolicy() : "NONE");
+    entity.setShardStrategy(Nullables.coalesce(spec.getShardStrategy(), "NONE"));
+    entity.setRetryPolicy(Nullables.coalesce(spec.getRetryPolicy(), "NONE"));
     entity.setRetryMaxCount(spec.getRetryMaxCount());
     entity.setTimeoutSeconds(spec.getTimeoutSeconds());
     entity.setExecutionHandler(spec.getExecutionHandler());
     entity.setParamSchema(spec.getParamSchema());
     entity.setDefaultParams(spec.getDefaultParams());
-    entity.setPriority(spec.getPriority() != null ? spec.getPriority() : 5);
+    entity.setPriority(Nullables.coalesce(spec.getPriority(), 5));
     entity.setEnabled(spec.getEnabled() != null && spec.getEnabled());
     entity.setDescription(spec.getDescription());
     entity.setCreatedBy(operator);
@@ -350,27 +351,27 @@ public class DefaultConsoleTenantConfigInitApplicationService
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(existing.getTenantId());
     param.setJobCode(existing.getJobCode());
-    param.setJobName(spec.getJobName() != null ? spec.getJobName() : existing.getJobName());
-    param.setQueueCode(spec.getQueueCode() != null ? spec.getQueueCode() : existing.getQueueCode());
+    param.setJobName(Nullables.coalesce(spec.getJobName(), existing.getJobName()));
+    param.setQueueCode(Nullables.coalesce(spec.getQueueCode(), existing.getQueueCode()));
     param.setWorkerGroup(
-        spec.getWorkerGroup() != null ? spec.getWorkerGroup() : existing.getWorkerGroup());
+        Nullables.coalesce(spec.getWorkerGroup(), existing.getWorkerGroup()));
     param.setScheduleExpr(
-        spec.getScheduleExpr() != null ? spec.getScheduleExpr() : existing.getScheduleExpr());
+        Nullables.coalesce(spec.getScheduleExpr(), existing.getScheduleExpr()));
     param.setCalendarCode(
-        spec.getCalendarCode() != null ? spec.getCalendarCode() : existing.getCalendarCode());
+        Nullables.coalesce(spec.getCalendarCode(), existing.getCalendarCode()));
     param.setWindowCode(
-        spec.getWindowCode() != null ? spec.getWindowCode() : existing.getWindowCode());
+        Nullables.coalesce(spec.getWindowCode(), existing.getWindowCode()));
     param.setRetryPolicy(
-        spec.getRetryPolicy() != null ? spec.getRetryPolicy() : existing.getRetryPolicy());
+        Nullables.coalesce(spec.getRetryPolicy(), existing.getRetryPolicy()));
     param.setRetryMaxCount(
-        spec.getRetryMaxCount() != null ? spec.getRetryMaxCount() : existing.getRetryMaxCount());
+        Nullables.coalesce(spec.getRetryMaxCount(), existing.getRetryMaxCount()));
     param.setTimeoutSeconds(
-        spec.getTimeoutSeconds() != null ? spec.getTimeoutSeconds() : existing.getTimeoutSeconds());
+        Nullables.coalesce(spec.getTimeoutSeconds(), existing.getTimeoutSeconds()));
     param.setShardStrategy(
-        spec.getShardStrategy() != null ? spec.getShardStrategy() : existing.getShardStrategy());
-    param.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : existing.getEnabled());
+        Nullables.coalesce(spec.getShardStrategy(), existing.getShardStrategy()));
+    param.setEnabled(Nullables.coalesce(spec.getEnabled(), existing.getEnabled()));
     param.setDescription(
-        spec.getDescription() != null ? spec.getDescription() : existing.getDescription());
+        Nullables.coalesce(spec.getDescription(), existing.getDescription()));
     param.setUpdatedBy(operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
   }
@@ -432,7 +433,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
         nodeParam.setRetryMaxCount(nodeSpec.getRetryMaxCount());
         nodeParam.setTimeoutSeconds(nodeSpec.getTimeoutSeconds());
         nodeParam.setNodeParams(nodeSpec.getNodeParams());
-        nodeParam.setEnabled(nodeSpec.getEnabled() != null ? nodeSpec.getEnabled() : true);
+        nodeParam.setEnabled(Nullables.coalesce(nodeSpec.getEnabled(), true));
         workflowNodeMapper.upsertWorkflowNode(nodeParam);
       }
       if (spec.getEdges() != null) {
@@ -441,9 +442,9 @@ public class DefaultConsoleTenantConfigInitApplicationService
           edgeParam.setWorkflowDefinitionId(defId);
           edgeParam.setFromNodeCode(edgeSpec.getFromNodeCode());
           edgeParam.setToNodeCode(edgeSpec.getToNodeCode());
-          edgeParam.setEdgeType(edgeSpec.getEdgeType() != null ? edgeSpec.getEdgeType() : "NORMAL");
+          edgeParam.setEdgeType(Nullables.coalesce(edgeSpec.getEdgeType(), "NORMAL"));
           edgeParam.setConditionExpr(edgeSpec.getConditionExpr());
-          edgeParam.setEnabled(edgeSpec.getEnabled() != null ? edgeSpec.getEnabled() : true);
+          edgeParam.setEnabled(Nullables.coalesce(edgeSpec.getEnabled(), true));
           workflowEdgeMapper.upsertWorkflowEdge(edgeParam);
         }
       }
@@ -495,20 +496,20 @@ public class DefaultConsoleTenantConfigInitApplicationService
     params.put(KEY_ID, id);
     params.put(
         "pipeline_name",
-        spec.getPipelineName() != null ? spec.getPipelineName() : existing.get("pipeline_name"));
+        Nullables.coalesce(spec.getPipelineName(), existing.get("pipeline_name")));
     params.put(
         "pipeline_type",
-        spec.getPipelineType() != null ? spec.getPipelineType() : existing.get("pipeline_type"));
+        Nullables.coalesce(spec.getPipelineType(), existing.get("pipeline_type")));
     params.put(
-        "biz_type", spec.getBizType() != null ? spec.getBizType() : existing.get("biz_type"));
+        "biz_type", Nullables.coalesce(spec.getBizType(), existing.get("biz_type")));
     params.put(
         "worker_group",
-        spec.getWorkerGroup() != null ? spec.getWorkerGroup() : existing.get("worker_group"));
+        Nullables.coalesce(spec.getWorkerGroup(), existing.get("worker_group")));
     params.put(
-        KEY_ENABLED, spec.getEnabled() != null ? spec.getEnabled() : existing.get(KEY_ENABLED));
+        KEY_ENABLED, Nullables.coalesce(spec.getEnabled(), existing.get(KEY_ENABLED)));
     params.put(
         "description",
-        spec.getDescription() != null ? spec.getDescription() : existing.get("description"));
+        Nullables.coalesce(spec.getDescription(), existing.get("description")));
     pipelineDefinitionMapper.update(params);
     if (spec.getSteps() != null) {
       pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);
@@ -527,16 +528,16 @@ public class DefaultConsoleTenantConfigInitApplicationService
       stepParams.put("step_code", step.getStepCode());
       stepParams.put("step_name", step.getStepName());
       stepParams.put("stage_code", step.getStageCode());
-      stepParams.put("step_order", step.getStepOrder() != null ? step.getStepOrder() : 0);
+      stepParams.put("step_order", Nullables.coalesce(step.getStepOrder(), 0));
       stepParams.put("impl_code", step.getImplCode());
       stepParams.put("step_params", step.getStepParams());
       stepParams.put(
-          "timeout_seconds", step.getTimeoutSeconds() != null ? step.getTimeoutSeconds() : 0);
+          "timeout_seconds", Nullables.coalesce(step.getTimeoutSeconds(), 0));
       stepParams.put(
-          "retry_policy", step.getRetryPolicy() != null ? step.getRetryPolicy() : "NONE");
+          "retry_policy", Nullables.coalesce(step.getRetryPolicy(), "NONE"));
       stepParams.put(
-          "retry_max_count", step.getRetryMaxCount() != null ? step.getRetryMaxCount() : 0);
-      stepParams.put(KEY_ENABLED, step.getEnabled() != null ? step.getEnabled() : true);
+          "retry_max_count", Nullables.coalesce(step.getRetryMaxCount(), 0));
+      stepParams.put(KEY_ENABLED, Nullables.coalesce(step.getEnabled(), true));
       pipelineStepDefinitionMapper.insert(stepParams);
     }
   }
@@ -566,7 +567,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
     param.setConfigJson(spec.getConfigJson());
     param.setReceiptPolicy(spec.getReceiptPolicy());
     param.setTimeoutSeconds(spec.getTimeoutSeconds());
-    param.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : true);
+    param.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);
     fileChannelConfigMapper.upsertFileChannelConfig(param);
@@ -583,7 +584,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
             (tid, s) ->
                 Optional.ofNullable(
                     fileTemplateConfigMapper.selectByUniqueKey(
-                        tid, s.getTemplateCode(), s.getVersion() != null ? s.getVersion() : 1)),
+                        tid, s.getTemplateCode(), Nullables.coalesce(s.getVersion(), 1))),
             (c, s) -> upsertFileTemplate(c.tenantId(), s, c.operator())));
   }
 
@@ -597,8 +598,8 @@ public class DefaultConsoleTenantConfigInitApplicationService
     basicInfo.setTemplateName(spec.getTemplateName());
     basicInfo.setTemplateType(spec.getTemplateType());
     basicInfo.setBizType(spec.getBizType());
-    basicInfo.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : true);
-    basicInfo.setVersion(spec.getVersion() != null ? spec.getVersion() : 1);
+    basicInfo.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
+    basicInfo.setVersion(Nullables.coalesce(spec.getVersion(), 1));
     basicInfo.setDescription(spec.getDescription());
     p.setBasicInfo(basicInfo);
 
@@ -686,7 +687,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
     p.setResourceTag(spec.getResourceTag());
     p.setPriorityPolicy(spec.getPriorityPolicy());
     p.setFairShareWeight(spec.getFairShareWeight());
-    p.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : true);
+    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
     p.setDescription(spec.getDescription());
     p.setCreatedBy(operator);
     p.setUpdatedBy(operator);
@@ -711,13 +712,13 @@ public class DefaultConsoleTenantConfigInitApplicationService
     p.setTenantId(tenantId);
     p.setWindowCode(spec.getWindowCode());
     p.setWindowName(spec.getWindowName());
-    p.setTimezone(spec.getTimezone() != null ? spec.getTimezone() : "Asia/Shanghai");
+    p.setTimezone(Nullables.coalesce(spec.getTimezone(), "Asia/Shanghai"));
     p.setStartTime(spec.getStartTime());
     p.setEndTime(spec.getEndTime());
     p.setEndStrategy(spec.getEndStrategy());
     p.setOutOfWindowAction(spec.getOutOfWindowAction());
-    p.setAllowCrossDay(spec.getAllowCrossDay() != null ? spec.getAllowCrossDay() : false);
-    p.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : true);
+    p.setAllowCrossDay(Nullables.coalesce(spec.getAllowCrossDay(), false));
+    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
     p.setDescription(spec.getDescription());
     batchWindowMapper.upsertBatchWindow(p);
   }
@@ -746,11 +747,11 @@ public class DefaultConsoleTenantConfigInitApplicationService
     p.setTenantId(tenantId);
     p.setCalendarCode(spec.getCalendarCode());
     p.setCalendarName(spec.getCalendarName());
-    p.setTimezone(spec.getTimezone() != null ? spec.getTimezone() : "Asia/Shanghai");
+    p.setTimezone(Nullables.coalesce(spec.getTimezone(), "Asia/Shanghai"));
     p.setHolidayRollRule(spec.getHolidayRollRule());
     p.setCatchUpPolicy(spec.getCatchUpPolicy());
     p.setCatchUpMaxDays(spec.getCatchUpMaxDays());
-    p.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : true);
+    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
     p.setCreatedBy(operator);
     p.setUpdatedBy(operator);
     businessCalendarMapper.upsertBusinessCalendar(p);
@@ -800,7 +801,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
     p.setMaxPartitionsPerTenant(spec.getMaxPartitionsPerTenant());
     p.setMaxQpsPerTenant(spec.getMaxQpsPerTenant());
     p.setFairShareWeight(spec.getFairShareWeight());
-    p.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : true);
+    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
     p.setDescription(spec.getDescription());
     tenantQuotaPolicyMapper.upsertTenantQuotaPolicy(p);
   }
@@ -832,7 +833,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
     p.setGroupWaitSeconds(spec.getGroupWaitSeconds());
     p.setGroupIntervalSeconds(spec.getGroupIntervalSeconds());
     p.setRepeatIntervalSeconds(spec.getRepeatIntervalSeconds());
-    p.setEnabled(spec.getEnabled() != null ? spec.getEnabled() : true);
+    p.setEnabled(Nullables.coalesce(spec.getEnabled(), true));
     p.setDescription(spec.getDescription());
     p.setCreatedBy(operator);
     p.setUpdatedBy(operator);

@@ -17,6 +17,7 @@ import com.example.batch.console.application.ConsoleFileChannelExcelApplicationS
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.param.FileChannelConfigUpsertParam;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.support.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -237,39 +238,25 @@ public class DefaultConsoleFileChannelExcelApplicationService
       String traceId,
       String action) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            tenantId,
-            "configType",
-            "FILE_CHANNEL",
-            "configKey",
-            row.channelCode(),
-            "versionNo",
-            1,
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            changeSummaryJson(
-                reason,
-                mapOf(
-                    "channelName",
-                    row.channelName(),
-                    "channelType",
-                    row.channelType(),
-                    "authType",
-                    row.authType(),
-                    "receiptPolicy",
-                    row.receiptPolicy(),
-                    "timeoutSeconds",
-                    row.timeoutSeconds()))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
+            .forType("FILE_CHANNEL")
+            .withKey(row.channelCode())
+            .action(action)
+            .summary(
+                changeSummaryJson(
+                    reason,
+                    mapOf(
+                        "channelName",
+                        row.channelName(),
+                        "channelType",
+                        row.channelType(),
+                        "authType",
+                        row.authType(),
+                        "receiptPolicy",
+                        row.receiptPolicy(),
+                        "timeoutSeconds",
+                        row.timeoutSeconds())))
+            .build());
   }
 
   @Override

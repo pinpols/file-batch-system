@@ -15,6 +15,7 @@ import com.example.batch.console.application.ConsoleBatchWindowExcelApplicationS
 import com.example.batch.console.mapper.BatchWindowMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.param.BatchWindowUpsertParam;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.support.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -221,41 +222,27 @@ public class DefaultConsoleBatchWindowExcelApplicationService
       String traceId,
       String action) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            tenantId,
-            "configType",
-            "BATCH_WINDOW",
-            "configKey",
-            row.windowCode(),
-            "versionNo",
-            1,
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            changeSummaryJson(
-                reason,
-                mapOf(
-                    "windowName",
-                    row.windowName(),
-                    COL_TIMEZONE,
-                    row.timezone(),
-                    "startTime",
-                    row.startTime(),
-                    "endTime",
-                    row.endTime(),
-                    "endStrategy",
-                    row.endStrategy(),
-                    "outOfWindowAction",
-                    row.outOfWindowAction()))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
+            .forType("BATCH_WINDOW")
+            .withKey(row.windowCode())
+            .action(action)
+            .summary(
+                changeSummaryJson(
+                    reason,
+                    mapOf(
+                        "windowName",
+                        row.windowName(),
+                        COL_TIMEZONE,
+                        row.timezone(),
+                        "startTime",
+                        row.startTime(),
+                        "endTime",
+                        row.endTime(),
+                        "endStrategy",
+                        row.endStrategy(),
+                        "outOfWindowAction",
+                        row.outOfWindowAction())))
+            .build());
   }
 
   @Override

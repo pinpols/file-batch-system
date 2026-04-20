@@ -11,6 +11,7 @@ import com.example.batch.console.domain.entity.ConfigReleaseEntity;
 import com.example.batch.console.mapper.ConfigApprovalMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ConfigReleaseMapper;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.request.ConfigApprovalActionRequest;
 import com.example.batch.console.web.request.ConfigReleaseApprovalSubmitRequest;
@@ -242,28 +243,17 @@ public class DefaultConsoleConfigApprovalApplicationService
       String reason,
       Map<String, Object> detail) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            KEY_TENANT_ID,
-            tenantId,
-            "configType",
-            release.getConfigType(),
-            "configKey",
-            release.getConfigKey(),
-            "versionNo",
-            release.getVersionNo(),
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "API",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            null,
-            "changeSummaryJson",
-            JsonUtils.toJson(
-                mapOf("reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, null)
+            .forType(release.getConfigType())
+            .withKey(release.getConfigKey())
+            .versionNo(release.getVersionNo())
+            .action(action)
+            .operatorType("API")
+            .summary(
+                JsonUtils.toJson(
+                    mapOf(
+                        "reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
+            .build());
   }
 
   private Instant parseInstant(String text) {

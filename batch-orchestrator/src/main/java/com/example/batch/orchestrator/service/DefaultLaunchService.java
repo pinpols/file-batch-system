@@ -176,58 +176,54 @@ public class DefaultLaunchService implements LaunchService {
       Map<String, Object> effectiveParams,
       String traceId,
       Instant batchDaySlaDeadlineAt) {
-    JobInstanceEntity jobInstance = new JobInstanceEntity();
-    jobInstance.setTenantId(request.tenantId());
-    jobInstance.setJobDefinitionId(loaded.jobDefinition().id());
-    jobInstance.setTriggerRequestId(loaded.triggerRequest().getId());
-    jobInstance.setJobCode(request.jobCode());
-    jobInstance.setInstanceNo(IdGenerator.newBusinessNo("inst"));
-    jobInstance.setBizDate(request.bizDate());
-    jobInstance.setTriggerType(request.triggerType().code());
-    jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
-    jobInstance.setBatchNo(launchParamResolver.resolveBatchNo(request.bizDate(), effectiveParams));
-    jobInstance.setOperatorId(LaunchParamResolver.resolveOperatorId(effectiveParams));
-    jobInstance.setRerunFlag(
-        launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams));
-    jobInstance.setRetryFlag(launchParamResolver.resolveRetryFlag(effectiveParams));
-    jobInstance.setRerunReason(launchParamResolver.resolveRerunReason(effectiveParams));
-    jobInstance.setRelatedFileId(launchParamResolver.resolveRelatedFileId(effectiveParams));
     String dedupKey = loaded.triggerRequest().getDedupKey();
-    Integer runAttempt = nextRunAttempt(request.tenantId(), dedupKey);
     Long explicitParent = launchParamResolver.resolveParentInstanceId(effectiveParams);
     Long parentInstanceId =
         explicitParent != null
             ? explicitParent
             : (loaded.existingInstance() == null ? null : loaded.existingInstance().getId());
-    jobInstance.setParentInstanceId(parentInstanceId);
-    jobInstance.setQueueCode(loaded.jobDefinition().queueCode());
-    jobInstance.setWorkerGroup(loaded.jobDefinition().workerGroup());
-    jobInstance.setPriority(
-        loaded.jobDefinition().priority() == null ? 5 : loaded.jobDefinition().priority());
-    jobInstance.setDedupKey(dedupKey);
-    jobInstance.setRunAttempt(runAttempt);
-    jobInstance.setVersion(0L);
-    jobInstance.setExpectedPartitionCount(0);
-    jobInstance.setSuccessPartitionCount(0);
-    jobInstance.setFailedPartitionCount(0);
-    jobInstance.setTraceId(traceId);
-    jobInstance.setParamsSnapshot(
-        launchParamResolver.buildParamsSnapshot(
-            loaded.jobDefinition(), request, effectiveParams, traceId));
-    jobInstance.setResultSummary(null);
-    Instant createdAt = Instant.now();
-    jobInstance.setDeadlineAt(
-        launchParamResolver.resolveDeadlineAt(
-            createdAt,
-            request.bizDate(),
-            loaded.jobDefinition(),
-            effectiveParams,
-            batchDaySlaDeadlineAt));
-    jobInstance.setExpectedDurationSeconds(
-        launchParamResolver.resolveExpectedDurationSeconds(
-            loaded.jobDefinition(), effectiveParams));
-    jobInstance.setSlaAlertedAt(null);
-    return jobInstance;
+    Integer priority =
+        loaded.jobDefinition().priority() == null ? 5 : loaded.jobDefinition().priority();
+    return JobInstanceEntity.builder()
+        .tenantId(request.tenantId())
+        .jobDefinitionId(loaded.jobDefinition().id())
+        .triggerRequestId(loaded.triggerRequest().getId())
+        .jobCode(request.jobCode())
+        .instanceNo(IdGenerator.newBusinessNo("inst"))
+        .bizDate(request.bizDate())
+        .triggerType(request.triggerType().code())
+        .instanceStatus(JobInstanceStatus.CREATED.code())
+        .batchNo(launchParamResolver.resolveBatchNo(request.bizDate(), effectiveParams))
+        .operatorId(LaunchParamResolver.resolveOperatorId(effectiveParams))
+        .rerunFlag(launchParamResolver.resolveRerunFlag(request.triggerType(), effectiveParams))
+        .retryFlag(launchParamResolver.resolveRetryFlag(effectiveParams))
+        .rerunReason(launchParamResolver.resolveRerunReason(effectiveParams))
+        .relatedFileId(launchParamResolver.resolveRelatedFileId(effectiveParams))
+        .parentInstanceId(parentInstanceId)
+        .queueCode(loaded.jobDefinition().queueCode())
+        .workerGroup(loaded.jobDefinition().workerGroup())
+        .priority(priority)
+        .dedupKey(dedupKey)
+        .runAttempt(nextRunAttempt(request.tenantId(), dedupKey))
+        .version(0L)
+        .expectedPartitionCount(0)
+        .successPartitionCount(0)
+        .failedPartitionCount(0)
+        .traceId(traceId)
+        .paramsSnapshot(
+            launchParamResolver.buildParamsSnapshot(
+                loaded.jobDefinition(), request, effectiveParams, traceId))
+        .deadlineAt(
+            launchParamResolver.resolveDeadlineAt(
+                Instant.now(),
+                request.bizDate(),
+                loaded.jobDefinition(),
+                effectiveParams,
+                batchDaySlaDeadlineAt))
+        .expectedDurationSeconds(
+            launchParamResolver.resolveExpectedDurationSeconds(
+                loaded.jobDefinition(), effectiveParams))
+        .build();
   }
 
   private PreparedLaunch prepareWorkflowRunAndNodes(

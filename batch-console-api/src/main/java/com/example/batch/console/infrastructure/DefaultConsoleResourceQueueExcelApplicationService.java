@@ -15,6 +15,7 @@ import com.example.batch.console.application.ConsoleResourceQueueExcelApplicatio
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ResourceQueueMapper;
 import com.example.batch.console.mapper.param.ResourceQueueUpsertParam;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.support.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -226,39 +227,25 @@ public class DefaultConsoleResourceQueueExcelApplicationService
       String traceId,
       String action) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            tenantId,
-            "configType",
-            "RESOURCE_QUEUE",
-            "configKey",
-            row.queueCode(),
-            "versionNo",
-            1,
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            changeSummaryJson(
-                reason,
-                mapOf(
-                    "queueName",
-                    row.queueName(),
-                    "queueType",
-                    row.queueType(),
-                    "maxRunningJobs",
-                    row.maxRunningJobs(),
-                    "priorityPolicy",
-                    row.priorityPolicy(),
-                    "fairShareWeight",
-                    row.fairShareWeight()))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
+            .forType("RESOURCE_QUEUE")
+            .withKey(row.queueCode())
+            .action(action)
+            .summary(
+                changeSummaryJson(
+                    reason,
+                    mapOf(
+                        "queueName",
+                        row.queueName(),
+                        "queueType",
+                        row.queueType(),
+                        "maxRunningJobs",
+                        row.maxRunningJobs(),
+                        "priorityPolicy",
+                        row.priorityPolicy(),
+                        "fairShareWeight",
+                        row.fairShareWeight())))
+            .build());
   }
 
   @Override

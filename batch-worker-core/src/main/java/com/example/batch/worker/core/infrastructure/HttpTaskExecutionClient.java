@@ -126,11 +126,13 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
   }
 
   private void reportInternal(TaskExecutionReport report) {
-    int max = Math.max(1, properties.getReportMaxAttempts());
-    long backoff = Math.max(1L, properties.getReportInitialBackoffMillis());
-    long cap = Math.max(backoff, properties.getReportMaxBackoffMillis());
+    RetryState state =
+        RetryState.initial(
+            properties.getReportMaxAttempts(),
+            properties.getReportInitialBackoffMillis(),
+            properties.getReportMaxBackoffMillis());
     String traceFallback = currentTraceId();
-    for (int attempt = 1; attempt <= max; attempt++) {
+    while (state.canAttempt()) {
       String traceId = firstNonBlank(report.getTraceId(), traceFallback);
       if (!Texts.hasText(traceId)) {
         traceId = IdGenerator.newTraceId();
@@ -149,61 +151,55 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
       } catch (HttpClientErrorException ex) {
         if (ex.getStatusCode() == HttpStatus.CONFLICT) {
           // 409 STATE_CONFLICT：orchestrator 乐观锁失败，整个事务已回滚，task/partition 仍是 RUNNING，可以重试。
-          recordReportFailure("STATE_CONFLICT");
-          if (attempt >= max) {
-            logStructuredReportFailure("STATE_CONFLICT", attempt, max, ex);
-            throw ex;
-          }
-          log.warn("orchestrator report state conflict, will retry: attempt={}/{}", attempt, max);
-          sleepBackoff(backoff);
-          backoff = Math.min(cap, backoff * 2);
+          state = handleRetryableReportFailure("STATE_CONFLICT", "state conflict", state, ex);
           continue;
         }
         if (ex.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
-          recordReportFailure("RATE_LIMITED");
-          logStructuredReportFailure("RATE_LIMITED", attempt, max, ex);
-          throw ex;
+          failReportImmediately("RATE_LIMITED", state, ex);
         }
-        recordReportFailure("CLIENT_ERROR");
-        logStructuredReportFailure("CLIENT_ERROR", attempt, max, ex);
-        throw ex;
+        failReportImmediately("CLIENT_ERROR", state, ex);
       } catch (HttpServerErrorException ex) {
-        recordReportFailure("SERVER_ERROR");
-        if (attempt >= max) {
-          logStructuredReportFailure("SERVER_ERROR", attempt, max, ex);
-          throw ex;
-        }
-        log.warn(
-            "orchestrator report transient failure, will retry: attempt={}/{}, status={},"
-                + " message={}",
-            attempt,
-            max,
-            ex.getStatusCode(),
-            ex.getMessage());
-        sleepBackoff(backoff);
-        backoff = Math.min(cap, backoff * 2);
+        state = handleRetryableReportFailure("SERVER_ERROR", "transient failure", state, ex);
       } catch (ResourceAccessException ex) {
-        recordReportFailure("IO_TIMEOUT");
-        if (attempt >= max) {
-          logStructuredReportFailure("IO_TIMEOUT", attempt, max, ex);
-          throw ex;
-        }
-        log.warn(
-            "orchestrator report I/O failure, will retry: attempt={}/{}, message={}",
-            attempt,
-            max,
-            ex.getMessage());
-        sleepBackoff(backoff);
-        backoff = Math.min(cap, backoff * 2);
+        state = handleRetryableReportFailure("IO_TIMEOUT", "I/O failure", state, ex);
       }
     }
   }
 
+  /**
+   * 记录失败指标；若已达最大尝试次数直接抛；否则等待退避并返回下次 attempt 的 state。 {@code reasonCode}
+   * 进 metrics，{@code retryHint} 进 log。
+   */
+  private RetryState handleRetryableReportFailure(
+      String reasonCode, String retryHint, RetryState state, RuntimeException ex) {
+    recordReportFailure(reasonCode);
+    if (state.isLastAttempt()) {
+      logStructuredReportFailure(reasonCode, state.attempt(), state.max(), ex);
+      throw ex;
+    }
+    log.warn(
+        "orchestrator report {}, will retry: attempt={}/{}, error={}",
+        retryHint,
+        state.attempt(),
+        state.max(),
+        ex.getMessage());
+    sleepBackoff(state.backoff());
+    return state.advance();
+  }
+
+  private void failReportImmediately(String reasonCode, RetryState state, RuntimeException ex) {
+    recordReportFailure(reasonCode);
+    logStructuredReportFailure(reasonCode, state.attempt(), state.max(), ex);
+    throw ex;
+  }
+
   private boolean executeClaimLike(String operation, Runnable call) {
-    int max = Math.max(1, properties.getClaimMaxAttempts());
-    long backoff = Math.max(1L, properties.getClaimInitialBackoffMillis());
-    long cap = Math.max(backoff, properties.getClaimMaxBackoffMillis());
-    for (int attempt = 1; attempt <= max; attempt++) {
+    RetryState state =
+        RetryState.initial(
+            properties.getClaimMaxAttempts(),
+            properties.getClaimInitialBackoffMillis(),
+            properties.getClaimMaxBackoffMillis());
+    while (state.canAttempt()) {
       try {
         call.run();
         return true;
@@ -214,21 +210,45 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
         }
         throw ex;
       } catch (HttpServerErrorException | ResourceAccessException ex) {
-        if (attempt >= max) {
-          log.warn("{} failed after {} attempts: {}", operation, max, ex.getMessage());
+        if (state.isLastAttempt()) {
+          log.warn("{} failed after {} attempts: {}", operation, state.max(), ex.getMessage());
           throw ex instanceof RuntimeException r ? r : new IllegalStateException(ex);
         }
         log.warn(
             "{} transient failure, retrying: attempt={}/{}, message={}",
             operation,
-            attempt,
-            max,
+            state.attempt(),
+            state.max(),
             ex.getMessage());
-        sleepBackoff(backoff);
-        backoff = Math.min(cap, backoff * 2);
+        sleepBackoff(state.backoff());
+        state = state.advance();
       }
     }
     throw new IllegalStateException(operation + " exhausted retries without outcome");
+  }
+
+  /**
+   * 重试循环的不可变状态：attempt 从 1 起，backoff 每轮乘 2 但夹在 cap 内。 {@link #advance()} 返回下一轮的新 state。
+   */
+  record RetryState(int attempt, int max, long backoff, long cap) {
+    static RetryState initial(int configuredMax, long initialBackoff, long maxBackoff) {
+      int normalizedMax = Math.max(1, configuredMax);
+      long normalizedBackoff = Math.max(1L, initialBackoff);
+      long normalizedCap = Math.max(normalizedBackoff, maxBackoff);
+      return new RetryState(1, normalizedMax, normalizedBackoff, normalizedCap);
+    }
+
+    boolean canAttempt() {
+      return attempt <= max;
+    }
+
+    boolean isLastAttempt() {
+      return attempt >= max;
+    }
+
+    RetryState advance() {
+      return new RetryState(attempt + 1, max, Math.min(cap, backoff * 2), cap);
+    }
   }
 
   private void recordReportFailure(String reason) {
