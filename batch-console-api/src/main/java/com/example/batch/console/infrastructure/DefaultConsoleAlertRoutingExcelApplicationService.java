@@ -14,6 +14,7 @@ import com.example.batch.console.application.ConsoleAlertRoutingExcelApplication
 import com.example.batch.console.mapper.AlertRoutingConfigMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.param.AlertRoutingConfigUpsertParam;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.support.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -234,37 +235,23 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
       String traceId,
       String action) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            tenantId,
-            "configType",
-            "ALERT_ROUTING",
-            "configKey",
-            row.routeCode(),
-            "versionNo",
-            1,
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            changeSummaryJson(
-                reason,
-                mapOf(
-                    "routeName",
-                    row.routeName(),
-                    COL_TEAM,
-                    row.team(),
-                    COL_SEVERITY,
-                    row.severity(),
-                    COL_RECEIVER,
-                    row.receiver()))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
+            .forType("ALERT_ROUTING")
+            .withKey(row.routeCode())
+            .action(action)
+            .summary(
+                changeSummaryJson(
+                    reason,
+                    mapOf(
+                        "routeName",
+                        row.routeName(),
+                        COL_TEAM,
+                        row.team(),
+                        COL_SEVERITY,
+                        row.severity(),
+                        COL_RECEIVER,
+                        row.receiver())))
+            .build());
   }
 
   @Override

@@ -21,6 +21,7 @@ import com.example.batch.console.application.ConsolePipelineDefinitionExcelAppli
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.ConsoleExcelStyles;
@@ -985,35 +986,22 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       String traceId,
       String action) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            tenantId,
-            "configType",
-            "PIPELINE_DEFINITION",
-            "configKey",
-            row.jobCode() + KEY_SEP_COLON + row.version(),
-            "versionNo",
-            row.version(),
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            JsonUtils.toJson(
-                mapOf(
-                    "reason", ConsoleTextSanitizer.safeInput(reason, 512),
-                    "detail",
-                        mapOf(
-                            "pipelineName", row.pipelineName(),
-                            "pipelineType", row.pipelineType(),
-                            "bizType", row.bizType(),
-                            "workerGroup", row.workerGroup())))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
+            .forType("PIPELINE_DEFINITION")
+            .withKey(row.jobCode() + KEY_SEP_COLON + row.version())
+            .versionNo(row.version())
+            .action(action)
+            .summary(
+                JsonUtils.toJson(
+                    mapOf(
+                        "reason", ConsoleTextSanitizer.safeInput(reason, 512),
+                        "detail",
+                            mapOf(
+                                "pipelineName", row.pipelineName(),
+                                "pipelineType", row.pipelineType(),
+                                "bizType", row.bizType(),
+                                "workerGroup", row.workerGroup()))))
+            .build());
   }
 
   private Map<String, Object> mapOf(Object... pairs) {

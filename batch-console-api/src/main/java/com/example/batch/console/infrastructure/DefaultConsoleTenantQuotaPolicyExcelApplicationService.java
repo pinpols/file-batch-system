@@ -11,6 +11,7 @@ import com.example.batch.console.application.ConsoleTenantQuotaPolicyExcelApplic
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.TenantQuotaPolicyMapper;
 import com.example.batch.console.mapper.param.TenantQuotaPolicyUpsertParam;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.support.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -187,37 +188,23 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
       String traceId,
       String action) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            tenantId,
-            "configType",
-            "TENANT_QUOTA_POLICY",
-            "configKey",
-            row.policyCode(),
-            "versionNo",
-            1,
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            changeSummaryJson(
-                reason,
-                mapOf(
-                    "maxRunningJobsPerTenant",
-                    row.maxRunningJobsPerTenant(),
-                    "maxPartitionsPerTenant",
-                    row.maxPartitionsPerTenant(),
-                    "maxQpsPerTenant",
-                    row.maxQpsPerTenant(),
-                    "fairShareWeight",
-                    row.fairShareWeight()))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
+            .forType("TENANT_QUOTA_POLICY")
+            .withKey(row.policyCode())
+            .action(action)
+            .summary(
+                changeSummaryJson(
+                    reason,
+                    mapOf(
+                        "maxRunningJobsPerTenant",
+                        row.maxRunningJobsPerTenant(),
+                        "maxPartitionsPerTenant",
+                        row.maxPartitionsPerTenant(),
+                        "maxQpsPerTenant",
+                        row.maxQpsPerTenant(),
+                        "fairShareWeight",
+                        row.fairShareWeight())))
+            .build());
   }
 
   @Override

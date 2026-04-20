@@ -17,6 +17,7 @@ import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.ConfigReleaseMapper;
 import com.example.batch.console.mapper.SecretVersionMapper;
 import com.example.batch.console.repository.ConsoleDashboardQueryRepository;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;
@@ -319,30 +320,22 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
 
   private void logChange(ChangeLogCommand command) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            KEY_TENANT_ID,
-            command.context().tenantId(),
-            KEY_CONFIG_TYPE,
-            command.target().configType(),
-            "configKey",
-            command.target().configKey(),
-            "versionNo",
-            command.target().versionNo(),
-            "changeAction",
-            command.change().action(),
-            "changeResult",
-            command.change().result(),
-            "operatorType",
-            "API",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(command.context().operatorId(), 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(command.context().traceId(), 128),
-            "changeSummaryJson",
-            JsonUtils.toJson(
-                detailOf(
-                    ConsoleTextSanitizer.safeInput(command.context().reason(), 512),
-                    command.change().detail()))));
+        ConfigChangeLogBuilder.create(
+                command.context().tenantId(),
+                command.context().operatorId(),
+                command.context().traceId())
+            .forType(command.target().configType())
+            .withKey(command.target().configKey())
+            .versionNo(command.target().versionNo())
+            .action(command.change().action())
+            .result(command.change().result())
+            .operatorType("API")
+            .summary(
+                JsonUtils.toJson(
+                    detailOf(
+                        ConsoleTextSanitizer.safeInput(command.context().reason(), 512),
+                        command.change().detail())))
+            .build());
   }
 
   private String resolveTenant(String requestTenantId) {

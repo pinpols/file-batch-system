@@ -34,6 +34,7 @@ import com.example.batch.console.mapper.WorkflowNodeMapper;
 import com.example.batch.console.mapper.param.WorkflowDefinitionUpsertParam;
 import com.example.batch.console.mapper.param.WorkflowEdgeUpsertParam;
 import com.example.batch.console.mapper.param.WorkflowNodeUpsertParam;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.ConsoleExcelStyles;
@@ -1125,17 +1126,12 @@ public class DefaultConsoleWorkflowExcelApplicationService
 
   private void logDefinitionChange(DefinitionChangeContext ctx) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId", ctx.row().tenantId(),
-            "configType", "WORKFLOW_DEFINITION",
-            "configKey", ctx.row().workflowCode() + "#" + ctx.row().version(),
-            "versionNo", ctx.row().version(),
-            "changeAction", ctx.action(),
-            "changeResult", EDGE_SUCCESS,
-            "operatorType", "USER",
-            "operatorId", ConsoleTextSanitizer.safeInput(ctx.operatorId(), 64),
-            "traceId", ConsoleTextSanitizer.safeInput(ctx.traceId(), 128),
-            "changeSummaryJson",
+        ConfigChangeLogBuilder.create(ctx.row().tenantId(), ctx.operatorId(), ctx.traceId())
+            .forType("WORKFLOW_DEFINITION")
+            .withKey(ctx.row().workflowCode() + "#" + ctx.row().version())
+            .versionNo(ctx.row().version())
+            .action(ctx.action())
+            .summary(
                 JsonUtils.toJson(
                     mapOf(
                         "reason", ConsoleTextSanitizer.safeInput(ctx.reason(), 512),
@@ -1150,7 +1146,8 @@ public class DefaultConsoleWorkflowExcelApplicationService
                                 "nodeCount",
                                 ctx.nodeCount(),
                                 "edgeCount",
-                                ctx.edgeCount())))));
+                                ctx.edgeCount()))))
+            .build());
   }
 
   private Map<String, Object> mapOf(Object... pairs) {

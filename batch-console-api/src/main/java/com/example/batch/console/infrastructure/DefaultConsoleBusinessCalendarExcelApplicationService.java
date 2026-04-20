@@ -24,6 +24,7 @@ import com.example.batch.console.mapper.CalendarHolidayMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.param.BusinessCalendarUpsertParam;
 import com.example.batch.console.support.BusinessCalendarExcelImportStore;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.ConsoleExcelStyles;
@@ -51,6 +52,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
@@ -687,40 +690,24 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       List<Map<String, Object>> calendars, List<Map<String, Object>> holidays) {
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      // Sheet 1: business_calendar
-      Sheet calendarSheet = workbook.createSheet(CALENDAR_SHEET_NAME);
-      calendarSheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(calendarSheet, CALENDAR_COLUMNS, CALENDAR_COLUMN_GUIDES, workbook);
-      int rowIndex = 1;
-      for (Map<String, Object> row : calendars) {
-        Row dataRow = calendarSheet.createRow(rowIndex++);
-        for (int i = 0; i < CALENDAR_COLUMNS.size(); i++) {
-          String header = CALENDAR_COLUMNS.get(i);
-          Cell cell = dataRow.createCell(i);
-          Object value = mapCalendarExportValue(header, row);
-          cell.setCellValue(value == null ? "" : String.valueOf(value));
-        }
-      }
-      applyCalendarValidations(calendarSheet);
-      setWidths(calendarSheet, CALENDAR_COLUMNS);
-
-      // Sheet 2: calendar_holiday
-      Sheet holidaySheet = workbook.createSheet(HOLIDAY_SHEET_NAME);
-      holidaySheet.createFreezePane(0, 1, 0, 1);
-      writeTemplateHeaders(holidaySheet, HOLIDAY_COLUMNS, HOLIDAY_COLUMN_GUIDES, workbook);
-      int holidayRowIndex = 1;
-      for (Map<String, Object> row : holidays) {
-        Row dataRow = holidaySheet.createRow(holidayRowIndex++);
-        for (int i = 0; i < HOLIDAY_COLUMNS.size(); i++) {
-          String header = HOLIDAY_COLUMNS.get(i);
-          Cell cell = dataRow.createCell(i);
-          Object value = mapHolidayExportValue(header, row);
-          cell.setCellValue(value == null ? "" : String.valueOf(value));
-        }
-      }
-      applyHolidayValidations(holidaySheet);
-      setWidths(holidaySheet, HOLIDAY_COLUMNS);
-
+      writeDataSheet(
+          workbook,
+          new SheetSpec(
+              CALENDAR_SHEET_NAME,
+              CALENDAR_COLUMNS,
+              CALENDAR_COLUMN_GUIDES,
+              this::mapCalendarExportValue,
+              this::applyCalendarValidations),
+          calendars);
+      writeDataSheet(
+          workbook,
+          new SheetSpec(
+              HOLIDAY_SHEET_NAME,
+              HOLIDAY_COLUMNS,
+              HOLIDAY_COLUMN_GUIDES,
+              this::mapHolidayExportValue,
+              this::applyHolidayValidations),
+          holidays);
       createReadmeSheet(workbook);
       createDictSheet(workbook);
       createValidationSheet(workbook);
@@ -730,6 +717,33 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
     }
   }
+
+  /** 按 spec 写入一个 data sheet：创建 sheet + 冻结首行 + 表头 + 数据行 + 校验 + 列宽。 */
+  private void writeDataSheet(
+      Workbook workbook, SheetSpec spec, List<Map<String, Object>> rows) {
+    Sheet sheet = workbook.createSheet(spec.name());
+    sheet.createFreezePane(0, 1, 0, 1);
+    writeTemplateHeaders(sheet, spec.columns(), spec.guides(), workbook);
+    int rowIndex = 1;
+    for (Map<String, Object> row : rows) {
+      Row dataRow = sheet.createRow(rowIndex++);
+      for (int i = 0; i < spec.columns().size(); i++) {
+        String header = spec.columns().get(i);
+        Cell cell = dataRow.createCell(i);
+        Object value = spec.valueMapper().apply(header, row);
+        cell.setCellValue(value == null ? "" : String.valueOf(value));
+      }
+    }
+    spec.validator().accept(sheet);
+    setWidths(sheet, spec.columns());
+  }
+
+  private record SheetSpec(
+      String name,
+      List<String> columns,
+      Map<String, ConsoleExcelStyles.ColumnGuide> guides,
+      BiFunction<String, Map<String, Object>, Object> valueMapper,
+      Consumer<Sheet> validator) {}
 
   private Object mapCalendarExportValue(String header, Map<String, Object> row) {
     return switch (header) {
@@ -905,30 +919,16 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       String traceId,
       String action) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            tenantId,
-            "configType",
-            "BUSINESS_CALENDAR",
-            "configKey",
-            calendarCode,
-            "versionNo",
-            1,
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            JsonUtils.toJson(
-                mapOf(
-                    "reason", ConsoleTextSanitizer.safeInput(reason, 512),
-                    "detail", mapOf("calendarCode", calendarCode)))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
+            .forType("BUSINESS_CALENDAR")
+            .withKey(calendarCode)
+            .action(action)
+            .summary(
+                JsonUtils.toJson(
+                    mapOf(
+                        "reason", ConsoleTextSanitizer.safeInput(reason, 512),
+                        "detail", mapOf("calendarCode", calendarCode))))
+            .build());
   }
 
 

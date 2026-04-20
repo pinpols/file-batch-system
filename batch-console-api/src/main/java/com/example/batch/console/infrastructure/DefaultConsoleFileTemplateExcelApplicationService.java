@@ -19,6 +19,7 @@ import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileTemplateConfigMapper;
 import com.example.batch.console.mapper.param.FileTemplateConfigUpsertParam;
 import com.example.batch.console.mapper.query.FileTemplateConfigQuery;
+import com.example.batch.console.support.ConfigChangeLogBuilder;
 import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.support.ConsoleExcelStyles.ColumnGuide;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -408,35 +409,22 @@ public class DefaultConsoleFileTemplateExcelApplicationService
       String traceId,
       String action) {
     configChangeLogMapper.insertConfigChangeLog(
-        mapOf(
-            "tenantId",
-            tenantId,
-            "configType",
-            "FILE_TEMPLATE",
-            "configKey",
-            row.templateCode(),
-            "versionNo",
-            row.version(),
-            "changeAction",
-            action,
-            "changeResult",
-            "SUCCESS",
-            "operatorType",
-            "USER",
-            "operatorId",
-            ConsoleTextSanitizer.safeInput(operatorId, 64),
-            "traceId",
-            ConsoleTextSanitizer.safeInput(traceId, 128),
-            "changeSummaryJson",
-            changeSummaryJson(
-                reason,
-                mapOf(
-                    "templateName",
-                    row.templateName(),
-                    COL_ENABLED,
-                    row.enabled(),
-                    "fileFormatType",
-                    row.fileFormatType()))));
+        ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
+            .forType("FILE_TEMPLATE")
+            .withKey(row.templateCode())
+            .versionNo(row.version())
+            .action(action)
+            .summary(
+                changeSummaryJson(
+                    reason,
+                    mapOf(
+                        "templateName",
+                        row.templateName(),
+                        COL_ENABLED,
+                        row.enabled(),
+                        "fileFormatType",
+                        row.fileFormatType())))
+            .build());
   }
 
   @Override
