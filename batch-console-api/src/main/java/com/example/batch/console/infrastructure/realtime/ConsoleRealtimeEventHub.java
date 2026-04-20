@@ -165,19 +165,18 @@ public class ConsoleRealtimeEventHub {
 
   private void sendLifecycleEvent(
       Subscription subscription, String eventName, ConsoleSseEventResponse payload) {
+    // 便宜检查：对已关闭订阅跳过，省掉进入 Spring ResponseBodyEmitter 内部 writeLock
+    // + 捕构 IllegalStateException 的开销。失败也只是少写一次 log。
     if (!subscription.active.get()) {
       return;
     }
+    // 这里不再 synchronized(subscription.emitter)：
+    //   1) Spring ResponseBodyEmitter 内部已有 ReentrantLock writeLock 串行化 send
+    //   2) 我们的 monitor 锁不影响 close() 路径的 emitter.complete()——两把锁互相看不见
+    //   3) 正常 race（active 检查过了但随即被 close）Spring 会抛 IllegalStateException，
+    //      下面 catch 已调 close(subscription) 善后
     try {
-      synchronized (subscription.emitter) {
-        // P2：active 再校验一次——与 close() 的 CAS 之间有窗口期，外层 get 过关
-        // 之后另一线程可能 close。双重检查 + synchronized 保证 send 仅在 emitter
-        // 仍 active 时执行，避免 IllegalStateException 噪音
-        if (!subscription.active.get()) {
-          return;
-        }
-        subscription.emitter.send(SseEmitter.event().name(eventName).data(payload));
-      }
+      subscription.emitter.send(SseEmitter.event().name(eventName).data(payload));
     } catch (IOException | IllegalStateException exception) {
       if (log.isDebugEnabled()) {
         log.debug(
