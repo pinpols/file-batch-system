@@ -61,6 +61,18 @@ public class ConsoleCacheInvalidationAspect {
     String tenantId = evaluateSpel(annotation.tenantSpel(), method, args);
     String code = evaluateSpel(annotation.codeSpel(), method, args);
 
+    // P2：SpEL 解析失败返回 null 时不能继续——之前 configKey(null,...) 会把
+    // key 退化为 "config:_:*:*" 模式，evictByPattern 会扫掉**所有租户**的缓存。
+    // 这里显式拒绝：tenantId 必须非空；缺 code 的 target（ALL_* / META_OPTIONS）另判。
+    if (tenantId == null || tenantId.isBlank()) {
+      log.warn(
+          "cache invalidation skipped: tenantSpel='{}' resolved to null/blank on method {}"
+              + " — fix the annotation or ensure the argument is non-null",
+          annotation.tenantSpel(),
+          method.getName());
+      return;
+    }
+
     switch (annotation.target()) {
       case JOB_DEFINITION -> invalidationService.evictJobDefinition(tenantId, code);
       case ALL_JOB_DEFINITIONS_BY_TENANT ->
