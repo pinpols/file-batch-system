@@ -17,6 +17,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExcelExportFormat extends AbstractExportFormat {
 
+  // P-2：防御插件返回循环 cursor 导致无限分页；1M 行 / 约数 GB 已足够任何合理业务
+  private static final int MAX_PAGES = 100_000;
+
   public ExcelExportFormat(ObjectMapper objectMapper) {
     super(objectMapper);
   }
@@ -36,17 +39,18 @@ public class ExcelExportFormat extends AbstractExportFormat {
     DelimitedFormatConfig formatConfig =
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
 
-    try (SXSSFWorkbook workbook = new SXSSFWorkbook(100);
-        OutputStream outputStream =
-            Files.newOutputStream(
-                ctx.generatedFile(),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE)) {
+    SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+    try (OutputStream outputStream =
+        Files.newOutputStream(
+            ctx.generatedFile(),
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE)) {
       Sheet sheet = workbook.createSheet(resolveSheetName(ctx.dataCtx().templateConfig()));
       int rowNo = 0;
       rowNo = writeExcelHeaderRows(sheet, columns, rowNo, formatConfig.headerRows());
       long recordCount = 0L;
+      int pageNo = 0;
       while (true) {
         List<Map<String, Object>> details = page.rows();
         if (details.isEmpty()) {
@@ -65,10 +69,22 @@ public class ExcelExportFormat extends AbstractExportFormat {
         if (cursor == null) {
           break;
         }
+        // P-2：插件返回循环 cursor 是严重 bug；到此值即 fail-fast
+        if (++pageNo >= MAX_PAGES) {
+          throw new IllegalStateException(
+              "excel export page iteration exceeded MAX_PAGES="
+                  + MAX_PAGES
+                  + "; data plugin likely returning stale cursor");
+        }
         page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
       }
       workbook.write(outputStream);
       return recordCount;
+    } finally {
+      // L-2：SXSSFWorkbook.close() 并不等价于 dispose()；必须显式调 dispose 以
+      // 清理 /tmp 下的 sheet-backing temp files，否则大导出后 /tmp 会堆积 GB 级文件
+      workbook.dispose();
+      workbook.close();
     }
   }
 

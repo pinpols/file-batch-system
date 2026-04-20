@@ -11,6 +11,12 @@ import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
@@ -210,18 +216,56 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       return new DispatchResult(
           false, ctx.externalRequestId(), ctx.receiptCode(), false, false, ex.getMessage(), null);
     } finally {
-      if (sftp != null) {
-        try {
-          sftp.disconnect();
-        } catch (Exception ignored) {
-        }
-      }
-      if (session != null) {
-        try {
-          session.disconnect();
-        } catch (Exception ignored) {
-        }
-      }
+      // D-1：JSch disconnect 在网络抖动 / 半关闭连接上可能挂住 30+s（TCP 关半开），
+      // 之前的 try/catch(ignored) 虽然吞了异常但不管挂住——dispatch worker 线程被卡住，
+      // 线程池堆积僵尸。改异步 disconnect + 5s 硬超时；超时则让后台线程自然结束，
+      // 主路径立即返回不阻塞下一个 dispatch。
+      disconnectWithTimeout(sftp, "sftp-channel", ctx.connConfig().host());
+      disconnectWithTimeout(session, "sftp-session", ctx.connConfig().host());
+    }
+  }
+
+  // D-1：用 daemon 单线程池承载异步 disconnect；daemon=true 保证 JVM 退出不被卡住
+  private static final ScheduledExecutorService DISCONNECT_EXECUTOR =
+      Executors.newScheduledThreadPool(
+          2,
+          new ThreadFactory() {
+            private int n = 0;
+            @Override
+            public Thread newThread(Runnable r) {
+              Thread t = new Thread(r, "sftp-disconnect-" + (++n));
+              t.setDaemon(true);
+              return t;
+            }
+          });
+
+  private static void disconnectWithTimeout(ChannelSftp channel, String kind, String host) {
+    if (channel == null) {
+      return;
+    }
+    Future<?> future = DISCONNECT_EXECUTOR.submit(channel::disconnect);
+    awaitOrCancel(future, kind, host);
+  }
+
+  private static void disconnectWithTimeout(Session session, String kind, String host) {
+    if (session == null) {
+      return;
+    }
+    Future<?> future = DISCONNECT_EXECUTOR.submit(session::disconnect);
+    awaitOrCancel(future, kind, host);
+  }
+
+  private static void awaitOrCancel(Future<?> future, String kind, String host) {
+    try {
+      future.get(5, TimeUnit.SECONDS);
+    } catch (TimeoutException timeout) {
+      log.warn("{} disconnect timed out for host {} — leaving background thread to finish", kind, host);
+      future.cancel(true);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      future.cancel(true);
+    } catch (Exception ignored) {
+      // 其他 disconnect 异常吞掉（原语义）
     }
   }
 

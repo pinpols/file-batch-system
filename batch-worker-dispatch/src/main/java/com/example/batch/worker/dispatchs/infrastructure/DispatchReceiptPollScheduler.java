@@ -38,6 +38,9 @@ import com.example.batch.common.utils.Texts;
 @RequiredArgsConstructor
 public class DispatchReceiptPollScheduler {
 
+  // L-4：receipt 响应体上限（1MB）。正常 ACK payload 在 KB 级；超过说明上游异常。
+  private static final int MAX_RECEIPT_BODY_BYTES = 1_048_576;
+
   private final DispatchReceiptPollProperties properties;
   private final FileDispatchRepository fileDispatchRepository;
   private final ObjectMapper objectMapper;
@@ -111,8 +114,19 @@ public class DispatchReceiptPollScheduler {
       if (!response.isSuccessful() || response.body() == null) {
         return;
       }
-      String body = response.body().string();
-      JsonNode root = objectMapper.readTree(body);
+      // L-4：之前 response.body().string() 把整个响应一次性读进堆内存，异常响应体（如
+      // 上游误返回大量调试信息）可能打爆 JVM。改流式读取 + maxReceiptBodyBytes 硬上限
+      JsonNode root;
+      try (java.io.InputStream bodyStream = response.body().byteStream()) {
+        byte[] limited = bodyStream.readNBytes(MAX_RECEIPT_BODY_BYTES);
+        if (limited.length == MAX_RECEIPT_BODY_BYTES && bodyStream.read() != -1) {
+          log.warn(
+              "receipt poll response body exceeds {} bytes — truncating: externalRequestId={}",
+              MAX_RECEIPT_BODY_BYTES,
+              externalRequestId);
+        }
+        root = objectMapper.readTree(limited);
+      }
       boolean ack =
           root.path("acknowledged").asBoolean(false)
               || "ACKED".equalsIgnoreCase(root.path("status").asText())

@@ -80,7 +80,10 @@ public class ConsoleAuthApplicationService {
         && authentication.getPrincipal() instanceof ConsolePrincipal principal) {
       return principal.tenantId();
     }
-    String resolved = requestMetadataResolver.current().tenantId();
+    // N-3：requestMetadataResolver.current() 在非 Servlet 上下文（@Async / 后台任务）可能
+    // 返回全 null 字段的 mock metadata；对 null 的链式调用会 NPE。这里整段防御。
+    var metadata = requestMetadataResolver.current();
+    String resolved = metadata == null ? null : metadata.tenantId();
     return resolved == null || resolved.isBlank()
         ? securityProperties.getDefaultTenantId()
         : resolved;

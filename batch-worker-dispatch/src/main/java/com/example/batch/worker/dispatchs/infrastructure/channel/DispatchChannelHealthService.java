@@ -70,6 +70,11 @@ public class DispatchChannelHealthService {
     }
     String tenantId = stringValue(channelConfig.get("tenant_id"));
     String channelCode = stringValue(channelConfig.get("channel_code"));
+    // T-3：没有 tenantId/channelCode 无法查健康快照；此时放行（健康门控不适用），
+    // 避免 repository.findHealth(null, null) 走 SQL 返回脏数据或 DAO 层 NPE
+    if (!Texts.hasText(tenantId) || !Texts.hasText(channelCode)) {
+      return true;
+    }
     DispatchChannelHealthSnapshot snapshot = repository.findHealth(tenantId, channelCode);
     if (snapshot == null) {
       return true;

@@ -50,6 +50,7 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
             StandardOpenOption.WRITE)) {
       writeFixedWidthHeaderRows(writer, columns, recordLength, headerRows);
       long recordCount = 0L;
+      int pageNo = 0;
       while (true) {
         List<Map<String, Object>> details = page.rows();
         if (details.isEmpty()) {
@@ -74,6 +75,11 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
         cursor = page.nextCursor();
         if (cursor == null) {
           break;
+        }
+        if (++pageNo >= 100_000) {
+          throw new IllegalStateException(
+              "fixed-width export page iteration exceeded 100000; data plugin likely returning"
+                  + " stale cursor");
         }
         page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
       }
