@@ -164,6 +164,28 @@ public enum XxxType implements DictEnum {
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
 
 ### 2026-04-20
+- **脏数据入口治理**：新增 `CodeNormalizer` 工具（batch-common/utils），定义两类归一规则：
+  - **分组码**（`worker_group` / `tenant_id`）→ UPPER + `^[A-Z][A-Z0-9_]*$` 校验
+  - **配置码**（`window_code` / `calendar_code` / `queue_code`）→ LOWER + `-` 替换为 `_` + `^[a-z0-9][a-z0-9_]*$` 校验
+  入口侧在 7 个写路径统一调用 `toUpperOrNull` / `toConfigFormOrNull`（宽松版，供 Excel 预览使用）：
+  `DefaultConsoleJobDefinitionExcelApplicationService` / `DefaultConsoleWorkflowExcelApplicationService` /
+  `DefaultConsoleTenantConfigPackageExcelApplicationService` / `DefaultConsoleJobDefinitionApplicationService` /
+  `DefaultConsoleTenantConfigInitApplicationService` / `AbstractWorkerLoop.ensureStarted`（worker 注册源头）/
+  `DefaultWorkerSelector.select`（读路径兜底）。
+  V64 migration (`V64__normalize_code_conventions.sql`) 一次性归一 5 张表（worker_registry / job_definition /
+  job_instance / job_partition / resource_queue / workflow_node / batch_window / business_calendar）的历史存量。
+  修的 bug：`IMPORT` vs `import`、`always_open` vs `always-open` 并存导致 ResourceScheduler worker 匹配等值
+  比较失配，WAITING 分片永久卡住。
+- **`job_instance` / `job_partition` quota check 去除 WAITING 分母**：`countActiveByTenant` / `countActiveAll` /
+  `countActiveByFairShareGroup` / `countActiveByTenantAndQueueCode` / `job_partition.countActive*`
+  6 个 SQL 把 WAITING 也算作 "active"，而 WAITING 正是被 quota 裁决的候选集——分母含分子 → 死锁
+  （WAITING 超过配额就永久卡）。改为仅统计 READY/RUNNING（job_partition 多一个 RETRYING）。
+  非 quota 路径（SLA 扫描、UI 活跃计数快照）保留原语义。
+- **Worker 心跳超时降级**：新增 `WorkerHeartbeatTimeoutScheduler`（batch-orchestrator），
+  30s 周期 + ShedLock(PT2M)；超时阈值 `batch.worker.drain.heartbeat-timeout-seconds` 默认 90s。
+  把 `status IN ('ONLINE','DRAINING') AND heartbeat_at < cutoff` 的 worker 批量降为 OFFLINE；
+  不动 DECOMMISSIONED。修的 bug：系统之前没有心跳超时清理，worker 进程 crash 后 DB 里 status 仍为
+  ONLINE，WorkerSelector 选中它 release partition → partition 永远不会被 claim。
 - **触发器控制面收敛：`job_definition.enabled` 作为权威，Quartz 异步对账**（修 "job 被 toggle=false 但 Quartz 还 fire → orchestrator 404 刷日志" 的长期 bug）：
   - 新增 `TriggerReconciler`（batch-trigger/infrastructure/scheduler）：`@Scheduled(fixedDelay=30s)` + `ShedLock PT5M` + `@EventListener(ApplicationReadyEvent)` 首轮立扫；比较 `job_definition` 权威集合与 Quartz `GroupMatcher.jobGroupEquals(JOB_GROUP)` 列表，DB-有-Quartz-无→`registerByJobCode`，DB-无-Quartz-有→`unregisterByJobCode`；`TriggerGracefulShutdown.isDraining()` 时跳过。
   - 删除 `TriggerRegistrationStartup`（`ApplicationRunner` 启动注册）+ 配套 IT `TriggerRegistrationStartupIntegrationTest`，由 reconciler 的启动期首轮覆盖同等语义。

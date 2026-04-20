@@ -48,6 +48,7 @@ import com.example.batch.console.web.response.TenantConfigBatchInitResponse.Tena
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Nullables;
 import java.util.Map;
 import java.util.Optional;
@@ -326,10 +327,10 @@ public class DefaultConsoleTenantConfigInitApplicationService
     entity.setScheduleExpr(spec.getScheduleExpr());
     entity.setTimezone(Nullables.coalesce(spec.getTimezone(), "Asia/Shanghai"));
     entity.setTriggerMode(Nullables.coalesce(spec.getTriggerMode(), "SCHEDULED"));
-    entity.setWorkerGroup(spec.getWorkerGroup());
-    entity.setQueueCode(spec.getQueueCode());
-    entity.setCalendarCode(spec.getCalendarCode());
-    entity.setWindowCode(spec.getWindowCode());
+    entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()));
+    entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()));
+    entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()));
+    entity.setWindowCode(CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()));
     entity.setDagEnabled(spec.getDagEnabled() != null && spec.getDagEnabled());
     entity.setShardStrategy(Nullables.coalesce(spec.getShardStrategy(), "NONE"));
     entity.setRetryPolicy(Nullables.coalesce(spec.getRetryPolicy(), "NONE"));
@@ -352,15 +353,21 @@ public class DefaultConsoleTenantConfigInitApplicationService
     param.setTenantId(existing.getTenantId());
     param.setJobCode(existing.getJobCode());
     param.setJobName(Nullables.coalesce(spec.getJobName(), existing.getJobName()));
-    param.setQueueCode(Nullables.coalesce(spec.getQueueCode(), existing.getQueueCode()));
+    param.setQueueCode(
+        Nullables.coalesce(
+            CodeNormalizer.toConfigFormOrNull(spec.getQueueCode()), existing.getQueueCode()));
     param.setWorkerGroup(
-        Nullables.coalesce(spec.getWorkerGroup(), existing.getWorkerGroup()));
+        Nullables.coalesce(
+            CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()), existing.getWorkerGroup()));
     param.setScheduleExpr(
         Nullables.coalesce(spec.getScheduleExpr(), existing.getScheduleExpr()));
     param.setCalendarCode(
-        Nullables.coalesce(spec.getCalendarCode(), existing.getCalendarCode()));
+        Nullables.coalesce(
+            CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()),
+            existing.getCalendarCode()));
     param.setWindowCode(
-        Nullables.coalesce(spec.getWindowCode(), existing.getWindowCode()));
+        Nullables.coalesce(
+            CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()), existing.getWindowCode()));
     param.setRetryPolicy(
         Nullables.coalesce(spec.getRetryPolicy(), existing.getRetryPolicy()));
     param.setRetryMaxCount(

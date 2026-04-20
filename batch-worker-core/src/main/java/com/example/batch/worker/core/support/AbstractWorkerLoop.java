@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Texts;
 
 /**
@@ -114,7 +115,8 @@ public abstract class AbstractWorkerLoop {
       workerRegistration.setWorkerId(buildWorkerId(cfg));
       workerRegistration.setTenantId(cfg.tenantId());
       workerRegistration.setWorkerType(cfg.workerType());
-      workerRegistration.setWorkerGroup(workerGroup());
+      // 源头归一 workerGroup 为大写，避免 IMPORT / import 同语义字符串被 ResourceScheduler 等值比较误失配
+      workerRegistration.setWorkerGroup(CodeNormalizer.toUpperOrNull(workerGroup()));
       workerRegistration.setHost(resolveHostName());
       workerRegistration.setPort(workerPort());
       workerRegistration.setActive(Boolean.TRUE);

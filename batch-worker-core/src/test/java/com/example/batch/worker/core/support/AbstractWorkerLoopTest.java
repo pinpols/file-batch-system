@@ -71,7 +71,8 @@ class AbstractWorkerLoopTest {
     WorkerRegistration sent = captor.getValue();
     assertThat(sent.getTenantId()).isEqualTo("t1");
     assertThat(sent.getWorkerType()).isEqualTo("TEST");
-    assertThat(sent.getWorkerGroup()).isEqualTo("test");
+    // AbstractWorkerLoop.ensureStarted 源头归一 workerGroup 为大写（防大小写脏数据）
+    assertThat(sent.getWorkerGroup()).isEqualTo("TEST");
     assertThat(sent.getPort()).isEqualTo(9999);
     assertThat(sent.getActive()).isTrue();
     assertThat(sent.getRegisteredAt()).isNotNull();
