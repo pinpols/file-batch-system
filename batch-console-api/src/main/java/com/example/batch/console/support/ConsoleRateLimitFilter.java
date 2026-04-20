@@ -24,7 +24,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <ol>
  *   <li><b>登录接口</b>（POST {@code /api/console/auth/login}）：基于客户端 IP 限流， 防止账户暴力破解（默认 10 次/分钟/IP）。
- *   <li><b>敏感变更接口</b>（POST {@code /api/console/triggers/**}）：基于已认证用户名限流， 防止单用户耗尽资源（默认 30 次/分钟/用户）。
+ *   <li><b>敏感变更接口</b>（POST {@code /api/console/ops/triggers/**}）：基于已认证用户名限流， 防止单用户耗尽资源（默认 30 次/分钟/用户）。
  * </ol>
  *
  * <p>超限时返回 HTTP 429，响应体为标准 {@code CommonResponse} 格式。
@@ -34,7 +34,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class ConsoleRateLimitFilter extends OncePerRequestFilter {
 
   private static final String LOGIN_PATH = "/api/console/auth/login";
-  private static final String TRIGGER_PATH_PREFIX = "/api/console/triggers/";
+  private static final String TRIGGER_PATH_PREFIX = "/api/console/ops/triggers/";
 
   private final SlidingWindowRateLimiter rateLimiter;
   private final ConsoleRateLimitProperties properties;
