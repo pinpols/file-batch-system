@@ -202,16 +202,25 @@ public class ImportIngressScanner {
     if (scannerProperties.getStabilityWindowSeconds() <= 0) {
       return true;
     }
-    ObservedObjectState existing = observedObjects.get(snapshot.objectName());
     Instant now = Instant.now();
-    if (existing == null
-        || existing.size() != snapshot.size()
-        || !Objects.equals(existing.etag(), snapshot.etag())) {
-      observedObjects.put(
-          snapshot.objectName(), new ObservedObjectState(snapshot.size(), snapshot.etag(), now));
+    // P2：用 ConcurrentHashMap.compute 原子化 check-and-update，即便 ShedLock
+    // 异常过期时也不会有 get+put 之间的 TOCTOU；返回更新后的 state，稳定性判断在外部做
+    ObservedObjectState state =
+        observedObjects.compute(
+            snapshot.objectName(),
+            (k, existing) -> {
+              if (existing == null
+                  || existing.size() != snapshot.size()
+                  || !Objects.equals(existing.etag(), snapshot.etag())) {
+                return new ObservedObjectState(snapshot.size(), snapshot.etag(), now);
+              }
+              return existing;
+            });
+    // 刚被替换（或首次观察）→ 还未稳定；否则看 firstObservedAt + stabilityWindow 是否已过
+    if (state.firstObservedAt().equals(now)) {
       return false;
     }
-    return existing
+    return state
         .firstObservedAt()
         .plusSeconds(scannerProperties.getStabilityWindowSeconds())
         .isBefore(now);

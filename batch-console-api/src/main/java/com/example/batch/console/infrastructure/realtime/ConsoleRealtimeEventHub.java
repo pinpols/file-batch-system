@@ -170,6 +170,12 @@ public class ConsoleRealtimeEventHub {
     }
     try {
       synchronized (subscription.emitter) {
+        // P2：active 再校验一次——与 close() 的 CAS 之间有窗口期，外层 get 过关
+        // 之后另一线程可能 close。双重检查 + synchronized 保证 send 仅在 emitter
+        // 仍 active 时执行，避免 IllegalStateException 噪音
+        if (!subscription.active.get()) {
+          return;
+        }
         subscription.emitter.send(SseEmitter.event().name(eventName).data(payload));
       }
     } catch (IOException | IllegalStateException exception) {
