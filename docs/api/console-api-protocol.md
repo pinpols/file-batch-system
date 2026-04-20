@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-04-20 | 触发器运维 5 条路径由 `/api/console/triggers` 迁到 `/api/console/ops/triggers`（list/{jobCode}/register/unregister/pause/resume），语义归 Ops 救急入口；日常禁用 job 请走 `toggleEnabled`，`TriggerReconciler` 以 30s 周期把 Quartz 收敛到 DB（`ROLE_ADMIN` 权限不变，限流路径前缀同步调整） |
 | 2026-04-20 | `/api/console/meta/enums` 的 `triggerType` 字典新增 `RERUN`（重跑触发）；与 V62 迁移中扩展的 `ck_trigger_request_type` / `ck_job_instance_trigger_type` CHECK 约束对齐；OpenAPI `MetaEnumItem` 由后端反射下发，schema 无需改 |
 | 2026-04-20 | 删除 7 个单表 Excel 维护接口的 upload/preview/previewWorkbook/apply（job-definitions / workflows / business-calendars / quota-policies / batch-windows / file-channels / pipeline-definitions，共 28 条路由，均已由 tenant-package 合并导入取代）。保留各自 `/export` 和 `/template` 导出；同步删除 49 个仅被这些端点引用的 schema（含 Common/Preview/Apply wrapper 和 per-entity request body） |
 | 2026-04-20 | 补录 `POST /api/console/auth/stream/ticket` 到 OpenAPI（2026-04-18 新增端点，Changelog 已记但 yaml 漏写，CI path 一致性校验失败）；新增 `ConsoleSseTicketResponse` schema（`{ticket: string}`）和 `CommonResponseConsoleSseTicketResponse` 包装器 |
@@ -492,11 +493,11 @@ Deployment note:
 
 ### Triggers
 
-- `GET /api/console/triggers`
-- `POST /api/console/triggers/{jobCode}/register`
-- `POST /api/console/triggers/{jobCode}/unregister`
-- `POST /api/console/triggers/{jobCode}/pause`
-- `POST /api/console/triggers/{jobCode}/resume`
+- `GET /api/console/ops/triggers`
+- `POST /api/console/ops/triggers/{jobCode}/register`
+- `POST /api/console/ops/triggers/{jobCode}/unregister`
+- `POST /api/console/ops/triggers/{jobCode}/pause`
+- `POST /api/console/ops/triggers/{jobCode}/resume`
 - `register` loads the job definition from DB and registers it into Quartz; safe to call again to update an existing trigger.
 - `unregister` removes the Quartz job entry; does not affect the job definition record.
 - Trigger list response includes `status`, `previousFireTime`, and `nextFireTime` per job.

@@ -53,7 +53,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
-  static final String JOB_GROUP = "batch-trigger";
+  public static final String JOB_GROUP = "batch-trigger";
 
   private final TriggerDefinitionLoader triggerDefinitionLoader;
   private final Scheduler scheduler;

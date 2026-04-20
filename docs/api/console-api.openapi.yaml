@@ -3903,7 +3903,7 @@ paths:
                 $ref: '#/components/schemas/CommonResponseString'
 
   # ─── P0: Trigger management ───────────────────────────────────────────────────
-  /api/console/triggers:
+  /api/console/ops/triggers:
     get:
       tags: [Triggers]
       summary: List registered Quartz triggers
@@ -3923,7 +3923,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/triggers/{jobCode}/register:
+  /api/console/ops/triggers/{jobCode}/register:
     post:
       tags: [Triggers]
       summary: Register a Quartz trigger for a job
@@ -3949,7 +3949,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
-  /api/console/triggers/{jobCode}/unregister:
+  /api/console/ops/triggers/{jobCode}/unregister:
     post:
       tags: [Triggers]
       summary: Unregister a Quartz trigger for a job
@@ -3975,7 +3975,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
-  /api/console/triggers/{jobCode}/pause:
+  /api/console/ops/triggers/{jobCode}/pause:
     post:
       tags: [Triggers]
       summary: Pause a Quartz trigger for a job
@@ -4001,7 +4001,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
-  /api/console/triggers/{jobCode}/resume:
+  /api/console/ops/triggers/{jobCode}/resume:
     post:
       tags: [Triggers]
       summary: Resume a paused Quartz trigger for a job

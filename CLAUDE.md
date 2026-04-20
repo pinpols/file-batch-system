@@ -164,6 +164,13 @@ public enum XxxType implements DictEnum {
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
 
 ### 2026-04-20
+- **触发器控制面收敛：`job_definition.enabled` 作为权威，Quartz 异步对账**（修 "job 被 toggle=false 但 Quartz 还 fire → orchestrator 404 刷日志" 的长期 bug）：
+  - 新增 `TriggerReconciler`（batch-trigger/infrastructure/scheduler）：`@Scheduled(fixedDelay=30s)` + `ShedLock PT5M` + `@EventListener(ApplicationReadyEvent)` 首轮立扫；比较 `job_definition` 权威集合与 Quartz `GroupMatcher.jobGroupEquals(JOB_GROUP)` 列表，DB-有-Quartz-无→`registerByJobCode`，DB-无-Quartz-有→`unregisterByJobCode`；`TriggerGracefulShutdown.isDraining()` 时跳过。
+  - 删除 `TriggerRegistrationStartup`（`ApplicationRunner` 启动注册）+ 配套 IT `TriggerRegistrationStartupIntegrationTest`，由 reconciler 的启动期首轮覆盖同等语义。
+  - `TriggerSchedulerFacade.JOB_GROUP` 可见性从 package-private 提升为 `public`（reconciler 跨包引用）。
+  - **控制面职责重划**：console `ConsoleTriggerController` 的 5 条路由 `/api/console/triggers/**` → `/api/console/ops/triggers/**`（list/{jobCode}/register/unregister/pause/resume），定位为 **Ops 救急入口**（DB 与 Quartz 漂移时的强制修复），日常业务走 `toggleEnabled`；控制器 javadoc + OpenAPI tag 加警告："在此注销 enabled=true 的 job 会被下一次 reconcile 重建"。`ConsoleRateLimitFilter.TRIGGER_PATH_PREFIX` 同步更新。
+  - 对账周期配置项 `batch.trigger.reconcile-interval-millis`（默认 30000）。
+  - 守护：`TriggerReconcilerTest` 6 个 case 覆盖 DB-only / Quartz-only / 对齐 / 禁用 / draining / 畸形 JobKey。
 - **新增 §时区策略 + 全局时区 provider**：`BatchTimezoneProperties` (`batch.timezone.default-zone`，默认 `Asia/Shanghai`) + `BatchTimezoneProvider` bean；业务路径上的 `ZoneId.systemDefault()` 统一替换为 `provider.defaultZone()` / `provider.resolveOrDefault(tz)`，9 处调用点完成迁移（`LaunchBatchDayService` / `LaunchParamResolver` / `CalendarBizDateResolver` / `DefaultLaunchAdapterService` / `DefaultResourceScheduler` / `BatchDayCutoffScheduler`×2 / `QuotaRuntimeStateService`）。`QuotaResetPolicy.systemZone()` 打 `@Deprecated`；`ConsoleQuerySupport` 宽松日期解析作为明确豁免保留。`batch-defaults.yml` 补 `spring.jackson.time-zone`。
 - **V62 迁移：重跑语义 + 批次日并发 + 时区快照**（对齐 `docs/analysis/deep-issue-analysis-v3.md` 的五点设计灰色地带）：
   - `job_instance` 新增 `run_attempt INT NOT NULL DEFAULT 1` + `ck_run_attempt >= 1`；唯一键由 `(tenant_id, dedup_key)` 改为 `(tenant_id, dedup_key, run_attempt)`，同一 (job, biz_date) 可持有多次 attempts。
