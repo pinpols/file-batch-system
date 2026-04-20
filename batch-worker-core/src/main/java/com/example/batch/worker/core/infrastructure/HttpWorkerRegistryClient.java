@@ -27,7 +27,8 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
   private final BatchSecurityProperties securityProperties;
   private final RestClient.Builder builder;
   private final Environment environment;
-  private RestClient restClient;
+  // T-1：DCL 必须 volatile，否则另一线程可能读到未完全构造的 RestClient 对象引用
+  private volatile RestClient restClient;
 
   @Override
   public WorkerRegistration register(WorkerRegistration registration) {

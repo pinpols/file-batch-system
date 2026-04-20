@@ -61,10 +61,16 @@ public class OutboxPublishCircuitBreaker {
   private final OutboxProperties outboxProperties;
   private final OrchestratorRedisSupport redis;
 
-  // 本地缓存的熔断开启截止时间（毫秒时间戳）；0 表示熔断关闭
-  private volatile long cachedOpenUntilMs = 0;
-  // 关闭状态缓存的到期时间；到期后需重新查询 Redis 确认状态
-  private volatile long closedCacheExpiresAt = 0;
+  /**
+   * T-2：把 {@code cachedOpenUntilMs} + {@code closedCacheExpiresAt} 捆绑成单个不可变 record，
+   * 通过 volatile 引用原子发布/读取，消除两字段的 torn-read（旧实现两个 volatile long
+   * 分别读取，高并发下可能组合出不存在的中间状态）。
+   */
+  private record CircuitState(long openUntilMs, long closedCacheExpiresAt) {
+    static final CircuitState CLOSED_EMPTY = new CircuitState(0L, 0L);
+  }
+
+  private volatile CircuitState state = CircuitState.CLOSED_EMPTY;
   // C-5.1: 用 AtomicBoolean.compareAndSet 保证只有一个线程进入半开探测
   private final AtomicBoolean halfOpenProbing = new AtomicBoolean(false);
 
@@ -84,26 +90,28 @@ public class OutboxPublishCircuitBreaker {
       return true;
     }
     long now = System.currentTimeMillis();
+    // T-2：单次 volatile 读取拿到一致的 (openUntilMs, closedCacheExpiresAt) 快照
+    CircuitState snapshot = state;
     // 快速路径 1：本地已知熔断开启，且冷却期未结束
-    if (cachedOpenUntilMs > now) {
+    if (snapshot.openUntilMs() > now) {
       return false;
     }
     // C-5.1: 冷却期结束时进入半开状态，CAS 保证仅一个线程执行探测
-    if (cachedOpenUntilMs > 0
-        && cachedOpenUntilMs <= now
+    if (snapshot.openUntilMs() > 0
+        && snapshot.openUntilMs() <= now
         && halfOpenProbing.compareAndSet(false, true)) {
       return true;
     }
     // 快速路径 2：本地已知熔断关闭，且关闭缓存仍有效
-    if (cachedOpenUntilMs == 0 && now < closedCacheExpiresAt) {
+    if (snapshot.openUntilMs() == 0 && now < snapshot.closedCacheExpiresAt()) {
       return true;
     }
-    // 慢速路径：查询 Redis，刷新本地缓存
+    // 慢速路径：查询 Redis，原子发布新快照
     Long openUntilMs =
         redis.evalLong(ALLOW_SCRIPT, BatchRedisKeys.outboxCircuit(), FIELD_OPEN_UNTIL_MS);
-    cachedOpenUntilMs = openUntilMs != null ? openUntilMs : 0;
-    closedCacheExpiresAt = now + outboxProperties.getPollIntervalMillis();
-    return cachedOpenUntilMs <= now;
+    long resolvedOpen = openUntilMs != null ? openUntilMs : 0L;
+    state = new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis());
+    return resolvedOpen <= now;
   }
 
   /** 根据本轮推进结果更新熔断状态，并同步刷新本地缓存。 */
@@ -124,9 +132,9 @@ public class OutboxPublishCircuitBreaker {
             String.valueOf(outboxProperties.getCircuitBreakerCooldownMillis()),
             String.valueOf(now),
             String.valueOf(ttlMillis));
-    // 用 Redis 返回的最新值刷新本地缓存
-    cachedOpenUntilMs = openUntilMs != null ? openUntilMs : 0;
-    closedCacheExpiresAt = now + outboxProperties.getPollIntervalMillis();
+    // T-2：原子发布新快照
+    long resolvedOpen = openUntilMs != null ? openUntilMs : 0L;
+    state = new CircuitState(resolvedOpen, now + outboxProperties.getPollIntervalMillis());
     // C-5.1: 探测完成后重置半开标记
     if (halfOpenProbing.compareAndSet(true, false)) {
       // 探测成功：cachedOpenUntilMs 已为 0，自然进入关闭状态

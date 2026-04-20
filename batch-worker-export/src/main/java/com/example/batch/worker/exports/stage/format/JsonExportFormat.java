@@ -17,6 +17,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class JsonExportFormat extends AbstractExportFormat {
 
+  // P-1：防御插件返回循环 cursor 导致无限分页
+  private static final int MAX_PAGES = 100_000;
+
   public JsonExportFormat(ObjectMapper objectMapper) {
     super(objectMapper);
   }
@@ -53,6 +56,7 @@ public class JsonExportFormat extends AbstractExportFormat {
     long recordCount = 0L;
     boolean first = true;
     Object cursor = null;
+    int pageNo = 0;
     while (true) {
       ExportDataPlugin.DetailPage page =
           ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
@@ -74,6 +78,12 @@ public class JsonExportFormat extends AbstractExportFormat {
       cursor = page.nextCursor();
       if (cursor == null) {
         break;
+      }
+      if (++pageNo >= MAX_PAGES) {
+        throw new IllegalStateException(
+            "json export page iteration exceeded MAX_PAGES="
+                + MAX_PAGES
+                + "; data plugin likely returning stale cursor");
       }
     }
     writer.write("]}");

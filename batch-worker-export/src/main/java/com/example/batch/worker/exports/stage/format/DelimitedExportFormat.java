@@ -51,6 +51,7 @@ public class DelimitedExportFormat extends AbstractExportFormat {
             StandardOpenOption.WRITE)) {
       writeDelimitedHeaderRows(writer, columns, formatConfig);
       long recordCount = 0L;
+      int pageNo = 0;
       while (true) {
         List<Map<String, Object>> details = page.rows();
         if (details.isEmpty()) {
@@ -72,6 +73,12 @@ public class DelimitedExportFormat extends AbstractExportFormat {
         cursor = page.nextCursor();
         if (cursor == null) {
           break;
+        }
+        // P-1 同系列防御：插件返回循环 cursor 时 fail-fast
+        if (++pageNo >= 100_000) {
+          throw new IllegalStateException(
+              "delimited export page iteration exceeded 100000; data plugin likely returning"
+                  + " stale cursor");
         }
         page = ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), cursor);
       }

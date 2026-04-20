@@ -51,8 +51,19 @@ public class WorkerTaskLeaseRenewer {
 
   @Scheduled(fixedDelayString = "${batch.worker.lease.renew-interval-millis:10000}")
   public void renewActiveTaskLeases() {
-    for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease :
-        activeTaskLeaseRegistry.snapshot()) {
+    java.util.Collection<ActiveTaskLeaseRegistry.ActiveTaskLease> active =
+        activeTaskLeaseRegistry.snapshot();
+    // L-5：清理 consecutiveFailures 里已不在活跃 lease 集合的条目，避免
+    // "失败达到阈值后任务被 orchestrator 驱逐不再 renew" 路径永驻 AtomicInteger。
+    // 按 taskId 比对当前活跃集 → 差集即是可回收的失败计数条目。
+    if (!consecutiveFailures.isEmpty()) {
+      java.util.Set<String> activeIds = new java.util.HashSet<>(active.size());
+      for (ActiveTaskLeaseRegistry.ActiveTaskLease lease : active) {
+        activeIds.add(lease.getTaskId());
+      }
+      consecutiveFailures.keySet().removeIf(taskId -> !activeIds.contains(taskId));
+    }
+    for (ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease : active) {
       try {
         boolean renewed =
             taskExecutionClient.renewLease(
