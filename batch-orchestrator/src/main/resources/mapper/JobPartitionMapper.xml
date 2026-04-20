@@ -225,11 +225,14 @@
           and version = #{expectedVersion}
     </update>
 
+    <!-- quota / throttle 决策用：仅统计真正占用 worker 的 partition
+         （READY/RUNNING/RETRYING）。WAITING 是待调度候选，算进分母会造成死锁。
+         {@code #{waitingStatus}} 参数保留以不破坏调用方，但 SQL 不再引用。 -->
     <select id="countActiveByTenant" resultType="long">
         select count(1)
         from batch.job_partition
         where tenant_id = #{tenantId}
-          and partition_status in (#{waitingStatus}, #{readyStatus}, #{runningStatus}, #{retryingStatus})
+          and partition_status in (#{readyStatus}, #{runningStatus}, #{retryingStatus})
     </select>
 
     <select id="countActiveByTenantAndWorkerGroup" resultType="long">
@@ -237,6 +240,6 @@
         from batch.job_partition
         where tenant_id = #{tenantId}
           and worker_group = #{workerGroup}
-          and partition_status in (#{waitingStatus}, #{readyStatus}, #{runningStatus}, #{retryingStatus})
+          and partition_status in (#{readyStatus}, #{runningStatus}, #{retryingStatus})
     </select>
 </mapper>

@@ -231,11 +231,14 @@
           and sla_alerted_at is null
     </update>
 
+    <!-- quota 决策用：仅统计真正占用 worker 资源的实例（READY/RUNNING），
+         WAITING 是待调度队列，本身就是被 quota check 裁决的候选集，
+         不能把候选人算进分母——否则一旦 WAITING 超过配额就永久死锁。 -->
     <select id="countActiveByTenant" resultType="long">
         select count(1)
         from batch.job_instance
         where tenant_id = #{tenantId}
-          and instance_status in ('WAITING', 'READY', 'RUNNING')
+          and instance_status in ('READY', 'RUNNING')
     </select>
 
     <select id="countActiveByTenantAndQueueCode" resultType="long">
@@ -243,13 +246,13 @@
         from batch.job_instance
         where tenant_id = #{tenantId}
           and queue_code = #{queueCode}
-          and instance_status in ('WAITING', 'READY', 'RUNNING')
+          and instance_status in ('READY', 'RUNNING')
     </select>
 
     <select id="countActiveByFairShareGroup" resultType="long">
         select count(1)
         from batch.job_instance ji
-        where ji.instance_status in ('WAITING', 'READY', 'RUNNING')
+        where ji.instance_status in ('READY', 'RUNNING')
           and ji.tenant_id in (
               select tenant_id
               from batch.tenant_quota_policy
@@ -261,7 +264,7 @@
     <select id="countActiveAll" resultType="long">
         select count(1)
         from batch.job_instance
-        where instance_status in ('WAITING', 'READY', 'RUNNING')
+        where instance_status in ('READY', 'RUNNING')
     </select>
 
     <select id="selectBatchDayMetrics" resultType="com.example.batch.orchestrator.domain.query.BatchDayInstanceMetrics">
