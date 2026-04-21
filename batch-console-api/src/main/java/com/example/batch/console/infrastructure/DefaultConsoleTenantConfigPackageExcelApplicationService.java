@@ -25,6 +25,7 @@ import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
+import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
 import com.example.batch.console.mapper.WorkflowEdgeMapper;
 import com.example.batch.console.mapper.WorkflowNodeMapper;
@@ -121,9 +122,11 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
+  private final StepRegistryQueryMapper stepRegistryQueryMapper;
 
   private ConfigPackageExcelValidator validator() {
-    return new ConfigPackageExcelValidator(jobDefinitionMapper, pipelineDefinitionMapper);
+    return new ConfigPackageExcelValidator(
+        jobDefinitionMapper, pipelineDefinitionMapper, stepRegistryQueryMapper);
   }
 
   private final ConfigPackageExcelWorkbookWriter workbookWriter =
@@ -147,6 +150,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     List<Map<String, Object>> wfDefs = toWfDefRows(wfEntities);
     List<Map<String, Object>> wfNodes = collectWorkflowNodes(tid, wfEntities);
     List<Map<String, Object>> wfEdges = collectWorkflowEdges(tid, wfEntities);
+    workbookWriter.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
     byte[] bytes =
         workbookWriter.buildExportWorkbook(
             List.of(jobs, channels, routings, pipelines, steps, wfDefs, wfNodes, wfEdges));
@@ -156,8 +160,30 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
 
   @Override
   public ResponseEntity<InputStreamResource> downloadTemplate() {
+    workbookWriter.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
     byte[] bytes = workbookWriter.buildTemplateWorkbook();
     return ConsoleSingleSheetExcelImportSupport.excelResponse("tenant-config-package-template.xlsx", bytes);
+  }
+
+  /**
+   * 从 {@code batch.step_registry} 查 (module → bean 列表)，供 Excel 模板 / 导出的 impl_code 下拉用。
+   * 查询失败或结果为空时返回空 map，writer 会降级为不加下拉（首次部署无 worker 启动的兼容路径）。
+   */
+  private java.util.Map<String, java.util.List<String>> loadRegisteredImplCodesByModule() {
+    java.util.Map<String, java.util.List<String>> result = new java.util.LinkedHashMap<>();
+    try {
+      for (java.util.Map<String, String> row : stepRegistryQueryMapper.selectAllImplEntries()) {
+        String module = row.get("module");
+        String implCode = row.get("implCode");
+        if (module == null || implCode == null) {
+          continue;
+        }
+        result.computeIfAbsent(module, k -> new java.util.ArrayList<>()).add(implCode);
+      }
+    } catch (RuntimeException ignored) {
+      // step_registry 表尚未创建 / 查询失败时降级为空，writer 跳过 impl_code 下拉
+    }
+    return result;
   }
 
   @Override

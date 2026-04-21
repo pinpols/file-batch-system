@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.core.mapper.StepRegistryMapper">
+
+    <delete id="deleteByModule">
+        delete from batch.step_registry
+        where module = #{module}
+    </delete>
+
+    <insert id="insertEntry">
+        insert into batch.step_registry (module, impl_code, impl_class, registered_at, last_seen_at)
+        values (#{module}, #{implCode}, #{implClass}, current_timestamp, current_timestamp)
+    </insert>
+
+</mapper>

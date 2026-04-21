@@ -24,6 +24,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -116,6 +117,15 @@ class ConfigPackageExcelWorkbookWriter {
       Consumer<Sheet> validationApplier) {}
 
   private final List<SheetDef> sheetDefs;
+  // module → 该模块的 bean name 列表；applyStepValidations 会拼成 MODULE:beanName 格式的下拉项。
+  // 由调用方（DefaultConsoleTenantConfigPackageExcelApplicationService）在每次 buildXxx 前从
+  // batch.step_registry 查并 set；空/null 时不加 impl_code 下拉（避免 worker 未启动时模板不可下载）。
+  private Map<String, List<String>> registeredImplCodesByModule;
+
+  /** 设置本次导出用的 (module → impl_code 列表)；由调用方在 build* 前从 step_registry 查出。 */
+  void setRegisteredImplCodesByModule(Map<String, List<String>> registeredImplCodesByModule) {
+    this.registeredImplCodesByModule = registeredImplCodesByModule;
+  }
 
   ConfigPackageExcelWorkbookWriter() {
     this.sheetDefs =
@@ -368,6 +378,26 @@ class ConfigPackageExcelWorkbookWriter {
     addDropdownValidation(sheet, 4, STAGE_CODES.toArray(String[]::new), COL_STAGE_CODE, "请选择阶段");
     addDropdownValidation(
         sheet, 9, RETRY_POLICIES.toArray(String[]::new), COL_RETRY_POLICY, "请选择重试策略");
+    // impl_code（第 7 列 index=6）：动态下拉，格式 MODULE:beanName 让用户一眼看出模块归属。
+    // 上传时 Validator 会剥掉前缀比对 pipeline_type 与 module 是否匹配，不匹配会报错。
+    // registry 空时不加下拉（首次部署没 worker 启动过也能下载模板）。
+    if (registeredImplCodesByModule != null && !registeredImplCodesByModule.isEmpty()) {
+      List<String> options = new java.util.ArrayList<>();
+      registeredImplCodesByModule.forEach(
+          (module, beans) -> {
+            for (String bean : beans) {
+              options.add(module + ":" + bean);
+            }
+          });
+      if (!options.isEmpty()) {
+        addDropdownValidation(
+            sheet,
+            6,
+            options.toArray(String[]::new),
+            "impl_code",
+            "格式 MODULE:beanName（MODULE 来自 pipeline_type，beanName 来自 worker 启动时上报的 step_registry）");
+      }
+    }
     addBooleanValidation(sheet, new int[] {11}, COL_ENABLED, GUIDE_BOOL_HINT);
   }
 
