@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.console.mapper.StepRegistryQueryMapper">
+
+    <select id="selectImplCodesByModule" resultType="string">
+        select impl_code
+        from batch.step_registry
+        where module = #{module}
+        order by impl_code
+    </select>
+
+    <select id="selectAllImplCodes" resultType="string">
+        select distinct impl_code
+        from batch.step_registry
+        order by impl_code
+    </select>
+
+    <select id="selectAllImplEntries" resultType="map">
+        select module, impl_code as implCode
+        from batch.step_registry
+        order by module, impl_code
+    </select>
+
+</mapper>
