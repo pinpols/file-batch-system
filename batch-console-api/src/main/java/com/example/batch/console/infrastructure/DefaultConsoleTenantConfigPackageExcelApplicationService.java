@@ -24,6 +24,7 @@ import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
+import com.example.batch.console.mapper.BizTableSchemaQueryMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
 import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
@@ -123,6 +124,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private final WorkflowEdgeMapper workflowEdgeMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
   private final StepRegistryQueryMapper stepRegistryQueryMapper;
+  // 保留注入：供 WorkbookWriter 在下载模板 / 导出时用来生成 targetColumn 下拉；
+  // Validator 不再硬拦业务 schema 漂移（真正的错交给 LoadStep 运行时抛）。
+  private final BizTableSchemaQueryMapper bizTableSchemaQueryMapper;
 
   private ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
