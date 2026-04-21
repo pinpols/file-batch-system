@@ -2,6 +2,7 @@ package com.example.batch.worker.core.support;
 
 import com.example.batch.worker.core.mapper.StepRegistryMapper;
 import java.util.Map;
+import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationContext;
@@ -26,16 +27,19 @@ public abstract class AbstractStepBeanRegistrar<T> {
   private final StepRegistryMapper stepRegistryMapper;
   private final Class<T> stepBeanType;
   private final String module;
+  private final Function<T, String> implCodeExtractor;
 
   protected AbstractStepBeanRegistrar(
       ApplicationContext applicationContext,
       StepRegistryMapper stepRegistryMapper,
       Class<T> stepBeanType,
-      String module) {
+      String module,
+      Function<T, String> implCodeExtractor) {
     this.applicationContext = applicationContext;
     this.stepRegistryMapper = stepRegistryMapper;
     this.stepBeanType = stepBeanType;
     this.module = module;
+    this.implCodeExtractor = implCodeExtractor;
   }
 
   /**
@@ -52,14 +56,30 @@ public abstract class AbstractStepBeanRegistrar<T> {
         log.info("step registry snapshot refreshed: module={}, count=0 (未发现 bean)", module);
         return;
       }
-      beans.forEach(
-          (beanName, bean) ->
-              stepRegistryMapper.insertEntry(module, beanName, bean.getClass().getName()));
+      // 关键：用业务侧的 step.implCode() 做登记键而非 Spring bean name。运行时
+      // DefaultImportStageExecutor / DefaultDispatchStageExecutor 用的就是 step.implCode()
+      // 做 Map key（默认返回 "MODULE_STAGENAME" 比如 DISPATCH_PREPARE），而不是 Spring
+      // camelCase 的 bean name（prepareDispatchStep）。登记必须对齐，否则 Excel 校验 /
+      // 下拉的 impl_code 跟运行时脱节。
+      java.util.LinkedHashSet<String> registeredCodes = new java.util.LinkedHashSet<>();
+      beans.values()
+          .forEach(
+              bean -> {
+                String code = implCodeExtractor.apply(bean);
+                if (code == null || code.isBlank()) {
+                  return;
+                }
+                // 同 impl_code 可能有多个 bean 实现（预留扩展），按第一个登记；同一 bean
+                // 重复登记由 UK(module, impl_code) 拦截，这里手动去重避免 SQL 异常
+                if (registeredCodes.add(code)) {
+                  stepRegistryMapper.insertEntry(module, code, bean.getClass().getName());
+                }
+              });
       log.info(
-          "step registry snapshot refreshed: module={}, count={}, beans={}",
+          "step registry snapshot refreshed: module={}, count={}, implCodes={}",
           module,
-          beans.size(),
-          beans.keySet());
+          registeredCodes.size(),
+          registeredCodes);
     } catch (Exception ex) {
       log.error("step registry snapshot failed: module={}, err={}", module, ex.getMessage(), ex);
     }

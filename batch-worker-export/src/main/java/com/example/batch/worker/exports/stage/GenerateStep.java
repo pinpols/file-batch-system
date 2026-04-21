@@ -13,6 +13,7 @@ import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import com.example.batch.worker.exports.stage.format.ExportFormatContext;
 import com.example.batch.worker.exports.stage.format.ExportFormatStrategy;
 import com.example.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,6 +38,7 @@ public class GenerateStep implements ExportStageStep {
   private final ExportDataPluginRegistry exportDataPluginRegistry;
   private final ExportFormatStrategyRegistry formatStrategyRegistry;
   private final ExportWorkerConfiguration workerConfiguration;
+  private final ObjectMapper objectMapper;
 
   @Override
   public ExportStage stage() {
@@ -143,7 +145,33 @@ public class GenerateStep implements ExportStageStep {
     if (v != null && Texts.hasText(String.valueOf(v))) {
       return String.valueOf(v).trim();
     }
+    // 与 JdbcMappedImportSpec.extractJdbcMappedImport 的双层 lookup 对齐：顶层没有时再查
+    // query_param_schema 里的 export_data_ref。schema 里 file_template_config 没有独立
+    // export_data_ref 列，seed 通常把它塞进 query_param_schema jsonb。
+    Object qps = tc.get("query_param_schema");
+    Map<String, Object> qpsMap = toStringKeyMap(qps);
+    Object nested = qpsMap.get("export_data_ref");
+    if (nested != null && Texts.hasText(String.valueOf(nested))) {
+      return String.valueOf(nested).trim();
+    }
     return null;
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> toStringKeyMap(Object raw) {
+    if (raw instanceof Map<?, ?> m) {
+      Map<String, Object> out = new java.util.LinkedHashMap<>();
+      m.forEach((k, val) -> out.put(String.valueOf(k), val));
+      return out;
+    }
+    if (raw instanceof String text && Texts.hasText(text)) {
+      try {
+        return objectMapper.readValue(text, Map.class);
+      } catch (Exception ignored) {
+        return Map.of();
+      }
+    }
+    return Map.of();
   }
 
   private int resolvePageSize(ExportJobContext context) {
