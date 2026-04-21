@@ -15,6 +15,11 @@ public class ExportStepBeanRegistrar extends AbstractStepBeanRegistrar<ExportSta
 
   public ExportStepBeanRegistrar(
       ApplicationContext applicationContext, StepRegistryMapper stepRegistryMapper) {
-    super(applicationContext, stepRegistryMapper, ExportStageStep.class, "EXPORT");
+    super(
+        applicationContext,
+        stepRegistryMapper,
+        ExportStageStep.class,
+        "EXPORT",
+        ExportStageStep::implCode);
   }
 }

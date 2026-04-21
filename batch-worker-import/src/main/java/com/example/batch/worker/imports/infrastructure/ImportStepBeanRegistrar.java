@@ -15,6 +15,11 @@ public class ImportStepBeanRegistrar extends AbstractStepBeanRegistrar<ImportSta
 
   public ImportStepBeanRegistrar(
       ApplicationContext applicationContext, StepRegistryMapper stepRegistryMapper) {
-    super(applicationContext, stepRegistryMapper, ImportStageStep.class, "IMPORT");
+    super(
+        applicationContext,
+        stepRegistryMapper,
+        ImportStageStep.class,
+        "IMPORT",
+        ImportStageStep::implCode);
   }
 }

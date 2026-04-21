@@ -15,6 +15,11 @@ public class DispatchStepBeanRegistrar extends AbstractStepBeanRegistrar<Dispatc
 
   public DispatchStepBeanRegistrar(
       ApplicationContext applicationContext, StepRegistryMapper stepRegistryMapper) {
-    super(applicationContext, stepRegistryMapper, DispatchStageStep.class, "DISPATCH");
+    super(
+        applicationContext,
+        stepRegistryMapper,
+        DispatchStageStep.class,
+        "DISPATCH",
+        DispatchStageStep::implCode);
   }
 }
