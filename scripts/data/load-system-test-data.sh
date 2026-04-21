@@ -43,15 +43,23 @@ psql_business() {
   psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${BUSINESS_DB}" -v ON_ERROR_STOP=1 "$@"
 }
 
+# 历史上引用的 docs/sql/system-test/ 不存在，真 seed 一直在 scripts/db/test-seed/；
+# business_seed 里 INSERT 前要求 biz.* 表已建，必须先跑 create_biz_tables.sql，否则报 relation not found。
+SEED_DIR="${ROOT_DIR}/scripts/db/test-seed"
+BIZ_DDL="${ROOT_DIR}/scripts/db/business/create_biz_tables.sql"
+
+echo "Creating business DDL (biz.customer_account / settlement_batch / settlement_detail)..."
+psql_business -f "${BIZ_DDL}"
+
 echo "Loading platform seed..."
-psql_platform -f "${ROOT_DIR}/docs/sql/system-test/platform_seed.sql"
+psql_platform -f "${SEED_DIR}/platform_seed.sql"
 echo "Loading platform edge cases..."
-psql_platform -f "${ROOT_DIR}/docs/sql/system-test/platform_edge_cases.sql"
+psql_platform -f "${SEED_DIR}/platform_edge_cases.sql"
 
 echo "Loading business seed..."
-psql_business -f "${ROOT_DIR}/docs/sql/system-test/business_seed.sql"
+psql_business -f "${SEED_DIR}/business_seed.sql"
 echo "Loading business edge cases..."
-psql_business -f "${ROOT_DIR}/docs/sql/system-test/business_edge_cases.sql"
+psql_business -f "${SEED_DIR}/business_edge_cases.sql"
 
 if command -v mc >/dev/null 2>&1; then
   echo "Seeding MinIO objects..."

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.worker.core.mapper.BizTableSchemaMapper">
+
+    <delete id="deleteAll">
+        delete from batch.biz_table_schema
+    </delete>
+
+    <insert id="upsertEntry">
+        insert into batch.biz_table_schema (schema_name, table_name, columns, registered_at, last_seen_at)
+        values (#{schemaName}, #{tableName}, CAST(#{columns} AS jsonb), current_timestamp, current_timestamp)
+        on conflict (schema_name, table_name) do update
+          set columns = EXCLUDED.columns,
+              last_seen_at = current_timestamp
+    </insert>
+
+</mapper>

@@ -109,10 +109,19 @@ class ConfigPackageExcelValidator {
   static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
   static final Set<String> SEVERITIES = DictEnum.codes(AlertSeverity.class);
   static final Set<String> PIPELINE_TYPES = DictEnum.codes(PipelineType.class);
+  // 旧的 STAGE_CODES 是跨 module 的 union，现在只保留做"基础形状校验"；精确校验按
+  // pipeline_type 查 STAGES_BY_TYPE（对齐 worker 侧 ImportStage / ExportStage / DispatchStage
+  // 三个 enum 的实际值，避免 Excel 里填 PREPROCESS 到 EXPORT 管线这种 cross-module 错配）。
   static final Set<String> STAGE_CODES =
       Set.of(
-          "RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "GENERATE", "TRANSFER",
-          "DISPATCH", "ACK");
+          "RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK",
+          "PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE",
+          "DISPATCH", "ACK", "RETRY", "COMPENSATE");
+  static final Map<String, Set<String>> STAGES_BY_TYPE =
+      Map.of(
+          "IMPORT",   Set.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
+          "EXPORT",   Set.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
+          "DISPATCH", Set.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
   static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
   static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);
   static final Set<String> EDGE_TYPES = DictEnum.codes(WorkflowEdgeType.class);
@@ -482,11 +491,25 @@ class ConfigPackageExcelValidator {
         ri.add("step_name is required");
       }
       String stageCode = normalizeEnum(row.get(COL_STAGE_CODE));
+      // pipelineKey 在后面定义，这里先算一个本地副本用于 stage/impl 联动校验
+      String stagePipelineKey = jobCode + KEY_SEP_COLON + version;
       if (!hasText(stageCode)) {
         ri.add("stage_code is required");
-      }
-      else if (!STAGE_CODES.contains(stageCode)) {
+      } else if (!STAGE_CODES.contains(stageCode)) {
         ri.add("stage_code must be one of " + STAGE_CODES);
+      } else if (pipelineKeyToType.containsKey(stagePipelineKey)) {
+        // 按 pipeline_type 做精确校验：例如 EXPORT 管线不能出现 PREPROCESS/LOAD 这种 IMPORT stage
+        String pipelineType = pipelineKeyToType.get(stagePipelineKey);
+        Set<String> allowed = STAGES_BY_TYPE.get(pipelineType);
+        if (allowed != null && !allowed.contains(stageCode)) {
+          ri.add(
+              "stage_code '"
+                  + stageCode
+                  + "' 不属于 pipeline_type '"
+                  + pipelineType
+                  + "'，允许值："
+                  + allowed);
+        }
       }
       String retryPolicy = normalizeEnum(row.get(COL_RETRY_POLICY));
       if (hasText(retryPolicy) && !RETRY_POLICIES.contains(retryPolicy)) {
@@ -536,6 +559,10 @@ class ConfigPackageExcelValidator {
                   + "（检查 Spring bean name 是否存在或 worker 是否启动过以刷新 step_registry）");
         }
       }
+
+      // 业务表/列精确校验的"硬拦截"故意不放在这里——Validator 只做 Excel 格式 + 枚举 / registry
+      // 层面的校验，不耦合业务 schema。biz_table_schema 的信息通过模板下拉在 ConfigPackageExcelWorkbookWriter
+      // 里以下拉选项形式呈现给填表用户；真正的 schema 漂移由 LoadStep 在运行时报业务错。
       addIssues(ri, STEP_SHEET, rowNo, issues);
       if (ri.isEmpty()) {
         valid.add(row);
@@ -811,4 +838,5 @@ class ConfigPackageExcelValidator {
       issues.add(new WorkbookIssue(sheetName, rowNo, null, msg));
     }
   }
+
 }
