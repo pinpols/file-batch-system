@@ -30,6 +30,7 @@ import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,21 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class DefaultRetryGovernanceService implements RetryGovernanceService {
+
+  /**
+   * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。
+   * 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈，
+   * 指数 backoff 只会把 dead_letter_task 灌满。
+   */
+  private static final Set<String> NON_RETRYABLE_ERROR_CODES =
+      Set.of(
+          "DISPATCH_PREPARE_FILE_MISSING",
+          "DISPATCH_PREPARE_FILE_NOT_FOUND",
+          "DISPATCH_PREPARE_CHANNEL_NOT_FOUND",
+          "DISPATCH_PREPARE_INVALID",
+          "DISPATCH_PREPARE_PARSE_FAILED",
+          "EXPORT_GENERATE_NO_PAYLOAD",
+          "STEP_NOT_FOUND");
 
   private final RetryScheduleMapper retryScheduleMapper;
   private final DeadLetterTaskMapper deadLetterTaskMapper;
@@ -91,6 +107,16 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           jobInstance.getId() == null ? null : String.valueOf(jobInstance.getId()));
     }
     try {
+      if (errorCode != null && NON_RETRYABLE_ERROR_CODES.contains(errorCode)) {
+        // 硬错跳过重试——见 NON_RETRYABLE_ERROR_CODES 的语义说明。
+        log.info(
+            "skipping retry for non-retryable error: tenantId={}, partitionId={}, errorCode={}",
+            task.getTenantId(),
+            partition.getId(),
+            errorCode);
+        createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
+        return false;
+      }
       RetryPolicyPlan retryPolicyPlan = resolveRetryPolicy(jobInstance.getJobDefinitionId());
       if (RetryPolicyType.NONE.code().equals(retryPolicyPlan.retryPolicy())
           || retryPolicyPlan.maxRetryCount() <= 0) {

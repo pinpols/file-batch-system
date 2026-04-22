@@ -86,6 +86,12 @@ public class WaitingPartitionDispatchScheduler {
         jobMappers.jobPartitionMapper.selectWaitingPartitionsGlobal(
             governance.resourceScheduler().getWaitingDispatchBatchSize(),
             PartitionStatus.WAITING.code());
+    if (waitingPartitions.isEmpty()) {
+      log.debug("no WAITING partitions this tick");
+      return;
+    }
+    log.info("waiting dispatch tick: {} WAITING partitions to evaluate",
+        waitingPartitions.size());
     List<WaitingDispatchCandidate> candidates = new ArrayList<>();
     for (JobPartitionEntity partition : waitingPartitions) {
       WaitingDispatchCandidate candidate;
@@ -143,12 +149,17 @@ public class WaitingPartitionDispatchScheduler {
         jobMappers.jobTaskMapper.selectByPartitionAndSeq(
             partition.getTenantId(), partition.getId(), 1);
     if (task == null || !TaskStatus.CREATED.code().equals(task.getTaskStatus())) {
+      log.debug(
+          "skip partitionId={}: task missing or not CREATED (status={})",
+          partition.getId(),
+          task == null ? "null" : task.getTaskStatus());
       return null;
     }
     JobInstanceEntity jobInstance =
         jobMappers.jobInstanceMapper.selectById(
             partition.getTenantId(), partition.getJobInstanceId());
     if (jobInstance == null) {
+      log.debug("skip partitionId={}: job_instance missing", partition.getId());
       return null;
     }
     JobDefinitionRecord jobDefinition =
@@ -157,6 +168,11 @@ public class WaitingPartitionDispatchScheduler {
     ResourceSchedulingDecision decision =
         resourceScheduler.schedule(buildRequest(jobInstance, partition, task, jobDefinition));
     if (!decision.isDispatchable()) {
+      log.info(
+          "skip partitionId={}: not dispatchable, reason={}, route={}",
+          partition.getId(),
+          decision.getReasonCode(),
+          decision.getRoute() == null ? "null" : decision.getRoute().getAvailable());
       return null;
     }
     return new WaitingDispatchCandidate(partition, task, jobInstance, decision);
@@ -271,7 +287,16 @@ public class WaitingPartitionDispatchScheduler {
     ResourceSchedulingRequest request = new ResourceSchedulingRequest();
     request.setTenantId(jobInstance.getTenantId());
     request.setJobCode(jobInstance.getJobCode());
-    request.setQueueCode(jobInstance.getQueueCode());
+    // workflow TASK 节点的 partition 由 SchedulePlanBuilder 按 sub-job 的 job_definition 填
+    // input_snapshot.queueCode（如 DISPATCH 节点 → dispatch_queue），与 jobInstance.queue_code
+    // （workflow 自己的 workflow_queue）不一致。优先用 partition input_snapshot 里写的 queueCode，
+    // 否则 selector 按 workflow_queue 的 resource_tag=workflow 去找 DISPATCH worker，永远不会匹配到
+    // capability_tags=[delivery] 的分发 worker → NO_AVAILABLE_WORKER 死循环。
+    String partitionQueueCode = extractInputField(partition, "queueCode");
+    request.setQueueCode(
+        partitionQueueCode != null && !partitionQueueCode.isBlank()
+            ? partitionQueueCode
+            : jobInstance.getQueueCode());
     request.setWorkerGroup(
         partition.getWorkerGroup() == null
             ? jobInstance.getWorkerGroup()
@@ -279,8 +304,32 @@ public class WaitingPartitionDispatchScheduler {
     request.setWorkerType(task.getTaskType());
     request.setPriority(jobInstance.getPriority());
     request.setRequestedPartitionCount(1);
-    request.setWindowCode(jobDefinition == null ? null : jobDefinition.windowCode());
+    // windowCode 同理：优先读 partition（sub-job 的 window），否则回退到 workflow 的 job_definition
+    String partitionWindowCode = extractInputField(partition, "windowCode");
+    request.setWindowCode(
+        partitionWindowCode != null && !partitionWindowCode.isBlank()
+            ? partitionWindowCode
+            : (jobDefinition == null ? null : jobDefinition.windowCode()));
     return request;
+  }
+
+  /** 从 partition.input_snapshot（JSON 字符串）里抽一个顶层字符串字段。畸形 JSON 返回 null。 */
+  private static String extractInputField(JobPartitionEntity partition, String field) {
+    if (partition == null || partition.getInputSnapshot() == null) {
+      return null;
+    }
+    try {
+      Object parsed =
+          com.example.batch.common.utils.JsonUtils.fromJson(
+              partition.getInputSnapshot(), Object.class);
+      if (parsed instanceof java.util.Map<?, ?> map) {
+        Object v = map.get(field);
+        return v == null ? null : String.valueOf(v);
+      }
+    } catch (IllegalArgumentException ignored) {
+      // 畸形 snapshot 不阻断调度
+    }
+    return null;
   }
 
   private record WaitingDispatchCandidate(

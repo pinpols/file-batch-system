@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -90,9 +90,12 @@ public class TriggerSecurityConfiguration {
     }
 
     private void setAuthenticated() {
+      // 必须用非匿名令牌——Spring Security 的 .authenticated() 匹配器通过
+      // AuthenticatedAuthorizationManager#isGranted 调用 trustResolver.isAnonymous()，
+      // 任何 AnonymousAuthenticationToken 都会被判定未认证而返回 403。
       var auth =
-          new AnonymousAuthenticationToken(
-              "internal", "internal-service", List.of(new SimpleGrantedAuthority("ROLE_INTERNAL")));
+          UsernamePasswordAuthenticationToken.authenticated(
+              "internal", null, List.of(new SimpleGrantedAuthority("ROLE_INTERNAL")));
       SecurityContextHolder.getContext().setAuthentication(auth);
     }
   }

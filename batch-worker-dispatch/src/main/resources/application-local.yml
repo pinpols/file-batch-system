@@ -55,6 +55,8 @@ batch:
       heartbeat-interval-millis: 15000
       topic: batch.task.dispatch.dispatch
       consumer-group-id: batch-worker-dispatch
+      capability-tags:
+        - delivery
   datasource:
     business:
       url: jdbc:postgresql://localhost:15432/batch_business

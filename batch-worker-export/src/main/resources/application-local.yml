@@ -51,6 +51,10 @@ batch:
       heartbeat-interval-millis: 15000
       topic: batch.task.dispatch.export
       consumer-group-id: batch-worker-export
+      # 同一台 EXPORT worker 承担两种工作流：settlement 导出 (report) + 合规导出 (workflow)
+      capability-tags:
+        - report
+        - workflow
       file-processing:
         streaming-enabled: true
         page-size: 1000

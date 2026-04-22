@@ -1,12 +1,10 @@
 package com.example.batch.worker.imports.stage.format;
 
-import com.example.batch.worker.imports.domain.CustomerImportPayload;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedWriter;
@@ -149,35 +147,12 @@ public class ParseSupport {
       recordParseError(context, recordNo, errorCode, "parsed row is empty", rawRecord);
       return;
     }
-    Object value = row;
-    if (!preserveLogicalRow) {
-      try {
-        CustomerImportPayload payload =
-            objectMapper.convertValue(row, CustomerImportPayload.class);
-        if (payload == null) {
-          recordParseError(
-              context, recordNo, errorCode, "record cannot convert to payload", rawRecord);
-          return;
-        }
-        value = payload;
-      } catch (RuntimeException ex) {
-        if (row == null) {
-          throw ex;
-        }
-        ObjectMapper lenient =
-            objectMapper
-                .copy()
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        CustomerImportPayload payload = lenient.convertValue(row, CustomerImportPayload.class);
-        if (payload == null) {
-          recordParseError(
-              context, recordNo, errorCode, "record cannot convert to payload", rawRecord);
-          return;
-        }
-        value = payload;
-      }
-    }
-    writeNdjsonValue(writer, value);
+    // 参数 preserveLogicalRow 保留是为了调用方的 API 兼容，但内部不再区分：
+    // 历史上 false 分支把 row 强转 CustomerImportPayload，导致所有非 customer schema 的 import
+    // 被默默丢字段 → validate 阶段集体报 "customerNo is required"。
+    // 统一成 Map → NDJSON 后，LoadStep 的流式路径本来就按 Map 读 NDJSON（MAP_TYPE），无行为变化；
+    // 单 schema 路径由 jdbc_mapped_import 的 columnMappings 接管字段投影。
+    writeNdjsonValue(writer, row);
     writer.newLine();
     context
         .getAttributes()

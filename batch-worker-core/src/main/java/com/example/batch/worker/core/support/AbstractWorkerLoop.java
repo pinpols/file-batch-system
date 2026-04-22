@@ -122,6 +122,7 @@ public abstract class AbstractWorkerLoop {
       workerRegistration.setActive(Boolean.TRUE);
       workerRegistration.setRegisteredAt(OffsetDateTime.now());
       workerRegistration.setLastHeartbeatAt(OffsetDateTime.now());
+      workerRegistration.setCapabilityTags(cfg.capabilityTags());
       registration = workerRuntimeFacade.start(workerRegistration);
       started.set(true);
       log.info(

@@ -169,6 +169,20 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
   }
 
   protected String resolveJobCode(StepExecutionRequest request, Map<String, Object> attributes) {
+    // 优先级 1：workflow TASK 节点派发时，orchestrator 在 task_payload JSON 里写
+    // `targetJobCode` 指向实际要跑的子作业（如 SETTLE 节点 → `exp_settlement_daily`）。
+    // 若用 request.jobCode()（= workflow 自己的 jobCode，如 `wf_eod_process`），对应的
+    // pipeline_definition 是跨 worker 的复合 pipeline（含 EXPORT_* + DISPATCH_* 各类 impl_code），
+    // EXPORT worker 加载后会在 DISPATCH_PREPARE 这种异域 step 上报 STEP_NOT_FOUND。
+    // 注：task_payload 在 executionContext 里是 JSON 字符串（key=payload），不是 flatten 的字段；
+    // 所以这里要先解出字符串再取 targetJobCode。
+    String targetJobCode = resolveText(attributes, "targetJobCode");
+    if (!Texts.hasText(targetJobCode)) {
+      targetJobCode = extractFromPayloadJson(attributes, "targetJobCode");
+    }
+    if (Texts.hasText(targetJobCode)) {
+      return targetJobCode;
+    }
     String jobCode =
         resolveText(
             attributes,
@@ -186,6 +200,30 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
       return request.stepCode();
     }
     return pipelineType();
+  }
+
+  /**
+   * 从 executionContext 里塞的原始 `payload` JSON 字符串中抽一个顶层字符串字段。
+   * 用于在未把 payload flatten 成 attributes 的场景下读 `targetJobCode` / `templateCode` 等。
+   */
+  @SuppressWarnings("unchecked")
+  private String extractFromPayloadJson(Map<String, Object> attributes, String fieldName) {
+    Object raw = attributes == null ? null : attributes.get("payload");
+    if (!(raw instanceof String payload) || payload.isBlank()) {
+      return null;
+    }
+    try {
+      Object parsed = com.example.batch.common.utils.JsonUtils.fromJson(payload, Object.class);
+      if (parsed instanceof Map<?, ?> map) {
+        Object v = ((Map<String, Object>) map).get(fieldName);
+        if (v instanceof String s && Texts.hasText(s)) {
+          return s;
+        }
+      }
+    } catch (IllegalArgumentException ignored) {
+      // 非 JSON / 非对象 payload 不阻断调度，回退到其他 jobCode 来源
+    }
+    return null;
   }
 
   protected String resolveText(Map<String, Object> attributes, String... keys) {

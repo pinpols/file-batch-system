@@ -7,6 +7,7 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
@@ -322,7 +323,10 @@ public class DefaultTriggerService implements TriggerService {
     if (command == null || command.descriptor() == null) {
       return null;
     }
-    String calendarCode = command.descriptor().getCalendarCode();
+    // 归一化到「配置码」形式（小写 + `-`→`_`，与 V64 migration 对 DB 存量归一一致），
+    // 否则 Quartz JobDataMap 里老存下来的 `strict-calendar` 在 DB 是 `strict_calendar` 时查不到。
+    String calendarCode =
+        CodeNormalizer.toConfigFormOrNull(command.descriptor().getCalendarCode());
     if (!Texts.hasText(calendarCode)) {
       return null;
     }
