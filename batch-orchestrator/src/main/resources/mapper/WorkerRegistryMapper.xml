@@ -37,4 +37,32 @@
            and heartbeat_at &lt; #{cutoff}
     </update>
 
+    <!-- capability_tags 数据质量扫描：筛出"非字符串数组"形态的活跃 worker。
+         正常形态：NULL / [] / ["ingest", "delivery"]。
+         异常形态：对象、标量、含非字符串元素的数组——selector 会把它当作无能力静默跳过，
+         导致 partition 反复无可用 worker；由审计调度器以 WARN + metric 暴露。 -->
+    <resultMap id="InvalidCapabilityTagsRecord"
+               type="com.example.batch.orchestrator.mapper.InvalidCapabilityTagsRecord">
+        <result property="tenantId"   column="tenant_id"/>
+        <result property="workerCode" column="worker_code"/>
+        <result property="rawValue"   column="raw_value"/>
+    </resultMap>
+
+    <select id="selectInvalidCapabilityTags" resultMap="InvalidCapabilityTagsRecord">
+        select tenant_id,
+               worker_code,
+               capability_tags::text as raw_value
+          from batch.worker_registry
+         where status in ('ONLINE', 'DRAINING')
+           and capability_tags is not null
+           and (
+                 jsonb_typeof(capability_tags) &lt;&gt; 'array'
+                 or exists (
+                   select 1
+                     from jsonb_array_elements(capability_tags) elem
+                    where jsonb_typeof(elem) &lt;&gt; 'string'
+                 )
+               )
+    </select>
+
 </mapper>
