@@ -1,28 +1,13 @@
 # Test Full Coverage Import Suite
 
-租户：`test-full-coverage`
+租户：`ta` / `tb` / `tc`、`default-tenant`
 
-这套样本用于在前台按 Excel 导入方式初始化同一个租户，所有文件的 `tenant_id`、编码和上下游引用已经对齐。
+本目录下的 `*-tenant-config-package-test.xlsx` 是系统当前主用的整合式配置包（8 sheet：job_definition / file_channel_config / alert_routing_config / pipeline_definition / pipeline_step_definition / workflow_definition / workflow_node / workflow_edge），通过 `POST /api/console/config/tenant-package/excel/{upload,preview,apply}` 导入。
 
-推荐导入顺序：
+- `ta/tb/tc-tenant-config-package-test.xlsx`：三大业务租户样本。按租户分工覆盖枚举长尾——ta 补 IMPORT FEEDBACK 全链 / EXPORT 全链 / LOCAL channel；tb 补 DISPATCH 全链 / API channel；tc 补 GATEWAY ALL 与 N_OF join + FAILURE / CONDITION 边。幂等追加脚本 `scripts/local/append-tenant-coverage.py`。
+- `default-tenant-config-package-test.xlsx`：与 `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql` 中 v4 硬化批次新增的 `default-tenant` 项对齐（4 条本地化 channel_config + `wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed` 3 条探针 workflow + 对应 job_definition）。生成脚本 `scripts/local/gen-default-tenant-excel.py`。
 
-1. `01-resource-queue-full-coverage-test.xlsx`
-2. `02-batch-window-full-coverage-test.xlsx`
-3. `03-business-calendar-full-coverage-test.xlsx`
-4. `04-tenant-quota-policy-full-coverage-test.xlsx`
-5. `05-file-channel-full-coverage-test.xlsx`
-6. `06-file-template-full-coverage-test.xlsx`
-7. `07-pipeline-definition-full-coverage-test.xlsx`
-8. `08-job-definition-full-coverage-test.xlsx`
-9. `09-workflow-full-coverage-test.xlsx`
-10. `10-alert-routing-full-coverage-test.xlsx`
-
-说明：
-
-- `resource queue` 中的 `queue-general`、`queue-export`、`queue-workflow` 已与 job definition 样本保持一致。
-- `workflow` 引用了 `general-manual-001` 和 `import-cron-001` 这两个 job code。
-- `pipeline definition` 使用了 `import-cron-001`、`export-cron-001`，并与 `file channel`、`file template` 的编码保持一致。
-- 每个 workbook 都带 `README`、`DICT`、`VALIDATION` sheet，便于和系统模板习惯保持一致。
+> **关于 `file_template_config`**：整合式 Excel 不含该 sheet 是系统设计，不是 gap。`ConsoleFileTemplateExcelController` 已 `@Deprecated`（建租户时从 `default` 租户克隆 + 页面单条维护，不走 Excel 批量）。`tenant-init` JSON 请求（`POST /api/console/config/tenant-init`）支持 `FileTemplateConfigUpsertParam`，需要批量初始化时走那条路；多租户 seed SQL 里的 `IMP-TXN-FIXED` / `IMP-TXN-XML` / `IMP-TRANSACTION-CSV.jdbcMappedImport` / `IMP-RISK-SCORE-JSON.jdbcMappedImport` / `EXP-RISK-ALERT-JSON.sqlTemplateExport` 也是这条路的样本（直接灌 DB 是为了 E2E 省事）。
 
 ## E2E 渠道基础设施（ta/tb/tc）
 
