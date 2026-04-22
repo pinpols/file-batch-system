@@ -76,7 +76,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     String jobCode = "IT_RETRY_" + suffix;
     String requestId = "req-retry-" + suffix;
     String dedupKey = "dedup-retry-" + suffix;
-    String workerCode = "wk-retry-" + suffix;
+    String workerCode = "WK-RETRY-" + suffix;
 
     // 初始化一个 FIXED 重试策略、最多重试 1 次的任务定义
     jdbcTemplate.update(
@@ -118,7 +118,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         """
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, status, heartbeat_at, current_load
-        ) values (?, ?, ?, '{}'::jsonb, 'ONLINE', now(), 0)
+        ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
         """,
         TENANT,
         workerCode,

@@ -168,7 +168,7 @@ public class WaitingPartitionDispatchScheduler {
     ResourceSchedulingDecision decision =
         resourceScheduler.schedule(buildRequest(jobInstance, partition, task, jobDefinition));
     if (!decision.isDispatchable()) {
-      log.info(
+      log.debug(
           "skip partitionId={}: not dispatchable, reason={}, route={}",
           partition.getId(),
           decision.getReasonCode(),

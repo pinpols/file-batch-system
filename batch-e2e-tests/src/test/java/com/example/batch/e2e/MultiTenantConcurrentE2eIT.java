@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.e2e.apps.E2eImportApplication;
 import com.example.batch.e2e.support.E2eOutboxPublishSupport;
 import com.example.batch.e2e.support.E2eScenarioFixture;
@@ -80,6 +81,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
    */
   @Test
   void concurrentTenantJobsAreIsolatedAndBothSucceed() throws Exception {
+    awaitWorkerOnline(T1, "e2e-import-1", "IMPORT");
     seedTenantTemplates(T2);
     seedWorkerRegistry(T2, "e2e-import-1", "import");
 
@@ -511,12 +513,36 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
             status, heartbeat_at, current_load, drain_started_at, drain_deadline_at
-        ) values (?, ?, ?, '{}'::jsonb, null, 'ONLINE', ?, 0, null, null)
+        ) values (?, ?, ?, '[]'::jsonb, null, 'ONLINE', ?, 0, null, null)
         """,
         tenantId,
         workerCode,
-        workerGroup,
+        CodeNormalizer.toUpperOrNull(workerGroup),
         Timestamp.from(Instant.now()));
+  }
+
+  private void awaitWorkerOnline(String tenantId, String workerCode, String workerGroup) {
+    await()
+        .atMost(Duration.ofSeconds(30))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(
+            () -> {
+              Integer count =
+                  jdbcTemplate.queryForObject(
+                      """
+                      select count(1)::int
+                      from batch.worker_registry
+                      where tenant_id = ?
+                        and worker_code = ?
+                        and worker_group = ?
+                        and status = 'ONLINE'
+                      """,
+                      Integer.class,
+                      tenantId,
+                      workerCode,
+                      CodeNormalizer.toUpperOrNull(workerGroup));
+              assertThat(count).isEqualTo(1);
+            });
   }
 
   private String taskStatus(String tenantId, String dedupKey) {

@@ -202,7 +202,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     String jobCode = "IT_" + prefix + "_" + suffix;
     String requestId = "req-" + prefix.toLowerCase() + "-" + suffix;
     String dedupKey = "dedup-" + prefix.toLowerCase() + "-" + suffix;
-    String workerCode = "wk-" + prefix.toLowerCase() + "-" + suffix;
+    String workerCode = "WK-" + prefix + "-" + suffix;
 
     jdbcTemplate.update(
         """
@@ -238,7 +238,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, status,
             heartbeat_at, current_load
-        ) values (?, ?, ?, '{}'::jsonb, 'ONLINE', now(), 0)
+        ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
         """,
         TENANT, workerCode, workerCode);
 
@@ -269,7 +269,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     String jobCode = "IT_" + prefix + "_" + suffix;
     String requestId = "req-" + prefix.toLowerCase() + "-" + suffix;
     String dedupKey = "dedup-" + prefix.toLowerCase() + "-" + suffix;
-    String workerCode = "wk-" + prefix.toLowerCase() + "-" + suffix;
+    String workerCode = "WK-" + prefix + "-" + suffix;
 
     // retry_policy=NONE, retry_max_count=0 → 立即进死信
     jdbcTemplate.update(
@@ -306,7 +306,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, status,
             heartbeat_at, current_load
-        ) values (?, ?, ?, '{}'::jsonb, 'ONLINE', now(), 0)
+        ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
         """,
         TENANT, workerCode, workerCode);
 

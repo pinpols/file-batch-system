@@ -8,6 +8,7 @@ import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.OutboxPublisher;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
@@ -286,7 +287,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         tenantId,
         jobCode,
         "restart dispatch " + jobCode,
-        workerGroup);
+        CodeNormalizer.toUpperOrNull(workerGroup));
 
     jdbcTemplate.update(
         """
@@ -385,6 +386,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             JAVA_BIN,
             "-jar",
             workerExecJar.toString(),
+            "--spring.profiles.active=test,e2e",
             "--spring.main.web-application-type=none",
             "--spring.datasource.url=" + platformJdbcUrl(),
             "--spring.datasource.username=batch_user",
@@ -440,7 +442,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
                   jdbcTemplate.queryForObject(
                       """
                       select count(1)::int from batch.worker_registry
-                      where tenant_id = ? and worker_code = ? and status = 'ONLINE' and worker_group = 'dispatch'
+                      where tenant_id = ? and worker_code = ? and status = 'ONLINE' and worker_group = 'DISPATCH'
                       """,
                       Integer.class,
                       tenantId,
