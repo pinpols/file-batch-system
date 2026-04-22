@@ -163,6 +163,65 @@ public enum XxxType implements DictEnum {
 
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
 
+### 2026-04-22
+- **清理 `docs/test-data/deprecated-single-sheet-imports/`**：10 份单 sheet Excel 样本（`01..10-*-full-coverage-test.xlsx`，绑定孤立租户 `test-full-coverage`）已全量删除。3 个对应控制器已 `@Deprecated`（FileTemplate / ResourceQueue / AlertRouting），其余 7 个虽未标注但流程上被整合式 Excel 和 tenant-init JSON 取代，样本无人装载。同步修 README：明确 `file_template_config` 不进整合式 Excel 是系统设计（建租户时从 `default` 克隆 + 页面单条维护），不是"gap"；批量初始化走 `tenant-init` 的 `FileTemplateConfigUpsertParam`。
+- **前端整合式 Excel 按租户分工补齐枚举覆盖**（在 default-tenant 之外）：
+  - **ta（零售）**：新 `TA_IMPORT_ORDER` IMPORT 6-stage 流水线（`RECEIVE→PREPROCESS→PARSE→VALIDATE→LOAD→FEEDBACK` 全链）+ 既有 `TA_EXPORT_REPORT` 补 5-stage EXPORT 流水线（`PREPARE→GENERATE→STORE→REGISTER→COMPLETE`）+ `ta_local_archive` LOCAL channel。
+  - **tb（金融）**：新 `TB_DISPATCH_SETTLE` DISPATCH 6-stage 流水线（`PREPARE→DISPATCH→ACK→RETRY→COMPENSATE→COMPLETE` 全链）+ `tb_api_ingest` API channel（区别于已有 API_PUSH）。
+  - **tc（风控）**：两个新 GATEWAY workflow —— `TC_WF_GATEWAY_ALL`（`joinMode=ALL`，3 branch）和 `TC_WF_GATEWAY_N_OF`（`joinMode=N_OF, joinThreshold=2`，带 FAILURE / CONDITION 边的 fallback 子路径）覆盖 `WorkflowJoinMode` 全部三值 + `workflow_edge.edge_type` 全部四值。
+  - 追加脚本 `scripts/local/append-tenant-coverage.py` 幂等处理（按主键查重跳过），重复跑不会产生重复行；源于 v4 审计发现"ta/tb/tc excel 场景长尾缺口"（FEEDBACK / STORE / REGISTER / DISPATCH 全链 / API / LOCAL / ALL / N_OF / FAILURE / CONDITION）。
+- **前端整合式 Excel 补齐 default-tenant 样本**：v4 硬化批次在 `multi-tenant-seed.sql` 给 `default-tenant` 新增了 4 条本地化 dispatch channel_config + 3 条探针 workflow（`wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed`）+ 对应 job_definition，但 `test-full-coverage-import-suite/` 只有 ta/tb/tc 的 `*-tenant-config-package-test.xlsx`，前端 `/api/console/config/tenant-package/excel/*` 入口无法一键重放这批 seed。
+  - 新增 `docs/test-data/test-full-coverage-import-suite/default-tenant-config-package-test.xlsx`（用生成脚本 `scripts/local/gen-default-tenant-excel.py` 产出，整合式 8 sheet 结构，按需修改脚本重生）。
+  - 更新同目录 `README.md`：声明四个租户样本的用途、生成脚本指针、以及已知 gap——整合式 Excel 暂不含 `file_template_config` sheet，因此 tb/tc 本轮新增的 `IMP-TXN-FIXED` / `IMP-TXN-XML` / `IMP-TRANSACTION-CSV.jdbcMappedImport` / `IMP-RISK-SCORE-JSON.jdbcMappedImport` / `EXP-RISK-ALERT-JSON.sqlTemplateExport` 目前仅落地 seed SQL，等后续整合式 Excel 增加该 sheet 后再同步。
+- **`capability_tags` 数据质量审计调度器**（审计发现的唯一"脏数据妥协"兜底）：`DefaultWorkerSelector.capabilityTagsContain` 为防畸形 JSON 拖垮 selector，catch 后返回 false（WARN 一条即过）——数据源头可能长期无人发现。新增 `WorkerCapabilityTagsAuditScheduler` 默认每 5 min（`batch.worker.audit.capability-tags-scan-interval-millis`）扫描 ONLINE/DRAINING worker：
+  - DB 侧 `WorkerRegistryMapper.selectInvalidCapabilityTags` 用 `jsonb_typeof(capability_tags) <> 'array'` + 含非字符串元素过滤，O(activeWorkers) 扫表。
+  - App 侧用 `JsonNode` 而非 `String[].class` 做二次严格校验——Jackson 默认会把 `[1,2]` 这种数值元素静默强转成字符串（这恰恰是要审计的脏数据），必须按元素 `isTextual()` 判定才能暴露。
+  - 命中时 WARN 日志（采样前 10 条，`capability-tags-log-sample-limit` 可覆盖）+ `batch.worker.capability_tags.invalid.count` gauge，Grafana 可设"> 0 持续 2 周期"告警。
+  - ShedLock(`worker_capability_tags_audit`, PT2M)；`OrchestratorGracefulShutdown.isDraining()` 时跳过。
+  - 新增 `InvalidCapabilityTagsRecord` DTO（tenant/code/raw）+ `WorkerCapabilityTagsAuditSchedulerTest` 7 case（draining/empty/对象/标量/含数值数组/合法数组/mixed/null-blank）。
+  - 顺手修 `DefaultWorkflowNodeDispatchServiceIdempotencyTest` 对 `DefaultWorkflowNodeDispatchService` 构造器的过期调用（缺 `NamedParameterJdbcTemplate` 入参，早先补 upstream partition output 查询时遗漏）。
+- **v4 P0/P1/P3 批量闭环**（仅 P2 验证型场景保留）：
+  - **P3-1 calendar WARN**：`DefaultTriggerService.resolveCalendar` 加 `CodeNormalizer.toConfigFormOrNull` 归一 `strict-calendar` → `strict_calendar`，消除每 30min 刷的「calendar definition not found」WARN。
+  - **P3-3 P3-4 数据清理**：新增 `scripts/db/cleanup-historical-failures.sql` 按保留窗口级联清理 `job_instance`/`job_partition`/`job_step_instance`/`job_task`/`pipeline_instance`/`pipeline_step_run`/`file_dispatch_record`/`workflow_run`/`workflow_node_run`/`dead_letter_task`/`trigger_request`/`outbox_event` 一条龙。本轮跑完：146 FAILED + 4 CANCELLED 清零；146 DL 剩 3 条活跃。
+  - **P1-4 EXPORT SQL 占位符白名单**：`SqlTemplateExportSecurityProperties.allowedExtraParams` 默认加入 `bizDate`，不再因「常见业务日期过滤」被拒。
+  - **P1-5 DISPATCH 硬错不可重试**：`DefaultRetryGovernanceService` 加 `NON_RETRYABLE_ERROR_CODES` 集合（`DISPATCH_PREPARE_FILE_MISSING` / `DISPATCH_PREPARE_FILE_NOT_FOUND` / `DISPATCH_PREPARE_CHANNEL_NOT_FOUND` / `DISPATCH_PREPARE_INVALID` / `DISPATCH_PREPARE_PARSE_FAILED` / `EXPORT_GENERATE_NO_PAYLOAD` / `STEP_NOT_FOUND`），这类一次性硬错直接进死信，不再 EXPONENTIAL 重试 3 次浪费指数 backoff 与 DL 空间。
+  - **P1-3 EXPORT 包装层校验 `id` 列**：`SqlTemplateExportSpec.parse` 在加载模板时用词界正则预检 `cursorColumn`（默认 `id`）是否在 SQL 出现，不在就直接抛 `IllegalArgumentException` 明示「either add to SELECT, or set sqlTemplateExport.cursorColumn」，避免运行期 PostgreSQL `bad SQL grammar` 难调试。
+  - **P0-3 空壳 workflow 清理**：删掉 24 条 0-node 的 `workflow_definition`（跨 4 租户 × 6 workflow_code：`wf_archive_flow / wf_compliance_check / wf_data_migration / wf_full_pipeline / wf_onboarding / wf_settle_dispatch`），同时把 default-tenant 3 条指向这些空壳的 `job_definition` 禁用。
+  - **P1-1 Workflow 节点 payload 串联**：`DefaultWorkflowNodeDispatchService.buildTaskPayload` 新增两层合并：
+    - `mergeNodeParams`：把当前 `workflow_node.node_params`（用户在设计器配的 `templateCode` / `channelCode` 等静态字段）合并进下游 task payload。
+    - `mergeUpstreamPartitionOutputs`：扫描同一 job_instance 下已 SUCCESS 的兄弟分区 `output_summary`，按保守白名单（`fileId / fileCode / batchNo / recordCount / bizDate`）抽取后塞进 payload；SETTLE 生成的文件自动流向 DISPATCH 节点。
+    验证：触发 `wf_eod_process` 后观察 SETTLE 分区的 `task_payload`，5 个 node_params 字段（`step / batchNo / bizType / fileCode / templateCode`）正确注入，与 `sourcePayload` 字段共存。
+    跟进：经查 `WaitingPartitionDispatchScheduler` 本身没 bug。早先误判「不 release」的根因是 worker 进程在长时间运行中挂掉、心跳超时被 `WorkerHeartbeatTimeoutScheduler` 打 OFFLINE，selector 自然 `candidates=0 / no_online_workers_in_group` 静默重试。重启 workers 后 WAITING partition 立即释放。顺手给该 scheduler 加了 `waiting dispatch tick` 和 `skip partitionId=... reason=...` 两级 INFO 日志，今后此类卡死一目了然。
+- **Workflow→worker step executor 协议错位修复**（上段副发现的根因落地）：`STEP_NOT_FOUND: DISPATCH_PREPARE` 不是 worker 把 payload.steps 当执行链解读的问题，而是 worker 拿 `request.jobCode()`（= workflow 自己的 `wf_eod_process`）去查 `pipeline_definition` → 命中的是跨 worker 的复合 pipeline（混着 EXPORT_* 和 DISPATCH_* 两类 impl_code）→ EXPORT worker 在 DISPATCH_PREPARE 上自然报错。三处修法一起上：
+  - `AbstractPipelineStepExecutionAdapter.resolveJobCode` 优先读 task payload JSON 的 `targetJobCode`（orchestrator 派发 workflow TASK 节点时已经写入），确保 worker 加载本域独立 pipeline（`exp_settlement_daily` / `disp_sftp_bank` 这种纯 EXPORT / DISPATCH 的 pipeline，而不是 `wf_eod_process` 的复合 pipeline）。
+  - `DefaultWorkflowNodeDispatchService.mergeUpstreamPartitionOutputs` 加两级兜底查 fileId：先按 `jobInstance.traceId` 查 `file_record.trace_id`（本轮产出的文件），没有时再按 `batchNo → file_record.source_ref` 查（按业务键幂等复用的文件，如 `settlement-2026-04-22`）；抽到后注入下游 payload。DISPATCH 节点从此能看到 SETTLE 上游生成的 fileId。
+  - `WaitingPartitionDispatchScheduler.buildRequest` 优先读 `partition.input_snapshot` 里 sub-job 专用的 `queueCode / windowCode`，否则才回退到 `jobInstance` 的 workflow 级值。避免 DISPATCH partition 按 `workflow_queue.resource_tag=workflow` 去找 DISPATCH worker → capability_tags=[delivery] 永远不匹配的死循环。
+  - 端到端验证：wf_eod_process（instance 219）的 SETTLE SUCCESS → DISPATCH partition 的 `task_payload` 含 `fileId=470 / channelCode=sftp_bank / targetJobCode=disp_sftp_bank` → DISPATCH worker 加载正确 pipeline 跑到 DISPATCH_SEND 阶段。最后的 `sftp_host missing` 是 channel config 种子数据硬伤，与代码无关。
+- **P2 场景真实数据验证**（除压测）：逐条走通 —— drain enable/disable（orchestrator+trigger 双边，trigger 同步切 Quartz STANDBY/STARTED）、worker drain 生命周期（ONLINE→DRAINING→DECOMMISSIONED）、file archive/redispatch（file 470 `GENERATED→ARCHIVED`）、compensation 独立（`cmp-...afe1e065` JOB type SUCCESS）、LOCAL dispatch 真文件落盘、OSS dispatch 真上传、日历 holiday 插入验证。未覆盖：FIXED_WIDTH/XML（无种子模板）、GATEWAY 节点 + PIPELINE/MIXED 类型 workflow + join 模式（ALL/ANY/ANY_N）（无种子实例）、API/API_PUSH/EMAIL/NAS/SFTP 最后一公里（endpoint 占位或 channel config 种子问题）。
+- **P2 未通过项种子补齐**（沉到 `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql` 末尾）：
+  - default-tenant 4 条 dispatch channel config 重写：`sftp_bank`→`localhost:12222`（docker SFTP 映射）、`email_ops`→`localhost:1025`（MailHog-ready）、`nas_archive`→`/tmp/batch/nas-probe`、`oss_backup`→`http://localhost:19000`（本地 MinIO），全部对齐 `ChannelConfigMerge` 白名单的 key（sftp_host/smtp_host/oss_bucket/nas_remote_directory 等）。验证：SFTP 真上传到 `/home/ta/inbound/settlement-2026-04-22`；NAS 真写到 `/tmp/batch/nas-probe/settlement-{bizDate}.csv`；LOCAL + OSS 之前已绿。
+  - tb 两条文件格式模板：`IMP-TXN-FIXED`（FIXED_WIDTH，record_length=70，6 定宽字段；2 行真实数据落 `biz.transaction`）+ `IMP-TXN-XML`（XML，`parseHints.xmlRecordElement=txn`；2 行真实数据落 `biz.transaction`）。XML 模板必须把 `xmlRecordElement` 放在 `query_param_schema.parseHints` 下（被 `ParseSupport.parseHints` 取），顶层或 `xml_record_element` 作为后备路径；这条踩坑经验也记在种子注释里。
+  - 两条探针 workflow：`wf_probe_pipeline`（workflow_type=PIPELINE，START→TASK→END）+ `wf_probe_gateway`（DAG，含 GATEWAY fork、并行两 TASK 分支、`joinMode=ANY` 的 MERGE gateway）。验证：instance 239 真走完 START→FORK(GATEWAY→SUCCESS)→BRANCH_A + BRANCH_B 并行派发（`failed_partition_count=2` 证明两条分支都真实执行），PIPELINE 类型 workflow 派发链路同样走通。MIXED 类型未加种子（code 路径支持，样板需另给）。
+- **`ParseSupport.writeParsedRecord` 去硬编码 `CustomerImportPayload`（P1-2 修完）**：`preserveLogicalRow=false` 分支把 row 强转 `CustomerImportPayload` 的代码删除，改为原样 NDJSON 输出。主链路 I/O 形态不变（LoadStep/ValidateStep 本来就按 Map 走），但后续非 customer schema 的 IMPORT 模板即便忘配 `jdbc_mapped_import` 也不会被默默吞字段。`CustomerImportPayload` 类和 LoadStep/DataQuality 的 legacy 重载保留，与硬编码问题无关、等后续统一下线 legacy 路径时再清。同场修掉 `ImportIngressScannerTest` / `GenerateStepTest` 两个旧版构造器调用。
+
+### 2026-04-21
+- **Worker `capability_tags` 心跳上报闭环（P0-2 修完）**：让 V4-BUG-2 的 selector 代码修复真正生效。
+  - `WorkerConfiguration` 接口加 `default List<String> capabilityTags()`（默认空列表，向后兼容）
+  - 3 个 `@ConfigurationProperties` record（`ImportWorkerConfiguration` / `ExportWorkerConfiguration` / `DispatchWorkerConfiguration`）加 `List<String> capabilityTags` 字段 + `@Override` 把 null 归一成 `List.of()`
+  - `WorkerRegistration` domain 加 `List<String> capabilityTags`；`AbstractWorkerLoop.ensureStarted` 把 `cfg.capabilityTags()` 塞进 registration；`HttpWorkerRegistryClient.toHeartbeatDto` 用这个值替代原 `null`
+  - 3 个 worker 的 `application-local.yml` 声明具体 tag（import=`[ingest]` / export=`[report, workflow]` / dispatch=`[delivery]`）
+  - 踩坑提示：只改 `batch-worker-core` 源码后，直接 `mvn package` 下游 worker 模块会用本地 m2 缓存的旧 jar 打包。必须先 `mvn -pl batch-worker-core install -DskipTests`，否则下游 jar 里没有新的 setter 调用。
+  - 恢复 `default-tenant` 2 条 queue 的 `resource_tag`（`export_queue=report` / `workflow_queue=workflow`），之前 V4-P0-1 临时清空的状态回滚为正常。
+- **多租户业务链路验证批次 v4**：详见 `docs/analysis/fix-report-v4.md` / `docs/analysis/hardening-backlog-v4.md`。修了 2 条代码 bug：
+  - `TriggerSecurityConfiguration.InternalSecretFilter.setAuthenticated` 用 `AnonymousAuthenticationToken` 被 Spring Security `.authenticated()` 拒绝（trustResolver 判 anonymous）→ 换 `UsernamePasswordAuthenticationToken.authenticated(...)`。原因：`/api/triggers/management/*` 全线 403 / bypass-mode 失效。
+  - `DefaultWorkerSelector.matchesResourceTag` 只比对 `worker.resource_tag` 单值，忽略 `capability_tags` JSONB 数组 → 扩展为"单值等于 OR 数组命中"，同时畸形 JSON 降级为 WARN 不抛。新增 `DefaultWorkerSelectorTest` 6 case。
+- **worker-import `business` 数据源 URL 加 `?stringtype=unspecified`**（`application-local.yml`）：`GenericJdbcMappedImportLoadPlugin.setObject(String)` 绑定到 NUMERIC/DATE 列时 Postgres 不隐式 cast，导致 tb TRANSACTION / tc RISK_SCORE 批 LOAD 失败。加参数后服务端按列类型自动转换。
+- **DB 改动种子化（Flyway 不承接这类；详见 hardening-backlog-v4 的 V4-P0-1）**：
+  - ✅ `biz.transaction` / `biz.risk_score` / `biz.risk_alert` 三张业务表 DDL 已落 `scripts/db/business/create_biz_tables.sql`（含索引 + CHECK）
+  - ✅ `tb/IMP-TRANSACTION-CSV`、`tc/IMP-RISK-SCORE-JSON`、`tc/EXP-RISK-ALERT-JSON` 的 `jdbcMappedImport` / `sqlTemplateExport` / `default_query_sql` 已落 `batch-e2e-tests/src/test/resources/db/testdata/multi-tenant-seed.sql`（UPDATE 块在原 INSERT 下方）
+  - ❓ `default-tenant/exp_settlement_csv_v1` 源头暂未定位（live DB created_by='system'，可能来自 Console 上传 / 租户初始化服务），留到 P1-1 批次
+  - ❌ `default-tenant` `export_queue` / `workflow_queue` `resource_tag` 清空、2 条 `job_definition.enabled=false`（TA_DISPATCH_ORDER / gen_reconcile）不入种子 — 属运维临时动作 / 待 P0-2 根治
+
 ### 2026-04-20
 - **脏数据入口治理**：新增 `CodeNormalizer` 工具（batch-common/utils），定义两类归一规则：
   - **分组码**（`worker_group` / `tenant_id`）→ UPPER + `^[A-Z][A-Z0-9_]*$` 校验
