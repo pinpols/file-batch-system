@@ -59,6 +59,7 @@ class GenerateStepTest {
             5000L,
             "batch-export",
             "group-export",
+            null,
             500_000L,
             new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
 
@@ -70,7 +71,7 @@ class GenerateStepTest {
                 new DelimitedExportFormat(objectMapper),
                 new ExcelExportFormat(objectMapper),
                 new FixedWidthExportFormat(objectMapper)));
-    generateStep = new GenerateStep(pluginRegistry, formatStrategyRegistry, config);
+    generateStep = new GenerateStep(pluginRegistry, formatStrategyRegistry, config, objectMapper);
   }
 
   // ── DELIMITED / CSV ────────────────────────────────────────────────────────

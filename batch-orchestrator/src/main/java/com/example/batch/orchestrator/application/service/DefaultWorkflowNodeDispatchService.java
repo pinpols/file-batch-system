@@ -66,6 +66,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final ResourceScheduler resourceScheduler;
   private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
   private final ObjectProvider<LaunchService> launchServiceProvider;
+  private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbcTemplate;
 
   /**
    * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量，
@@ -165,7 +166,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     List<JobPartitionEntity> newPartitions =
         partitionLifecycleService.createPartitions(
             plan, jobInstance.getId(), decision.getPartitionStatus());
-    String taskPayload = buildTaskPayload(sourcePayload, node, targetJobCode);
+    String taskPayload =
+        buildTaskPayload(sourcePayload, node, targetJobCode, workflowNode, jobInstance);
     int sequence = 1;
     for (JobPartitionEntity partition : newPartitions) {
       JobTaskEntity task = new JobTaskEntity();
@@ -534,9 +536,25 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         : latestNodeRun.getRunSeq() + 1;
   }
 
+  /**
+   * 组装下游节点的 task payload。分层优先级（后写覆盖前写）：
+   *
+   * <ol>
+   *   <li>workflow 实例的 {@code sourcePayload}（整条链路共享的根 params）
+   *   <li>上游兄弟分区产出（{@code job_partition.output_summary} 里带的 {@code fileId} 等），保证
+   *       SETTLE 生成的 file_record id 自动流向 DISPATCH 节点，而不是靠每条 workflow 手工声明
+   *   <li>当前节点的 {@code workflow_node.node_params}（节点级静态配置，如 DISPATCH 的 {@code channelCode}）
+   *   <li>workflow 元数据（{@code workflowNodeCode / workflowNodeType / targetJobCode}），供 worker
+   *       侧用作上下文日志、幂等键计算
+   * </ol>
+   */
   @SuppressWarnings("unchecked")
   private String buildTaskPayload(
-      String sourcePayload, WorkflowDagService.DagNodeResolution node, String targetJobCode) {
+      String sourcePayload,
+      WorkflowDagService.DagNodeResolution node,
+      String targetJobCode,
+      WorkflowNodeEntity workflowNode,
+      JobInstanceEntity jobInstance) {
     Map<String, Object> payload = new LinkedHashMap<>();
     if (sourcePayload != null && !sourcePayload.isBlank()) {
       try {
@@ -550,10 +568,136 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         payload.put("upstreamPayloadRaw", sourcePayload);
       }
     }
+    mergeUpstreamPartitionOutputs(payload, jobInstance);
+    mergeNodeParams(payload, workflowNode);
     payload.put("workflowNodeCode", node.nodeCode());
     payload.put("workflowNodeType", node.nodeType());
     payload.put("targetJobCode", targetJobCode);
     return JsonUtils.toJson(payload);
+  }
+
+  /**
+   * 扫描当前 workflow_run 同一 job_instance 下已 SUCCESS 的兄弟分区的 {@code output_summary}，
+   * 把 {@code fileId} / {@code fileCode} 这类跨节点常用字段挑出来塞进 payload。保守做法：
+   * 只挑已知少量字段（避免把 partition 内部诊断字段污染到 worker payload）。多分区并存时最新成功的胜出。
+   */
+  @SuppressWarnings("unchecked")
+  private void mergeUpstreamPartitionOutputs(
+      Map<String, Object> payload, JobInstanceEntity jobInstance) {
+    if (jobInstance == null || jobInstance.getId() == null) {
+      return;
+    }
+    List<JobPartitionEntity> siblings =
+        jobMappers.jobPartitionMapper.selectByQuery(
+            new JobPartitionQuery(jobInstance.getTenantId(), jobInstance.getId(), null, null));
+    if (siblings == null || siblings.isEmpty()) {
+      return;
+    }
+    JobPartitionEntity latestSuccess = null;
+    for (JobPartitionEntity p : siblings) {
+      if (!PartitionStatus.SUCCESS.code().equals(p.getPartitionStatus())) {
+        continue;
+      }
+      if (latestSuccess == null
+          || (p.getFinishedAt() != null
+              && latestSuccess.getFinishedAt() != null
+              && p.getFinishedAt().isAfter(latestSuccess.getFinishedAt()))) {
+        latestSuccess = p;
+      }
+    }
+    if (latestSuccess != null && latestSuccess.getOutputSummary() != null) {
+      try {
+        Object outputObj = JsonUtils.fromJson(latestSuccess.getOutputSummary(), Object.class);
+        if (outputObj instanceof Map<?, ?> outMap) {
+          Map<String, Object> out = (Map<String, Object>) outMap;
+          // 保守白名单：只把已知的跨节点常用字段挑出来
+          for (String key : List.of("fileId", "fileCode", "batchNo", "recordCount", "bizDate")) {
+            Object v = out.get(key);
+            if (v != null && !payload.containsKey(key)) {
+              payload.put(key, v);
+            }
+          }
+        }
+      } catch (IllegalArgumentException ignored) {
+        // 跳过脏 outputSummary
+      }
+    }
+    // 兜底：partition.output_summary 不含 fileId 时，通过 trace_id 或 batchNo 反查 file_record。
+    // 两条独立的线索都要查：
+    //   (a) trace_id - 本次 run 期间 EXPORT worker 新建的 file_record 会打同一 trace_id
+    //   (b) source_ref = batchNo - 文件按 batchNo 幂等复用时，trace_id 不更新但 source_ref 一致
+    //       （settlement-2026-04-22 这种业务上每日唯一的文件就是这种场景）
+    if (!payload.containsKey("fileId") && jobInstance.getTenantId() != null) {
+      Long fileId = null;
+      if (jobInstance.getTraceId() != null && !jobInstance.getTraceId().isBlank()) {
+        fileId = lookupFileIdByTraceId(jobInstance.getTenantId(), jobInstance.getTraceId());
+      }
+      if (fileId == null) {
+        Object batchNo = payload.get("batchNo");
+        if (batchNo != null && !String.valueOf(batchNo).isBlank()) {
+          fileId = lookupFileIdBySourceRef(jobInstance.getTenantId(), String.valueOf(batchNo));
+        }
+      }
+      if (fileId != null) {
+        payload.put("fileId", String.valueOf(fileId));
+      }
+    }
+  }
+
+  private Long lookupFileIdByTraceId(String tenantId, String traceId) {
+    return queryFileIdSingle(
+        "select id from batch.file_record where tenant_id = :tenantId"
+            + " and trace_id = :traceId and source_type = 'GENERATED'"
+            + " order by id desc limit 1",
+        new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+            .addValue("tenantId", tenantId)
+            .addValue("traceId", traceId));
+  }
+
+  private Long lookupFileIdBySourceRef(String tenantId, String sourceRef) {
+    return queryFileIdSingle(
+        "select id from batch.file_record where tenant_id = :tenantId"
+            + " and source_ref = :sourceRef and source_type = 'GENERATED'"
+            + " order by id desc limit 1",
+        new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+            .addValue("tenantId", tenantId)
+            .addValue("sourceRef", sourceRef));
+  }
+
+  private Long queryFileIdSingle(
+      String sql, org.springframework.jdbc.core.namedparam.MapSqlParameterSource params) {
+    try {
+      return jdbcTemplate.queryForObject(sql, params, Long.class);
+    } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
+      return null;
+    } catch (RuntimeException ex) {
+      org.slf4j.LoggerFactory.getLogger(DefaultWorkflowNodeDispatchService.class)
+          .warn("file_record lookup failed: params={}, error={}", params.getValues(), ex.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * 合并当前节点的 {@code workflow_node.node_params}（JSON 对象）到 payload。用户在 workflow 设计器
+   * 配的 templateCode / channelCode 等静态字段由此流入 worker，无需每次触发时手工重复。
+   */
+  @SuppressWarnings("unchecked")
+  private void mergeNodeParams(Map<String, Object> payload, WorkflowNodeEntity workflowNode) {
+    if (workflowNode == null || workflowNode.getNodeParams() == null) {
+      return;
+    }
+    String raw = workflowNode.getNodeParams();
+    if (raw.isBlank()) {
+      return;
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(raw, Object.class);
+      if (parsed instanceof Map<?, ?> map) {
+        ((Map<String, Object>) map).forEach(payload::putIfAbsent);
+      }
+    } catch (IllegalArgumentException ignored) {
+      // node_params 非 Map 或畸形——静默跳过，不让坏数据阻断派发
+    }
   }
 
   @SuppressWarnings("unchecked")

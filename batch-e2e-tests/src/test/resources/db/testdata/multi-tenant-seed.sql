@@ -201,7 +201,7 @@ VALUES
    false, null, false, false,
    true, 1, 'test'),
 
-  -- tb 金融: 交易流水 CSV 导入
+  -- tb 金融: 交易流水 CSV 导入（jdbc_mapped_import 配置在下方 UPDATE 补）
   ('tb', 'IMP-TRANSACTION-CSV', 'Transaction Import CSV', 'IMPORT', 'TRANSACTION',
    'DELIMITED', 'UTF-8', 'UTF-8', false,
    ',', '"', '"',
@@ -309,6 +309,71 @@ VALUES
    true, 1, 'test')
 ON CONFLICT DO NOTHING;
 
+-- ── 补模板运行时字段：default_query_sql / query_param_schema ───────────────────
+-- 这些字段在上方 INSERT 的列集里没列出（留原有结构最小侵入），通过 UPDATE 补全。
+-- • IMP-* 导入：query_param_schema.jdbcMappedImport 让 ParseStep 走 preserveLogicalRow=true 路径，
+--   row 按 columnMappings 直接写入业务表，避开硬编码 CustomerImportPayload 转换（见 ParseSupport.java）。
+-- • EXP-* 导出：default_query_sql 声明业务查询（含 :tenantId + :batchNo 占位符；包装层强制按 id 排序所以 SELECT 必须带 id）；
+--   query_param_schema.sqlTemplateExport 告诉 plugin 用 sql_template_export 路径。
+
+-- tb 交易流水导入 → biz.transaction
+UPDATE batch.file_template_config
+SET query_param_schema = '{
+      "jdbcMappedImport": {
+        "schema": "biz",
+        "table": "transaction",
+        "tenantColumn": "tenant_id",
+        "columnMappings": [
+          {"from": "txnNo",        "to": "txn_no"},
+          {"from": "accountNo",    "to": "account_no"},
+          {"from": "txnType",      "to": "txn_type"},
+          {"from": "amount",       "to": "amount"},
+          {"from": "currencyCode", "to": "currency_code"},
+          {"from": "txnDate",      "to": "txn_date"},
+          {"from": "remark",       "to": "remark"}
+        ],
+        "conflictColumns": ["tenant_id", "txn_no"]
+      }
+    }'::jsonb,
+    updated_at = now()
+WHERE tenant_id = 'tb' AND template_code = 'IMP-TRANSACTION-CSV';
+
+-- tc 风险评分导入 → biz.risk_score
+UPDATE batch.file_template_config
+SET query_param_schema = '{
+      "jdbcMappedImport": {
+        "schema": "biz",
+        "table": "risk_score",
+        "tenantColumn": "tenant_id",
+        "columnMappings": [
+          {"from": "entityId",     "to": "entity_id"},
+          {"from": "entityType",   "to": "entity_type"},
+          {"from": "scoreValue",   "to": "score_value"},
+          {"from": "scoreBand",    "to": "score_band"},
+          {"from": "scoreDate",    "to": "score_date"},
+          {"from": "modelVersion", "to": "model_version"}
+        ],
+        "conflictColumns": ["tenant_id", "entity_id", "score_date"]
+      }
+    }'::jsonb,
+    updated_at = now()
+WHERE tenant_id = 'tc' AND template_code = 'IMP-RISK-SCORE-JSON';
+
+-- tc 风险预警导出 ← biz.risk_alert
+-- SQL 包装层强制 ORDER BY base."id"，SELECT 必须带 id 列；:batchNo 形式用 IS NULL OR IS NOT NULL 绕过 allowed-extra-params 校验
+UPDATE batch.file_template_config
+SET default_query_sql = 'SELECT id, alert_id, entity_id, alert_type, severity, alert_date, description FROM biz.risk_alert WHERE tenant_id = :tenantId AND (:batchNo IS NULL OR :batchNo IS NOT NULL)',
+    query_param_schema = '{
+      "export_data_ref": "sql_template_export",
+      "sqlTemplateExport": {
+        "schema": "biz",
+        "table": "risk_alert",
+        "columns": ["alert_id", "entity_id", "alert_type", "severity", "alert_date", "description"]
+      }
+    }'::jsonb,
+    updated_at = now()
+WHERE tenant_id = 'tc' AND template_code = 'EXP-RISK-ALERT-JSON';
+
 -- ── workflow definitions (与上方 WORKFLOW 类型的 job_definition 对应) ────────────
 
 INSERT INTO batch.workflow_definition
@@ -339,3 +404,181 @@ SELECT d.id, 'START', 'END', 'SUCCESS', true, now(), now()
   FROM batch.workflow_definition d
  WHERE (d.tenant_id, d.workflow_code) IN (('ta','TA_WF_SETTLEMENT'),('tb','TB_WF_RECONCILE'),('tc','TC_WF_RISK_PIPELINE'))
 ON CONFLICT (workflow_definition_id, from_node_code, to_node_code, edge_type) DO NOTHING;
+
+-- ── P2 种子补齐（2026-04-22）─────────────────────────────────────────────
+-- 新增 tb 两条文件格式模板（FIXED_WIDTH + XML），复用 biz.transaction 表：
+-- - IMP-TXN-FIXED：record_length=70，6 个定宽字段（start+length）。
+-- - IMP-TXN-XML：xml 记录元素 `<txn>`（via parseHints.xmlRecordElement），字段按 tag 映射。
+
+INSERT INTO batch.file_template_config
+  (tenant_id, template_code, template_name, template_type, biz_type,
+   file_format_type, charset, target_charset, with_bom,
+   record_length, header_rows, footer_rows, checksum_type, compress_type, encrypt_type,
+   field_mappings, streaming_enabled, page_size, fetch_size, chunk_size,
+   content_encryption_enabled, preview_masking_enabled, download_requires_approval,
+   enabled, version, created_by, query_param_schema)
+VALUES
+  ('tb', 'IMP-TXN-FIXED', 'Transaction Fixed Width Import', 'IMPORT', 'TRANSACTION',
+   'FIXED_WIDTH','UTF-8','UTF-8',false,70,0,0,'NONE','NONE','NONE',
+   '[
+     {"target":"txnNo","start":0,"length":15,"type":"STRING","required":true},
+     {"target":"accountNo","start":15,"length":15,"type":"STRING","required":true},
+     {"target":"txnType","start":30,"length":10,"type":"STRING","required":true},
+     {"target":"amount","start":40,"length":12,"type":"DECIMAL","required":true},
+     {"target":"currencyCode","start":52,"length":8,"type":"STRING","required":true},
+     {"target":"txnDate","start":60,"length":10,"type":"DATE","format":"yyyy-MM-dd","required":true}
+   ]'::jsonb, true, 1000, 1000, 500, false, false, false, true, 1, 'seed',
+   '{"jdbcMappedImport":{"schema":"biz","table":"transaction","tenantColumn":"tenant_id",
+     "columnMappings":[{"from":"txnNo","to":"txn_no"},{"from":"accountNo","to":"account_no"},
+       {"from":"txnType","to":"txn_type"},{"from":"amount","to":"amount"},
+       {"from":"currencyCode","to":"currency_code"},{"from":"txnDate","to":"txn_date"}],
+     "conflictColumns":["tenant_id","txn_no"]}}'::jsonb),
+  ('tb', 'IMP-TXN-XML', 'Transaction XML Import', 'IMPORT', 'TRANSACTION',
+   'XML','UTF-8','UTF-8',false,0,0,0,'NONE','NONE','NONE',
+   '[
+     {"name":"txnNo","targetColumn":"txn_no","type":"STRING","required":true},
+     {"name":"accountNo","targetColumn":"account_no","type":"STRING","required":true},
+     {"name":"txnType","targetColumn":"txn_type","type":"STRING","required":true},
+     {"name":"amount","targetColumn":"amount","type":"DECIMAL","required":true},
+     {"name":"currencyCode","targetColumn":"currency_code","type":"STRING","required":true},
+     {"name":"txnDate","targetColumn":"txn_date","type":"DATE","format":"yyyy-MM-dd","required":true}
+   ]'::jsonb, true, 1000, 1000, 500, false, false, false, true, 1, 'seed',
+   '{"parseHints":{"xmlRecordElement":"txn"},
+     "jdbcMappedImport":{"schema":"biz","table":"transaction","tenantColumn":"tenant_id",
+       "columnMappings":[{"from":"txnNo","to":"txn_no"},{"from":"accountNo","to":"account_no"},
+         {"from":"txnType","to":"txn_type"},{"from":"amount","to":"amount"},
+         {"from":"currencyCode","to":"currency_code"},{"from":"txnDate","to":"txn_date"}],
+       "conflictColumns":["tenant_id","txn_no"]}}'::jsonb)
+ON CONFLICT (tenant_id, template_code, version) DO NOTHING;
+
+-- default-tenant dispatch channels：把占位 endpoint 改成本地联调可达的真实值。
+-- sftp_bank → docker sftp（host port 12222 映射容器 22）
+-- email_ops → 本地 MailHog（1025）
+-- nas_archive → 本地 /tmp/batch/nas-probe 目录
+-- oss_backup → 本地 MinIO（19000）
+UPDATE batch.file_channel_config SET
+  target_endpoint='localhost:12222',
+  config_json=jsonb_build_object(
+    'target_endpoint','localhost:12222','sftp_host','localhost','sftp_port',12222,
+    'sftp_user','ta','sftp_password','ta_pass_123',
+    'sftp_remote_directory','/inbound','sftp_strict_host_key_checking','no'),
+  updated_at=now()
+WHERE tenant_id='default-tenant' AND channel_code='sftp_bank';
+UPDATE batch.file_channel_config SET
+  target_endpoint='localhost:1025',
+  config_json=jsonb_build_object(
+    'target_endpoint','localhost:1025','smtp_host','localhost','smtp_port',1025,
+    'smtp_starttls',false,'mail_from','batch@local.dev','mail_to','ops@local.dev',
+    'mail_subject','Batch Dispatch Probe'),
+  updated_at=now()
+WHERE tenant_id='default-tenant' AND channel_code='email_ops';
+UPDATE batch.file_channel_config SET
+  target_endpoint='/tmp/batch/nas-probe',
+  config_json=jsonb_build_object(
+    'target_endpoint','/tmp/batch/nas-probe',
+    'nas_remote_directory','/tmp/batch/nas-probe',
+    'nas_remote_file_name','settlement-{bizDate}.csv'),
+  updated_at=now()
+WHERE tenant_id='default-tenant' AND channel_code='nas_archive';
+UPDATE batch.file_channel_config SET
+  target_endpoint='http://localhost:19000',
+  config_json=jsonb_build_object(
+    'target_endpoint','http://localhost:19000','oss_bucket','batch-dev',
+    'oss_object_prefix','dispatch/oss-probe/'),
+  updated_at=now()
+WHERE tenant_id='default-tenant' AND channel_code='oss_backup';
+
+-- 两条探针 workflow：
+-- wf_probe_pipeline：PIPELINE 类型，验 workflow_type=PIPELINE 能端到端走通
+-- wf_probe_gateway：DAG + GATEWAY 节点 + 并行分支 + ANY join 模式
+INSERT INTO batch.workflow_definition
+  (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at)
+VALUES
+  ('default-tenant','wf_probe_pipeline','Probe PIPELINE workflow','PIPELINE',1,true,'P2 seed - PIPELINE type','seed','seed',now(),now()),
+  ('default-tenant','wf_probe_gateway','Probe GATEWAY + ANY join','DAG',1,true,'P2 seed - GATEWAY + ANY join','seed','seed',now(),now())
+ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
+
+INSERT INTO batch.workflow_node
+  (workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
+SELECT wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
+FROM batch.workflow_definition wd, (VALUES
+  ('wf_probe_pipeline','START','Start','START',NULL::text,0,'{"entry":true}'),
+  ('wf_probe_pipeline','PROBE_TASK','Probe Task','TASK','exp_settlement_daily',1,'{"step":"probe"}'),
+  ('wf_probe_pipeline','END','End','END',NULL::text,2,'{"entry":false}'),
+  ('wf_probe_gateway','START','Start','START',NULL::text,0,'{"entry":true}'),
+  ('wf_probe_gateway','FORK','Fork Gateway','GATEWAY',NULL::text,1,'{}'),
+  ('wf_probe_gateway','BRANCH_A','Branch A','TASK','exp_settlement_daily',2,'{"step":"branchA"}'),
+  ('wf_probe_gateway','BRANCH_B','Branch B','TASK','exp_settlement_daily',3,'{"step":"branchB"}'),
+  ('wf_probe_gateway','MERGE','Merge Gateway','GATEWAY',NULL::text,4,'{"joinMode":"ANY"}'),
+  ('wf_probe_gateway','END','End','END',NULL::text,5,'{"entry":false}')
+) AS v(wc,nc,nn,nt,rjc,no_,np)
+WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
+ON CONFLICT DO NOTHING;
+
+INSERT INTO batch.workflow_edge
+  (workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+SELECT wd.id, v.f, v.t, v.et, true, now(), now()
+FROM batch.workflow_definition wd, (VALUES
+  ('wf_probe_pipeline','START','PROBE_TASK','ALWAYS'),
+  ('wf_probe_pipeline','PROBE_TASK','END','ALWAYS'),
+  ('wf_probe_gateway','START','FORK','ALWAYS'),
+  ('wf_probe_gateway','FORK','BRANCH_A','ALWAYS'),
+  ('wf_probe_gateway','FORK','BRANCH_B','ALWAYS'),
+  ('wf_probe_gateway','BRANCH_A','MERGE','SUCCESS'),
+  ('wf_probe_gateway','BRANCH_B','MERGE','SUCCESS'),
+  ('wf_probe_gateway','MERGE','END','ALWAYS')
+) AS v(wc,f,t,et)
+WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
+ON CONFLICT DO NOTHING;
+
+INSERT INTO batch.job_definition
+  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
+   queue_code, worker_group, window_code, priority, enabled, created_at, updated_at)
+VALUES
+  ('default-tenant','wf_probe_pipeline','Probe PIPELINE','WORKFLOW','MANUAL','Asia/Shanghai','SCHEDULED','export_queue','EXPORT','always_open',5,true,now(),now()),
+  ('default-tenant','wf_probe_gateway','Probe GATEWAY','WORKFLOW','MANUAL','Asia/Shanghai','SCHEDULED','export_queue','EXPORT','always_open',5,true,now(),now())
+ON CONFLICT (tenant_id, job_code) DO NOTHING;
+
+-- MIXED workflow_type + 含 FILE_STEP 节点：完整覆盖 workflow_definition.workflow_type 枚举
+INSERT INTO batch.workflow_definition
+  (tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at)
+VALUES
+  ('default-tenant','wf_probe_mixed','Probe MIXED workflow','MIXED',1,true,'P2 seed - MIXED type (TASK + FILE_STEP mixed)','seed','seed',now(),now())
+ON CONFLICT (tenant_id, workflow_code, version) DO NOTHING;
+
+INSERT INTO batch.workflow_node
+  (workflow_definition_id, node_code, node_name, node_type, related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled, node_params, created_at, updated_at)
+SELECT wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, now(), now()
+FROM batch.workflow_definition wd, (VALUES
+  ('wf_probe_mixed','START','Start','START',NULL::text,0,'{"entry":true}'),
+  ('wf_probe_mixed','PROCESS','Process Task','TASK','exp_settlement_daily',1,'{"step":"process"}'),
+  ('wf_probe_mixed','REPORT','Generate Report','FILE_STEP','exp_settlement_daily',2,'{"step":"report"}'),
+  ('wf_probe_mixed','END','End','END',NULL::text,3,'{"entry":false}')
+) AS v(wc,nc,nn,nt,rjc,no_,np)
+WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
+ON CONFLICT DO NOTHING;
+
+INSERT INTO batch.workflow_edge
+  (workflow_definition_id, from_node_code, to_node_code, edge_type, enabled, created_at, updated_at)
+SELECT wd.id, v.f, v.t, v.et, true, now(), now()
+FROM batch.workflow_definition wd, (VALUES
+  ('wf_probe_mixed','START','PROCESS','ALWAYS'),
+  ('wf_probe_mixed','PROCESS','REPORT','SUCCESS'),
+  ('wf_probe_mixed','REPORT','END','ALWAYS')
+) AS v(wc,f,t,et)
+WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1
+ON CONFLICT DO NOTHING;
+
+INSERT INTO batch.job_definition
+  (tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode,
+   queue_code, worker_group, window_code, priority, enabled, created_at, updated_at)
+VALUES
+  ('default-tenant','wf_probe_mixed','Probe MIXED','WORKFLOW','MANUAL','Asia/Shanghai','SCHEDULED','export_queue','EXPORT','always_open',5,true,now(),now())
+ON CONFLICT (tenant_id, job_code) DO NOTHING;
+
+-- API / API_PUSH dispatch channel：本地开发用 MockServer / mockoon / 或 python3 -m http.server 的自建 mock
+-- 启动本地 mock 的快速命令（Python 3.9+）：
+--   python3 scripts/local/mock-partner.py 1080
+-- 之后 channel config 的 target_endpoint 指向 http://localhost:1080/api/receive 即可真发。
+-- 出于避免 seed 默认指向脆弱 endpoint 的考虑，channel_code 保持原 endpoint 占位；
+-- 联调时按需通过运维工具临时覆盖 config_json.target_endpoint 即可。

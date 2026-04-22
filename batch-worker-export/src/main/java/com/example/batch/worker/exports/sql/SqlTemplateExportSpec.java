@@ -55,7 +55,32 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     }
     cursorColumn = JdbcMappedSqlValidator.requireIdentifier(cursorColumn, "cursorColumn");
 
-    return new SqlTemplateExportSpec(detailSql.trim(), cursorColumn);
+    // 早校验：包装层 SQL 会附加 `ORDER BY base."<cursorColumn>" ASC`，base 是用户 SQL 的 CTE。
+    // 如果用户 SELECT 里没出这列，运行期才会炸 PostgreSQL `bad SQL grammar`，debug 成本极高。
+    // 这里用词界正则做廉价启发式检测：拦住「忘 SELECT id」的主流坏配置，同时允许显式换 cursorColumn。
+    String trimmedSql = detailSql.trim();
+    if (!mentionsIdentifier(trimmedSql, cursorColumn)) {
+      throw new IllegalArgumentException(
+          "sql_template_export default_query_sql must reference cursor column `"
+              + cursorColumn
+              + "` (used by ORDER BY / keyset pagination). Either add `"
+              + cursorColumn
+              + "` to the SELECT list, or set sqlTemplateExport.cursorColumn to a column actually"
+              + " selected by the query.");
+    }
+
+    return new SqlTemplateExportSpec(trimmedSql, cursorColumn);
+  }
+
+  /** 词界扫描：识别 `\b<name>\b` 是否出现在 SQL 中（不区分大小写）。 */
+  private static boolean mentionsIdentifier(String sql, String name) {
+    if (sql == null || name == null) {
+      return false;
+    }
+    return java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(name) + "\\b",
+            java.util.regex.Pattern.CASE_INSENSITIVE)
+        .matcher(sql)
+        .find();
   }
 
   private static Object firstNonNull(Object... values) {

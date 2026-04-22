@@ -20,6 +20,7 @@ management:
       exposure:
         include: health,info,prometheus
 
+
 batch:
   shedlock:
     auto-create: true
@@ -47,6 +48,9 @@ batch:
       heartbeat-interval-millis: 15000
       topic: batch.task.dispatch.import
       consumer-group-id: batch-worker-import
+      # worker_registry.capability_tags；让 selector 能匹配带 resource_tag 的 queue（见 DefaultWorkerSelector）
+      capability-tags:
+        - ingest
       file-processing:
         streaming-enabled: true
         page-size: 1000
@@ -85,7 +89,7 @@ batch:
           notify-channels:
   datasource:
     business:
-      url: jdbc:postgresql://localhost:15432/batch_business
+      url: jdbc:postgresql://localhost:15432/batch_business?stringtype=unspecified
       username: batch_user
       password: batch_pass_123
       schema: biz

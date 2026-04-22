@@ -1,6 +1,7 @@
 package com.example.batch.worker.exports.config;
 
 import com.example.batch.worker.core.config.WorkerConfiguration;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** 导出 Worker 配置属性，绑定前缀 {@code batch.worker.export}。 */
@@ -12,9 +13,15 @@ public record ExportWorkerConfiguration(
     Long heartbeatIntervalMillis,
     String topic,
     String consumerGroupId,
+    List<String> capabilityTags,
     long maxExportRows,
     FileProcessing fileProcessing)
     implements WorkerConfiguration {
+
+  @Override
+  public List<String> capabilityTags() {
+    return capabilityTags == null ? List.of() : capabilityTags;
+  }
   private static final int DEFAULT_PAGE_SIZE = 1000;
   private static final int DEFAULT_FETCH_SIZE = 1000;
   private static final int DEFAULT_CHUNK_SIZE = 500;

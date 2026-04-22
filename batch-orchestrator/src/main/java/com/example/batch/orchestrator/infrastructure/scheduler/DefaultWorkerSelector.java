@@ -2,11 +2,15 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.model.WorkerRouteModel;
+import com.example.batch.common.utils.CodeNormalizer;
+import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.WorkerSelector;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.entity.WorkerRegistryRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
+import com.example.batch.orchestrator.domain.value.JsonbString;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -17,8 +21,6 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.CodeNormalizer;
-import com.example.batch.common.utils.Texts;
 
 /**
  * Worker 路由选择：从 ONLINE worker 中挑一个承接任务。
@@ -29,7 +31,9 @@ import com.example.batch.common.utils.Texts;
  *   <li>按 {@code (tenantId, workerGroup, status=ONLINE)} 过滤——workerGroup 缺省时退化为仅按租户 + ONLINE 过滤。
  *       <b>只选 ONLINE</b>：DRAINING / DECOMMISSIONED 状态的 worker 即使 heartbeat 仍在也不选
  *       （与 {@link com.example.batch.orchestrator.service.DefaultWorkerRegistryService} 的"状态不回退"不变量呼应）。
- *   <li>按 {@code resourceTag} 匹配队列要求（队列无标签则全通过）。
+ *   <li>按 {@code resourceTag} 匹配队列要求（队列无标签则全通过）；worker 侧既可用 {@code resource_tag}
+ *       单值，也可用 {@code capability_tags} JSONB 数组声明多个能力。队列 tag 与 worker 单值相等、或命中
+ *       worker 能力数组中的任意一项均视为匹配（忽略大小写）。
  *   <li>排序 {@code (currentLoad asc, heartbeatAt desc)}：当前负载最小优先，并列时心跳最新者优先——
  *       同时兼顾负载均衡与活跃度（最近心跳的 worker 状态最可信）。
  * </ol>
@@ -167,7 +171,34 @@ public class DefaultWorkerSelector implements WorkerSelector {
     if (queue == null || !Texts.hasText(queue.resourceTag())) {
       return true;
     }
-    return queue.resourceTag().equalsIgnoreCase(candidate.resourceTag());
+    String required = queue.resourceTag();
+    if (required.equalsIgnoreCase(candidate.resourceTag())) {
+      return true;
+    }
+    return capabilityTagsContain(candidate.capabilityTags(), required);
+  }
+
+  private boolean capabilityTagsContain(JsonbString tags, String required) {
+    if (tags == null || !Texts.hasText(tags.getValue())) {
+      return false;
+    }
+    String[] parsed;
+    try {
+      parsed = JsonUtils.fromJson(tags.getValue(), String[].class);
+    } catch (RuntimeException ex) {
+      // capability_tags 约定是 JSON 数组；非数组或畸形 JSON 视为无能力，不让畸形数据阻塞 selector。
+      log.warn("invalid capability_tags JSON on worker: {}", tags.getValue(), ex);
+      return false;
+    }
+    if (parsed == null) {
+      return false;
+    }
+    for (String tag : parsed) {
+      if (tag != null && required.equalsIgnoreCase(tag)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private String resolveWorkerGroup(ResourceSchedulingRequest request, ResourceQueueRecord queue) {

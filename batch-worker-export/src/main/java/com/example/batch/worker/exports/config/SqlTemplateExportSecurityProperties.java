@@ -21,9 +21,10 @@ public class SqlTemplateExportSecurityProperties {
 
   /**
    * S-1.10：模板 SQL 允许使用的额外具名参数白名单（除 required + 引擎保留 __cursor / __limit 之外）。
-   * 默认为空 —— 任何多余的 {@code :param} 在模板加载期即抛错。业务确有扩展参数时在 yml 显式列出。
+   * 默认包含常见业务占位符 {@code bizDate}（业务日期过滤常用）；其余扩展参数仍需在 yml 显式列出。
+   * 注：{@code tenantId} / {@code batchNo} 已通过 {@link #requiredParams} 强制，这里不必重复。
    */
-  private List<String> allowedExtraParams = new ArrayList<>();
+  private List<String> allowedExtraParams = new ArrayList<>(List.of("bizDate"));
 
   /** 允许引用的 schema 白名单，空列表表示不限制。 示例：["biz", "ref"] — 引用其他 schema（如 pg_catalog）的表将被拒绝。 */
   private List<String> allowedSchemas = new ArrayList<>();

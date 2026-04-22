@@ -28,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
@@ -47,6 +48,7 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
   @Mock ResourceScheduler resourceScheduler;
   @Mock ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
   @Mock ObjectProvider<LaunchService> launchServiceProvider;
+  @Mock NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
   private DefaultWorkflowNodeDispatchService service;
 
@@ -72,7 +74,8 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
             workflowDagService,
             resourceScheduler,
             taskExecutionServiceProvider,
-            launchServiceProvider);
+            launchServiceProvider,
+            namedParameterJdbcTemplate);
   }
 
   @Test

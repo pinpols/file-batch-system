@@ -37,6 +37,7 @@ class ImportIngressScannerTest {
             15000L,
             "test-topic",
             "test-group",
+            null,
             new ImportWorkerConfiguration.FileProcessing(false, 1000, 1000, 500));
 
     scannerProperties = new ImportScannerProperties();
