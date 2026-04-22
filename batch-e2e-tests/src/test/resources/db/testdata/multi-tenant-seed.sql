@@ -34,7 +34,10 @@ VALUES
 
   ('tc', 'TC_IMPORT_RISK_SCORE',  'TC Risk Score Import',     'IMPORT',   'EVENT',  NULL,           'EVENT',   'Asia/Shanghai',
    'EXPONENTIAL', 5, now(), now()),
-  ('tc', 'TC_EXPORT_RISK_ALERT',  'TC Risk Alert Export',     'EXPORT',   'CRON',   '0 */30 * * * ?','SCHEDULED','Asia/Shanghai',
+  -- 原先是 CRON '0 */30 * * * ?' 每 30min 自动触发，但 default_params 为空，EXPORT worker 每次都
+  -- 因 `exportPayload.batchNo=null` 抛 EXPORT_GENERATE_NO_PAYLOAD；作为 demo 改 MANUAL，让前端
+  -- /api/console/ops/* 按需带完整 payload 触发，避免后台长期刷无意义失败日志。
+  ('tc', 'TC_EXPORT_RISK_ALERT',  'TC Risk Alert Export',     'EXPORT',   'MANUAL', NULL,            'MANUAL',   'Asia/Shanghai',
    'FIXED',       3, now(), now()),
   ('tc', 'TC_DISPATCH_REVIEW',    'TC Review Dispatch',       'DISPATCH', 'MANUAL', NULL,           'MANUAL',  'Asia/Shanghai',
    'NONE',        0, now(), now()),

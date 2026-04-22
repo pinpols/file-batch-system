@@ -95,7 +95,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     // 有 DAG 初始节点（非 START）时优先走 DAG dispatch；否则走普通计划调度（schedulePlan + resourceScheduler）。
     boolean dispatchable = true;
     int partitionCount;
-    String sourcePayload = buildPayloadJson(effectiveParams);
+    String sourcePayload = buildPayloadJson(request, jobInstance, effectiveParams);
     if (initialNodes != null && !initialNodes.isEmpty()) {
       partitionCount = 0;
       for (WorkflowDagService.DagNodeResolution initialNode : initialNodes) {
@@ -226,7 +226,11 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
             ? TaskStatus.READY.code()
             : decision.getTaskStatus());
     task.setVersion(0L);
-    task.setTaskPayload(buildPayloadJson(context.creation().execution().effectiveParams()));
+    task.setTaskPayload(
+        buildPayloadJson(
+            context.creation().execution().request(),
+            context.creation().execution().jobInstance(),
+            context.creation().execution().effectiveParams()));
     return task;
   }
 
@@ -297,8 +301,37 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
     return null;
   }
 
-  private String buildPayloadJson(Map<String, Object> params) {
-    Map<String, Object> payload = params == null ? Map.of() : params;
+  static Map<String, Object> enrichPayload(
+      LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
+    Map<String, Object> payload = new java.util.LinkedHashMap<>();
+    if (params != null) {
+      payload.putAll(params);
+    }
+    if (!payload.containsKey("batchNo") && !payload.containsKey("batch_no")) {
+      String batchNo = jobInstance == null ? null : jobInstance.getBatchNo();
+      if (batchNo != null && !batchNo.isBlank()) {
+        payload.put("batchNo", batchNo);
+      }
+    }
+    if (!payload.containsKey("bizDate")) {
+      String bizDate =
+          request == null || request.bizDate() == null ? null : request.bizDate().toString();
+      if (bizDate != null && !bizDate.isBlank()) {
+        payload.put("bizDate", bizDate);
+      }
+    }
+    if (!payload.containsKey("jobCode")) {
+      String jobCode = request == null ? null : request.jobCode();
+      if (jobCode != null && !jobCode.isBlank()) {
+        payload.put("jobCode", jobCode);
+      }
+    }
+    return payload;
+  }
+
+  private String buildPayloadJson(
+      LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
+    Map<String, Object> payload = enrichPayload(request, jobInstance, params);
     return JsonUtils.toJson(payload);
   }
 }

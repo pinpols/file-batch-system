@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -64,6 +65,17 @@ public final class ChannelConfigMerge {
           "api_push_api_key",
           "authorization");
 
+  /**
+   * 兼容历史 seed / 手工录入的短键名；merge 时统一折叠为运行时消费的规范键。
+   *
+   * <p>保留别名兼容而不是继续打 WARN，避免老租户在未迁移存量 config_json 前持续刷屏。
+   */
+  private static final Map<String, String> KEY_ALIASES =
+      Map.of(
+          "endpoint", "target_endpoint",
+          "bucket", "oss_bucket",
+          "prefix", "oss_object_prefix");
+
   private ChannelConfigMerge() {}
 
   public static Map<String, Object> merge(Map<String, Object> row, ObjectMapper objectMapper) {
@@ -92,19 +104,22 @@ public final class ChannelConfigMerge {
   }
 
   private static void mergeConfigJson(Map<String, Object> target, Map<?, ?> parsed) {
+    Map<String, Object> normalized = new HashMap<>();
     for (Map.Entry<?, ?> entry : parsed.entrySet()) {
-      String key = String.valueOf(entry.getKey());
+      String rawKey = String.valueOf(entry.getKey());
+      String key = KEY_ALIASES.getOrDefault(rawKey, rawKey);
       if (!ALLOWED_CONFIG_KEYS.contains(key)) {
         // S-1.5：白名单未登记的键忽略；记 WARN 便于运维发现模板异常或攻击尝试。
         // 尤其要阻止 enabled / receipt_policy 等策略字段被 overlay 覆盖。
         if (log.isWarnEnabled()) {
           log.warn(
               "ChannelConfigMerge ignored non-whitelisted key in config_json: key={}",
-              key);
+              rawKey);
         }
         continue;
       }
-      target.put(key, entry.getValue());
+      normalized.put(key, entry.getValue());
     }
+    normalized.forEach(target::put);
   }
 }

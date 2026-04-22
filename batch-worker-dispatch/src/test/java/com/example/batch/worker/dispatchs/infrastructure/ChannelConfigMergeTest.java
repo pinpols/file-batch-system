@@ -55,4 +55,22 @@ class ChannelConfigMergeTest {
     assertThat(merged.get("sftp_host")).isEqualTo("example.com");
     assertThat(merged).doesNotContainKeys("ignored", "tenant_id", "random_ext");
   }
+
+  @Test
+  void shouldNormalizeLegacyOssAliasesToCanonicalKeys() {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put(
+        "config_json",
+        Map.of(
+            "endpoint", "http://minio:9000",
+            "bucket", "batch-dev",
+            "prefix", "tb/outbound/statement/"));
+
+    Map<String, Object> merged = ChannelConfigMerge.merge(row, objectMapper);
+
+    assertThat(merged.get("target_endpoint")).isEqualTo("http://minio:9000");
+    assertThat(merged.get("oss_bucket")).isEqualTo("batch-dev");
+    assertThat(merged.get("oss_object_prefix")).isEqualTo("tb/outbound/statement/");
+    assertThat(merged).doesNotContainKeys("endpoint", "bucket", "prefix");
+  }
 }
