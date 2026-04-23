@@ -6,17 +6,21 @@ import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.JobInstanceEntity;
+import com.example.batch.console.domain.entity.JobPartitionEntity;
 import com.example.batch.console.domain.entity.JobStepInstanceEntity;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
 import com.example.batch.console.domain.query.JobInstanceQuery;
+import com.example.batch.console.domain.query.JobPartitionQuery;
 import com.example.batch.console.domain.query.JobStepInstanceQuery;
 import com.example.batch.console.support.ConsoleJobQueryMappers;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
+import com.example.batch.console.web.query.JobPartitionQueryRequest;
 import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
 import com.example.batch.console.web.response.ConsoleJobInstanceResponse;
+import com.example.batch.console.web.response.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -101,6 +105,36 @@ class ConsoleJobQueryService {
     JobStepInstanceEntity entity =
         jobMappers.jobStepInstanceMapper.selectById(resolveTenant(tenantGuard, tenantId), id);
     return toJobStepInstanceResponse(requireNotNull(entity, "job step instance not found"));
+  }
+
+  PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
+    PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
+    JobPartitionQuery query =
+        new JobPartitionQuery(
+            resolveTenant(tenantGuard, request.getTenantId()),
+            request.getJobInstanceId(),
+            request.getPartitionStatus(),
+            pageRequest);
+    List<JobPartitionEntity> rows = jobMappers.jobPartitionMapper.selectByQuery(query);
+    long total = jobMappers.jobPartitionMapper.countByQuery(query);
+    return page(pageRequest, total, rows, this::toJobPartitionResponse);
+  }
+
+  private ConsoleJobPartitionResponse toJobPartitionResponse(JobPartitionEntity entity) {
+    return new ConsoleJobPartitionResponse(
+        entity.getId(),
+        display(entity.getTenantId()),
+        entity.getJobInstanceId(),
+        entity.getPartitionNo(),
+        display(entity.getPartitionKey()),
+        display(entity.getPartitionStatus()),
+        display(entity.getWorkerGroup()),
+        display(entity.getWorkerCode()),
+        entity.getRetryCount(),
+        display(entity.getBusinessKey()),
+        entity.getLeaseExpireAt(),
+        entity.getStartedAt(),
+        entity.getFinishedAt());
   }
 
   private ConsoleJobDefinitionResponse toJobDefinitionResponse(JobDefinitionEntity entity) {

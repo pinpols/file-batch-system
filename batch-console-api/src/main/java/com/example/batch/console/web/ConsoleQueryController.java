@@ -21,6 +21,7 @@ import com.example.batch.console.web.query.FilePipelineStepQueryRequest;
 import com.example.batch.console.web.query.FileTemplateQueryRequest;
 import com.example.batch.console.web.query.JobDefinitionQueryRequest;
 import com.example.batch.console.web.query.JobInstanceQueryRequest;
+import com.example.batch.console.web.query.JobPartitionQueryRequest;
 import com.example.batch.console.web.query.JobStepInstanceQueryRequest;
 import com.example.batch.console.web.query.OutboxDeliveryLogQueryRequest;
 import com.example.batch.console.web.query.OutboxRetryLogQueryRequest;
@@ -50,6 +51,7 @@ import com.example.batch.console.web.response.ConsoleFileRecordResponse;
 import com.example.batch.console.web.response.ConsoleFileTemplateResponse;
 import com.example.batch.console.web.response.ConsoleJobDefinitionResponse;
 import com.example.batch.console.web.response.ConsoleJobInstanceResponse;
+import com.example.batch.console.web.response.ConsoleJobPartitionResponse;
 import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
 import com.example.batch.console.web.response.ConsoleOutboxDeliveryLogResponse;
 import com.example.batch.console.web.response.ConsoleOutboxRetryLogResponse;
@@ -247,6 +249,13 @@ public class ConsoleQueryController {
   public CommonResponse<PageResponse<ConsoleJobStepInstanceResponse>> jobStepInstances(
       @Valid @ModelAttribute JobStepInstanceQueryRequest request) {
     return responseFactory.success(applicationService.jobStepInstances(request));
+  }
+
+  /** GET /partitions — 按作业实例分页查询分区（{@code job_partition}）。 */
+  @GetMapping("/partitions")
+  public CommonResponse<PageResponse<ConsoleJobPartitionResponse>> jobPartitions(
+      @Valid @ModelAttribute JobPartitionQueryRequest request) {
+    return responseFactory.success(applicationService.jobPartitions(request));
   }
 
   /** GET /job-step-instances/{id} — 作业步骤实例详情。 */
