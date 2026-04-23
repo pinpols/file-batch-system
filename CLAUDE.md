@@ -163,6 +163,14 @@ public enum XxxType implements DictEnum {
 
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
 
+### 2026-04-23
+- **新增 `GET /api/console/queries/partitions`**：按作业实例分页查询 `job_partition` 列表。前端 `PartitionView.vue` 此前打的 `instanceApi.partitions(instanceId)` 后端没有对应路由，只能本地裁切；补上后走服务端分页，避免大实例（分区数 > 1000）拉全量。
+  - 新建 `JobPartitionQueryRequest`（extends `PageQueryRequest`，字段 `tenantId / jobInstanceId / partitionStatus`）+ `ConsoleJobPartitionResponse`（13 字段，含 `partitionNo / partitionKey / partitionStatus / workerGroup / workerCode / retryCount / businessKey / leaseExpireAt / startedAt / finishedAt`）。
+  - 新建 console 侧只读 `JobPartitionMapper` + XML（MyBatis）独立于 orchestrator 的同名可写 mapper；`selectByQuery` 走 `<include refid="filters"/>` 消除 count/list 的 where 重复。
+  - `ConsoleJobQueryMappers` / `ConsoleJobQueryService` / `ConsoleQueryApplicationService` / `DefaultConsoleQueryApplicationService` / `ConsoleQueryController` 接线。
+  - OpenAPI 加 `/api/console/queries/partitions` path + `ConsoleJobPartitionResponse` schema + `CommonResponseJobPartitionList` wrapper；`console-api-protocol.md` 补 Changelog、endpoint 清单、过滤参数表。
+  - 备注：「partition 粒度」与既有「step 粒度」（`/job-step-instances`）并存，前者 = `job_partition`，后者 = `job_step_instance`。
+
 ### 2026-04-22
 - **清理 `docs/test-data/deprecated-single-sheet-imports/`**：10 份单 sheet Excel 样本（`01..10-*-full-coverage-test.xlsx`，绑定孤立租户 `test-full-coverage`）已全量删除。3 个对应控制器已 `@Deprecated`（FileTemplate / ResourceQueue / AlertRouting），其余 7 个虽未标注但流程上被整合式 Excel 和 tenant-init JSON 取代，样本无人装载。同步修 README：明确 `file_template_config` 不进整合式 Excel 是系统设计（建租户时从 `default` 克隆 + 页面单条维护），不是"gap"；批量初始化走 `tenant-init` 的 `FileTemplateConfigUpsertParam`。
 - **前端整合式 Excel 按租户分工补齐枚举覆盖**（在 default-tenant 之外）：

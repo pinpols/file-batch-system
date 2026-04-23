@@ -3241,6 +3241,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleJobStepInstanceResponse'
+  /api/console/queries/partitions:
+    get:
+      tags: [Queries]
+      summary: Query job partitions by instance
+      description: 按作业实例分页查询分区（`job_partition`）。服务端分页 + `partitionStatus` 过滤；按 `partition_no` 升序返回。
+      operationId: queryJobPartitions
+      parameters:
+        - $ref: '#/components/parameters/TenantIdQuery'
+        - $ref: '#/components/parameters/PageNoQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+        - $ref: '#/components/parameters/JobInstanceIdFilter'
+        - name: partitionStatus
+          in: query
+          required: false
+          description: Filter by partition status (e.g. WAITING / READY / RUNNING / SUCCESS / FAILED)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job partition list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseJobPartitionList'
   /api/console/queries/workflow-definitions:
     get:
       tags: [Queries]
@@ -6802,21 +6826,25 @@ paths:
           application/json:
             schema:
               type: object
-              required: [quotaKey, requestedValue, reason]
+              required: [field, requestedValue, reason]
               properties:
-                quotaKey:
+                field:
                   type: string
+                  maxLength: 64
                 requestedValue:
-                  type: string
+                  type: integer
+                  format: int32
+                  minimum: 1
                 reason:
                   type: string
+                  maxLength: 512
       responses:
         '200':
           description: Request submitted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseVoid'
+                $ref: '#/components/schemas/CommonResponseString'
   /api/console/files/presign-upload:
     post:
       tags: [Files]
@@ -8087,6 +8115,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    CommonResponseJobPartitionList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PageResponse'
     CommonResponseWorkflowDefinitionList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -9245,6 +9280,44 @@ components:
           type: string
           format: date-time
       required: [id, tenantId, jobInstanceId, jobPartitionId, jobTaskId, stepCode, stepType, stepStatus, retryCount, relatedFileId, resultSummary, errorCode, errorMessage, startedAt, finishedAt]
+    ConsoleJobPartitionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        tenantId:
+          type: string
+        jobInstanceId:
+          type: integer
+          format: int64
+        partitionNo:
+          type: integer
+          format: int32
+        partitionKey:
+          type: string
+        partitionStatus:
+          type: string
+          description: WAITING / READY / RUNNING / RETRYING / SUCCESS / FAILED / CANCELLED
+        workerGroup:
+          type: string
+        workerCode:
+          type: string
+        retryCount:
+          type: integer
+          format: int32
+        businessKey:
+          type: string
+        leaseExpireAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+      required: [id, tenantId, jobInstanceId, partitionNo, partitionKey, partitionStatus, workerGroup, workerCode, retryCount, businessKey, leaseExpireAt, startedAt, finishedAt]
     ConsoleWorkflowDefinitionResponse:
       type: object
       properties:

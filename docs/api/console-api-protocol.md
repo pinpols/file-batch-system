@@ -7,6 +7,7 @@ When the API surface changes, update this file and [console-api.openapi.yaml](./
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-04-23 | 新增 `GET /api/console/queries/partitions`：按作业实例分页查询 `job_partition` 列表，支持 `partitionStatus` 过滤，按 `partition_no ASC` 排序；响应 `ConsoleJobPartitionResponse`（13 字段：`id/tenantId/jobInstanceId/partitionNo/partitionKey/partitionStatus/workerGroup/workerCode/retryCount/businessKey/leaseExpireAt/startedAt/finishedAt`）。前端 PartitionView 改为服务端分页，替换已废弃的本地聚合调用 |
 | 2026-04-20 | 触发器运维 5 条路径由 `/api/console/triggers` 迁到 `/api/console/ops/triggers`（list/{jobCode}/register/unregister/pause/resume），语义归 Ops 救急入口；日常禁用 job 请走 `toggleEnabled`，`TriggerReconciler` 以 30s 周期把 Quartz 收敛到 DB（`ROLE_ADMIN` 权限不变，限流路径前缀同步调整） |
 | 2026-04-20 | `/api/console/meta/enums` 的 `triggerType` 字典新增 `RERUN`（重跑触发）；与 V62 迁移中扩展的 `ck_trigger_request_type` / `ck_job_instance_trigger_type` CHECK 约束对齐；OpenAPI `MetaEnumItem` 由后端反射下发，schema 无需改 |
 | 2026-04-20 | 删除 7 个单表 Excel 维护接口的 upload/preview/previewWorkbook/apply（job-definitions / workflows / business-calendars / quota-policies / batch-windows / file-channels / pipeline-definitions，共 28 条路由，均已由 tenant-package 合并导入取代）。保留各自 `/export` 和 `/template` 导出；同步删除 49 个仅被这些端点引用的 schema（含 Common/Preview/Apply wrapper 和 per-entity request body） |
@@ -936,7 +937,22 @@ Deployment note:
 
 - `GET /api/console/tenants/quota` — tenant quota policies
 - `GET /api/console/tenants/usage` — tenant usage metrics
-- `POST /api/console/tenants/quota/request` — request quota change
+- `POST /api/console/tenants/quota/request` — request quota change (stored as system parameter; returns request key)
+
+Request body:
+
+```json
+{
+  "field": "maxConcurrentJobs",
+  "requestedValue": 200,
+  "reason": "业务增长，需要提升并发额度"
+}
+```
+
+Notes:
+
+- `field` should match quota policy code returned by `GET /api/console/tenants/quota` (e.g. `items[].policyCode`)
+- `requestedValue` must be a positive integer
 
 ### Self-Service Jobs
 
@@ -971,6 +987,7 @@ Deployment note:
 - `GET /api/console/queries/instances/batch-status` — batch query instance status by `instanceNos[]`
 - `GET /api/console/queries/job-step-instances`
 - `GET /api/console/queries/job-step-instances/{id}`
+- `GET /api/console/queries/partitions` — 按作业实例分页查询 `job_partition`（分区粒度；`job-step-instances` 是步骤粒度）
 - `GET /api/console/queries/workflow-definitions`
 - `GET /api/console/queries/workflow-nodes`
 - `GET /api/console/queries/workflow-edges`
@@ -1004,6 +1021,7 @@ Deployment note:
 | `/query/instances` | `jobCode` (partial); `instanceStatus`, `instanceNo`, `bizDate` (exact); `traceId` (partial); `startDate`/`endDate` (range); `sortBy` (`id`/`duration`); `minDurationSeconds` (threshold filter) | mixed |
 | `/query/job-definitions` | `jobCode`, `jobName`, `workerGroup`, `queueCode` (partial); `jobType`, `scheduleType`, `enabled` (exact) | mixed |
 | `/query/job-step-instances` | `jobInstanceId`, `jobPartitionId`, `stepCode`, `stepStatus` (exact) | exact |
+| `/query/partitions` | `jobInstanceId`, `partitionStatus` (exact) | exact |
 | `/query/workflow-definitions` | `workflowCode` (partial) | partial |
 | `/query/workflow-nodes` | `workflowDefinitionId` (exact); `workflowCode`, `nodeCode` (exact); `nodeType`, `enabled` (exact) | exact |
 | `/query/workflow-edges` | `workflowDefinitionId` (exact); `workflowCode`, `fromNodeCode`, `toNodeCode`, `edgeType`, `enabled` (exact) | exact |
@@ -1134,7 +1152,7 @@ Request body:
 
 - `GET /api/console/tenants/quota` — query tenant quota policies
 - `GET /api/console/tenants/usage` — query tenant usage metrics
-- `POST /api/console/tenants/quota/request` — request quota change (stored as system parameter)
+- `POST /api/console/tenants/quota/request` — request quota change (stored as system parameter; returns request key)
 
 ### File Upload & Arrival Confirmation
 
