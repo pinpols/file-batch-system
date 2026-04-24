@@ -7,9 +7,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
@@ -20,6 +22,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
  * <p>锁键格式由 {@link com.example.batch.common.redis.BatchRedisKeys#shedLock} 生成，
  * 包含 {@code environment} 前缀以隔离不同环境（dev/staging/prod）。
  */
+@Slf4j
 @RequiredArgsConstructor
 public class RedisShedLockProvider implements LockProvider {
 
@@ -42,13 +45,37 @@ public class RedisShedLockProvider implements LockProvider {
     if (ttl.isNegative() || ttl.isZero()) {
       ttl = Duration.ofSeconds(1);
     }
-    Boolean acquired = redisTemplate.opsForValue().setIfAbsent(key, token, ttl);
+    Boolean acquired;
+    try {
+      acquired = redisTemplate.opsForValue().setIfAbsent(key, token, ttl);
+    } catch (DataAccessException redisError) {
+      // Redis 瞬时故障（超时、连接拒绝、节点切主）：当作"未拿到锁"处理，
+      // 下一 tick 自然重试，避免异常冒泡到 Spring scheduler 打 ERROR。
+      log.warn(
+          "shed-lock acquire failed, treating as not-held: lock={}, reason={}",
+          lockConfiguration.getName(),
+          redisError.getMostSpecificCause() == null
+              ? redisError.getClass().getSimpleName()
+              : redisError.getMostSpecificCause().getMessage());
+      return Optional.empty();
+    }
     if (!Boolean.TRUE.equals(acquired)) {
       return Optional.empty();
     }
     return Optional.of(
-        () ->
+        () -> {
+          try {
             redisTemplate.execute(
-                new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class), List.of(key), token));
+                new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class), List.of(key), token);
+          } catch (DataAccessException redisError) {
+            // 解锁失败：key 到期自然释放，这里只记一条 WARN 不上抛。
+            log.warn(
+                "shed-lock release failed (ttl will expire key): lock={}, reason={}",
+                lockConfiguration.getName(),
+                redisError.getMostSpecificCause() == null
+                    ? redisError.getClass().getSimpleName()
+                    : redisError.getMostSpecificCause().getMessage());
+          }
+        });
   }
 }

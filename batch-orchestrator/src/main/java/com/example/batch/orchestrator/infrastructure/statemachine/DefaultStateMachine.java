@@ -86,20 +86,25 @@ public class DefaultStateMachine<T> implements StateMachine<T> {
   private String resolveToState(String fromState, String event) {
     return switch (event) {
       case "READY" -> "READY";
-      case "START", "CLAIM", "RUN", "DISPATCH", "RETRYING" -> "RUNNING";
+      case "START", "CLAIM", "RUN", "DISPATCH", "RETRYING", "RUNNING" -> "RUNNING";
       case "SUCCESS", "SUCCEED", "COMPLETE", "FINISH" -> "SUCCESS";
       case "PARTIAL_FAILED" -> "PARTIAL_FAILED";
       case "FAIL", "FAILED", "ERROR", "REJECT" -> "FAILED";
-      case "TERMINATE", "CANCEL" -> "TERMINATED";
+      case "TERMINATE", "CANCEL", "TERMINATED", "CANCELLED" -> "TERMINATED";
       case "SKIP", "SKIPPED" -> "SKIPPED";
-      case "NOOP" -> fromState;
-      // A-3.3: 未知事件保留 NOOP 语义不变（向后兼容），但记 WARN 日志暴露拼写错误
-      // （如 "SUCESS" vs "SUCCESS"）。生产环境检索此日志可快速定位状态机误用。
+      case "WAITING", "CREATED", "PENDING", "NOOP" -> fromState;
+      // A-3.3: 未知事件保留 NOOP 语义不变（向后兼容）。
+      // 自回边（event == fromState）属幂等重复上报，DEBUG 即可；
+      // 其他未知事件（如 "SUCESS" 拼错）保留 WARN 以便诊断状态机误用。
       default -> {
-        log.warn(
-            "state machine NOOP on unknown event: fromState={}, event={} — check for typo",
-            fromState,
-            event);
+        if (fromState != null && fromState.equalsIgnoreCase(event)) {
+          log.debug("state machine self-transition noop: state={}", fromState);
+        } else {
+          log.warn(
+              "state machine NOOP on unknown event: fromState={}, event={} — check for typo",
+              fromState,
+              event);
+        }
         yield fromState;
       }
     };

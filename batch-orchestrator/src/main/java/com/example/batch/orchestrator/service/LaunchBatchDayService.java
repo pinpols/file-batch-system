@@ -24,6 +24,8 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -60,7 +62,7 @@ public class LaunchBatchDayService {
       JobDefinitionRecord jobDefinition,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
-    OptimisticLockingFailureException last = null;
+    DataAccessException last = null;
     for (int attempt = 1; attempt <= UPSERT_MAX_ATTEMPTS; attempt++) {
       try {
         selfProvider
@@ -72,6 +74,16 @@ public class LaunchBatchDayService {
         log.info(
             "batch day upsert cas conflict; will retry: tenantId={}, jobCode={}, bizDate={},"
                 + " attempt={}/{}",
+            request == null ? null : request.tenantId(),
+            request == null ? null : request.jobCode(),
+            request == null ? null : request.bizDate(),
+            attempt,
+            UPSERT_MAX_ATTEMPTS);
+      } catch (DuplicateKeyException concurrentInsert) {
+        last = concurrentInsert;
+        log.info(
+            "batch day upsert concurrent insert (uk_batch_day_instance); will retry as update:"
+                + " tenantId={}, jobCode={}, bizDate={}, attempt={}/{}",
             request == null ? null : request.tenantId(),
             request == null ? null : request.jobCode(),
             request == null ? null : request.bizDate(),
