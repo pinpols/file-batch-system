@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.quartz.CronTrigger;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.impl.matchers.GroupMatcher;
@@ -95,6 +96,28 @@ class TriggerReconcilerTest {
 
     verify(loader, never()).loadAll();
     verify(registration, never()).registerByJobCode(any(), any());
+    verify(registration, never()).unregisterByJobCode(any(), any());
+  }
+
+  @Test
+  void scheduleDrift_triggersReRegister() throws Exception {
+    TriggerDescriptor descriptor = enabledDescriptor("t1", "JOB_A");
+    descriptor.setScheduleType("CRON");
+    descriptor.setScheduleExpression("0 0 2 * * ?"); // DB expects every day 02:00 (Quartz)
+    descriptor.setTimezone("Asia/Shanghai");
+    JobKey existing = JobKey.jobKey("t1:JOB_A", TriggerSchedulerFacade.JOB_GROUP);
+
+    CronTrigger quartzTrigger = org.mockito.Mockito.mock(CronTrigger.class);
+    when(quartzTrigger.getCronExpression()).thenReturn("0 0 3 * * ?"); // Quartz still has old
+    // timezone stub 被 short-circuit 跳过（cron 不同已命中 drift），故不 stub 以避免 strict mode 报错
+
+    when(loader.loadAll()).thenReturn(List.of(descriptor));
+    when(scheduler.getJobKeys(any(GroupMatcher.class))).thenReturn(Set.of(existing));
+    org.mockito.Mockito.doReturn(List.of(quartzTrigger)).when(scheduler).getTriggersOfJob(existing);
+
+    reconciler.reconcile();
+
+    verify(registration).registerByJobCode("t1", "JOB_A");
     verify(registration, never()).unregisterByJobCode(any(), any());
   }
 

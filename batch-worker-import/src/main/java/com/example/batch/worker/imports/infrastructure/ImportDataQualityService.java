@@ -1,7 +1,6 @@
 package com.example.batch.worker.imports.infrastructure;
 
 import com.example.batch.common.config.BatchSecurityProperties;
-import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.common.utils.ContentMaskingUtils;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -528,10 +527,17 @@ public class ImportDataQualityService {
 
   private Map<String, Object> mergedRuleSet(Object templateConfigObject) {
     Map<String, Object> templateConfig = toMap(templateConfigObject);
-    Map<String, Object> merged =
-        usesGenericJdbcMapped(templateConfig)
-            ? new LinkedHashMap<>()
-            : new LinkedHashMap<>(defaultRuleSet());
+    Map<String, Object> merged = new LinkedHashMap<>();
+    // 1) 从 field_mappings 自动派生必填校验（required=true 的字段 → IMPORT_VALIDATE_REQUIRED）；
+    //    替代原来硬编码 customerNo/customerName 的 customer 专属 defaultRuleSet——否则非 customer
+    //    schema（如 IMP-TRANSACTION-CSV 的 txnNo/accountNo）会被错误地要求必填 customerNo。
+    Map<String, Object> derived = deriveRequiredRulesFromFieldMappings(templateConfig);
+    if (!derived.isEmpty()) {
+      Map<String, Object> fieldRules = new LinkedHashMap<>();
+      fieldRules.put("fieldRules", derived);
+      merged.putAll(fieldRules);
+    }
+    // 2) 叠加 template_config.validation_rule_set 的显式规则（覆盖派生值）。
     deepMerge(
         merged,
         toMap(
@@ -541,30 +547,43 @@ public class ImportDataQualityService {
     return merged;
   }
 
-  private Map<String, Object> defaultRuleSet() {
-    Map<String, Object> fieldRules = new LinkedHashMap<>();
-    fieldRules.put(
-        "customerNo", Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
-    fieldRules.put(
-        "customerName", Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
-    fieldRules.put(
-        "customerType",
-        Map.of(
-            KEY_ALLOWED_VALUES,
-            List.of("PERSONAL", "ENTERPRISE"),
-            KEY_ERROR_CODE,
-            "IMPORT_VALIDATE_TYPE_INVALID"));
-    fieldRules.put(
-        "status",
-        Map.of(
-            KEY_ALLOWED_VALUES,
-            List.of("ACTIVE", "INACTIVE", "FROZEN"),
-            KEY_ERROR_CODE,
-            "IMPORT_VALIDATE_STATUS_INVALID"));
-    Map<String, Object> defaults = new LinkedHashMap<>();
-    defaults.put("fieldRules", fieldRules);
-    defaults.put("uniqueFields", List.of("customerNo"));
-    return defaults;
+  /**
+   * 从 {@code template_config.field_mappings} 的 {@code required:true} 字段派生最简必填规则：
+   * {@code {fieldName: {required: true, errorCode: IMPORT_VALIDATE_REQUIRED}}}。
+   * <p>这是原硬编码 {@code defaultRuleSet} 的替代：之前所有非 jdbc_mapped_import 的 template 都会
+   * 套上 customer 专属默认规则（customerNo/customerName required、customerType/status 枚举限定），
+   * 导致非 customer schema 跑起来报 "customerNo is required"。改为"按 template 自身声明派生"后：
+   * IMP-CUSTOMER-CSV 的 customerNo/customerName required 继续生效；IMP-TRANSACTION-CSV 按自己的
+   * txnNo/accountNo required 生效；各司其职。更复杂的规则（枚举、长度、unique）仍需在
+   * {@code validation_rule_set} 中显式声明。
+   */
+  private Map<String, Object> deriveRequiredRulesFromFieldMappings(
+      Map<String, Object> templateConfig) {
+    if (templateConfig == null || templateConfig.isEmpty()) {
+      return Map.of();
+    }
+    Object raw =
+        firstNonNull(templateConfig.get("field_mappings"), templateConfig.get("fieldMappings"));
+    if (!(raw instanceof List<?> list)) {
+      return Map.of();
+    }
+    Map<String, Object> derived = new LinkedHashMap<>();
+    for (Object item : list) {
+      Map<String, Object> mapping = toMap(item);
+      if (mapping.isEmpty()) {
+        continue;
+      }
+      String name = stringValue(mapping.get("name"));
+      if (!Texts.hasText(name)) {
+        continue;
+      }
+      if (booleanValue(firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull")), false)) {
+        derived.put(
+            name,
+            Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, "IMPORT_VALIDATE_REQUIRED"));
+      }
+    }
+    return derived;
   }
 
   @SuppressWarnings("unchecked")
@@ -587,23 +606,6 @@ public class ImportDataQualityService {
 
   private Map<String, Object> payloadToMap(CustomerImportPayload payload) {
     return objectMapper.convertValue(payload, new TypeReference<>() {});
-  }
-
-  private boolean usesGenericJdbcMapped(Map<String, Object> templateConfig) {
-    if (templateConfig == null || templateConfig.isEmpty()) {
-      return false;
-    }
-    Object direct = templateConfig.get("load_target_ref");
-    if (direct != null
-        && WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED.equalsIgnoreCase(
-            String.valueOf(direct).trim())) {
-      return true;
-    }
-    if (templateConfig.get("jdbc_mapped_import") != null) {
-      return true;
-    }
-    Map<String, Object> querySchema = toMap(templateConfig.get("query_param_schema"));
-    return querySchema.get("jdbcMappedImport") instanceof Map<?, ?>;
   }
 
   private Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
