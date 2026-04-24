@@ -164,6 +164,9 @@ public enum XxxType implements DictEnum {
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
 
 ### 2026-04-24
+- **shutdown 期 Redis 调用收敛**（重启日志复查发现）：orchestrator graceful shutdown 时 Lettuce 先关，OutboxPollScheduler 继续 tick 抢 ShedLock → `setIfAbsent` 抛 `java.lang.IllegalStateException: LettuceConnectionFactory has been STOPPED` → 冒泡到 OutboxPollScheduler `catch (Throwable t)` 打 `ERROR Outbox 轮询异常（非数据库类）`。两处补丁：
+  - `RedisShedLockProvider.lock/unlock` 的 catch 追加 `IllegalStateException`（与 `DataAccessException` 并列），统一 `rootReason()` 抽取消息格式，关闭期 return Optional.empty 视为未拿到锁。
+  - `OutboxPollScheduler.pollAndReschedule` 在 `executeWithLock` 之前加前置 `gracefulShutdown.isDraining()` 短路（原先的 check 在 `executeAdvance` 里，发生在拿锁之后）；这样 shutdown 期间根本不会调用 Redis，也不会产生 WARN。
 - **运行日志长期噪声 + 真错误一锅端**（跟进 2026-04-22 "收敛运行日志长期噪声" 批次；这轮抓的是日志里剩下的 ERROR/WARN 噪声大头）：
   - **`LaunchBatchDayService.upsertBatchDayInstance` 加 `DuplicateKeyException` 重试**：03:00 等整点时多个触发同时落 `default-tenant/default_calendar/<bizDate>` 的 batch_day_instance，两个线程 `findFirstByTenantIdAndCalendarCodeAndBizDate` 都返回 null，都走 INSERT 分支，第二个撞 `uk_batch_day_instance` → 500 → trigger 当 SYSTEM_ERROR 重试。外层 retry 循环现在同时抓 `OptimisticLockingFailureException`（update 分支 CAS 失败）和 `DuplicateKeyException`（INSERT 分支并发撞键），`last` 容器类型升到 `DataAccessException` 兼容两者；重试后 SELECT 已能看到对方的记录，走 update 分支收敛。
   - **`DefaultTriggerService.handleHttpClientError` 区分 422/409/404**：

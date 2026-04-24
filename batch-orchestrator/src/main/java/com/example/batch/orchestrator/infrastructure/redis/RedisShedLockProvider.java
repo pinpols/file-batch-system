@@ -48,15 +48,13 @@ public class RedisShedLockProvider implements LockProvider {
     Boolean acquired;
     try {
       acquired = redisTemplate.opsForValue().setIfAbsent(key, token, ttl);
-    } catch (DataAccessException redisError) {
-      // Redis 瞬时故障（超时、连接拒绝、节点切主）：当作"未拿到锁"处理，
-      // 下一 tick 自然重试，避免异常冒泡到 Spring scheduler 打 ERROR。
+    } catch (DataAccessException | IllegalStateException redisError) {
+      // Redis 瞬时故障（超时、连接拒绝、节点切主）或 Lettuce 已 STOPPED（shutdown 期间调用）：
+      // 当作"未拿到锁"处理，下一 tick 自然重试，避免异常冒泡到 Spring scheduler 打 ERROR。
       log.warn(
           "shed-lock acquire failed, treating as not-held: lock={}, reason={}",
           lockConfiguration.getName(),
-          redisError.getMostSpecificCause() == null
-              ? redisError.getClass().getSimpleName()
-              : redisError.getMostSpecificCause().getMessage());
+          rootReason(redisError));
       return Optional.empty();
     }
     if (!Boolean.TRUE.equals(acquired)) {
@@ -67,15 +65,20 @@ public class RedisShedLockProvider implements LockProvider {
           try {
             redisTemplate.execute(
                 new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class), List.of(key), token);
-          } catch (DataAccessException redisError) {
-            // 解锁失败：key 到期自然释放，这里只记一条 WARN 不上抛。
+          } catch (DataAccessException | IllegalStateException redisError) {
+            // 解锁失败（含 shutdown 后 Lettuce 已停）：key 到期自然释放，只记一条 WARN 不上抛。
             log.warn(
                 "shed-lock release failed (ttl will expire key): lock={}, reason={}",
                 lockConfiguration.getName(),
-                redisError.getMostSpecificCause() == null
-                    ? redisError.getClass().getSimpleName()
-                    : redisError.getMostSpecificCause().getMessage());
+                rootReason(redisError));
           }
         });
+  }
+
+  private static String rootReason(Throwable t) {
+    if (t instanceof DataAccessException dae && dae.getMostSpecificCause() != null) {
+      return dae.getMostSpecificCause().getMessage();
+    }
+    return t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
   }
 }
