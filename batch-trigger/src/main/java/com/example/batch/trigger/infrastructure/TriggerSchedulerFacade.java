@@ -252,6 +252,23 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       throw new IllegalArgumentException(
           "invalid cron expression for job " + descriptor.getJobCode() + ": '" + expression + "'");
     }
+    // Linux 5 字段 cron（"分 时 日 月 星期"）在 Quartz 下会被当 6 字段 "秒 分 时 日 月 星期" 解析，
+    // 语义严重错位：如 "0 1 * * *" 原意每日 01:00，Quartz 却读成"每小时第 1 分 0 秒触发"。
+    // Quartz 标准 cron 必须 6（无年）或 7（有年）字段，此处硬校验，拒绝所有 Linux-cron 误用。
+    int fieldCount = expression.trim().split("\\s+").length;
+    if (fieldCount < 6 || fieldCount > 7) {
+      throw new IllegalArgumentException(
+          "cron must be Quartz format (6 or 7 fields: sec min hour day month dow [year]), got "
+              + fieldCount
+              + " fields for job "
+              + descriptor.getJobCode()
+              + ": '"
+              + expression
+              + "'"
+              + (fieldCount == 5
+                  ? " — Linux 5-field cron is not supported; add a leading '0 ' for seconds"
+                  : ""));
+    }
     String timezone = descriptor.getTimezone();
     if (timezone != null && !timezone.isBlank()) {
       try {
