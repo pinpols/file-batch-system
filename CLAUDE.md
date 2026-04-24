@@ -163,6 +163,19 @@ public enum XxxType implements DictEnum {
 
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
 
+### 2026-04-24
+- **运行日志长期噪声 + 真错误一锅端**（跟进 2026-04-22 "收敛运行日志长期噪声" 批次；这轮抓的是日志里剩下的 ERROR/WARN 噪声大头）：
+  - **`LaunchBatchDayService.upsertBatchDayInstance` 加 `DuplicateKeyException` 重试**：03:00 等整点时多个触发同时落 `default-tenant/default_calendar/<bizDate>` 的 batch_day_instance，两个线程 `findFirstByTenantIdAndCalendarCodeAndBizDate` 都返回 null，都走 INSERT 分支，第二个撞 `uk_batch_day_instance` → 500 → trigger 当 SYSTEM_ERROR 重试。外层 retry 循环现在同时抓 `OptimisticLockingFailureException`（update 分支 CAS 失败）和 `DuplicateKeyException`（INSERT 分支并发撞键），`last` 容器类型升到 `DataAccessException` 兼容两者；重试后 SELECT 已能看到对方的记录，走 update 分支收敛。
+  - **`DefaultTriggerService.handleHttpClientError` 区分 422/409/404**：
+    - 422 Unprocessable = 业务拒绝（典型：`current execution time is outside batch window`、tenant closed、validation 失败）→ REJECTED + WARN + 不抛异常，避免 Quartz 打 `Job threw an unhandled Exception` ERROR 并进 misfire retry；下次 cron fire 仍是同样结果，重试无意义。
+    - 409 Conflict = 瞬时并发冲突（乐观锁 / 唯一键 / 幂等撞键）→ FORWARD_FAILED（trigger-retry-scheduler 自动下次 tick 再试），不抛。
+    - 404 / 其他 4xx 行为不变。
+  - **`AbstractApiExceptionHandler` 新增 2 个 handler**：`OptimisticLockingFailureException` / `DuplicateKeyException` 统一映射为 409 CONFLICT + WARN（而不是落到通用 `Exception` handler 打 ERROR + 500）。所有模块（trigger/orchestrator/console）的 ApiExceptionHandler 一次受益，因为它们都继承这个基类。
+  - **`RedisShedLockProvider.lock` 捕获 `DataAccessException`**：Redis 瞬时故障（`QueryTimeoutException` / 连接拒绝 / 节点切主）时 `return Optional.empty()`（视为没拿到锁），下 tick 自然重试，不再冒泡到 Spring scheduler 打 ERROR。`unlock` 同理吞掉（key TTL 自动释放）。
+  - **`DefaultStateMachine` 自回边 NOOP 降 DEBUG**：`case "START", "CLAIM", ..., "RUNNING" -> "RUNNING"` 把 RUNNING 加进合法事件；TERMINATE/CANCEL 补 TERMINATED/CANCELLED；WAITING/CREATED/PENDING/NOOP 合并为 noop；default 分支判断 `event.equalsIgnoreCase(fromState)` → 幂等重复事件 DEBUG，其他真未知事件（如 `SUCESS` 拼错）保留 WARN。
+  - **`RemoteFilesystemDispatchSupport` NAS symlink WARN 首次抑制**：加 `ConcurrentHashMap<String, Boolean> NAS_SYMLINK_WARNED`，同一 configured path 只报一次；macOS 本地 `/tmp → /private/tmp` 这种恒定 symlink 不再每次 dispatch 都刷一条。
+- **脏数据排查：`default-tenant/gen_data_cleanup` 孤儿 job**：`job_definition` id=20016 要求 `worker_group=GENERAL`，但系统只有 IMPORT/EXPORT/DISPATCH 三组 worker，没有任何 GENERAL worker 在线。结果 `WaitingPartitionDispatchScheduler` 每 10s 选一次、每次 `DefaultWorkerSelector` WARN `no_online_workers_in_group`（一个排查期累计 1073 条）。沿用 2026-04-22 对 `TA_DISPATCH_ORDER / gen_reconcile` 的处理惯例，给出一次性可幂等脚本 `scripts/db/cleanup-orphan-general-job.sql`：禁用 job_definition + 把 2 条 WAITING partition 和对应 job_instance 标 CANCELLED。脚本不入 Flyway，属运维一次性动作，由操作者手工执行。
+
 ### 2026-04-23
 - **新增 `GET /api/console/queries/partitions`**：按作业实例分页查询 `job_partition` 列表。前端 `PartitionView.vue` 此前打的 `instanceApi.partitions(instanceId)` 后端没有对应路由，只能本地裁切；补上后走服务端分页，避免大实例（分区数 > 1000）拉全量。
   - 新建 `JobPartitionQueryRequest`（extends `PageQueryRequest`，字段 `tenantId / jobInstanceId / partitionStatus`）+ `ConsoleJobPartitionResponse`（13 字段，含 `partitionNo / partitionKey / partitionStatus / workerGroup / workerCode / retryCount / businessKey / leaseExpireAt / startedAt / finishedAt`）。

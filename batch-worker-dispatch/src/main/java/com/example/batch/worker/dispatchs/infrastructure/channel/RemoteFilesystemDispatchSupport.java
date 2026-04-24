@@ -25,6 +25,8 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import lombok.extern.slf4j.Slf4j;
 import com.example.batch.common.utils.Texts;
 
@@ -46,6 +48,11 @@ final class RemoteFilesystemDispatchSupport {
   private static final String SANDBOX_ROOT_PROP = "batch.dispatch.nas-sandbox-root";
 
   private static final int MINIO_PART_SIZE = 10 * 1024 * 1024;
+
+  // Dedup: 每个 configured NAS path 的 symlink WARN 只报一次；否则每次 dispatch 都会刷同样告警
+  // （macOS 本地 `/tmp → /private/tmp` 是典型场景）。路径在进程生命周期内稳定，内存开销可忽略。
+  private static final ConcurrentMap<String, Boolean> NAS_SYMLINK_WARNED =
+      new ConcurrentHashMap<>();
 
   private RemoteFilesystemDispatchSupport() {}
 
@@ -95,10 +102,12 @@ final class RemoteFilesystemDispatchSupport {
     Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
     Files.createDirectories(directory);
     Path realDirectory = directory.toRealPath();
-    if (!realDirectory.equals(directory)) {
+    if (!realDirectory.equals(directory)
+        && NAS_SYMLINK_WARNED.putIfAbsent(directory.toString(), Boolean.TRUE) == null) {
       log.warn(
           "NAS directory contains symlink(s): configured={}, real={} — using real path;"
-              + " set -D{}=<abs-path> to enforce sandbox root and reject symlink escape",
+              + " set -D{}=<abs-path> to enforce sandbox root and reject symlink escape"
+              + " (this warning is emitted only once per configured path)",
           directory,
           realDirectory,
           SANDBOX_ROOT_PROP);

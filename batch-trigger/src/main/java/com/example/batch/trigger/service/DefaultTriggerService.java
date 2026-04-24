@@ -256,6 +256,11 @@ public class DefaultTriggerService implements TriggerService {
     if (!e.getStatusCode().is4xxClientError()) {
       return markForwardFailed(r, e.getMessage());
     }
+    if (e.getStatusCode() == HttpStatusCode.valueOf(409)) {
+      // Transient concurrency conflict (optimistic lock / duplicate insert race).
+      // 不是真正的"拒绝"——对方并发已在改同一资源，下次 tick 再试即可。
+      return markForwardFailed(r, "orchestrator 409 CONFLICT: " + e.getResponseBodyAsString());
+    }
     triggerRequestMapper.updateRequestStatus(r.tenantId(), r.requestId(), "REJECTED");
     if (e.getStatusCode() == HttpStatusCode.valueOf(404)) {
       log.warn(
@@ -265,6 +270,18 @@ public class DefaultTriggerService implements TriggerService {
           e.getResponseBodyAsString());
       throw new BizException(
           ResultCode.NOT_FOUND, "orchestrator rejected trigger: job or tenant not found");
+    }
+    if (e.getStatusCode() == HttpStatusCode.valueOf(422)) {
+      // Business rejection (e.g. outside batch window, late arrival, tenant closed, validation).
+      // Don't throw — request is already marked REJECTED; retrying the same fire time cannot
+      // change the outcome, so quietly consume the exception and let Quartz skip this tick.
+      log.warn(
+          "trigger rejected (business): job [{}] tenant [{}] requestId [{}] — {}",
+          r.jobCode(),
+          r.tenantId(),
+          r.requestId(),
+          e.getResponseBodyAsString());
+      return new LaunchResponse(r.requestId(), r.traceId());
     }
     throw new SystemException(ResultCode.SYSTEM_ERROR, "failed to forward trigger request", e);
   }
