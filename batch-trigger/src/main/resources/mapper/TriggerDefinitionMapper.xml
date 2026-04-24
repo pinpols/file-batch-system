@@ -52,7 +52,7 @@
           on bc.tenant_id = jd.tenant_id
          and bc.calendar_code = jd.calendar_code
          and bc.enabled = true
-        where jd.tenant_id = #{arg0}
-          and jd.job_code = #{arg1}
+        where jd.tenant_id = #{tenantId}
+          and jd.job_code = #{jobCode}
     </select>
 </mapper>
