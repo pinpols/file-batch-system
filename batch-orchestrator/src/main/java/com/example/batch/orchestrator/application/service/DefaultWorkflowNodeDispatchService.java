@@ -32,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -303,7 +304,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
                 sourcePayload,
                 childRequestId,
                 traceId,
-                virtualTask));
+                virtualTask,
+                workflowNode));
     launchServiceProvider.getObject().launch(childLaunchRequest);
 
     return 1; // one virtual partition added to the parent job
@@ -407,10 +409,38 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       String sourcePayload,
       String childRequestId,
       String traceId,
-      JobTaskEntity virtualTask) {}
+      JobTaskEntity virtualTask,
+      WorkflowNodeEntity workflowNode) {}
+
+  /**
+   * sourcePayload 在 workflow 跨节点传递时会携带前一个节点由 {@link #buildTaskPayload} 写入的
+   * workflow 内部字段（{@code workflowNodeCode / workflowNodeType / targetJobCode} 等）。
+   * 这些字段是"当前节点"的标记，不应该泄露给下游节点的子作业——否则 EXPORT 节点的子作业会
+   * 看到 IMPORT 节点的 targetJobCode，用错 pipeline（表现为 "unsupported export stage code: RECEIVE"）。
+   */
+  private static final Set<String> WORKFLOW_INTERNAL_PAYLOAD_KEYS =
+      Set.of(
+          "workflowNodeCode",
+          "workflowNodeType",
+          "targetJobCode",
+          "_parentNodeCode",
+          "_parentVirtualTaskId",
+          "_parentWorkflowRunId",
+          "parentInstanceId");
 
   private LaunchRequest buildChildLaunchRequest(ChildLaunchContext ctx) {
-    Map<String, Object> childParams = new LinkedHashMap<>(parsePayloadMap(ctx.sourcePayload()));
+    Map<String, Object> parsed = parsePayloadMap(ctx.sourcePayload());
+    Map<String, Object> childParams = new LinkedHashMap<>();
+    parsed.forEach(
+        (k, v) -> {
+          if (!WORKFLOW_INTERNAL_PAYLOAD_KEYS.contains(k)) {
+            childParams.put(k, v);
+          }
+        });
+    // 与 TASK 节点的 buildTaskPayload 对齐：把 workflow_node.node_params 合并进子作业 launch
+    // params。否则 JOB 节点在设计器里配的 templateCode / channelCode / seed payload 等字段
+    // 永远无法传到子作业 job_instance.params_snapshot → worker 看不到 → import/export 凭空失败。
+    mergeNodeParams(childParams, ctx.workflowNode());
     childParams.put("parentInstanceId", ctx.jobInstance().getId());
     childParams.put("_parentVirtualTaskId", ctx.virtualTask().getId());
     childParams.put("_parentWorkflowRunId", ctx.workflowRun().getId());
