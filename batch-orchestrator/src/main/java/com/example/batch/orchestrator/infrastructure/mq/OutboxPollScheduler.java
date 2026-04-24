@@ -145,6 +145,14 @@ public class OutboxPollScheduler {
       scheduleNext(null);
       return;
     }
+    if (gracefulShutdown.isDraining()) {
+      // 前置短路：shutdown 已触发时不再去抢 ShedLock（Lettuce 可能已 STOPPED，
+      // 抢锁会抛 IllegalStateException），内层 executeAdvance 的 isDraining 判断
+      // 仅在拿到锁后生效，这里补一层保证 shutdown 期间不产生 ERROR 日志。
+      running.set(false);
+      scheduleNext(null);
+      return;
+    }
     @SuppressWarnings("unchecked")
     ScheduleForwarderResult[] holder = new ScheduleForwarderResult[1];
     try {
