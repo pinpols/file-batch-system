@@ -40,6 +40,12 @@ public class KafkaConsumerConfiguration {
   @Value("${spring.kafka.consumer.max-poll-interval-ms:600000}")
   private int maxPollIntervalMs;
 
+  // PATTERN/REGEX topic 订阅必须等到 metadata 刷新才能发现新创建的 topic。Kafka 客户端默认 5min，
+  // 对生产 OK（topic 多预创建）但 e2e/集成测试 timeout 通常 ≤ 2min 接收不到。降到 30s 给一个
+  // 既保护 broker 又能让测试感知新 topic 的折衷值。
+  @Value("${spring.kafka.consumer.metadata-max-age-ms:30000}")
+  private int metadataMaxAgeMs;
+
   @Bean
   public ProducerFactory<String, String> kafkaProducerFactory() {
     Map<String, Object> properties = new HashMap<>();
@@ -71,6 +77,7 @@ public class KafkaConsumerConfiguration {
     properties.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, fetchMinBytes);
     properties.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, fetchMaxWaitMs);
     properties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollIntervalMs);
+    properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, metadataMaxAgeMs);
     return new DefaultKafkaConsumerFactory<>(properties);
   }
 

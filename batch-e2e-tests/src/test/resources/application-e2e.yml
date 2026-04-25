@@ -5,6 +5,8 @@ spring:
   kafka:
     consumer:
       auto-offset-reset: earliest
+      # KafkaConsumerConfiguration 默认 30s；e2e 进一步缩到 5s 加快 PATTERN 订阅发现新 topic
+      metadata-max-age-ms: 5000
 
 batch:
   retry:
