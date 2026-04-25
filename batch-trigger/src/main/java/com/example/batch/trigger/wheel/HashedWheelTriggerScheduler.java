@@ -318,7 +318,8 @@ public class HashedWheelTriggerScheduler {
       String groupTag,
       String successStatus) {
     String requestId = IdGenerator.newBusinessNo("wheel");
-    TriggerRequestEntity req = buildFireRequest(state, scheduledFireTime, requestId, triggerType);
+    TriggerRequestEntity req =
+        buildFireRequest(state, descriptor, scheduledFireTime, requestId, triggerType);
     try {
       requestMapper.insert(req);
     } catch (DuplicateKeyException dup) {
@@ -365,20 +366,37 @@ public class HashedWheelTriggerScheduler {
   }
 
   private TriggerRequestEntity buildFireRequest(
-      TriggerRuntimeStateEntity state, Instant scheduledFireTime, String requestId,
-      TriggerType triggerType) {
+      TriggerRuntimeStateEntity state, TriggerDescriptor descriptor,
+      Instant scheduledFireTime, String requestId, TriggerType triggerType) {
     TriggerRequestEntity req = new TriggerRequestEntity();
     req.setTenantId(state.getTenantId());
     req.setRequestId(requestId);
     req.setTriggerType(triggerType.code());
     req.setJobCode(state.getJobCode());
-    req.setBizDate(LocalDate.now()); // TODO 接 business_calendar 解析
+    req.setBizDate(resolveBizDate(descriptor, scheduledFireTime));
     req.setDedupKey(state.getTenantId() + ":" + state.getJobCode() + ":"
         + scheduledFireTime.toEpochMilli());
     req.setRequestStatus("ACCEPTED");
     req.setScheduledFireTime(scheduledFireTime);
     req.setTriggerRuntimeStateId(state.getId());
     return req;
+  }
+
+  /**
+   * 用 trigger 时区把 {@code scheduledFireTime} 转成业务日期。
+   *
+   * <p>跟 {@code CalendarBizDateResolver.resolve} 第一步对齐(不带 cutoff / 节假日 rolling)
+   * — wheel 写入 trigger_request 的 biz_date 是审计字段,真正业务用的 bizDate 由
+   * {@code LaunchService.launchScheduled → launchAdapterService.fromScheduledTrigger} 内部
+   * 用完整 calendar 算法计算。粗算 vs 精算的差异不影响业务正确性,只影响 trigger_request
+   * 表的运维查询语义(运维按 biz_date 查 fire 历史,精度到天即可)。
+   *
+   * <p>禁用 {@code LocalDate.now()}(JVM 默认时区)防止跨时区部署偏移。
+   */
+  private LocalDate resolveBizDate(TriggerDescriptor descriptor, Instant scheduledFireTime) {
+    java.time.ZoneId zone =
+        timezoneProvider.resolveOrDefault(descriptor == null ? null : descriptor.getTimezone());
+    return scheduledFireTime.atZone(zone).toLocalDate();
   }
 
   private TriggerDescriptor loadDescriptor(TriggerRuntimeStateEntity state) {
