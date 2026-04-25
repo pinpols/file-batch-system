@@ -29,6 +29,7 @@ flowchart LR
   end
 
   PDB[("batch_platform<br/>job_* / file_* / workflow_*<br/>outbox_event / worker_registry")]:::store
+  RDS[("Redis<br/>ShedLock / config-cache<br/>shard-assignment")]:::store
 
   K[("Kafka<br/>batch.task.dispatch.*")]:::store
 
@@ -59,6 +60,9 @@ flowchart LR
   PA  -. "write partition status" .-> PDB
   SEL -. "read worker_registry<br/>+ resource_queue" .-> PDB
   OUT -. "poll outbox_event" .-> PDB
+
+  %% ─── Redis 辅助：ShedLock + config cache + shard-assignment ──
+  SCH -. "ShedLock (@Scheduled 防多实例)<br/>+ config cache" .- RDS
 
   %% ─── outbox → Kafka → workers（粗实线 = 消息流） ──
   OUT ==>|"publish task"| K
