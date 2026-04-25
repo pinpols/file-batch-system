@@ -10,7 +10,7 @@
 > **图例**：粗实线 `══>` = 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号。
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 45, 'rankSpacing': 55, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
+%%{init: {'flowchart': {'curve': 'step', 'nodeSpacing': 55, 'rankSpacing': 75, 'htmlLabels': true, 'diagramPadding': 16}, 'themeVariables': {'fontSize': '13px'}}}%%
 flowchart TB
   USER([用户 / 前端]):::user
 
