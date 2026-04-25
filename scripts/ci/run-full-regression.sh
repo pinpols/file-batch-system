@@ -18,6 +18,7 @@ export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
 RUN_DEFAULT_TESTS=true
 RUN_IT_SUITE=true
 RUN_LOAD_SMOKE=false
+RUN_LOAD_CAPACITY=false
 RUN_DEPLOY_SMOKE=false
 RUN_DEPLOY_VERIFICATION=false
 RUN_INSPECTION=false
@@ -42,6 +43,7 @@ Options:
   --skip-default-tests   Skip reactor default tests (*Test / *IntegrationTest)
   --skip-it-suite        Skip E2E suite (batch-e2e-tests, *E2eIT)
   --with-load-smoke      Run Gatling JobLaunchSimulation smoke
+  --with-load-capacity   Run Gatling CapacityBaselineSimulation (~5-10 min, real ramp)
   --with-deploy-smoke    Run Helm lint/template deployment smoke
   --with-deployment-verification
                          Run upgrade / rollback verification smoke
@@ -422,6 +424,10 @@ while [[ $# -gt 0 ]]; do
       RUN_LOAD_SMOKE=true
       shift
       ;;
+    --with-load-capacity)
+      RUN_LOAD_CAPACITY=true
+      shift
+      ;;
     --with-deploy-smoke)
       RUN_DEPLOY_SMOKE=true
       shift
@@ -451,7 +457,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$RUN_DEFAULT_TESTS" == false && "$RUN_IT_SUITE" == false && "$RUN_LOAD_SMOKE" == false && "$RUN_DEPLOY_SMOKE" == false && "$RUN_DEPLOY_VERIFICATION" == false && "$RUN_INSPECTION" == false ]]; then
+if [[ "$RUN_DEFAULT_TESTS" == false && "$RUN_IT_SUITE" == false && "$RUN_LOAD_SMOKE" == false && "$RUN_LOAD_CAPACITY" == false && "$RUN_DEPLOY_SMOKE" == false && "$RUN_DEPLOY_VERIFICATION" == false && "$RUN_INSPECTION" == false ]]; then
   printf 'Nothing to run. Use --help for options.\n' >&2
   exit 2
 fi
@@ -473,6 +479,14 @@ if [[ "$RUN_LOAD_SMOKE" == true ]]; then
   run_step \
     "Load Smoke (JobLaunchSimulation)" \
     bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=JobLaunchSimulation -Dusers.peak=\${BATCH_LOAD_SMOKE_USERS_PEAK:-5} -Dduration.seconds=\${BATCH_LOAD_SMOKE_DURATION_SECONDS:-30} -Dramp.seconds=\${BATCH_LOAD_SMOKE_RAMP_SECONDS:-10}"
+fi
+
+if [[ "$RUN_LOAD_CAPACITY" == true ]]; then
+  # CapacityBaselineSimulation 内置 SLO 断言（write p95<500ms / read p99<300ms / err<1%），
+  # 失败即非零退出，作为容量回归门禁。stepped ramp 25→200 users，约 5-10 分钟。
+  run_step \
+    "Capacity Baseline (CapacityBaselineSimulation)" \
+    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=CapacityBaselineSimulation -DjobCode=\${BATCH_LOAD_CAPACITY_JOB_CODE:-E2E_IMPORT_LOAD} -DtenantId=\${BATCH_LOAD_CAPACITY_TENANT_ID:-t1}"
 fi
 
 if [[ "$RUN_DEPLOY_SMOKE" == true ]]; then
