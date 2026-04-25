@@ -314,6 +314,150 @@ paths:
             text/event-stream:
               schema:
                 $ref: '#/components/schemas/ConsoleSseEventResponse'
+  /api/console/ops/cache/evict-job-definition:
+    post:
+      tags: [Ops]
+      summary: Evict orchestrator Redis cache for a single job definition
+      description: |-
+        Manual cache eviction for the OrchestratorConfigCacheService. Use only when DB
+        was modified outside the console write path (direct psql / SQL migration);
+        otherwise normal write endpoints already trigger afterCommit eviction.
+      operationId: evictJobDefinitionCache
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: jobCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eviction result with the affected cache key descriptor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cache/evict-all-job-definitions:
+    post:
+      tags: [Ops]
+      summary: Evict orchestrator Redis cache for all job definitions of a tenant
+      operationId: evictAllJobDefinitionsCache
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eviction result with the wildcard cache key descriptor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cache/evict-workflow-definition:
+    post:
+      tags: [Ops]
+      summary: Evict orchestrator Redis cache for a single workflow definition
+      operationId: evictWorkflowDefinitionCache
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: workflowCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eviction result with the affected cache key descriptor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cache/evict-business-calendar:
+    post:
+      tags: [Ops]
+      summary: Evict orchestrator Redis cache for a single business calendar
+      operationId: evictBusinessCalendarCache
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: calendarCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eviction result with the affected cache key descriptor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cache/evict-batch-window:
+    post:
+      tags: [Ops]
+      summary: Evict orchestrator Redis cache for a single batch window
+      operationId: evictBatchWindowCache
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: windowCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eviction result with the affected cache key descriptor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+  /api/console/ops/cache/evict-quota-policies:
+    post:
+      tags: [Ops]
+      summary: Evict orchestrator Redis cache for tenant quota policy resolution
+      operationId: evictQuotaPoliciesCache
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Eviction result with the affected cache key descriptor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/ops/summary:
     get:
       tags: [Ops]
