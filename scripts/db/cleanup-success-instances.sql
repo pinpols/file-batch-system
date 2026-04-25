@@ -75,7 +75,7 @@ old_pipeline_instances AS (
 DELETE FROM batch.pipeline_step_run
  WHERE pipeline_instance_id IN (SELECT id FROM old_pipeline_instances);
 
--- 4) pipeline_instance（先解 file_record FK 引用避免冲突）
+-- 4) pipeline_instance（先解 file_record FK 引用 + 删 file_dispatch_record 子表避免冲突）
 WITH old_instances AS (
   SELECT id FROM batch.job_instance
    WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
@@ -83,6 +83,19 @@ WITH old_instances AS (
 )
 UPDATE batch.pipeline_instance SET file_id = NULL
  WHERE related_job_instance_id IN (SELECT id FROM old_instances);
+
+-- file_dispatch_record FK 到 pipeline_instance（dispatch 链路落盘时写）
+WITH old_instances AS (
+  SELECT id FROM batch.job_instance
+   WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
+     AND finished_at < now() - (:success_retention_days || ' days')::interval
+),
+old_pipeline_instances AS (
+  SELECT id FROM batch.pipeline_instance
+   WHERE related_job_instance_id IN (SELECT id FROM old_instances)
+)
+DELETE FROM batch.file_dispatch_record
+ WHERE pipeline_instance_id IN (SELECT id FROM old_pipeline_instances);
 
 WITH old_instances AS (
   SELECT id FROM batch.job_instance
@@ -126,6 +139,23 @@ WITH old_instances AS (
      AND finished_at < now() - (:success_retention_days || ' days')::interval
 )
 DELETE FROM batch.job_execution_log WHERE job_instance_id IN (SELECT id FROM old_instances);
+
+-- 7.5) compensation_command FK 引用：补偿命令记录与 job_instance 关联
+WITH old_instances AS (
+  SELECT id FROM batch.job_instance
+   WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
+     AND finished_at < now() - (:success_retention_days || ' days')::interval
+)
+DELETE FROM batch.compensation_command
+ WHERE related_job_instance_id IN (SELECT id FROM old_instances);
+
+-- 7.6) 解开 job_instance 自引用 FK：子实例的 parent_instance_id 指向即将被删的父
+UPDATE batch.job_instance SET parent_instance_id = NULL
+ WHERE parent_instance_id IN (
+   SELECT id FROM batch.job_instance
+    WHERE instance_status IN ('SUCCESS','PARTIAL_FAILED')
+      AND finished_at < now() - (:success_retention_days || ' days')::interval
+ );
 
 -- 8) 根：job_instance
 DELETE FROM batch.job_instance

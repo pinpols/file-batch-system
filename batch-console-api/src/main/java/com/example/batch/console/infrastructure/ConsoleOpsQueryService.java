@@ -56,10 +56,12 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 运维相关查询子服务。 */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 class ConsoleOpsQueryService {
 
   private final ConsoleTenantGuard tenantGuard;

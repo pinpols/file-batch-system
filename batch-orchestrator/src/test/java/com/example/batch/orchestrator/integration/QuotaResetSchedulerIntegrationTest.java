@@ -24,6 +24,7 @@ import org.springframework.test.context.TestPropertySource;
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @TestPropertySource(
     properties = {
+      "batch.quota.runtime-store=database",
       "batch.resource-scheduler.quota-reset-enabled=true",
       "batch.resource-scheduler.quota-reset-sliding-window-hours=2",
       "batch.resource-scheduler.quota-reset-scan-interval-millis=600000"

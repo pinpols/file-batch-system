@@ -45,6 +45,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final BatchOrchestratorGovernanceProperties governance;
   private final EventDeliveryLogMapper eventDeliveryLogMapper;
+  private final BatchTopicResolver topicResolver;
   /**
    * delivery-log 写库及回调上的 executor。不能使用 CompletableFuture 默认的 ForkJoinPool.commonPool（共享全局池，
    * 任一耗时回调都会拖累其他业务），也不能在 Kafka producer 的 IO 回调线程上做同步写库（背压风险）。
@@ -56,20 +57,24 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       KafkaTemplate<String, String> kafkaTemplate,
       BatchOrchestratorGovernanceProperties governance,
       EventDeliveryLogMapper eventDeliveryLogMapper,
+      BatchTopicResolver topicResolver,
       @Qualifier("applicationTaskExecutor") Executor deliveryLogExecutor) {
     this.kafkaTemplate = kafkaTemplate;
     this.governance = governance;
     this.eventDeliveryLogMapper = eventDeliveryLogMapper;
+    this.topicResolver = topicResolver;
     this.deliveryLogExecutor = deliveryLogExecutor;
   }
 
   @Override
   public CompletableFuture<Boolean> publish(OutboxEventEntity event) {
-    String topic = governance.mqTopics().resolveDispatchTopic(event.getEventType());
+    // P2-5: dispatch 消息按 routing.mode 走 (tenant|priority|single) 分流；非派发类 fallback 不变
+    TaskDispatchMessage dispatchMessage = null;
+    if (governance.mqTopics().resolveDispatchTopic(event.getEventType()) != null) {
+      dispatchMessage = JsonUtils.fromJson(event.getPayloadJson(), TaskDispatchMessage.class);
+    }
+    String topic = topicResolver.resolve(event.getEventType(), dispatchMessage);
     if (topic != null) {
-      // 任务派发：payloadJson 是 TaskDispatchMessage 的 JSON，直接按 eventKey 作为 Kafka key 投递。
-      TaskDispatchMessage dispatchMessage =
-          JsonUtils.fromJson(event.getPayloadJson(), TaskDispatchMessage.class);
       String targetTopic =
           dispatchMessage != null && dispatchMessage.selectedWorkerId() != null
               ? BatchTopics.directDispatchTopic(topic, dispatchMessage.selectedWorkerId())

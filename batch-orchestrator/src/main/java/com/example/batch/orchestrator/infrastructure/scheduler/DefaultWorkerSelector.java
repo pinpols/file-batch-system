@@ -50,14 +50,17 @@ public class DefaultWorkerSelector implements WorkerSelector {
   private final WorkerRegistryRepository workerRegistryRepository;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
   private final ResourceSchedulerProperties resourceSchedulerProperties;
+  private final ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
 
   public DefaultWorkerSelector(
       WorkerRegistryRepository workerRegistryRepository,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      ResourceSchedulerProperties resourceSchedulerProperties) {
+      ResourceSchedulerProperties resourceSchedulerProperties,
+      ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider) {
     this.workerRegistryRepository = workerRegistryRepository;
     this.meterRegistryProvider = meterRegistryProvider;
     this.resourceSchedulerProperties = resourceSchedulerProperties;
+    this.workerRegistryCacheProvider = workerRegistryCacheProvider;
   }
 
   @Override
@@ -129,11 +132,18 @@ public class DefaultWorkerSelector implements WorkerSelector {
   }
 
   private List<WorkerRegistryRecord> findCandidates(String tenantId, String workerGroup) {
-    return Texts.hasText(workerGroup)
-        ? workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
-            tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
-        : workerRegistryRepository.findByTenantIdAndStatus(
-            tenantId, WorkerRegistryStatus.ONLINE.code());
+    java.util.function.Supplier<List<WorkerRegistryRecord>> loader =
+        () ->
+            Texts.hasText(workerGroup)
+                ? workerRegistryRepository.findByTenantIdAndWorkerGroupAndStatus(
+                    tenantId, workerGroup, WorkerRegistryStatus.ONLINE.code())
+                : workerRegistryRepository.findByTenantIdAndStatus(
+                    tenantId, WorkerRegistryStatus.ONLINE.code());
+    WorkerRegistryCache cache = workerRegistryCacheProvider.getIfAvailable();
+    if (cache == null) {
+      return loader.get();
+    }
+    return cache.getOrLoad(tenantId, workerGroup, loader);
   }
 
   private WorkerRegistryRecord pickBest(

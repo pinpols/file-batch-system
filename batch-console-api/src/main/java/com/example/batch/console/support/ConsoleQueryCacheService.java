@@ -39,6 +39,7 @@ import com.example.batch.common.utils.Texts;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class ConsoleQueryCacheService {
 
   private static final String PREFIX = "console:cache:";

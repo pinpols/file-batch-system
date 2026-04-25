@@ -14,13 +14,14 @@ import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.orchestrator.application.scheduler.QuotaRuntimeStateService;
 import com.example.batch.orchestrator.domain.entity.QuotaRuntimeStateRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
+import com.example.batch.orchestrator.infrastructure.quota.DatabaseQuotaRuntimeStateService;
 import com.example.batch.orchestrator.repository.QuotaRuntimeStateRepository;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class QuotaRuntimeStateServiceTest {
+class DatabaseQuotaRuntimeStateServiceTest {
 
   private static final class ReservationSpec {
     private String tenantId = "t1";
@@ -93,17 +94,17 @@ class QuotaRuntimeStateServiceTest {
   }
 
   private QuotaRuntimeStateRepository quotaRuntimeStateRepository;
-  private QuotaRuntimeStateService service;
+  private DatabaseQuotaRuntimeStateService service;
 
   @BeforeEach
   void setUp() {
     quotaRuntimeStateRepository = mock(QuotaRuntimeStateRepository.class);
     // C-2.8：selfProvider 在单测里直通（不走 REQUIRES_NEW 子事务），
     // 等 reconcileOne 的事务语义由集成测试覆盖
-    org.springframework.beans.factory.ObjectProvider<QuotaRuntimeStateService> selfProvider =
-        mock(org.springframework.beans.factory.ObjectProvider.class);
+    org.springframework.beans.factory.ObjectProvider<DatabaseQuotaRuntimeStateService>
+        selfProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
     service =
-        new QuotaRuntimeStateService(
+        new DatabaseQuotaRuntimeStateService(
             quotaRuntimeStateRepository,
             new BatchTimezoneProvider(new BatchTimezoneProperties()),
             selfProvider);

@@ -44,6 +44,20 @@ ORDER BY 1;
 
 BEGIN;
 
+-- 0) 先清 event_delivery_log（外键引用 outbox_event.id），按相同保留窗口删
+DELETE FROM batch.event_delivery_log
+WHERE outbox_event_id IN (
+  SELECT id FROM batch.outbox_event
+  WHERE publish_status = 'PUBLISHED'
+    AND created_at < now() - (:outbox_published_retention_days || ' days')::interval
+);
+DELETE FROM batch.event_delivery_log
+WHERE outbox_event_id IN (
+  SELECT id FROM batch.outbox_event
+  WHERE publish_status = 'GIVE_UP'
+    AND created_at < now() - (:outbox_giveup_retention_days || ' days')::interval
+);
+
 -- 1) PUBLISHED 已成功投递，仅保留近 N 天用于回查
 DELETE FROM batch.outbox_event
 WHERE publish_status = 'PUBLISHED'

@@ -7,17 +7,29 @@ services:
     restart: unless-stopped
     # 默认 max_connections=100 不够：6 模块 × (platform + business) × Hikari 池
     # 本地联调叠加就会炸 "too many clients already"。调到 300 留足余量。
+    # P2-4: 流复制参数 —— wal_level=replica（默认值，显式声明便于审阅）+ max_wal_senders 给 replica 容器留位
     command:
       - postgres
       - -c
       - max_connections=300
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - wal_keep_size=64
+      - -c
+      - hot_standby=on
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # P2-4: 透传给 003-create-replication-user.sh 创建流复制用户
+      POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}
       # 全栈 UTF-8（见 CLAUDE.md §字符编码）：数据库 initdb 强制 UTF8 编码，
       # 容器 locale 锁 C.UTF-8 防止 psql/日志输出乱码。
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --auth-host=scram-sha-256"
       LANG: ${BATCH_LOCALE:-C.UTF-8}
       LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
       TZ: ${TZ}
@@ -34,6 +46,52 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # P2-4: 只读从库（流复制 hot standby）。console-api 启用 read-replica 时连接此实例。
+  # 首次启动时 entrypoint.sh 会从主库 pg_basebackup 引导；后续重启直接进 standby 模式。
+  # `--profile replica` 启用：docker compose --profile replica up -d
+  postgres-replica:
+    profiles: ["replica"]
+    image: postgres:${POSTGRES_IMAGE_TAG}
+    container_name: batch-postgres-replica
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/replica-entrypoint.sh"]
+    # Hot standby 要求 max_connections >= 主库（PG 限制）；其他参数也需匹配主库才能 redo
+    command:
+      - -c
+      - max_connections=300
+      - -c
+      - hot_standby=on
+    environment:
+      POSTGRES_PRIMARY_HOST: postgres
+      POSTGRES_PRIMARY_PORT: 5432
+      POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-repl_pass_dev_only}
+      # healthcheck 用的本地连接信息（同主库一致；replica 镜像主库账号体系）
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      LANG: ${BATCH_LOCALE:-C.UTF-8}
+      LC_ALL: ${BATCH_LOCALE:-C.UTF-8}
+      TZ: ${TZ}
+      PGTZ: ${TZ}
+    ports:
+      - "${POSTGRES_REPLICA_PORT:-15433}:5432"
+    volumes:
+      - postgres-replica-data:/var/lib/postgresql/data
+      - ./docker/postgres-replica/entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro
+    networks:
+      - batch-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # 走 unix socket 用主库同名用户/库；standby 接受只读连接，pg_isready 只看 listening 不看 recovery 状态
+      test: ["CMD-SHELL", "pg_isready -h /var/run/postgresql -U $${POSTGRES_USER:-batch_user} -d $${POSTGRES_DB:-batch_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   kafka:
     image: apache/kafka:${KAFKA_IMAGE_TAG}
@@ -157,6 +215,7 @@ services:
 
 volumes:
   postgres-data:
+  postgres-replica-data:
   kafka-data:
   minio-data:
   redis-data:

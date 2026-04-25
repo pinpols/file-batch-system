@@ -78,4 +78,14 @@ public class OrchestratorRedisSupport {
     return redisTemplate.execute(
         new DefaultRedisScript<>(script, Long.class), List.of(key), (Object[]) args);
   }
+
+  /**
+   * 执行 Lua 脚本并返回 List 结果。元素类型依赖 Lua return 的形态：number → Long，string → String。
+   * 调用方按需 toString 后 parseLong / 直接用。Quota 状态服务等需要原子返回多字段的场景使用。
+   */
+  @SuppressWarnings("unchecked")
+  public List<Object> evalList(String script, String key, String... args) {
+    DefaultRedisScript<List> redisScript = new DefaultRedisScript<>(script, List.class);
+    return redisTemplate.execute(redisScript, List.of(key), (Object[]) args);
+  }
 }
