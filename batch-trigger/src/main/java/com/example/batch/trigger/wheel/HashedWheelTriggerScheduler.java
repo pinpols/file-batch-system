@@ -1,17 +1,16 @@
 package com.example.batch.trigger.wheel;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.dto.LaunchResponse;
 import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity;
-import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.config.WheelSchedulerProperties;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
-import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.service.TriggerService;
 import com.example.batch.trigger.support.TriggerDescriptor;
@@ -22,7 +21,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,7 +32,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.DuplicateKeyException;  // 仍用于 misfire pending 写入幂等
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -72,7 +70,6 @@ public class HashedWheelTriggerScheduler {
 
   private final WheelSchedulerProperties props;
   private final TriggerRuntimeStateMapper stateMapper;
-  private final TriggerRequestMapper requestMapper;
   private final TriggerMisfirePendingMapper misfirePendingMapper;
   private final TriggerService triggerService;
   private final TriggerDefinitionLoader definitionLoader;
@@ -316,7 +313,20 @@ public class HashedWheelTriggerScheduler {
     }
   }
 
-  /** 实际 fire 主路径(共享 SCHEDULED + CATCH_UP 两种 triggerType)。 */
+  /**
+   * 实际 fire 主路径(共享 SCHEDULED + CATCH_UP 两种 triggerType)。
+   *
+   * <p><b>R-1 重复 fire 三层兜底</b>(无需 trigger_request 自加 fire dedup unique):
+   *
+   * <ol>
+   *   <li>marker CAS(claimForSchedule + version):同一 trigger 同 next_fire_time 不可能两个 leader
+   *       同时 claim 成功
+   *   <li>LaunchService.persistAndForward 内部 select-by-dedupKey 软幂等:GC pause 旧 leader
+   *       fire 时,LaunchService 看到 existing → return existing.requestId,不再 forward
+   *   <li>job_instance 唯一约束 uk_job_instance_tenant_dedup:即使前两层都漏了,业务侧 INSERT
+   *       job_instance 撞唯一键
+   * </ol>
+   */
   private void doFire(
       TriggerRuntimeStateEntity state,
       TriggerDescriptor descriptor,
@@ -325,22 +335,18 @@ public class HashedWheelTriggerScheduler {
       String groupTag,
       String successStatus) {
     String requestId = IdGenerator.newBusinessNo("wheel");
-    TriggerRequestEntity req =
-        buildFireRequest(state, descriptor, scheduledFireTime, requestId, triggerType);
-    try {
-      requestMapper.insert(req);
-    } catch (DuplicateKeyException dup) {
-      metrics.incrementFireDuplicateSkipped(groupTag);
-      log.info("fire skipped (duplicate): job={} scheduledFireTime={}",
-          state.getJobCode(), scheduledFireTime);
-      advanceNextFireTime(state, scheduledFireTime, "SKIPPED_DUPLICATE", 0);
-      return;
-    }
     try {
       ScheduledTriggerCommand command =
           new ScheduledTriggerCommand(
               descriptor, scheduledFireTime, triggerType, requestId, IdGenerator.newTraceId());
-      triggerService.launchScheduled(command);
+      LaunchResponse response = triggerService.launchScheduled(command);
+      // LaunchResponse.instanceNo == null = LaunchService 主动跳过(节假日 SKIP rollRule
+      // 或 bizDate 为空);不算失败,但需要区分状态
+      if (response == null || response.instanceNo() == null) {
+        metrics.incrementFireSuccess(groupTag);
+        advanceNextFireTime(state, scheduledFireTime, "SKIPPED_BY_CALENDAR", 0);
+        return;
+      }
       metrics.incrementFireSuccess(groupTag);
       advanceNextFireTime(state, scheduledFireTime, successStatus, 0);
     } catch (Exception e) {
@@ -370,40 +376,6 @@ public class HashedWheelTriggerScheduler {
     } catch (Exception e) {
       log.warn("advanceAfterFire failed for job={}: {}", state.getJobCode(), e.getMessage());
     }
-  }
-
-  private TriggerRequestEntity buildFireRequest(
-      TriggerRuntimeStateEntity state, TriggerDescriptor descriptor,
-      Instant scheduledFireTime, String requestId, TriggerType triggerType) {
-    TriggerRequestEntity req = new TriggerRequestEntity();
-    req.setTenantId(state.getTenantId());
-    req.setRequestId(requestId);
-    req.setTriggerType(triggerType.code());
-    req.setJobCode(state.getJobCode());
-    req.setBizDate(resolveBizDate(descriptor, scheduledFireTime));
-    req.setDedupKey(state.getTenantId() + ":" + state.getJobCode() + ":"
-        + scheduledFireTime.toEpochMilli());
-    req.setRequestStatus("ACCEPTED");
-    req.setScheduledFireTime(scheduledFireTime);
-    req.setTriggerRuntimeStateId(state.getId());
-    return req;
-  }
-
-  /**
-   * 用 trigger 时区把 {@code scheduledFireTime} 转成业务日期。
-   *
-   * <p>跟 {@code CalendarBizDateResolver.resolve} 第一步对齐(不带 cutoff / 节假日 rolling)
-   * — wheel 写入 trigger_request 的 biz_date 是审计字段,真正业务用的 bizDate 由
-   * {@code LaunchService.launchScheduled → launchAdapterService.fromScheduledTrigger} 内部
-   * 用完整 calendar 算法计算。粗算 vs 精算的差异不影响业务正确性,只影响 trigger_request
-   * 表的运维查询语义(运维按 biz_date 查 fire 历史,精度到天即可)。
-   *
-   * <p>禁用 {@code LocalDate.now()}(JVM 默认时区)防止跨时区部署偏移。
-   */
-  private LocalDate resolveBizDate(TriggerDescriptor descriptor, Instant scheduledFireTime) {
-    java.time.ZoneId zone =
-        timezoneProvider.resolveOrDefault(descriptor == null ? null : descriptor.getTimezone());
-    return scheduledFireTime.atZone(zone).toLocalDate();
   }
 
   private TriggerDescriptor loadDescriptor(TriggerRuntimeStateEntity state) {
