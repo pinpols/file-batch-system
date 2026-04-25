@@ -19,6 +19,7 @@
 ### 参考文档
 
 - `system-flow-overview.md`：**端到端业务流程总览（图文）— 第一次接触系统先看这份**
+- `workflow-dependency-guide.md`：作业依赖与编排指南（DAG / GATEWAY / joinMode / CONDITION）
 - `runtime-module-communication.md`：运行时模块通信拓扑
 - `runtime-default-parameters.md`：运行默认参数基线
 - `kafka-topic-plan.md`：Kafka Topic 设计规范
