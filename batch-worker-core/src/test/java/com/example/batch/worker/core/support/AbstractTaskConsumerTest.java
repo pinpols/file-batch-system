@@ -256,6 +256,83 @@ class AbstractTaskConsumerTest {
     assertThat(p.matcher("batch.task.dispatch.import.node.x").matches()).isFalse();
   }
 
+  // ── 方案 A：FIXED 模式只匹配 base + node-direct ────────────────────────
+
+  @Test
+  void topicPattern_fixedModeOnlyMatchesBaseAndNodeDirect() throws Exception {
+    AbstractTaskConsumer consumer =
+        buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
+    com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties props =
+        new com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(
+        com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode.FIXED);
+    setSubscribeProperties(consumer, props);
+
+    String pattern = consumer.topicPattern();
+    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+
+    assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
+    // FIXED 模式不订阅任何 tenant/priority 后缀
+    assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isFalse();
+    assertThat(p.matcher("batch.task.dispatch.import.high").matches()).isFalse();
+  }
+
+  // ── 方案 A：TENANT_SCOPED 仅匹配 allowlist 中的租户 ──────────────────
+
+  @Test
+  void topicPattern_tenantScopedModeMatchesAllowlistOnly() throws Exception {
+    AbstractTaskConsumer consumer =
+        buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
+    com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties props =
+        new com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(
+        com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode.TENANT_SCOPED);
+    props.setTenantAllowlist(java.util.List.of("t1", "t2"));
+    setSubscribeProperties(consumer, props);
+
+    String pattern = consumer.topicPattern();
+    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+
+    assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
+    // ✅ allowlist 中的租户
+    assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.t2").matches()).isTrue();
+    // ❌ 不在 allowlist 中
+    assertThat(p.matcher("batch.task.dispatch.import.t3").matches()).isFalse();
+    assertThat(p.matcher("batch.task.dispatch.import.high").matches()).isFalse();
+  }
+
+  @Test
+  void topicPattern_tenantScopedWithEmptyAllowlistFallsBackToFixed() throws Exception {
+    AbstractTaskConsumer consumer =
+        buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
+    com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties props =
+        new com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(
+        com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode.TENANT_SCOPED);
+    props.setTenantAllowlist(java.util.List.of());
+    setSubscribeProperties(consumer, props);
+
+    String pattern = consumer.topicPattern();
+    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+
+    assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isFalse();
+  }
+
+  private static void setSubscribeProperties(
+      AbstractTaskConsumer consumer,
+      com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties props)
+      throws Exception {
+    java.lang.reflect.Field f =
+        AbstractTaskConsumer.class.getDeclaredField("subscribeProperties");
+    f.setAccessible(true);
+    f.set(consumer, props);
+  }
+
   // ------------------------------------------------------------------ helpers
 
   private AbstractTaskConsumer buildConsumer(
