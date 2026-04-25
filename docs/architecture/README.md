@@ -18,6 +18,7 @@
 
 ### 参考文档
 
+- `system-flow-overview.md`：**端到端业务流程总览（图文）— 第一次接触系统先看这份**
 - `runtime-module-communication.md`：运行时模块通信拓扑
 - `runtime-default-parameters.md`：运行默认参数基线
 - `kafka-topic-plan.md`：Kafka Topic 设计规范
@@ -36,11 +37,12 @@
 
 ## 推荐阅读顺序
 
-1. 先看 [architecture-truth.md](./architecture-truth.md)
-2. 再看 [core-model.md](./core-model.md)
-3. 然后看 [implementation-status.md](./implementation-status.md)
-4. 如需了解运行约束，继续看 [runtime-default-parameters.md](./runtime-default-parameters.md) 和 [runtime-module-communication.md](./runtime-module-communication.md)
-5. 最后按需阅读 [adr/](./adr/)
+1. **第一次接触**先看 [system-flow-overview.md](./system-flow-overview.md)（端到端业务流程总览）
+2. 再看 [architecture-truth.md](./architecture-truth.md)
+3. 再看 [core-model.md](./core-model.md)
+4. 然后看 [implementation-status.md](./implementation-status.md)
+5. 如需了解运行约束，继续看 [runtime-default-parameters.md](./runtime-default-parameters.md) 和 [runtime-module-communication.md](./runtime-module-communication.md)
+6. 最后按需阅读 [adr/](./adr/)
 
 ## 相关入口
 
