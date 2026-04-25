@@ -30,4 +30,13 @@ public interface WorkflowRunMapper {
       @Param("runStatus") String runStatus,
       @Param("currentNodeCode") String currentNodeCode,
       @Param("startedAt") Instant startedAt);
+
+  /** P3-3 archive: 选出终结态、finished_at 早于 cutoff 的 workflow_run id（带 limit 防长事务）。 */
+  List<Long> selectArchivableIds(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+  /** P3-3 archive: 按 id 列表删除 workflow_node_run（FK 子表），返回删除行数。 */
+  int deleteNodeRunsByWorkflowRunIds(@Param("ids") List<Long> workflowRunIds);
+
+  /** P3-3 archive: 按 id 列表删除 workflow_run，返回删除行数。 */
+  int deleteByIds(@Param("ids") List<Long> ids);
 }

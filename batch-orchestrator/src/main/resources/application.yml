@@ -133,6 +133,13 @@ batch:
       enabled: ${BATCH_QUOTA_SNAPSHOT_ENABLED:true}
       # snapshot 调度间隔（毫秒）
       interval-millis: ${BATCH_QUOTA_SNAPSHOT_INTERVAL_MILLIS:300000}
+  workflow:
+    # P3-3: workflow_run / workflow_node_run 自动归档调度器（默认每天 04:15）
+    archive:
+      enabled: ${BATCH_WORKFLOW_ARCHIVE_ENABLED:true}
+      retention-days: ${BATCH_WORKFLOW_ARCHIVE_RETENTION_DAYS:30}
+      batch-size: ${BATCH_WORKFLOW_ARCHIVE_BATCH_SIZE:5000}
+      cron: "${BATCH_WORKFLOW_ARCHIVE_CRON:0 15 4 * * *}"
   mq:
     routing:
       # P2-5: 派发 topic 分流策略——SINGLE / TENANT（默认）/ PRIORITY
