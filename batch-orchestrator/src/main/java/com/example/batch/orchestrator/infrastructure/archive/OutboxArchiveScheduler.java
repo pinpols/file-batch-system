@@ -33,7 +33,9 @@ public class OutboxArchiveScheduler {
   private final OutboxArchiveProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(cron = "${batch.outbox.archive.cron:0 30 3 * * *}")
+  @Scheduled(
+      cron = "${batch.outbox.archive.cron:0 30 3 * * *}",
+      zone = "${batch.timezone.default-zone:Asia/Shanghai}")
   @SchedulerLock(name = "outbox_archive", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
   public void scheduledArchive() {
     archive();

@@ -21,8 +21,8 @@ public class MisfirePendingExpireScheduler {
 
   private final TriggerMisfirePendingMapper mapper;
 
-  /** 每小时跑一次,过期清理量极小,不需要更频繁。 */
-  @Scheduled(fixedDelayString = "PT1H")
+  /** 每小时跑一次,过期清理量极小,不需要更频繁。可调:batch.trigger.wheel.misfire-pending-expire-interval。 */
+  @Scheduled(fixedDelayString = "${batch.trigger.wheel.misfire-pending-expire-interval:PT1H}")
   @SchedulerLock(name = "misfire_pending_expire", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
   public void expirePending() {
     try {

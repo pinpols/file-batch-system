@@ -1,5 +1,6 @@
 package com.example.batch.trigger.config;
 
+import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -27,8 +28,8 @@ public class WheelSchedulerProperties {
   /** 滑动窗口大小(秒):每次扫库 push 进 wheel 的"未来 N 秒内即将 fire 的 trigger"。 */
   private int slidingWindowSeconds = 300;
 
-  /** 滑动窗口扫库间隔(秒)。默认 60s 一次。 */
-  private int slidingWindowScanIntervalSeconds = 60;
+  /** 滑动窗口扫库间隔(毫秒)。默认 60_000 = 60s 一次。直接 ms 配置匹配 @Scheduled fixedDelayString 语义。 */
+  private long slidingWindowScanIntervalMillis = 60_000L;
 
   /** ShedLock leader 锁名。 */
   private String leaderLockName = "trigger_wheel_leader";
@@ -42,8 +43,11 @@ public class WheelSchedulerProperties {
   /** stale marker 接管阈值(秒):marker 超过此时间未释放,视为 leader 崩溃,可被新 leader 接管。 */
   private int staleMarkerThresholdSeconds = 300;
 
-  /** stale marker 释放扫描周期(秒)。 */
-  private int staleMarkerReleaseIntervalSeconds = 120;
+  /** stale marker 释放扫描周期(毫秒)。默认 120_000 = 2 min 一次。 */
+  private long staleMarkerReleaseIntervalMillis = 120_000L;
+
+  /** misfire pending 过期清理周期(ISO-8601 Duration)。默认 PT1H = 每小时一次。 */
+  private Duration misfirePendingExpireInterval = Duration.ofHours(1);
 
   /** 单次扫库 limit(防一次拉太多)。 */
   private int scanBatchSize = 1000;

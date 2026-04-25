@@ -111,12 +111,12 @@ public class HashedWheelTriggerScheduler {
     metrics.registerTasksScheduledGauge(() -> tasksScheduled.get());
     log.info(
         "HashedWheelTriggerScheduler started: leaderInstanceId={}, tick={}ms, buckets={},"
-            + " window={}s, scanInterval={}s",
+            + " window={}s, scanIntervalMillis={}",
         leaderInstanceId,
         props.getTickMillis(),
         props.getBucketCount(),
         props.getSlidingWindowSeconds(),
-        props.getSlidingWindowScanIntervalSeconds());
+        props.getSlidingWindowScanIntervalMillis());
   }
 
   @PreDestroy
@@ -136,7 +136,7 @@ public class HashedWheelTriggerScheduler {
    *
    * <p>fixedDelay 单位 ms,默认 60_000(60s 一次)。
    */
-  @Scheduled(fixedDelayString = "#{${batch.trigger.wheel.sliding-window-scan-interval-seconds:60} * 1000}")
+  @Scheduled(fixedDelayString = "${batch.trigger.wheel.sliding-window-scan-interval-millis:60000}")
   @SchedulerLock(
       name = "${batch.trigger.wheel.leader-lock-name:trigger_wheel_leader}",
       lockAtMostFor = "PT2M",
@@ -153,11 +153,18 @@ public class HashedWheelTriggerScheduler {
    * stale marker 释放:周期清理超过 staleMarkerThresholdSeconds 未释放的占位。
    *
    * <p>独立定时(默认每 2 min),与 slidingWindow 解耦,避免 leader 漂移期间 stale 占位卡住所有
-   * trigger。本任务不需要 leader 锁(纯清理操作,幂等)。
+   * trigger。
+   *
+   * <p>2026-04-26 加 ShedLock:虽然 UPDATE 是幂等的,但 N 实例并发跑会撞同批 stale 行的
+   * PG row lock,造成写放大 + 连接浪费。leader-elect 语义本就该有,迟来的 lint 修复。
    */
   @Scheduled(
       fixedDelayString =
-          "#{${batch.trigger.wheel.stale-marker-release-interval-seconds:120} * 1000}")
+          "${batch.trigger.wheel.stale-marker-release-interval-millis:120000}")
+  @SchedulerLock(
+      name = "wheel_stale_marker_release",
+      lockAtMostFor = "PT3M",
+      lockAtLeastFor = "PT30S")
   public void releaseStaleMarkers() {
     Instant staleBefore =
         Instant.now().minus(Duration.ofSeconds(props.getStaleMarkerThresholdSeconds()));

@@ -34,7 +34,9 @@ public class SuccessInstanceArchiveScheduler {
   private final SuccessInstanceArchiveProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(cron = "${batch.job-instance.archive.cron:0 30 4 * * SUN}")
+  @Scheduled(
+      cron = "${batch.job-instance.archive.cron:0 30 4 * * SUN}",
+      zone = "${batch.timezone.default-zone:Asia/Shanghai}")
   @SchedulerLock(
       name = "success_instance_archive",
       lockAtMostFor = "PT2H",
