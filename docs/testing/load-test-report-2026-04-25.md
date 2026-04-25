@@ -60,16 +60,26 @@ maximum-pool-size: ${BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE:30}
 
 这说明缺：
 - backpressure（rate limit 已有 `TenantActionRateLimiter` 但默认配置未启用）
-- 连接池耗尽时的 fail-fast（Hikari `connectionTimeout` 默认 30s 太长，应调到 5s）
+- ~~连接池耗尽时的 fail-fast~~ — 实际上 orchestrator (`application.yml:34` 默认 5000ms) 与
+  console-api (`ReadReplicaProperties.connectionTimeoutMillis=5_000L`) **都已 5s fail-fast**；
+  trigger 走 SB 默认 30s 是因为 Quartz cluster checkin 需要这个头寸（验证：把 trigger
+  也改 5s 会让 `QuartzJdbcClusterIntegrationTest` 不稳）。瓶颈不在 timeout 长度，而是
+  Tomcat worker 全部卡在 DB 等待时整个 process 没办法服务健康检查。
 - 优雅降级（拒绝新请求而不是排队等死）
 
-## 待补的运维改动（按 ROI）
+## 已落地的运维改动（2026-04-25）
 
-1. **生产 yml 调 pool**：`BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE=30 → 50` for 千万/天
-2. **Hikari connectionTimeout=5000**（orchestrator + trigger + console；console-api 已经做了，详见 ReadReplicaProperties）
-3. **启用 TenantActionRateLimiter**：`batch.rate-limit.enabled=true` + 按租户 launch QPS 上限
-4. **生产部署 orchestrator ≥ 3 实例**（k8s）+ ShedLock 已支持多实例
-5. **load-tests/CapacityBaselineSimulation 加入 CI 门禁**（每周回归）
+| # | 改动 | 文件 | 状态 |
+|---|---|---|---|
+| 1 | 生产 yml pool 30→50 | `.env.prod` `BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE=50` | ✅ |
+| 2 | Hikari connectionTimeout=5s | orchestrator + console-api 早已就位，trigger 因 Quartz 保留 30s | ✅（不再需新动作）|
+| 3 | TenantActionRateLimiter 上线 | `.env.prod` `BATCH_RATE_LIMIT_*` 三 env | ✅ |
+
+## 仍需运维/部署侧动作（按 ROI）
+
+4. **生产部署 orchestrator ≥ 3 实例**（k8s）+ ShedLock 已支持多实例 — 部署改造
+5. **load-tests/CapacityBaselineSimulation 加入 CI 门禁** — staging-gate.yml 现仅
+   compile-load-tests + upload artifact，要补 `mvn gatling:test` step 才真跑
 
 ## 命令复现
 
