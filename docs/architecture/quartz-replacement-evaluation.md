@@ -11,7 +11,11 @@
 
 ## 0. 一句话结论
 
-> 业务量级接近 1000 万 fire/天 拐点时,**直接用 Netty `HashedWheelTimer` 替换 Quartz**,跳过"Quartz 独立库"中间过渡。核心代码 ≤ 800 行,工程量 ≈ 1 人月,内核被 Pulsar / Dubbo / Curator 用了多年,生产级。
+> 业务量级接近 1000 万 fire/天 拐点时,**直接用 Netty `HashedWheelTimer` 替换 Quartz**,跳过"Quartz 独立库"中间过渡。内核被 Pulsar / Dubbo / Curator 用了多年,生产级。
+>
+> **工程量(2026-04-25 经外部 review 校准)**:1.5-2 人月开发 + 1 人月 staging/灰度观察 = 真实从开工到全量切换 2-3 个月。原 "≤ 800 行 / 1 人月" 估算偏乐观,**未计入** fire 强约束 / 滑动窗口去重 / failover fast-path / 双引擎防护 / cron 一致性等生产风险兜底。
+>
+> ⚠️ **动工前必读**:[`quartz-replacement-design.md`](./quartz-replacement-design.md)(详细实施设计 + 5 项风险兜底 + Pre-flight Checklist)。本文档(evaluation)只承载战略决策,设计层细节全部在 design.md。
 
 ---
 
