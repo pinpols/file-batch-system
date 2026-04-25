@@ -10,12 +10,12 @@
 > **图例**：粗实线 `══>` = 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号。
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 45, 'rankSpacing': 55, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
-flowchart TB
+%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 70, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
+flowchart LR
   USER([用户 / 前端]):::user
 
   subgraph TRIG ["触发层 · batch-trigger"]
-    direction LR
+    direction TB
     QZ[(Quartz<br/>QRTZ_*)]:::store
     TR["TriggerSchedulerFacade<br/>+ TriggerReconciler"]:::svc
   end
@@ -28,24 +28,24 @@ flowchart TB
     OUT[OutboxPollScheduler]:::svc
   end
 
-  PDB[("batch_platform<br/>job_* / file_* / workflow_* / outbox_event<br/>worker_registry / resource_queue")]:::store
+  PDB[("batch_platform<br/>job_* / file_* / workflow_*<br/>outbox_event / worker_registry")]:::store
 
   K[("Kafka<br/>batch.task.dispatch.*")]:::store
 
   subgraph WORKERS ["执行层 · 三类 Worker"]
-    direction LR
+    direction TB
     WI["worker-import<br/>RECEIVE → ... → FEEDBACK"]:::worker
     WE["worker-export<br/>PREPARE → ... → COMPLETE"]:::worker
     WD["worker-dispatch<br/>PREPARE → ... → COMPLETE"]:::worker
   end
 
-  subgraph DATA [数据落地]
-    direction LR
+  subgraph DATA ["数据落地"]
+    direction TB
     BIZ[("batch_business<br/>biz.*")]:::store
     M[("MinIO<br/>batch-dev")]:::store
   end
 
-  FS[("外部 target<br/>LOCAL / SFTP / NAS / OSS / API")]:::extern
+  FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
 
   %% ─── 触发链路（粗实线 = 主流程） ─────────────────
   USER ==>|"launch (MANUAL)"| TR
