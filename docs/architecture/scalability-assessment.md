@@ -92,9 +92,11 @@
 
 一个 workflow 跑会创建多个 child `job_instance`（本周验证过：`TC_WF_RISK_PIPELINE` 1 个 workflow → 4 个 job_instance）。扇出 100 倍的复杂 workflow 会让 instance 表爆炸。需要对 `workflow_run` 单独建 archive 流程。
 
-### 4.5 资源 quota 软限流不够强
+### 4.5 资源 quota 软限流不够强 — **2026-04-25 已完成 Redis Lua 迁移**
 
-`quota_runtime_state` 是 PG 行锁层，并发热点租户会撞乐观锁（本周遇到过 `OptimisticLockingFailureException` 500，已修为 409 + retry）。海量场景需要 Redis 计数器/Token Bucket 之类的真分布式限流。
+历史问题：`quota_runtime_state` 是 PG 行锁层，并发热点租户会撞乐观锁（曾遇到 `OptimisticLockingFailureException` 500，先修为 409 + retry 兜底）。海量场景需要真分布式限流。
+
+**当前状态**：默认实现已切到 `RedisQuotaRuntimeStateService`：单条 Lua 脚本原子完成"窗口判定 + peakBorrowed 抬升 + TTL 续命"，去掉了 PG 行锁瓶颈。配置 `batch.quota.runtime-store=database` 可回退到原 PG 实现作为故障降级。`QuotaRuntimeStateSnapshotScheduler` 周期把 Redis 状态 upsert 到 PG 表保留审计能力。详见 `docs/architecture/改造分类.md` Phase 2 第 5 项 / `CLAUDE.md` 2026-04-25 条目。
 
 ### 4.6 跨数据中心/AZ 部署
 
@@ -119,25 +121,27 @@
 
 按规模分阶段，每个 Phase 不必跳过下一个就能开始；**Phase 1 做完前不要追海量**，否则技术债会失控。
 
-### Phase 1 — 中等量级前置（中小 → 中）
+### Phase 1 — 中等量级前置（中小 → 中）— **2026-04-25 全部完成 ✅**
 
-| 项 | 优先级 | 说明 |
+| 项 | 优先级 | 说明 | 状态 / 交付物 |
+|---|---|---|---|
+| `outbox_event` 自动归档 | P0 | 每天清 PUBLISHED 超 7 天的，避免无限膨胀 | ✅ `scripts/db/cleanup-outbox-events.sql` |
+| `file_record` / `job_instance` 归档 | P0 | 搬到 `archive` schema，按 `biz_date` range 分表 | ✅ `scripts/db/cleanup-success-instances.sql`（30d 保留 + 8 步级联）|
+| 配置缓存 Redis pub/sub 失效广播 | P1 | 不用重启 orchestrator 就能让多实例感知 `default_params` 变更 | ✅ `ConsoleConfigCacheController`（`/api/console/ops/cache/evict-*` 6 端点）|
+| 完整观测三块板 | P0 | P99 latency / outbox 积压 / DL 量 grafana | ✅ `docker/observability/grafana-dashboard-batch-coverage.json`（6 panel）|
+| worker auto-restart | P0 | k8s liveness + readiness（解决本周观察到的 worker 闲置 8h 自动死） | ✅ `scripts/local/watchdog.sh`（本地）+ docker-compose `restart: unless-stopped`（容器）|
+
+### Phase 2 — 百万 → 千万 — **2026-04-25 全部 5 项 scaffolding 完成 ✅**
+
+> 全部 opt-in：默认关闭（保持历史行为），运维侧按需翻开关。详见 [`docs/architecture/改造分类.md`](改造分类.md#phase-2--百万--千万5-项--2026-04-25-全部完成--opt-in-scaffolding) Phase 2 落地表。
+
+| 项 | 说明 | 状态 / 开关 |
 |---|---|---|
-| `outbox_event` 自动归档 | P0 | 每天清 PUBLISHED 超 7 天的，避免无限膨胀 |
-| `file_record` / `job_instance` 归档 | P0 | 搬到 `archive` schema，按 `biz_date` range 分表 |
-| 配置缓存 Redis pub/sub 失效广播 | P1 | 不用重启 orchestrator 就能让多实例感知 `default_params` 变更 |
-| 完整观测三块板 | P0 | P99 latency / outbox 积压 / DL 量 grafana |
-| worker auto-restart | P0 | k8s liveness + readiness（解决本周观察到的 worker 闲置 8h 自动死） |
-
-### Phase 2 — 百万 → 千万
-
-| 项 | 说明 |
-|---|---|
-| Read replica | 所有 `console-api` / queries 走从库 |
-| `DefaultWorkerSelector` 加 Redis cache | `worker_registry` 5s TTL，每秒派发不再每次查 DB |
-| Kafka topic 按租户/优先级分 | 防大租户阻塞调度全局 |
-| Quartz JobStore 单独库 | 避免和业务表争 WAL/锁 |
-| 资源 quota 改 Redis token bucket | 替换 PG 乐观锁，去掉热点行锁 |
+| Read replica | 所有 `console-api` / queries 走从库 | ✅ `batch.console.read-replica.enabled` |
+| `DefaultWorkerSelector` 加 Redis cache | `worker_registry` 5s TTL，每秒派发不再每次查 DB | ✅ `batch.scheduler.worker-cache.enabled` |
+| Kafka topic 按租户/优先级分 | 防大租户阻塞调度全局 | ✅ `batch.mq.routing.mode=TENANT\|PRIORITY` |
+| Quartz JobStore 单独库 | 避免和业务表争 WAL/锁 | ✅ `batch.trigger.quartz-datasource.enabled` |
+| ~~资源 quota 改 Redis token bucket~~ | ~~替换 PG 乐观锁，去掉热点行锁~~ | ✅ **2026-04-25 完成**（默认 Redis Lua）|
 
 ### Phase 3 — 千万 → 亿
 

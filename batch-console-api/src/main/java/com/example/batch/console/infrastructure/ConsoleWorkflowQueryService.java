@@ -31,10 +31,12 @@ import com.example.batch.console.web.response.ConsoleWorkflowTopologyResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 工作流相关查询子服务。 */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 class ConsoleWorkflowQueryService {
 
   private final ConsoleTenantGuard tenantGuard;

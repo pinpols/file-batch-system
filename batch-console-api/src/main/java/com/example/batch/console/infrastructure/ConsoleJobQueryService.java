@@ -25,10 +25,12 @@ import com.example.batch.console.web.response.ConsoleJobStepInstanceResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 作业相关查询子服务。 */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 class ConsoleJobQueryService {
 
   private final ConsoleTenantGuard tenantGuard;

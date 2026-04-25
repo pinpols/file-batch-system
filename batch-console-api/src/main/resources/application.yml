@@ -31,6 +31,19 @@ mybatis:
 
 batch:
   console:
+    # P2-4: 读写分离（默认禁用，启用时主/从两个 HikariPool；@Transactional(readOnly=true) 路由到从库）
+    read-replica:
+      enabled: ${BATCH_CONSOLE_READ_REPLICA_ENABLED:false}
+      primary:
+        url: ${BATCH_CONSOLE_PRIMARY_URL:}
+        username: ${BATCH_CONSOLE_PRIMARY_USER:}
+        password: ${BATCH_CONSOLE_PRIMARY_PASSWORD:}
+        maximum-pool-size: ${BATCH_CONSOLE_PRIMARY_POOL:16}
+      replica:
+        url: ${BATCH_CONSOLE_REPLICA_URL:}
+        username: ${BATCH_CONSOLE_REPLICA_USER:}
+        password: ${BATCH_CONSOLE_REPLICA_PASSWORD:}
+        maximum-pool-size: ${BATCH_CONSOLE_REPLICA_POOL:16}
     # Redis Pub/Sub、SSE：实例标识。未设置环境变量时使用固定默认值，避免随机 UUID 与启动 WARN。
     instance-id: ${BATCH_CONSOLE_INSTANCE_ID:batch-console-api}
     security:

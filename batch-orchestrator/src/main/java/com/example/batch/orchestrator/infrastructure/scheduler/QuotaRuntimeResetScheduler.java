@@ -5,10 +5,16 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * 仅在 {@code batch.quota.runtime-store=database} 时启用：周期 reconcile PG quota_runtime_state
+ * 表里过期的窗口。Redis 后端由 TTL 自动回收，本调度器不需要存在。
+ */
 @Component
+@ConditionalOnProperty(name = "batch.quota.runtime-store", havingValue = "database")
 @RequiredArgsConstructor
 public class QuotaRuntimeResetScheduler {
 

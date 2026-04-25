@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.config.governance;
 
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
+import com.example.batch.orchestrator.config.MqRoutingProperties;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.config.RateLimitProperties;
@@ -26,6 +27,7 @@ public class BatchOrchestratorGovernanceProperties {
   private final WorkerDrainProperties workerDrain;
   private final FileGovernanceProperties fileGovernance;
   private final BatchMqTopicsProperties mqTopics;
+  private final MqRoutingProperties mqRouting;
 
   public OutboxProperties outbox() {
     return outbox;
@@ -61,5 +63,9 @@ public class BatchOrchestratorGovernanceProperties {
 
   public BatchMqTopicsProperties mqTopics() {
     return mqTopics;
+  }
+
+  public MqRoutingProperties mqRouting() {
+    return mqRouting;
   }
 }

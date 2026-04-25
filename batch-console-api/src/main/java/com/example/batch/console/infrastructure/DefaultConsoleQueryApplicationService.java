@@ -66,10 +66,12 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** {@link ConsoleQueryApplicationService} 的门面实现： 将调用委派给各领域查询子服务（Job / File / Workflow / Ops）。 */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplicationService {
 
   private final ConsoleJobQueryService jobQueryService;

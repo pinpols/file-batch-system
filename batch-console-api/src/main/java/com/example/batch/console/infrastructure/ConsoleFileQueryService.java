@@ -39,11 +39,13 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.example.batch.common.utils.Texts;
 
 /** 文件相关查询子服务。 */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 class ConsoleFileQueryService {
 
   // ── duplicate literal constants ─────────────────────────────────────────

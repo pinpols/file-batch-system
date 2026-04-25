@@ -39,13 +39,20 @@ class DefaultWorkerSelectorTest {
   @Mock
   private ObjectProvider<MeterRegistry> meterRegistryProvider;
 
+  @SuppressWarnings("unchecked")
+  @Mock
+  private ObjectProvider<WorkerRegistryCache> workerRegistryCacheProvider;
+
   private DefaultWorkerSelector selector;
   private final ResourceSchedulerProperties props = new ResourceSchedulerProperties();
 
   @BeforeEach
   void setUp() {
-    selector = new DefaultWorkerSelector(workerRegistryRepository, meterRegistryProvider, props);
+    selector =
+        new DefaultWorkerSelector(
+            workerRegistryRepository, meterRegistryProvider, props, workerRegistryCacheProvider);
     lenient().when(meterRegistryProvider.getIfAvailable()).thenReturn(null);
+    lenient().when(workerRegistryCacheProvider.getIfAvailable()).thenReturn(null);
   }
 
   @Test

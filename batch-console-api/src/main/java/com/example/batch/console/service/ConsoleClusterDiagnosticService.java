@@ -12,10 +12,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 跨节点一致性诊断服务：检查 ShedLock 租约、Worker 注册一致性、Outbox 健康。 */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ConsoleClusterDiagnosticService {
 
   private final ConsoleTenantGuard tenantGuard;

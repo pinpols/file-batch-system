@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
+import com.example.batch.orchestrator.config.MqRoutingProperties;
 import com.example.batch.orchestrator.config.OutboxProperties;
 import com.example.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
@@ -41,8 +42,11 @@ class KafkaOutboxPublisherTest {
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.mqTopics()).thenReturn(batchMqTopicsProperties);
     when(governance.outbox()).thenReturn(outboxProperties);
+    BatchTopicResolver topicResolver =
+        new BatchTopicResolver(batchMqTopicsProperties, new MqRoutingProperties());
     publisher =
-        new KafkaOutboxPublisher(kafkaTemplate, governance, eventDeliveryLogMapper, Runnable::run);
+        new KafkaOutboxPublisher(
+            kafkaTemplate, governance, eventDeliveryLogMapper, topicResolver, Runnable::run);
   }
 
   @Test
