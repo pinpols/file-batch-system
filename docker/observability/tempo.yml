@@ -1,0 +1,44 @@
+# Grafana Tempo 单节点本地配置（monolithic mode）。
+# 仅作开发与压测后端，生产请用 distributor/ingester/querier 分离 + 对象存储后端。
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+# 接收 OTel Collector 转发过来的 OTLP 链路（gRPC 4317）
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m   # 本地小块写入，便于 Grafana 立即查到
+
+compactor:
+  compaction:
+    block_retention: 168h  # 7 天，匹配 Prometheus retention
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+# 全租户共用一个 metrics_generator，给 Grafana 出 service graph & span metrics
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: batch-platform-local
+  storage:
+    path: /var/tempo/generator/wal
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]

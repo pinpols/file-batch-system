@@ -3,23 +3,70 @@ apiVersion: 1
 datasources:
   - name: Prometheus
     type: prometheus
+    uid: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
     editable: false
+    jsonData:
+      # 允许 Grafana 在 metric 视图里通过 exemplar 跳到 Tempo 链路
+      exemplarTraceIdDestinations:
+        - name: traceID
+          datasourceUid: tempo
 
   - name: Loki
     type: loki
+    uid: loki
     access: proxy
     url: http://loki:3100
     editable: false
     jsonData:
+      # 应用日志的 traceId 是 Spring Boot Micrometer 自动注入的 MDC 字段；
+      # ECS 结构化输出形如 "traceId":"abc..."；正则同时兼容 32hex（OTel）与 16hex（旧 Sleuth）
       derivedFields:
         - name: TraceID
-          matcherRegex: '"traceId"\s*:\s*"([a-f0-9]{32})"'
+          matcherRegex: '"traceId"\s*:\s*"([a-f0-9]{16,32})"'
+          datasourceUid: tempo
+          url: "$${__value.raw}"
+          urlDisplayLabel: "View in Tempo"
+        - name: TraceIDJaeger
+          matcherRegex: '"traceId"\s*:\s*"([a-f0-9]{16,32})"'
           url: "http://localhost:16686/trace/$${__value.raw}"
-          datasourceUid: jaeger
-          urlDisplayLabel: "Open in Jaeger"
+          urlDisplayLabel: "View in Jaeger"
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      # Tempo → Loki：在 trace 视图里点击 span 跳转到对应日志
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        tags:
+          - key: service.name
+            value: service_name
+        filterByTraceID: true
+        filterBySpanID: false
+      # Tempo → Prometheus：service graph 跳到延迟 / 错误率 metric
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: -2m
+        spanEndTimeShift: 2m
+        tags:
+          - key: service.name
+            value: service
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki
 
   - name: Jaeger
     type: jaeger
