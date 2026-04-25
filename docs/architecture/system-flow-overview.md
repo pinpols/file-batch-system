@@ -55,16 +55,17 @@ flowchart LR
   %% ─── 调度写库（粗实线） ─────────────────────────
   LS ==>|"INSERT job_instance<br/>+ partition + outbox_event<br/>(同一 tx)"| PDB
 
-  %% ─── orchestrator 内部读 / 写 PDB（虚线 = 控制） ──
-  PA  -. "write partition status" .-> PDB
+  %% ─── orchestrator 内部访问 PDB ────────────────
+  PA  ==>|"write partition status"| PDB
   SEL -. "read worker_registry<br/>+ resource_queue" .-> PDB
   OUT -. "poll outbox_event" .-> PDB
 
-  %% ─── outbox → Kafka → workers（粗实线 = 消息流） ──
+  %% ─── outbox → Kafka → workers ──────────────────
+  %% OUT 是主动 publish（粗实线）；workers 是订阅 + 主动 poll（虚线）
   OUT ==>|"publish task"| K
-  K ==> WI
-  K ==> WE
-  K ==> WD
+  WI -. "consume" .-> K
+  WE -. "consume" .-> K
+  WD -. "consume" .-> K
 
   %% ─── worker 上报回 LS（虚线 = 控制信号） ────────
   WI -. "claim / heartbeat / report" .-> LS
