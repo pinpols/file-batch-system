@@ -75,10 +75,18 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     }
     String topic = topicResolver.resolve(event.getEventType(), dispatchMessage);
     if (topic != null) {
-      String targetTopic =
-          dispatchMessage != null && dispatchMessage.selectedWorkerId() != null
-              ? BatchTopics.directDispatchTopic(topic, dispatchMessage.selectedWorkerId())
-              : topic;
+      // 当指定了 selectedWorkerId 时，走 node-direct 拓扑（base.node.{workerId}），跳过
+      // TENANT/PRIORITY 后缀。worker 端 topicPattern 仅匹配 base / base.<single-segment> /
+      // base.node.<workerCode> 三种形式，**不**匹配组合形式 base.<tenant>.node.<workerCode>，
+      // 否则会出现 producer 写到 base.t1.node.X 但 worker 订阅 base.node.X 的不匹配，
+      // 任务卡在 CREATED 永不下发（被 e2e ImportFailureE2eIT/OutboxForwarderE2eIT 等暴露）。
+      String targetTopic;
+      if (dispatchMessage != null && dispatchMessage.selectedWorkerId() != null) {
+        String baseTopic = governance.mqTopics().resolveDispatchTopic(event.getEventType());
+        targetTopic = BatchTopics.directDispatchTopic(baseTopic, dispatchMessage.selectedWorkerId());
+      } else {
+        targetTopic = topic;
+      }
       String workerId = dispatchMessage == null ? null : dispatchMessage.selectedWorkerId();
       return kafkaTemplate
           .send(targetTopic, event.getEventKey(), event.getPayloadJson())

@@ -12,3 +12,8 @@ batch:
   console:
     ai:
       enabled: false
+    # 测试关读写分离，避免 ReadReplicaRoutingDataSource 把写路径打到 application.yml
+    # 默认硬编码的 localhost:15432（本地 dev PG），导致写不进 Testcontainer，
+    # 反而污染本地 PG 数据并触发 UK 冲突（uk_console_ai_audit_request 等）。
+    read-replica:
+      enabled: false
