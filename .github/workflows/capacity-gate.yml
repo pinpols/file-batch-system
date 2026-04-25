@@ -1,0 +1,90 @@
+name: capacity-gate
+
+# 容量回归门禁：每周一凌晨跑 CapacityBaselineSimulation，
+# 用 staging 环境的真实部署做 stepped-ramp（25→200 users），
+# 内置 SLO 断言：write p95 < 500ms / read p99 < 300ms / err < 1%。
+# 失败 = 容量退化，需要排查并阻断生产发布。
+on:
+  workflow_dispatch:
+    inputs:
+      job_code:
+        description: "用作 launch 的 jobCode（必须在 staging 已存在）"
+        required: false
+        default: "E2E_IMPORT_LOAD"
+      tenant_id:
+        description: "压测使用的 tenantId"
+        required: false
+        default: "t1"
+  schedule:
+    # 每周一 03:00 UTC = 11:00 北京时间（避开业务高峰）
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capacity-gate-${{ github.ref }}
+  cancel-in-progress: false   # 容量基线正在跑时不要被新 push 抢断
+
+jobs:
+  capacity-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+      BATCH_LOAD_CAPACITY_JOB_CODE: ${{ inputs.job_code || 'E2E_IMPORT_LOAD' }}
+      BATCH_LOAD_CAPACITY_TENANT_ID: ${{ inputs.tenant_id || 't1' }}
+      # 指向 staging 的 trigger / console，由 GatlingConfig 默认值或 -D 覆盖
+      TRIGGER_BASE_URL: ${{ vars.STAGING_TRIGGER_BASE_URL || 'http://batch-platform-staging-trigger.batch-staging.svc.cluster.local:8081' }}
+      CONSOLE_BASE_URL: ${{ vars.STAGING_CONSOLE_BASE_URL || 'http://batch-platform-staging-console-api.batch-staging.svc.cluster.local:8080' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          compile-load-tests: "true"
+
+      - name: Run capacity baseline gate
+        shell: bash
+        run: |
+          bash scripts/ci/run-full-regression.sh \
+            --skip-default-tests \
+            --skip-it-suite \
+            --with-load-capacity \
+            -- -Dtrigger.baseUrl="$TRIGGER_BASE_URL" -Dconsole.baseUrl="$CONSOLE_BASE_URL"
+
+      - name: Upload Gatling Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-baseline-report
+          path: |
+            load-tests/target/gatling-results/**
+          retention-days: 90
+
+      - name: Summarize result
+        if: always()
+        shell: bash
+        run: |
+          echo "## Capacity Baseline 报告" >> "$GITHUB_STEP_SUMMARY"
+          last_dir=$(ls -1dt load-tests/target/gatling-results/capacitybaselinesimulation-* 2>/dev/null | head -n1 || true)
+          if [[ -n "$last_dir" && -f "$last_dir/index.html" ]]; then
+            echo "Gatling HTML 报告已上传为 artifact \`capacity-baseline-report\`" >> "$GITHUB_STEP_SUMMARY"
+            if [[ -f "$last_dir/js/stats.json" ]]; then
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "全局摘要：" >> "$GITHUB_STEP_SUMMARY"
+              python3 -c "
+          import json, sys
+          d = json.load(open('$last_dir/js/stats.json'))
+          s = d.get('stats', {})
+          print(f\"- 总请求数：{s.get('numberOfRequests', {}).get('total', '?')}\")
+          print(f\"- 失败数：{s.get('numberOfRequests', {}).get('ko', '?')}\")
+          print(f\"- p95：{s.get('percentiles3', {}).get('total', '?')} ms\")
+          print(f\"- p99：{s.get('percentiles4', {}).get('total', '?')} ms\")
+          " >> "$GITHUB_STEP_SUMMARY" || true
+            fi
+          else
+            echo "未生成 Gatling 报告（可能 staging 不可达或 staging-gate 未先运行）" >> "$GITHUB_STEP_SUMMARY"
+          fi

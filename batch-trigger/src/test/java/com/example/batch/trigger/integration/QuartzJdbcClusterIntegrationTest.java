@@ -166,13 +166,14 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
 
   private int waitForSchedulerStateRows(String schedulerName, int expected)
       throws InterruptedException {
+    // Quartz clusterCheckinInterval 默认 7.5s；之前 20×250ms=5s 等不到 secondary 注册导致 flaky
     int observed = 0;
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 60; i++) {
       observed = querySchedulerStateRows(schedulerName);
       if (observed >= expected) {
         return observed;
       }
-      Thread.sleep(250L);
+      Thread.sleep(500L);
     }
     return observed;
   }
