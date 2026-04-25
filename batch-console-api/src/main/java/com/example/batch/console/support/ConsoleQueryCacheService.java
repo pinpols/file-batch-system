@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.example.batch.common.utils.Texts;
 
 /**
@@ -39,7 +40,7 @@ import com.example.batch.common.utils.Texts;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@org.springframework.transaction.annotation.Transactional(readOnly = true)
+@Transactional(readOnly = true)
 public class ConsoleQueryCacheService {
 
   private static final String PREFIX = "console:cache:";

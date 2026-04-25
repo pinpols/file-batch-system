@@ -4,6 +4,7 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -21,9 +22,11 @@ import org.springframework.stereotype.Component;
 @Aspect
 @Component
 @ConditionalOnProperty(name = "batch.console.read-replica.enabled", havingValue = "true")
-@Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 10)
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RouteToPrimaryAspect {
 
+  // AspectJ pointcut 表达式是字符串，由 AspectJ 运行时解析，不走 Java import 体系；
+  // 此处 FQN 是 AspectJ 语法要求，不是 §Java 代码风格 §FQN 规则违例。
   @Around("@annotation(com.example.batch.console.config.RouteToPrimary)")
   public Object wrap(ProceedingJoinPoint pjp) throws Throwable {
     Boolean prev = RoutingHints.enterForcePrimary();
