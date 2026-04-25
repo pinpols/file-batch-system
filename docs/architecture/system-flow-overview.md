@@ -7,70 +7,77 @@
 
 ## 1. 一张图看完整链路
 
-```mermaid
-%%{init: {'flowchart': {'curve': 'stepAfter', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
-flowchart TB
-  USER([用户/前端]):::user
+> **图例**：粗实线 `══>` = 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号。
 
-  subgraph 触发层 [触发层 batch-trigger]
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 45, 'rankSpacing': 55, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
+flowchart TB
+  USER([用户 / 前端]):::user
+
+  subgraph TRIG ["触发层 · batch-trigger"]
     direction LR
-    Q[(Quartz<br/>QRTZ_*)]:::store
-    T[TriggerSchedulerFacade<br/>+ TriggerReconciler]:::svc
+    QZ[(Quartz<br/>QRTZ_*)]:::store
+    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler"]:::svc
   end
 
-  subgraph 调度层 [调度层 batch-orchestrator]
-    direction LR
+  subgraph SCH ["调度层 · batch-orchestrator"]
+    direction TB
     LS[LaunchService]:::svc
-    OUT[OutboxPollScheduler]:::svc
     PA[PartitionLifecycleService]:::svc
     SEL[DefaultWorkerSelector]:::svc
+    OUT[OutboxPollScheduler]:::svc
   end
 
-  subgraph 中间件 [中间件]
-    direction LR
-    K[(Kafka<br/>batch.task.dispatch.*)]:::store
-    P[(batch_platform<br/>job_*/file_*/workflow_*)]:::store
-    BIZ[(batch_business<br/>biz.*)]:::store
-    M[(MinIO<br/>batch-dev)]:::store
-    FS[(本地 / SFTP / NAS<br/>OSS / API)]:::extern
-  end
+  PDB[("batch_platform<br/>job_* / file_* / workflow_* / outbox_event<br/>worker_registry / resource_queue")]:::store
 
-  subgraph 执行层 [执行层 三类 Worker]
+  K[("Kafka<br/>batch.task.dispatch.*")]:::store
+
+  subgraph WORKERS ["执行层 · 三类 Worker"]
     direction LR
     WI["worker-import<br/>RECEIVE → ... → FEEDBACK"]:::worker
     WE["worker-export<br/>PREPARE → ... → COMPLETE"]:::worker
     WD["worker-dispatch<br/>PREPARE → ... → COMPLETE"]:::worker
   end
 
-  %% ── 触发链路 ───────────────────────────
-  USER -- "POST /api/triggers/launch (MANUAL)" --> T
-  Q    -- "cron fire (SCHEDULED)"             --> T
-  T    -- "HTTP launch"                       --> LS
+  subgraph DATA [数据落地]
+    direction LR
+    BIZ[("batch_business<br/>biz.*")]:::store
+    M[("MinIO<br/>batch-dev")]:::store
+  end
 
-  %% ── 调度落库 + 出 outbox ────────────────
-  LS  -- "INSERT job_instance<br/>+ partition + outbox_event"     --> P
-  P   -. "tx commit"                                              .-> OUT
-  OUT -- "publish task"                                           --> K
+  FS[("外部 target<br/>LOCAL / SFTP / NAS / OSS / API")]:::extern
 
-  %% ── Kafka 分发到 worker ─────────────────
-  K --> WI
-  K --> WE
-  K --> WD
+  %% ─── 触发链路（粗实线 = 主流程） ─────────────────
+  USER ==>|"launch (MANUAL)"| TR
+  QZ   ==>|"cron fire (SCHEDULED)"| TR
+  TR   ==>|"HTTP /internal/launch"| LS
 
-  %% ── Worker 上报与状态推进 ───────────────
-  WI -- "claim / heartbeat / report (HTTP)" --> LS
-  WE -- "claim / heartbeat / report (HTTP)" --> LS
-  WD -- "claim / heartbeat / report (HTTP)" --> LS
-  LS -- "UPDATE job_instance / partition<br/>(状态机推进)" --> P
-  PA -. "写入" .-> P
-  SEL -. "选 worker<br/>(tenant / group / tag)" .-> P
+  %% ─── 调度写库（粗实线） ─────────────────────────
+  LS ==>|"INSERT job_instance<br/>+ partition + outbox_event<br/>(同一 tx)"| PDB
 
-  %% ── Worker 数据落地 ─────────────────────
-  WI -- "INSERT biz.customer / risk_score / …" --> BIZ
-  WE -- "SELECT biz.risk_alert / …"            --> BIZ
-  WE -- "PUT object"                            --> M
-  WD -- "GET object"                            --> M
-  WD -- "deliver file (cp / scp / POST)"        --> FS
+  %% ─── orchestrator 内部读 / 写 PDB（虚线 = 控制） ──
+  PA  -. "write partition status" .-> PDB
+  SEL -. "read worker_registry<br/>+ resource_queue" .-> PDB
+  OUT -. "poll outbox_event" .-> PDB
+
+  %% ─── outbox → Kafka → workers（粗实线 = 消息流） ──
+  OUT ==>|"publish task"| K
+  K ==> WI
+  K ==> WE
+  K ==> WD
+
+  %% ─── worker 上报回 LS（虚线 = 控制信号） ────────
+  WI -. "claim / heartbeat / report" .-> LS
+  WE -. "claim / heartbeat / report" .-> LS
+  WD -. "claim / heartbeat / report" .-> LS
+  LS ==>|"UPDATE job_instance<br/>+ partition (状态机)"| PDB
+
+  %% ─── worker 数据落地（写 = 粗实线，读 = 虚线） ──
+  WI ==>|"INSERT biz.*"| BIZ
+  WE -. "SELECT biz.*" .-> BIZ
+  WE ==>|"PUT object"| M
+  WD -. "GET object" .-> M
+  WD ==>|"deliver (cp / scp / POST)"| FS
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
