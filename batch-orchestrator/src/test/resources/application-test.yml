@@ -43,6 +43,22 @@ batch:
   outbox:
     # 拉长轮询周期，避免测试时频繁跑后台任务
     poll-interval-millis: 600000
+    # OutboxPollScheduler 自适应间隔的下限：默认 200ms 会让测试期手动 publish 后被 scheduler 二次 publish
+    # 产生重复 event_delivery_log 行；测试拉到 10 分钟同时锁住上下限。
+    min-poll-interval-millis: 600000
+    # P3-3 archive: 测试禁用，避免后台 cron 干扰主测时序
+    archive:
+      enabled: false
+  workflow:
+    archive:
+      enabled: false
+  job-instance:
+    archive:
+      enabled: false
+  # P2-5: 测试锁定 SINGLE 模式（IT 期望的 Kafka topic 是 base topic，无 tenant 后缀）
+  mq:
+    routing:
+      mode: SINGLE
   retry:
     # 拉长轮询周期，避免测试时频繁跑后台任务
     poll-interval-millis: 600000
@@ -61,3 +77,6 @@ batch:
     snapshot-persist-enabled: false
     # 拉长周期（理论上不应触发），兜底避免误触发
     snapshot-persist-ms: 600000
+    # P2-3: 测试禁用 WorkerSelector Redis 缓存，避免缓存的 worker 列表与测试动态创建的 worker 时序不一致
+    worker-cache:
+      enabled: false
