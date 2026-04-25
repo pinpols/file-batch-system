@@ -45,6 +45,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -75,6 +76,11 @@ import org.springframework.test.context.ActiveProfiles;
     })
 @ActiveProfiles({"test", "e2e"})
 @Tag("e2e")
+// 杀真 subprocess Worker 后 Spring context 里 Lettuce/RedisTemplate 会进入 STOPPED 状态，污染
+// 后续 IT class 共用的同一个 ApplicationContext。AFTER_CLASS 强制 Spring 在本 IT 跑完后销毁
+// 上下文，下个 IT 重建一份干净的，避免 ImportFailurePipeline / ExportPipeline / ExportContent /
+// MultiTenantConcurrent 等被级联污染（实证：4 个隔离运行皆 ✅，全模块顺序跑则 fail）。
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
