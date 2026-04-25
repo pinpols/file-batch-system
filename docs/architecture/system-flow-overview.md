@@ -62,7 +62,7 @@ flowchart LR
   OUT -. "poll outbox_event" .-> PDB
 
   %% ─── Redis 辅助：ShedLock + config cache + shard-assignment ──
-  SCH -. "ShedLock (@Scheduled 防多实例)<br/>+ config cache" .- RDS
+  SCH -. "ShedLock (@Scheduled 防多实例)<br/>+ config cache" .-> RDS
 
   %% ─── outbox → Kafka → workers（粗实线 = 消息流） ──
   OUT ==>|"publish task"| K
