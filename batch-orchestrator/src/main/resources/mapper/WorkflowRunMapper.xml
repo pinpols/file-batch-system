@@ -85,4 +85,27 @@
         where tenant_id = #{tenantId}
           and id = #{id}
     </update>
+
+    <!-- P3-3 archive 自动化：选终结态 + finished_at 早于 cutoff 的 workflow_run id，按 id asc 防 missed delete -->
+    <select id="selectArchivableIds" resultType="java.lang.Long">
+        select id
+        from batch.workflow_run
+        where run_status in ('SUCCESS','FAILED','TERMINATED')
+          and finished_at is not null
+          and finished_at &lt; #{cutoff}
+        order by id asc
+        limit #{limit}
+    </select>
+
+    <delete id="deleteNodeRunsByWorkflowRunIds">
+        delete from batch.workflow_node_run
+        where workflow_run_id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteByIds">
+        delete from batch.workflow_run
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
 </mapper>
