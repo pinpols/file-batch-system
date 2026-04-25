@@ -1,0 +1,141 @@
+{
+  "title": "Batch Platform — coverage (P1)",
+  "uid": "batch-platform-coverage",
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Outbox 积压（pending events）",
+      "description": "batch.outbox.pending.events: NEW + FAILED 待 publish 的事件数。> 1000 持续 5 分钟应告警，说明 OutboxPollScheduler 跟不上 launch 速率。",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "batch_outbox_pending_events",
+          "legendFormat": "pending",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 500},
+              {"color": "red", "value": 2000}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Outbox stale PUBLISHING（卡住的事件）",
+      "description": "batch.outbox.publishing.stale.events: 在 PUBLISHING 状态超过 publishingTimeoutSeconds 仍未 ack 的事件。理论上每轮自动重置回 FAILED，持续 > 0 说明 reset 逻辑有问题或 Kafka 严重故障。",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "batch_outbox_publishing_stale_events",
+          "legendFormat": "stale-publishing",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 50}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Dead Letter 队列累积",
+      "description": "batch.dead_letter.tasks.pending: replay_status='NEW' 的死信总数。持续增长说明业务/通道有系统性问题需要人工介入。",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "batch_dead_letter_tasks_pending",
+          "legendFormat": "DL-pending",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 100},
+              {"color": "red", "value": 1000}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HTTP 请求 P99 latency（按 endpoint）",
+      "description": "Spring Boot Actuator 自带的 http_server_requests_seconds_bucket。覆盖 trigger / orchestrator / console-api 的所有 HTTP 入口。launch / claim / report 应保持 < 200ms P99。",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, uri, application) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "{{application}} {{uri}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Outbox publish 速率（每秒发出 task 数）",
+      "description": "rate(batch_outbox_pending_events[1m]) 反向估算（pending 减少速度）。结合 task_dispatch 计数器观察 publish throughput。",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(batch_outbox_pending_events[1m]) * -1",
+          "legendFormat": "publish rate (events/s)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "当前 outbox / DL 总览",
+      "description": "实时数字面板，给值班一眼判断系统健康。",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "batch_outbox_pending_events",
+          "legendFormat": "outbox pending",
+          "refId": "A"
+        },
+        {
+          "expr": "batch_outbox_publishing_stale_events",
+          "legendFormat": "stale publishing",
+          "refId": "B"
+        },
+        {
+          "expr": "batch_dead_letter_tasks_pending",
+          "legendFormat": "DL pending",
+          "refId": "C"
+        }
+      ]
+    }
+  ],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "30s",
+  "tags": ["batch", "p1-coverage"]
+}
