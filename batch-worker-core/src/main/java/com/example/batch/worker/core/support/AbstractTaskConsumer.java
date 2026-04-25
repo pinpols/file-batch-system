@@ -8,15 +8,18 @@ import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.config.WorkerConfiguration;
+import com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
@@ -72,8 +75,8 @@ public abstract class AbstractTaskConsumer {
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
   // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
-  @org.springframework.beans.factory.annotation.Autowired(required = false)
-  private com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties subscribeProperties;
+  @Autowired(required = false)
+  private WorkerKafkaSubscribeProperties subscribeProperties;
   private volatile Semaphore semaphore;
 
   protected AbstractTaskConsumer(
@@ -207,8 +210,7 @@ public abstract class AbstractTaskConsumer {
           Semaphore captured = semaphore;
           registry.gauge(
               "batch.worker.semaphore.available",
-              io.micrometer.core.instrument.Tags.of(
-                  "workerType", workerConfiguration().workerType()),
+              Tags.of("workerType", workerConfiguration().workerType()),
               captured,
               Semaphore::availablePermits);
         }
@@ -326,9 +328,9 @@ public abstract class AbstractTaskConsumer {
             ? null
             : "\\.node\\." + escapeRegex(configuredWorkerCode);
 
-    com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode mode =
+    WorkerKafkaSubscribeProperties.Mode mode =
         subscribeProperties == null
-            ? com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode.PATTERN
+            ? WorkerKafkaSubscribeProperties.Mode.PATTERN
             : subscribeProperties.getSubscribeMode();
 
     String suffixAlt;
@@ -339,9 +341,9 @@ public abstract class AbstractTaskConsumer {
         break;
       case TENANT_SCOPED:
         // 只订阅 allowlist 中的 tenant 后缀（+ node-direct）；其他 tenant 的后缀不接
-        java.util.List<String> allow =
+        List<String> allow =
             subscribeProperties.getTenantAllowlist() == null
-                ? java.util.List.of()
+                ? List.of()
                 : subscribeProperties.getTenantAllowlist();
         if (allow.isEmpty()) {
           suffixAlt = nodeDirect;

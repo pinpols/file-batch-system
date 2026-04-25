@@ -13,10 +13,14 @@ import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.application.TaskDispatchExecutor;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.config.WorkerConfiguration;
+import com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.infrastructure.DeadLetterPublisher;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
@@ -223,8 +227,7 @@ class AbstractTaskConsumerTest {
   void topicPattern_matchesBaseAndNodeDirectAndSingleSegmentSuffix() {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
-    String pattern = consumer.topicPattern();
-    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+    Pattern p = Pattern.compile(consumer.topicPattern());
 
     // ✅ base
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
@@ -247,8 +250,7 @@ class AbstractTaskConsumerTest {
   void topicPattern_withoutWorkerCodeStillAllowsTenantSuffix() {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null);
-    String pattern = consumer.topicPattern();
-    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+    Pattern p = Pattern.compile(consumer.topicPattern());
 
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
     assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isTrue();
@@ -262,14 +264,11 @@ class AbstractTaskConsumerTest {
   void topicPattern_fixedModeOnlyMatchesBaseAndNodeDirect() throws Exception {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
-    com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties props =
-        new com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties();
-    props.setSubscribeMode(
-        com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode.FIXED);
+    WorkerKafkaSubscribeProperties props = new WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(WorkerKafkaSubscribeProperties.Mode.FIXED);
     setSubscribeProperties(consumer, props);
 
-    String pattern = consumer.topicPattern();
-    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+    Pattern p = Pattern.compile(consumer.topicPattern());
 
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
     assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
@@ -284,15 +283,12 @@ class AbstractTaskConsumerTest {
   void topicPattern_tenantScopedModeMatchesAllowlistOnly() throws Exception {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
-    com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties props =
-        new com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties();
-    props.setSubscribeMode(
-        com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode.TENANT_SCOPED);
-    props.setTenantAllowlist(java.util.List.of("t1", "t2"));
+    WorkerKafkaSubscribeProperties props = new WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(WorkerKafkaSubscribeProperties.Mode.TENANT_SCOPED);
+    props.setTenantAllowlist(List.of("t1", "t2"));
     setSubscribeProperties(consumer, props);
 
-    String pattern = consumer.topicPattern();
-    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+    Pattern p = Pattern.compile(consumer.topicPattern());
 
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
     assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
@@ -308,15 +304,12 @@ class AbstractTaskConsumerTest {
   void topicPattern_tenantScopedWithEmptyAllowlistFallsBackToFixed() throws Exception {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
-    com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties props =
-        new com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties();
-    props.setSubscribeMode(
-        com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode.TENANT_SCOPED);
-    props.setTenantAllowlist(java.util.List.of());
+    WorkerKafkaSubscribeProperties props = new WorkerKafkaSubscribeProperties();
+    props.setSubscribeMode(WorkerKafkaSubscribeProperties.Mode.TENANT_SCOPED);
+    props.setTenantAllowlist(List.of());
     setSubscribeProperties(consumer, props);
 
-    String pattern = consumer.topicPattern();
-    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+    Pattern p = Pattern.compile(consumer.topicPattern());
 
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
     assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
@@ -324,11 +317,8 @@ class AbstractTaskConsumerTest {
   }
 
   private static void setSubscribeProperties(
-      AbstractTaskConsumer consumer,
-      com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties props)
-      throws Exception {
-    java.lang.reflect.Field f =
-        AbstractTaskConsumer.class.getDeclaredField("subscribeProperties");
+      AbstractTaskConsumer consumer, WorkerKafkaSubscribeProperties props) throws Exception {
+    Field f = AbstractTaskConsumer.class.getDeclaredField("subscribeProperties");
     f.setAccessible(true);
     f.set(consumer, props);
   }

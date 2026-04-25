@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
@@ -244,7 +245,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     }
 
     String key = BatchRedisKeys.quotaState(tenantId, quotaScope, ownerCode);
-    java.util.Map<Object, Object> entries;
+    Map<Object, Object> entries;
     try {
       entries = redis.entries(key);
     } catch (DataAccessException ex) {

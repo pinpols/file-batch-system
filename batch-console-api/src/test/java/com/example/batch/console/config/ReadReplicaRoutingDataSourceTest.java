@@ -20,6 +20,8 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockingDetails;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -217,7 +219,7 @@ class ReadReplicaRoutingDataSourceTest {
     assertThat(actual).isSameAs(replicaConn);
   }
 
-  private static org.mockito.MockingDetails mockingDetails(Object target) {
-    return org.mockito.Mockito.mockingDetails(target);
+  private static MockingDetails mockingDetails(Object target) {
+    return Mockito.mockingDetails(target);
   }
 }

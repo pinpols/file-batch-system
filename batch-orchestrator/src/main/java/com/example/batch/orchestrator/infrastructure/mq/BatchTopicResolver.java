@@ -4,6 +4,7 @@ import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.BatchMqTopicsProperties;
 import com.example.batch.orchestrator.config.MqRoutingProperties;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -39,7 +40,7 @@ public class BatchTopicResolver {
     return switch (routingProperties.getMode()) {
       case TENANT -> Texts.hasText(dispatch.tenantId()) ? base + "." + safe(dispatch.tenantId()) : base;
       case PRIORITY -> Texts.hasText(dispatch.priorityBand())
-          ? base + "." + safe(dispatch.priorityBand()).toLowerCase(java.util.Locale.ROOT)
+          ? base + "." + safe(dispatch.priorityBand()).toLowerCase(Locale.ROOT)
           : base;
       default -> base;
     };
