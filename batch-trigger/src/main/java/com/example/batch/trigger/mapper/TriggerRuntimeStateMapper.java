@@ -76,6 +76,12 @@ public interface TriggerRuntimeStateMapper {
   /** 给灰度切换数据迁移 + 运维查询用:按 tenant 列出全部 trigger 状态。 */
   List<TriggerRuntimeStateEntity> selectByTenantId(@Param("tenantId") String tenantId);
 
+  /**
+   * Reconciler 全表扫:列出所有 (id, job_definition_id) 对。用于计算"DB 中已禁用 / 删除的 state
+   * 集合"(loadAll 只返回 enabled,无法识别 disabled trigger 的 tenant)。
+   */
+  List<TriggerRuntimeStateEntity> selectAllJobDefinitionIds();
+
   /** schedule_expr 修改时:重新计算的 next_fire_time 直接写回,清掉 marker。 */
   int rescheduleNextFireTime(
       @Param("id") Long id, @Param("nextFireTime") Instant nextFireTime);

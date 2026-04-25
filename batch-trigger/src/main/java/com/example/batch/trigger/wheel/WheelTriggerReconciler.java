@@ -1,0 +1,161 @@
+package com.example.batch.trigger.wheel;
+
+import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
+import com.example.batch.trigger.config.WheelSchedulerProperties;
+import com.example.batch.trigger.domain.TriggerDefinitionLoader;
+import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
+import com.example.batch.trigger.support.TriggerDescriptor;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.event.EventListener;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+/**
+ * Wheel 模式下的 trigger reconciler — 周期对账 {@code job_definition} 与
+ * {@code trigger_runtime_state}。详见 quartz-replacement-design.md §10。
+ *
+ * <p>对账逻辑:
+ *
+ * <ul>
+ *   <li>DB enabled trigger 但 state 不存在 → INSERT runtime_state(next_fire_time = cron.next(now))
+ *   <li>DB 禁用 / 不存在 但 state 存在 → DELETE runtime_state(级联清理 misfire_pending)
+ *   <li>cron 表达式或时区漂移 → 重算 next_fire_time + 释放 marker(rescheduleNextFireTime)
+ *   <li>cron 表达式不变,只更新 next_fire_time(non-impact)
+ * </ul>
+ *
+ * <p><b>未做的事</b>(留待 CRUD 联动):wheel 内 task cancel — 当前依赖 stale marker 自然过期 +
+ * advanceAfterFire 找不到 state 时静默失败,不影响业务正确性。
+ */
+@Slf4j
+@Component
+@ConditionalOnProperty(name = "batch.trigger.scheduler-impl", havingValue = "wheel")
+@RequiredArgsConstructor
+public class WheelTriggerReconciler {
+
+  private final TriggerDefinitionLoader definitionLoader;
+  private final TriggerRuntimeStateMapper stateMapper;
+  private final CronExpressionAdapter cronAdapter;
+  private final BatchTimezoneProvider timezoneProvider;
+  private final WheelSchedulerProperties props;
+
+  @EventListener(ApplicationReadyEvent.class)
+  public void onApplicationReady() {
+    log.info("wheel trigger reconciler initial run on application ready");
+    reconcile();
+  }
+
+  @Scheduled(fixedDelayString = "${batch.trigger.reconcile-interval-millis:30000}")
+  @SchedulerLock(name = "wheel_trigger_reconciler", lockAtMostFor = "PT5M", lockAtLeastFor = "PT10S")
+  public void reconcile() {
+    try {
+      doReconcile();
+    } catch (RuntimeException e) {
+      log.warn("wheel reconcile pass failed, will retry next cycle: {}", e.getMessage());
+    }
+  }
+
+  private void doReconcile() {
+    List<TriggerDescriptor> dbDescriptors = definitionLoader.loadAll();
+    Map<Long, TriggerDescriptor> wantedById = new HashMap<>();
+    for (TriggerDescriptor d : dbDescriptors) {
+      if (!d.isEnabled() || d.getJobDefinitionId() == null) {
+        continue;
+      }
+      wantedById.put(d.getJobDefinitionId(), d);
+    }
+
+    int inserted = 0;
+    int updated = 0;
+    int deleted = 0;
+
+    // 1) 同步 INSERT + 漂移检测
+    for (TriggerDescriptor d : wantedById.values()) {
+      TriggerRuntimeStateEntity existing = stateMapper.selectByJobDefinitionId(d.getJobDefinitionId());
+      if (existing == null) {
+        if (insertRuntimeState(d)) {
+          inserted++;
+        }
+        continue;
+      }
+      if (hasScheduleDrift(existing, d)) {
+        Instant next = computeNext(d, Instant.now());
+        if (next != null) {
+          stateMapper.rescheduleNextFireTime(existing.getId(), next);
+          updated++;
+          log.info(
+              "wheel reschedule due to drift: jobDefId={} jobCode={} newNextFireTime={}",
+              d.getJobDefinitionId(), d.getJobCode(), next);
+        }
+      }
+    }
+
+    // 2) 全表扫,删 DB 里已禁用 / 不存在的 state
+    //    用全表扫而非按 tenant 扫,因为 loadAll 只返回 enabled,无法识别 disabled 的 tenant
+    List<TriggerRuntimeStateEntity> allStates = stateMapper.selectAllJobDefinitionIds();
+    for (TriggerRuntimeStateEntity state : allStates) {
+      if (!wantedById.containsKey(state.getJobDefinitionId())) {
+        stateMapper.deleteByJobDefinitionId(state.getJobDefinitionId());
+        deleted++;
+        log.info("wheel delete runtime_state: jobDefId={} jobCode={} (DB disabled or removed)",
+            state.getJobDefinitionId(), state.getJobCode());
+      }
+    }
+
+    if (inserted > 0 || updated > 0 || deleted > 0) {
+      log.info("wheel reconcile drift resolved: inserted={} updated={} deleted={} expectedTotal={}",
+          inserted, updated, deleted, wantedById.size());
+    }
+  }
+
+  private boolean insertRuntimeState(TriggerDescriptor d) {
+    Instant next = computeNext(d, Instant.now());
+    if (next == null) {
+      log.warn("trigger has no future fire time, skip INSERT runtime_state: jobCode={}", d.getJobCode());
+      return false;
+    }
+    TriggerRuntimeStateEntity entity = new TriggerRuntimeStateEntity();
+    entity.setJobDefinitionId(d.getJobDefinitionId());
+    entity.setTenantId(d.getTenantId());
+    entity.setJobCode(d.getJobCode());
+    entity.setNextFireTime(next);
+    try {
+      stateMapper.insertOnReconcile(entity);
+      return true;
+    } catch (DuplicateKeyException dup) {
+      // 并发 reconciler / 其他 leader 已 INSERT,幂等
+      return false;
+    }
+  }
+
+  private boolean hasScheduleDrift(TriggerRuntimeStateEntity state, TriggerDescriptor d) {
+    if (!cronAdapter.isValid(d.getScheduleExpression())) {
+      return false;  // 表达式无效,跳过 drift 检查(下个 reconcile 等运维修)
+    }
+    // 用 desc 当前 cron + 时区,从 last_fire_time(或 now)计算 next,与 DB 现存对比
+    Instant baseline = state.getLastFireTime() != null ? state.getLastFireTime() : Instant.now();
+    Instant expectedNext = computeNext(d, baseline);
+    if (expectedNext == null) {
+      return false;
+    }
+    // 容忍 1 秒误差(避免边界场景的 noise)
+    return Math.abs(expectedNext.toEpochMilli() - state.getNextFireTime().toEpochMilli()) > 1000L;
+  }
+
+  private Instant computeNext(TriggerDescriptor d, Instant after) {
+    return cronAdapter.next(
+        d.getScheduleExpression(),
+        timezoneProvider.resolveOrDefault(d.getTimezone()),
+        after);
+  }
+
+}

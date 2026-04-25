@@ -1,13 +1,16 @@
 package com.example.batch.trigger.wheel;
 
 import com.example.batch.common.config.BatchTimezoneProvider;
+import com.example.batch.common.enums.CatchUpPolicyType;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.trigger.config.WheelSchedulerProperties;
 import com.example.batch.trigger.domain.TriggerDefinitionLoader;
 import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
+import com.example.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.service.TriggerService;
@@ -70,6 +73,7 @@ public class HashedWheelTriggerScheduler {
   private final WheelSchedulerProperties props;
   private final TriggerRuntimeStateMapper stateMapper;
   private final TriggerRequestMapper requestMapper;
+  private final TriggerMisfirePendingMapper misfirePendingMapper;
   private final TriggerService triggerService;
   private final TriggerDefinitionLoader definitionLoader;
   private final CronExpressionAdapter cronAdapter;
@@ -236,42 +240,96 @@ public class HashedWheelTriggerScheduler {
     metrics.recordFireLag(actualFireMillis - scheduledFireTime.toEpochMilli());
     String groupTag = "tenant:" + state.getTenantId();
     try {
-      // 1) DB 强约束兜底:写 trigger_request,撞 unique → 跳过(其他 leader 已 fire)
-      String requestId = IdGenerator.newBusinessNo("wheel");
-      TriggerRequestEntity req = buildFireRequest(state, scheduledFireTime, requestId);
-      try {
-        requestMapper.insert(req);
-      } catch (DuplicateKeyException dup) {
-        metrics.incrementFireDuplicateSkipped(groupTag);
-        log.info(
-            "fire skipped (duplicate): job={} scheduledFireTime={}",
-            state.getJobCode(), scheduledFireTime);
-        advanceNextFireTime(state, scheduledFireTime, "SKIPPED_DUPLICATE", 0);
+      TriggerDescriptor descriptor = loadDescriptor(state);
+      // 0) misfire 分流:next_fire_time 比 actual 早超过 misfireThreshold 视为 misfire
+      long lagSeconds = (actualFireMillis - scheduledFireTime.toEpochMilli()) / 1000L;
+      if (lagSeconds >= props.getMisfireThresholdSeconds()) {
+        handleMisfire(state, descriptor, scheduledFireTime, groupTag);
         return;
       }
-      // 2) 真正 fire:调 TriggerService.launchScheduled
-      TriggerDescriptor descriptor = loadDescriptor(state);
-      ScheduledTriggerCommand command =
-          new ScheduledTriggerCommand(
-              descriptor,
-              scheduledFireTime,
-              TriggerType.SCHEDULED,
-              requestId,
-              IdGenerator.newTraceId());
-      triggerService.launchScheduled(command);
-      metrics.incrementFireSuccess(groupTag);
-      // 3) 推进 next_fire_time
-      advanceNextFireTime(state, scheduledFireTime, "FIRED", 0);
+      doFire(state, descriptor, scheduledFireTime, TriggerType.SCHEDULED, groupTag, "FIRED");
     } catch (Exception e) {
       metrics.incrementFireFailed(groupTag, e.getClass().getSimpleName());
-      log.warn("trigger fire failed: job={} scheduledFireTime={}",
+      log.warn("trigger fire outer failure: job={} scheduledFireTime={}",
           state.getJobCode(), scheduledFireTime, e);
-      // 失败也要推进 next_fire_time,否则 trigger 卡死;状态写 FAILED 留观察
       advanceNextFireTime(state, scheduledFireTime, "FAILED", 0);
     } finally {
       timeoutRegistry.remove(state.getId());
       inFlightFires.remove(dedupKey);
       tasksScheduled.updateAndGet(v -> Math.max(0, v - 1));
+    }
+  }
+
+  /** 按 catchUpPolicy 分流 NONE / AUTO / MANUAL_APPROVAL,详见 design.md §9.2。 */
+  private void handleMisfire(
+      TriggerRuntimeStateEntity state,
+      TriggerDescriptor descriptor,
+      Instant scheduledFireTime,
+      String groupTag) {
+    CatchUpPolicyType policy = CatchUpPolicyType.fromCode(descriptor.getCatchUpPolicy());
+    metrics.incrementMisfireHandled(policy.code());
+    log.info("misfire detected: job={} scheduledFireTime={} policy={}",
+        state.getJobCode(), scheduledFireTime, policy.code());
+    switch (policy) {
+      case NONE -> {
+        // 跳过本次 fire,只推进 next_fire_time
+        advanceNextFireTime(state, scheduledFireTime, "MISFIRE_SKIPPED", 1);
+      }
+      case AUTO -> {
+        // 立即补 1 次,以 CATCH_UP triggerType
+        doFire(state, descriptor, scheduledFireTime, TriggerType.CATCH_UP, groupTag,
+            "MISFIRE_CATCH_UP");
+      }
+      case MANUAL_APPROVAL -> {
+        // 落 trigger_misfire_pending 表,等运维 console 审批
+        try {
+          TriggerMisfirePendingEntity pending = new TriggerMisfirePendingEntity();
+          pending.setTriggerRuntimeStateId(state.getId());
+          pending.setTenantId(state.getTenantId());
+          pending.setJobCode(state.getJobCode());
+          pending.setScheduledFireTime(scheduledFireTime);
+          misfirePendingMapper.insertPending(pending);
+        } catch (DuplicateKeyException dup) {
+          // 已有相同 (state_id, scheduledFireTime) 待审,幂等跳过
+          log.info("misfire pending already exists, skip insert: job={} scheduledFireTime={}",
+              state.getJobCode(), scheduledFireTime);
+        }
+        advanceNextFireTime(state, scheduledFireTime, "MISFIRE_PENDING", 1);
+      }
+    }
+  }
+
+  /** 实际 fire 主路径(共享 SCHEDULED + CATCH_UP 两种 triggerType)。 */
+  private void doFire(
+      TriggerRuntimeStateEntity state,
+      TriggerDescriptor descriptor,
+      Instant scheduledFireTime,
+      TriggerType triggerType,
+      String groupTag,
+      String successStatus) {
+    String requestId = IdGenerator.newBusinessNo("wheel");
+    TriggerRequestEntity req = buildFireRequest(state, scheduledFireTime, requestId, triggerType);
+    try {
+      requestMapper.insert(req);
+    } catch (DuplicateKeyException dup) {
+      metrics.incrementFireDuplicateSkipped(groupTag);
+      log.info("fire skipped (duplicate): job={} scheduledFireTime={}",
+          state.getJobCode(), scheduledFireTime);
+      advanceNextFireTime(state, scheduledFireTime, "SKIPPED_DUPLICATE", 0);
+      return;
+    }
+    try {
+      ScheduledTriggerCommand command =
+          new ScheduledTriggerCommand(
+              descriptor, scheduledFireTime, triggerType, requestId, IdGenerator.newTraceId());
+      triggerService.launchScheduled(command);
+      metrics.incrementFireSuccess(groupTag);
+      advanceNextFireTime(state, scheduledFireTime, successStatus, 0);
+    } catch (Exception e) {
+      metrics.incrementFireFailed(groupTag, e.getClass().getSimpleName());
+      log.warn("trigger launch failed: job={} scheduledFireTime={}",
+          state.getJobCode(), scheduledFireTime, e);
+      advanceNextFireTime(state, scheduledFireTime, "FAILED", 0);
     }
   }
 
@@ -297,13 +355,14 @@ public class HashedWheelTriggerScheduler {
   }
 
   private TriggerRequestEntity buildFireRequest(
-      TriggerRuntimeStateEntity state, Instant scheduledFireTime, String requestId) {
+      TriggerRuntimeStateEntity state, Instant scheduledFireTime, String requestId,
+      TriggerType triggerType) {
     TriggerRequestEntity req = new TriggerRequestEntity();
     req.setTenantId(state.getTenantId());
     req.setRequestId(requestId);
-    req.setTriggerType(TriggerType.SCHEDULED.code());
+    req.setTriggerType(triggerType.code());
     req.setJobCode(state.getJobCode());
-    req.setBizDate(LocalDate.now()); // TODO 第 3 周从 business_calendar 解析
+    req.setBizDate(LocalDate.now()); // TODO 接 business_calendar 解析
     req.setDedupKey(state.getTenantId() + ":" + state.getJobCode() + ":"
         + scheduledFireTime.toEpochMilli());
     req.setRequestStatus("ACCEPTED");
