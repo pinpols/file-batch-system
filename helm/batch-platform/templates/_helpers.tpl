@@ -104,6 +104,42 @@ envFrom:
 {{- end }}
 
 {{/*
+Graceful shutdown block. Renders pod-level terminationGracePeriodSeconds (siblings
+to containers/volumes) AND container-level lifecycle.preStop sleep separately.
+
+Usage:
+  spec:
+    {{- include "batch-platform.gracefulShutdownPod" $svc.gracefulShutdown | nindent 6 }}
+    containers:
+      - name: foo
+        ...
+        {{- include "batch-platform.gracefulShutdownLifecycle" $svc.gracefulShutdown | nindent 10 }}
+
+Defaults: terminationGracePeriodSeconds=90, preStop sleep=15.
+- 90s 让 ShedLock 释放 + Spring graceful shutdown drain in-flight requests
+- preStop sleep 15s 让 k8s Service endpoints 收敛（避免 SLB 仍把流量打到正在退出的 pod）
+
+可在 values.yaml 每个 component 覆盖：
+  orchestrator:
+    gracefulShutdown:
+      terminationGracePeriodSeconds: 120  # ShedLock + 长 archive 任务
+      preStopSleepSeconds: 20
+*/}}
+{{- define "batch-platform.gracefulShutdownPod" -}}
+terminationGracePeriodSeconds: {{ default 90 .terminationGracePeriodSeconds }}
+{{- end }}
+
+{{- define "batch-platform.gracefulShutdownLifecycle" -}}
+{{- $sleep := default 15 .preStopSleepSeconds -}}
+{{- if gt (int $sleep) 0 }}
+lifecycle:
+  preStop:
+    exec:
+      command: ["/bin/sh", "-c", "sleep {{ $sleep }}"]
+{{- end }}
+{{- end }}
+
+{{/*
 Standard pod scheduling fields.
 */}}
 {{- define "batch-platform.scheduling" -}}

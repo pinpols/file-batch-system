@@ -52,12 +52,14 @@ spec:
       {{- end }}
     spec:
       {{- include "batch-platform.imagePullSecrets" . | nindent 6 }}
+      {{- include "batch-platform.gracefulShutdownPod" $svc.gracefulShutdown | nindent 6 }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ $component }}
           image: {{ include "batch-platform.image" (dict "root" . "name" "batch-orchestrator") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "batch-platform.gracefulShutdownLifecycle" $svc.gracefulShutdown | nindent 10 }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           ports:

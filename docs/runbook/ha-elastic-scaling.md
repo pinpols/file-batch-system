@@ -91,21 +91,24 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 - 自建 Sentinel（≥3 节点）
 - 自建 Redis Cluster（≥6 节点）
 
-### 2. Helm chart 加 `terminationGracePeriodSeconds` ⚠️
-现在 `helm/batch-platform/` 没有任何 `terminationGracePeriodSeconds` / `preStop` 配置（已 grep 验证），意味着 k8s 用默认 30s。如果 OutboxPoll/SuccessArchive 正在跑会被 SIGKILL 强杀，留下长时间锁。
+### 2. Helm chart `terminationGracePeriodSeconds` ✅（已落地）
+`_helpers.tpl` 提供 `gracefulShutdownPod` / `gracefulShutdownLifecycle` helper，
+`values.yaml` 每个组件已配 `gracefulShutdown:` 默认值：
 
-**建议补丁**（写到 helm values）：
-```yaml
-deployments:
-  orchestrator:
-    terminationGracePeriodSeconds: 90    # 30s 默认 → 90s 让 ShedLock 释放 + 优雅 drain
-    lifecycle:
-      preStop:
-        exec:
-          command: ["/bin/sh", "-c", "sleep 15"]   # k8s 摘流量时给 SLB 15s 收敛
-```
+| 组件 | grace 默认 | preStop sleep | 理由 |
+|---|---|---|---|
+| console-api | 90s | 15s | SSE drain + Spring graceful（默认 60s） |
+| trigger | 90s | 15s | Quartz cluster 注销 + transfer drain |
+| **orchestrator** | **150s** | 15s | **ShedLock 主动释放 + outbox shard rebalance；Spring `BATCH_SHUTDOWN_TIMEOUT` 默认 120s 加 30s 缓冲** |
+| worker-dispatch | 120s | 15s | Kafka leave + 完成在跑 task |
+| worker-import | 180s | 15s | 长 task（>1 min 常见）需要 |
+| worker-export | 180s | 15s | 大文件生成更长，超时仍由 PartitionLeaseReclaim 兜底 |
 
-Worker 同理，并且 `terminationGracePeriodSeconds` 要 ≥ 单 task 平均执行时间。
+**单 task 平均执行时间长于上面默认值时**，要在 values 里调高对应组件，否则 SIGKILL
+仍会强杀 in-flight task（虽然有 reclaim 兜底，但产生不必要的重派）。
+
+helm rendered 验证：6 个 deploy/sts 全部正确渲染 `terminationGracePeriodSeconds` +
+container `lifecycle.preStop` block。
 
 ### 3. DB max_connections 容量核算 ⚠️
 N 实例 × 单实例 pool = 总连接数，不能超 PG `max_connections`。
@@ -158,7 +161,8 @@ curl http://console-api/api/console/queries/job-instances?tenantId=t1
 - `batch-worker-core/.../support/AbstractWorkerLoop.java:137` — Worker `@PreDestroy`
 - `batch-worker-core/.../infrastructure/GracefulKafkaShutdown.java` — Kafka 优雅停消费
 - `batch-console-api/.../config/ReadReplicaRoutingDataSource.java` — Read replica 路由 + per-instance quarantine
-- `helm/batch-platform/` — **TODO**：补 `terminationGracePeriodSeconds` + `preStop`
+- `helm/batch-platform/templates/_helpers.tpl` — `gracefulShutdownPod` / `gracefulShutdownLifecycle` helper
+- `helm/batch-platform/values.yaml` — 每个组件 `gracefulShutdown:` 默认值
 
 ## 相关参考
 

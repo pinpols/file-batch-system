@@ -52,6 +52,11 @@ security:
 
 consoleApi:
   replicaCount: 2
+  # SSE 客户端断开 + Spring graceful shutdown drain；preStop sleep 让 k8s Service endpoints
+  # 收敛后再发 SIGTERM，避免 SLB 把新流量打到正退出的 pod。
+  gracefulShutdown:
+    terminationGracePeriodSeconds: 90
+    preStopSleepSeconds: 15
   # CPU-based HPA（BFF 流量敏感，CPU 足够）。生产建议 enabled: true。
   hpa:
     enabled: false
@@ -107,6 +112,11 @@ consoleApi:
 trigger:
   replicaCount: 1
   port: 18081
+  # Quartz misfire 由幸存节点立即补跑，trigger 自身负担轻；但要给 Quartz cluster
+  # 注销节点 + Spring graceful shutdown drain in-flight 的 trigger 转发请求时间。
+  gracefulShutdown:
+    terminationGracePeriodSeconds: 90
+    preStopSleepSeconds: 15
   resources:
     requests:
       cpu: "100m"
@@ -137,6 +147,12 @@ trigger:
 orchestrator:
   replicaCount: 2
   port: 18082
+  # 关键路径：让 ShedLock 主动释放（OutboxPoll/各 Archive scheduler）+ Spring graceful
+  # 完成 in-flight 请求 + outbox 分片 rebalance 完成。
+  # 必须 ≥ Spring batch.shutdown-timeout (默认 120s) + 30s 缓冲。
+  gracefulShutdown:
+    terminationGracePeriodSeconds: 150
+    preStopSleepSeconds: 15
   # Outbox 分片模式。static=BATCH_OUTBOX_SHARD_TOTAL 写死（扩缩容需 helm upgrade
   # 走滚动重启），dynamic=运行期通过 Redis 成员注册动态分配（允许 kubectl scale
   # 或 HPA/KEDA 自动扩缩容）。
@@ -195,6 +211,11 @@ orchestrator:
 workerImport:
   replicaCount: 2
   port: 18083
+  # Worker 长任务可能 1-3 分钟才完成；@PreDestroy 上报下线 + Kafka consumer leave +
+  # 完成在跑 task。如果你的 import 单 task 平均 >2 分钟，调高这里。
+  gracefulShutdown:
+    terminationGracePeriodSeconds: 180
+    preStopSleepSeconds: 15
   resources:
     requests:
       cpu: "500m"
@@ -242,6 +263,11 @@ workerImport:
 workerExport:
   replicaCount: 2
   port: 18084
+  # Export 任务通常更长（生成大文件），给更宽窗口；超时未完成的 task 由 orchestrator
+  # PartitionLeaseReclaimScheduler 兜底重派。
+  gracefulShutdown:
+    terminationGracePeriodSeconds: 180
+    preStopSleepSeconds: 15
   resources:
     requests:
       cpu: "500m"
@@ -286,6 +312,10 @@ workerExport:
 workerDispatch:
   replicaCount: 2
   port: 18085
+  # Dispatch 任务通常较短，但仍需 Kafka consumer leave + 完成在跑 task。
+  gracefulShutdown:
+    terminationGracePeriodSeconds: 120
+    preStopSleepSeconds: 15
   resources:
     requests:
       cpu: "200m"
