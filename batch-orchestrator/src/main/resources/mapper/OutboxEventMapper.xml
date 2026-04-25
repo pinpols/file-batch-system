@@ -124,4 +124,26 @@
         where publish_status = #{publishingStatus}
           and updated_at &lt; current_timestamp - (#{timeoutSeconds} || ' seconds')::interval
     </select>
+
+    <!-- archive scheduler: 按 status + created_at 选出可归档 id（带 limit 防长事务） -->
+    <select id="selectArchivableIds" resultType="java.lang.Long">
+        select id
+        from batch.outbox_event
+        where publish_status = #{status}
+          and created_at &lt; #{cutoff}
+        order by id asc
+        limit #{limit}
+    </select>
+
+    <delete id="deleteEventDeliveryLogsByOutboxIds">
+        delete from batch.event_delivery_log
+        where outbox_event_id in
+        <foreach collection="outboxIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteByIds">
+        delete from batch.outbox_event
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
 </mapper>

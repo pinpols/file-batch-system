@@ -36,6 +36,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+// P2-5: 锁定 SINGLE 模式，专测发到 base topic 的语义；TENANT/PRIORITY 端到端由 BatchTopicResolverTest 覆盖
+@org.springframework.test.context.TestPropertySource(properties = "batch.mq.routing.mode=SINGLE")
 class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();

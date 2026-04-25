@@ -90,6 +90,13 @@ batch:
     max-retry-attempts: ${BATCH_OUTBOX_MAX_RETRY_ATTEMPTS:5}
     # PUBLISHING 状态最大驻留时长（秒），超时自动回退为 FAILED
     publishing-timeout-seconds: ${BATCH_OUTBOX_PUBLISHING_TIMEOUT_SECONDS:120}
+    # P3-3 archive: outbox_event 自动归档（默认每天 03:30，PUBLISHED 7d / GIVE_UP 30d）
+    archive:
+      enabled: ${BATCH_OUTBOX_ARCHIVE_ENABLED:true}
+      published-retention-days: ${BATCH_OUTBOX_ARCHIVE_PUBLISHED_RETENTION_DAYS:7}
+      give-up-retention-days: ${BATCH_OUTBOX_ARCHIVE_GIVE_UP_RETENTION_DAYS:30}
+      batch-size: ${BATCH_OUTBOX_ARCHIVE_BATCH_SIZE:5000}
+      cron: "${BATCH_OUTBOX_ARCHIVE_CRON:0 30 3 * * *}"
     # Outbox 投递熔断（全局）：连续若干轮推进失败后进入 cooldown
     circuit-breaker-enabled: ${BATCH_OUTBOX_CIRCUIT_BREAKER_ENABLED:true}
     circuit-breaker-failure-threshold-consecutive-polls: ${BATCH_OUTBOX_CIRCUIT_BREAKER_FAILURE_THRESHOLD_CONSECUTIVE_POLLS:3}
@@ -133,6 +140,13 @@ batch:
       enabled: ${BATCH_QUOTA_SNAPSHOT_ENABLED:true}
       # snapshot 调度间隔（毫秒）
       interval-millis: ${BATCH_QUOTA_SNAPSHOT_INTERVAL_MILLIS:300000}
+  job-instance:
+    # P3-3 archive: SUCCESS / PARTIAL_FAILED 实例级联归档（默认每周日 04:30）
+    archive:
+      enabled: ${BATCH_JOB_INSTANCE_ARCHIVE_ENABLED:true}
+      retention-days: ${BATCH_JOB_INSTANCE_ARCHIVE_RETENTION_DAYS:30}
+      batch-size: ${BATCH_JOB_INSTANCE_ARCHIVE_BATCH_SIZE:1000}
+      cron: "${BATCH_JOB_INSTANCE_ARCHIVE_CRON:0 30 4 * * SUN}"
   workflow:
     # P3-3: workflow_run / workflow_node_run 自动归档调度器（默认每天 04:15）
     archive:

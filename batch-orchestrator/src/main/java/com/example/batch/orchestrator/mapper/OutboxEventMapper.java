@@ -48,4 +48,19 @@ public interface OutboxEventMapper {
   long countStalePublishing(
       @Param("publishingStatus") String publishingStatus,
       @Param("timeoutSeconds") long timeoutSeconds);
+
+  /**
+   * Outbox archive 调度器：选出指定 status 中、created_at 早于 cutoff 的事件 id（带 limit）。
+   * status 通常是 PUBLISHED 或 GIVE_UP；其他状态（NEW/FAILED/PUBLISHING）属于活跃事件不归档。
+   */
+  List<Long> selectArchivableIds(
+      @Param("status") String status,
+      @Param("cutoff") Instant cutoff,
+      @Param("limit") int limit);
+
+  /** 按 outbox_event_id 列表删 event_delivery_log（FK 子表）。 */
+  int deleteEventDeliveryLogsByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
+
+  /** 按 id 列表删 outbox_event。 */
+  int deleteByIds(@Param("ids") List<Long> ids);
 }
