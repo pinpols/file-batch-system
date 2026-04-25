@@ -69,7 +69,7 @@ public class ImportTaskConsumer extends AbstractTaskConsumer {
 
   @KafkaListener(
       id = "import-task-consumer",
-      topics = "#{__listener.topics()}",
+      topicPattern = "#{__listener.topicPattern()}",
       groupId = "#{__listener.consumerGroupId()}")
   public void consume(String payload, Acknowledgment acknowledgment) {
     if (doConsume(payload)) {

@@ -279,29 +279,70 @@ public abstract class AbstractTaskConsumer {
   /**
    * 返回该消费者监听的 Kafka topic 列表；公开为 public 方法，供子类 {@code @KafkaListener} SpEL 表达式 通过 {@code
    * #{__listener.topics()}} 引用。
+   *
+   * <p>P2-5 之后已废弃 — 推荐用 {@link #topicPattern()} 代替；保留本方法兼容老子类（{@code @KafkaListener(topics=...)}）
+   * 仅 SINGLE 模式下能匹配 producer 端实际写出的 topic。
    */
   public String[] topics() {
     WorkerConfiguration cfg = workerConfiguration();
     String configuredWorkerCode = cfg.workerCode();
-    String baseTopic = cfg.topic();
-    if (baseTopic == null || baseTopic.isBlank()) {
-      // e2e / local 环境可能不完整注入 topic；兜底保证 @KafkaListener(topics=...) 不会解析成 null。
-      baseTopic = resolveTopicByWorkerType(cfg.workerType());
-      // 最后兜底：仅根据 workerCode 文本推断，避免返回空数组导致 Spring Kafka 启动失败。
-      if (baseTopic == null || baseTopic.isBlank()) {
-        baseTopic = resolveTopicByWorkerCode(configuredWorkerCode);
-      }
-    }
-    if (baseTopic == null || baseTopic.isBlank()) {
-      // 保底：绝不返回空数组，确保 @KafkaListener(topics=...) 至少有一个值可用。
-      baseTopic = BatchTopics.TASK_DISPATCH_DISPATCH;
-    }
+    String baseTopic = resolveBaseTopic(cfg);
     if (configuredWorkerCode == null || configuredWorkerCode.isBlank()) {
       return new String[] {baseTopic};
     }
     return new String[] {
       baseTopic, BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode)
     };
+  }
+
+  /**
+   * P2-5 worker 端 Kafka pattern 适配：用宽松 regex 同时匹配 SINGLE / TENANT / PRIORITY 三种 producer
+   * 输出的 topic 形态。Kafka client 按 {@code metadata.max.age.ms} 周期重新发现匹配 topic，新增 tenant /
+   * priority 后缀 topic 会自动被 worker 拾取。
+   *
+   * <p>匹配规则（base = 例如 {@code batch.task.dispatch.import}）：
+   * <ul>
+   *   <li>{@code base}（exact）：SINGLE 模式 producer 写出的固定 topic
+   *   <li>{@code base.node.{ourWorkerCode}}（exact）：直达分发 topic（粘性路由）
+   *   <li>{@code base.<single-segment>}（一段后缀，不含 dot）：TENANT 后缀（{@code .default-tenant}） /
+   *       PRIORITY 后缀（{@code .high}）
+   * </ul>
+   *
+   * <p><b>不匹配</b> {@code base.node.{otherWorkerCode}} —— 直达 topic 是双段后缀，由 {@code .[^.]+} 排除。
+   *
+   * @return Kafka topic 正则 pattern（已转义 base 中的点；调用方直接传给 {@code @KafkaListener.topicPattern}）
+   */
+  public String topicPattern() {
+    WorkerConfiguration cfg = workerConfiguration();
+    String baseTopic = resolveBaseTopic(cfg);
+    String safeBase = baseTopic.replace(".", "\\.");
+    String configuredWorkerCode = cfg.workerCode();
+    if (configuredWorkerCode == null || configuredWorkerCode.isBlank()) {
+      // 没 workerCode：只允许 base + 单段后缀（tenant/priority），不允许 node-direct
+      return "^" + safeBase + "(\\.[^.]+)?$";
+    }
+    // workerCode 也可能含 dot/特殊字符，安全转义
+    String safeWorker = configuredWorkerCode.replaceAll("([\\\\\\.\\[\\]\\(\\)\\{\\}\\^\\$\\|\\?\\*\\+])", "\\\\$1");
+    return "^"
+        + safeBase
+        + "(\\.node\\."
+        + safeWorker
+        + "|\\.[^.]+)?$";
+  }
+
+  private String resolveBaseTopic(WorkerConfiguration cfg) {
+    String configuredWorkerCode = cfg.workerCode();
+    String baseTopic = cfg.topic();
+    if (baseTopic == null || baseTopic.isBlank()) {
+      baseTopic = resolveTopicByWorkerType(cfg.workerType());
+      if (baseTopic == null || baseTopic.isBlank()) {
+        baseTopic = resolveTopicByWorkerCode(configuredWorkerCode);
+      }
+    }
+    if (baseTopic == null || baseTopic.isBlank()) {
+      baseTopic = BatchTopics.TASK_DISPATCH_DISPATCH;
+    }
+    return baseTopic;
   }
 
   /**

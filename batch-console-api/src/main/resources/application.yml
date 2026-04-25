@@ -31,22 +31,22 @@ mybatis:
 
 batch:
   console:
-    # P2-4: 读写分离（默认禁用，启用时主/从两个 HikariPool；@Transactional(readOnly=true) 路由到从库）
+    # P2-4: 读写分离（默认开启；fail-open 已就位，从库挂了自动降级到主库）
     read-replica:
-      enabled: ${BATCH_CONSOLE_READ_REPLICA_ENABLED:false}
+      enabled: ${BATCH_CONSOLE_READ_REPLICA_ENABLED:true}
       # fail-open：从库连续连接失败 N 次后进入 quarantine，期间所有读路由降级到主库
       failure-threshold: ${BATCH_CONSOLE_REPLICA_FAILURE_THRESHOLD:3}
       quarantine-seconds: ${BATCH_CONSOLE_REPLICA_QUARANTINE_SECONDS:30}
       primary:
-        url: ${BATCH_CONSOLE_PRIMARY_URL:}
-        username: ${BATCH_CONSOLE_PRIMARY_USER:}
-        password: ${BATCH_CONSOLE_PRIMARY_PASSWORD:}
+        url: ${BATCH_CONSOLE_PRIMARY_URL:jdbc:postgresql://localhost:15432/batch_platform}
+        username: ${BATCH_CONSOLE_PRIMARY_USER:batch_user}
+        password: ${BATCH_CONSOLE_PRIMARY_PASSWORD:batch_pass_123}
         maximum-pool-size: ${BATCH_CONSOLE_PRIMARY_POOL:16}
         leak-detection-threshold-millis: ${BATCH_CONSOLE_PRIMARY_LEAK_DETECTION_MS:0}
       replica:
-        url: ${BATCH_CONSOLE_REPLICA_URL:}
-        username: ${BATCH_CONSOLE_REPLICA_USER:}
-        password: ${BATCH_CONSOLE_REPLICA_PASSWORD:}
+        url: ${BATCH_CONSOLE_REPLICA_URL:jdbc:postgresql://localhost:15433/batch_platform}
+        username: ${BATCH_CONSOLE_REPLICA_USER:batch_user}
+        password: ${BATCH_CONSOLE_REPLICA_PASSWORD:batch_pass_123}
         maximum-pool-size: ${BATCH_CONSOLE_REPLICA_POOL:16}
         leak-detection-threshold-millis: ${BATCH_CONSOLE_REPLICA_LEAK_DETECTION_MS:0}
     # Redis Pub/Sub、SSE：实例标识。未设置环境变量时使用固定默认值，避免随机 UUID 与启动 WARN。

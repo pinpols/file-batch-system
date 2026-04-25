@@ -75,9 +75,9 @@ batch:
     snapshot-persist-enabled: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST:true}
     # 快照持久化周期（毫秒）
     snapshot-persist-ms: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST_MS:120000}
-    # P2-3: WorkerSelector Redis 缓存（默认禁用，海量场景启用避免每秒派发都打 PG）
+    # P2-3: WorkerSelector Redis 缓存（默认开启；fail-open 已就位，Redis 故障不阻塞 selector）
     worker-cache:
-      enabled: ${BATCH_SCHEDULER_WORKER_CACHE_ENABLED:false}
+      enabled: ${BATCH_SCHEDULER_WORKER_CACHE_ENABLED:true}
       ttl-millis: ${BATCH_SCHEDULER_WORKER_CACHE_TTL_MILLIS:5000}
   outbox:
     # Outbox 拉取批大小（单次处理条数）
@@ -135,11 +135,11 @@ batch:
       interval-millis: ${BATCH_QUOTA_SNAPSHOT_INTERVAL_MILLIS:300000}
   mq:
     routing:
-      # P2-5: 派发 topic 分流策略——SINGLE（默认）/ TENANT / PRIORITY
+      # P2-5: 派发 topic 分流策略——SINGLE / TENANT（默认）/ PRIORITY
       # SINGLE：所有租户/优先级共享 base topic
-      # TENANT：base.{tenantId}，避免大租户挤占
+      # TENANT（默认）：base.{tenantId}，避免大租户挤占；worker 端 topicPattern 自动适配多 topic
       # PRIORITY：base.{priorityBand}，高优 topic 独立 consumer group 防低优阻塞
-      mode: ${BATCH_MQ_ROUTING_MODE:SINGLE}
+      mode: ${BATCH_MQ_ROUTING_MODE:TENANT}
   resource-scheduler:
     # 等待派发任务的批大小
     waiting-dispatch-batch-size: ${BATCH_RESOURCE_SCHEDULER_WAITING_DISPATCH_BATCH_SIZE:100}

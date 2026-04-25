@@ -63,7 +63,7 @@ public class DispatchTaskConsumer extends AbstractTaskConsumer {
 
   @KafkaListener(
       id = "dispatch-task-consumer",
-      topics = "#{__listener.topics()}",
+      topicPattern = "#{__listener.topicPattern()}",
       groupId = "#{__listener.consumerGroupId()}")
   public void consume(String payload, Acknowledgment acknowledgment) {
     if (doConsume(payload)) {
