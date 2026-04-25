@@ -13,7 +13,7 @@
 - `engineering-backlog.md`：工程积压任务优先级排序
 - `comprehensive-project-analysis.md`：系统安全与能力矩阵分析
 - `system-multidimensional-improvement-analysis.md`：系统多维度改进分析
-- `scalability-ha-assessment.md`：可扩展性与高可用评估
+- `scalability-assessment.md`：海量批量调度承载力评估（绿/黄/红 + 改造路线图）
 - `console-api-gap-analysis.md`：控制台 API 差距分析
 
 ### 参考文档
