@@ -2,6 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.example.batch.trigger.mapper.TriggerDefinitionMapper">
     <resultMap id="TriggerDescriptorResultMap" type="com.example.batch.trigger.support.TriggerDescriptor">
+        <result column="job_definition_id" property="jobDefinitionId"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_code" property="jobCode"/>
         <result column="schedule_type" property="scheduleType"/>
@@ -15,6 +16,7 @@
     </resultMap>
 
     <sql id="TriggerDefinitionBaseColumns">
+        jd.id as job_definition_id,
         jd.tenant_id,
         jd.job_code,
         jd.schedule_type,

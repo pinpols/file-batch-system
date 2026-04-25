@@ -108,6 +108,15 @@
          order by job_code
     </select>
 
+    <!--
+      reconciler 全表扫:只取轻量字段(id + job_definition_id + tenant_id + job_code),
+      避免拉所有列。用于 disabled trigger 的删除路径。
+    -->
+    <select id="selectAllJobDefinitionIds" resultMap="TriggerRuntimeStateResultMap">
+        select id, job_definition_id, tenant_id, job_code
+          from batch.trigger_runtime_state
+    </select>
+
     <update id="rescheduleNextFireTime">
         update batch.trigger_runtime_state
            set next_fire_time = #{nextFireTime},

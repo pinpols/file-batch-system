@@ -50,6 +50,8 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+    name = "batch.trigger.scheduler-impl", havingValue = "quartz", matchIfMissing = true)
 @RequiredArgsConstructor
 public class TriggerReconciler {
 
