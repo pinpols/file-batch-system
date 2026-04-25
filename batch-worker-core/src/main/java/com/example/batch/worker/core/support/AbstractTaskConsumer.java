@@ -70,6 +70,10 @@ public abstract class AbstractTaskConsumer {
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
   // #6-2: 注入 MeterRegistry 用于暴露信号量可用许可数
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+  // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
+  // 注入不到时 topicPattern() 走默认 PATTERN 行为。
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties subscribeProperties;
   private volatile Semaphore semaphore;
 
   protected AbstractTaskConsumer(
@@ -317,17 +321,65 @@ public abstract class AbstractTaskConsumer {
     String baseTopic = resolveBaseTopic(cfg);
     String safeBase = baseTopic.replace(".", "\\.");
     String configuredWorkerCode = cfg.workerCode();
-    if (configuredWorkerCode == null || configuredWorkerCode.isBlank()) {
-      // 没 workerCode：只允许 base + 单段后缀（tenant/priority），不允许 node-direct
-      return "^" + safeBase + "(\\.[^.]+)?$";
+    String nodeDirect =
+        (configuredWorkerCode == null || configuredWorkerCode.isBlank())
+            ? null
+            : "\\.node\\." + escapeRegex(configuredWorkerCode);
+
+    com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode mode =
+        subscribeProperties == null
+            ? com.example.batch.worker.core.config.WorkerKafkaSubscribeProperties.Mode.PATTERN
+            : subscribeProperties.getSubscribeMode();
+
+    String suffixAlt;
+    switch (mode) {
+      case FIXED:
+        // 仅 base + 自己的 node-direct，不订阅任何后缀；producer 处于 SINGLE 模式时等价
+        suffixAlt = nodeDirect;
+        break;
+      case TENANT_SCOPED:
+        // 只订阅 allowlist 中的 tenant 后缀（+ node-direct）；其他 tenant 的后缀不接
+        java.util.List<String> allow =
+            subscribeProperties.getTenantAllowlist() == null
+                ? java.util.List.of()
+                : subscribeProperties.getTenantAllowlist();
+        if (allow.isEmpty()) {
+          suffixAlt = nodeDirect;
+        } else {
+          String tenantAlt =
+              allow.stream()
+                  .filter(s -> s != null && !s.isBlank())
+                  .map(AbstractTaskConsumer::escapeRegex)
+                  .reduce((a, b) -> a + "|" + b)
+                  .orElse(null);
+          String tenantBranch = tenantAlt == null ? null : "\\.(" + tenantAlt + ")";
+          suffixAlt = joinAlt(nodeDirect, tenantBranch);
+        }
+        break;
+      case PATTERN:
+      default:
+        // 宽松：base / base.<single-segment> / base.node.<workerCode>
+        suffixAlt = joinAlt(nodeDirect, "\\.[^.]+");
     }
-    // workerCode 也可能含 dot/特殊字符，安全转义
-    String safeWorker = configuredWorkerCode.replaceAll("([\\\\\\.\\[\\]\\(\\)\\{\\}\\^\\$\\|\\?\\*\\+])", "\\\\$1");
-    return "^"
-        + safeBase
-        + "(\\.node\\."
-        + safeWorker
-        + "|\\.[^.]+)?$";
+    if (suffixAlt == null) {
+      return "^" + safeBase + "$";
+    }
+    return "^" + safeBase + "(" + suffixAlt + ")?$";
+  }
+
+  private static String joinAlt(String a, String b) {
+    if (a == null) {
+      return b;
+    }
+    if (b == null) {
+      return a;
+    }
+    return a + "|" + b;
+  }
+
+  private static String escapeRegex(String value) {
+    return value.replaceAll(
+        "([\\\\\\.\\[\\]\\(\\)\\{\\}\\^\\$\\|\\?\\*\\+])", "\\\\$1");
   }
 
   private String resolveBaseTopic(WorkerConfiguration cfg) {

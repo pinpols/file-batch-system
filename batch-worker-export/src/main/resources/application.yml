@@ -31,6 +31,10 @@ batch:
     type: EXPORT
     # 实例内并发上限（背压）：建议按任务重量与 DB 连接池匹配
     max-concurrent-tasks: ${BATCH_WORKER_EXPORT_MAX_CONCURRENT_TASKS:4}
+    # P2-5 Kafka 订阅模式（PATTERN/FIXED/TENANT_SCOPED）；详见 batch-worker-import yml 注释
+    kafka:
+      subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}
+      tenant-allowlist: ${BATCH_WORKER_KAFKA_TENANT_ALLOWLIST:}
     export:
       # Worker 唯一标识
       worker-code: ${BATCH_WORKER_EXPORT_CODE:export-node-1}

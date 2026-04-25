@@ -32,6 +32,13 @@ batch:
     type: IMPORT
     # 实例内并发上限（背压）：建议按任务重量与 DB 连接池匹配
     max-concurrent-tasks: ${BATCH_WORKER_IMPORT_MAX_CONCURRENT_TASKS:6}
+    # P2-5 worker 端 Kafka 订阅模式：
+    #   PATTERN（默认）— 宽松正则同时覆盖 SINGLE/TENANT/PRIORITY 三种 producer 输出，新增 tenant 自动拾取
+    #   FIXED         — 仅订阅 base + node-direct，回退路径 / 海量 tenant 限制元数据刷新成本
+    #   TENANT_SCOPED — 仅订阅 batch.worker.kafka.tenant-allowlist 列出的租户，物理隔离 worker pool
+    kafka:
+      subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}
+      tenant-allowlist: ${BATCH_WORKER_KAFKA_TENANT_ALLOWLIST:}
     import:
       # Worker 唯一标识（用于注册、审计、告警定位）
       worker-code: ${BATCH_WORKER_IMPORT_CODE:import-node-1}
