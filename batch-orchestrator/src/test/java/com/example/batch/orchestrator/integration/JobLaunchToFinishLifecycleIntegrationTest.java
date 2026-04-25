@@ -42,6 +42,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+// P2-5: 锁定 SINGLE 模式，IT 期望的 Kafka topic 是 base topic（无 tenant 后缀）
+@org.springframework.test.context.TestPropertySource(properties = "batch.mq.routing.mode=SINGLE")
 class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
