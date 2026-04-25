@@ -50,13 +50,12 @@ batch:
     quartz-standard-tables: true
     quartz-schema: quartz
   trigger:
-    # P2-2: Quartz JobStore 独占 DataSource（默认禁用，共用主库；海量场景启用避免与业务表争 WAL/锁）
+    # P2-2: Quartz JobStore 独占 DataSource（默认开启；docker-compose 已部署 batch-postgres-quartz）
     quartz-datasource:
-      enabled: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_ENABLED:false}
-      # 启用后必填：
-      url: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_URL:}
-      username: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_USERNAME:}
-      password: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_PASSWORD:}
+      enabled: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_ENABLED:true}
+      url: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_URL:jdbc:postgresql://localhost:15434/quartz}
+      username: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_USERNAME:batch_user}
+      password: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_PASSWORD:batch_pass_123}
       maximum-pool-size: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_MAX_POOL:8}
     runtime:
       # misfire 追赶阈值（秒）：当触发错过时间超过该阈值时进行 catch-up

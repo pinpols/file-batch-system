@@ -217,6 +217,45 @@ class AbstractTaskConsumerTest {
     assertThat(topics).hasSize(2);
   }
 
+  // ── P2-5 worker pattern: 匹配 SINGLE / TENANT / PRIORITY 三种 producer 输出 ───────────────
+
+  @Test
+  void topicPattern_matchesBaseAndNodeDirectAndSingleSegmentSuffix() {
+    AbstractTaskConsumer consumer =
+        buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "import-node-1");
+    String pattern = consumer.topicPattern();
+    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+
+    // ✅ base
+    assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
+    // ✅ node-direct（自己的 workerCode）
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-1").matches()).isTrue();
+    // ✅ TENANT 后缀（一段后缀）
+    assertThat(p.matcher("batch.task.dispatch.import.default-tenant").matches()).isTrue();
+    // ✅ PRIORITY 后缀
+    assertThat(p.matcher("batch.task.dispatch.import.high").matches()).isTrue();
+
+    // ❌ 别人的 node-direct（双段 .node.<otherCode>）
+    assertThat(p.matcher("batch.task.dispatch.import.node.import-node-2").matches()).isFalse();
+    // ❌ 不同 workerType 的 base
+    assertThat(p.matcher("batch.task.dispatch.export").matches()).isFalse();
+    // ❌ TENANT 后缀里有 dot（双段非 node 形态）
+    assertThat(p.matcher("batch.task.dispatch.import.tenant.subseg").matches()).isFalse();
+  }
+
+  @Test
+  void topicPattern_withoutWorkerCodeStillAllowsTenantSuffix() {
+    AbstractTaskConsumer consumer =
+        buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null);
+    String pattern = consumer.topicPattern();
+    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+
+    assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();
+    assertThat(p.matcher("batch.task.dispatch.import.t1").matches()).isTrue();
+    // 没 workerCode 时不允许任何 node-direct（双段后缀）
+    assertThat(p.matcher("batch.task.dispatch.import.node.x").matches()).isFalse();
+  }
+
   // ------------------------------------------------------------------ helpers
 
   private AbstractTaskConsumer buildConsumer(
