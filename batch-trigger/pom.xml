@@ -120,6 +120,14 @@
             <artifactId>testcontainers-redis</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+          Netty HashedWheelTimer 用于 wheel scheduler(batch.trigger.scheduler-impl=wheel)。
+          仅 io.netty.util.HashedWheelTimer 一个类,选最小 jar netty-common(~640KB)避免拉整个 Netty。
+        -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-common</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
