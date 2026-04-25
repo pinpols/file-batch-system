@@ -1,3 +1,14 @@
+-- =========================================================
+-- batch_business.biz seed data (默认租户 / 联调初始数据)
+--
+-- ⚠️  目标库 = batch_business（不是 batch_platform）
+--     在主库执行会污染 batch_platform.biz，业务代码读的是 batch_business。
+--     正确路径：
+--       1) scripts/data/load-system-test-data.sh（已 psql_business -d batch_business）
+--       2) 手工：psql -d batch_business -f scripts/db/test-seed/business_seed.sql
+--     E2E test 不读这两个 seed 文件（用 IMPORT_TEMPLATE_SEED 等独立 fixture）。
+-- =========================================================
+
 BEGIN;
 
 TRUNCATE TABLE biz.settlement_detail, biz.settlement_batch, biz.customer_account RESTART IDENTITY CASCADE;

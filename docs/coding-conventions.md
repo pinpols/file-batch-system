@@ -490,6 +490,64 @@ public record ConsoleProperties(
 }
 ```
 
+### 13.3 配置归属决策（yml / DB / 环境变量 / 配置中心）
+
+每个新增的可调参数，落地前先回答一个问题：**改这个值，业务/运维期望什么时候生效？**
+
+**决策树**：
+
+1. 运行时改 + 立即生效（不重启）→ **DB 表 + Redis cache**
+2. 改完接受滚动重启 → **`@ConfigurationProperties` + yml**
+3. 跨环境差异化（dev/test/prod 取值不同）→ **环境变量 + yml 占位符** `${VAR:default}`
+4. 秘钥/凭证（不能进 git）→ **环境变量 / k8s Secret / 部署平台注入**
+5. 多机房/多 region 下发不同配置 + 频繁审计 → 等场景真出现再评估配置中心，**当前阶段不引入**
+
+**三层归属边界**：
+
+| 配置去处 | 适合 | 不适合 | 现存例子 |
+|---|---|---|---|
+| `@ConfigurationProperties` + yml | 启动期注入的静态参数：超时、池大小、开关、阈值、重试次数、表达式格式约束 | 频繁变更的业务规则、租户级差异化、秘钥 | `BatchSecurityProperties` / `ReadReplicaProperties` / `MqRoutingProperties`（共 ~62 个） |
+| PostgreSQL 表 + Redis cache | 动态业务规则、多租户 / 多 job 维度差异化、需要审计版本、Console UI 可改 | 启动期就需要的基础设施配置（DB url、Kafka bootstrap）、秘钥 | `tenant_config` / `default_params` / `tenant_quota_policy` / `business_calendar` / `pipeline_step_definition` |
+| 环境变量（`${VAR:default}`） | 跨环境差异化：URL、端口、profile、秘钥、规模参数（pool size） | 业务逻辑规则、多租户参数 | `BATCH_CONSOLE_READ_REPLICA_ENABLED` / `BATCH_SECURITY_BYPASS_MODE` / DB 密码 |
+
+**反模式（PR 评审拒绝）**：
+
+- ❌ 把租户级差异化参数塞 yml（如 `tenant.acme.quota=1000`）→ 应进 `tenant_quota_policy` 表
+- ❌ 秘钥写死在 yml 且无环境变量占位符 → 必须 `${VAR:fallback-only-for-local}`
+- ❌ 基础设施 URL 写死在 yml 不留 env 占位符 → 跨环境部署受限
+- ❌ 给 yml 字段加 `@RefreshScope` 期望热更新但下游不监听失效 → 多实例配置漂移；动态需求一律走 §13.3 标准链路
+- ❌ 业务方临时提"改这个参数立即生效"，直接把 yml 字段 promote 成"运行时可改"→ 必须先评估是否该建表；**yml 字段一旦发布就只能滚动重启改**
+
+**动态配置标准链路**（任何"运行时改 + 立即生效"需求按此串）：
+
+1. DB 表（权威源）
+2. MyBatis / Spring Data JDBC 仓储读取
+3. 应用内 cache（自建 Redis cache 或 `@Cacheable`）
+4. Console UI / Ops 端点改 DB → 调 `/api/console/ops/cache/evict-*` 触发 Redis pub/sub
+5. 多实例订阅 channel，本地 cache 失效后下次读重新加载
+
+参考实现：`ConsoleConfigCacheController` / `OrchestratorConfigCacheService`。
+
+**为什么当前不引入配置中心**：
+
+| 配置中心能力 | 当前替代 |
+|---|---|
+| 静态参数运行时改 + 推送 | 静态参数本来就低频改，滚动重启可接受 |
+| 多环境集中管理 | Spring Profile + `.env.*` 三件套 |
+| 配置版本/审计 | git（yml 在仓库；DB 配置变更走 Console 审计） |
+| 灰度/分实例下发 | 当前 worker 同质化，无此需求 |
+| 秘钥集中管理 | k8s Secret / 部署平台环境变量注入 |
+| 动态业务规则 | DB + Redis cache（已落地） |
+
+**触发时机**（满足任意 2 项再立项评估，否则不引入）：
+
+- 部署 region / 集群数 ≥ 3
+- 业务方提"线上无重启修改 yml 参数"需求 ≥ 月度
+- 合规要求配置变更可审计 + 任意版本回滚
+- 微服务模块数翻倍（≥ 16 个）
+
+**当前阶段不要做的"预埋"**：禁止为了"以后好迁"在 yml 字段上加 `@RefreshScope` / Nacos 注解 / Apollo 客户端依赖。真要迁时按 `prefix` 一一映射到外部 namespace，工作量 ≈ 1-2 周；预埋只会徒增复杂度。
+
 ---
 
 ## 14. 测试规范

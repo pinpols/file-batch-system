@@ -1,3 +1,12 @@
+-- =========================================================
+-- batch_business.biz edge-case seed data (CANCELLED / ARCHIVED 等异常状态样本)
+--
+-- ⚠️  目标库 = batch_business（不是 batch_platform）
+--     在主库执行会污染 batch_platform.biz。正确路径同 business_seed.sql：
+--       1) scripts/data/load-system-test-data.sh（已 psql_business）
+--       2) 手工：psql -d batch_business -f scripts/db/test-seed/business_edge_cases.sql
+-- =========================================================
+
 BEGIN;
 
 INSERT INTO biz.settlement_batch (

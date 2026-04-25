@@ -228,6 +228,10 @@ fi
 
 echo "==> 按依赖顺序启动..."
 
+# console-api 读写分离：与 start-all.sh 对齐，本地默认关（fail-open WARN 噪音消除）；
+# 想联调从库：显式 export BATCH_CONSOLE_READ_REPLICA_ENABLED=true 后再 restart console
+export BATCH_CONSOLE_READ_REPLICA_ENABLED="${BATCH_CONSOLE_READ_REPLICA_ENABLED:-false}"
+
 # 定义全局启动顺序
 ORDERED=(orchestrator trigger console worker-import worker-export worker-dispatch)
 

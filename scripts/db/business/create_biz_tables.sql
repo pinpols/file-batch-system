@@ -1,6 +1,21 @@
 -- =========================================================
 -- batch_business.biz business tables (import/export demo model)
--- 非 Flyway：由 E2E testResource / 手工 psql 执行，文件名不使用 V__ 前缀。
+-- 非 Flyway：由以下三种方式执行，哪种都要保证最终落在 batch_business 库。
+--
+-- ⚠️  目标库 = batch_business（不是 batch_platform）
+--     在 batch_platform 库直接执行会创建出 batch_platform.biz 污染 schema，
+--     业务代码不会读它（platform / business 两个 DataSource 物理分离），
+--     但日积月累会让人误以为业务数据在主库 ——  2026-04-25 已清理过一次。
+--
+-- 三种正确执行路径：
+--   1) E2E test：Spring @Sql 走主 DataSource。application-e2e.yml 显式把 business
+--      DS 映射到主 DS（${spring.datasource.url}），所以测试期间会落在 testcontainer
+--      的 batch_platform.biz —— 这是测试简化的有意设计（单 PG 容器，跑完丢弃）。
+--   2) 联调灌种：scripts/data/load-system-test-data.sh 用 psql_business（已 -d
+--      batch_business），直接跑该脚本即可，无需手动切库。
+--   3) 运维手工：必须 `psql -d batch_business -f scripts/db/business/create_biz_tables.sql`，
+--      不要在 batch_platform 会话里 \i 该文件。
+--
 -- Scope:
 -- 1) customer import target table
 -- 2) settlement export source tables

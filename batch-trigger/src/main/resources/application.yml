@@ -50,13 +50,9 @@ batch:
     quartz-standard-tables: true
     quartz-schema: quartz
   trigger:
-    # P2-2: Quartz JobStore 独占 DataSource（默认开启；docker-compose 已部署 batch-postgres-quartz）
-    quartz-datasource:
-      enabled: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_ENABLED:true}
-      url: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_URL:jdbc:postgresql://localhost:15434/quartz}
-      username: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_USERNAME:batch_user}
-      password: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_PASSWORD:batch_pass_123}
-      maximum-pool-size: ${BATCH_TRIGGER_QUARTZ_DATASOURCE_MAX_POOL:8}
+    # 注：原 quartz-datasource opt-in 开关已于 2026-04-25 移除（Phase 2 半成品清理）。
+    # Quartz JobStore 共享主 DataSource，业务表与 QRTZ_* 同 PG 实例不同 schema。
+    # 业务量级到拐点时演进路径见 docs/architecture/quartz-replacement-evaluation.md（直接换时间轮，不做独立库）。
     runtime:
       # misfire 追赶阈值（秒）：当触发错过时间超过该阈值时进行 catch-up
       misfire-catch-up-threshold-seconds: ${BATCH_TRIGGER_MISFIRE_CATCH_UP_THRESHOLD_SECONDS:60}
