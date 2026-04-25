@@ -79,6 +79,7 @@ public class HashedWheelTriggerScheduler {
   private final CronExpressionAdapter cronAdapter;
   private final BatchTimezoneProvider timezoneProvider;
   private final WheelMetrics metrics;
+  private final CatchUpThrottle catchUpThrottle;
 
   private HashedWheelTimer wheel;
   private String leaderInstanceId;
@@ -276,7 +277,16 @@ public class HashedWheelTriggerScheduler {
         advanceNextFireTime(state, scheduledFireTime, "MISFIRE_SKIPPED", 1);
       }
       case AUTO -> {
-        // 立即补 1 次,以 CATCH_UP triggerType
+        // catch-up throttle:防启动期 / 灰度切换瞬间 100+ 个 misfire 同时打挂 LaunchService
+        try {
+          catchUpThrottle.acquire();
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          log.warn("catch-up throttle interrupted, skip misfire AUTO fire: job={}",
+              state.getJobCode());
+          advanceNextFireTime(state, scheduledFireTime, "MISFIRE_SKIPPED", 1);
+          return;
+        }
         doFire(state, descriptor, scheduledFireTime, TriggerType.CATCH_UP, groupTag,
             "MISFIRE_CATCH_UP");
       }

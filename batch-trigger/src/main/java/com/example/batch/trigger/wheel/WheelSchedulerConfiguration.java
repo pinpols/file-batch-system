@@ -26,4 +26,9 @@ public class WheelSchedulerConfiguration {
   public WheelMetrics wheelMetrics(MeterRegistry meterRegistry) {
     return new WheelMetrics(meterRegistry);
   }
+
+  @Bean
+  public CatchUpThrottle catchUpThrottle(WheelSchedulerProperties props) {
+    return new CatchUpThrottle(props.getCatchUpRatePerSecond());
+  }
 }
