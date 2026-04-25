@@ -163,6 +163,13 @@ public enum XxxType implements DictEnum {
 
 > 按日期倒序；每次影响本文件任一规范的改动都必须在此追加条目。日期使用绝对日期（`YYYY-MM-DD`），条目简要描述"改了什么 + 为什么"。
 
+### 2026-04-25
+- **`ensurePipelineDefinition` 跨 worker 错位污染 pipeline_step_definition**：worker 启动一次任务时调 `runtimeRepository.ensurePipelineDefinition(tenantId, jobCode, pipelineType, defaultSteps)`，发现已有 pipeline 时仍**会追加** default steps（`ensurePipelineStepDefinitions` 用 step_code Set 判存在但**不检查 pipeline_type 是否一致**）。结果：当 sourcePayload 跨节点继承泄露字段（昨日修过），EXPORT worker 拿到带 `targetJobCode=TC_IMPORT_RISK_SCORE` 的 task → resolveJobCode 用错 jobCode → ensurePipelineDefinition 把 EXPORT_* 默认 steps 写入 IMPORT pipeline；DISPATCH worker 同理把 DISPATCH_PREPARE 写进 EXPORT pipeline。多次跨 worker 错位调用后，TC_EXPORT_RISK_ALERT 的 pipeline_step 长成 IMPORT_*+EXPORT_*+DISPATCH_* 大杂烩，跑起来报"找不到步骤实现: DISPATCH_PREPARE"。
+  - **代码层**：`ensurePipelineDefinition` 仅在首次创建 pipeline_definition 时才调 `ensurePipelineStepDefinitions`；已存在则只读不写，避免跨 worker 错位再污染。
+  - **数据层**：一次性 SQL 删 `pipeline_step_definition` 中所有 step_code 与 pipeline_type 不匹配的行（EXPORT pipeline 删 IMPORT_/DISPATCH_，IMPORT pipeline 删 EXPORT_/DISPATCH_，DISPATCH pipeline 删 IMPORT_/EXPORT_）。
+  - **`batch_business` 库 vs `batch_platform.biz` schema 易混**：worker-export 的 `exportBusinessDataSource` 在 `application-local.yml` 配 `jdbc:postgresql://...:15432/batch_business`，而 `scripts/db/business/create_biz_tables.sql` 默认在当前数据库执行；运维灌种子时若不显式 `psql -d batch_business`，会落到 `batch_platform.biz` 不被 export worker 看到。本日发现的 recordCount=0 即此故障。
+  - **TC_EXPORT_RISK_ALERT 端到端验证通过**：5 条 tc 风险告警从 biz.risk_alert 查出 → 1073 字节 GZIP JSON → file_record GENERATED。
+
 ### 2026-04-24
 - **JOB 节点 workflow node_params 合并 + 跨节点字段泄露**（在 tc workflow 全链验证过程中挖出的两条连锁 bug）：`DefaultWorkflowNodeDispatchService.dispatchJobNode` 的 `buildChildLaunchRequest` 对 JOB 节点走独立子作业路径，和 TASK 节点的 `buildTaskPayload` 是两条完全分开的 payload 构造。历史上只有后者调 `mergeNodeParams`，所以 TASK 节点用 workflow_node.node_params 工作，JOB 节点形同虚设。同时前一个节点 buildTaskPayload 写进 sourcePayload 的 workflow 内部字段（`workflowNodeCode / workflowNodeType / targetJobCode`）会随 sourcePayload 继承到下一个节点的子作业 launch params，导致 EXPORT 节点的子 job 看到 IMPORT 节点的 `targetJobCode` → `AbstractPipelineStepExecutionAdapter.resolveJobCode` 优先用它 → 加载错 pipeline → worker 报 `unsupported export stage code: RECEIVE`。两处一并修：
   - **合并 node_params**：`buildChildLaunchRequest` 调 `mergeNodeParams(childParams, ctx.workflowNode())`。`ChildLaunchContext` 加 `WorkflowNodeEntity workflowNode` 字段，dispatchJobNode 透传。

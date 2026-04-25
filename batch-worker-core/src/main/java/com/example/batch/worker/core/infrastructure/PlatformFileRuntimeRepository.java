@@ -157,8 +157,12 @@ public class PlatformFileRuntimeRepository {
               description);
       platformFileRuntimeMapper.insertPipelineDefinition(paramMap);
       pipelineDefinitionId = toLong(paramMap.get(KEY_ID));
+      // 仅在首次创建 pipeline_definition 时写入 default steps。已存在的 pipeline
+      // 不再追加：跨 worker 错位调用（如 EXPORT worker 因 sourcePayload 继承拿到
+      // IMPORT 子作业的 jobCode）会把别的 worker 的 default steps 累积进来，导致
+      // step_code 大杂烩，最终 worker 在 step registry 找不到 impl 报"找不到步骤实现"。
+      ensurePipelineStepDefinitions(pipelineDefinitionId, defaultSteps);
     }
-    ensurePipelineStepDefinitions(pipelineDefinitionId, defaultSteps);
     return pipelineDefinitionId;
   }
 
