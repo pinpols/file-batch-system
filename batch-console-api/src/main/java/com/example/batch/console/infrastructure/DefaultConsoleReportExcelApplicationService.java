@@ -259,7 +259,7 @@ public class DefaultConsoleReportExcelApplicationService
     }
     try {
       return Arrays.stream(Introspector.getBeanInfo(rowType, Object.class).getPropertyDescriptors())
-          .map(descriptor -> descriptor.getName())
+          .map(PropertyDescriptor::getName)
           .filter(name -> !"class".equals(name))
           .sorted()
           .collect(Collectors.toCollection(ArrayList::new));

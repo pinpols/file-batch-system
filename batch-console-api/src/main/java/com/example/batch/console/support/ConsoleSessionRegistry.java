@@ -80,7 +80,7 @@ public class ConsoleSessionRegistry {
     }
     // 基础计数 gauge；更完整的 CaffeineStats / tagged metrics 可后续接 micrometer-caffeine
     registry.gauge(
-        "batch.console.session.cache.size", localMirror, c -> c.estimatedSize());
+        "batch.console.session.cache.size", localMirror, Cache::estimatedSize);
     registry.gauge(
         "batch.console.session.cache.hit_count",
         localMirror,
