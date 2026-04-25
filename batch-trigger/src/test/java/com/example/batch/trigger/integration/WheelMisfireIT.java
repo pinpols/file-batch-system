@@ -102,17 +102,17 @@ class WheelMisfireIT extends AbstractIntegrationTest {
         });
 
     TriggerRuntimeStateEntity afterFire = stateMapper.selectByJobDefinitionId(jobDefId);
-    // AUTO 走 doFire 路径;orchestrator 不可达 → FAILED;否则 MISFIRE_CATCH_UP
-    assertThat(afterFire.getLastFireStatus()).isIn("MISFIRE_CATCH_UP", "FAILED");
+    // AUTO 走 doFire 路径;orchestrator 不可达 → FAILED;否则 MISFIRE_CATCH_UP / SKIPPED_BY_CALENDAR
+    assertThat(afterFire.getLastFireStatus()).isIn("MISFIRE_CATCH_UP", "FAILED", "SKIPPED_BY_CALENDAR");
     assertThat(afterFire.getNextFireTime()).isAfter(longAgo);
     // AUTO 不落 pending 表
     List<TriggerMisfirePendingEntity> pending = pendingMapper.selectPendingByTenant(tenantId, 100);
     assertThat(pending).isEmpty();
-
-    // trigger_request 应该被尝试写入(fire 路径走过)
+    // trigger_request 由 LaunchService 内部 INSERT(wheel 不再自己写),IT 没起 orchestrator
+    // 时 LaunchService 走到 forwardToOrchestrator 才挂,前面的 INSERT 已发生 — 至少 1 行
     Integer count = jdbcTemplate.queryForObject(
-        "select count(*) from batch.trigger_request where trigger_runtime_state_id = ?",
-        Integer.class, afterFire.getId());
+        "select count(*) from batch.trigger_request where tenant_id = ? and job_code = ?",
+        Integer.class, tenantId, jobCode);
     assertThat(count).isGreaterThanOrEqualTo(1);
   }
 

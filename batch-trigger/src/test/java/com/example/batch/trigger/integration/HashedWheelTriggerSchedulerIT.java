@@ -12,7 +12,6 @@ import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.wheel.HashedWheelTriggerScheduler;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -95,7 +94,7 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void fireWritesTriggerRequestAndAdvancesNextFireTime() {
+  void fireRunsLaunchServiceAndAdvancesNextFireTime() {
     Instant fireSoon = Instant.now().plusMillis(300);
     insertState(fireSoon);
 
@@ -103,7 +102,7 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
 
     // 等 wheel tick fire(最多等 8s);IT 没起 orchestrator,launchScheduled HTTP 调用会失败,
     // 但 fire 流程会走 catch 块 advance,last_fire_status 写 FAILED;关键是 fire 流程跑过 +
-    // trigger_request 写入 + next_fire_time 推进。
+    // next_fire_time 推进 + marker 释放。
     await()
         .atMost(Duration.ofSeconds(8))
         .pollInterval(Duration.ofMillis(200))
@@ -113,42 +112,56 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
         });
 
     TriggerRuntimeStateEntity afterFire = stateMapper.selectByJobDefinitionId(jobDefId);
-    // FIRED(orchestrator 可达)or FAILED(IT 不可达,但 fire 流程仍跑全)
-    assertThat(afterFire.getLastFireStatus()).isIn("FIRED", "FAILED");
+    // FIRED(orchestrator 可达)or FAILED(IT 不可达,但 fire 流程跑全)or
+    // SKIPPED_BY_CALENDAR(LaunchResponse.instanceNo == null,IT 没配 calendar 时可能命中)
+    assertThat(afterFire.getLastFireStatus()).isIn("FIRED", "FAILED", "SKIPPED_BY_CALENDAR");
     assertThat(afterFire.getNextFireTime()).isAfter(fireSoon);
     assertThat(afterFire.getScheduledFireMarker()).isNull();
-
-    // 关键验证:trigger_request 行被写入(在 launchScheduled 之前),新字段填充
-    Optional<TriggerRequestEntity> req = findFireRequest(afterFire.getId(), fireSoon);
-    assertThat(req).isPresent();
-    assertThat(req.get().getTriggerRuntimeStateId()).isEqualTo(afterFire.getId());
-    assertThat(req.get().getScheduledFireTime()).isEqualTo(fireSoon);
   }
 
+  /**
+   * R-1 重复 fire 防御:wheel 不再自己 INSERT trigger_request 走 DB UNIQUE 兜底
+   * (已通过 V70 撤销)。改为依赖三层防御:marker CAS + LaunchService persistAndForward
+   * 软幂等 + job_instance.uk_job_instance_tenant_dedup。
+   *
+   * <p>本测试覆盖第二层:模拟"另一 leader 已经写了 trigger_request 同 dedupKey 行",
+   * 然后 wheel 调 launchScheduled,LaunchService select-by-dedupKey 应当看到 existing →
+   * 直接 return existing.requestId,**不再 INSERT 新行 + 不再 forward 到 orchestrator**。
+   *
+   * <p>验证点:
+   * <ul>
+   *   <li>fire 流程跑完(last_fire_status 非 null)
+   *   <li>没有第二行 trigger_request(还是 1 行 — preempt 写的那一行)
+   *   <li>next_fire_time 仍被推进(防卡死)
+   * </ul>
+   */
   @Test
-  void duplicateFireBlockedByUniqueConstraint() {
+  void duplicateFireBlockedByLaunchServiceIdempotency() {
     Instant fireSoon = Instant.now().plusMillis(300);
     insertState(fireSoon);
 
-    // 模拟"另一个 leader 已经 fire 过":手工 INSERT 一条 trigger_request
-    TriggerRequestEntity req = new TriggerRequestEntity();
-    TriggerRuntimeStateEntity state = stateMapper.selectByJobDefinitionId(jobDefId);
-    req.setTenantId(tenantId);
-    req.setRequestId("preempt-" + System.nanoTime());
-    req.setTriggerType("SCHEDULED");
-    req.setJobCode(jobCode);
-    req.setBizDate(java.time.LocalDate.now());
-    req.setDedupKey("preempt-dedup-" + System.nanoTime());
-    req.setRequestStatus("ACCEPTED");
-    req.setScheduledFireTime(fireSoon);
-    req.setTriggerRuntimeStateId(state.getId());
-    requestMapper.insert(req);
+    // 模拟"另一 leader 已经 fire 过":手工 INSERT 一条 trigger_request,dedupKey 用
+    // LaunchService.buildScheduledDedupKey 同款格式(tenantId:jobCode:fireTime.toString())
+    String preemptDedupKey = tenantId + ":" + jobCode + ":" + fireSoon.toString();
+    TriggerRequestEntity preempt = new TriggerRequestEntity();
+    preempt.setTenantId(tenantId);
+    preempt.setRequestId("preempt-" + System.nanoTime());
+    preempt.setTriggerType("SCHEDULED");
+    preempt.setJobCode(jobCode);
+    preempt.setBizDate(java.time.LocalDate.now());
+    preempt.setDedupKey(preemptDedupKey);
+    preempt.setRequestStatus("ACCEPTED");
+    requestMapper.insert(preempt);
 
-    // 现在 wheel scheduler 来 fire — 应被 DB UNIQUE 兜住,状态走 SKIPPED_DUPLICATE
+    int countBefore = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_request where dedup_key = ?",
+        Integer.class, preemptDedupKey);
+    assertThat(countBefore).isEqualTo(1);
+
     wheelScheduler.scanAndSchedule(Duration.ofSeconds(30));
 
     await()
-        .atMost(Duration.ofSeconds(5))
+        .atMost(Duration.ofSeconds(8))
         .pollInterval(Duration.ofMillis(200))
         .until(() -> {
           TriggerRuntimeStateEntity s = stateMapper.selectByJobDefinitionId(jobDefId);
@@ -156,8 +169,15 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
         });
 
     TriggerRuntimeStateEntity afterFire = stateMapper.selectByJobDefinitionId(jobDefId);
-    assertThat(afterFire.getLastFireStatus()).isEqualTo("SKIPPED_DUPLICATE");
+    // wheel 视角:fire 流程跑完(LaunchService 软幂等返回 existing 视为成功);next_fire_time 推进
     assertThat(afterFire.getNextFireTime()).isAfter(fireSoon);
+    assertThat(afterFire.getScheduledFireMarker()).isNull();
+
+    // 关键:LaunchService 软幂等生效 — 没有第二行 trigger_request(只有 preempt 那一行)
+    int countAfter = jdbcTemplate.queryForObject(
+        "select count(*) from batch.trigger_request where dedup_key = ?",
+        Integer.class, preemptDedupKey);
+    assertThat(countAfter).isEqualTo(1);
   }
 
   // ── helpers ─────────────────────────────────────────────
@@ -169,30 +189,5 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
     e.setJobCode(jobCode);
     e.setNextFireTime(nextFireTime);
     stateMapper.insertOnReconcile(e);
-  }
-
-  private Optional<TriggerRequestEntity> findFireRequest(long stateId, Instant scheduled) {
-    return jdbcTemplate
-        .query(
-            """
-            select * from batch.trigger_request
-             where trigger_runtime_state_id = ?
-               and scheduled_fire_time = ?
-            """,
-            (rs, n) -> {
-              TriggerRequestEntity e = new TriggerRequestEntity();
-              e.setId(rs.getLong("id"));
-              e.setTenantId(rs.getString("tenant_id"));
-              e.setRequestId(rs.getString("request_id"));
-              e.setTriggerType(rs.getString("trigger_type"));
-              e.setJobCode(rs.getString("job_code"));
-              e.setRequestStatus(rs.getString("request_status"));
-              e.setScheduledFireTime(rs.getTimestamp("scheduled_fire_time").toInstant());
-              e.setTriggerRuntimeStateId(rs.getLong("trigger_runtime_state_id"));
-              return e;
-            },
-            stateId, java.sql.Timestamp.from(scheduled))
-        .stream()
-        .findFirst();
   }
 }
