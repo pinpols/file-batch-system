@@ -247,9 +247,11 @@ receipt_policy   = 'NONE'   -- 不等回执，写文件成功即 ACK
 
 ---
 
-## 4. 跟着一条任务走一遍（EXPORT 全程）
+## 4. 跟着任务走一遍（三类全程）
 
-以 2026-04-25 实际验证的 `TC_EXPORT_RISK_ALERT` 为例（`pipeline_step_run` 真实记录）：
+下面三个例子都来自 2026-04-25 真实跑通的 instance，`pipeline_step_run` 的耗时是真实数据。
+
+### 4.1 EXPORT 全程 — `TC_EXPORT_RISK_ALERT`
 
 ```mermaid
 sequenceDiagram
@@ -280,7 +282,7 @@ sequenceDiagram
     O->>DB: UPDATE job_instance.status=SUCCESS
 ```
 
-跑完后查 `pipeline_step_run`：
+`pipeline_step_run` 记录：
 
 ```
 EXPORT_PREPARE   SUCCESS  7ms
@@ -289,6 +291,129 @@ EXPORT_STORE     SUCCESS  63ms
 EXPORT_REGISTER  SUCCESS  14ms
 EXPORT_COMPLETE  SUCCESS  11ms
 ```
+
+### 4.2 IMPORT 全程 — `TC_IMPORT_RISK_SCORE`
+
+注意 IMPORT 的输入不是 `biz` 表，而是 launch 时带在 `params.content` 里的 JSON 字符串（或 SFTP/上传到达的文件，由 ReceiveStep 转成 rawPayload）。
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant T as trigger
+    participant O as orchestrator
+    participant K as Kafka
+    participant I as worker-import
+    participant DB as batch_platform
+    participant BIZ as batch_business
+    participant FS as 临时文件<br/>NDJSON
+
+    U->>T: POST /api/triggers/launch<br/>{tenantId:tc, jobCode:TC_IMPORT_RISK_SCORE,<br/> params:{templateCode, content:"[...5 行 JSON...]"}}
+    T->>O: HTTP /internal/launch
+    O->>DB: INSERT job_instance(416) + partition + outbox<br/>(同一 tx)
+    O->>K: publish task 426
+    K->>I: consume task 426
+    I->>DB: claim partition (worker_code=import-node-1)
+    Note over I: RECEIVE: 写 file_record(1066, RECEIVED)
+    I->>DB: file_record 1066 RECEIVED
+    Note over I: PREPROCESS: 解码 content,<br/>load IMP-RISK-SCORE-JSON template
+    I->>FS: 写临时 normalizedPayload
+    Note over I: PARSE: JSON array → NDJSON 5 行
+    I->>FS: 写 parsedRecordsPath (5 行)
+    Note over I: VALIDATE: required 字段 + 业务规则
+    I->>FS: 写 validatedRecordsPath
+    Note over I: LOAD: jdbc upsert
+    I->>BIZ: INSERT INTO biz.risk_score<br/>ON CONFLICT (tenant_id,entity_id,score_date)<br/>DO UPDATE × 5
+    Note over I: FEEDBACK: 回写 metadata
+    I->>DB: file_record 1066 LOADED<br/>metadata: parsed=5,validated=5,loaded=5
+    I->>O: report SUCCESS
+    O->>DB: UPDATE job_instance.status=SUCCESS
+```
+
+`pipeline_step_run` 记录：
+
+```
+IMPORT_RECEIVE     SUCCESS  60ms
+IMPORT_PREPROCESS  SUCCESS  17ms
+IMPORT_PARSE       SUCCESS  49ms
+IMPORT_VALIDATE    SUCCESS  12ms
+IMPORT_LOAD        SUCCESS  245ms   ← 5 行 upsert + 索引
+IMPORT_FEEDBACK    SUCCESS  22ms
+```
+
+落地证据：`SELECT count(*) FROM biz.risk_score WHERE tenant_id='tc'` 真实新增 5 行（重复跑会 upsert，不会重复入库）。
+
+### 4.3 DISPATCH 全程（happy path）— `TC_DISPATCH_REVIEW`
+
+DISPATCH 的输入是已存在的 `file_record`（通常是上游 EXPORT 的产出），把它派发到一个外部通道。
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant T as trigger
+    participant O as orchestrator
+    participant K as Kafka
+    participant D as worker-dispatch
+    participant DB as batch_platform
+    participant M as MinIO
+    participant LFS as LOCAL/SFTP/<br/>NAS/OSS/API
+
+    U->>T: POST /api/triggers/launch<br/>{tenantId:tc, jobCode:TC_DISPATCH_REVIEW,<br/> params:{fileId:1065, channelCode:tc_local_archive}}
+    T->>O: HTTP /internal/launch
+    O->>DB: INSERT job_instance(417) + partition + outbox
+    O->>K: publish task 427
+    K->>D: consume task 427
+    D->>DB: claim partition (worker_code=dispatch-node-1)
+    Note over D: PREPARE: load file_record(1065) + channel_config(tc_local_archive)
+    D->>DB: SELECT file_record / file_channel_config
+    Note over D: DISPATCH: 从 MinIO 拉对象 + 写到 channel target
+    D->>M: GET object outbound/...risk_alerts__bizDate_.json.gz
+    D->>LFS: cp → /tmp/batch/tc-risk-alert/<br/>tc_local_archive-688467a5-...json
+    Note over D: ACK: receipt_policy=NONE,<br/>本地写成功即 ACK
+    Note over D: COMPLETE: 写 file_dispatch_record
+    D->>DB: file_dispatch_record(13, ACKED)<br/>file_record 1065 → DISPATCHED
+    D->>O: report SUCCESS
+    O->>DB: UPDATE job_instance.status=SUCCESS
+```
+
+`pipeline_step_run` 记录：
+
+```
+DISPATCH_PREPARE   SUCCESS  30ms
+DISPATCH_DISPATCH  SUCCESS  54ms
+DISPATCH_ACK       SUCCESS  10ms
+DISPATCH_COMPLETE  SUCCESS  8ms
+```
+
+> 异常路径（DISPATCH_RETRY + DISPATCH_COMPENSATE 怎么跑通）参考 [`../runbook/worker-stage-coverage.md` §3.4](../runbook/worker-stage-coverage.md)，那里有用坏 channel 触发 3 轮 retry 的真实 `pipeline_step_run` 12 行记录。
+
+### 4.4 三个例子的对比
+
+```mermaid
+flowchart LR
+  subgraph EXPORT
+    EI([触发: 无外部输入]) --> EQ[查 biz 表] --> EF[生成文件]
+    EF --> EM[(MinIO)]
+    EF --> EFR[file_record GENERATED]
+  end
+  subgraph IMPORT
+    II([触发: 外部 content / 上传文件]) --> IP[parse + validate]
+    IP --> IL[upsert biz 表]
+    IP --> IFR[file_record LOADED]
+  end
+  subgraph DISPATCH
+    DI([触发: 已有 file_record]) --> DG[拉文件]
+    DG --> DM[(MinIO)]
+    DG --> DD[投递 channel]
+    DD --> DT[(LOCAL/SFTP/<br/>OSS/API)]
+    DD --> DFR[file_record DISPATCHED]
+  end
+```
+
+| 类型 | 数据流向 | 输入 | 输出 |
+|---|---|---|---|
+| EXPORT | biz 表 → 文件 | 无（按 SQL 拉数据） | `file_record (GENERATED)` + MinIO 对象 |
+| IMPORT | 文件 → biz 表 | `params.content` 或上传文件 | `file_record (LOADED)` + biz 表新增/更新 |
+| DISPATCH | file_record → 外部通道 | `params.fileId` + `channelCode` | `file_record (DISPATCHED)` + `file_dispatch_record (ACKED)` + 外部 target 落盘 |
 
 ---
 
