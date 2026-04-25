@@ -50,16 +50,32 @@ services:
     networks:
       - batch-network
 
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: batch-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    user: "0"  # Tempo 写 /var/tempo 需要 root；本地开发简化
+    volumes:
+      - ./docker/observability/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "${TEMPO_HTTP_PORT:-13200}:3200"   # 查询 API（Grafana datasource 走容器内 tempo:3200）
+      - "4317"                              # OTLP gRPC（仅容器间，被 otel-collector 用）
+    networks:
+      - batch-network
+
   # ── 日志 ──────────────────────────────────────────────────────────
   loki:
     image: grafana/loki:3.5.0
     container_name: batch-loki
     restart: unless-stopped
-    command: -config.file=/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./docker/observability/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
     ports:
       - "${LOKI_PORT:-13100}:3100"
-    volumes:
-      - loki-data:/loki
     networks:
       - batch-network
 
@@ -80,6 +96,7 @@ services:
       - batch-network
     depends_on:
       - jaeger
+      - tempo
       - loki
 
   # ── 仪表盘 ───────────────────────────────────────────────────────
@@ -103,6 +120,7 @@ services:
     depends_on:
       - prometheus
       - loki
+      - tempo
 
   # ── 基础设施 Exporters ───────────────────────────────────────────
   redis-exporter:
@@ -162,6 +180,7 @@ services:
 volumes:
   prometheus-data:
   loki-data:
+  tempo-data:
   grafana-data:
 
 networks:

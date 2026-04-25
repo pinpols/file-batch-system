@@ -2,8 +2,9 @@
 # OpenTelemetry 采集器（Collector）— batch-platform 流水线配置
 #
 # 数据流：
-#   应用（OTLP HTTP/gRPC）→ Collector → Jaeger（链路）
-#                                     → Loki（日志）
+#   应用（OTLP HTTP/gRPC）→ Collector → Tempo（链路，主后端 + Grafana 内嵌查询）
+#                                     → Jaeger（链路，UI 兼容）
+#                                     → Loki（日志，OTLP /otlp/v1/logs）
 #   指标：仍由 Prometheus 抓取（/actuator/prometheus），保持不变
 #
 # 本文件挂载到 Collector 容器的 /etc/otelcol/config.yaml
@@ -50,7 +51,13 @@ processors:
 
 # ── 导出器（Exporters）────────────────────────────────────────────
 exporters:
-  # 链路 → Jaeger（Jaeger 1.35+ 原生支持 OTLP gRPC 4317）
+  # 链路 → Tempo（OTLP gRPC 4317）；Grafana 直查 Tempo 出 service graph + span metrics
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # 链路 → Jaeger（Jaeger 1.35+ 原生支持 OTLP gRPC 4317），保留 UI 兼容
   otlp/jaeger:
     endpoint: jaeger:4317
     tls:
@@ -83,7 +90,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
-      exporters: [otlp/jaeger, debug]
+      exporters: [otlp/tempo, otlp/jaeger, debug]
     logs:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
