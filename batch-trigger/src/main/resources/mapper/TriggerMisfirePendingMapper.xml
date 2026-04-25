@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.trigger.mapper.TriggerMisfirePendingMapper">
+
+    <resultMap id="TriggerMisfirePendingResultMap"
+               type="com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity">
+        <id column="id" property="id"/>
+        <result column="trigger_runtime_state_id" property="triggerRuntimeStateId"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="scheduled_fire_time" property="scheduledFireTime"/>
+        <result column="detected_at" property="detectedAt"/>
+        <result column="status" property="status"/>
+        <result column="approved_by" property="approvedBy"/>
+        <result column="approved_at" property="approvedAt"/>
+        <result column="rejection_reason" property="rejectionReason"/>
+        <result column="catch_up_request_id" property="catchUpRequestId"/>
+        <result column="expires_at" property="expiresAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insertPending"
+            parameterType="com.example.batch.common.persistence.entity.TriggerMisfirePendingEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into batch.trigger_misfire_pending (
+            trigger_runtime_state_id, tenant_id, job_code, scheduled_fire_time,
+            detected_at, status, expires_at, created_at, updated_at
+        ) values (
+            #{triggerRuntimeStateId}, #{tenantId}, #{jobCode}, #{scheduledFireTime},
+            now(), 'PENDING', now() + interval '7 days', now(), now()
+        )
+    </insert>
+
+    <select id="selectById" resultMap="TriggerMisfirePendingResultMap">
+        select * from batch.trigger_misfire_pending where id = #{id}
+    </select>
+
+    <select id="selectPendingByTenant" resultMap="TriggerMisfirePendingResultMap">
+        select *
+          from batch.trigger_misfire_pending
+         where tenant_id = #{tenantId}
+           and status = 'PENDING'
+         order by detected_at desc
+         limit #{limit}
+    </select>
+
+    <update id="approve">
+        update batch.trigger_misfire_pending
+           set status = 'APPROVED',
+               approved_by = #{approvedBy},
+               approved_at = now(),
+               updated_at = now()
+         where id = #{id}
+           and status = 'PENDING'
+    </update>
+
+    <update id="reject">
+        update batch.trigger_misfire_pending
+           set status = 'REJECTED',
+               approved_by = #{approvedBy},
+               approved_at = now(),
+               rejection_reason = #{rejectionReason},
+               updated_at = now()
+         where id = #{id}
+           and status = 'PENDING'
+    </update>
+
+    <update id="linkCatchUpRequest">
+        update batch.trigger_misfire_pending
+           set catch_up_request_id = #{catchUpRequestId},
+               updated_at = now()
+         where id = #{id}
+    </update>
+
+    <update id="markExpired">
+        update batch.trigger_misfire_pending
+           set status = 'EXPIRED',
+               updated_at = now()
+         where status = 'PENDING'
+           and expires_at &lt; #{now}
+    </update>
+
+</mapper>
