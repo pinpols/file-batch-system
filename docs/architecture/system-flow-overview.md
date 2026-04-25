@@ -62,9 +62,9 @@ flowchart LR
 
   %% ─── outbox → Kafka → workers（粗实线 = 消息流） ──
   OUT ==>|"publish task"| K
-  K ==> WI
-  K ==> WE
-  K ==> WD
+  K ==>|"consume<br/>(import topic)"| WI
+  K ==>|"consume<br/>(export topic)"| WE
+  K ==>|"consume<br/>(dispatch topic)"| WD
 
   %% ─── worker 上报回 LS（虚线 = 控制信号） ────────
   WI -. "claim / heartbeat / report" .-> LS
