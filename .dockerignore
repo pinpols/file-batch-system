@@ -18,3 +18,4 @@ security-scan
 .local
 !batch-e2e-tests/
 !batch-e2e-tests/pom.xml
+docker/sftp/data

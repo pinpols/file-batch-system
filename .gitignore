@@ -30,3 +30,4 @@ build/
 tmp/
 *.bak
 .claude/
+docker/sftp/data
