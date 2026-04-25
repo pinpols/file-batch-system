@@ -105,7 +105,7 @@ public class HashedWheelTriggerScheduler {
             props.getTickMillis(),
             TimeUnit.MILLISECONDS,
             props.getBucketCount());
-    metrics.registerTasksScheduledGauge(() -> tasksScheduled.get());
+    metrics.registerTasksScheduledGauge(tasksScheduled::get);
     log.info(
         "HashedWheelTriggerScheduler started: leaderInstanceId={}, tick={}ms, buckets={},"
             + " window={}s, scanIntervalMillis={}",
@@ -231,7 +231,7 @@ public class HashedWheelTriggerScheduler {
     long delayMillis = Math.max(
         0L, scheduledFireTime.toEpochMilli() - System.currentTimeMillis());
     Timeout timeout =
-        wheel.newTimeout(t -> fire(state, scheduledFireTime, dedupKey),
+        wheel.newTimeout(_ -> fire(state, scheduledFireTime, dedupKey),
             delayMillis, TimeUnit.MILLISECONDS);
     timeoutRegistry.put(state.getId(), timeout);
     tasksScheduled.updateAndGet(v -> v + 1);
@@ -276,10 +276,8 @@ public class HashedWheelTriggerScheduler {
     log.info("misfire detected: job={} scheduledFireTime={} policy={}",
         state.getJobCode(), scheduledFireTime, policy.code());
     switch (policy) {
-      case NONE -> {
-        // 跳过本次 fire,只推进 next_fire_time
-        advanceNextFireTime(state, scheduledFireTime, "MISFIRE_SKIPPED", 1);
-      }
+      // NONE: 跳过本次 fire,只推进 next_fire_time
+      case NONE -> advanceNextFireTime(state, scheduledFireTime, "MISFIRE_SKIPPED", 1);
       case AUTO -> {
         // catch-up throttle:防启动期 / 灰度切换瞬间 100+ 个 misfire 同时打挂 LaunchService
         try {
