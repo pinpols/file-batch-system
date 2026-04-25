@@ -6,6 +6,9 @@
 
 - `start-all.sh`：一键启动本地联调环境（基础依赖 + 6 个 Java 模块）
 - `stop-all.sh`：分阶段停止本地 Java 进程
+- `watchdog.sh`：长时间联调时挂在另一 tab 自动拉起被系统回收的 worker 进程
+  （macOS 闲置数小时会回收 JVM；docker-compose 模式不需要本脚本，靠 docker
+  自带 `restart: unless-stopped` 兜底）
 - `build-apps.sh`：Maven 打包六个应用模块（-DskipTests）
 - `run-tests.sh`：**本地一键测试入口**（推荐）
   - 默认：单元 + 集成（跳过 E2E）
