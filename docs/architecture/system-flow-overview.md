@@ -8,55 +8,75 @@
 ## 1. 一张图看完整链路
 
 ```mermaid
+%%{init: {'flowchart': {'curve': 'stepAfter', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
 flowchart TB
+  USER([用户/前端]):::user
+
   subgraph 触发层 [触发层 batch-trigger]
-    Q[(Quartz<br/>QRTZ_*)]
-    T[TriggerSchedulerFacade<br/>+ TriggerReconciler]
+    direction LR
+    Q[(Quartz<br/>QRTZ_*)]:::store
+    T[TriggerSchedulerFacade<br/>+ TriggerReconciler]:::svc
   end
 
   subgraph 调度层 [调度层 batch-orchestrator]
-    LS[LaunchService]
-    OUT[OutboxPollScheduler]
-    PA[PartitionLifecycleService]
-    SEL[DefaultWorkerSelector]
+    direction LR
+    LS[LaunchService]:::svc
+    OUT[OutboxPollScheduler]:::svc
+    PA[PartitionLifecycleService]:::svc
+    SEL[DefaultWorkerSelector]:::svc
+  end
+
+  subgraph 中间件 [中间件]
+    direction LR
+    K[(Kafka<br/>batch.task.dispatch.*)]:::store
+    P[(batch_platform<br/>job_*/file_*/workflow_*)]:::store
+    BIZ[(batch_business<br/>biz.*)]:::store
+    M[(MinIO<br/>batch-dev)]:::store
+    FS[(本地 / SFTP / NAS<br/>OSS / API)]:::extern
   end
 
   subgraph 执行层 [执行层 三类 Worker]
-    WI[worker-import<br/>RECEIVE→...→FEEDBACK]
-    WE[worker-export<br/>PREPARE→...→COMPLETE]
-    WD[worker-dispatch<br/>PREPARE→...→COMPLETE]
+    direction LR
+    WI["worker-import<br/>RECEIVE → ... → FEEDBACK"]:::worker
+    WE["worker-export<br/>PREPARE → ... → COMPLETE"]:::worker
+    WD["worker-dispatch<br/>PREPARE → ... → COMPLETE"]:::worker
   end
 
-  subgraph 中间件
-    K[(Kafka<br/>batch.task.dispatch.*)]
-    P[(batch_platform<br/>job_*/file_*/workflow_*)]
-    BIZ[(batch_business<br/>biz.*)]
-    M[(MinIO<br/>batch-dev)]
-    FS[(本地 / SFTP / NAS<br/>OSS / API)]
-  end
+  %% ── 触发链路 ───────────────────────────
+  USER -- "POST /api/triggers/launch (MANUAL)" --> T
+  Q    -- "cron fire (SCHEDULED)"             --> T
+  T    -- "HTTP launch"                       --> LS
 
-  USER([用户/前端]) -- "POST /api/triggers/launch<br/>(MANUAL)" --> T
-  Q -- "cron fire<br/>(SCHEDULED)" --> T
-  T -- "HTTP launch" --> LS
-  LS -- "INSERT job_instance<br/>+ partition + outbox_event" --> P
-  P -. "tx commit" .-> OUT
-  OUT -- "publish task" --> K
-  K -- "consume" --> WI
-  K -- "consume" --> WE
-  K -- "consume" --> WD
+  %% ── 调度落库 + 出 outbox ────────────────
+  LS  -- "INSERT job_instance<br/>+ partition + outbox_event"     --> P
+  P   -. "tx commit"                                              .-> OUT
+  OUT -- "publish task"                                           --> K
 
-  WI -- "claim/heartbeat/report<br/>HTTP" --> LS
-  WE -- "claim/heartbeat/report<br/>HTTP" --> LS
-  WD -- "claim/heartbeat/report<br/>HTTP" --> LS
+  %% ── Kafka 分发到 worker ─────────────────
+  K --> WI
+  K --> WE
+  K --> WD
 
-  WI -- "INSERT biz.customer/risk_score/..." --> BIZ
-  WE -- "SELECT biz.risk_alert/..." --> BIZ
-  WE -- "PUT object" --> M
-  WD -- "deliver file<br/>scp/post/cp" --> FS
+  %% ── Worker 上报与状态推进 ───────────────
+  WI -- "claim / heartbeat / report (HTTP)" --> LS
+  WE -- "claim / heartbeat / report (HTTP)" --> LS
+  WD -- "claim / heartbeat / report (HTTP)" --> LS
+  LS -- "UPDATE job_instance / partition<br/>(状态机推进)" --> P
+  PA -. "写入" .-> P
+  SEL -. "选 worker<br/>(tenant / group / tag)" .-> P
 
-  LS -- "UPDATE job_instance/partition<br/>(状态机推进)" --> P
-  PA -. 写入 .-> P
-  SEL -. "选 worker<br/>tenant/group/tag" .-> P
+  %% ── Worker 数据落地 ─────────────────────
+  WI -- "INSERT biz.customer / risk_score / …" --> BIZ
+  WE -- "SELECT biz.risk_alert / …"            --> BIZ
+  WE -- "PUT object"                            --> M
+  WD -- "GET object"                            --> M
+  WD -- "deliver file (cp / scp / POST)"        --> FS
+
+  classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
+  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
+  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+  classDef extern  fill:#fce4ec,stroke:#ad1457,stroke-width:1.5px,color:#880e4f;
 ```
 
 ### 一句话叙事
@@ -80,7 +100,7 @@ flowchart LR
   R0([task_payload<br/>含 content + templateCode])
   R1[RECEIVE<br/>读取 rawPayload<br/>登记 file_record]
   R2[PREPROCESS<br/>解码/解密/归一化<br/>load templateConfig]
-  R3[PARSE<br/>JSON/CSV/XML/<br/>FixedWidth → NDJSON]
+  R3["PARSE<br/>JSON/CSV/XML/<br/>FixedWidth → NDJSON"]
   R4[VALIDATE<br/>field_mappings.required<br/>+ validation_rule_set]
   R5[LOAD<br/>jdbc_mapped_import<br/>upsert biz 表]
   R6[FEEDBACK<br/>写 file_record.metadata<br/>parsed/validated/loaded]
