@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.trigger.mapper.TriggerRuntimeStateMapper">
+
+    <resultMap id="TriggerRuntimeStateResultMap"
+               type="com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity">
+        <id column="id" property="id"/>
+        <result column="job_definition_id" property="jobDefinitionId"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="next_fire_time" property="nextFireTime"/>
+        <result column="last_fire_time" property="lastFireTime"/>
+        <result column="last_fire_status" property="lastFireStatus"/>
+        <result column="scheduled_fire_marker" property="scheduledFireMarker"/>
+        <result column="scheduled_at" property="scheduledAt"/>
+        <result column="misfire_count" property="misfireCount"/>
+        <result column="version" property="version"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!--
+      滑动窗口扫库:
+      WHERE next_fire_time < horizon AND scheduled_fire_marker IS NULL
+      命中 idx_trigger_runtime_state_next_fire (partial index)
+      FOR UPDATE SKIP LOCKED 防多 leader 撞锁
+    -->
+    <select id="findReadyToSchedule" resultMap="TriggerRuntimeStateResultMap">
+        select *
+          from batch.trigger_runtime_state
+         where next_fire_time &lt; #{horizon}
+           and scheduled_fire_marker is null
+         order by next_fire_time
+         limit #{limit}
+        for update skip locked
+    </select>
+
+    <!-- 占位 (CAS):scheduledFireMarker=leader_id, scheduled_at=now(), version+1 -->
+    <update id="claimForSchedule">
+        update batch.trigger_runtime_state
+           set scheduled_fire_marker = #{marker},
+               scheduled_at = now(),
+               version = version + 1,
+               updated_at = now()
+         where id = #{id}
+           and version = #{expectedVersion}
+           and scheduled_fire_marker is null
+    </update>
+
+    <!--
+      fire 完成后:推进 next_fire_time + 写状态 + 释放 marker
+      misfireDelta 通常 0(正常 fire) 或 1(catch_up=AUTO 时累加)
+    -->
+    <update id="advanceAfterFire">
+        update batch.trigger_runtime_state
+           set next_fire_time = #{nextFireTime},
+               last_fire_time = #{lastFireTime},
+               last_fire_status = #{lastFireStatus},
+               misfire_count = misfire_count + #{misfireDelta},
+               scheduled_fire_marker = null,
+               scheduled_at = null,
+               version = version + 1,
+               updated_at = now()
+         where id = #{id}
+    </update>
+
+    <!--
+      stale marker 释放:周期任务,清理超过 staleBefore 仍未释放的占位
+      命中 idx_trigger_runtime_state_marker_stale (partial index)
+    -->
+    <update id="releaseStaleMarkers">
+        update batch.trigger_runtime_state
+           set scheduled_fire_marker = null,
+               scheduled_at = null,
+               version = version + 1,
+               updated_at = now()
+         where scheduled_fire_marker is not null
+           and scheduled_at &lt; #{staleBefore}
+    </update>
+
+    <insert id="insertOnReconcile"
+            parameterType="com.example.batch.common.persistence.entity.TriggerRuntimeStateEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into batch.trigger_runtime_state (
+            job_definition_id, tenant_id, job_code, next_fire_time,
+            misfire_count, version, created_at, updated_at
+        ) values (
+            #{jobDefinitionId}, #{tenantId}, #{jobCode}, #{nextFireTime},
+            0, 1, now(), now()
+        )
+    </insert>
+
+    <delete id="deleteByJobDefinitionId">
+        delete from batch.trigger_runtime_state
+         where job_definition_id = #{jobDefinitionId}
+    </delete>
+
+    <select id="selectByJobDefinitionId" resultMap="TriggerRuntimeStateResultMap">
+        select *
+          from batch.trigger_runtime_state
+         where job_definition_id = #{jobDefinitionId}
+    </select>
+
+    <select id="selectByTenantId" resultMap="TriggerRuntimeStateResultMap">
+        select *
+          from batch.trigger_runtime_state
+         where tenant_id = #{tenantId}
+         order by job_code
+    </select>
+
+    <update id="rescheduleNextFireTime">
+        update batch.trigger_runtime_state
+           set next_fire_time = #{nextFireTime},
+               scheduled_fire_marker = null,
+               scheduled_at = null,
+               version = version + 1,
+               updated_at = now()
+         where id = #{id}
+    </update>
+
+</mapper>

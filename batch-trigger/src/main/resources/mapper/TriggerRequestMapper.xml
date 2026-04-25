@@ -13,6 +13,8 @@
         <result column="related_job_instance_id" property="relatedJobInstanceId"/>
         <result column="trace_id" property="traceId"/>
         <result column="forward_retry_count" property="forwardRetryCount"/>
+        <result column="scheduled_fire_time" property="scheduledFireTime"/>
+        <result column="trigger_runtime_state_id" property="triggerRuntimeStateId"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -57,7 +59,9 @@
             biz_date,
             dedup_key,
             request_status,
-            trace_id
+            trace_id,
+            scheduled_fire_time,
+            trigger_runtime_state_id
         ) values (
             #{tenantId},
             #{requestId},
@@ -66,7 +70,9 @@
             #{bizDate},
             #{dedupKey},
             #{requestStatus},
-            #{traceId}
+            #{traceId},
+            #{scheduledFireTime},
+            #{triggerRuntimeStateId}
         )
     </insert>
 
