@@ -28,7 +28,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {
       "spring.flyway.enabled=false",
-      "spring.autoconfigure.exclude=org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration"
+      "spring.autoconfigure.exclude=org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration",
+      // 关 QuartzMetricsConfiguration：本测试用 mock(Scheduler) 而非真 Quartz，
+      // 否则 mock 的 getListenerManager() 返回 null 在 @PostConstruct 触发 NPE
+      "batch.trigger.quartz-metrics.enabled=false"
     })
 @Import(QuartzLaunchJobIntegrationTest.TestConfig.class)
 class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {
