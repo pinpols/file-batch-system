@@ -491,7 +491,117 @@ INSTANCE_STATUS = CREATED → WAITING → READY → RUNNING →
 
 ---
 
-## 7. 进一步阅读
+## 7. Outbox 机制详解（DB → Kafka 的桥）
+
+§6 第 1、2 条不变量都涉及 `outbox_event`。这一节讲清楚它怎么落地。
+
+### 7.1 解决什么问题
+
+orchestrator 派发任务时要做两件事：
+1. 把 `job_instance` / `partition` 写进 PostgreSQL
+2. 把"task dispatch"事件发到 Kafka 让 worker 消费
+
+PostgreSQL + Kafka 没原生分布式事务。**先发 Kafka 后写 DB**：DB 失败 → worker 收到指向幽灵任务的事件；**先写 DB 后发 Kafka**：Kafka 失败 → 任务永远不会被 worker 看到。
+
+**Outbox Pattern 的解法**：把"我要发的消息"也写到一张表 `outbox_event`，**和业务数据写在同一个 PG 事务里**；Kafka 投递解耦到独立 poller。
+
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear', 'htmlLabels': true}}}%%
+sequenceDiagram
+    participant LS as LaunchService
+    participant PDB as batch_platform
+    participant OUT as OutboxPollScheduler
+    participant K as Kafka
+
+    Note over LS,PDB: 单事务: 业务表 + outbox_event 一起 commit
+    LS->>PDB: BEGIN
+    LS->>PDB: INSERT job_instance / partition
+    LS->>PDB: INSERT outbox_event<br/>(publish_status='NEW')
+    LS->>PDB: COMMIT
+    Note over LS,PDB: 业务一致性已保证
+
+    Note over OUT,K: 异步轮询，与业务事务解耦
+    loop 每个 poll tick
+        OUT->>PDB: SELECT outbox_event<br/>WHERE publish_status IN ('NEW','FAILED')<br/>LIMIT N
+        OUT->>PDB: UPDATE publish_status='PUBLISHING'
+        OUT->>K: producer.send(...)
+        K-->>OUT: ack
+        OUT->>PDB: UPDATE publish_status='PUBLISHED'<br/>(成功) 或 'FAILED' (失败)
+    end
+```
+
+业务事务一旦 commit，事件就一定在 outbox 里；Kafka 暂挂、producer 重启、网络分区，业务不阻塞，最差只是延迟。
+
+### 7.2 publish_status 状态机
+
+```mermaid
+stateDiagram-v2
+  [*] --> NEW: LaunchService INSERT
+  NEW --> PUBLISHING: poller claim
+  PUBLISHING --> PUBLISHED: Kafka ack
+  PUBLISHING --> FAILED: Kafka 拒绝/超时
+  FAILED --> PUBLISHING: 下一轮 poll 重试
+  FAILED --> GIVE_UP: 重试耗尽
+  PUBLISHING --> FAILED: stale 超时重置<br/>(JVM 崩溃 / Kafka 卡死)
+  PUBLISHED --> [*]
+  GIVE_UP --> [*]
+```
+
+`PUBLISHING` 是中间态，表示"某 poll 节点已 claim 但还未 ack"。**stale PUBLISHING 重置**是关键容错：JVM 在 publish 中途崩溃时，事件会卡在 PUBLISHING 永远没人捡；poller 每轮开头扫一遍超过 `publishingTimeoutSeconds`（默认 60s）的 PUBLISHING 全部拨回 FAILED 让下轮接管。
+
+### 7.3 自适应轮询间隔
+
+不是固定 `@Scheduled(fixedDelay = 5s)`，而是**动态调速**：
+
+```
+本轮处理了事件（积压）→ 下轮立即 (minPollIntervalMillis,  默认 200ms)
+本轮空跑（无事件）   → 间隔 ×= backoffMultiplier
+                      退避到上限 pollIntervalMillis     (默认 5s)
+```
+
+业务繁忙时接近实时（200ms 一轮），系统空闲时降到 5s，**减少 DB 空查询压力**。实现上用 `ScheduledExecutorService` 自调度（不用 Spring `@Scheduled`），每轮自己决定下次间隔。
+
+### 7.4 分布式互斥与分片（ShedLock + Sharding）
+
+orchestrator 集群多实例时，不能让两个实例同时 poll 同一批 outbox_event（会重复发 Kafka）。用 ShedLock 加 Redis 分布式锁：
+
+| 模式 | 锁 key | 行为 |
+|---|---|---|
+| 单实例 / `shardTotal=1` | `outbox_poll` | 集群中只有一个实例真正在 poll，其他抢不到锁直接跳过 |
+| 多分片 / `shardTotal>1` | `outbox_poll_shard_0` / `_shard_1` / ... | 允许 N 个实例**并行**处理不同分片，吞吐放大 N 倍 |
+
+锁参数：`lockAtMostFor=1min`（保险上限，避免 JVM 崩了一直握锁）；`lockAtLeastFor=3s`（最少持锁时间，避免高频抢锁雪崩）。
+
+### 7.5 熔断与优雅下线
+
+- **熔断（OutboxPublishCircuitBreaker）**：连续失败超阈值时整轮跳过 advance，避免 Kafka 雪崩时把 outbox 打成大面积 FAILED。三态：关闭 / 打开 / 半开。
+- **优雅下线**：`gracefulShutdown.isDraining()=true` 时跳过本轮 + 跳过抢锁（防 Lettuce 已 STOPPED 还去 Redis 抢锁抛 `IllegalStateException`，详见 CLAUDE.md 2026-04-24）。
+
+### 7.6 关键参数（`OutboxProperties`）
+
+| 参数 | 默认 | 作用 |
+|---|---|---|
+| `min-poll-interval-millis` | 200 | 有事件时下轮间隔下限 |
+| `poll-interval-millis` | 5000 | 无事件时退避间隔上限 |
+| `backoff-multiplier` | 2.0 | 空闲时间隔放大系数 |
+| `publishing-timeout-seconds` | 60 | PUBLISHING 超过此值判 stale 重置回 FAILED |
+| `shard-total` / `shard-index` | 1 / 0 | 多实例分片配置 |
+| `batch-size` | 100 | 每轮 SELECT 多少行 |
+
+### 7.7 在 §1 总览图里它的位置
+
+```
+LS ==> PDB                         ← 业务事务写 outbox_event (NEW)
+                                     (同事务保证一致性)
+OUT -. poll outbox_event .-> PDB   ← poller 自己读 (虚线 = 主动 poll)
+OUT ==> K (publish task)           ← 把 publishable 的发到 Kafka
+```
+
+Outbox 是**业务事务和 Kafka 投递之间的桥**——双方完全解耦，业务永远不会因为 Kafka 暂挂阻塞，Kafka 恢复后 poller 自动追回。
+
+---
+
+## 8. 进一步阅读
 
 | 你想看 | 文档 |
 |---|---|
