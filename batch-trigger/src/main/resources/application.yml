@@ -50,9 +50,24 @@ batch:
     quartz-standard-tables: true
     quartz-schema: quartz
   trigger:
+    # 调度引擎选择(quartz / wheel),默认 quartz;wheel 模式仍在阶段 1 实施期,生产暂不切。
+    # 切换流程见 docs/architecture/quartz-replacement-design.md §11。
+    scheduler-impl: ${BATCH_TRIGGER_SCHEDULER_IMPL:quartz}
     # 注：原 quartz-datasource opt-in 开关已于 2026-04-25 移除（Phase 2 半成品清理）。
     # Quartz JobStore 共享主 DataSource，业务表与 QRTZ_* 同 PG 实例不同 schema。
     # 业务量级到拐点时演进路径见 docs/architecture/quartz-replacement-evaluation.md（直接换时间轮，不做独立库）。
     runtime:
       # misfire 追赶阈值（秒）：当触发错过时间超过该阈值时进行 catch-up
       misfire-catch-up-threshold-seconds: ${BATCH_TRIGGER_MISFIRE_CATCH_UP_THRESHOLD_SECONDS:60}
+    wheel:
+      # 时间轮 scheduler 配置(scheduler-impl=wheel 时生效)。详见 quartz-replacement-design.md §5.4
+      tick-millis: ${BATCH_TRIGGER_WHEEL_TICK_MILLIS:100}
+      bucket-count: ${BATCH_TRIGGER_WHEEL_BUCKET_COUNT:512}
+      sliding-window-seconds: ${BATCH_TRIGGER_WHEEL_SLIDING_WINDOW_SECONDS:300}
+      sliding-window-scan-interval-seconds: ${BATCH_TRIGGER_WHEEL_SCAN_INTERVAL_SECONDS:60}
+      stale-marker-threshold-seconds: ${BATCH_TRIGGER_WHEEL_STALE_MARKER_THRESHOLD_SECONDS:300}
+      stale-marker-release-interval-seconds: ${BATCH_TRIGGER_WHEEL_STALE_MARKER_RELEASE_INTERVAL_SECONDS:120}
+      scan-batch-size: ${BATCH_TRIGGER_WHEEL_SCAN_BATCH_SIZE:1000}
+      misfire-threshold-seconds: ${BATCH_TRIGGER_WHEEL_MISFIRE_THRESHOLD_SECONDS:60}
+      catch-up-rate-per-second: ${BATCH_TRIGGER_WHEEL_CATCH_UP_RATE:10.0}
+      leader-instance-id: ${BATCH_TRIGGER_WHEEL_LEADER_INSTANCE_ID:}
