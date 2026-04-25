@@ -37,7 +37,9 @@ public class WorkflowArchiveScheduler {
   private final WorkflowArchiveProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
-  @Scheduled(cron = "${batch.workflow.archive.cron:0 15 4 * * *}")
+  @Scheduled(
+      cron = "${batch.workflow.archive.cron:0 15 4 * * *}",
+      zone = "${batch.timezone.default-zone:Asia/Shanghai}")
   @SchedulerLock(
       name = "workflow_archive",
       lockAtMostFor = "PT30M",
