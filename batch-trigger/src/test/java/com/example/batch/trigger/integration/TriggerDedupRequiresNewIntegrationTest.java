@@ -41,7 +41,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       "spring.flyway.enabled=false",
       "spring.autoconfigure.exclude="
           + "org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration",
-      "batch.orchestrator.base-url=http://localhost:8082"
+      "batch.orchestrator.base-url=http://localhost:8082",
+      // 关 QuartzMetricsConfiguration：本测试用 mock(Scheduler) 而非真 Quartz，
+      // 否则 mock 的 getListenerManager() 返回 null 在 @PostConstruct 触发 NPE
+      "batch.trigger.quartz-metrics.enabled=false"
     })
 @Import(TriggerDedupRequiresNewIntegrationTest.TestConfig.class)
 class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
