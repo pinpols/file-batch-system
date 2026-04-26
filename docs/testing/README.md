@@ -12,7 +12,7 @@
 | 04 | [e2e-coverage.md](./e2e-coverage.md) | 三条主链路（IMPORT / EXPORT / DISPATCH）E2E 场景矩阵 | 写新 E2E IT 前 |
 | 05 | [release-gate.md](./release-gate.md) | PR / CI / staging 三道门禁规则 + smoke 清单 | 上线 / 评 PR |
 | 06 | [realtime-sse-verification.md](./realtime-sse-verification.md) | 实时 SSE 推送链路验证 SOP | console 实时栏目验收 |
-| 07 | [load-test-report-2026-04-25.md](./load-test-report-2026-04-25.md) | 单实例 orchestrator 拐点压测报告（8 req/s）+ 生产容量推算 | 容量规划 |
+| 07 | [load-test-report.md](./load-test-report.md) | 单实例 orchestrator 拐点压测报告（8 req/s）+ 生产容量推算 | 容量规划 |
 
 ## 角色路径
 

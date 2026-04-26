@@ -29,4 +29,4 @@
 | 深度分析 | `analysis/deep-issue-analysis.md`（2026-04-23 最新）| `archive/analysis/deep-issue-analysis-v1.md`/`-v2`/`-v3`（4-15 / 4-17 / 4-20）|
 | 修复报告 | `analysis/fix-report.md`（2026-04-22 最新）| `archive/analysis/fix-report-v1`/`-v2`/`-v3` |
 | 测试计划 | `testing/full-project-test-plan.md` | `archive/testing/test-plan-2026-03-28.md` |
-| 测试报告 | `testing/load-test-report-2026-04-25.md` | `archive/testing/historical-test-reports-2026-04-09-10.md` |
+| 测试报告 | `testing/load-test-report.md` | `archive/testing/historical-test-reports-2026-04-09-10.md` |

@@ -1,7 +1,7 @@
 # 历史测试报告归档（2026-04-09 ~ 04-10 快照）
 
 > 这些是 v1 阶段（4/9-4/10）跑测产物的快照；保留为审计参考，不再维护。
-> 当前测试体系见 `docs/testing/` (full-project-test-plan / phase-coverage / e2e-coverage / release-gate / coverage-gap-analysis / load-test-report-2026-04-25)。
+> 当前测试体系见 `docs/testing/` (full-project-test-plan / phase-coverage / e2e-coverage / release-gate / coverage-gap-analysis / load-test-report)。
 
 ---
 
