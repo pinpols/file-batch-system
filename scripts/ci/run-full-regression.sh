@@ -466,7 +466,15 @@ if [[ "$RUN_DEFAULT_TESTS" == true ]]; then
   run_step \
     "Reactor Default Tests (*Test / *IntegrationTest)" \
     run_mvn test -fae
-  run_step "Coverage gate" run_mvn jacoco:check -fae || true
+  # Coverage gate — 真正阻断 CI（2026-04-26 启用）。阈值见 pom.xml jacoco-maven-plugin（起步 25% LINE）。
+  # 调试模式可显式 export BATCH_CI_SKIP_COVERAGE_GATE=1 让 dev 本地 escape；CI 不应设此变量。
+  if [[ "${BATCH_CI_SKIP_COVERAGE_GATE:-}" == "1" ]]; then
+    echo "[Coverage gate] skipped via BATCH_CI_SKIP_COVERAGE_GATE=1 (debug only)"
+  else
+    # 用 @check execution id 而非裸 jacoco:check —— 后者走 default-cli execution 拿不到 pom.xml
+    # check execution 配的 rules（因为 check execution phase=none，rules 只挂在该 execution 上）。
+    run_step "Coverage gate (jacoco:check@check, fail PR if below threshold)" run_mvn jacoco:check@check -fae
+  fi
 fi
 
 if [[ "$RUN_IT_SUITE" == true ]]; then

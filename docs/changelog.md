@@ -7,6 +7,7 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-04-26
+- **jacoco 覆盖率门控启用**（maturity-assessment §6 P1 第 3 步）。`pom.xml` jacoco 阈值从 60%（不可达）降到 25%（起步基线，实测各模块 30-44%）；`scripts/ci/run-full-regression.sh` 删 `|| true` 让 `jacoco:check@check` 真正阻断 CI（之前覆盖率不达标完全静默）。调用语法注意：必须用 `jacoco:check@check` 而非裸 `jacoco:check`（后者走 default-cli execution 拿不到 pom 配的 rules）。提供 `BATCH_CI_SKIP_COVERAGE_GATE=1` env escape hatch（dev 本地 debug 用，CI 不应设）。提升节奏：6 个月内到 40% / 1 年内到 60%。
 - **默认调度引擎切换：Quartz → HashedWheelTimer**（phase 1 收尾）。`application.yml` 的 `BATCH_TRIGGER_SCHEDULER_IMPL` fallback 从 `quartz` 改为 `wheel`，`QuartzPauseWhenWheelEnabledCustomizer` 的 `@Value` fallback 同步切到 `wheel`，`TriggerReconciler` 的 `@ConditionalOnProperty` 去掉 `matchIfMissing=true`（原本是 quartz 默认时的兜底语义，现已不需要）。Quartz 仍保留作 opt-in incident 回退路径（显式 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`）。代码层面 wheel 已通过 phase 1 实施期 4 周 + 57 IT 全过的验证（commit a9b38d17 等）；本次仅切换默认值，未删 Quartz codepath；删 codepath 按 `docs/runbook/wheel-scheduler-rollout.md` §6 完成判定的"灰度全量 30 天无回归"节奏走。配套同步 `docs/architecture/system-flow-overview.md` §1 trigger 层视觉权重（QZ→TR 边降级为粗虚线，WHEEL→WS 升级为粗实主路径）+ label 表达。
 - **架构硬约束扩展（2 条）**：
   - **读写分离仅 console-api 启用**；主链路（trigger / orchestrator / worker）严禁引入。原因：状态机依赖 read-after-write 强一致性，PG 异步流复制秒级延迟会引入 race condition；且这些模块写为主，读路径分离也无收益。详见 `docs/runbook/read-replica.md` §六。
