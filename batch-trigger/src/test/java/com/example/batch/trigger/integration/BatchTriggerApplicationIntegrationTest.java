@@ -15,7 +15,9 @@ import org.springframework.boot.test.context.SpringBootTest;
     properties = {
       "spring.flyway.enabled=false",
       "spring.quartz.job-store-type=jdbc",
-      "spring.quartz.jdbc.initialize-schema=always"
+      "spring.quartz.jdbc.initialize-schema=always",
+      // 2026-04-26 默认调度器切到 wheel，但本测试专门验证 Quartz 启动行为，强制 override
+      "batch.trigger.scheduler-impl=quartz"
     })
 class BatchTriggerApplicationIntegrationTest extends AbstractIntegrationTest {
 
