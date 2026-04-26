@@ -213,5 +213,5 @@ docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 \
 ## 8. 相关文档
 
 - `docs/runbook/feature-switches.md` §3.3 — 开关速查
-- `docs/architecture/改造分类.md` Phase 2 第 3 项
+- `docs/architecture/rework-classification.md` Phase 2 第 3 项
 - `docs/architecture/scalability-assessment.md` §6 路线图

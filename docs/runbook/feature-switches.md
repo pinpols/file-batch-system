@@ -2,19 +2,19 @@
 
 > 汇总 2026-04-25 完成的 5 项 Phase 2 scaffolding 涉及的 6 个开关：配置 key、实际默认、启用条件、风险、验证、回滚。
 >
-> 配套阅读：[`docs/architecture/改造分类.md`](../architecture/改造分类.md) Phase 2 章节、[`docs/coding-conventions.md` §13.3](../coding-conventions.md) 配置归属决策。
+> 配套阅读：[`docs/architecture/rework-classification.md`](../architecture/rework-classification.md) Phase 2 章节、[`docs/coding-conventions.md` §13.3](../coding-conventions.md) 配置归属决策。
 
 ---
 
 ## 0. ⚠️ 默认值叙述矛盾（先读这条）
 
-`docs/architecture/改造分类.md` 第 81 行写
+`docs/architecture/rework-classification.md` 第 81 行写
 
 > Phase 2 落地策略统一为 opt-in scaffolding：所有开关默认关闭（enabled=false / mode=SINGLE），与历史行为一致
 
 但 **`application.yml` 实际 fallback 多数已是"开启"**。代码注释（如 orchestrator `application.yml` 第 78 行 `WorkerSelector Redis 缓存（默认开启；fail-open 已就位）`）说明这是**有意的设计变更**——scaffolding 验证完毕后默认放开，因 fail-open 兜底已就位。
 
-**本文档以代码 + yml 为权威**，与 改造分类.md 第 81 行不符时以本文档为准。改造分类.md 第 81 行待下次结构性 review 时修订。
+**本文档以代码 + yml 为权威**，与 rework-classification.md 第 81 行不符时以本文档为准。rework-classification.md 第 81 行待下次结构性 review 时修订。
 
 > 优先级规则：**显式环境变量 > docker-compose `:-` 兜底 > application.yml `${VAR:fallback}` > Java 字段默认**。Java 字段默认（`@Data` 字段初始化值）只在 application.yml 完全没声明该 key 时生效，是兜底中的兜底。
 
@@ -230,7 +230,7 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 | `docker-compose.app.yml` | 如需显式覆盖（如 read-replica）补 `:-xxx` |
 | `.env.example` | 列出该开关 + 默认值 + 一行作用说明 |
 | 本文档（`feature-switches.md`） | §1 索引表 + §3 详述节 |
-| `docs/architecture/改造分类.md` | Phase 2 表格的"开关"列 |
+| `docs/architecture/rework-classification.md` | Phase 2 表格的"开关"列 |
 | `docs/changelog.md` | **仅当**改的是 CLAUDE.md 已有规范条款时记一条 |
 
 ---
@@ -240,6 +240,6 @@ SELECT owner_type, owner_id, peak_borrowed, updated_at
 | # | 待办 | 状态 |
 |---|---|---|
 | 1 | `docker-compose.app.yml` 给 `quartz-datasource` 加显式 `:-false` 兜底 | ✅ 完成 → 后于 2026-04-25 进一步**整体移除**该开关（Phase 2 半成品清理），新方案见 `docs/architecture/quartz-replacement-evaluation.md` |
-| 2 | `改造分类.md` 第 81 行更新为实际默认表 | ✅ 完成（替换为 5 项开关默认值表 + 引用 `feature-switches.md`） |
+| 2 | `rework-classification.md` 第 81 行更新为实际默认表 | ✅ 完成（替换为 5 项开关默认值表 + 引用 `feature-switches.md`） |
 | 3 | `read-replica` 应用层 fail-open | ✅ **本次梳理前已落地**（`ReadReplicaRoutingDataSource` C-3.1：失败计数 + quarantine + micrometer 指标 + `@RouteToPrimary` 注解）；本文档 §3.1 已校准 |
 | 4 | `mq.routing` 切换灰度发布 runbook | ✅ 完成（新增 `docs/runbook/mq-topic-routing-rollout.md`） |

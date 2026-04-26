@@ -14,7 +14,7 @@
 - `comprehensive-project-analysis.md`：系统安全与能力矩阵分析
 - `system-multidimensional-improvement-analysis.md`：系统多维度改进分析
 - `scalability-assessment.md`：海量批量调度承载力评估（绿/黄/红 + 改造路线图）
-- `改造分类.md`：scalability 评估的落地分类（哪些动代码 / 配置 / 数据 / 运维）
+- `rework-classification.md`：scalability 评估的落地分类（哪些动代码 / 配置 / 数据 / 运维）
 - `console-api-gap-analysis.md`：控制台 API 差距分析
 
 ### 参考文档

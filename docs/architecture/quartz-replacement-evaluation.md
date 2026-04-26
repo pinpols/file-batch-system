@@ -4,7 +4,7 @@
 >
 > **关联文档**:
 > - [`docs/runbook/feature-switches.md`](../runbook/feature-switches.md) §3.4(原 quartz-datasource 开关移除说明)
-> - [`docs/architecture/改造分类.md`](./改造分类.md) Phase 2 章节
+> - [`docs/architecture/rework-classification.md`](./rework-classification.md) Phase 2 章节
 > - [`docs/architecture/scalability-assessment.md`](./scalability-assessment.md) §6 路线图
 
 ---
