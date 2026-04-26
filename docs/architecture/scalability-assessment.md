@@ -96,7 +96,7 @@
 
 历史问题：`quota_runtime_state` 是 PG 行锁层，并发热点租户会撞乐观锁（曾遇到 `OptimisticLockingFailureException` 500，先修为 409 + retry 兜底）。海量场景需要真分布式限流。
 
-**当前状态**：默认实现已切到 `RedisQuotaRuntimeStateService`：单条 Lua 脚本原子完成"窗口判定 + peakBorrowed 抬升 + TTL 续命"，去掉了 PG 行锁瓶颈。配置 `batch.quota.runtime-store=database` 可回退到原 PG 实现作为故障降级。`QuotaRuntimeStateSnapshotScheduler` 周期把 Redis 状态 upsert 到 PG 表保留审计能力。详见 `docs/architecture/改造分类.md` Phase 2 第 5 项 / `CLAUDE.md` 2026-04-25 条目。
+**当前状态**：默认实现已切到 `RedisQuotaRuntimeStateService`：单条 Lua 脚本原子完成"窗口判定 + peakBorrowed 抬升 + TTL 续命"，去掉了 PG 行锁瓶颈。配置 `batch.quota.runtime-store=database` 可回退到原 PG 实现作为故障降级。`QuotaRuntimeStateSnapshotScheduler` 周期把 Redis 状态 upsert 到 PG 表保留审计能力。详见 `docs/architecture/rework-classification.md` Phase 2 第 5 项 / `CLAUDE.md` 2026-04-25 条目。
 
 ### 4.6 跨数据中心/AZ 部署
 
@@ -133,7 +133,7 @@
 
 ### Phase 2 — 百万 → 千万 — **2026-04-25 全部 5 项 scaffolding 完成 ✅**
 
-> 全部 opt-in：默认关闭（保持历史行为），运维侧按需翻开关。详见 [`docs/architecture/改造分类.md`](改造分类.md#phase-2--百万--千万5-项--2026-04-25-全部完成--opt-in-scaffolding) Phase 2 落地表。
+> 全部 opt-in：默认关闭（保持历史行为），运维侧按需翻开关。详见 [`docs/architecture/rework-classification.md`](rework-classification.md#phase-2--百万--千万5-项--2026-04-25-全部完成--opt-in-scaffolding) Phase 2 落地表。
 
 | 项 | 说明 | 状态 / 开关 |
 |---|---|---|

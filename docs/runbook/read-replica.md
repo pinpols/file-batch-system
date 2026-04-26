@@ -207,5 +207,5 @@ console-api 启动时不会创建从库连接池，走 Spring Boot 默认主 Dat
 
 ## 相关参考
 
-- `docs/architecture/改造分类.md` Phase 2 第 1 项
+- `docs/architecture/rework-classification.md` Phase 2 第 1 项
 - `docs/architecture/scalability-assessment.md` §6 路线图
