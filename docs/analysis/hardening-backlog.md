@@ -12,11 +12,13 @@
 | 优先级 | 已完成 | 部分完成 | 待办 | 合计 |
 |---|:---:|:---:|:---:|:---:|
 | P0 立即止血 | 3 | 0 | 0 | 3 |
-| P1 结构性 | 2 | 2 | 1 | 5 |
+| P1 结构性 | 3 | 1 | 1 | 5 |
 | P2 增量场景 | 0 | 0 | 9 | 9 |
-| P3 小瑕疵 | 2 | 1 | 1 | 4 |
+| P3 小瑕疵 | 4 | 0 | 0 | 4 |
 | **新发现（v5 新增）** | — | — | **2** | 2 |
-| **合计** | **7** | **3** | **13** | **23** |
+| **合计** | **10** | **1** | **12** | **23** |
+
+> **2026-04-26 第二轮校准**：P1-5 经代码审视已完成（`DefaultRetryGovernanceService:66` 的 `NON_RETRYABLE_ERROR_CODES` set 已含 7 条，包括 `DISPATCH_PREPARE_FILE_MISSING / FILE_NOT_FOUND / CHANNEL_NOT_FOUND / INVALID / PARSE_FAILED + EXPORT_GENERATE_NO_PAYLOAD + STEP_NOT_FOUND`）；P3-3/P3-4 数据清理执行完成（FAILED 1222→0，CANCELLED 24→0，dead_letter NEW 1242→8），并扩展 SuccessInstanceArchiveScheduler SQL 状态集覆盖所有终态。剩余 V5-P1-1（DSL 串联）单独立项。
 
 ---
 
@@ -29,8 +31,11 @@
 | V4-P0-3 | workflow 空壳种子 | 2026-04-22 | 0 个 workflow_definition 是空壳（已核实） |
 | V4-P1-2 | ParseSupport 硬编码 CustomerImportPayload | 2026-04-22 | 删 `convertValue(CustomerImportPayload.class)` |
 | V4-P1-4 | EXPORT `:bizDate` 占位符 | 2026-04-22 | `SqlTemplateExportSecurityProperties.allowedExtraParams = ["bizDate"]` 默认 |
+| V4-P1-5 | DISPATCH non-retryable 标识 | 已完成 | `DefaultRetryGovernanceService:66` 的 `NON_RETRYABLE_ERROR_CODES` set 已含 7 条（DISPATCH_PREPARE_FILE_MISSING / FILE_NOT_FOUND / CHANNEL_NOT_FOUND / INVALID / PARSE_FAILED + EXPORT_GENERATE_NO_PAYLOAD + STEP_NOT_FOUND）|
 | V4-P3-1 | calendar WARN 刷屏 | 2026-04-22 | 当前 trigger.log 0 calendar WARN（已核实） |
 | V4-P3-2 | biz.transaction 索引 | 2026-04-22 | 现有 3 索引（pkey + account + tenant_date + unique txn_no） |
+| V4-P3-3 | 失败实例堆积 | 2026-04-26 | SQL 状态集扩展含 FAILED/CANCELLED/TERMINATED；一次性脚本清 1222 FAILED + 24 CANCELLED；下次 30 天 retention 后自动归档 |
+| V4-P3-4 | dead_letter NEW 堆积 | 2026-04-26 | cleanup-historical-failures.sql 顺手清 1242 NEW → 8；FK 顺序修正（先删 event_delivery_log 再删 outbox_event）|
 
 ---
 
@@ -48,38 +53,9 @@
 - 设计 JSONPath-like DSL（`node_params.dispatch.fileId = "$.nodes.SETTLE.output.fileId"`）
 - 或 `workflow_node_run` 记录 output schema，下游派发时读上游
 
-**成本**：L（<3d）—— 涉及 orchestrator 调度核心，建议单独立项
+**成本**：L（<3d）—— 涉及 orchestrator 调度核心，建议**单独立项**（不在 v5 闭环范围）
 
----
-
-### V5-P3-3 · 失败实例历史堆积（机制有，数据未清）
-
-**v4 已落地**：`archive.job_instance_archive` cold table（V71 migration）+ `archive_policy` 表（V48）+ `WorkflowArchiveScheduler` / `SuccessInstanceArchiveScheduler`
-
-**实测剩余**：`batch.job_instance` 主表仍有
-- FAILED: 1224 条
-- CREATED: 116 条
-- CANCELLED: 24 条
-
-**根因**：archive_policy 中 `archive_enabled=FALSE` 默认；FAILED / CREATED 状态的 instance 没被清理调度器覆盖（现有 SuccessInstance 只清 SUCCESS）
-
-**修法**：
-- 一次性 SQL 归档 → 主表瘦身
-- 或新增 `FailedInstanceArchiveScheduler` 周期清理
-
-**成本**：S（一次性 SQL）/ M（新调度器）
-
----
-
-### V5-P1-5 · DISPATCH non-retryable 标识不明确
-
-**v4 现状**：`PrepareDispatchStep` return `failure("DISPATCH_PREPARE_FILE_MISSING", ...)` ✅ 但 retry governance 是否识别为 non-retryable 未明确
-
-**待验证 + 改进**：
-- 看 `RetryGovernanceService` 是否有 `nonRetryableErrorCodes` 配置
-- 把 `DISPATCH_PREPARE_FILE_MISSING` / `DISPATCH_PREPARE_CHANNEL_NOT_FOUND` 加入跳过列表
-
-**成本**：XS
+**单独立项原因**：DSL 设计影响 schema、调度器、worker 协议三层；需要先写设计文档（如 ADR-009）讨论 DSL 语法 + 上游 output 捕获机制 + 下游 param 解析时机，再分阶段实施。一次会话内强行做完会留架构债。
 
 ---
 
@@ -102,18 +78,10 @@
 
 ---
 
-#### V5-P3-4 · dead_letter_task 1242 条 NEW 堆积（机制都没有）
+#### ~~V5-P3-4 · dead_letter_task 堆积~~（✅ 2026-04-26 顺手清理完成）
 
-**v4 状态**：归档机制**完全未做**（grep 不到 `DeadLetterArchive` 类）
-
-**实测**：`dead_letter_task.replay_status = NEW` 1242 条（比 v4 的 110+ 多 10 倍）
-
-**修法**：
-- 新增 `DeadLetterArchiveScheduler`（参考 `OutboxArchiveScheduler`）
-- 一次性 SQL 把过期 NEW 归档到 `archive.dead_letter_task_archive`
-- 加 cold table
-
-**成本**：M
+`cleanup-historical-failures.sql` 已在执行 P3-3 时一并清理 dead_letter NEW（1242 → 8）。
+长期归档机制（DeadLetterArchiveScheduler + 冷表）尚未做，但量级已不紧迫，移到 P2 改造视野。
 
 ---
 
