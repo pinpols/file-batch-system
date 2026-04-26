@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Auto-format staged Java files with Spotless before commit.
+# 启用：git config core.hooksPath .githooks（每人 clone 后跑一次）
+
+set -e
+
+staged_java=$(git diff --cached --name-only --diff-filter=ACM | grep '\.java$' || true)
+if [ -z "$staged_java" ]; then
+  exit 0
+fi
+
+echo "[pre-commit] spotless apply 全 reactor (含 staged Java 改动)..."
+mvn spotless:apply -q
+
+# 把 spotless apply 改的同一批 staged 文件重新 add
+echo "$staged_java" | xargs git add
+echo "[pre-commit] ✅ 格式化完成，已重新 git add"
