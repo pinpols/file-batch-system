@@ -7,9 +7,23 @@
 
 ## 1. 一张图看完整链路
 
+> **重要前提（先读这段再看图）**：系统**主入口是定时器**（Quartz cron / wheel tick），生产环境 95%+ 的任务由 trigger 模块自动 fire，**根本不经过 console-api**。前台 `USER → CONSOLE → 触发` 是少数场景（联调 / 失败重跑 / 运维介入），看图时把它当辅助入口。
+>
+> 下图为了完整性把两条入口都画了，但**当前默认主路径是 `QZ → TR`**（Quartz cron fire，蓝粗实线 = 生产正在用）；前台 `USER → CONSOLE → TR/WS` 已**降级为灰色细虚线**作"可选入口"标记，方便视觉一眼分清主辅。
+>
+> **触发层新旧两套实现并存（严格二选一）**：
+>
+> | 实现 | 状态表 | 调度 svc | fire 路径 | 何时 active |
+> |---|---|---|---|---|
+> | **Quartz**（**旧 / 当前默认**） | `QRTZ_*` | `TR`（TriggerSchedulerFacade） | `QZ → TR → LS`（蓝粗实） | `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`（默认值） |
+> | **HashedWheelTimer**（**新 / 可选切换**） | `trigger_runtime_state` + `trigger_misfire_pending` | `WS`（HashedWheelTriggerScheduler） | `WHEEL → WS → LS`（蓝**虚线** = 默认不生效，需开关） | `BATCH_TRIGGER_SCHEDULER_IMPL=wheel` |
+> | **互斥控制器** | — | `FLAG`（QuartzPauseWhenWheelEnabledCustomizer） | 切到 wheel 模式时把 `QZ.autoStartup=false` 让 Quartz bean 仍存在但不 fire | 自动 |
+>
+> 图里 `QZ → TR` 是粗实线（默认在跑），`WHEEL → WS` 改为粗虚线（可选实现，需开关激活）。这两条**永远只有一条会 fire**，由配置决定。详见 [`docs/architecture/quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)。
+>
 > **图例**：
-> - 线**类型**：粗实线 `══>` = 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号。
-> - 线**颜色**（按协议分类）：🔵 蓝 = HTTP/REST 同步调用；🟢 绿 = SQL/JDBC 写；🟣 紫 = SQL/JDBC 读；🟠 橙 = Kafka 异步消息；🟡 黄 = Redis（cache / Streams / pub-sub）；🔴 红 = 外部副作用（MinIO PUT / SFTP 投递 / OpenAI）；⚫ 灰 = 控制信号 / 监控 / 心跳。
+> - 线**主次**：粗实线 `══>` = 生产主路径 / 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号 / 前台可选入口。
+> - 线**颜色**（按协议分类）：🔵 蓝 = HTTP/REST 同步调用；🟢 绿 = SQL/JDBC 写；🟣 紫 = SQL/JDBC 读；🟠 橙 = Kafka 异步消息；🟡 黄 = Redis（cache / Streams / pub-sub）；🔴 红 = 外部副作用（MinIO PUT / SFTP 投递 / OpenAI）；⚫ 灰 = 控制信号 / 监控 / 心跳 / 前台可选入口。
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 70, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
@@ -55,11 +69,12 @@ flowchart LR
   FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
 
   %% ─── 触发链路（HTTP 入站 + 时序触发；scheduler-impl 决定走哪条） ──
-  USER    ==>|"POST /api/console/triggers/launch"| CONSOLE
-  CONSOLE ==>|"HTTP forward (MANUAL)"| TR
-  CONSOLE ==>|"HTTP forward (MANUAL)"| WS
-  QZ      ==>|"cron fire (SCHEDULED · 默认)"| TR
-  WHEEL   ==>|"tick fire (SCHEDULED · 新可选)"| WS
+  %% 边 label 直接标流量占比（按触发数估算），让"主入口=定时器"在图里一眼可见
+  USER    ==>|"POST /api/console/triggers/launch<br/>📉 < 5% · 联调 / 重跑 / ops"| CONSOLE
+  CONSOLE ==>|"HTTP forward (MANUAL · < 5%)"| TR
+  CONSOLE ==>|"HTTP forward (MANUAL · < 5%)"| WS
+  QZ      ==>|"cron fire (SCHEDULED · 默认)<br/>📈 生产 95%+ 触发量"| TR
+  WHEEL   ==>|"tick fire (SCHEDULED · 新可选)<br/>开关切换后承接同等流量"| WS
   FLAG    -. "scheduler-impl=wheel → autoStartup=false" .-> QZ
   TR      ==>|"HTTP /internal/launch"| LS
   WS      ==>|"HTTP /internal/launch"| LS
@@ -95,11 +110,13 @@ flowchart LR
   WD ==>|"deliver (cp / scp / POST)"| FS
 
   %% ─── 边按协议着色（顺序与上面声明一致；linkStyle index 从 0 起） ──
-  %%   0..7  HTTP / 触发层入站 (蓝色)
-  linkStyle 0,1,2,3,4 stroke:#1565c0,stroke-width:2.5px
-  %%   5     feature flag 控制（虚线灰）
+  %%   0,1,2  前台 MANUAL 入口（灰细虚 = 辅助路径，少数场景）：USER→CONSOLE / CONSOLE→TR / CONSOLE→WS
+  linkStyle 0,1,2 stroke:#9e9e9e,stroke-width:1.5px,stroke-dasharray:5 4
+  %%   3,4    定时 SCHEDULED 主入口（蓝粗实 = 生产 95%+ 触发量）：QZ→TR / WHEEL→WS
+  linkStyle 3,4 stroke:#1565c0,stroke-width:2.5px
+  %%   5      feature flag 控制（虚线灰）
   linkStyle 5 stroke:#616161,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   6,7   trigger → orchestrator（HTTP 蓝）
+  %%   6,7    trigger → orchestrator（HTTP 蓝，MANUAL 与 SCHEDULED 在此汇合）
   linkStyle 6,7 stroke:#1565c0,stroke-width:2.5px
   %%   8     LS → PDB 写（绿）
   linkStyle 8 stroke:#2e7d32,stroke-width:2.5px
@@ -146,6 +163,9 @@ flowchart LR
 
 主图聚焦「一条任务的生命周期」，console-api（BFF）只在主图体现「人工 launch」这一跳。
 以下补充其余四条职责：配置管理、查询 / 报表、实时监控、补偿命令。
+
+> **注意**：本节的图**只画 console-api 视角**，所有边都从 `USER` 起。这不代表系统是前台驱动 ——
+> 生产 95%+ 任务由定时器自动 fire 不经 console（详见 §1 主图的 `QZ → TR` / `WHEEL → WS` 蓝粗实线）。本节只是补充运营 5 条支线，不要据此理解为"系统都靠人点"。
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
@@ -474,6 +494,118 @@ flowchart LR
 - **重放幂等**：`markReplaying` 用乐观锁（`replay_status='NEW' AND id=?`），避免并发 replay；重放写新 `outbox_event(eventType=REPLAY)`，复用主链 publish 路径，**不绕过状态机**。
 - **GIVE_UP 是终态**：人工标记后不再 replay，需重置回 NEW 才能再走重放路径。
 - **source_type 决定重放粒度**：可重放 task / partition / instance / pipeline_instance / file_dispatch / mq_message 6 类，由 `RetryGovernanceService` 路由分发。
+
+---
+
+## 1.9 弹性伸缩拓扑 — 6 个模块各自怎么扩 + 协调机制
+
+不同模块的扩缩约束完全不同：trigger 受 ShedLock 限制只能横向扩、worker 横向扩靠 Kafka rebalance、orchestrator 横向扩靠 Outbox sharding。这张图把扩缩机制 + 触发信号 + 协调依赖一图全景。
+
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 40, 'rankSpacing': 70, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
+flowchart LR
+  subgraph SIGNAL ["扩缩信号源（Prometheus + KEDA）"]
+    direction TB
+    PROM[(Prometheus<br/>scrape /actuator/prometheus)]:::store
+    KAFKA_LAG{{KEDA Kafka lag scaler<br/>consumer_group lag &gt; threshold}}:::flag
+    CPU{{HPA CPU/Memory<br/>70% threshold}}:::flag
+    HTTP_QPS{{Custom metric<br/>HTTP req/s}}:::flag
+  end
+
+  subgraph APP ["应用层（k8s Deployment / StatefulSet）"]
+    direction TB
+    CONSOLE["console-api<br/>📈 1 → 10 实例<br/>HPA: CPU + HTTP QPS"]:::svc
+    TRIGGER["trigger<br/>📈 2 → 5 实例<br/>HPA: CPU<br/>⚠️ Quartz cluster lock 自协调"]:::svc
+    ORCH["orchestrator (StatefulSet)<br/>📈 3 → 10 实例<br/>HPA: CPU + Outbox lag<br/>⚠️ ShedLock + Outbox shard"]:::svc
+    W_IMPORT["worker-import<br/>📈 2 → 20 实例<br/>KEDA: Kafka lag"]:::worker
+    W_EXPORT["worker-export<br/>📈 1 → 10 实例<br/>KEDA: Kafka lag"]:::worker
+    W_DISP["worker-dispatch<br/>📈 1 → 10 实例<br/>KEDA: Kafka lag<br/>+ 渠道熔断"]:::worker
+  end
+
+  subgraph COORD ["扩缩时的协调机制（防止多实例冲突）"]
+    direction TB
+    SHEDLOCK[(ShedLock<br/>Redis: orchestrator scheduler<br/>JDBC: trigger scheduler)]:::store
+    SHARD[(Outbox shard<br/>动态分配<br/>shardTotal=N)]:::store
+    QRTZ_LOCK[(QRTZ_LOCKS<br/>PG SELECT FOR UPDATE)]:::store
+    KAFKA_GROUP[(Kafka consumer group<br/>partition rebalance)]:::store
+    LEASE[(job_partition.lease<br/>worker CLAIM 持锁)]:::store
+  end
+
+  subgraph LIMIT ["扩缩上限的硬约束"]
+    direction TB
+    PG_CONN["PG max_connections<br/>500 / 1000<br/>限制总实例 × pool"]:::extern
+    KAFKA_PART["Kafka partition 数<br/>限制 worker 并发上限"]:::extern
+    REDIS_HA["Redis 高可用<br/>单点挂 ≈ orchestrator 协调失效"]:::extern
+  end
+
+  HTTP_QPS -.->|HPA| CONSOLE
+  CPU -.->|HPA| TRIGGER
+  CPU -.->|HPA| ORCH
+  KAFKA_LAG -.->|Outbox lag| ORCH
+  KAFKA_LAG -.->|topic lag| W_IMPORT
+  KAFKA_LAG -.->|topic lag| W_EXPORT
+  KAFKA_LAG -.->|topic lag| W_DISP
+
+  PROM ==> KAFKA_LAG
+  PROM ==> CPU
+  PROM ==> HTTP_QPS
+
+  TRIGGER -->|cluster lock| QRTZ_LOCK
+  TRIGGER -->|辅助调度 lock| SHEDLOCK
+  ORCH -->|scheduler lock| SHEDLOCK
+  ORCH -->|动态分片| SHARD
+  W_IMPORT -->|consumer group| KAFKA_GROUP
+  W_EXPORT -->|consumer group| KAFKA_GROUP
+  W_DISP -->|consumer group| KAFKA_GROUP
+  W_IMPORT -->|partition CLAIM| LEASE
+  W_EXPORT -->|partition CLAIM| LEASE
+  W_DISP -->|partition CLAIM| LEASE
+
+  CONSOLE -.-> PG_CONN
+  ORCH -.-> PG_CONN
+  TRIGGER -.-> PG_CONN
+  W_IMPORT -.-> PG_CONN
+  W_IMPORT -.-> KAFKA_PART
+  W_EXPORT -.-> KAFKA_PART
+  W_DISP -.-> KAFKA_PART
+  ORCH -.-> REDIS_HA
+
+  %% 信号 → 应用：黄色虚线（控制流）
+  linkStyle 0,1,2,3,4,5,6 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  %% Prometheus → 信号：橙色实线（指标流）
+  linkStyle 7,8,9 stroke:#ef6c00,stroke-width:2.5px
+  %% 应用 → 协调：紫色实线（DB/Redis 写）
+  linkStyle 10,11,12,13,14,15,16,17,18,19 stroke:#7b1fa2,stroke-width:1.5px
+  %% 应用 → 上限：红色虚线（capacity ceiling）
+  linkStyle 20,21,22,23,24,25,26,27 stroke:#c62828,stroke-width:1.2px,stroke-dasharray:5 4
+
+  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
+  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
+  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+  classDef extern  fill:#fce4ec,stroke:#ad1457,stroke-width:1.5px,color:#880e4f;
+  classDef flag    fill:#fffde7,stroke:#f9a825,stroke-width:1.5px,color:#f57f17;
+```
+
+### 关键约束（按"为什么这样扩"分类）
+
+| 模块 | 扩缩特点 | 为什么 |
+|---|---|---|
+| **console-api** | 完全无状态，纯横向扩 | BFF 层，请求间无依赖；HPA 按 CPU + HTTP QPS |
+| **trigger** | 横向扩靠 Quartz cluster lock 内部协调；辅助调度走 ShedLock JDBC | 同 cron 触发的多实例靠 `QRTZ_LOCKS` 排他抢占，应用层不感知 |
+| **orchestrator** | 横向扩靠 Outbox 动态分片 + ShedLock；StatefulSet 部署 | 多实例并行处理不同 outbox shard；ShedLock 保证调度类任务全集群单实例执行 |
+| **worker-***  | 横向扩靠 Kafka consumer group rebalance + lease | 实例数 ≤ Kafka partition 数；超过 = 多余实例空闲；KEDA 按 lag 自动扩缩 |
+
+### 三个扩缩硬上限（红色虚线）
+
+1. **PG `max_connections`**：所有模块总连接数上限。N 实例 × 单实例 pool ≤ PG max_connections（生产 500-1000，加 PgBouncer 可放大）
+2. **Kafka partition 数**：限制 worker 并发上限。partition=10 → 最多 10 个 worker 实例消费同一 topic；超出空跑
+3. **Redis 高可用**：orchestrator 的 ShedLock / 限流 / 配额 / SSE replay 全靠 Redis；单点 Redis 挂 ≈ orchestrator 协调失效（trigger 走 PG，不受影响）
+
+### 详细文档
+
+- 扩缩机制 + HPA 配置示例 → [`../runbook/autoscaling-strategy.md`](../runbook/autoscaling-strategy.md)
+- HA 兼容性矩阵 + 缩容 4 个隐藏雷 + 部署前 checklist → [`../runbook/ha-elastic-scaling.md`](../runbook/ha-elastic-scaling.md)
+- 千万级承载力评估 + Phase 改造路线 → [`./scalability-assessment.md`](./scalability-assessment.md)
 
 ---
 
