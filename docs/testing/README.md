@@ -1,42 +1,34 @@
 # 测试文档索引
 
-这里是 `docs/testing/` 的统一入口，收纳测试计划、门禁规则、执行清单和测试报告。
+测试计划、覆盖矩阵、release-gate、压测报告。
 
-## 先看这里
+## 文件清单（编号即推荐阅读顺序）
 
-1. [full-project-full-project-test-plan.md](./full-project-full-project-test-plan.md) - 全量测试总计划、阶段拆分和完成状态
-2. [phase-coverage.md](./phase-coverage.md) - 当前测试覆盖盘点和缺口分布
-3. [phase-coverage.md](./phase-coverage.md) - Phase 2 的 P0 回归范围和后续增量项
-4. [release-gate.md](./release-gate.md) - PR / CI / staging 门禁规则和放行标准
+| # | 文件 | 作用 | 何时看 |
+|---|---|---|---|
+| 01 | [full-project-test-plan.md](./full-project-test-plan.md) | 全量测试总计划：分层策略、阶段拆分、当前状态 | 入门必看 |
+| 02 | [phase-coverage.md](./phase-coverage.md) | Phase 1 + Phase 2 测试覆盖矩阵（合并版）| 想知道"还差什么没测" |
+| 03 | [coverage-gap-analysis.md](./coverage-gap-analysis.md) | 覆盖缺口分析（按模块 + 按风险维度）| 排期补测试用例 |
+| 04 | [e2e-coverage.md](./e2e-coverage.md) | 三条主链路（IMPORT / EXPORT / DISPATCH）E2E 场景矩阵 | 写新 E2E IT 前 |
+| 05 | [release-gate.md](./release-gate.md) | PR / CI / staging 三道门禁规则 + smoke 清单 | 上线 / 评 PR |
+| 06 | [realtime-sse-verification.md](./realtime-sse-verification.md) | 实时 SSE 推送链路验证 SOP | console 实时栏目验收 |
+| 07 | [load-test-report-2026-04-25.md](./load-test-report-2026-04-25.md) | 单实例 orchestrator 拐点压测报告（8 req/s）+ 生产容量推算 | 容量规划 |
 
-## 执行指南
+## 角色路径
 
-- [release-gate.md](./release-gate.md) - staging 上线 smoke 执行清单
+| 角色 | 顺序 |
+|---|---|
+| 新加测试 | 01 → 02 → 03 |
+| Review PR | 05 |
+| 容量 / 性能 | 07 → [`../architecture/scalability-assessment.md`](../architecture/scalability-assessment.md) |
+| 写新 E2E | 04 → [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) |
 
-## 场景矩阵
+## 与其他子目录的分工
 
-- [e2e-coverage.md](./e2e-coverage.md) - E2E 测试类、场景和覆盖状态矩阵
-- [e2e-coverage.md](./e2e-coverage.md) - 三条主链路的 E2E 覆盖分析
-
-## 说明文档
-
-- [full-project-full-project-test-plan.md](./full-project-full-project-test-plan.md) - 测试分层策略
-- [full-project-test-plan.md](./full-project-test-plan.md) - 更面向项目层的测试总览和当前状态
-
-## 已完成报告归档（`completed-reports/`）
-
-历史性测试报告已归档至 `completed-reports/` 目录：
-
-- `full-test-run-report.md` - 仓库级全量回归结果
-- `failure-drill-report.md` - 故障演练记录
-- `deployment-verification-report.md` - 升级 / 回滚验证记录
-- `e2e-individual-run-report.md` - 单次 E2E 执行记录
-- `verification-e2e-unit-integration-run.md` - 逐类验证报告
-- `frontend-backend-integration-issue.md` - 前后端联调问题记录
-- `load-test-capacity-baseline.md` - 压测容量基线模板
-
-## 命名约定
-
-- `phase-1-*` 和 `phase-2-*` 表示阶段性补充文件。
-- `full-project-*` 表示跨阶段共用的总计划和参考文档。
-- 报告文件尽量按所支持的阶段或门禁命名，保持就近维护。
+| 目录 | 视角 |
+|---|---|
+| `testing/`（本目录） | 质量向：计划 / 矩阵 / 门禁 / 压测 |
+| [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) | 端到端验证手册（运维角度）|
+| [`../runbook/quartz-capacity-baseline.md`](../runbook/quartz-capacity-baseline.md) | Quartz 容量压测（运维角度）|
+| [`../analysis/`](../analysis/README.md) | 测试中发现问题的滚动记录 |
+| [`../archive/testing/`](../archive/testing/) | 历史压测报告 / 测试运行快照 |
