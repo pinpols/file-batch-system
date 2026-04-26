@@ -58,8 +58,20 @@ public interface OutboxEventMapper {
       @Param("cutoff") Instant cutoff,
       @Param("limit") int limit);
 
+  /** 将待瘦身 outbox_event 复制到 archive schema；重复 id 跳过，保证归档任务可重入。 */
+  int archiveOutboxEventsByIds(@Param("ids") List<Long> ids);
+
+  /** 将 outbox 相关投递日志复制到 archive schema。 */
+  int archiveEventDeliveryLogsByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
+
+  /** 将 outbox 重试记录复制到 archive schema。 */
+  int archiveEventOutboxRetriesByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
+
   /** 按 outbox_event_id 列表删 event_delivery_log（FK 子表）。 */
   int deleteEventDeliveryLogsByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
+
+  /** 按 outbox_event_id 列表删 event_outbox_retry（FK 子表）。 */
+  int deleteEventOutboxRetriesByOutboxIds(@Param("outboxIds") List<Long> outboxIds);
 
   /** 按 id 列表删 outbox_event。 */
   int deleteByIds(@Param("ids") List<Long> ids);

@@ -32,6 +32,30 @@ public interface SuccessInstanceArchiveMapper {
   List<Long> selectArchivableInstanceIds(
       @Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
+  // ── 冷表归档（按 instanceIds 列表，先复制后删除）──────────────────────
+
+  int archiveJobInstancesByIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveJobPartitionsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveJobTasksByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveJobStepInstancesByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archivePipelineInstancesByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archivePipelineStepRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveFileDispatchRecordsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveWorkflowRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveWorkflowNodeRunsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveJobExecutionLogsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
+  int archiveCompensationCommandsByInstanceIds(@Param("instanceIds") List<Long> instanceIds);
+
   // ── 级联删（按 instanceIds 列表）──────────────────────────────
 
   int deleteJobStepInstancesByInstanceIds(@Param("instanceIds") List<Long> instanceIds);

@@ -54,11 +54,12 @@ class SuccessInstanceArchiveServiceTest {
   }
 
   @Test
-  void cascadeDeleteFollowsCorrectOrder() {
+  void archiveColdTablesBeforeCascadeDelete() {
     props.setEnabled(true);
     props.setBatchSize(100);
     List<Long> ids = List.of(1L, 2L, 3L);
     when(mapper.selectArchivableInstanceIds(any(Instant.class), anyInt())).thenReturn(ids);
+    when(mapper.archiveJobInstancesByIds(ids)).thenReturn(3);
     when(mapper.deleteJobInstancesByIds(ids)).thenReturn(3);
 
     ArchiveBatchResult result = service.archiveOnce();
@@ -67,6 +68,17 @@ class SuccessInstanceArchiveServiceTest {
     assertThat(result.instancesDeleted()).isEqualTo(3);
 
     InOrder order = Mockito.inOrder(mapper);
+    order.verify(mapper).archiveJobInstancesByIds(ids);
+    order.verify(mapper).archiveJobPartitionsByInstanceIds(ids);
+    order.verify(mapper).archiveJobTasksByInstanceIds(ids);
+    order.verify(mapper).archiveJobStepInstancesByInstanceIds(ids);
+    order.verify(mapper).archivePipelineInstancesByInstanceIds(ids);
+    order.verify(mapper).archivePipelineStepRunsByInstanceIds(ids);
+    order.verify(mapper).archiveFileDispatchRecordsByInstanceIds(ids);
+    order.verify(mapper).archiveWorkflowRunsByInstanceIds(ids);
+    order.verify(mapper).archiveWorkflowNodeRunsByInstanceIds(ids);
+    order.verify(mapper).archiveJobExecutionLogsByInstanceIds(ids);
+    order.verify(mapper).archiveCompensationCommandsByInstanceIds(ids);
     // FK 依赖顺序：先孙节点（job_step_instance / pipeline_step_run），中间表，最后根（job_instance）
     order.verify(mapper).deleteJobStepInstancesByInstanceIds(ids);
     order.verify(mapper).deleteJobTasksByInstanceIds(ids);

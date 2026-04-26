@@ -57,11 +57,13 @@ class OutboxArchiveServiceTest {
   }
 
   @Test
-  void candidatesShouldDeleteDeliveryLogsBeforeOutbox() {
+  void candidatesShouldArchiveColdTablesBeforeDeletingHotRows() {
     props.setEnabled(true);
     props.setBatchSize(100);
     List<Long> ids = List.of(1L, 2L, 3L);
     when(mapper.selectArchivableIds(eq("PUBLISHED"), any(Instant.class), anyInt())).thenReturn(ids);
+    when(mapper.archiveEventDeliveryLogsByOutboxIds(ids)).thenReturn(5);
+    when(mapper.archiveOutboxEventsByIds(ids)).thenReturn(3);
     when(mapper.deleteEventDeliveryLogsByOutboxIds(ids)).thenReturn(5);
     when(mapper.deleteByIds(ids)).thenReturn(3);
 
@@ -70,7 +72,11 @@ class OutboxArchiveServiceTest {
     assertThat(result.outboxDeleted()).isEqualTo(3);
     assertThat(result.deliveryLogsDeleted()).isEqualTo(5);
     InOrder inOrder = Mockito.inOrder(mapper);
+    inOrder.verify(mapper).archiveEventDeliveryLogsByOutboxIds(ids);
+    inOrder.verify(mapper).archiveEventOutboxRetriesByOutboxIds(ids);
+    inOrder.verify(mapper).archiveOutboxEventsByIds(ids);
     inOrder.verify(mapper).deleteEventDeliveryLogsByOutboxIds(ids);
+    inOrder.verify(mapper).deleteEventOutboxRetriesByOutboxIds(ids);
     inOrder.verify(mapper).deleteByIds(ids);
   }
 

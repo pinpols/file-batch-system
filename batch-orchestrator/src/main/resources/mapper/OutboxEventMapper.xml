@@ -135,8 +135,41 @@
         limit #{limit}
     </select>
 
+    <insert id="archiveOutboxEventsByIds">
+        insert into archive.outbox_event_archive
+        select *
+        from batch.outbox_event
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        on conflict (id) do nothing
+    </insert>
+
+    <insert id="archiveEventDeliveryLogsByOutboxIds">
+        insert into archive.event_delivery_log_archive
+        select *
+        from batch.event_delivery_log
+        where outbox_event_id in
+        <foreach collection="outboxIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        on conflict (id) do nothing
+    </insert>
+
+    <insert id="archiveEventOutboxRetriesByOutboxIds">
+        insert into archive.event_outbox_retry_archive
+        select *
+        from batch.event_outbox_retry
+        where outbox_event_id in
+        <foreach collection="outboxIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        on conflict (id) do nothing
+    </insert>
+
     <delete id="deleteEventDeliveryLogsByOutboxIds">
         delete from batch.event_delivery_log
+        where outbox_event_id in
+        <foreach collection="outboxIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteEventOutboxRetriesByOutboxIds">
+        delete from batch.event_outbox_retry
         where outbox_event_id in
         <foreach collection="outboxIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </delete>

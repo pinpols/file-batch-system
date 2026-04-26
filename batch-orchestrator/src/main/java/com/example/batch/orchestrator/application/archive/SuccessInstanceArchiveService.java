@@ -13,8 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * P3-3 archive 系列：SUCCESS / PARTIAL_FAILED job_instance 级联归档业务层。
  *
- * <p>同删除语义对应 {@code cleanup-success-instances.sql}，本类把 12 步级联固化到 mapper，
- * 单批 {@link SuccessInstanceArchiveProperties#getBatchSize()} 个 instance id 在同一事务内完成。
+ * <p>同删除语义对应 {@code cleanup-success-instances.sql}，本类先把运行态树复制到 {@code archive}
+ * schema 冷表，再执行 12 步级联删除。单批 {@link SuccessInstanceArchiveProperties#getBatchSize()} 个
+ * instance id 在同一事务内完成。
  */
 @Slf4j
 @Service
@@ -37,6 +38,19 @@ public class SuccessInstanceArchiveService {
     if (ids.isEmpty()) {
       return ArchiveBatchResult.empty(cutoff);
     }
+    // 先复制到冷表；任一步失败都会回滚事务，避免只删热表丢历史。
+    long archivedInstances = archiveMapper.archiveJobInstancesByIds(ids);
+    long archivedPartitions = archiveMapper.archiveJobPartitionsByInstanceIds(ids);
+    long archivedJobTasks = archiveMapper.archiveJobTasksByInstanceIds(ids);
+    long archivedStepInstances = archiveMapper.archiveJobStepInstancesByInstanceIds(ids);
+    long archivedPipelineInstances = archiveMapper.archivePipelineInstancesByInstanceIds(ids);
+    long archivedPipelineStepRuns = archiveMapper.archivePipelineStepRunsByInstanceIds(ids);
+    long archivedFileDispatchRecords = archiveMapper.archiveFileDispatchRecordsByInstanceIds(ids);
+    long archivedWorkflowRuns = archiveMapper.archiveWorkflowRunsByInstanceIds(ids);
+    long archivedWorkflowNodeRuns = archiveMapper.archiveWorkflowNodeRunsByInstanceIds(ids);
+    long archivedExecutionLogs = archiveMapper.archiveJobExecutionLogsByInstanceIds(ids);
+    long archivedCompensations = archiveMapper.archiveCompensationCommandsByInstanceIds(ids);
+
     // 12 步级联删（顺序遵守 cleanup-success-instances.sql）
     long stepInstances = archiveMapper.deleteJobStepInstancesByInstanceIds(ids);
     long jobTasks = archiveMapper.deleteJobTasksByInstanceIds(ids);
@@ -53,12 +67,26 @@ public class SuccessInstanceArchiveService {
     long instances = archiveMapper.deleteJobInstancesByIds(ids);
 
     log.info(
-        "success-instance archive tick: cutoff={}, retention={}d, instances={}, partitions={},"
-            + " stepInstances={}, jobTasks={}, pipelineInstances={}, pipelineStepRuns={},"
-            + " fileDispatch={}, workflowRuns={}, workflowNodeRuns={}, executionLogs={},"
-            + " compensations={}",
+        "success-instance archive tick: cutoff={}, retention={}d, archivedInstances={},"
+            + " archivedPartitions={}, archivedStepInstances={}, archivedJobTasks={},"
+            + " archivedPipelineInstances={}, archivedPipelineStepRuns={}, archivedFileDispatch={},"
+            + " archivedWorkflowRuns={}, archivedWorkflowNodeRuns={}, archivedExecutionLogs={},"
+            + " archivedCompensations={}, instances={}, partitions={}, stepInstances={}, jobTasks={},"
+            + " pipelineInstances={}, pipelineStepRuns={}, fileDispatch={}, workflowRuns={},"
+            + " workflowNodeRuns={}, executionLogs={}, compensations={}",
         cutoff,
         retention,
+        archivedInstances,
+        archivedPartitions,
+        archivedStepInstances,
+        archivedJobTasks,
+        archivedPipelineInstances,
+        archivedPipelineStepRuns,
+        archivedFileDispatchRecords,
+        archivedWorkflowRuns,
+        archivedWorkflowNodeRuns,
+        archivedExecutionLogs,
+        archivedCompensations,
         instances,
         partitions,
         stepInstances,
