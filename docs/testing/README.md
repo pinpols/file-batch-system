@@ -4,24 +4,24 @@
 
 ## 先看这里
 
-1. [full-project-test-plan.md](./full-project-test-plan.md) - 全量测试总计划、阶段拆分和完成状态
-2. [phase-1-test-coverage-matrix.md](./phase-1-test-coverage-matrix.md) - 当前测试覆盖盘点和缺口分布
-3. [phase-2-functional-regression.md](./phase-2-functional-regression.md) - Phase 2 的 P0 回归范围和后续增量项
+1. [full-project-full-project-test-plan.md](./full-project-full-project-test-plan.md) - 全量测试总计划、阶段拆分和完成状态
+2. [phase-coverage.md](./phase-coverage.md) - 当前测试覆盖盘点和缺口分布
+3. [phase-coverage.md](./phase-coverage.md) - Phase 2 的 P0 回归范围和后续增量项
 4. [release-gate.md](./release-gate.md) - PR / CI / staging 门禁规则和放行标准
 
 ## 执行指南
 
-- [staging-live-deploy-smoke-checklist.md](./staging-live-deploy-smoke-checklist.md) - staging 上线 smoke 执行清单
+- [release-gate.md](./release-gate.md) - staging 上线 smoke 执行清单
 
 ## 场景矩阵
 
-- [e2e-scenario-matrix.md](./e2e-scenario-matrix.md) - E2E 测试类、场景和覆盖状态矩阵
-- [e2e-three-flows-coverage.md](./e2e-three-flows-coverage.md) - 三条主链路的 E2E 覆盖分析
+- [e2e-coverage.md](./e2e-coverage.md) - E2E 测试类、场景和覆盖状态矩阵
+- [e2e-coverage.md](./e2e-coverage.md) - 三条主链路的 E2E 覆盖分析
 
 ## 说明文档
 
-- [test-strategy.md](./test-strategy.md) - 测试分层策略
-- [test-plan.md](./test-plan.md) - 更面向项目层的测试总览和当前状态
+- [full-project-full-project-test-plan.md](./full-project-full-project-test-plan.md) - 测试分层策略
+- [full-project-test-plan.md](./full-project-test-plan.md) - 更面向项目层的测试总览和当前状态
 
 ## 已完成报告归档（`completed-reports/`）
 

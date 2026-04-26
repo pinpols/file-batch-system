@@ -26,7 +26,7 @@
 - `kafka-topic-plan.md`：Kafka Topic 设计规范
 - `worker-plugins.md`：Worker 平台与插件扩展说明
 - `console-sidebar-menu-tree.md`：控制台侧边栏菜单树与可见角色
-- `local-env.md`：本地开发环境说明
+- `local-development.md`：本地开发环境说明
 - `adr/`：架构决策记录（不可变）
 
 ### 已完成归档（`completed/`）

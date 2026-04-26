@@ -1,4 +1,7 @@
-# Phase 1：P1 功能回归补齐
+# Phase 1/2 测试覆盖矩阵（按阶段分章合并）
+
+## Phase 1：P1 功能回归补齐
+
 # 全项目测试覆盖矩阵（Phase 1）
 
 更新时间：2026-04-08
@@ -39,7 +42,7 @@
 
 ### 结论 5：测试口径已统一到当前仓库基线
 
-当前统一口径为：**247 个测试相关文件**（146 单元 + 59 集成 + 30 E2E + 支撑类）。后续文档引用应以本文件和 `docs/testing/test-strategy.md` 为准。
+当前统一口径为：**247 个测试相关文件**（146 单元 + 59 集成 + 30 E2E + 支撑类）。后续文档引用应以本文件和 `docs/testing/full-project-full-project-test-plan.md` 为准。
 
 ## 当前测试资产总览
 
@@ -89,8 +92,105 @@
 | 部署验证 | `scripts/ci/run-full-regression.sh --with-deployment-verification`、`docs/testing/deployment-verification-report.md` | 升级 / 回滚执行链路已接入 | 仍缺真实 staging 留档和 `--atomic` 失败观测 |
 | 压测资产 | `JobLaunchSimulation`、`ConsoleQuerySimulation`、`CapacityBaselineSimulation` | 仅有脚本和空白基线表 | 仍缺实测数据和流水线接入 |
 | CI 工作流 | `.github/workflows/pr-gate.yml`、`.github/workflows/full-ci-gate.yml`、`.github/workflows/staging-gate.yml` 已存在；未发现 `.gitlab-ci.yml`、`Jenkinsfile` | 三层门禁已落地 | 下一步重点转为真实 staging 执行与回滚验证 |
-| 文档一致性 | 本轮已统一到 156 / 76 / 27 / 42 口径 | 以本文件、`test-strategy.md`、`release-gate.md` 为主 | 后续新增测试时需同步更新 |
+| 文档一致性 | 本轮已统一到 156 / 76 / 27 / 42 口径 | 以本文件、`full-project-full-project-test-plan.md`、`release-gate.md` 为主 | 后续新增测试时需同步更新 |
 
 ## 说明
 
-本文件只保留覆盖盘点和缺口分布。具体执行顺序、阶段推进、已完成 / 未完成状态和后续输入清单见 `docs/testing/full-project-test-plan.md`。
+本文件只保留覆盖盘点和缺口分布。具体执行顺序、阶段推进、已完成 / 未完成状态和后续输入清单见 `docs/testing/full-project-full-project-test-plan.md`。
+
+---
+
+## Phase 2：P0 功能回归补齐
+
+
+更新时间：2026-03-28
+
+## 当前状态
+
+Phase 2 已收口完成。
+
+收口结果：
+
+- `batch-trigger` 首批 P0 门禁已补齐
+- 统一回归入口 `scripts/ci/run-full-regression.sh` 已落地
+- `batch-console-api` 历史集成测试失败已清零
+- `batch-e2e-tests` 历史失败已清零
+- 仓库级最终复跑结果见 `docs/testing/full-test-run-report.md`
+
+## 目标
+
+本文件用于保留 Phase 2 的 P0 收口清单和后续增量项，便于单独查阅和维护。
+
+## 已完成的首轮收口
+
+### `batch-trigger` 首批门禁
+
+已落地：
+
+- `DefaultTriggerServiceTest`
+- `DefaultLaunchAdapterServiceTest`
+- `QuartzLaunchJobTest`
+- `TriggerSchedulerFacadeTest`
+- `TriggerControllerTest`
+- `TriggerServiceIntegrationIT`
+
+覆盖点：
+
+- API 请求校验、缺少幂等键、自动生成 `requestId/traceId`
+- trigger request 幂等落库与重复提交去重
+- catch-up 审批通过后的状态推进
+- Quartz misfire 后的自动补跑 / 人工审批分支
+- Quartz 注册时 `catchUpPolicy` / `catchUpMaxDays` 元数据透传
+- `batch-trigger` 与真实 PostgreSQL 的基本协作
+
+### 接口层校验补强
+
+已修正：
+
+- `TriggerLaunchRequest` 补齐字段校验注解
+- `TriggerApiExceptionHandler` 补齐 `MethodArgumentNotValidException`
+- `TriggerApiExceptionHandler` 统一处理 `ConstraintViolationException` 和兜底 500
+
+### Quartz catch-up 策略修正
+
+已修正：
+
+- `TriggerSchedulerFacade` 注册任务时补充 `calendarCode`、`catchUpPolicy`、`catchUpMaxDays`
+- `QuartzLaunchJob` 执行时恢复这些元数据并参与 misfire 决策
+
+### 统一回归入口
+
+已落地：
+
+- `scripts/ci/run-full-regression.sh`
+
+当前脚本能力：
+
+- reactor 默认测试（`*Test` / `*IntegrationTest`）
+- reactor 显式 `*IT` 套件，包含需要单独触发的集成测试和 E2E
+- 可选 Gatling load smoke
+- 可选 Helm deploy smoke
+- 可选巡检脚本收尾
+- 可选 live deploy smoke：`helm upgrade --install --wait` + rollout + readiness
+
+## 仍建议继续补强的 P0
+
+- `batch-worker-core` 真实 listener / backpressure / drain 协作测试
+- dedup key 幂等冲突专项
+- Kafka 重复投递与重试耗尽专项
+- 外部渠道失败与恢复专项
+
+## 本轮新增补强
+
+- `batch-console-api` 权限/租户负向测试
+- 同 task 并发 claim 竞争专项
+- Kafka 外部渠道失败与恢复专项（补了 `KafkaOutboxPublisher` 失败分支）
+- Worker drain / worker registry 状态保持修正
+- 多租户并发 E2E 隔离补种子与断言修正
+- 导出 / outbox E2E 断言与种子修正
+- 共享调度器关闭策略调整，清除 surefire 强杀噪音
+
+## 补充说明
+
+- `batch-worker-core` 已有 backpressure、worker loop、lease/wrapper 的单测基础，仍可继续补真实 listener 级协作测
+- `dedup key` 和 retry exhausted 已有 service/mapper 级覆盖，后续若继续扩展，优先补 E2E 或真实依赖链路

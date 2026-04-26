@@ -166,6 +166,6 @@ curl http://console-api/api/console/queries/job-instances?tenantId=t1
 
 ## 相关参考
 
-- `docs/runbook/observability-loki-tempo.md` — 三件套监控（看 ShedLock 抢锁、Worker 上下线、SSE 重连都靠它）
+- `docs/runbook/observability-stack.md` — 三件套监控（看 ShedLock 抢锁、Worker 上下线、SSE 重连都靠它）
 - `docs/runbook/read-replica.md` — Read replica 部署与切换
 - `docs/architecture/scalability-assessment.md` §6 — 海量场景的下一步分库分表路线
