@@ -25,17 +25,42 @@
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 兜底，故障自动降级。
 
+### 1.1 Fail-open 速查（代码核实，2026-04-26）
+
+| 开关 | Fail-open 强度 | 故障场景 | 行为 | 副作用 |
+|---|---|---|---|---|
+| `read-replica.enabled` | 🟡 中 | 从库 SQLException | 失败 3 次 → quarantine 30s → 静默走主库；期满自动探活 | 主库压力上升；read-after-write 一致性同步生效 |
+| `worker-cache.enabled` | 🟢 强 | Redis 异常 / 反序列化失败 | `catch Exception` → 直通 DB loader + WARN | 派发延迟略增（DB query），业务不受影响 |
+| `mq.routing.mode` | — | 无故障场景 | — | 切换需走灰度 SOP（[`mq-topic-routing-rollout.md`](./mq-topic-routing-rollout.md)） |
+| `quota.runtime-store=redis` | 🟡 中 | Redis `DataAccessException` | `catch` → `ResourceCheck.allow()`（**放行**）+ WARN | **限流功能等同关闭**：长期 Redis 故障会让大租户吃掉小租户配额 |
+| `quota.snapshot.enabled` | 🟢 强（局部） | 单租户 snapshot 失败 | per-tenant `catch` → 跳过该租户继续下一个 | 该租户审计数据漏一个周期，下次自然恢复 |
+
+> "强 fail-open"=故障时业务完全不受影响；"中 fail-open"=故障时业务继续但行为/语义变化，需运维监控。
+
 ---
 
-## 2. 生产开启建议矩阵
+## 2. 默认开关状态 + 开启建议（按部署形态）
 
-| 部署形态 | 业务量级 | 建议开关组合 |
+> **原则**：5 个 P2 开关的 yml fallback 全部为生产推荐值（read-replica=true / worker-cache=true / mq.routing=TENANT / quota.runtime-store=redis / quota.snapshot=true），所有开关都有 fail-open 兜底（详见 §1.1）。**多数场景"全部默认"即可**，下表只列需要显式覆盖的场景。
+
+| 部署形态 | 业务量级 | 推荐覆盖（在 .env 显式设） | 理由 |
+|---|---|---|---|
+| **本地 IDE 直跑** | 极小 | 无（全默认） | 未起 replica 时 read-replica fail-open 仅前几次 WARN 后静默；嫌噪音可设 `BATCH_CONSOLE_READ_REPLICA_ENABLED=false` |
+| **本地 docker-compose** | < 1 万/天 | 无（全默认） | compose 默认起 PG / Redis / Kafka；可 `--profile replica` 起从库让 read-replica 真路由 |
+| **单机生产** | < 100 万/天 | 无（全默认） | 单机 PG 不起 replica → `BATCH_CONSOLE_READ_REPLICA_ENABLED=false` 减 WARN 噪音 |
+| **中等生产** | 100 万 ~ 1000 万/天 | 无（全默认） | 5 项默认值即为本量级目标配置 |
+| **海量** | > 1000 万/天 | `BATCH_MQ_ROUTING_MODE=PRIORITY` | TENANT topic 数随租户线性膨胀；切 PRIORITY 收敛到 HIGH/NORMAL/LOW 三 topic（详见 §3.3 切换灰度） |
+| **测试 / E2E** | — | `application-test.yml` 已覆盖 `read-replica=false` + `worker-cache=false` + `file-governance.*=false` + 后台调度全关 | 测试不起 replica；关后台 scheduler 防 timing flake |
+
+**何时关某个开关**：
+
+| 想关 | 设置 | 何时这么干 |
 |---|---|---|
-| 本地开发 / 联调 | 极小 | 全保持默认；想关掉减少依赖时设 `worker-cache=false` / `quota.runtime-store=database` |
-| docker-compose 演示 | < 1 万/天 | 默认即可；read-replica 默认 true（启 `--profile replica` 即用，未启走 fail-open 兜底，前几次请求 WARN 后 quarantine 静默走主库） |
-| 单机生产 | < 100 万/天 | `worker-cache=true` + `quota=redis`（默认）；其他保持 false |
-| 中等生产 | 100 万 ~ 1000 万/天 | 全部默认（含 read-replica 翻 true） |
-| 海量 | > 1000 万/天 | 全开 + `mq.routing.mode=PRIORITY`；Quartz 拐点临近时直接换时间轮（见 `docs/architecture/quartz-replacement-evaluation.md`），不做独立库；这是 Phase 3 范畴，需配套分库分表 |
+| read-replica | `BATCH_CONSOLE_READ_REPLICA_ENABLED=false` | 没起 PG 从库 / 想避免 WARN 日志 |
+| worker-cache | `BATCH_SCHEDULER_WORKER_CACHE_ENABLED=false` | Redis 抖动期间想完全直通 DB / 调试派发延迟问题 |
+| quota Redis | `BATCH_QUOTA_RUNTIME_STORE=database` | Redis 长期故障 / 想看 PG 行锁瓶颈复现 |
+| quota snapshot | `BATCH_QUOTA_SNAPSHOT_ENABLED=false` | 不需要审计 quota 历史时减 PG 写压力 |
+| mq routing | `BATCH_MQ_ROUTING_MODE=SINGLE` | 单租户场景 / 回退老 worker 兼容期 |
 
 ---
 
@@ -56,7 +81,7 @@
 - 必须配 `BATCH_CONSOLE_PRIMARY_URL` / `BATCH_CONSOLE_REPLICA_URL` 等 6 项 DB 凭证
 
 **风险**：
-- 从库挂掉 → **已 fail-open**：`ReadReplicaRoutingDataSource` 在从库 SQLException 时降级走主库；连续失败 ≥ `failureThreshold`（默认 3）后进入 `quarantineSeconds`（默认 30s）隔离期，期内静默走主库；期满下次请求自动探测，成功即解除
+- 从库挂掉 → 🟡 **中 fail-open**：`ReadReplicaRoutingDataSource` 在从库 SQLException 时降级走主库；连续失败 ≥ `failureThreshold`（默认 3）后进入 `quarantineSeconds`（默认 30s）隔离期，期内静默走主库；期满下次请求自动探测，成功即解除。**副作用：主库压力上升**，长期 replica 故障要扩容主库
 - 主从延迟 → "提交后立即读"场景会读到旧数据；用 `@RouteToPrimary` 注解强制走主库（`RouteToPrimaryAspect` 已就位）
 - 多从库扩展 → 当前 routing map 硬编码 PRIMARY/REPLICA，多从库需改 `determineCurrentLookupKey` 加轮询
 
@@ -84,7 +109,7 @@
 **配套依赖**：Redis 已就位（项目本来就依赖）。
 
 **风险**：🟢 低
-- Redis 故障 → 实现已 fail-open（catch `DataAccessException` 直通 DB），见 `WorkerRegistryCache`
+- Redis 故障 → 🟢 **强 fail-open**：`WorkerRegistryCache` `catch Exception`（涵盖 Redis 异常 + JSON 反序列化失败）→ 直通 DB loader + WARN，业务完全不受影响
 - TTL 内 worker offline → 最多 5s 内可能选到已下线 worker，`DefaultWorkerSelector` 后续 dispatch 会被 worker 拒绝，下次 tick 重试
 
 **验证**：
@@ -118,9 +143,10 @@ docker exec batch-redis redis-cli --scan --pattern "batch:worker-registry:*" | h
 - 切换 mode 不能在线滚动 → 老消费者订阅 base topic，新生产者写到 `base.{tenant}`，老 worker 收不到 → 任务积压
 - 正确切换姿势：先全量升级 worker（同时订阅 base 和 base.*）→ 再切 producer mode → 等老 base topic 消费完 → 老 worker 下线
 
-**风险**：🟡 中
-- 切换不当 → 任务静默积压（producer 在新 topic、consumer 在老 topic）
+**风险**：🟡 中（**无 fail-open**——这是配置开关，不是故障降级开关）
+- 切换不当 → 任务静默积压（producer 在新 topic、consumer 在老 topic）；走灰度 SOP [`mq-topic-routing-rollout.md`](./mq-topic-routing-rollout.md)
 - topic 数膨胀 → 多租户场景一千个租户 = 一千个 topic，broker 分区元数据膨胀，需提前评估 broker 容量
+- BatchTopicResolver 仅在 `workerType` 字段无效时返回 null（业务数据异常，**不是基础设施故障**），由调用方走 fallback 路径
 
 **验证**：
 ```bash
@@ -158,8 +184,8 @@ docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 --list | 
 - `redis` 模式：Redis 必须就位；`QuotaRuntimeStateSnapshotScheduler` 按 `batch.quota.snapshot.interval-millis`（默认 5 分钟）把 Redis 状态 upsert 回 PG `quota_runtime_state` 保留审计能力
 - `database` 模式：`QuotaRuntimeResetScheduler` 启用，按时间窗口重置 PG 行；Redis 模式下该 scheduler 不启动（`@ConditionalOnProperty(havingValue=database)`）
 
-**风险**：🟢 低
-- Redis 抛 `DataAccessException` → fail-open（放行 + WARN）；不阻塞业务
+**风险**：🟡 中（fail-open 有语义副作用）
+- Redis 抛 `DataAccessException` → 🟡 **中 fail-open**：`RedisQuotaRuntimeStateService` 三处 catch（evaluateAndReserve / acquire / release）一律返回 `ResourceCheck.allow()` —— **限流功能等同关闭**。短抖动无影响；**长期 Redis 故障会让大租户吃掉小租户配额**。运维需监控 quota allow WARN 频率，必要时手工切回 `database` 模式
 - 切回 `database` → PG `quota_runtime_state` 表行可能因 Redis 模式期间未及时 snapshot 而短暂不一致；下个调度周期自然收敛
 
 **验证**：
@@ -183,7 +209,7 @@ docker exec batch-redis redis-cli --scan --pattern "batch:quota:*" | head
 **配套依赖**：无新增。
 
 **风险**：🟢 低
-- snapshot 失败 → WARN，下次周期重试；不阻塞限流业务
+- snapshot 失败 → 🟢 **强 fail-open（局部）**：per-tenant `catch DataAccessException`，单个租户失败仅跳过该租户日志 WARN，其他租户继续；该租户漏一周期，下次自然恢复；**不阻塞限流业务**
 - 频率太高 → PG 写压力（每 5 min 全量 upsert 所有 owner）；万级 owner 时建议放大到 600000+
 
 **验证**：
