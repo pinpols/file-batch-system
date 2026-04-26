@@ -29,8 +29,7 @@
 | **Apache-2.0** | Spring 全家桶 / Flyway / MyBatis / MinIO / OkHttp / POI / Quartz / Netty / Jackson / Micrometer / OpenTelemetry / ShedLock | 🟢 无 | 完全兼容 Apache-2.0 项目自身 |
 | **MIT** | Lombok / SLF4J / Mockito / 部分 transitive | 🟢 无 | 完全宽松 |
 | **BSD-2-Clause** | PostgreSQL JDBC | 🟢 无 | 仅需保留 copyright |
-| **BSD-3-Clause** | JSch (mwiede fork) / ANTLR ST4 | 🟢 无（admin 缺口） | 严格要求保留 3 条款原文，详见 §3.3 |
-| **EDL 1.0** | Angus Activation Registries | 🟢 无 | Eclipse Distribution License = 改名版 BSD-3 |
+| **BSD-3-Clause / EDL-1.0** | JSch (mwiede fork) / ANTLR ST4 / Angus Activation Registries | 🟢 无（admin 缺口） | 严格要求保留 3 条款原文，详见 §3.3。EDL-1.0 = Eclipse Distribution License，与 BSD-3 等价 |
 | **EPL-2.0 + LGPL（双许可）** | Logback Classic / Core 1.5.32 | 🟢 无 | 双许可可选 EPL-2.0 路径；动态链接库使用无义务，详见 §2.1 |
 | **EPL-2.0 + GPL-2 w/ Classpath Exception** | Angus Mail / Jakarta Annotations API / Jakarta Mail API | 🟢 无 | Classpath Exception **明确允许**链接到非 GPL 代码，无传染，详见 §2.2 |
 | **LGPL-2.1 OR Apache-2.0（双许可）** | JSqlParser 4.5 | 🟢 无 | 选 Apache-2.0 路径即可，无需走 LGPL，详见 §2.3 |
@@ -98,7 +97,7 @@
 
 **BSD-3-Clause §1-3 严格要求**：分发二进制时必须包含 copyright notice + 三条款条文原文 + disclaimer 全文。
 
-**现状**：当前 `THIRD-PARTY-LICENSES.md` 只列了一行简介。`THIRD-PARTY-GENERATED.txt` 也只列名字，未嵌全文。
+**现状**：当前 `THIRD-PARTY-LICENSES.md` 只列了一行简介，`sbom.json` 也只记 license id（如 `BSD-3-Clause`），未嵌全文。
 
 **修复**：把 BSD-3-Clause 全文（10 行）作为附录贴到 `THIRD-PARTY-LICENSES.md` 末尾或独立 `licenses/BSD-3-Clause.txt`。
 
@@ -129,21 +128,31 @@
 ### 5.1 完整刷新（每次升级依赖后跑）
 
 ```bash
-# 同时生成 SBOM (CycloneDX) + 第三方 license 聚合
+# 生成 SBOM (CycloneDX, 入库) + 第三方 license 聚合（输出到 target/，仅开发时校验用）
 mvn -P compliance cyclonedx:makeAggregateBom license:aggregate-add-third-party
 
-# 输出：
-#   target/bom.json + target/bom.xml          ← CycloneDX SBOM
-#   docs/compliance/THIRD-PARTY-GENERATED.txt ← 252 个依赖的 license 清单
-#   docs/compliance/sbom.json                 ← 拷贝后的 SBOM 副本
+# 入库的权威产物：
+#   docs/compliance/sbom.json           ← CycloneDX 1.6 完整 SBOM（266 个 component）
+# 仅开发期临时产物（不入库）：
+#   target/bom.json + target/bom.xml
+#   target/generated-sources/license/THIRD-PARTY.txt
 ```
+
+> 历史包袱：`docs/compliance/THIRD-PARTY-GENERATED.txt` 曾经入库，2026-04-26 删除（与 `sbom.json` 数据冗余，pom.xml 已改回默认 `target/` 输出路径）。
 
 ### 5.2 红线快速扫描（CI 友好，0 输出 = 安全）
 
+基于 `sbom.json` 用 jq 查询，避免依赖临时文本文件：
+
 ```bash
-# 任何输出都需要人工 review
-grep -iE "unknown|^\s*\(GPL[^2 ]|AGPL|CDDL|MPL|CC-BY-NC|json license" \
-  docs/compliance/THIRD-PARTY-GENERATED.txt | grep -v -iE "Apache|w/ CPE|Classpath Exception"
+# 列出所有 license 唯一值（人工瞄一眼）
+jq -r '.components[].licenses[]?.license | (.id // .name)' docs/compliance/sbom.json | sort -u
+
+# 红线扫描：任何输出都需要人工 review
+jq -r '.components[] | "\(.licenses[0].license.id // .licenses[0].license.name // "UNKNOWN") \(.purl)"' \
+  docs/compliance/sbom.json \
+  | grep -iE "^(UNKNOWN|GPL-[0-9]|AGPL|CDDL|MPL|CC-BY-NC|JSON)" \
+  | grep -v -iE "GPL-[23]\.0-with-classpath-exception"
 ```
 
 **今天（2026-04-26）实跑结果**：0 命中 ✅
@@ -182,7 +191,6 @@ grep -iE "unknown|^\s*\(GPL[^2 ]|AGPL|CDDL|MPL|CC-BY-NC|json license" \
 
 - `LICENSE` — 项目自身 Apache-2.0 全文
 - `NOTICE` — 项目自身 attribution（待按 §3.1 升级）
-- `docs/compliance/THIRD-PARTY-LICENSES.md` — 人工维护的依赖 license 摘要表
-- `docs/compliance/THIRD-PARTY-GENERATED.txt` — `mvn -P compliance` 自动生成的完整清单（252 项）
-- `docs/compliance/sbom.json` — CycloneDX 1.6 SBOM
-- `pom.xml` `<profile id="compliance">` — 生成器配置
+- `docs/compliance/sbom.json` — **权威依赖清单**，CycloneDX 1.6 SBOM（266 个 component，机器可读，jq 友好）
+- `docs/compliance/THIRD-PARTY-LICENSES.md` — 人工 curated 摘要表（按 runtime/test 分类，附 "Used By" 业务上下文）
+- `pom.xml` `<profile id="compliance">` — 生成器配置（cyclonedx → 入库；license-maven-plugin → 临时 target/，不入库）
