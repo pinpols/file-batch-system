@@ -349,10 +349,11 @@ START_TRIGGER="${START_TRIGGER:-1}"
 START_WORKERS="${START_WORKERS:-1}"
 WORKERS="${WORKERS:-import,export,dispatch}"
 
-# console-api 读写分离：本地默认无 PG 从库容器（postgres-replica 是 docker compose --profile replica opt-in），
-# application.yml fallback 是 true 但 fail-open 会触发 quarantine + WARN 日志。本地默认关，
-# 想联调从库时显式 export BATCH_CONSOLE_READ_REPLICA_ENABLED=true 后再跑本脚本。
-export BATCH_CONSOLE_READ_REPLICA_ENABLED="${BATCH_CONSOLE_READ_REPLICA_ENABLED:-false}"
+# console-api 读写分离：与 application.yml fallback / docker-compose / .env.example 对齐默认 true。
+# 本地裸 jar 若没起 postgres-replica 容器，ReadReplicaRoutingDataSource fail-open 会
+# 在前几次请求时打 WARN 后进入 quarantine 自动降级到主库；想完全静音可
+# 显式 export BATCH_CONSOLE_READ_REPLICA_ENABLED=false 后再跑本脚本。
+export BATCH_CONSOLE_READ_REPLICA_ENABLED="${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}"
 
 echo "==> 启动 Spring Boot 进程（profile=local）..."
 # 实测 "orch + trigger + console 三并发" 让 orch 自己被资源竞争拖慢 ~6s（10→16s），
