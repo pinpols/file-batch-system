@@ -12,7 +12,10 @@ import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.wheel.HashedWheelTriggerScheduler;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import org.assertj.core.data.TemporalUnitOffset;
+import org.assertj.core.data.TemporalUnitWithinOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -181,8 +184,7 @@ class WheelMisfireIT extends AbstractIntegrationTest {
     stateMapper.insertOnReconcile(e);
   }
 
-  private static org.assertj.core.data.TemporalUnitOffset within1s() {
-    return new org.assertj.core.data.TemporalUnitWithinOffset(
-        1, java.time.temporal.ChronoUnit.SECONDS);
+  private static TemporalUnitOffset within1s() {
+    return new TemporalUnitWithinOffset(1, ChronoUnit.SECONDS);
   }
 }
