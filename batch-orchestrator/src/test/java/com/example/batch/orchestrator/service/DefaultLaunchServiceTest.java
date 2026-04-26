@@ -95,7 +95,8 @@ class DefaultLaunchServiceTest {
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     selfProvider = mock(ObjectProvider.class);
     batchDaySelfProvider = mock(ObjectProvider.class);
-    BatchTimezoneProvider timezoneProvider = new BatchTimezoneProvider(new BatchTimezoneProperties());
+    BatchTimezoneProvider timezoneProvider =
+        new BatchTimezoneProvider(new BatchTimezoneProperties());
     launchBatchDayService =
         new LaunchBatchDayService(
             configCacheService,

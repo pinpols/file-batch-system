@@ -6,6 +6,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleConfigApprovalApplicationService;
 import com.example.batch.console.domain.entity.ConfigReleaseEntity;
 import com.example.batch.console.mapper.ConfigApprovalMapper;
@@ -22,7 +23,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /**
  * ConfigRelease 的审批流入口（submit / approve / reject），独立于 JOB/FILE 审批链路。
@@ -37,8 +37,8 @@ import com.example.batch.common.utils.Texts;
  *   <li>{@link #reject}：类似 approve 的 CAS 保护，但 release 回退到 {@code DRAFT}（可重新编辑再提交）。
  * </ul>
  *
- * <p>全程写 {@code config_change_log}（SUBMIT_APPROVAL / APPROVE / REJECT 三种 action），
- * 带 operator / reason / detail JSON，提供完整审计轨迹。
+ * <p>全程写 {@code config_change_log}（SUBMIT_APPROVAL / APPROVE / REJECT 三种 action）， 带 operator /
+ * reason / detail JSON，提供完整审计轨迹。
  *
  * <p>submit 接收可选 {@code expiredAt}（ISO-8601 Instant），用于后续超期自动回滚的定时器钩子。
  */
@@ -251,8 +251,7 @@ public class DefaultConsoleConfigApprovalApplicationService
             .operatorType("API")
             .summary(
                 JsonUtils.toJson(
-                    mapOf(
-                        "reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
+                    mapOf("reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail)))
             .build());
   }
 

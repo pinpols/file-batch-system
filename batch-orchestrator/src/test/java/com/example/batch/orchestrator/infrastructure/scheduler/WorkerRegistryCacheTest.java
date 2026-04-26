@@ -50,7 +50,13 @@ class WorkerRegistryCacheTest {
     props.setEnabled(false);
     AtomicInteger calls = new AtomicInteger();
     List<WorkerRegistryRecord> result =
-        cache.getOrLoad("t1", "EXPORT", () -> { calls.incrementAndGet(); return List.of(); });
+        cache.getOrLoad(
+            "t1",
+            "EXPORT",
+            () -> {
+              calls.incrementAndGet();
+              return List.of();
+            });
     assertThat(result).isEmpty();
     assertThat(calls.get()).isEqualTo(1);
     verify(redis, never()).redisTemplate();
@@ -64,10 +70,20 @@ class WorkerRegistryCacheTest {
     List<WorkerRegistryRecord> records = List.of(record(1L, "w-1"));
 
     List<WorkerRegistryRecord> result =
-        cache.getOrLoad("t1", "EXPORT", () -> { calls.incrementAndGet(); return records; });
+        cache.getOrLoad(
+            "t1",
+            "EXPORT",
+            () -> {
+              calls.incrementAndGet();
+              return records;
+            });
 
     assertThat(calls.get()).isEqualTo(1);
-    assertThat(result).hasSize(1).first().extracting(WorkerRegistryRecord::workerCode).isEqualTo("w-1");
+    assertThat(result)
+        .hasSize(1)
+        .first()
+        .extracting(WorkerRegistryRecord::workerCode)
+        .isEqualTo("w-1");
     verify(valueOps).set(anyString(), anyString(), eq(Duration.ofMillis(props.getTtlMillis())));
   }
 
@@ -94,7 +110,13 @@ class WorkerRegistryCacheTest {
     AtomicInteger calls = new AtomicInteger();
 
     List<WorkerRegistryRecord> result =
-        cache.getOrLoad("t1", "EXPORT", () -> { calls.incrementAndGet(); return List.of(); });
+        cache.getOrLoad(
+            "t1",
+            "EXPORT",
+            () -> {
+              calls.incrementAndGet();
+              return List.of();
+            });
 
     assertThat(calls.get()).isZero();
     assertThat(result).hasSize(1);
@@ -110,7 +132,13 @@ class WorkerRegistryCacheTest {
     List<WorkerRegistryRecord> records = List.of(record(2L, "w-2"));
 
     List<WorkerRegistryRecord> result =
-        cache.getOrLoad("t1", "EXPORT", () -> { calls.incrementAndGet(); return records; });
+        cache.getOrLoad(
+            "t1",
+            "EXPORT",
+            () -> {
+              calls.incrementAndGet();
+              return records;
+            });
 
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);
@@ -127,7 +155,13 @@ class WorkerRegistryCacheTest {
     List<WorkerRegistryRecord> records = List.of(record(3L, "w-3"));
 
     List<WorkerRegistryRecord> result =
-        cache.getOrLoad("t1", "EXPORT", () -> { calls.incrementAndGet(); return records; });
+        cache.getOrLoad(
+            "t1",
+            "EXPORT",
+            () -> {
+              calls.incrementAndGet();
+              return records;
+            });
 
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);
@@ -142,7 +176,13 @@ class WorkerRegistryCacheTest {
     List<WorkerRegistryRecord> records = List.of(record(4L, "w-4"));
 
     List<WorkerRegistryRecord> result =
-        cache.getOrLoad("t1", "EXPORT", () -> { calls.incrementAndGet(); return records; });
+        cache.getOrLoad(
+            "t1",
+            "EXPORT",
+            () -> {
+              calls.incrementAndGet();
+              return records;
+            });
 
     assertThat(calls.get()).isEqualTo(1);
     assertThat(result).hasSize(1);

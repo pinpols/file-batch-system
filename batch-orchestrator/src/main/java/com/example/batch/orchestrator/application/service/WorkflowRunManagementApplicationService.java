@@ -17,10 +17,9 @@ import org.springframework.stereotype.Service;
 /**
  * 工作流运行实例的生命周期管理应用服务，提供取消、终止和跳过节点等运维操作。
  *
- * <p>取消和终止最终均将运行状态置为 {@code TERMINATED}，区别在于允许的前置状态范围不同：
- * 取消允许从 {@code CREATED} 或 {@code RUNNING} 发起，而终止仅允许 {@code RUNNING} 状态。
- * 节点跳过（{@link #skipNode}）仅作用于 {@code FAILED} 的节点运行记录，
- * 可在工作流整体处于 {@code RUNNING} 或 {@code FAILED} 时使用，以便跳过卡点后续继续推进。
+ * <p>取消和终止最终均将运行状态置为 {@code TERMINATED}，区别在于允许的前置状态范围不同： 取消允许从 {@code CREATED} 或 {@code RUNNING}
+ * 发起，而终止仅允许 {@code RUNNING} 状态。 节点跳过（{@link #skipNode}）仅作用于 {@code FAILED} 的节点运行记录， 可在工作流整体处于
+ * {@code RUNNING} 或 {@code FAILED} 时使用，以便跳过卡点后续继续推进。
  *
  * <p>所有状态变更通过 Mapper 层完成，不经过完整的编排引擎，属于直接的运维干预手段。
  */

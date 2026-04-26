@@ -1,5 +1,6 @@
 package com.example.batch.console.support;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.domain.ConsoleUserAccountEntity;
 import com.example.batch.console.repository.ConsoleUserAccountRepository;
 import java.util.Arrays;
@@ -8,7 +9,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Service;
-import com.example.batch.common.utils.Texts;
 
 /** 控制台账号查询：通过 Spring Data JDBC 从平台库读取账号、密码哈希和角色列表。 */
 @Service

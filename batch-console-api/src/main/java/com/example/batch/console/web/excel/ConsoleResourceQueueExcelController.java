@@ -72,8 +72,8 @@ public class ConsoleResourceQueueExcelController {
   @Deprecated
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")
-  public CommonResponse<ExcelUploadResponse> upload(
-      @RequestParam("file") MultipartFile file) throws IOException {
+  public CommonResponse<ExcelUploadResponse> upload(@RequestParam("file") MultipartFile file)
+      throws IOException {
     return responseFactory.success(applicationService.upload(file));
   }
 

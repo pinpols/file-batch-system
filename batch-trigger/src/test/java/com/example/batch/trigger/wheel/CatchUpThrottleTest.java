@@ -68,10 +68,10 @@ class CatchUpThrottleTest {
   @Test
   void secondAcquireWaitsByInterval() {
     StubClock clock = new StubClock(1_000_000L);
-    CatchUpThrottle throttle = new CatchUpThrottle(10.0, clock);  // 100ms 间隔
+    CatchUpThrottle throttle = new CatchUpThrottle(10.0, clock); // 100ms 间隔
 
-    throttle.reserveSlot();  // 第 1 个,0 等待
-    long wait = throttle.reserveSlot();  // 第 2 个,需等 100ms
+    throttle.reserveSlot(); // 第 1 个,0 等待
+    long wait = throttle.reserveSlot(); // 第 2 个,需等 100ms
     assertThat(wait).isEqualTo(100);
   }
 
@@ -95,11 +95,11 @@ class CatchUpThrottleTest {
   @Test
   void idleGapDoesNotAccumulateBurst() {
     StubClock clock = new StubClock(0L);
-    CatchUpThrottle throttle = new CatchUpThrottle(10.0, clock);  // 100ms 间隔
+    CatchUpThrottle throttle = new CatchUpThrottle(10.0, clock); // 100ms 间隔
 
-    throttle.reserveSlot();           // 第 1 个 @ t=0
-    clock.advanceMillis(10_000L);     // 空档 10 秒
-    long wait = throttle.reserveSlot();  // 第 2 个 @ t=10000
+    throttle.reserveSlot(); // 第 1 个 @ t=0
+    clock.advanceMillis(10_000L); // 空档 10 秒
+    long wait = throttle.reserveSlot(); // 第 2 个 @ t=10000
 
     // 空档不累积 token,本次直接放行
     assertThat(wait).isZero();
@@ -115,7 +115,7 @@ class CatchUpThrottleTest {
     CatchUpThrottle throttle = new CatchUpThrottle(10.0, clock);
 
     throttle.reserveSlot();
-    clock.advanceMillis(50);  // 物理时间过了 50ms
+    clock.advanceMillis(50); // 物理时间过了 50ms
 
     // 应该还需要等 50ms 才能放行下一个(100ms - 50ms 已过)
     long wait = throttle.reserveSlot();
@@ -127,14 +127,13 @@ class CatchUpThrottleTest {
     assertThatThrownBy(() -> new CatchUpThrottle(0))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("ratePerSecond must be > 0");
-    assertThatThrownBy(() -> new CatchUpThrottle(-1))
-        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new CatchUpThrottle(-1)).isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
   void highRateGivesShortInterval() {
     StubClock clock = new StubClock(0L);
-    CatchUpThrottle throttle = new CatchUpThrottle(1000.0, clock);  // 1ms 间隔
+    CatchUpThrottle throttle = new CatchUpThrottle(1000.0, clock); // 1ms 间隔
 
     throttle.reserveSlot();
     long wait = throttle.reserveSlot();
@@ -144,7 +143,7 @@ class CatchUpThrottleTest {
   @Test
   void lowRateGivesLongInterval() {
     StubClock clock = new StubClock(0L);
-    CatchUpThrottle throttle = new CatchUpThrottle(0.5, clock);  // 2 秒间隔
+    CatchUpThrottle throttle = new CatchUpThrottle(0.5, clock); // 2 秒间隔
 
     throttle.reserveSlot();
     long wait = throttle.reserveSlot();

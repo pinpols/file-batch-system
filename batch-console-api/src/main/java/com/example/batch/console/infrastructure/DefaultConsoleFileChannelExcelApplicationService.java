@@ -13,6 +13,7 @@ import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileReceiptPolicy;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleFileChannelExcelApplicationService;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
@@ -39,7 +40,6 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /** {@link ConsoleFileChannelExcelApplicationService} 的默认实现。 */
 @Service
@@ -76,12 +76,9 @@ public class DefaultConsoleFileChannelExcelApplicationService
   private static final Set<String> RECEIPT_POLICIES = DictEnum.codes(FileReceiptPolicy.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
-              "tenant_id",
-              optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry(
-              "channel_code",
-              requiredColumn("通道唯一编码，作为导入匹配键。", GUIDE_STR, "CH_API_SETTLEMENT")),
+              "channel_code", requiredColumn("通道唯一编码，作为导入匹配键。", GUIDE_STR, "CH_API_SETTLEMENT")),
           Map.entry("channel_name", requiredColumn("控制台展示的通道名称。", GUIDE_STR, "清算 API 通道")),
           Map.entry(
               COL_CHANNEL_TYPE,
@@ -89,8 +86,7 @@ public class DefaultConsoleFileChannelExcelApplicationService
                   "该通道的传输类型。", "枚举", "API", "SFTP", "API", "EMAIL", "NAS", "OSS", "LOCAL")),
           Map.entry(
               "target_endpoint",
-              optionalColumn(
-                  "目标地址、路径或邮箱。", "URL / 路径 / 邮箱", "https://api.example.com/push")),
+              optionalColumn("目标地址、路径或邮箱。", "URL / 路径 / 邮箱", "https://api.example.com/push")),
           Map.entry(
               COL_AUTH_TYPE,
               requiredColumn(
@@ -110,11 +106,9 @@ public class DefaultConsoleFileChannelExcelApplicationService
               COL_RECEIPT_POLICY,
               requiredColumn(
                   "文件投递后的回执或回调策略。", "枚举", "SYNC", GUIDE_NONE, "SYNC", "ASYNC", "POLLING")),
+          Map.entry("timeout_seconds", requiredColumn("超时时间（秒），必须大于等于 0。", "整数", "30")),
           Map.entry(
-              "timeout_seconds", requiredColumn("超时时间（秒），必须大于等于 0。", "整数", "30")),
-          Map.entry(
-              COL_ENABLED,
-              optionalColumn("文件通道是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
+              COL_ENABLED, optionalColumn("文件通道是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")));
 
   private final FileChannelConfigMapper fileChannelConfigMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -129,7 +123,6 @@ public class DefaultConsoleFileChannelExcelApplicationService
     this.fileChannelConfigMapper = fileChannelConfigMapper;
     this.configChangeLogMapper = configChangeLogMapper;
   }
-
 
   @Override
   public ResponseEntity<InputStreamResource> exportFileChannels(FileChannelQueryRequest request) {
@@ -149,7 +142,6 @@ public class DefaultConsoleFileChannelExcelApplicationService
   public ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request) {
     return doApply(uploadToken, request.getReason());
   }
-
 
   @Override
   protected String sheetName() {
@@ -262,23 +254,11 @@ public class DefaultConsoleFileChannelExcelApplicationService
   @Override
   protected void applyValidations(Sheet sheet) {
     addDropdownValidation(
-        sheet,
-        3,
-        CHANNEL_TYPES.toArray(String[]::new),
-        "channel_type 填写提示",
-        "请从下拉列表中选择通道类型。");
+        sheet, 3, CHANNEL_TYPES.toArray(String[]::new), "channel_type 填写提示", "请从下拉列表中选择通道类型。");
     addDropdownValidation(
-        sheet,
-        5,
-        AUTH_TYPES.toArray(String[]::new),
-        "auth_type 填写提示",
-        "请从下拉列表中选择认证方式。");
+        sheet, 5, AUTH_TYPES.toArray(String[]::new), "auth_type 填写提示", "请从下拉列表中选择认证方式。");
     addDropdownValidation(
-        sheet,
-        7,
-        RECEIPT_POLICIES.toArray(String[]::new),
-        "receipt_policy 填写提示",
-        "请从下拉列表中选择回执策略。");
+        sheet, 7, RECEIPT_POLICIES.toArray(String[]::new), "receipt_policy 填写提示", "请从下拉列表中选择回执策略。");
     addBooleanValidation(sheet, new int[] {9}, "enabled 填写提示", "请填写 TRUE 或 FALSE。");
   }
 
@@ -343,9 +323,7 @@ public class DefaultConsoleFileChannelExcelApplicationService
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-
-  private static String requireJson(
-      Map<String, String> values, String key, List<String> issues) {
+  private static String requireJson(Map<String, String> values, String key, List<String> issues) {
     String normalized = normalize(values.get(key));
     if (!Texts.hasText(normalized)) {
       issues.add(key + " is required");
@@ -359,7 +337,6 @@ public class DefaultConsoleFileChannelExcelApplicationService
       return normalized;
     }
   }
-
 
   @Builder
   record ChannelRow(

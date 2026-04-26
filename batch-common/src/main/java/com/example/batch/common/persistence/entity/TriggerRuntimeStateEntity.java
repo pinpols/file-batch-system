@@ -6,8 +6,8 @@ import lombok.Data;
 /**
  * 时间轮 trigger 运行时状态(对应 batch.trigger_runtime_state)。
  *
- * <p>替换 Quartz QRTZ_TRIGGERS 的 NEXT_FIRE_TIME / TRIGGER_STATE,作为时间轮调度器的权威源。
- * 详见 docs/architecture/quartz-replacement-design.md §2。
+ * <p>替换 Quartz QRTZ_TRIGGERS 的 NEXT_FIRE_TIME / TRIGGER_STATE,作为时间轮调度器的权威源。 详见
+ * docs/architecture/quartz-replacement-design.md §2。
  */
 @Data
 public class TriggerRuntimeStateEntity {
@@ -24,15 +24,14 @@ public class TriggerRuntimeStateEntity {
   private Instant lastFireTime;
 
   /**
-   * FIRED / FAILED / SKIPPED_DUPLICATE / MISFIRE_CATCH_UP / MISFIRE_SKIPPED / MISFIRE_PENDING。
-   * 详见 V67 migration check 约束。
+   * FIRED / FAILED / SKIPPED_DUPLICATE / MISFIRE_CATCH_UP / MISFIRE_SKIPPED / MISFIRE_PENDING。 详见
+   * V67 migration check 约束。
    */
   private String lastFireStatus;
 
   /**
-   * 调度占位 marker:某 leader 把这一条推进 wheel 时写自己的 instance_id;
-   * fire 完毕清回 NULL。其他 leader / 同 leader 下一周期扫库时跳过 marker IS NOT NULL 的行,
-   * 实现"滑动窗口去重"防 design.md §4 风险 R-2。
+   * 调度占位 marker:某 leader 把这一条推进 wheel 时写自己的 instance_id; fire 完毕清回 NULL。其他 leader / 同 leader
+   * 下一周期扫库时跳过 marker IS NOT NULL 的行, 实现"滑动窗口去重"防 design.md §4 风险 R-2。
    */
   private String scheduledFireMarker;
 

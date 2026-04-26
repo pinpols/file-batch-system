@@ -24,8 +24,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
- * 覆盖 resource_tag 匹配逻辑，重点验证 {@code capability_tags} JSONB 数组作为 worker 侧多能力声明
- * 可以命中 queue 的 tag 要求——防止 selector 在单值 {@code resource_tag} 外静默阻塞。
+ * 覆盖 resource_tag 匹配逻辑，重点验证 {@code capability_tags} JSONB 数组作为 worker 侧多能力声明 可以命中 queue 的 tag
+ * 要求——防止 selector 在单值 {@code resource_tag} 外静默阻塞。
  */
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkerSelectorTest {
@@ -101,8 +101,7 @@ class DefaultWorkerSelectorTest {
 
   @Test
   void returnsNoMatchWhenNeitherResourceTagNorCapabilityMatches() {
-    WorkerRegistryRecord worker =
-        worker("w-1", "delivery", new JsonbString("[\"ingest\"]"));
+    WorkerRegistryRecord worker = worker("w-1", "delivery", new JsonbString("[\"ingest\"]"));
     stubCandidates(List.of(worker));
 
     WorkerRouteModel route = selector.select(request(), queue("report"), 5);
@@ -137,15 +136,38 @@ class DefaultWorkerSelectorTest {
 
   private static ResourceQueueRecord queue(String resourceTag) {
     return new ResourceQueueRecord(
-        1L, TENANT, "export_queue", "export", "STANDARD",
-        10, 20, 0, GROUP, resourceTag,
-        "FIFO", 1, null, 0, "NONE", 0, Boolean.TRUE);
+        1L,
+        TENANT,
+        "export_queue",
+        "export",
+        "STANDARD",
+        10,
+        20,
+        0,
+        GROUP,
+        resourceTag,
+        "FIFO",
+        1,
+        null,
+        0,
+        "NONE",
+        0,
+        Boolean.TRUE);
   }
 
   private static WorkerRegistryRecord worker(
       String code, String resourceTag, JsonbString capabilityTags) {
     return new WorkerRegistryRecord(
-        1L, TENANT, code, GROUP, capabilityTags, resourceTag,
-        WorkerRegistryStatus.ONLINE.code(), Instant.now(), 0, null, null);
+        1L,
+        TENANT,
+        code,
+        GROUP,
+        capabilityTags,
+        resourceTag,
+        WorkerRegistryStatus.ONLINE.code(),
+        Instant.now(),
+        0,
+        null,
+        null);
   }
 }

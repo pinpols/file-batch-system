@@ -81,7 +81,6 @@ public class DefaultDispatchStageExecutor
     return defaultStepDefinitions;
   }
 
-
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(DispatchJobContext context) {
     // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
@@ -183,7 +182,6 @@ public class DefaultDispatchStageExecutor
   protected String cycleDetectedMessage() {
     return "dispatch pipeline step flow contains a cycle";
   }
-
 
   private DispatchStage toStage(String stageCode) {
     try {

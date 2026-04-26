@@ -4,8 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Map;
 
 /**
- * 导入任务的原始业务载荷，从 Kafka 消息或任务 payload 字段反序列化而来。
- * 描述待导入文件的来源（sourceType/sourceRef）、存储位置、格式参数（分隔符、表头行数等）
+ * 导入任务的原始业务载荷，从 Kafka 消息或任务 payload 字段反序列化而来。 描述待导入文件的来源（sourceType/sourceRef）、存储位置、格式参数（分隔符、表头行数等）
  * 及校验信息（checksumType/checksumValue），是导入流水线的数据入口。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

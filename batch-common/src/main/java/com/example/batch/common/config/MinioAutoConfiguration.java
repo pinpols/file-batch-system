@@ -4,12 +4,12 @@ import com.example.batch.common.health.MinioHealthIndicator;
 import io.minio.MinioClient;
 import java.util.concurrent.TimeUnit;
 import okhttp3.OkHttpClient;
-import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
 
 @AutoConfiguration

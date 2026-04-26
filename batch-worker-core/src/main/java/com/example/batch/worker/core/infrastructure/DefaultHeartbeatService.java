@@ -8,8 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * Worker 心跳服务默认实现：从 {@link WorkerRuntimeState} 取出当前注册信息，
- * 调用 {@link WorkerSelfRegistrationService#renew} 向 Orchestrator 续期，并将更新后的注册状态写回缓存。
+ * Worker 心跳服务默认实现：从 {@link WorkerRuntimeState} 取出当前注册信息， 调用 {@link
+ * WorkerSelfRegistrationService#renew} 向 Orchestrator 续期，并将更新后的注册状态写回缓存。
  *
  * <p>若 workerId 对应的注册不存在（如 Worker 尚未完成启动注册），静默跳过本次心跳。
  */

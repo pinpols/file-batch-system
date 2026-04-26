@@ -12,14 +12,14 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * P3-3 workflow archive 调度器：默认每天 04:15 跑（{@code batch.workflow.archive.cron}），
- * 清理终结态 workflow_run / workflow_node_run。
+ * P3-3 workflow archive 调度器：默认每天 04:15 跑（{@code batch.workflow.archive.cron}）， 清理终结态 workflow_run /
+ * workflow_node_run。
  *
- * <p>单 tick 处理 {@code batchSize}（默认 5000）条上限，命中上限时立即再来一次直到清干净，
- * 由本调度器内的循环负责（带 ShedLock 内最多 5 次防止异常情况死循环）。
+ * <p>单 tick 处理 {@code batchSize}（默认 5000）条上限，命中上限时立即再来一次直到清干净， 由本调度器内的循环负责（带 ShedLock 内最多 5
+ * 次防止异常情况死循环）。
  *
- * <p>{@code @ConditionalOnProperty} 默认启用；运维侧不想让 orchestrator 自动跑可设
- * {@code batch.workflow.archive.enabled=false}（仍可用 SQL 脚本 cleanup-workflow-runs.sql 手工补刀）。
+ * <p>{@code @ConditionalOnProperty} 默认启用；运维侧不想让 orchestrator 自动跑可设 {@code
+ * batch.workflow.archive.enabled=false}（仍可用 SQL 脚本 cleanup-workflow-runs.sql 手工补刀）。
  */
 @Slf4j
 @Component
@@ -40,10 +40,7 @@ public class WorkflowArchiveScheduler {
   @Scheduled(
       cron = "${batch.workflow.archive.cron:0 15 4 * * *}",
       zone = "${batch.timezone.default-zone:Asia/Shanghai}")
-  @SchedulerLock(
-      name = "workflow_archive",
-      lockAtMostFor = "PT30M",
-      lockAtLeastFor = "PT1M")
+  @SchedulerLock(name = "workflow_archive", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
   public void scheduledArchive() {
     archive();
   }

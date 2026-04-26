@@ -75,7 +75,6 @@ public abstract class AbstractStageExecutor<
     return results;
   }
 
-
   /** 加载本次 pipeline 运行的有序步骤定义列表。 */
   protected abstract List<PipelineStepDefinition> loadConfiguredSteps(C context);
 

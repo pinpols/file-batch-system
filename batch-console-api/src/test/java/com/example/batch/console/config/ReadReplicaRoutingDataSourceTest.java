@@ -1,12 +1,9 @@
 package com.example.batch.console.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,9 +22,7 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/**
- * ReadReplicaRoutingDataSource 单元测试：覆盖路由决策、force-primary 旁路、fail-open 降级、quarantine 闭环。
- */
+/** ReadReplicaRoutingDataSource 单元测试：覆盖路由决策、force-primary 旁路、fail-open 降级、quarantine 闭环。 */
 class ReadReplicaRoutingDataSourceTest {
 
   private DataSource primary;
@@ -133,7 +128,8 @@ class ReadReplicaRoutingDataSourceTest {
     assertThat(actual).isSameAs(primaryConn);
     verify(replica).getConnection();
     verify(primary).getConnection();
-    assertThat(meterRegistry.find("batch.console.replica.connection.failure").counter()).isNotNull();
+    assertThat(meterRegistry.find("batch.console.replica.connection.failure").counter())
+        .isNotNull();
     assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);
     assertThat(ds.isReplicaQuarantined()).isFalse();
   }

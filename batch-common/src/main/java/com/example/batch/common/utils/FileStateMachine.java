@@ -7,10 +7,9 @@ import java.util.EnumSet;
 import java.util.Map;
 
 /**
- * 文件状态机，维护 {@link com.example.batch.common.enums.FileStatus} 的合法流转规则。
- * 初始状态仅允许 {@code RECEIVED} 和 {@code GENERATED}；
- * 违反状态约束时抛出 {@link com.example.batch.common.exception.BizException}（{@code STATE_CONFLICT}）。
- * 同状态转换（current == next）视为幂等操作，不抛异常。
+ * 文件状态机，维护 {@link com.example.batch.common.enums.FileStatus} 的合法流转规则。 初始状态仅允许 {@code RECEIVED} 和
+ * {@code GENERATED}； 违反状态约束时抛出 {@link com.example.batch.common.exception.BizException}（{@code
+ * STATE_CONFLICT}）。 同状态转换（current == next）视为幂等操作，不抛异常。
  */
 public final class FileStateMachine {
 

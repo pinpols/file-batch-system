@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 编排器代理服务：控制台不直接持有编排器的领域模型，通过此代理将运维动作转发至编排器内部接口，
- * 由实现层负责 HTTP/RPC 调用、错误码映射和响应透传。
+ * 编排器代理服务：控制台不直接持有编排器的领域模型，通过此代理将运维动作转发至编排器内部接口， 由实现层负责 HTTP/RPC 调用、错误码映射和响应透传。
  *
  * <p>动作语义（{@code action} 参数均为大写字符串，如 {@code "CANCEL"}、{@code "RETRY"}）：
+ *
  * <ul>
  *   <li>instanceAction — 针对 job_instance 的生命周期操作（CANCEL / RETRY / TERMINATE 等）
  *   <li>partitionAction — 针对分区级别的操作（RETRY_PARTITION / CANCEL_PARTITION 等）

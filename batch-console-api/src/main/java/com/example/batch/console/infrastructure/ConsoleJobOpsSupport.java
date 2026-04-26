@@ -37,20 +37,20 @@ import org.springframework.web.client.RestClient;
 /**
  * 作业运维操作的公共基础设施：审批提交、补偿提交、recovery 触发、trigger launch 委派、租户解析、事件广播。
  *
- * <p>被 {@code ConsoleJobTriggerService} / {@code DefaultConsoleJobRecoveryService} /
- * {@code ConsoleApprovalApplicationService} 三个拆分服务共享，避免重复代码。
+ * <p>被 {@code ConsoleJobTriggerService} / {@code DefaultConsoleJobRecoveryService} / {@code
+ * ConsoleApprovalApplicationService} 三个拆分服务共享，避免重复代码。
  *
  * <p>关键约定：
  *
  * <ul>
- *   <li><b>双 baseUrl 路由</b>：{@link #delegateLaunch} 走 {@code triggerClientProperties}（batch-trigger 服务），
- *       其余（compensation / recovery / approval）走 {@code orchestratorClientProperties}（batch-orchestrator 服务）
- *       ——console 作为 BFF 不直连 DB，一律通过内部 HTTP 调用后端服务。
- *   <li><b>请求追踪三件套</b>：所有下游 RestClient 调用都带 {@code Idempotency-Key} / {@code X-Request-Id} /
- *       {@code X-Trace-Id}（见 {@link CommonConstants}），用户侧重试幂等 + 全链路追踪。
- *   <li><b>publishRefresh 批量广播</b>：触发型操作成功后一次性发 5 个领域事件
- *       （job-instances / workflow-runs / outbox-retries / outbox-deliveries / summary），
- *       让前端多个面板并行刷新，避免前端逐个轮询。
+ *   <li><b>双 baseUrl 路由</b>：{@link #delegateLaunch} 走 {@code triggerClientProperties}（batch-trigger
+ *       服务）， 其余（compensation / recovery / approval）走 {@code
+ *       orchestratorClientProperties}（batch-orchestrator 服务） ——console 作为 BFF 不直连 DB，一律通过内部 HTTP
+ *       调用后端服务。
+ *   <li><b>请求追踪三件套</b>：所有下游 RestClient 调用都带 {@code Idempotency-Key} / {@code X-Request-Id} / {@code
+ *       X-Trace-Id}（见 {@link CommonConstants}），用户侧重试幂等 + 全链路追踪。
+ *   <li><b>publishRefresh 批量广播</b>：触发型操作成功后一次性发 5 个领域事件 （job-instances / workflow-runs /
+ *       outbox-retries / outbox-deliveries / summary）， 让前端多个面板并行刷新，避免前端逐个轮询。
  *   <li><b>审批二次校验</b>：{@link #requireApprovedApproval} 同时接受 {@code APPROVED} 与 {@code EXECUTED}
  *       状态——已执行视为审批通过（幂等），调用方重放同一 approval 不被拒绝。
  * </ul>
@@ -69,16 +69,13 @@ class ConsoleJobOpsSupport {
   private final ConsoleRealtimeDomainEventPublisher domainEventPublisher;
   private final Environment environment;
 
-
   static String jobTypeCompensation() {
     return JOB_TYPE_COMPENSATION;
   }
 
-
   String resolveTenant(String requestTenantId) {
     return tenantGuard.resolveTenant(requestTenantId);
   }
-
 
   void publishRefresh(String tenantId) {
     domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");
@@ -87,7 +84,6 @@ class ConsoleJobOpsSupport {
     domainEventPublisher.publishChanged(tenantId, "outbox-deliveries", "outbox-delivery-updated");
     domainEventPublisher.publishSummaryRefresh(tenantId);
   }
-
 
   String delegateLaunch(
       String tenantId,
@@ -121,7 +117,6 @@ class ConsoleJobOpsSupport {
     return response.data().instanceNo();
   }
 
-
   String submitCompensation(CompensationPayload payload, String idempotencyKey) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient =
@@ -142,7 +137,6 @@ class ConsoleJobOpsSupport {
     }
     return response.commandNo();
   }
-
 
   private record RecoveryOperationResponse(String operationNo) {}
 
@@ -167,7 +161,6 @@ class ConsoleJobOpsSupport {
     }
     return response.data().operationNo();
   }
-
 
   String submitApproval(ApprovalSubmitContext ctx) {
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
@@ -217,7 +210,6 @@ class ConsoleJobOpsSupport {
       throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");
     }
   }
-
 
   boolean hasText(String text) {
     return text != null && !text.isBlank();
@@ -287,7 +279,6 @@ class ConsoleJobOpsSupport {
     }
     return null;
   }
-
 
   record ApprovalSubmitContext(
       String approvalType,

@@ -2,13 +2,13 @@ package com.example.batch.orchestrator.application.plan;
 
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 根据当前在线 Worker 数量解析分区数，公式为 {@code min(256, onlineWorkerCount × partitionFactor)}。 DYNAMIC 策略下

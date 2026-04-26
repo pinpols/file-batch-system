@@ -1,5 +1,7 @@
 package com.example.batch.worker.core.support;
 
+import com.example.batch.common.utils.CodeNormalizer;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.application.WorkerRuntimeFacade;
 import com.example.batch.worker.core.config.WorkerConfiguration;
 import com.example.batch.worker.core.domain.WorkerRegistration;
@@ -15,8 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import com.example.batch.common.utils.CodeNormalizer;
-import com.example.batch.common.utils.Texts;
 
 /**
  * Worker 生命周期模板（所有 worker 通用骨架）。

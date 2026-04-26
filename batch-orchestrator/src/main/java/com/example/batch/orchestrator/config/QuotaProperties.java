@@ -7,8 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 配额（quota）相关配置：
  *
  * <ul>
- *   <li>{@link #runtimeStore}：运行时状态后端选择，{@code redis}（默认）走 Lua 原子脚本，
- *       {@code database} 走 PG @Version 乐观锁（遗留路径，故障降级用）。
+ *   <li>{@link #runtimeStore}：运行时状态后端选择，{@code redis}（默认）走 Lua 原子脚本， {@code database} 走 PG @Version
+ *       乐观锁（遗留路径，故障降级用）。
  *   <li>{@link Snapshot}：Redis → PG 周期 snapshot 配置；仅 {@code runtimeStore=redis} 生效。
  * </ul>
  */

@@ -27,6 +27,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
+
 // SseTicketService used in mock() call below
 
 @ExtendWith(MockitoExtension.class)
@@ -55,8 +56,7 @@ class ConsoleAuthenticationFilterTest {
 
     filter =
         new ConsoleAuthenticationFilter(
-            properties, batchProperties, jwtService, responseWriter,
-            mock(SseTicketService.class));
+            properties, batchProperties, jwtService, responseWriter, mock(SseTicketService.class));
     SecurityContextHolder.clearContext();
   }
 

@@ -23,8 +23,7 @@ public interface TriggerRuntimeStateMapper {
   /**
    * 滑动窗口扫库:next_fire_time 在 horizon 之前,且 marker 未占位。
    *
-   * <p>使用 FOR UPDATE SKIP LOCKED 避免 leader 漂移时撞锁;调用方在事务内立即调
-   * {@link #claimForSchedule} 占位。
+   * <p>使用 FOR UPDATE SKIP LOCKED 避免 leader 漂移时撞锁;调用方在事务内立即调 {@link #claimForSchedule} 占位。
    */
   List<TriggerRuntimeStateEntity> findReadyToSchedule(
       @Param("horizon") Instant horizon, @Param("limit") int limit);
@@ -42,8 +41,8 @@ public interface TriggerRuntimeStateMapper {
   /**
    * fire 完成后推进 next_fire_time、写 last_fire_status、释放 marker。
    *
-   * <p>无 version CAS:fire 完成后这一行的"调度权"已被本 leader 持有,顺序写安全。
-   * 但如果 fire 期间 marker 被 release_stale 清掉,本次 advance 应该悄悄继续(下次扫库会重捡)。
+   * <p>无 version CAS:fire 完成后这一行的"调度权"已被本 leader 持有,顺序写安全。 但如果 fire 期间 marker 被 release_stale 清掉,本次
+   * advance 应该悄悄继续(下次扫库会重捡)。
    */
   int advanceAfterFire(
       @Param("id") Long id,
@@ -70,19 +69,17 @@ public interface TriggerRuntimeStateMapper {
   int deleteByJobDefinitionId(@Param("jobDefinitionId") Long jobDefinitionId);
 
   /** 单查(reconciler 检查 / 测试用)。 */
-  TriggerRuntimeStateEntity selectByJobDefinitionId(
-      @Param("jobDefinitionId") Long jobDefinitionId);
+  TriggerRuntimeStateEntity selectByJobDefinitionId(@Param("jobDefinitionId") Long jobDefinitionId);
 
   /** 给灰度切换数据迁移 + 运维查询用:按 tenant 列出全部 trigger 状态。 */
   List<TriggerRuntimeStateEntity> selectByTenantId(@Param("tenantId") String tenantId);
 
   /**
-   * Reconciler 全表扫:列出所有 (id, job_definition_id) 对。用于计算"DB 中已禁用 / 删除的 state
-   * 集合"(loadAll 只返回 enabled,无法识别 disabled trigger 的 tenant)。
+   * Reconciler 全表扫:列出所有 (id, job_definition_id) 对。用于计算"DB 中已禁用 / 删除的 state 集合"(loadAll 只返回
+   * enabled,无法识别 disabled trigger 的 tenant)。
    */
   List<TriggerRuntimeStateEntity> selectAllJobDefinitionIds();
 
   /** schedule_expr 修改时:重新计算的 next_fire_time 直接写回,清掉 marker。 */
-  int rescheduleNextFireTime(
-      @Param("id") Long id, @Param("nextFireTime") Instant nextFireTime);
+  int rescheduleNextFireTime(@Param("id") Long id, @Param("nextFireTime") Instant nextFireTime);
 }

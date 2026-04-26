@@ -8,22 +8,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Orchestrator 启动后租约审计：读取 worker_registry / job_partition / outbox_event 里
- * <b>已经过期但仍未被回收</b> 的记录并以 WARN 日志告知运维。
+ * Orchestrator 启动后租约审计：读取 worker_registry / job_partition / outbox_event 里 <b>已经过期但仍未被回收</b> 的记录并以
+ * WARN 日志告知运维。
  *
  * <p>审计范围：
  *
  * <ul>
- *   <li>{@code worker_registry} 处于 DRAINING 且 {@code drain_deadline_at < now()} —— 正常情况由
- *       {@code WorkerDrainTimeoutScheduler} 接管，非 0 说明上次调度挂了/未来得及跑；
- *   <li>{@code job_partition} 处于分配态且 {@code lease_expire_at < now()} —— 正常情况由
- *       {@code PartitionLeaseReclaimScheduler} 回收，非 0 说明租约没及时释放；
- *   <li>{@code outbox_event} 卡在 PUBLISHING 且 updated_at 超 10 分钟 —— 正常情况由 OutboxPoll
- *       {@code resetStalePublishing} 每轮清 0，非 0 说明轮询本身挂了。
+ *   <li>{@code worker_registry} 处于 DRAINING 且 {@code drain_deadline_at < now()} —— 正常情况由 {@code
+ *       WorkerDrainTimeoutScheduler} 接管，非 0 说明上次调度挂了/未来得及跑；
+ *   <li>{@code job_partition} 处于分配态且 {@code lease_expire_at < now()} —— 正常情况由 {@code
+ *       PartitionLeaseReclaimScheduler} 回收，非 0 说明租约没及时释放；
+ *   <li>{@code outbox_event} 卡在 PUBLISHING 且 updated_at 超 10 分钟 —— 正常情况由 OutboxPoll {@code
+ *       resetStalePublishing} 每轮清 0，非 0 说明轮询本身挂了。
  * </ul>
  *
- * <p>本组件 <b>只告警不修复</b>：修复交给各自的定时调度器（启动后几十秒内会自动跑第一轮）。
- * 价值在于"新启动的 Pod 立即给出一个健康快照"，便于排查"刚拉起就已有残留"这类场景。
+ * <p>本组件 <b>只告警不修复</b>：修复交给各自的定时调度器（启动后几十秒内会自动跑第一轮）。 价值在于"新启动的 Pod 立即给出一个健康快照"，便于排查"刚拉起就已有残留"这类场景。
  */
 @Slf4j
 @Component

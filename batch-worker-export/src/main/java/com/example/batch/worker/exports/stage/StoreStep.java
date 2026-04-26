@@ -2,6 +2,7 @@ package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.service.BatchObjectCryptoService;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
@@ -14,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /** 导出存储阶段：将生成的临时文件上传至对象存储（先写 .part 再 copy 提升），并完成 SHA-256 校验。 */
 @Component

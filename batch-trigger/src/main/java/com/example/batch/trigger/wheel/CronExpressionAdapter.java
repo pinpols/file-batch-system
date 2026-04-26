@@ -13,8 +13,8 @@ import org.quartz.CronExpression;
 /**
  * Quartz {@link CronExpression} 包装,提供"按 cron 表达式 + 时区 + 起始时刻 → 下次 fire 时刻"。
  *
- * <p><b>关键决策</b>(详见 quartz-replacement-design.md §7):**沿用 Quartz CronExpression 做计算**,
- * 不引入新解析器(如 Spring CronExpression)。理由:
+ * <p><b>关键决策</b>(详见 quartz-replacement-design.md §7):**沿用 Quartz CronExpression 做计算**, 不引入新解析器(如
+ * Spring CronExpression)。理由:
  *
  * <ul>
  *   <li>Quartz 支持 L / W / # 等扩展字符,Spring 不支持
@@ -22,9 +22,8 @@ import org.quartz.CronExpression;
  *   <li>历史 Quartz 实现的 next-fire-time 计算与本适配器一致,迁移期对账无差异
  * </ul>
  *
- * <p><b>线程安全</b>:{@link CronExpression} 实例本身不是线程安全的,但 next() 是只读 +
- * 局部变量,实际并发场景没问题(也未观察到 Quartz 报告);本类用 {@link ConcurrentHashMap}
- * 缓存解析结果,缓存命中时返回的是同一个 {@link CronExpression} 实例,严格说有理论 race;
+ * <p><b>线程安全</b>:{@link CronExpression} 实例本身不是线程安全的,但 next() 是只读 + 局部变量,实际并发场景没问题(也未观察到 Quartz
+ * 报告);本类用 {@link ConcurrentHashMap} 缓存解析结果,缓存命中时返回的是同一个 {@link CronExpression} 实例,严格说有理论 race;
  * 量小可以接受,如真要 100% 线程安全可改 ThreadLocal 或每次 new。
  */
 @Slf4j

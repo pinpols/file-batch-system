@@ -12,8 +12,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>覆盖：JWT 颁发 + Header 兼容认证 + 多租户路由 + session 单点。
  *
- * <p>JWT 是主认证方式，Header 认证为旧前端兼容期保留（{@link #legacyHeaderAuthEnabled}）。
- * 详见 design/multi-tenant-and-security.md §3。
+ * <p>JWT 是主认证方式，Header 认证为旧前端兼容期保留（{@link #legacyHeaderAuthEnabled}）。 详见
+ * design/multi-tenant-and-security.md §3。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.console.security")

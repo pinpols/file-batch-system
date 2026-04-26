@@ -11,12 +11,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * P3-3 workflow archive 业务层：把 SQL 脚本 {@code cleanup-workflow-runs.sql} 的删除语义移到代码侧，
- * 支持自动调度 + 单元测试覆盖 + 多实例 ShedLock 互斥。
+ * P3-3 workflow archive 业务层：把 SQL 脚本 {@code cleanup-workflow-runs.sql} 的删除语义移到代码侧， 支持自动调度 + 单元测试覆盖
+ * + 多实例 ShedLock 互斥。
  *
  * <p>批量上限设计：单批 {@link WorkflowArchiveProperties#getBatchSize()} 条 workflow_run，
- * 防止一次删几十万行长事务锁表；超出当前阈值剩余条目下 tick 继续清。这种 sweep 模式与
- * cleanup-historical-failures.sql / OutboxPublishingResetScheduler 一致。
+ * 防止一次删几十万行长事务锁表；超出当前阈值剩余条目下 tick 继续清。这种 sweep 模式与 cleanup-historical-failures.sql /
+ * OutboxPublishingResetScheduler 一致。
  */
 @Slf4j
 @Service
@@ -27,8 +27,7 @@ public class WorkflowArchiveService {
   private final WorkflowArchiveProperties properties;
 
   /**
-   * 执行一次归档。返回（候选数, 删除的 workflow_run 数, 删除的 workflow_node_run 数）。
-   * 候选 = 删除（候选不会比删除多——除非有并发；事务内不会丢删）。
+   * 执行一次归档。返回（候选数, 删除的 workflow_run 数, 删除的 workflow_node_run 数）。 候选 = 删除（候选不会比删除多——除非有并发；事务内不会丢删）。
    */
   @Transactional
   public ArchiveBatchResult archiveOnce() {

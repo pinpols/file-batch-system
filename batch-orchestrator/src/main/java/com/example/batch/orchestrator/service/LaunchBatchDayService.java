@@ -6,6 +6,7 @@ import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.logging.AuditLogConstants;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.service.OrchestratorJobMappers;
 import com.example.batch.orchestrator.domain.entity.BatchDayInstanceRecord;
 import com.example.batch.orchestrator.domain.entity.BusinessCalendarRecord;
@@ -30,7 +31,6 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /** 批次日（Batch Day）生命周期管理：upsert、cutoff 判定、late arrival 路由、审计日志。 */
 @Slf4j
@@ -50,12 +50,12 @@ public class LaunchBatchDayService {
   private final ObjectProvider<LaunchBatchDayService> selfProvider;
 
   /**
-   * 批次日 upsert 入口：内部以 REQUIRES_NEW 事务逐次尝试；遇到 @Version 乐观锁冲突时
-   * （{@link OptimisticLockingFailureException}）重新读 existing 再试，最多 {@link #UPSERT_MAX_ATTEMPTS} 次，
-   * 避免把并发路径的 CAS 冲突反向污染外层 launch 事务（T1）。
+   * 批次日 upsert 入口：内部以 REQUIRES_NEW 事务逐次尝试；遇到 @Version 乐观锁冲突时 （{@link
+   * OptimisticLockingFailureException}）重新读 existing 再试，最多 {@link #UPSERT_MAX_ATTEMPTS} 次， 避免把并发路径的
+   * CAS 冲突反向污染外层 launch 事务（T1）。
    *
-   * <p>独立事务意味着 batch_day 行可能先于外层 T1 提交；外层 T1 若因 job_instance 唯一键回滚，
-   * late_count / catchup_count 的+1 会留下（记录的是"尝试"而非"成功"），权衡后可接受。
+   * <p>独立事务意味着 batch_day 行可能先于外层 T1 提交；外层 T1 若因 job_instance 唯一键回滚， late_count / catchup_count 的+1
+   * 会留下（记录的是"尝试"而非"成功"），权衡后可接受。
    */
   void upsertBatchDayInstance(
       LaunchRequest request,
@@ -67,7 +67,8 @@ public class LaunchBatchDayService {
       try {
         selfProvider
             .getObject()
-            .doUpsertBatchDayInstance(request, jobDefinition, effectiveParams, batchDaySlaDeadlineAt);
+            .doUpsertBatchDayInstance(
+                request, jobDefinition, effectiveParams, batchDaySlaDeadlineAt);
         return;
       } catch (OptimisticLockingFailureException conflict) {
         last = conflict;
@@ -95,8 +96,8 @@ public class LaunchBatchDayService {
   }
 
   /**
-   * 单次 upsert 尝试：独立 REQUIRES_NEW 事务，保证 CAS 冲突时只回滚本次尝试的写入，
-   * 不会污染外层 launch 事务。必须是 {@code public} 并通过 self-proxy 调用以走 Spring AOP 织入。
+   * 单次 upsert 尝试：独立 REQUIRES_NEW 事务，保证 CAS 冲突时只回滚本次尝试的写入， 不会污染外层 launch 事务。必须是 {@code public} 并通过
+   * self-proxy 调用以走 Spring AOP 织入。
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void doUpsertBatchDayInstance(
@@ -246,8 +247,8 @@ public class LaunchBatchDayService {
   }
 
   /**
-   * 创建批次日实例时快照日历 timezone；日历未绑 timezone 时回退到平台默认
-   * （{@code batch.timezone.default-zone}，默认 {@code Asia/Shanghai}），避免落 'UTC' 导致事后 cutoff 回放偏差。
+   * 创建批次日实例时快照日历 timezone；日历未绑 timezone 时回退到平台默认 （{@code batch.timezone.default-zone}，默认 {@code
+   * Asia/Shanghai}），避免落 'UTC' 导致事后 cutoff 回放偏差。
    */
   String resolveCalendarTimezone(String tenantId, String calendarCode) {
     BusinessCalendarRecord calendar =

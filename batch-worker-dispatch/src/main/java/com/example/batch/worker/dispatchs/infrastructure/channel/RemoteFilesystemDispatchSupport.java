@@ -3,6 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.security.DnsResolveGuard;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -28,13 +29,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import lombok.extern.slf4j.Slf4j;
-import com.example.batch.common.utils.Texts;
 
 /**
- * 远程文件系统派发的静态工具类，封装 NAS、OSS、SFTP、SMTP（EMAIL）、HTTP 五种渠道的
- * 文件上传（dispatch*）与连通性探测（probe*）逻辑。
- * 所有方法均为包级静态，不持有状态，由各 ChannelDispatchHandler 按渠道类型调用；
- * {@link #probeChannel} 提供统一入口，依据 channel_type 路由到对应探测实现。
+ * 远程文件系统派发的静态工具类，封装 NAS、OSS、SFTP、SMTP（EMAIL）、HTTP 五种渠道的 文件上传（dispatch*）与连通性探测（probe*）逻辑。
+ * 所有方法均为包级静态，不持有状态，由各 ChannelDispatchHandler 按渠道类型调用； {@link #probeChannel} 提供统一入口，依据 channel_type
+ * 路由到对应探测实现。
  */
 @Slf4j
 final class RemoteFilesystemDispatchSupport {
@@ -60,7 +59,8 @@ final class RemoteFilesystemDispatchSupport {
       DispatchCommand command, DispatchFileContentResolver contentResolver) {
     try {
       Map<String, Object> channelConfig = command.channelConfig();
-      String remoteDir = resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
+      String remoteDir =
+          resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(remoteDir)) {
         return new DispatchResult(
             false, null, null, false, false, "nas_remote_directory missing", null);
@@ -88,6 +88,7 @@ final class RemoteFilesystemDispatchSupport {
    * R-4.2: 返回安全可写的 NAS 目录 {@link Path}。
    *
    * <p>流程：
+   *
    * <ol>
    *   <li>{@code toAbsolutePath().normalize()} 消除 . / ..
    *   <li>{@code Files.createDirectories} 保证存在
@@ -175,7 +176,8 @@ final class RemoteFilesystemDispatchSupport {
 
   static DispatchChannelProbeResult probeNas(Map<String, Object> channelConfig) {
     try {
-      String remoteDir = resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
+      String remoteDir =
+          resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(remoteDir)) {
         return new DispatchChannelProbeResult(false, "nas_remote_directory missing", null);
       }
@@ -424,9 +426,9 @@ final class RemoteFilesystemDispatchSupport {
   }
 
   /**
-   * 渠道配置端点解析：先读 {@code primaryKey}（如 {@code nas_remote_directory} / {@code sftp_host}
-   * / {@code smtp_host}），缺失再回退到 {@code fallbackKey}（通常是 {@link #KEY_TARGET_ENDPOINT}）。
-   * 消除 NAS dispatch / NAS probe / SFTP probe / SMTP probe 四处重复的 3 行 primary→fallback 读取样板。
+   * 渠道配置端点解析：先读 {@code primaryKey}（如 {@code nas_remote_directory} / {@code sftp_host} / {@code
+   * smtp_host}），缺失再回退到 {@code fallbackKey}（通常是 {@link #KEY_TARGET_ENDPOINT}）。 消除 NAS dispatch / NAS
+   * probe / SFTP probe / SMTP probe 四处重复的 3 行 primary→fallback 读取样板。
    *
    * @return 解析后的 endpoint 字符串；两键都为 null/blank 时返回 {@code null}，由调用方产出带渠道语义的错误消息。
    */

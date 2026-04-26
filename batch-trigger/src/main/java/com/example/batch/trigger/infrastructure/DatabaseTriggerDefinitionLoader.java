@@ -8,9 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 基于数据库的触发器定义加载器，通过 MyBatis Mapper 从持久层读取调度定义。
- * {@code loadAll} 仅返回已启用的调度型任务定义，用于启动时全量注册；
- * {@code loadByJobCode} 支持按租户和任务代码精确查询，用于动态注册单个触发器。
+ * 基于数据库的触发器定义加载器，通过 MyBatis Mapper 从持久层读取调度定义。 {@code loadAll} 仅返回已启用的调度型任务定义，用于启动时全量注册； {@code
+ * loadByJobCode} 支持按租户和任务代码精确查询，用于动态注册单个触发器。
  */
 @Component
 @RequiredArgsConstructor

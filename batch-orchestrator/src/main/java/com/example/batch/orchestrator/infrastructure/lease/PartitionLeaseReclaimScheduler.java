@@ -27,12 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 任务分区租约回收调度器。
  *
- * <p>默认每 15 秒扫描全局所有租约已过期的 {@code READY}/{@code RUNNING} 分区，
- * 通过两步 CAS（先重置分区版本、再重置任务版本）将其重新置为可派发状态，
- * 并向 Outbox 写入 {@code RECOVER} 模式的派发事件，使任务重新进入执行链路。
- * 两步 CAS 任意一步版本冲突时跳过本次回收，下轮重试，保证不重复派发。
- * ShedLock 锁名 {@code partition_lease_reclaim}，最长持锁 2 分钟，最短持锁 10 秒；
- * 同时使用 {@link java.util.concurrent.atomic.AtomicBoolean} 防止单节点重入。
+ * <p>默认每 15 秒扫描全局所有租约已过期的 {@code READY}/{@code RUNNING} 分区， 通过两步 CAS（先重置分区版本、再重置任务版本）将其重新置为可派发状态，
+ * 并向 Outbox 写入 {@code RECOVER} 模式的派发事件，使任务重新进入执行链路。 两步 CAS 任意一步版本冲突时跳过本次回收，下轮重试，保证不重复派发。 ShedLock
+ * 锁名 {@code partition_lease_reclaim}，最长持锁 2 分钟，最短持锁 10 秒； 同时使用 {@link
+ * java.util.concurrent.atomic.AtomicBoolean} 防止单节点重入。
  */
 @Slf4j
 @Component

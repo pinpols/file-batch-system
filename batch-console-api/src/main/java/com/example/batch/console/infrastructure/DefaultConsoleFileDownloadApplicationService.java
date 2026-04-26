@@ -6,6 +6,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleFileDownloadApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
@@ -29,7 +30,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import com.example.batch.common.utils.Texts;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -39,15 +39,15 @@ import org.springframework.web.client.RestClient;
  * <p>提供 2 个下载入口：
  *
  * <ul>
- *   <li>{@link #download}：单文件二进制流下载。按文件模板的 {@code download_requires_approval}
- *       或 {@code content_encryption_enabled} 标志决定是否强制 approvalId；带 approvalId 则先远程校验 APPROVED/EXECUTED
+ *   <li>{@link #download}：单文件二进制流下载。按文件模板的 {@code download_requires_approval} 或 {@code
+ *       content_encryption_enabled} 标志决定是否强制 approvalId；带 approvalId 则先远程校验 APPROVED/EXECUTED
  *       状态。响应用 {@code InputStreamResource + contentLength=-1} 实现真流式传输——避免一次性加载大文件进堆内存 OOM。
- *   <li>{@link #exportFileErrors}：文件错误记录 CSV 导出。按 RFC 4180 规则 escape 含逗号/双引号/换行的字段
- *       （双引号包裹 + 内部双引号转义），防 CSV 注入或解析歧义。
+ *   <li>{@link #exportFileErrors}：文件错误记录 CSV 导出。按 RFC 4180 规则 escape 含逗号/双引号/换行的字段 （双引号包裹 +
+ *       内部双引号转义），防 CSV 注入或解析歧义。
  * </ul>
  *
- * <p>加解密路径：{@code batchSecurityProperties.bypass-mode=true} 时跳过审批 + 跳过解密（仅测试环境用）；
- * 生产环境加密文件走 {@link BatchObjectCryptoService#decryptIfNeeded} 解密后再流给客户端。
+ * <p>加解密路径：{@code batchSecurityProperties.bypass-mode=true} 时跳过审批 + 跳过解密（仅测试环境用）； 生产环境加密文件走 {@link
+ * BatchObjectCryptoService#decryptIfNeeded} 解密后再流给客户端。
  */
 @Service
 @RequiredArgsConstructor

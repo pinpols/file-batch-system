@@ -46,8 +46,8 @@ import org.springframework.web.client.RestClient;
  *   <li>业务执行成功后调 {@code /executed} 把审批推进为 EXECUTED——失败则不推进，允许重试同一 approvalNo。
  * </ol>
  *
- * <p>批量接口 {@link #batchApprove} / {@link #batchReject}：逐项独立 try/catch，单项失败不中断全批；
- * 错误消息经 {@link ConsoleTextSanitizer#safeDisplay} 清洗后回传，防异常栈泄露内部细节。
+ * <p>批量接口 {@link #batchApprove} / {@link #batchReject}：逐项独立 try/catch，单项失败不中断全批； 错误消息经 {@link
+ * ConsoleTextSanitizer#safeDisplay} 清洗后回传，防异常栈泄露内部细节。
  */
 @Service
 @RequiredArgsConstructor

@@ -2,6 +2,7 @@ package com.example.batch.common.service;
 
 import com.example.batch.common.config.BatchKmsProperties;
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.utils.Texts;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -22,14 +23,12 @@ import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import com.example.batch.common.utils.Texts;
 
 /**
- * 批处理对象加解密服务，基于 AES/GCM/NoPadding 算法对文件内容进行加密保护。
- * 加密产物携带魔数（{@code BATCHENC}）、版本号、keyRef 和随机 IV，
- * {@code decryptIfNeeded} 通过检测魔数自动判断是否需要解密，对未加密内容透传。
- * 密钥材料通过 {@link com.example.batch.common.config.BatchKmsProperties} 以 Base64 形式配置，
- * 当 {@code BatchSecurityProperties.isBypassMode()} 为 {@code true} 时禁用加密（仅限测试环境）。
+ * 批处理对象加解密服务，基于 AES/GCM/NoPadding 算法对文件内容进行加密保护。 加密产物携带魔数（{@code BATCHENC}）、版本号、keyRef 和随机 IV，
+ * {@code decryptIfNeeded} 通过检测魔数自动判断是否需要解密，对未加密内容透传。 密钥材料通过 {@link
+ * com.example.batch.common.config.BatchKmsProperties} 以 Base64 形式配置， 当 {@code
+ * BatchSecurityProperties.isBypassMode()} 为 {@code true} 时禁用加密（仅限测试环境）。
  */
 public class BatchObjectCryptoService {
 
@@ -92,11 +91,13 @@ public class BatchObjectCryptoService {
 
   /**
    * 加密产物的线格式（字节序）：
+   *
    * <pre>
    *   MAGIC(8B) | VERSION(1B) | keyRef(UTF-8 长度前缀) | ivLen(1B) | IV(12B) | ciphertext+GCM_TAG
    * </pre>
-   * keyRef 写入归一化值（trim 或回落 defaultKeyRef），解密时用于从 KMS 查找对应密钥，
-   * 支持轮转：旧文件携带旧 keyRef，新文件携带新 keyRef，两套密钥可并存。
+   *
+   * keyRef 写入归一化值（trim 或回落 defaultKeyRef），解密时用于从 KMS 查找对应密钥， 支持轮转：旧文件携带旧 keyRef，新文件携带新
+   * keyRef，两套密钥可并存。
    */
   public void encrypt(InputStream plainInput, OutputStream encryptedOutput, String keyRef) {
     if (plainInput == null || encryptedOutput == null) {
@@ -141,19 +142,18 @@ public class BatchObjectCryptoService {
   /**
    * 流式解密：若流前缀匹配魔数则返回 {@link CipherInputStream}，否则透传明文。
    *
-   * <p><b>S-1.1 调用契约</b>：返回的流<b>必须被完整读取后 close</b>（或用 try-with-resources），close
-   * 时 GCM 底层会校验尾部 16B tag，不匹配则抛异常。若调用方仅读部分数据后丢弃、未 close，则 tag
-   * 验证不触发，完整性保证失效。<b>生产环境严禁裸用该方法的返回值不 close</b>。
+   * <p><b>S-1.1 调用契约</b>：返回的流<b>必须被完整读取后 close</b>（或用 try-with-resources），close 时 GCM 底层会校验尾部 16B
+   * tag，不匹配则抛异常。若调用方仅读部分数据后丢弃、未 close，则 tag 验证不触发，完整性保证失效。<b>生产环境严禁裸用该方法的返回值不 close</b>。
    *
    * <p>推荐模式：
+   *
    * <pre>{@code
    * try (InputStream in = cryptoService.decryptIfNeeded(raw)) {
    *   consume(in);  // 读完后 try-with-resources 自动 close 触发 tag 校验
    * }
    * }</pre>
    *
-   * <p>本方法已保证<b>setup 异常路径</b>必关闭底层 {@code inputStream}（之前存在 Cipher 初始化异常
-   * 但 inputStream 泄漏的窗口）。
+   * <p>本方法已保证<b>setup 异常路径</b>必关闭底层 {@code inputStream}（之前存在 Cipher 初始化异常 但 inputStream 泄漏的窗口）。
    */
   public InputStream decryptIfNeeded(InputStream inputStream) {
     if (inputStream == null) {

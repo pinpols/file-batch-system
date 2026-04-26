@@ -6,6 +6,7 @@ import java.time.Instant;
  * 配额运行时状态服务：管理租户/队列的突发配额（burst quota）窗口，支持三种重置策略。
  *
  * <p><b>重置策略</b>（{@link com.example.batch.orchestrator.domain.scheduler.QuotaResetPolicy}）：
+ *
  * <ul>
  *   <li>{@code NONE} / 非运行时管理策略：直接与 baseCap+burstLimit 比较，无窗口状态
  *   <li>{@code CALENDAR_DAY}：自然日窗口，跨日自动重置峰值借用计数
@@ -13,10 +14,11 @@ import java.time.Instant;
  * </ul>
  *
  * <p>实现选择由 {@code batch.quota.runtime-store} 配置控制：
+ *
  * <ul>
  *   <li>{@code redis}（默认）→ {@link
- *       com.example.batch.orchestrator.infrastructure.quota.RedisQuotaRuntimeStateService}
- *       Lua 原子脚本实现，无 PG 行级锁竞争，承担派发热路径
+ *       com.example.batch.orchestrator.infrastructure.quota.RedisQuotaRuntimeStateService} Lua
+ *       原子脚本实现，无 PG 行级锁竞争，承担派发热路径
  *   <li>{@code database} → {@link
  *       com.example.batch.orchestrator.infrastructure.quota.DatabaseQuotaRuntimeStateService}
  *       PG @Version 乐观锁实现，遗留路径，故障降级 / 短期回退使用
@@ -56,8 +58,7 @@ public interface QuotaRuntimeStateService {
   /**
    * 判断当前活跃数+请求数是否超过 baseCap+burst。需要 burst 时持久化峰值（{@code peakBorrowedCount}）。
    *
-   * <p>返回 {@link
-   * com.example.batch.orchestrator.domain.scheduler.ResourceCheck#allow()} 或 {@link
+   * <p>返回 {@link com.example.batch.orchestrator.domain.scheduler.ResourceCheck#allow()} 或 {@link
    * com.example.batch.orchestrator.domain.scheduler.ResourceCheck#waitForCapacity(String, String)}。
    */
   com.example.batch.orchestrator.domain.scheduler.ResourceCheck evaluateAndReserve(

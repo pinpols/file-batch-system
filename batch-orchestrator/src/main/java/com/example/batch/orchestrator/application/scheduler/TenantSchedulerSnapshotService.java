@@ -2,6 +2,7 @@ package com.example.batch.orchestrator.application.scheduler;
 
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
 import com.example.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
@@ -19,14 +20,13 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 租户调度快照服务：聚合配额策略、资源队列和 Worker 负载的实时视图，供监控和运维查询。
  *
- * <p>{@link #buildLive} 构建当前时刻的实时快照：统计活跃作业/分区数，查询每条配额策略的
- * burst 窗口状态（通过 {@link QuotaRuntimeStateService#describe}），以及各队列和在线 Worker 的负载。
- * {@link #history} 返回最近 N 条（上限 {@value #MAX_SNAPSHOT_LIMIT}）历史快照记录。
+ * <p>{@link #buildLive} 构建当前时刻的实时快照：统计活跃作业/分区数，查询每条配额策略的 burst 窗口状态（通过 {@link
+ * QuotaRuntimeStateService#describe}），以及各队列和在线 Worker 的负载。 {@link #history} 返回最近 N 条（上限 {@value
+ * #MAX_SNAPSHOT_LIMIT}）历史快照记录。
  */
 @Service
 @RequiredArgsConstructor

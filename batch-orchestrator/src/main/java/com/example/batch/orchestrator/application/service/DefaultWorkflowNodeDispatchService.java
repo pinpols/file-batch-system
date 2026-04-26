@@ -34,26 +34,26 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.ObjectProvider;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 工作流 DAG 节点派发：按节点类型分三条路径派发，所有路径的幂等由 {@link #isNodeAlreadyActivated} 配合 {@code
- * workflow_node_run} 行锁保证（见 {@code C-3}），防止同一节点被并发 dispatch 重复激活。
+ * 工作流 DAG 节点派发：按节点类型分三条路径派发，所有路径的幂等由 {@link #isNodeAlreadyActivated} 配合 {@code workflow_node_run}
+ * 行锁保证（见 {@code C-3}），防止同一节点被并发 dispatch 重复激活。
  *
  * <p>三种派发模式：
  *
  * <ul>
- *   <li><b>GATEWAY / START</b>：本身无工作负载，合成"立即完成"的 node_run（RUNNING→SUCCESS 同事务）
- *       后按条件解析下游节点并递归 dispatch，保证 DAG 流转不被无作业节点阻塞。
- *   <li><b>JOB</b>：通过启动一个独立子 Job 实例来派发，在父 Job 中插入一对"虚拟"分区 + 任务
- *       （状态直接为 RUNNING），子 Job 终态时通过 params snapshot 中的 {@code _parentVirtualTaskId}
- *       回指父任务，复用 {@code DefaultTaskOutcomeService} 基于分区的 DAG 推进逻辑，避免再写一套子作业监听。
- *   <li><b>TASK / FILE_STEP</b>：普通节点，走 {@code SchedulePlanBuilder} 生成分片 + 资源调度决策 +
- *       创建任务 + 落 outbox 派发事件（同事务）。
+ *   <li><b>GATEWAY / START</b>：本身无工作负载，合成"立即完成"的 node_run（RUNNING→SUCCESS 同事务） 后按条件解析下游节点并递归
+ *       dispatch，保证 DAG 流转不被无作业节点阻塞。
+ *   <li><b>JOB</b>：通过启动一个独立子 Job 实例来派发，在父 Job 中插入一对"虚拟"分区 + 任务 （状态直接为 RUNNING），子 Job 终态时通过 params
+ *       snapshot 中的 {@code _parentVirtualTaskId} 回指父任务，复用 {@code DefaultTaskOutcomeService} 基于分区的
+ *       DAG 推进逻辑，避免再写一套子作业监听。
+ *   <li><b>TASK / FILE_STEP</b>：普通节点，走 {@code SchedulePlanBuilder} 生成分片 + 资源调度决策 + 创建任务 + 落 outbox
+ *       派发事件（同事务）。
  * </ul>
  */
 @Slf4j
@@ -73,9 +73,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbcTemplate;
 
   /**
-   * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量，
-   * 调用方据此推进 {@code job_instance.expected_partition_count}。返回 0 代表节点不具备 dispatch 条件
-   * （依赖未就绪 / 已被其他线程激活 / 节点定义缺失等），不是错误。
+   * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code
+   * job_instance.expected_partition_count}。返回 0 代表节点不具备 dispatch 条件 （依赖未就绪 / 已被其他线程激活 /
+   * 节点定义缺失等），不是错误。
    */
   @Override
   @Transactional
@@ -221,9 +221,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   }
 
   /**
-   * GATEWAY / START 节点无实际工作负载，合成一条 RUNNING→SUCCESS 的 node_run（同事务），再按条件解析下游节点
-   * 并递归 dispatch。这样 DAG 流转不会在无作业节点处停滞等待 worker 回报。END 节点在下游解析时就地写 SUCCESS
-   * node_run，不再递归。
+   * GATEWAY / START 节点无实际工作负载，合成一条 RUNNING→SUCCESS 的 node_run（同事务），再按条件解析下游节点 并递归 dispatch。这样 DAG
+   * 流转不会在无作业节点处停滞等待 worker 回报。END 节点在下游解析时就地写 SUCCESS node_run，不再递归。
    */
   private int dispatchGatewayNode(
       JobInstanceEntity jobInstance,
@@ -416,10 +415,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       WorkflowNodeEntity workflowNode) {}
 
   /**
-   * sourcePayload 在 workflow 跨节点传递时会携带前一个节点由 {@link #buildTaskPayload} 写入的
-   * workflow 内部字段（{@code workflowNodeCode / workflowNodeType / targetJobCode} 等）。
-   * 这些字段是"当前节点"的标记，不应该泄露给下游节点的子作业——否则 EXPORT 节点的子作业会
-   * 看到 IMPORT 节点的 targetJobCode，用错 pipeline（表现为 "unsupported export stage code: RECEIVE"）。
+   * sourcePayload 在 workflow 跨节点传递时会携带前一个节点由 {@link #buildTaskPayload} 写入的 workflow 内部字段（{@code
+   * workflowNodeCode / workflowNodeType / targetJobCode} 等）。 这些字段是"当前节点"的标记，不应该泄露给下游节点的子作业——否则
+   * EXPORT 节点的子作业会 看到 IMPORT 节点的 targetJobCode，用错 pipeline（表现为 "unsupported export stage code:
+   * RECEIVE"）。
    */
   private static final Set<String> WORKFLOW_INTERNAL_PAYLOAD_KEYS =
       Set.of(
@@ -574,8 +573,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
    *
    * <ol>
    *   <li>workflow 实例的 {@code sourcePayload}（整条链路共享的根 params）
-   *   <li>上游兄弟分区产出（{@code job_partition.output_summary} 里带的 {@code fileId} 等），保证
-   *       SETTLE 生成的 file_record id 自动流向 DISPATCH 节点，而不是靠每条 workflow 手工声明
+   *   <li>上游兄弟分区产出（{@code job_partition.output_summary} 里带的 {@code fileId} 等），保证 SETTLE 生成的
+   *       file_record id 自动流向 DISPATCH 节点，而不是靠每条 workflow 手工声明
    *   <li>当前节点的 {@code workflow_node.node_params}（节点级静态配置，如 DISPATCH 的 {@code channelCode}）
    *   <li>workflow 元数据（{@code workflowNodeCode / workflowNodeType / targetJobCode}），供 worker
    *       侧用作上下文日志、幂等键计算
@@ -610,9 +609,9 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   }
 
   /**
-   * 扫描当前 workflow_run 同一 job_instance 下已 SUCCESS 的兄弟分区的 {@code output_summary}，
-   * 把 {@code fileId} / {@code fileCode} 这类跨节点常用字段挑出来塞进 payload。保守做法：
-   * 只挑已知少量字段（避免把 partition 内部诊断字段污染到 worker payload）。多分区并存时最新成功的胜出。
+   * 扫描当前 workflow_run 同一 job_instance 下已 SUCCESS 的兄弟分区的 {@code output_summary}， 把 {@code fileId} /
+   * {@code fileCode} 这类跨节点常用字段挑出来塞进 payload。保守做法： 只挑已知少量字段（避免把 partition 内部诊断字段污染到 worker
+   * payload）。多分区并存时最新成功的胜出。
    */
   @SuppressWarnings("unchecked")
   private void mergeUpstreamPartitionOutputs(
@@ -704,14 +703,15 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     } catch (EmptyResultDataAccessException ignored) {
       return null;
     } catch (RuntimeException ex) {
-      log.warn("file_record lookup failed: params={}, error={}", params.getValues(), ex.getMessage());
+      log.warn(
+          "file_record lookup failed: params={}, error={}", params.getValues(), ex.getMessage());
       return null;
     }
   }
 
   /**
-   * 合并当前节点的 {@code workflow_node.node_params}（JSON 对象）到 payload。用户在 workflow 设计器
-   * 配的 templateCode / channelCode 等静态字段由此流入 worker，无需每次触发时手工重复。
+   * 合并当前节点的 {@code workflow_node.node_params}（JSON 对象）到 payload。用户在 workflow 设计器 配的 templateCode /
+   * channelCode 等静态字段由此流入 worker，无需每次触发时手工重复。
    */
   @SuppressWarnings("unchecked")
   private void mergeNodeParams(Map<String, Object> payload, WorkflowNodeEntity workflowNode) {

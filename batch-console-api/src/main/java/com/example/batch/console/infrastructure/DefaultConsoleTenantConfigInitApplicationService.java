@@ -1,6 +1,8 @@
 package com.example.batch.console.infrastructure;
 
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.utils.CodeNormalizer;
+import com.example.batch.common.utils.Nullables;
 import com.example.batch.console.application.ConsoleTenantConfigInitApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
@@ -48,8 +50,6 @@ import com.example.batch.console.web.response.TenantConfigBatchInitResponse.Tena
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import com.example.batch.common.utils.CodeNormalizer;
-import com.example.batch.common.utils.Nullables;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -61,26 +61,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 跨租户批量配置初始化入口，被 {@link DefaultConsoleConfigSyncApplicationService#importBundle} 和
- * 直接 HTTP 入口两条路调用。
+ * 跨租户批量配置初始化入口，被 {@link DefaultConsoleConfigSyncApplicationService#importBundle} 和 直接 HTTP 入口两条路调用。
  *
- * <p><b>权限边界</b>：直接操作 Mapper 层，主动绕过租户守卫——调用方须在进入本服务前完成 ROLE_ADMIN 校验，
- * 本服务不再重复验证。
+ * <p><b>权限边界</b>：直接操作 Mapper 层，主动绕过租户守卫——调用方须在进入本服务前完成 ROLE_ADMIN 校验， 本服务不再重复验证。
  *
- * <p><b>10 种配置类型</b>：job / workflow / pipeline / fileChannel / fileTemplate /
- * resourceQueue / batchWindow / businessCalendar / quotaPolicy / alertRouting，
- * 每种类型由独立的 {@link SpecHandler} 描述"如何 find / insert / update"，公共模板
- * {@link #applySpecs} 统一驱动"查找 → 跳过/更新/创建"循环并逐项隔离异常（单项失败不中断全批）。
+ * <p><b>10 种配置类型</b>：job / workflow / pipeline / fileChannel / fileTemplate / resourceQueue /
+ * batchWindow / businessCalendar / quotaPolicy / alertRouting， 每种类型由独立的 {@link SpecHandler} 描述"如何
+ * find / insert / update"，公共模板 {@link #applySpecs} 统一驱动"查找 → 跳过/更新/创建"循环并逐项隔离异常（单项失败不中断全批）。
  *
  * <p><b>InitMode</b>：
+ *
  * <ul>
  *   <li>{@code SKIP_EXISTING}（默认）— 已存在则记为 skipped，适合首次初始化。
  *   <li>{@code UPSERT} — 已存在则覆盖更新，适合跨环境同步。
  * </ul>
  *
- * <p><b>Workflow 的特殊语义</b>：{@link #upsertWorkflowDefinition} 在 UPSERT 时先
- * {@code deleteByWorkflowDefinitionId} 节点和边再全量重插——保证图拓扑与传入 spec 完全一致，
- * 避免孤儿节点残留。
+ * <p><b>Workflow 的特殊语义</b>：{@link #upsertWorkflowDefinition} 在 UPSERT 时先 {@code
+ * deleteByWorkflowDefinitionId} 节点和边再全量重插——保证图拓扑与传入 spec 完全一致， 避免孤儿节点残留。
  *
  * <p><b>dryRun</b>：所有 insert/update 被跳过，仅做 find + 计数，用于 ConfigSync preview 预判结果。
  */
@@ -302,7 +299,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     }
   }
 
-
   private ItemStats applyJobDefinitions(List<JobDefinitionSpec> specs, ApplyContext ctx) {
     return applySpecs(
         specs,
@@ -359,17 +355,14 @@ public class DefaultConsoleTenantConfigInitApplicationService
     param.setWorkerGroup(
         Nullables.coalesce(
             CodeNormalizer.toUpperOrNull(spec.getWorkerGroup()), existing.getWorkerGroup()));
-    param.setScheduleExpr(
-        Nullables.coalesce(spec.getScheduleExpr(), existing.getScheduleExpr()));
+    param.setScheduleExpr(Nullables.coalesce(spec.getScheduleExpr(), existing.getScheduleExpr()));
     param.setCalendarCode(
         Nullables.coalesce(
-            CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()),
-            existing.getCalendarCode()));
+            CodeNormalizer.toConfigFormOrNull(spec.getCalendarCode()), existing.getCalendarCode()));
     param.setWindowCode(
         Nullables.coalesce(
             CodeNormalizer.toConfigFormOrNull(spec.getWindowCode()), existing.getWindowCode()));
-    param.setRetryPolicy(
-        Nullables.coalesce(spec.getRetryPolicy(), existing.getRetryPolicy()));
+    param.setRetryPolicy(Nullables.coalesce(spec.getRetryPolicy(), existing.getRetryPolicy()));
     param.setRetryMaxCount(
         Nullables.coalesce(spec.getRetryMaxCount(), existing.getRetryMaxCount()));
     param.setTimeoutSeconds(
@@ -377,12 +370,10 @@ public class DefaultConsoleTenantConfigInitApplicationService
     param.setShardStrategy(
         Nullables.coalesce(spec.getShardStrategy(), existing.getShardStrategy()));
     param.setEnabled(Nullables.coalesce(spec.getEnabled(), existing.getEnabled()));
-    param.setDescription(
-        Nullables.coalesce(spec.getDescription(), existing.getDescription()));
+    param.setDescription(Nullables.coalesce(spec.getDescription(), existing.getDescription()));
     param.setUpdatedBy(operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
   }
-
 
   private ItemStats applyWorkflowDefinitions(List<WorkflowDefinitionSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -458,7 +449,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     }
   }
 
-
   private ItemStats applyPipelineDefinitions(List<PipelineDefinitionSpec> specs, ApplyContext ctx) {
     return applySpecs(
         specs,
@@ -502,21 +492,15 @@ public class DefaultConsoleTenantConfigInitApplicationService
     params.put("tenant_id", tenantId);
     params.put(KEY_ID, id);
     params.put(
-        "pipeline_name",
-        Nullables.coalesce(spec.getPipelineName(), existing.get("pipeline_name")));
+        "pipeline_name", Nullables.coalesce(spec.getPipelineName(), existing.get("pipeline_name")));
     params.put(
-        "pipeline_type",
-        Nullables.coalesce(spec.getPipelineType(), existing.get("pipeline_type")));
+        "pipeline_type", Nullables.coalesce(spec.getPipelineType(), existing.get("pipeline_type")));
+    params.put("biz_type", Nullables.coalesce(spec.getBizType(), existing.get("biz_type")));
     params.put(
-        "biz_type", Nullables.coalesce(spec.getBizType(), existing.get("biz_type")));
+        "worker_group", Nullables.coalesce(spec.getWorkerGroup(), existing.get("worker_group")));
+    params.put(KEY_ENABLED, Nullables.coalesce(spec.getEnabled(), existing.get(KEY_ENABLED)));
     params.put(
-        "worker_group",
-        Nullables.coalesce(spec.getWorkerGroup(), existing.get("worker_group")));
-    params.put(
-        KEY_ENABLED, Nullables.coalesce(spec.getEnabled(), existing.get(KEY_ENABLED)));
-    params.put(
-        "description",
-        Nullables.coalesce(spec.getDescription(), existing.get("description")));
+        "description", Nullables.coalesce(spec.getDescription(), existing.get("description")));
     pipelineDefinitionMapper.update(params);
     if (spec.getSteps() != null) {
       pipelineStepDefinitionMapper.deleteByPipelineDefinitionId(id);
@@ -538,17 +522,13 @@ public class DefaultConsoleTenantConfigInitApplicationService
       stepParams.put("step_order", Nullables.coalesce(step.getStepOrder(), 0));
       stepParams.put("impl_code", step.getImplCode());
       stepParams.put("step_params", step.getStepParams());
-      stepParams.put(
-          "timeout_seconds", Nullables.coalesce(step.getTimeoutSeconds(), 0));
-      stepParams.put(
-          "retry_policy", Nullables.coalesce(step.getRetryPolicy(), "NONE"));
-      stepParams.put(
-          "retry_max_count", Nullables.coalesce(step.getRetryMaxCount(), 0));
+      stepParams.put("timeout_seconds", Nullables.coalesce(step.getTimeoutSeconds(), 0));
+      stepParams.put("retry_policy", Nullables.coalesce(step.getRetryPolicy(), "NONE"));
+      stepParams.put("retry_max_count", Nullables.coalesce(step.getRetryMaxCount(), 0));
       stepParams.put(KEY_ENABLED, Nullables.coalesce(step.getEnabled(), true));
       pipelineStepDefinitionMapper.insert(stepParams);
     }
   }
-
 
   private ItemStats applyFileChannels(List<FileChannelSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -579,7 +559,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     param.setUpdatedBy(operator);
     fileChannelConfigMapper.upsertFileChannelConfig(param);
   }
-
 
   private ItemStats applyFileTemplates(List<FileTemplateSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -668,7 +647,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     fileTemplateConfigMapper.upsertFileTemplateConfig(p);
   }
 
-
   private ItemStats applyResourceQueues(List<ResourceQueueSpec> specs, ApplyContext ctx) {
     return applySpecs(
         specs,
@@ -701,7 +679,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     resourceQueueMapper.upsertResourceQueue(p);
   }
 
-
   private ItemStats applyBatchWindows(List<BatchWindowSpec> specs, ApplyContext ctx) {
     return applySpecs(
         specs,
@@ -729,7 +706,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     p.setDescription(spec.getDescription());
     batchWindowMapper.upsertBatchWindow(p);
   }
-
 
   private ItemStats applyBusinessCalendars(List<BusinessCalendarSpec> specs, ApplyContext ctx) {
     return applySpecs(
@@ -786,7 +762,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     }
   }
 
-
   private ItemStats applyQuotaPolicies(List<TenantQuotaPolicySpec> specs, ApplyContext ctx) {
     return applySpecs(
         specs,
@@ -812,7 +787,6 @@ public class DefaultConsoleTenantConfigInitApplicationService
     p.setDescription(spec.getDescription());
     tenantQuotaPolicyMapper.upsertTenantQuotaPolicy(p);
   }
-
 
   private ItemStats applyAlertRoutings(List<AlertRoutingSpec> specs, ApplyContext ctx) {
     return applySpecs(

@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,18 +21,17 @@ import okhttp3.Request;
 import okhttp3.Response;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
- * 异步回执轮询器：定时从 {@code file_dispatch_record} 中取出 {@code receipt_status=PENDING} 的记录，
- * 向渠道配置的 {@code receipt_poll_url} 发 GET 请求查询投递确认状态。
+ * 异步回执轮询器：定时从 {@code file_dispatch_record} 中取出 {@code receipt_status=PENDING} 的记录， 向渠道配置的 {@code
+ * receipt_poll_url} 发 GET 请求查询投递确认状态。
  *
  * <p>若响应中 {@code acknowledged=true} / {@code status=ACKED} / {@code receipt_status=SUCCESS}，
- * 则标记该记录为 {@code ACKED} 并将 {@code file_record.file_status} 推进为 {@code DISPATCHED}；
- * 状态冲突（CAS 返回 0 行）记录 warn 跳过——另一节点已处理。
+ * 则标记该记录为 {@code ACKED} 并将 {@code file_record.file_status} 推进为 {@code DISPATCHED}； 状态冲突（CAS 返回 0
+ * 行）记录 warn 跳过——另一节点已处理。
  *
- * <p>ShedLock 防止多节点重复轮询同一批记录；Micrometer 指标
- * {@code batch.dispatch.receipt.poll.failures/successes} 用于告警监控。
+ * <p>ShedLock 防止多节点重复轮询同一批记录；Micrometer 指标 {@code batch.dispatch.receipt.poll.failures/successes}
+ * 用于告警监控。
  */
 @Slf4j
 @Component
@@ -86,9 +86,7 @@ public class DispatchReceiptPollScheduler {
         row.get("external_request_id") == null
             ? null
             : String.valueOf(row.get("external_request_id"));
-    if (fileId == null
-        || !Texts.hasText(channelCode)
-        || !Texts.hasText(externalRequestId)) {
+    if (fileId == null || !Texts.hasText(channelCode) || !Texts.hasText(externalRequestId)) {
       return;
     }
     Map<String, Object> channelRow = fileDispatchRepository.loadChannel(tenantId, channelCode);

@@ -13,8 +13,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 系统临时文件清理器：在应用启动就绪时执行一次清理，并定期（默认 PT4H）扫描 JVM 临时目录，
- * 删除超过 {@code batch.worker.stale-temp-file-hours}（默认 6h）未修改且以 {@code batch-} 开头的文件。
+ * 系统临时文件清理器：在应用启动就绪时执行一次清理，并定期（默认 PT4H）扫描 JVM 临时目录， 删除超过 {@code
+ * batch.worker.stale-temp-file-hours}（默认 6h）未修改且以 {@code batch-} 开头的文件。
  *
  * <p>只清理约定前缀 {@code batch-} 的文件，避免误删系统或其他应用的临时文件。
  */

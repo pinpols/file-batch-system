@@ -80,7 +80,6 @@ public class DefaultExportStageExecutor
     return defaultStepDefinitions;
   }
 
-
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(ExportJobContext context) {
     // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
@@ -179,7 +178,6 @@ public class DefaultExportStageExecutor
   protected String cycleDetectedMessage() {
     return "导出 pipeline 步骤流程存在循环依赖";
   }
-
 
   private ExportStage toStage(String stageCode) {
     try {

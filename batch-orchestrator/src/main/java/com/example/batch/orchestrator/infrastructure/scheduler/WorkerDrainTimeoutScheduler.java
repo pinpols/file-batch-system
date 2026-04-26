@@ -17,11 +17,10 @@ import org.springframework.stereotype.Component;
 /**
  * Worker 排水（Drain）超时治理调度器。
  *
- * <p>默认每 15 秒轮询一次处于 {@code DRAINING} 状态的 Worker 注册记录，
- * 若当前时刻已超过其 {@code drainDeadlineAt}，则调用 {@link WorkerDrainGovernanceService}
- * 执行超时接管逻辑（强制下线并重新派发该 Worker 持有的任务分区）。
- * ShedLock 锁名 {@code worker_drain_timeout}，最长持锁 2 分钟，最短持锁 10 秒。
- * 当 {@code batch.worker.drain.enabled=false} 或 Orchestrator 处于优雅停机时跳过执行。
+ * <p>默认每 15 秒轮询一次处于 {@code DRAINING} 状态的 Worker 注册记录， 若当前时刻已超过其 {@code drainDeadlineAt}，则调用 {@link
+ * WorkerDrainGovernanceService} 执行超时接管逻辑（强制下线并重新派发该 Worker 持有的任务分区）。 ShedLock 锁名 {@code
+ * worker_drain_timeout}，最长持锁 2 分钟，最短持锁 10 秒。 当 {@code batch.worker.drain.enabled=false} 或
+ * Orchestrator 处于优雅停机时跳过执行。
  */
 @Slf4j
 @Component

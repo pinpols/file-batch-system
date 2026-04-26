@@ -15,13 +15,13 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
 
 /**
- * P2-4: 仅在 {@code batch.console.read-replica.enabled=true} 时生效——为 console-api
- * 装配主/从两套 HikariPool，由 {@link ReadReplicaRoutingDataSource} 按事务 readOnly 标志 + force-primary
- * hint 路由，并在从库连接失败时 fail-open 降级到主库。
+ * P2-4: 仅在 {@code batch.console.read-replica.enabled=true} 时生效——为 console-api 装配主/从两套 HikariPool，由
+ * {@link ReadReplicaRoutingDataSource} 按事务 readOnly 标志 + force-primary hint 路由，并在从库连接失败时 fail-open
+ * 降级到主库。
  *
- * <p>外层包 {@link LazyConnectionDataSourceProxy}：让 Spring 真正调 {@code getConnection()} 之前
- * {@code TransactionSynchronizationManager} 的 readOnly 标志已被设置（标注的事务进入时机），
- * 否则按 currentLookupKey 取连接池时拿不到正确的标志。
+ * <p>外层包 {@link LazyConnectionDataSourceProxy}：让 Spring 真正调 {@code getConnection()} 之前 {@code
+ * TransactionSynchronizationManager} 的 readOnly 标志已被设置（标注的事务进入时机）， 否则按 currentLookupKey
+ * 取连接池时拿不到正确的标志。
  *
  * <p>未启用时本类完全不创建 bean，回退到 Spring Boot 默认主 DataSource 自动配置，行为同历史。
  */

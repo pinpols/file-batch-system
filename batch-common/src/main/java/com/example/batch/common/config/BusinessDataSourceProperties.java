@@ -6,10 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Worker 业务库 HikariCP 连接池配置（{@code batch.datasource.business}）。
  *
- * <p>区别于 platform 库（任务实例 / outbox / 审计等运行态表），business 库存放业务侧
- * 的源表 / 落地表（IMPORT 的目标表、EXPORT 的源表）。两库走双 DataSource 路由，
- * 详见 ADR-007。Worker 进程同时持有两个 pool，<b>business pool 默认比 platform 略大</b>，
- * 因为单个 task 通常多次读写业务表。
+ * <p>区别于 platform 库（任务实例 / outbox / 审计等运行态表），business 库存放业务侧 的源表 / 落地表（IMPORT 的目标表、EXPORT 的源表）。两库走双
+ * DataSource 路由， 详见 ADR-007。Worker 进程同时持有两个 pool，<b>business pool 默认比 platform 略大</b>， 因为单个 task
+ * 通常多次读写业务表。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.datasource.business")

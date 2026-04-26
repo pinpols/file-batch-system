@@ -21,9 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * trigger_misfire_pending Mapper 集成测试 — 覆盖 MANUAL_APPROVAL catch-up 流程的 DB 路径。
- */
+/** trigger_misfire_pending Mapper 集成测试 — 覆盖 MANUAL_APPROVAL catch-up 流程的 DB 路径。 */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -44,19 +42,26 @@ class TriggerMisfirePendingMapperIT extends AbstractIntegrationTest {
     tenantId = "mfp-it-" + System.nanoTime();
     jobCode = "job-" + System.nanoTime();
     jdbcTemplate.update(
-        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on conflict do nothing",
-        tenantId, tenantId);
-    jobDefId = jdbcTemplate.queryForObject(
-        """
-        insert into batch.job_definition (
-          tenant_id, job_code, job_name, job_type,
-          schedule_type, schedule_expr, timezone,
-          enabled, created_by, updated_by
-        ) values (?, ?, ?, 'GENERAL',
-          'CRON', '0 0 * * * ?', 'Asia/Shanghai',
-          true, 'it', 'it')
-        returning id
-        """, Long.class, tenantId, jobCode, jobCode);
+        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on"
+            + " conflict do nothing",
+        tenantId,
+        tenantId);
+    jobDefId =
+        jdbcTemplate.queryForObject(
+            """
+            insert into batch.job_definition (
+              tenant_id, job_code, job_name, job_type,
+              schedule_type, schedule_expr, timezone,
+              enabled, created_by, updated_by
+            ) values (?, ?, ?, 'GENERAL',
+              'CRON', '0 0 * * * ?', 'Asia/Shanghai',
+              true, 'it', 'it')
+            returning id
+            """,
+            Long.class,
+            tenantId,
+            jobCode,
+            jobCode);
     TriggerRuntimeStateEntity rs = new TriggerRuntimeStateEntity();
     rs.setJobDefinitionId(jobDefId);
     rs.setTenantId(tenantId);
@@ -157,7 +162,8 @@ class TriggerMisfirePendingMapperIT extends AbstractIntegrationTest {
 
     // 把 expires_at 改成 1 小时前
     jdbcTemplate.update(
-        "update batch.trigger_misfire_pending set expires_at = now() - interval '1 hour' where id = ?",
+        "update batch.trigger_misfire_pending set expires_at = now() - interval '1 hour' where id ="
+            + " ?",
         e.getId());
 
     int expired = mapper.markExpired(Instant.now());
@@ -172,11 +178,12 @@ class TriggerMisfirePendingMapperIT extends AbstractIntegrationTest {
     mapper.approve(e.getId(), "ops-user");
 
     jdbcTemplate.update(
-        "update batch.trigger_misfire_pending set expires_at = now() - interval '1 hour' where id = ?",
+        "update batch.trigger_misfire_pending set expires_at = now() - interval '1 hour' where id ="
+            + " ?",
         e.getId());
 
     mapper.markExpired(Instant.now());
-    assertThat(mapper.selectById(e.getId()).getStatus()).isEqualTo("APPROVED");  // 不变
+    assertThat(mapper.selectById(e.getId()).getStatus()).isEqualTo("APPROVED"); // 不变
   }
 
   // ── helpers ─────────────────────────────────────────────

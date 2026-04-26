@@ -3,9 +3,9 @@ package com.example.batch.console.support;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.Texts;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /** 控制台密码仅使用 Argon2id（Spring Security 默认参数）。 */
 @Component

@@ -4,11 +4,10 @@ import java.time.Clock;
 import java.time.Duration;
 
 /**
- * 进程内 fixed-interval throttle — 用于 catch-up AUTO 策略防雪崩(详见
- * quartz-replacement-design.md §9.3 R-X)。
+ * 进程内 fixed-interval throttle — 用于 catch-up AUTO 策略防雪崩(详见 quartz-replacement-design.md §9.3 R-X)。
  *
- * <p>语义:严格平滑限流(无 burst),每秒 N 次 {@link #acquire()} 调用,超出则阻塞当前线程到下一个
- * token 可用。catch-up 场景需要"排队补 fire"(而非"丢 fire"),所以选阻塞模式。
+ * <p>语义:严格平滑限流(无 burst),每秒 N 次 {@link #acquire()} 调用,超出则阻塞当前线程到下一个 token 可用。catch-up 场景需要"排队补
+ * fire"(而非"丢 fire"),所以选阻塞模式。
  *
  * <p>与 Guava {@code RateLimiter}(SmoothBursty)的区别:
  *
@@ -18,8 +17,7 @@ import java.time.Duration;
  *   <li>0 第三方依赖
  * </ul>
  *
- * <p>线程安全:简单 {@code synchronized} 保护 {@link #nextAvailableNanos};catch-up throttle 不是热路径,
- * 锁竞争可忽略。
+ * <p>线程安全:简单 {@code synchronized} 保护 {@link #nextAvailableNanos};catch-up throttle 不是热路径, 锁竞争可忽略。
  */
 public class CatchUpThrottle {
 
@@ -44,10 +42,7 @@ public class CatchUpThrottle {
     this.nextAvailableMillis = clock.millis();
   }
 
-  /**
-   * 预约下一个 token,返回**调用方应等待的毫秒数**(0 = 立即可消费)。
-   * 纯算法,不阻塞,易测试。
-   */
+  /** 预约下一个 token,返回**调用方应等待的毫秒数**(0 = 立即可消费)。 纯算法,不阻塞,易测试。 */
   public synchronized long reserveSlot() {
     long now = clock.millis();
     long sleepMillis;

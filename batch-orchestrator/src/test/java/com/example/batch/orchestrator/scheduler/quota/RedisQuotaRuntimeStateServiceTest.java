@@ -1,7 +1,6 @@
 package com.example.batch.orchestrator.scheduler.quota;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -24,8 +23,8 @@ import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
- * RedisQuotaRuntimeStateService 单元测试：覆盖 Java 侧的守卫逻辑、fail-open 降级、describe 路径。
- * Lua 脚本本身的窗口/peak 语义由集成测试在真实 Redis 上验证（{@code RedisQuotaRuntimeStateIntegrationTest}）。
+ * RedisQuotaRuntimeStateService 单元测试：覆盖 Java 侧的守卫逻辑、fail-open 降级、describe 路径。 Lua 脚本本身的窗口/peak
+ * 语义由集成测试在真实 Redis 上验证（{@code RedisQuotaRuntimeStateIntegrationTest}）。
  */
 class RedisQuotaRuntimeStateServiceTest {
 

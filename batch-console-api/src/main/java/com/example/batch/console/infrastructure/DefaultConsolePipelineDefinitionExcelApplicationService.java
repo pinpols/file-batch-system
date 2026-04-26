@@ -17,6 +17,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsolePipelineDefinitionExcelApplicationService;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
@@ -64,7 +65,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 /** {@link ConsolePipelineDefinitionExcelApplicationService} 的默认实现。 */
@@ -370,7 +370,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         appliedSteps);
   }
 
-
   private ParsedSession loadSession(String uploadToken) {
     PipelineDefinitionExcelImportStore.ExcelImportSession session =
         Guard.requireFound(importStore.get(uploadToken), "excel upload session not found");
@@ -382,7 +381,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         session.pipelineRows(),
         session.stepRows());
   }
-
 
   private ParsedWorkbook parseWorkbook(byte[] bytes, String tenantId, String originalFileName)
       throws IOException {
@@ -438,7 +436,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     }
     return rows;
   }
-
 
   private ValidationResult validateRows(ParsedSession session) {
     List<PipelineRow> validPipelines = new ArrayList<>();
@@ -541,7 +538,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         .build();
   }
 
-
   private String requireText(
       Map<String, String> values, String key, int maxLength, List<String> issues) {
     String normalized = normalize(values.get(key));
@@ -636,7 +632,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     }
   }
 
-
   private String normalize(String value) {
     return ConsoleTextSanitizer.normalize(value);
   }
@@ -690,7 +685,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     }
     return fileName;
   }
-
 
   private byte[] writeWorkbook(
       List<Map<String, Object>> pipelines, List<Map<String, Object>> steps) {
@@ -886,7 +880,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     ConsoleExcelStyles.createValidationSheet(workbook);
   }
 
-
   private Map<String, Object> buildPipelineInsertParams(String tenantId, PipelineRow row) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put(COL_TENANT_ID, tenantId);
@@ -929,7 +922,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     params.put(COL_ENABLED, row.enabled());
     return params;
   }
-
 
   private List<PipelineDefinitionDetailResponse> toPipelineResponses(ValidationResult result) {
     Map<String, List<StepRow>> stepsByKey =
@@ -977,7 +969,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         .toList();
   }
 
-
   private void logChange(
       String tenantId,
       PipelineRow row,
@@ -1011,7 +1002,6 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     }
     return values;
   }
-
 
   private record ParsedWorkbook(
       String fileName,

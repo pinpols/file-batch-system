@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.stage;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -11,14 +12,12 @@ import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * Dispatch pipeline 的 PREPARE 阶段：解析 payload，加载文件记录和渠道配置，初始化执行上下文。
  *
- * <p>校验 {@code fileId} 非空后从 {@code file_dispatch_record} 和 {@code file_channel} 加载数据；
- * 将文件绑定到当前 pipeline 实例，并将 {@code receipt_policy} 写入上下文供后续步骤判断回执模式。
- * 任一必要数据缺失时直接返回对应的失败码，不进入投递步骤。
+ * <p>校验 {@code fileId} 非空后从 {@code file_dispatch_record} 和 {@code file_channel} 加载数据； 将文件绑定到当前
+ * pipeline 实例，并将 {@code receipt_policy} 写入上下文供后续步骤判断回执模式。 任一必要数据缺失时直接返回对应的失败码，不进入投递步骤。
  */
 @Component
 public class PrepareDispatchStep implements DispatchStageStep {

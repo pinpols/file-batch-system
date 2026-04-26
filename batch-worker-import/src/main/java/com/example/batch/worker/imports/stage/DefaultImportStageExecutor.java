@@ -75,7 +75,6 @@ public class DefaultImportStageExecutor
     return defaultStepDefinitions;
   }
 
-
   @Override
   protected List<PipelineStepDefinition> loadConfiguredSteps(ImportJobContext context) {
     // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
@@ -177,7 +176,6 @@ public class DefaultImportStageExecutor
   protected String cycleDetectedMessage() {
     return "import pipeline step flow contains a cycle";
   }
-
 
   private ImportStage toStage(String stageCode) {
     try {

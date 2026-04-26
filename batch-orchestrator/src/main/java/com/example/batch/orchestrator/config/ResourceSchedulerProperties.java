@@ -17,9 +17,8 @@ public class ResourceSchedulerProperties {
   private long globalMaxRunningJobs = 0;
 
   /**
-   * 共享 worker 池的 fallback 租户。当某租户的目标 workerGroup 下没有 ONLINE worker 时，
-   * selector 会退到此租户再查一次——仅用于本地联调 / 共享 dev 环境，生产不设置。
-   * 空值（默认）禁用 fallback，严格保留 CLAUDE.md §多租户隔离 的原语义。
+   * 共享 worker 池的 fallback 租户。当某租户的目标 workerGroup 下没有 ONLINE worker 时， selector 会退到此租户再查一次——仅用于本地联调
+   * / 共享 dev 环境，生产不设置。 空值（默认）禁用 fallback，严格保留 CLAUDE.md §多租户隔离 的原语义。
    */
   private String sharedTenantFallback = "";
 }

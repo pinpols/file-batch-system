@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.scheduler.ResourceQueueManager;
 import com.example.batch.orchestrator.domain.entity.ResourceQueueRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
@@ -8,7 +9,6 @@ import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 解析调度请求的目标资源队列：有显式 {@code queueCode} 时直查，否则在租户启用的所有队列里按下述优先级挑一个：

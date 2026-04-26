@@ -60,9 +60,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
   /**
-   * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。
-   * 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈，
-   * 指数 backoff 只会把 dead_letter_task 灌满。
+   * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈， 指数 backoff
+   * 只会把 dead_letter_task 灌满。
    */
   private static final Set<String> NON_RETRYABLE_ERROR_CODES =
       Set.of(

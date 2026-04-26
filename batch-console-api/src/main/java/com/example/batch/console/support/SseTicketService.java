@@ -1,17 +1,17 @@
 package com.example.batch.console.support;
 
+import com.example.batch.common.utils.Texts;
 import java.time.Duration;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import com.example.batch.common.utils.Texts;
 
 /**
  * SSE 连接的一次性 ticket 服务。
  *
- * <p>流程：前端先 POST /api/console/stream/ticket（带 Authorization header）换取一次性 ticket，
- * 再用 EventSource(?ticket=xxx) 建立 SSE 连接。ticket 验证成功后立即删除，防止重放。
+ * <p>流程：前端先 POST /api/console/stream/ticket（带 Authorization header）换取一次性 ticket， 再用
+ * EventSource(?ticket=xxx) 建立 SSE 连接。ticket 验证成功后立即删除，防止重放。
  *
  * <p>ticket 有效期 5 分钟，存 Redis，格式 {@code console:sse:ticket:{ticket} → username:tenantId}。
  */

@@ -79,7 +79,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   private final ConsoleWorkflowQueryService workflowQueryService;
   private final ConsoleOpsQueryService opsQueryService;
 
-
   @Override
   public PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
     return opsQueryService.auditLogs(request);
@@ -150,7 +149,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     return opsQueryService.approvals(request);
   }
 
-
   @Override
   public PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
     return fileQueryService.fileChains(request);
@@ -216,7 +214,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
     return fileQueryService.filePipelineDetail(tenantId, id);
   }
 
-
   @Override
   public PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(
       JobDefinitionQueryRequest request) {
@@ -254,7 +251,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   public PageResponse<ConsoleJobPartitionResponse> jobPartitions(JobPartitionQueryRequest request) {
     return jobQueryService.jobPartitions(request);
   }
-
 
   @Override
   public PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(

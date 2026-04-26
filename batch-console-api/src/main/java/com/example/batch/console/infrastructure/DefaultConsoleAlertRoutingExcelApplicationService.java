@@ -72,34 +72,24 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
   private static final Set<String> SEVERITIES = DictEnum.codes(AlertSeverity.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry(
-              "tenant_id",
-              optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry(
-              "route_code", requiredColumn("路由唯一编码，作为导入匹配键。", GUIDE_STR, "RT_BATCH_ERROR")),
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("route_code", requiredColumn("路由唯一编码，作为导入匹配键。", GUIDE_STR, "RT_BATCH_ERROR")),
           Map.entry("route_name", requiredColumn("控制台展示的路由名称。", GUIDE_STR, "批处理异常路由")),
           Map.entry(COL_TEAM, requiredColumn("负责该路由的团队或值班组。", GUIDE_STR, "ops")),
           Map.entry("alert_group", requiredColumn("通知引擎使用的告警分组。", GUIDE_STR, "batch")),
           Map.entry(
               COL_SEVERITY,
-              requiredColumn(
-                  "该路由处理的告警级别。", "枚举", "ERROR", "INFO", "WARN", "ERROR", "CRITICAL")),
-          Map.entry(
-              COL_RECEIVER, requiredColumn("目标接收方、通道或 webhook 别名。", GUIDE_STR, "slack-ops")),
+              requiredColumn("该路由处理的告警级别。", "枚举", "ERROR", "INFO", "WARN", "ERROR", "CRITICAL")),
+          Map.entry(COL_RECEIVER, requiredColumn("目标接收方、通道或 webhook 别名。", GUIDE_STR, "slack-ops")),
           Map.entry("group_by", optionalColumn("用于去重和聚合的分组键，可选。", "表达式", "job_code")),
+          Map.entry("group_wait_seconds", optionalColumn("首次聚合通知前的等待秒数，必须大于等于 0。", "整数", "30")),
           Map.entry(
-              "group_wait_seconds", optionalColumn("首次聚合通知前的等待秒数，必须大于等于 0。", "整数", "30")),
+              "group_interval_seconds", optionalColumn("两次聚合通知之间的最小间隔，必须大于等于 0。", "整数", "300")),
           Map.entry(
-              "group_interval_seconds",
-              optionalColumn("两次聚合通知之间的最小间隔，必须大于等于 0。", "整数", "300")),
+              "repeat_interval_seconds", optionalColumn("持续告警的重复通知间隔，必须大于等于 0。", "整数", "3600")),
           Map.entry(
-              "repeat_interval_seconds",
-              optionalColumn("持续告警的重复通知间隔，必须大于等于 0。", "整数", "3600")),
-          Map.entry(
-              COL_ENABLED,
-              optionalColumn("告警路由是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
-          Map.entry(
-              COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "批处理失败默认路由")));
+              COL_ENABLED, optionalColumn("告警路由是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
+          Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "批处理失败默认路由")));
 
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -115,10 +105,8 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-
   @Override
-  public ResponseEntity<InputStreamResource> exportAlertRoutings(
-      AlertRoutingQueryRequest request) {
+  public ResponseEntity<InputStreamResource> exportAlertRoutings(AlertRoutingQueryRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     List<Map<String, Object>> rows =
         alertRoutingConfigMapper.selectByQuery(
@@ -136,7 +124,6 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
   public ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request) {
     return doApply(uploadToken, request.getReason());
   }
-
 
   @Override
   protected String sheetName() {
@@ -169,8 +156,7 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
         .groupBy(optionalText(values, "group_by", 512, issues))
         .groupWaitSeconds(optionalInteger(values, "group_wait_seconds", 0, 30, issues))
         .groupIntervalSeconds(optionalInteger(values, "group_interval_seconds", 0, 300, issues))
-        .repeatIntervalSeconds(
-            optionalInteger(values, "repeat_interval_seconds", 0, 3600, issues))
+        .repeatIntervalSeconds(optionalInteger(values, "repeat_interval_seconds", 0, 3600, issues))
         .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
         .description(optionalText(values, COL_DESCRIPTION, 1024, issues))
         .build();
@@ -308,7 +294,6 @@ public class DefaultConsoleAlertRoutingExcelApplicationService
     sheet.setColumnWidth(1, 20 * 256);
     sheet.setColumnWidth(2, 36 * 256);
   }
-
 
   @Builder
   record RoutingRow(

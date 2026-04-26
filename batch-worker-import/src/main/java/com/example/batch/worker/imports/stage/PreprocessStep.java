@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.stage;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.EncodingUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -27,7 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * PREPROCESS（设计说明书 §9.3）：拉取模板、解码正文，执行 {@link ImportPreprocessPipeline} （{@code preprocess_pipeline}
@@ -39,9 +39,8 @@ import com.example.batch.common.utils.Texts;
 public class PreprocessStep implements ImportStageStep {
 
   /**
-   * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块
-   * UTF-16 String。默认 16 MiB，可通过系统属性 {@code batch.worker.import.preprocess-spool-bytes}
-   * 调整（设 0 关闭 spool，全部走 byte[] → String 路径）。
+   * 解码后内存放大阈值：超过该字节数直接 spool 原始字节到临时文件，避免生成整块 UTF-16 String。默认 16 MiB，可通过系统属性 {@code
+   * batch.worker.import.preprocess-spool-bytes} 调整（设 0 关闭 spool，全部走 byte[] → String 路径）。
    */
   private static final int SPOOL_THRESHOLD_BYTES =
       Integer.getInteger("batch.worker.import.preprocess-spool-bytes", 16 * 1024 * 1024);
@@ -234,27 +233,24 @@ public class PreprocessStep implements ImportStageStep {
    * 文本解码三层守卫：把原始字节变成已归一化的 UTF-16 字符串，同时把可疑信号写入 context。
    *
    * <ul>
-   *   <li>A — 严格解码：非法字节 / 非 mappable 字符抛 {@code IMPORT_PREPROCESS_DECODE_FAILED},
-   *       避免默认 REPLACE 让 U+FFFD 静默入库
-   *   <li>D1 — 反向错检测：声明非 UTF-8 但字节同时通过 UTF-8 严格解码 → context 写入
-   *       {@code charsetSuspect=LIKELY_UTF8}, 让下游把标记写进 {@code file_record.metadata}
-   *   <li>B — 残留 U+FFFD 扫描：解码结果仍含 U+FFFD (源文件自带 / charset 内置替换) → context
-   *       写入 {@code replacementCount}
+   *   <li>A — 严格解码：非法字节 / 非 mappable 字符抛 {@code IMPORT_PREPROCESS_DECODE_FAILED}, 避免默认 REPLACE 让
+   *       U+FFFD 静默入库
+   *   <li>D1 — 反向错检测：声明非 UTF-8 但字节同时通过 UTF-8 严格解码 → context 写入 {@code charsetSuspect=LIKELY_UTF8},
+   *       让下游把标记写进 {@code file_record.metadata}
+   *   <li>B — 残留 U+FFFD 扫描：解码结果仍含 U+FFFD (源文件自带 / charset 内置替换) → context 写入 {@code
+   *       replacementCount}
    * </ul>
    */
   /**
-   * 大文件 spool：把原始字节写临时文件，PARSE 阶段用 InputStreamReader 按 charset 流式按行解码，
-   * 避免 byte[] → UTF-16 String 的 1.5-2x 内存放大。A 严格解码在 PARSE 阶段读时隐式触发（charset
-   * decoder REPORT 行为）；B/D1 为观测层，大文件场景下跳过以换取内存。IO 错误转为
+   * 大文件 spool：把原始字节写临时文件，PARSE 阶段用 InputStreamReader 按 charset 流式按行解码， 避免 byte[] → UTF-16 String 的
+   * 1.5-2x 内存放大。A 严格解码在 PARSE 阶段读时隐式触发（charset decoder REPORT 行为）；B/D1 为观测层，大文件场景下跳过以换取内存。IO 错误转为
    * {@link ImportPreprocessException} 以对齐主链路异常语义。
    */
-  private void spoolLargePayload(
-      byte[] processed, Charset charset, ImportJobContext context) {
+  private void spoolLargePayload(byte[] processed, Charset charset, ImportJobContext context) {
     Path spool;
     try {
       spool = Files.createTempFile("batch-preprocess-", ".raw");
-      Files.write(
-          spool, processed, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+      Files.write(spool, processed, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
     } catch (IOException ex) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_SPOOL_FAILED",

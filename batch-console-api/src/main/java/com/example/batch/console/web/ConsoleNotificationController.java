@@ -32,7 +32,6 @@ public class ConsoleNotificationController {
   private final ConsoleNotificationApplicationService service;
   private final ConsoleResponseFactory responseFactory;
 
-
   @GetMapping("/channels")
   @PreAuthorize(
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
@@ -82,7 +81,6 @@ public class ConsoleNotificationController {
     return responseFactory.success(service.testChannel(tenantId, channelCode));
   }
 
-
   @GetMapping("/rules")
   @PreAuthorize(
       "hasAnyAuthority('ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_CONFIG_ADMIN'," + " 'ROLE_TENANT_USER')")
@@ -124,7 +122,6 @@ public class ConsoleNotificationController {
     service.deleteRule(tenantId, ruleId);
     return responseFactory.success(null);
   }
-
 
   @GetMapping("/delivery-logs")
   @PreAuthorize(

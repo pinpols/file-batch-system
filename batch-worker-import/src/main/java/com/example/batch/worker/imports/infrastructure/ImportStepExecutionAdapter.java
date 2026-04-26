@@ -18,13 +18,11 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 /**
- * Import pipeline 的步骤执行适配器，连接通用 {@link AbstractPipelineStepExecutionAdapter} 模板
- * 与 Import 业务的具体实现。
+ * Import pipeline 的步骤执行适配器，连接通用 {@link AbstractPipelineStepExecutionAdapter} 模板 与 Import 业务的具体实现。
  *
- * <p>以 {@code @Primary} 覆盖 {@code batch-worker-core} 中的 no-op 默认适配器。
- * Pipeline 类型为 {@code IMPORT}，初始阶段为 {@code RECEIVE}；
- * 成功响应消息格式为 {@code "imported N row(s)"}；
- * 失败时通过 {@link PlatformFileRuntimeRepository#updateFileStatus} 将文件状态推进为 {@code FAILED}。
+ * <p>以 {@code @Primary} 覆盖 {@code batch-worker-core} 中的 no-op 默认适配器。 Pipeline 类型为 {@code
+ * IMPORT}，初始阶段为 {@code RECEIVE}； 成功响应消息格式为 {@code "imported N row(s)"}； 失败时通过 {@link
+ * PlatformFileRuntimeRepository#updateFileStatus} 将文件状态推进为 {@code FAILED}。
  */
 @Primary
 @Component

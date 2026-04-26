@@ -2,6 +2,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.security.DnsResolveGuard;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
@@ -21,7 +22,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * SFTP 渠道分发适配器，将 {@code file_record} 引用的文件上传到 {@code sftp_remote_directory}。
@@ -231,6 +231,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
           2,
           new ThreadFactory() {
             private int n = 0;
+
             @Override
             public Thread newThread(Runnable r) {
               Thread t = new Thread(r, "sftp-disconnect-" + (++n));
@@ -259,7 +260,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
     try {
       future.get(5, TimeUnit.SECONDS);
     } catch (TimeoutException timeout) {
-      log.warn("{} disconnect timed out for host {} — leaving background thread to finish", kind, host);
+      log.warn(
+          "{} disconnect timed out for host {} — leaving background thread to finish", kind, host);
       future.cancel(true);
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();

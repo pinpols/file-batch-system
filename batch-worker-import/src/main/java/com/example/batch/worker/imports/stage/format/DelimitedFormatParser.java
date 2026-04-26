@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.univocity.parsers.csv.CsvParser;
@@ -10,13 +11,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import com.example.batch.common.utils.Texts;
 
 /**
  * Parses delimited text (CSV, TSV, pipe-separated, etc.) into NDJSON records.
  *
- * <p>Backed by Univocity Parsers (RFC 4180 严格解析：正确处理嵌入引号、跨行字段、转义、
- * BOM、CR/LF 混合换行符)。替换了原手写 tokenizer，免费获得边界 case 覆盖。
+ * <p>Backed by Univocity Parsers (RFC 4180 严格解析：正确处理嵌入引号、跨行字段、转义、 BOM、CR/LF 混合换行符)。替换了原手写
+ * tokenizer，免费获得边界 case 覆盖。
  */
 public class DelimitedFormatParser implements FormatParser {
 

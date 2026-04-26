@@ -19,9 +19,7 @@ public class UpdateTaskStatusParam {
   private final String terminalStatus4;
   private final Long expectedVersion;
 
-  /**
-   * 以默认终态常量预填 terminalStatus1-4，调用方只需补 tenantId/id/taskStatus/error/expectedVersion 即可。
-   */
+  /** 以默认终态常量预填 terminalStatus1-4，调用方只需补 tenantId/id/taskStatus/error/expectedVersion 即可。 */
   public static UpdateTaskStatusParamBuilder withDefaultTerminals() {
     return builder()
         .terminalStatus1(TaskStatus.SUCCESS.code())

@@ -21,9 +21,9 @@ import org.springframework.stereotype.Service;
  *   <li>{@link #trigger}：单次触发。入参 triggerType 缺省为 {@code MANUAL}。
  *   <li>{@link #dryRunTrigger}：只做前置校验（tenant / jobCode / bizDate 格式 / triggerType 合法 / job 存在且启用），
  *       不真正落 trigger——方便 UI 在提交前预检，避免失败才报错影响用户体验。
- *   <li>{@link #batchTrigger}：列表批量入口。逐项独立 try/catch，失败项不中断全批；支持混合 dryRun：
- *       每项可单独带 {@code dryRun=true} 预检而其他项正常触发。每项 idempotencyKey 派生为
- *       {@code {baseKey}:{index}}，保证批内子项幂等独立，避免全部共用同一 key 导致 trigger 服务去重误杀。
+ *   <li>{@link #batchTrigger}：列表批量入口。逐项独立 try/catch，失败项不中断全批；支持混合 dryRun： 每项可单独带 {@code
+ *       dryRun=true} 预检而其他项正常触发。每项 idempotencyKey 派生为 {@code {baseKey}:{index}}，保证批内子项幂等独立，避免全部共用同一
+ *       key 导致 trigger 服务去重误杀。
  * </ul>
  */
 @Service
@@ -101,8 +101,7 @@ class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService {
   }
 
   @Override
-  public List<Map<String, Object>> batchTrigger(
-      List<TriggerRequest> items, String idempotencyKey) {
+  public List<Map<String, Object>> batchTrigger(List<TriggerRequest> items, String idempotencyKey) {
     List<Map<String, Object>> results = new ArrayList<>();
     for (int i = 0; i < items.size(); i++) {
       TriggerRequest item = items.get(i);
@@ -115,8 +114,7 @@ class DefaultConsoleJobTriggerService implements ConsoleJobTriggerService {
           Map<String, Object> dryRun = dryRunTrigger(item);
           entry.put("dryRun", true);
           entry.put(
-              "status",
-              Boolean.TRUE.equals(dryRun.get("valid")) ? "DRY_RUN_OK" : "DRY_RUN_FAILED");
+              "status", Boolean.TRUE.equals(dryRun.get("valid")) ? "DRY_RUN_OK" : "DRY_RUN_FAILED");
           entry.put("result", dryRun);
         } else {
           String itemKey = idempotencyKey + ":" + i;

@@ -3,6 +3,7 @@ package com.example.batch.console.support;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.utils.Texts;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -14,7 +15,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -59,6 +59,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       "{\"code\":\""
           + ResultCode.MISSING_IDEMPOTENCY_KEY.code()
           + "\",\"message\":\"this endpoint requires Idempotency-Key header\"}";
+
   /** Request attribute：记录本次请求使用的 Redis key，afterCompletion 时读取。 */
   private static final String ATTR_REDIS_KEY = "console.idempotency.redisKey";
 
@@ -93,7 +94,13 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
     String tenantId = resolveTenantId(request);
     String redisKey =
-        KEY_PREFIX + tenantId + ":" + request.getMethod() + ":" + request.getRequestURI() + ":"
+        KEY_PREFIX
+            + tenantId
+            + ":"
+            + request.getMethod()
+            + ":"
+            + request.getRequestURI()
+            + ":"
             + idempotencyKey.trim();
 
     String existing;
@@ -111,7 +118,9 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     if (DONE.equals(existing)) {
       log.warn(
           "duplicate idempotency key rejected (already done): key={}, uri={}, tenant={}",
-          idempotencyKey, request.getRequestURI(), tenantId);
+          idempotencyKey,
+          request.getRequestURI(),
+          tenantId);
       writeJson(response, HttpStatus.CONFLICT, CONFLICT_DONE_BODY);
       return false;
     }

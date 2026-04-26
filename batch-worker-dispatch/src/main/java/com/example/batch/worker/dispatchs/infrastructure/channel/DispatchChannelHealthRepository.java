@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.mapper.DispatchChannelHealthMapper;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -9,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import com.example.batch.common.utils.Texts;
 
 /** 分发渠道健康状态持久化仓库。 */
 @Repository
@@ -31,8 +31,8 @@ public class DispatchChannelHealthRepository {
   }
 
   /**
-   * A-3.9：CAS 抢占半开探针机会。委托给 Mapper 的条件 UPDATE，仅在 (next_probe_at &lt;= now &amp;&amp;
-   * health_status &lt;&gt; 'HEALTHY') 时把 next_probe_at 推到 {@code newNextProbeAt}。
+   * A-3.9：CAS 抢占半开探针机会。委托给 Mapper 的条件 UPDATE，仅在 (next_probe_at &lt;= now &amp;&amp; health_status
+   * &lt;&gt; 'HEALTHY') 时把 next_probe_at 推到 {@code newNextProbeAt}。
    *
    * @return true = 本线程获得半开通行证；false = 其他线程已抢或已恢复 HEALTHY
    */
@@ -47,8 +47,7 @@ public class DispatchChannelHealthRepository {
   }
 
   /**
-   * P2：原子写入"成功"结果，等价于旧 upsertHealth(HEALTHY, failures=0, ...) 但 SQL 侧一次
-   * 完成，无 find-then-upsert 竞态。
+   * P2：原子写入"成功"结果，等价于旧 upsertHealth(HEALTHY, failures=0, ...) 但 SQL 侧一次 完成，无 find-then-upsert 竞态。
    */
   public void upsertSuccess(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();
@@ -63,12 +62,12 @@ public class DispatchChannelHealthRepository {
   }
 
   /**
-   * P2：原子写入"失败"结果。consecutive_failures 由 SQL {@code COALESCE(...) + 1} 递增；
-   * health_status 根据 failureThreshold 自动判为 UNHEALTHY / DEGRADED。随后调用
-   * {@link #recalcBackoff} 按新的 count 更新 next_probe_at，完成指数退避。
+   * P2：原子写入"失败"结果。consecutive_failures 由 SQL {@code COALESCE(...) + 1} 递增； health_status 根据
+   * failureThreshold 自动判为 UNHEALTHY / DEGRADED。随后调用 {@link #recalcBackoff} 按新的 count 更新
+   * next_probe_at，完成指数退避。
    *
-   * <p>{@link DispatchHealthUpsertCommand#nextProbeAt()} 在失败路径上承载"首次失败 INSERT 的
-   * placeholder 回退时间"（{@code firstFailureBackoffAt}），mapper XML 字段名保持不变。
+   * <p>{@link DispatchHealthUpsertCommand#nextProbeAt()} 在失败路径上承载"首次失败 INSERT 的 placeholder
+   * 回退时间"（{@code firstFailureBackoffAt}），mapper XML 字段名保持不变。
    */
   public void upsertFailureAndBump(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();

@@ -59,9 +59,7 @@ class ConsoleFileTemplateExcelControllerTest {
   @Test
   void shouldUploadPreviewAndApplyExcelTemplate() throws Exception {
     when(excelService.upload(any()))
-        .thenReturn(
-            new ExcelUploadResponse(
-                "token-1", "template.xlsx", "file_template_config", 1));
+        .thenReturn(new ExcelUploadResponse("token-1", "template.xlsx", "file_template_config", 1));
     when(excelService.preview(anyString()))
         .thenReturn(
             new ExcelPreviewResponse<>(

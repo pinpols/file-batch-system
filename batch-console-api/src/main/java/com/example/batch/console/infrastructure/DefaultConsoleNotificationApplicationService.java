@@ -30,8 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li><b>投递日志</b>：审计用，每次通知分发的结果（成功/失败）都在此记录。
  * </ul>
  *
- * <p>唯一性约束：{@code channelCode} 应用层前置查重（{@code selectByCode != null → CONFLICT}），
- * 非 DB 唯一索引兜底——并发创建同 code 时存在 TOCTOU 窗口，但通知治理操作并发度低，可接受。
+ * <p>唯一性约束：{@code channelCode} 应用层前置查重（{@code selectByCode != null → CONFLICT}）， 非 DB 唯一索引兜底——并发创建同
+ * code 时存在 TOCTOU 窗口，但通知治理操作并发度低，可接受。
  *
  * <p>自由文本入参（channelName / channelCode 等）统一经 {@link ConsoleTextSanitizer#safeInput} 截断清洗。
  */
@@ -62,7 +62,6 @@ public class DefaultConsoleNotificationApplicationService
   private final NotificationChannelMapper channelMapper;
   private final SubscriptionRuleMapper ruleMapper;
   private final NotificationDeliveryLogMapper deliveryLogMapper;
-
 
   @Override
   public List<Map<String, Object>> listChannels(String tenantId) {
@@ -145,7 +144,6 @@ public class DefaultConsoleNotificationApplicationService
     channelMapper.deleteByCode(resolved, channelCode);
   }
 
-
   @Override
   public List<Map<String, Object>> listRules(String tenantId) {
     return ruleMapper.selectByTenant(tenantGuard.resolveTenant(tenantId));
@@ -226,13 +224,11 @@ public class DefaultConsoleNotificationApplicationService
     ruleMapper.deleteById(resolved, ruleId);
   }
 
-
   @Override
   public List<Map<String, Object>> deliveryLogs(String tenantId, int limit) {
     return deliveryLogMapper.selectByTenant(
         tenantGuard.resolveTenant(tenantId), Math.min(limit, 500));
   }
-
 
   @Override
   public Map<String, Object> testChannel(String tenantId, String channelCode) {
@@ -261,7 +257,6 @@ public class DefaultConsoleNotificationApplicationService
     return Map.of(
         KEY_CHANNEL_CODE, channelCode, "status", "OK", "message", "test notification dispatched");
   }
-
 
   private static String str(Map<String, Object> map, String key) {
     Object v = map.get(key);

@@ -1,6 +1,7 @@
 package com.example.batch.console.support;
 
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import java.time.Duration;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
@@ -8,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 控制台高频查询的 Redis 缓存层。
@@ -23,18 +23,17 @@ import com.example.batch.common.utils.Texts;
  *
  * <p>Redis 不可用时降级到直接查 DB，不影响功能。
  *
- * <p><b>A-3.16 · Dashboard 一致性语义</b>：Dashboard 聚合查询跨多表 join（job_instance /
- * workflow_run / file_record 等），PostgreSQL 默认 READ_COMMITTED 隔离级别下多表读之间可能
- * 读到不同 MVCC 版本。TTL 10s 窗口内缓存命中时读者看到同一快照；TTL 过期重算时可能读到
- * "正在写入中"的中间态（跨表 count 之和≠single-table total）。
+ * <p><b>A-3.16 · Dashboard 一致性语义</b>：Dashboard 聚合查询跨多表 join（job_instance / workflow_run /
+ * file_record 等），PostgreSQL 默认 READ_COMMITTED 隔离级别下多表读之间可能 读到不同 MVCC 版本。TTL 10s
+ * 窗口内缓存命中时读者看到同一快照；TTL 过期重算时可能读到 "正在写入中"的中间态（跨表 count 之和≠single-table total）。
  *
  * <p>这是**主动的设计权衡**：
  *
  * <ul>
  *   <li>Dashboard 是观察面板，秒级跨表误差可接受（对比 REPEATABLE_READ 带来的锁成本，性价比低）
  *   <li>需要强一致的场景请走带 tenant filter 的 single-table 查询
- *   <li>真要提升到事务快照：要么引 materialized view 定时刷，要么 @Transactional
- *       (isolation=REPEATABLE_READ, readOnly=true) 包 query chain —— 属于 v5 范围
+ *   <li>真要提升到事务快照：要么引 materialized view 定时刷，要么 @Transactional (isolation=REPEATABLE_READ,
+ *       readOnly=true) 包 query chain —— 属于 v5 范围
  * </ul>
  */
 @Slf4j
@@ -47,10 +46,13 @@ public class ConsoleQueryCacheService {
 
   /** Meta 枚举（纯静态数据）。 */
   public static final Duration META_ENUM_TTL = Duration.ofMinutes(30);
+
   /** Meta 配置选项（队列/日历/窗口等，跟随租户配置变化���。 */
   public static final Duration META_OPTION_TTL = Duration.ofMinutes(5);
+
   /** Dashboard 汇总。 */
   public static final Duration DASHBOARD_TTL = Duration.ofSeconds(10);
+
   /** 调度快照。 */
   public static final Duration SNAPSHOT_TTL = Duration.ofSeconds(30);
 

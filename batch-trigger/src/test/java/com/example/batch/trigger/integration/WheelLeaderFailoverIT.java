@@ -23,20 +23,20 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Failover 行为 IT — 验证 design.md §6 R-4 防御:
  *
- * <p>R-4 风险:Leader 崩溃后,新 leader 冷启动重建窗口 30s+ 期间 fire 全 delay。
- * 防御:wasLeader 翻转检测(@Scheduled 进入时 false → true)→ onLeaderAcquire fast-path:
- * 立即接管 stale marker + 立即扫一次 1 min 窗口。
+ * <p>R-4 风险:Leader 崩溃后,新 leader 冷启动重建窗口 30s+ 期间 fire 全 delay。 防御:wasLeader 翻转检测(@Scheduled 进入时
+ * false → true)→ onLeaderAcquire fast-path: 立即接管 stale marker + 立即扫一次 1 min 窗口。
  *
- * <p>测试技巧:wheelScheduler.slidingWindow() 是 public,IT 直接调即可触发 wasLeader 翻转;
- * 配合 stale marker 数据,验证 fast-path 接管行为。
+ * <p>测试技巧:wheelScheduler.slidingWindow() 是 public,IT 直接调即可触发 wasLeader 翻转; 配合 stale marker 数据,验证
+ * fast-path 接管行为。
  */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@TestPropertySource(properties = {
-    "batch.trigger.scheduler-impl=wheel",
-    "batch.trigger.wheel.stale-marker-threshold-seconds=2"  // 2s 阈值,IT 容易构造
-})
+@TestPropertySource(
+    properties = {
+      "batch.trigger.scheduler-impl=wheel",
+      "batch.trigger.wheel.stale-marker-threshold-seconds=2" // 2s 阈值,IT 容易构造
+    })
 @Transactional(propagation = Propagation.NEVER)
 class WheelLeaderFailoverIT extends AbstractIntegrationTest {
 
@@ -52,24 +52,33 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
   @BeforeEach
   void seed() {
     // 清 ShedLock 残留 + 重置 wheelScheduler.wasLeader 状态(每个 test 独立验证 fast-path 翻转)
-    jdbcTemplate.update("delete from batch.shedlock where name in (?, ?)",
-        "trigger_wheel_leader", "wheel_stale_marker_release");
+    jdbcTemplate.update(
+        "delete from batch.shedlock where name in (?, ?)",
+        "trigger_wheel_leader",
+        "wheel_stale_marker_release");
     tenantId = "fover-it-" + System.nanoTime();
     jobCode = "job-" + System.nanoTime();
     jdbcTemplate.update(
-        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on conflict do nothing",
-        tenantId, tenantId);
-    jobDefId = jdbcTemplate.queryForObject(
-        """
-        insert into batch.job_definition (
-          tenant_id, job_code, job_name, job_type,
-          schedule_type, schedule_expr, timezone,
-          enabled, created_by, updated_by
-        ) values (?, ?, ?, 'GENERAL',
-          'CRON', '0 * * * * ?', 'Asia/Shanghai',
-          true, 'it', 'it')
-        returning id
-        """, Long.class, tenantId, jobCode, jobCode);
+        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on"
+            + " conflict do nothing",
+        tenantId,
+        tenantId);
+    jobDefId =
+        jdbcTemplate.queryForObject(
+            """
+            insert into batch.job_definition (
+              tenant_id, job_code, job_name, job_type,
+              schedule_type, schedule_expr, timezone,
+              enabled, created_by, updated_by
+            ) values (?, ?, ?, 'GENERAL',
+              'CRON', '0 * * * * ?', 'Asia/Shanghai',
+              true, 'it', 'it')
+            returning id
+            """,
+            Long.class,
+            tenantId,
+            jobCode,
+            jobCode);
   }
 
   @Test
@@ -80,7 +89,8 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
     // 手工 claim + 把 scheduled_at 改到 stale 之前(threshold=2s,设 10s 前)
     stateMapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "dead-leader-instance");
     jdbcTemplate.update(
-        "update batch.trigger_runtime_state set scheduled_at = now() - interval '10 seconds' where id = ?",
+        "update batch.trigger_runtime_state set scheduled_at = now() - interval '10 seconds' where"
+            + " id = ?",
         loaded.getId());
 
     double leaderAcquireBefore = leaderAcquireCount();
@@ -109,10 +119,10 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
   void secondSlidingWindowCallDoesNotRetriggerFastPath() {
     insertState(Instant.now().plusSeconds(60));
 
-    wheelScheduler.doSlidingWindow();  // 第 1 次 — 触发 fast-path
+    wheelScheduler.doSlidingWindow(); // 第 1 次 — 触发 fast-path
     double afterFirstAcquire = leaderAcquireCount();
 
-    wheelScheduler.doSlidingWindow();  // 第 2 次 — wasLeader 已 true,不再触发
+    wheelScheduler.doSlidingWindow(); // 第 2 次 — wasLeader 已 true,不再触发
     double afterSecondAcquire = leaderAcquireCount();
 
     assertThat(afterSecondAcquire)
@@ -127,7 +137,8 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
     TriggerRuntimeStateEntity loaded = stateMapper.selectByJobDefinitionId(jobDefId);
     stateMapper.claimForSchedule(loaded.getId(), loaded.getVersion(), "dead-leader-instance");
     jdbcTemplate.update(
-        "update batch.trigger_runtime_state set scheduled_at = now() - interval '10 seconds' where id = ?",
+        "update batch.trigger_runtime_state set scheduled_at = now() - interval '10 seconds' where"
+            + " id = ?",
         loaded.getId());
 
     wheelScheduler.releaseStaleMarkers();
@@ -148,10 +159,7 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
   }
 
   private double leaderAcquireCount() {
-    return Search.in(meterRegistry)
-        .name("batch.trigger.wheel.leader.acquire")
-        .counters()
-        .stream()
+    return Search.in(meterRegistry).name("batch.trigger.wheel.leader.acquire").counters().stream()
         .mapToDouble(io.micrometer.core.instrument.Counter::count)
         .sum();
   }

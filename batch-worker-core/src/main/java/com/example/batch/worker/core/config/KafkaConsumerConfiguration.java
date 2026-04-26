@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.config;
 
+import io.micrometer.observation.ObservationRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -16,7 +17,6 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
-import io.micrometer.observation.ObservationRegistry;
 
 @Configuration(proxyBeanMethods = false)
 public class KafkaConsumerConfiguration {

@@ -46,7 +46,8 @@ class OutboxArchiveServiceTest {
   @Test
   void noCandidatesReturnsEmpty() {
     props.setEnabled(true);
-    when(mapper.selectArchivableIds(anyString(), any(Instant.class), anyInt())).thenReturn(List.of());
+    when(mapper.selectArchivableIds(anyString(), any(Instant.class), anyInt()))
+        .thenReturn(List.of());
 
     ArchiveBatchResult result = service.archivePublished();
 
@@ -85,7 +86,8 @@ class OutboxArchiveServiceTest {
     props.setEnabled(true);
     props.setPublishedRetentionDays(7);
     props.setGiveUpRetentionDays(30);
-    when(mapper.selectArchivableIds(anyString(), any(Instant.class), anyInt())).thenReturn(List.of());
+    when(mapper.selectArchivableIds(anyString(), any(Instant.class), anyInt()))
+        .thenReturn(List.of());
 
     service.archivePublished();
     service.archiveGiveUp();

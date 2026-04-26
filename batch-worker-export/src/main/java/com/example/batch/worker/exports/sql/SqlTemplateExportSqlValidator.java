@@ -1,5 +1,6 @@
 package com.example.batch.worker.exports.sql;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -20,7 +21,6 @@ import net.sf.jsqlparser.statement.select.SetOperationList;
 import net.sf.jsqlparser.statement.select.SubSelect;
 import net.sf.jsqlparser.statement.select.WithItem;
 import net.sf.jsqlparser.util.TablesNamesFinder;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 使用 JSqlParser AST 分析验证模板提供的 SELECT SQL。
@@ -192,9 +192,8 @@ public class SqlTemplateExportSqlValidator {
   }
 
   /**
-   * 提取 SQL 中所有 {@code :paramName} 引用。
-   * 简化处理：忽略字符串字面量 / 注释里的冒号；真需要全量覆盖可换用 JSqlParser 的 parameter visitor。
-   * 当前实现足以覆盖常见 SQL 模板（冒号参数不会出现在字符串里）。
+   * 提取 SQL 中所有 {@code :paramName} 引用。 简化处理：忽略字符串字面量 / 注释里的冒号；真需要全量覆盖可换用 JSqlParser 的 parameter
+   * visitor。 当前实现足以覆盖常见 SQL 模板（冒号参数不会出现在字符串里）。
    */
   private Set<String> extractNamedParameters(String sql) {
     Set<String> names = new LinkedHashSet<>();

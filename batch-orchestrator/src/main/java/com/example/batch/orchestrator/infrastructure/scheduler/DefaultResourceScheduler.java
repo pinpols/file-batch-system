@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.model.WorkerRouteModel;
@@ -16,7 +17,6 @@ import com.example.batch.orchestrator.domain.entity.TenantQuotaPolicyRecord;
 import com.example.batch.orchestrator.domain.scheduler.ResourceCheck;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingDecision;
 import com.example.batch.orchestrator.domain.scheduler.ResourceSchedulingRequest;
-import com.example.batch.common.config.BatchTimezoneProvider;
 import com.example.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import com.example.batch.orchestrator.mapper.CountActiveByGroupParam;
 import com.example.batch.orchestrator.mapper.JobInstanceMapper;
@@ -28,8 +28,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 资源调度统一收口：给定一个 {@link ResourceSchedulingRequest}，按固定 pipeline 依次判定可派发性，
- * 任一阶段 block 即 short-circuit 返回 {@code dispatchable=false} 的决策（带 reasonCode），不再继续后续检查。
+ * 资源调度统一收口：给定一个 {@link ResourceSchedulingRequest}，按固定 pipeline 依次判定可派发性， 任一阶段 block 即 short-circuit
+ * 返回 {@code dispatchable=false} 的决策（带 reasonCode），不再继续后续检查。
  *
  * <p>Pipeline 顺序：
  *
@@ -43,8 +43,8 @@ import org.springframework.stereotype.Component;
  *   <li>{@code enrichFairnessScore} — 公平分数（供 {@code WaitingPartitionDispatchScheduler} 排序用）。
  * </ol>
  *
- * <p>所有分支最终都产出 {@link ResourceSchedulingDecision}（包含队列码、worker route、priority band、
- * partitionStatus / taskStatus 初始值），让 launch / retry / DAG dispatch 复用同一决策，而不各自散落判断。
+ * <p>所有分支最终都产出 {@link ResourceSchedulingDecision}（包含队列码、worker route、priority band、 partitionStatus
+ * / taskStatus 初始值），让 launch / retry / DAG dispatch 复用同一决策，而不各自散落判断。
  */
 @Component
 @RequiredArgsConstructor

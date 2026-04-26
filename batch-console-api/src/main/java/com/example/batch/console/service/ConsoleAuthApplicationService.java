@@ -29,10 +29,10 @@ import org.springframework.stereotype.Service;
  *       —— 新登录自动踢旧会话，同一账号无法多端并存（{@code singleSessionEnabled=true} 时生效）。
  *   <li><b>tenantId 解析顺序</b>：Principal.tenantId → request metadata → {@code defaultTenantId} 兜底。
  *       前两个缺失时用默认租户而不是拒绝，兼容无 Principal 的边界场景（如 legacy header-only）。
- *   <li><b>authorities 兜底</b>：principal 无 authorities 或只含泛化的 {@link ConsoleRoles#USER} 时，
- *       用服务端 {@code defaultAuthorities} 替换——防止未正确配置角色的账号获得空权限集。
- *   <li><b>profile 带菜单</b>：{@link ConsoleAuthProfileResponse} 除身份字段外还附带
- *       {@link ConsoleMenuRegistry#filterByAuthorities} 过滤后的菜单树，前端不需再单独拉菜单接口。
+ *   <li><b>authorities 兜底</b>：principal 无 authorities 或只含泛化的 {@link ConsoleRoles#USER} 时， 用服务端
+ *       {@code defaultAuthorities} 替换——防止未正确配置角色的账号获得空权限集。
+ *   <li><b>profile 带菜单</b>：{@link ConsoleAuthProfileResponse} 除身份字段外还附带 {@link
+ *       ConsoleMenuRegistry#filterByAuthorities} 过滤后的菜单树，前端不需再单独拉菜单接口。
  * </ul>
  */
 @Service
@@ -59,7 +59,9 @@ public class ConsoleAuthApplicationService {
   public ConsoleAuthProfileResponse profile(Authentication authentication) {
     Set<String> auths = authorities(authentication);
     return new ConsoleAuthProfileResponse(
-        username(authentication), tenantId(authentication), auths,
+        username(authentication),
+        tenantId(authentication),
+        auths,
         ConsoleMenuRegistry.filterByAuthorities(auths));
   }
 

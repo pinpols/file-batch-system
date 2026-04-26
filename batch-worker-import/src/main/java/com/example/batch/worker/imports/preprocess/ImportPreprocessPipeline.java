@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.preprocess;
 
 import com.example.batch.common.utils.EncodingUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,20 +28,21 @@ import java.util.zip.ZipInputStream;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 有序二进制预处理管道（工具类，不可实例化）：对原始文件字节按步骤顺序依次执行解压、解密、摘要校验和字符集转码。
  *
- * <p><b>步骤解析规则</b>：优先使用模板配置中的 {@code preprocess_pipeline}（JSON 数组）；
- * 不存在时根据 {@code compress_type}（ZIP / GZIP）和 {@code encrypt_type}（AES）隐式推导步骤。
- * 其他加密类型在隐式模式下抛出 {@code IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED}。
+ * <p><b>步骤解析规则</b>：优先使用模板配置中的 {@code preprocess_pipeline}（JSON 数组）； 不存在时根据 {@code
+ * compress_type}（ZIP / GZIP）和 {@code encrypt_type}（AES）隐式推导步骤。 其他加密类型在隐式模式下抛出 {@code
+ * IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED}。
  *
  * <p><b>支持步骤类型</b>：
+ *
  * <ul>
  *   <li>{@code UNZIP} — 解 ZIP，支持 {@code entryName} 指定条目
  *   <li>{@code GUNZIP} — 解 GZIP
- *   <li>{@code AES_GCM_DECRYPT} — AES/GCM/NoPadding 解密，需提供 {@code aesKeyBase64} / {@code aesIvBase64}
+ *   <li>{@code AES_GCM_DECRYPT} — AES/GCM/NoPadding 解密，需提供 {@code aesKeyBase64} / {@code
+ *       aesIvBase64}
  *   <li>{@code VERIFY_DIGEST} — SHA-256 / MD5 摘要校验，期望值来自步骤配置或 {@link ImportPayload#checksumValue()}
  *   <li>{@code VERIFY_RSA_SHA256} — RSA 签名验证，需提供 PEM 公钥和 Base64 签名
  *   <li>{@code CHARSET_TRANSCODE} — 字节编码转换（{@code fromCharset} / {@code toCharset}）
@@ -59,13 +61,14 @@ public final class ImportPreprocessPipeline {
 
   /**
    * 隐式步骤推导表：{@code compress_type} / {@code encrypt_type} 的 UPPERCASE 值 → 对应 preprocess step。
-   * 扩展新的压缩/加密算法时，在表里新增一行即可，避免散落的 if-else。
-   * {@code encrypt_type=NONE} 视为无加密，在调用端直接跳过；其他未注册的加密类型在非 bypass 模式下拒收。
+   * 扩展新的压缩/加密算法时，在表里新增一行即可，避免散落的 if-else。 {@code encrypt_type=NONE} 视为无加密，在调用端直接跳过；其他未注册的加密类型在非
+   * bypass 模式下拒收。
    */
   private static final Map<String, String> IMPLICIT_COMPRESS_STEPS =
       Map.of("ZIP", "UNZIP", "GZIP", "GUNZIP");
 
-  private static final Map<String, String> IMPLICIT_ENCRYPT_STEPS = Map.of("AES", "AES_GCM_DECRYPT");
+  private static final Map<String, String> IMPLICIT_ENCRYPT_STEPS =
+      Map.of("AES", "AES_GCM_DECRYPT");
 
   private ImportPreprocessPipeline() {}
 
@@ -148,9 +151,7 @@ public final class ImportPreprocessPipeline {
     return implicit;
   }
 
-  /**
-   * 按查表结果追加隐式 step；命中返回 true，未命中（含空值）返回 false 交由调用方决定是否报错。
-   */
+  /** 按查表结果追加隐式 step；命中返回 true，未命中（含空值）返回 false 交由调用方决定是否报错。 */
   private static boolean appendImplicitStep(
       List<Map<String, Object>> implicit, Map<String, String> lookup, String rawType) {
     if (!Texts.hasText(rawType)) {
@@ -393,12 +394,12 @@ public final class ImportPreprocessPipeline {
   }
 
   /**
-   * A-3.13：CHARSET_TRANSCODE 输出大小硬上限。GBK/GB18030 → UTF-8 时字节可能膨胀到 2-3×，
-   * 无上限就能让上游构造一个接近 OOM 阈值的输入把整个 worker 拖死。
+   * A-3.13：CHARSET_TRANSCODE 输出大小硬上限。GBK/GB18030 → UTF-8 时字节可能膨胀到 2-3×， 无上限就能让上游构造一个接近 OOM 阈值的输入把整个
+   * worker 拖死。
    *
-   * <p>默认 = {@code max(inputLen × 2 + 1MB, 16MB)}；模板可通过 step.{@code outputSizeCap}
-   * 覆盖。超限抛 {@link IllegalArgumentException}，由 ReceiveStep / PreprocessStep 的 catch 兜底
-   * 落 file_record.reason_message。
+   * <p>默认 = {@code max(inputLen × 2 + 1MB, 16MB)}；模板可通过 step.{@code outputSizeCap} 覆盖。超限抛 {@link
+   * IllegalArgumentException}，由 ReceiveStep / PreprocessStep 的 catch 兜底 落
+   * file_record.reason_message。
    */
   private static final long CHARSET_TRANSCODE_MIN_CAP_BYTES = 16L * 1024L * 1024L;
 
@@ -407,7 +408,8 @@ public final class ImportPreprocessPipeline {
     String to = firstNonBlank(stringProp(step, "toCharset"), EncodingUtils.UTF_8);
     Charset fromCs = EncodingUtils.resolve(from);
     Charset toCs = EncodingUtils.resolve(to);
-    long computedCap = Math.max((long) input.length * 2L + 1_048_576L, CHARSET_TRANSCODE_MIN_CAP_BYTES);
+    long computedCap =
+        Math.max((long) input.length * 2L + 1_048_576L, CHARSET_TRANSCODE_MIN_CAP_BYTES);
     long cap = parseLong(stringProp(step, "outputSizeCap"), computedCap);
     String text = new String(input, fromCs);
     byte[] output = text.getBytes(toCs);

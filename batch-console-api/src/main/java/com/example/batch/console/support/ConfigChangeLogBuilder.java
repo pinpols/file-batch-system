@@ -5,10 +5,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 统一构造 {@code config_change_log} 插入参数 Map 的链式 Builder，消除 12 个 Excel Service 里重复的
- * {@code configChangeLogMapper.insertConfigChangeLog(mapOf(...))} 样板。
+ * 统一构造 {@code config_change_log} 插入参数 Map 的链式 Builder，消除 12 个 Excel Service 里重复的 {@code
+ * configChangeLogMapper.insertConfigChangeLog(mapOf(...))} 样板。
  *
  * <p>用法：
+ *
  * <pre>{@code
  * configChangeLogMapper.insertConfigChangeLog(
  *     ConfigChangeLogBuilder.create(tenantId, operatorId, traceId)
@@ -19,9 +20,9 @@ import java.util.Map;
  *         .build());
  * }</pre>
  *
- * <p>默认值：{@code versionNo=1}、{@code operatorType="USER"}、{@code changeResult="SUCCESS"}。
- * {@code operatorId} 在 {@link #build()} 里走 {@link ConsoleTextSanitizer#safeInput(String, int)}
- * 截断到 64 字符，{@code traceId} 截断到 128 字符。
+ * <p>默认值：{@code versionNo=1}、{@code operatorType="USER"}、{@code changeResult="SUCCESS"}。 {@code
+ * operatorId} 在 {@link #build()} 里走 {@link ConsoleTextSanitizer#safeInput(String, int)} 截断到 64
+ * 字符，{@code traceId} 截断到 128 字符。
  */
 public final class ConfigChangeLogBuilder {
 

@@ -2,6 +2,7 @@ package com.example.batch.worker.exports.stage.format;
 
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -12,21 +13,21 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import com.example.batch.common.utils.Texts;
 
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   private static final String KEY_DETAIL_PREFIX = "detail.";
+  private static final String KEY_QUERY_PARAM_SCHEMA = "query_param_schema";
+
   /**
-   * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致
-   * Excel/CSV 生成时内存爆炸。1024 列足够覆盖业务极端场景；真要超此值需显式把模板的
-   * {@code max_columns} 字段调大（见 {@link #resolveMaxColumns}）。
+   * A-3.12：列数硬上限。超过此值直接抛 {@link IllegalArgumentException}，防止宽表推断导致 Excel/CSV 生成时内存爆炸。1024
+   * 列足够覆盖业务极端场景；真要超此值需显式把模板的 {@code max_columns} 字段调大（见 {@link #resolveMaxColumns}）。
    */
   private static final int DEFAULT_MAX_COLUMNS = 1024;
 
   /**
-   * P-1/P-2 同系列防御：插件返回循环 cursor 时 fail-fast。1M 行 / 约数 GB 已足够任何合理业务；
-   * 超此值即视为 data plugin 返回陈旧 cursor 的严重 bug。
+   * P-1/P-2 同系列防御：插件返回循环 cursor 时 fail-fast。1M 行 / 约数 GB 已足够任何合理业务； 超此值即视为 data plugin 返回陈旧 cursor
+   * 的严重 bug。
    */
   protected static final int DEFAULT_MAX_PAGES = 100_000;
 
@@ -39,11 +40,11 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
   }
 
   /**
-   * 通用分页 generate 模板：负责 {@code loadDetailPage → iterate rows → nextCursor → MAX_PAGES} 循环骨架，
-   * 各 format 只需实现 row 写入逻辑。
+   * 通用分页 generate 模板：负责 {@code loadDetailPage → iterate rows → nextCursor → MAX_PAGES} 循环骨架， 各
+   * format 只需实现 row 写入逻辑。
    *
-   * <p>当调用方已因 column 推断等原因预取了首页，可通过 {@code preFetchedFirstPage} 传入以避免重复
-   * 读取；为 {@code null} 时由本方法负责首次加载。
+   * <p>当调用方已因 column 推断等原因预取了首页，可通过 {@code preFetchedFirstPage} 传入以避免重复 读取；为 {@code null}
+   * 时由本方法负责首次加载。
    *
    * @return 已处理的 row 总数
    */
@@ -101,7 +102,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
         throws Exception;
   }
 
-
   /** 优先级：模板配置 &gt; 插件描述 &gt; 首页字段推断。 */
   protected List<ColumnLayout> resolveDelimitedColumns(
       ExportDataContext dataCtx,
@@ -143,11 +143,11 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
                     key, KEY_DETAIL_PREFIX + key, Math.max(key.length(), 16), false, ' ')));
   }
 
-  /** delimited / fixed-width 共享的列解析模板：按 template &gt; plugin &gt; inferred 顺序选源，并统一做 max_columns 截断。 */
+  /**
+   * delimited / fixed-width 共享的列解析模板：按 template &gt; plugin &gt; inferred 顺序选源，并统一做 max_columns 截断。
+   */
   private List<ColumnLayout> resolveColumns(
-      ExportDataContext dataCtx,
-      List<Map<String, Object>> firstPage,
-      ColumnResolutionSpec spec) {
+      ExportDataContext dataCtx, List<Map<String, Object>> firstPage, ColumnResolutionSpec spec) {
     int maxColumns = resolveMaxColumns(dataCtx.templateConfig());
     if (!spec.configured().isEmpty()) {
       return enforceMaxColumns(spec.configured(), maxColumns, spec.labelTag() + "-template");
@@ -176,19 +176,20 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
       Function<String, ColumnLayout> inferredColumnFactory) {}
 
   /**
-   * A-3.12：解析模板中的 {@code max_columns} / {@code maxColumns}；未配置时走 {@link
-   * #DEFAULT_MAX_COLUMNS}。支持从 {@code query_param_schema} 继承配置。
+   * A-3.12：解析模板中的 {@code max_columns} / {@code maxColumns}；未配置时走 {@link #DEFAULT_MAX_COLUMNS}。支持从
+   * {@code query_param_schema} 继承配置。
    */
   protected int resolveMaxColumns(Map<String, Object> templateConfig) {
     if (templateConfig == null || templateConfig.isEmpty()) {
       return DEFAULT_MAX_COLUMNS;
     }
     Integer direct =
-        integerValue(firstNonNull(templateConfig.get("max_columns"), templateConfig.get("maxColumns")));
+        integerValue(
+            firstNonNull(templateConfig.get("max_columns"), templateConfig.get("maxColumns")));
     if (direct != null && direct > 0) {
       return direct;
     }
-    Map<String, Object> schema = toMap(templateConfig.get("query_param_schema"));
+    Map<String, Object> schema = toMap(templateConfig.get(KEY_QUERY_PARAM_SCHEMA));
     Integer fromSchema =
         integerValue(firstNonNull(schema.get("maxColumns"), schema.get("max_columns")));
     if (fromSchema != null && fromSchema > 0) {
@@ -212,7 +213,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return columns;
   }
 
-
   protected List<ColumnLayout> templateDelimitedColumns(Map<String, Object> templateConfig) {
     if (templateConfig == null || templateConfig.isEmpty()) {
       return List.of();
@@ -223,7 +223,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (!parsed.isEmpty()) {
       return parsed;
     }
-    Object querySchema = templateConfig.get("query_param_schema");
+    Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
     Map<String, Object> schemaMap = toMap(querySchema);
     return parseDelimitedColumns(
         firstNonNull(schemaMap.get("csvColumns"), schemaMap.get("delimitedColumns")), false);
@@ -240,7 +240,7 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     if (!parsed.isEmpty()) {
       return parsed;
     }
-    Object querySchema = templateConfig.get("query_param_schema");
+    Object querySchema = templateConfig.get(KEY_QUERY_PARAM_SCHEMA);
     Map<String, Object> schemaMap = toMap(querySchema);
     return parseDelimitedColumns(
         firstNonNull(schemaMap.get("fixedWidthColumns"), schemaMap.get("fixed_width_columns")),
@@ -298,10 +298,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return idx >= 0 && idx + 1 < source.length() ? source.substring(idx + 1) : source;
   }
 
-
   protected DelimitedFormatConfig resolveDelimitedFormatConfig(Map<String, Object> templateConfig) {
     Map<String, Object> source = templateConfig == null ? Map.of() : templateConfig;
-    Object schema = source.get("query_param_schema");
+    Object schema = source.get(KEY_QUERY_PARAM_SCHEMA);
     Map<String, Object> schemaMap = toMap(schema);
     Object delimiterRaw =
         firstNonNull(
@@ -350,7 +349,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     return cleaned.length() > 31 ? cleaned.substring(0, 31) : cleaned;
   }
 
-
   protected Object resolveDelimitedValue(
       Map<String, Object> batch, Map<String, Object> detail, String source) {
     if (!Texts.hasText(source)) {
@@ -380,7 +378,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     return fallback;
   }
-
 
   protected String csv(Object value, DelimitedFormatConfig formatConfig) {
     String text = textValue(value);
@@ -421,7 +418,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     };
   }
 
-
   protected String fixedWidthLine(
       List<ColumnLayout> columns, int recordLength, Function<ColumnLayout, String> valueMapper) {
     StringBuilder builder = new StringBuilder();
@@ -461,7 +457,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     return value + " ".repeat(length - value.length());
   }
-
 
   protected Object firstNonNull(Object... values) {
     for (Object value : values) {
@@ -525,7 +520,6 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     return padChar.charAt(0);
   }
-
 
   public record ColumnLayout(
       String header, String source, Integer width, boolean rightAlign, char padChar) {}

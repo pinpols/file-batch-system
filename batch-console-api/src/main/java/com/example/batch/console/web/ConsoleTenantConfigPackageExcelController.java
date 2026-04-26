@@ -4,11 +4,11 @@ import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.console.application.ConsoleTenantConfigPackageExcelApplicationService;
 import com.example.batch.console.service.ConsoleResponseFactory;
+import com.example.batch.console.support.Idempotent;
 import com.example.batch.console.web.request.TenantConfigPackageExcelApplyRequest;
 import com.example.batch.console.web.response.TenantConfigPackageExcelApplyResponse;
 import com.example.batch.console.web.response.TenantConfigPackageExcelPreviewResponse;
 import com.example.batch.console.web.response.TenantConfigPackageExcelUploadResponse;
-import com.example.batch.console.support.Idempotent;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
@@ -67,8 +67,8 @@ public class ConsoleTenantConfigPackageExcelController {
    * 上传租户配置包 Excel，解析 8 个 Sheet 后写入服务端临时会话，返回 {@code uploadToken}。
    *
    * @param file 表单字段名 {@code file}，内容为 xlsx
-   * @param tenantId 目标租户 id。ROLE_ADMIN / ROLE_CONFIG_ADMIN 是全局角色，必须显式指定；
-   *                 租户级账号可不传（自动沿用 JWT 内 tenantId）
+   * @param tenantId 目标租户 id。ROLE_ADMIN / ROLE_CONFIG_ADMIN 是全局角色，必须显式指定； 租户级账号可不传（自动沿用 JWT 内
+   *     tenantId）
    */
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_CONFIG_ADMIN')")

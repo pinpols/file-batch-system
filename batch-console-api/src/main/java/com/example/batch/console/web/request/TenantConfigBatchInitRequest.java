@@ -43,7 +43,6 @@ public class TenantConfigBatchInitRequest {
     UPSERT
   }
 
-
   @Data
   public static class JobDefinitionSpec {
     @Size(max = 128)

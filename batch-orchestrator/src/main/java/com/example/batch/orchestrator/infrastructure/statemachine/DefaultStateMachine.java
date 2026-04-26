@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.statemachine;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.statemachine.StateMachine;
 import com.example.batch.orchestrator.domain.statemachine.StateTransition;
 import com.example.batch.orchestrator.domain.statemachine.Stateful;
@@ -7,17 +8,15 @@ import java.lang.reflect.Method;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 默认状态机实现。
  *
- * <p>将任意领域对象的当前状态与触发事件映射为目标状态三元组（{@link StateTransition}）。
- * 状态解析优先级：{@code String} → {@code Enum.name()} → {@link Stateful#getStatus()} →
- * 反射调用 {@code getInstanceStatus/getPartitionStatus/getTaskStatus/getRunStatus/getNodeStatus/getStatus}；
- * 若均无法解析则快速失败抛出 {@link IllegalStateException}，避免状态静默损坏。
- * 事件到目标状态的映射在 {@code resolveToState} 中以 switch 表达式集中维护，
- * 未知事件保持原状态不变（NOOP 语义）。
+ * <p>将任意领域对象的当前状态与触发事件映射为目标状态三元组（{@link StateTransition}）。 状态解析优先级：{@code String} → {@code
+ * Enum.name()} → {@link Stateful#getStatus()} → 反射调用 {@code
+ * getInstanceStatus/getPartitionStatus/getTaskStatus/getRunStatus/getNodeStatus/getStatus}；
+ * 若均无法解析则快速失败抛出 {@link IllegalStateException}，避免状态静默损坏。 事件到目标状态的映射在 {@code resolveToState} 中以
+ * switch 表达式集中维护， 未知事件保持原状态不变（NOOP 语义）。
  */
 @Slf4j
 @Component

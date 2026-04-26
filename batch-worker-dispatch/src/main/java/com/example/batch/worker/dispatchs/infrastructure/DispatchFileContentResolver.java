@@ -3,6 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure;
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.service.BatchObjectCryptoService;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
@@ -14,7 +15,6 @@ import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /** 解析分发文件字节：支持本地路径或对象存储（MinIO/S3 兼容）。 */
 @Component

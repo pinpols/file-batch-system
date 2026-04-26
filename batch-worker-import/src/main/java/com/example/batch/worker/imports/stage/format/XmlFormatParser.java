@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -8,7 +9,6 @@ import java.util.Map;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import com.example.batch.common.utils.Texts;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -66,13 +66,7 @@ public class XmlFormatParser implements FormatParser {
         }
         support.collectSchemaFields(context, row);
         support.writeParsedRecord(
-            context,
-            writer,
-            row,
-            preserveLogicalRow,
-            recordNo,
-            "IMPORT_PARSE_XML_INVALID",
-            row);
+            context, writer, row, preserveLogicalRow, recordNo, "IMPORT_PARSE_XML_INVALID", row);
       } catch (Exception exception) {
         support.recordParseError(
             context, recordNo, "IMPORT_PARSE_XML_INVALID", exception.getMessage(), element);

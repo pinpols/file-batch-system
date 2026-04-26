@@ -46,10 +46,11 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private final BatchOrchestratorGovernanceProperties governance;
   private final EventDeliveryLogMapper eventDeliveryLogMapper;
   private final BatchTopicResolver topicResolver;
+
   /**
    * delivery-log 写库及回调上的 executor。不能使用 CompletableFuture 默认的 ForkJoinPool.commonPool（共享全局池，
-   * 任一耗时回调都会拖累其他业务），也不能在 Kafka producer 的 IO 回调线程上做同步写库（背压风险）。
-   * 显式绑定到 Spring Boot 自动装配的 {@code applicationTaskExecutor}，池参数受 {@code spring.task.execution.*} 控制。
+   * 任一耗时回调都会拖累其他业务），也不能在 Kafka producer 的 IO 回调线程上做同步写库（背压风险）。 显式绑定到 Spring Boot 自动装配的 {@code
+   * applicationTaskExecutor}，池参数受 {@code spring.task.execution.*} 控制。
    */
   private final Executor deliveryLogExecutor;
 
@@ -83,7 +84,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       String targetTopic;
       if (dispatchMessage != null && dispatchMessage.selectedWorkerId() != null) {
         String baseTopic = governance.mqTopics().resolveDispatchTopic(event.getEventType());
-        targetTopic = BatchTopics.directDispatchTopic(baseTopic, dispatchMessage.selectedWorkerId());
+        targetTopic =
+            BatchTopics.directDispatchTopic(baseTopic, dispatchMessage.selectedWorkerId());
       } else {
         targetTopic = topic;
       }

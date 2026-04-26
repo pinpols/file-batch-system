@@ -38,8 +38,7 @@ class ConsoleTenantGuardTest {
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken(
-                new ConsolePrincipal("tester", "tenant-b", Set.of("ROLE_TENANT_USER")),
-                "ignored"));
+                new ConsolePrincipal("tester", "tenant-b", Set.of("ROLE_TENANT_USER")), "ignored"));
 
     assertThat(tenantGuard.resolveTenant("tenant-b")).isEqualTo("tenant-b");
   }

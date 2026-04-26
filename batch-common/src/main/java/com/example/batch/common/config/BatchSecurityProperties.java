@@ -14,18 +14,16 @@ import org.springframework.core.env.Environment;
 public class BatchSecurityProperties {
 
   /**
-   * 全局安全旁路总开关（{@code batch.security.bypass-mode}）。开启后放宽认证、脱敏、加解密、审批、
-   * 渠道校验等所有安全约束，仅供本地 / 联调 / E2E 使用。
+   * 全局安全旁路总开关（{@code batch.security.bypass-mode}）。开启后放宽认证、脱敏、加解密、审批、 渠道校验等所有安全约束，仅供本地 / 联调 / E2E
+   * 使用。
    *
    * <p>S-1.11：Java 字段默认 {@code false}（安全默认），实际默认值由部署渠道覆盖：
    *
    * <ul>
-   *   <li>IDE 本地 / {@code application-local.yml}：<b>显式 {@code true}</b>（调试方便，与
-   *       CLAUDE.md §配置开关规范一致；旧注释写 {@code false} 是错的）
-   *   <li>docker-compose：{@code ${BATCH_SECURITY_BYPASS_MODE:-false}}（贴近生产；之前注释
-   *       误写 {@code -true}）
-   *   <li>prod profile：在 {@link #validateSecuritySettings()} 的 @PostConstruct 强制拒绝
-   *       {@code true}
+   *   <li>IDE 本地 / {@code application-local.yml}：<b>显式 {@code true}</b>（调试方便，与 CLAUDE.md
+   *       §配置开关规范一致；旧注释写 {@code false} 是错的）
+   *   <li>docker-compose：{@code ${BATCH_SECURITY_BYPASS_MODE:-false}}（贴近生产；之前注释 误写 {@code -true}）
+   *   <li>prod profile：在 {@link #validateSecuritySettings()} 的 @PostConstruct 强制拒绝 {@code true}
    * </ul>
    */
   private boolean bypassMode = false;
@@ -41,9 +39,8 @@ public class BatchSecurityProperties {
   private transient Environment environment;
 
   /**
-   * 兼容旧键 `batch.security.testing-open`（2026-04-19 重命名为 `bypass-mode`）。保留 setter 让
-   * Spring relaxed binding 仍能把旧键读入同一字段；启动时 @PostConstruct 打 WARN 提示迁移。
-   * 下一个 minor 版本移除。
+   * 兼容旧键 `batch.security.testing-open`（2026-04-19 重命名为 `bypass-mode`）。保留 setter 让 Spring relaxed
+   * binding 仍能把旧键读入同一字段；启动时 @PostConstruct 打 WARN 提示迁移。 下一个 minor 版本移除。
    */
   @Deprecated(since = "2026-04-19", forRemoval = true)
   public void setTestingOpen(boolean testingOpen) {

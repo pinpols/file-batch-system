@@ -19,13 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>关键不变量：
  *
  * <ul>
- *   <li><b>DRAINING / DECOMMISSIONED 状态不可被心跳重置为 ONLINE</b>——见 {@link #resolveHeartbeatStatus}。
- *       否则 {@link com.example.batch.orchestrator.application.service.DefaultWorkerDrainGovernanceService}
+ *   <li><b>DRAINING / DECOMMISSIONED 状态不可被心跳重置为 ONLINE</b>——见 {@link #resolveHeartbeatStatus}。 否则
+ *       {@link
+ *       com.example.batch.orchestrator.application.service.DefaultWorkerDrainGovernanceService}
  *       正在执行的 drain / decommission 会被 worker 端的周期心跳悄悄回滚。
- *   <li><b>heartbeat 未注册时自动降级到 register</b>——兜底首次 register 请求丢失的竞态，worker 不会因为
- *       register 漏发就永远心跳无主。
- *   <li><b>幂等 upsert</b>：register 对已存在记录走 {@code withHeartbeat} 更新而不是报错，允许 worker 重启后
- *       重新 register 同一 workerCode。
+ *   <li><b>heartbeat 未注册时自动降级到 register</b>——兜底首次 register 请求丢失的竞态，worker 不会因为 register 漏发就永远心跳无主。
+ *   <li><b>幂等 upsert</b>：register 对已存在记录走 {@code withHeartbeat} 更新而不是报错，允许 worker 重启后 重新 register
+ *       同一 workerCode。
  * </ul>
  */
 @Service("orchestratorWorkerRegistryService")

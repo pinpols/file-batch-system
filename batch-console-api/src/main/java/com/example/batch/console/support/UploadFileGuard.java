@@ -1,7 +1,7 @@
 package com.example.batch.console.support;
 
-import com.example.batch.common.exception.BizException;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
@@ -11,8 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 上传文件白名单 + 魔数（magic bytes）校验。
  *
- * <p>仅依赖 {@code Content-Type} / 扩展名会被客户端伪造，配合首 N 字节的文件签名判断
- * 才能真正识别文件类型。常见签名：
+ * <p>仅依赖 {@code Content-Type} / 扩展名会被客户端伪造，配合首 N 字节的文件签名判断 才能真正识别文件类型。常见签名：
  *
  * <ul>
  *   <li>XLSX / DOCX / PPTX / ZIP: {@code 50 4B 03 04}（PK\x03\x04）或 {@code 50 4B 05 06}（空 ZIP）
@@ -99,7 +98,8 @@ public final class UploadFileGuard {
         reject(file, "file too short to determine type (< " + n + " bytes)");
       }
     } catch (IOException ex) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "failed to read upload: " + ex.getMessage());
+      throw new BizException(
+          ResultCode.INVALID_ARGUMENT, "failed to read upload: " + ex.getMessage());
     }
     return head;
   }

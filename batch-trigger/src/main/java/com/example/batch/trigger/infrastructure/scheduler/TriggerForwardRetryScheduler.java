@@ -19,11 +19,9 @@ import org.springframework.stereotype.Component;
 /**
  * 对转发 Orchestrator 失败（{@code FORWARD_FAILED}）的 trigger_request 做定时重试。
  *
- * <p>每次最多取 {@code BATCH_SIZE=50} 条、{@code 1 小时}内创建的记录，逐条重发；
- * 成功更新为 {@code ACCEPTED}，失败则递增 {@code forwardRetryCount}；
- * 达到 {@code MAX_RETRIES=5} 次后标记 {@code GIVE_UP} 并记录 error 日志，不再重试。
- * 4xx 错误在首次转发时已标记 {@code REJECTED}，此处不会重拾。
- * ShedLock 保证集群内只有一个节点同时执行重试，避免多节点重复转发同一请求。
+ * <p>每次最多取 {@code BATCH_SIZE=50} 条、{@code 1 小时}内创建的记录，逐条重发； 成功更新为 {@code ACCEPTED}，失败则递增 {@code
+ * forwardRetryCount}； 达到 {@code MAX_RETRIES=5} 次后标记 {@code GIVE_UP} 并记录 error 日志，不再重试。 4xx
+ * 错误在首次转发时已标记 {@code REJECTED}，此处不会重拾。 ShedLock 保证集群内只有一个节点同时执行重试，避免多节点重复转发同一请求。
  */
 @Slf4j
 @Component

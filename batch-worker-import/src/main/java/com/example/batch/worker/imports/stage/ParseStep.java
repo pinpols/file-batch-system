@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.stage;
 import com.example.batch.common.constants.BatchFileConstants;
 import com.example.batch.common.plugin.WorkerPluginIds;
 import com.example.batch.common.utils.EncodingUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -29,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * Import pipeline 的 PARSE 阶段：将原始 payload 按文件格式解析为 NDJSON 暂存文件。
@@ -37,11 +37,11 @@ import com.example.batch.common.utils.Texts;
  * <p><b>格式路由</b>：优先取 {@link ImportPayload#fileFormatType()}，其次取模板配置 {@code file_format_type}，
  * 最后按内容推断（{@code {}/{[} → JSON，否则 DELIMITED}）。支持 EXCEL / JSON / XML / FIXED_WIDTH / DELIMITED。
  *
- * <p><b>二进制 payload</b>：若上下文中存在 {@code IMPORT_BINARY_PAYLOAD}（byte[]），
- * EXCEL 格式直接解析字节，其余格式按模板/payload 指定字符集转为字符串后再路由。
+ * <p><b>二进制 payload</b>：若上下文中存在 {@code IMPORT_BINARY_PAYLOAD}（byte[]）， EXCEL
+ * 格式直接解析字节，其余格式按模板/payload 指定字符集转为字符串后再路由。
  *
- * <p><b>结果</b>：解析后记录路径写入 {@code PARSED_RECORDS_PATH}，文件状态推进为 {@code PARSED}。
- * 解析记录数为 0 且无跳过记录时返回失败；超过跳过阈值时删除暂存文件并返回失败。
+ * <p><b>结果</b>：解析后记录路径写入 {@code PARSED_RECORDS_PATH}，文件状态推进为 {@code PARSED}。 解析记录数为 0
+ * 且无跳过记录时返回失败；超过跳过阈值时删除暂存文件并返回失败。
  *
  * <p>暂存文件命名前缀格式：{@code batch-<fileId>-<workerId>-parsed}，存放于 JVM 临时目录。
  */
@@ -50,6 +50,7 @@ import com.example.batch.common.utils.Texts;
 public class ParseStep implements ImportStageStep {
 
   private static final String KEY_PARSED_COUNT = "parsedCount";
+  private static final String FORMAT_EXCEL = "EXCEL";
 
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ParseSupport support;
@@ -69,11 +70,16 @@ public class ParseStep implements ImportStageStep {
     DelimitedFormatParser delimitedParser = new DelimitedFormatParser(support);
     this.parsers =
         Map.of(
-            "EXCEL", excelParser,
-            "JSON", jsonParser,
-            "XML", xmlParser,
-            "FIXED_WIDTH", fixedWidthParser,
-            "DELIMITED", delimitedParser);
+            FORMAT_EXCEL,
+            excelParser,
+            "JSON",
+            jsonParser,
+            "XML",
+            xmlParser,
+            "FIXED_WIDTH",
+            fixedWidthParser,
+            "DELIMITED",
+            delimitedParser);
     this.defaultParser = delimitedParser;
   }
 
@@ -105,7 +111,8 @@ public class ParseStep implements ImportStageStep {
       context.getAttributes().put(PipelineRuntimeKeys.PARSED_RECORDS_PATH, stagingFile.toString());
       context
           .getAttributes()
-          .put(KEY_PARSED_COUNT, support.numberValue(context.getAttributes().get(KEY_PARSED_COUNT)));
+          .put(
+              KEY_PARSED_COUNT, support.numberValue(context.getAttributes().get(KEY_PARSED_COUNT)));
       context.getAttributes().put("totalCount", totalCount);
       if (totalCount == 0
           && support.numberValue(context.getAttributes().get("skippedCount")) == 0) {
@@ -173,11 +180,11 @@ public class ParseStep implements ImportStageStep {
             StandardOpenOption.WRITE)) {
       if (binary instanceof byte[] binaryBytes && binaryBytes.length > 0) {
         String format = resolveFormat(importPayload, templateConfig, "");
-        if ("EXCEL".equalsIgnoreCase(format)) {
+        if (FORMAT_EXCEL.equalsIgnoreCase(format)) {
           FormatParseRequest request =
               new FormatParseRequest(
                   null, binaryBytes, importPayload, templateConfig, preserveLogicalRow);
-          return parsers.get("EXCEL").parse(context, request, writer);
+          return parsers.get(FORMAT_EXCEL).parse(context, request, writer);
         }
         Charset cs = resolvePayloadTextCharset(importPayload, templateConfig);
         String asText = new String(binaryBytes, cs);
@@ -212,7 +219,7 @@ public class ParseStep implements ImportStageStep {
             preserveLogicalRow,
             spoolPath,
             spoolCharset);
-    if ("EXCEL".equalsIgnoreCase(format)) {
+    if (FORMAT_EXCEL.equalsIgnoreCase(format)) {
       byte[] bytes =
           payloadText == null ? new byte[0] : payloadText.getBytes(StandardCharsets.UTF_8);
       request =
@@ -251,7 +258,6 @@ public class ParseStep implements ImportStageStep {
     return null;
   }
 
-
   private String resolveFormat(
       ImportPayload importPayload, Object templateConfigObject, String payloadText) {
     if (importPayload != null && Texts.hasText(importPayload.fileFormatType())) {
@@ -285,7 +291,6 @@ public class ParseStep implements ImportStageStep {
     }
     return StandardCharsets.UTF_8;
   }
-
 
   private boolean preserveLogicalRow(ImportJobContext context, Object templateConfigObject) {
     if (!(templateConfigObject instanceof Map<?, ?> templateConfig)) {

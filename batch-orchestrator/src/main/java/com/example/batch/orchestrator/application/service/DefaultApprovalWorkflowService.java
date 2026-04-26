@@ -2,19 +2,19 @@ package com.example.batch.orchestrator.application.service;
 
 import com.example.batch.common.enums.ApprovalCommandStatus;
 import com.example.batch.common.utils.IdGenerator;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import com.example.batch.orchestrator.mapper.ApprovalCommandMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 审批命令状态机：{@code PENDING → APPROVED / REJECTED → EXECUTED}。
  *
- * <p>所有转换以 {@code (fromStatus, toStatus)} 做 DB 级 CAS，并发重复审批天然互斥：
- * CAS 成功者推进状态，失败者重读取当前状态返回（幂等）。{@link #markExecuted} 多一层区分——
- * CAS 失败时"已是 EXECUTED"视为幂等重复，"当前非 APPROVED"则是非法状态转换要抛 {@link IllegalStateException}。
+ * <p>所有转换以 {@code (fromStatus, toStatus)} 做 DB 级 CAS，并发重复审批天然互斥： CAS
+ * 成功者推进状态，失败者重读取当前状态返回（幂等）。{@link #markExecuted} 多一层区分—— CAS 失败时"已是 EXECUTED"视为幂等重复，"当前非
+ * APPROVED"则是非法状态转换要抛 {@link IllegalStateException}。
  */
 @Service
 @RequiredArgsConstructor
@@ -33,8 +33,7 @@ public class DefaultApprovalWorkflowService implements ApprovalWorkflowService {
     entity.setActionType(command.actionType());
     entity.setTargetType(command.targetType());
     entity.setTargetId(command.targetId());
-    entity.setPayloadJson(
-        Texts.hasText(command.payloadJson()) ? command.payloadJson() : "{}");
+    entity.setPayloadJson(Texts.hasText(command.payloadJson()) ? command.payloadJson() : "{}");
     entity.setApprovalStatus(ApprovalCommandStatus.PENDING.code());
     entity.setRequesterId(command.requesterId());
     entity.setSourceTraceId(command.sourceTraceId());

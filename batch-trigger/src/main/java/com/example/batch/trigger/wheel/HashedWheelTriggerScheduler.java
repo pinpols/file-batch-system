@@ -32,15 +32,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.DuplicateKeyException;  // 仍用于 misfire pending 写入幂等
+import org.springframework.dao.DuplicateKeyException; // 仍用于 misfire pending 写入幂等
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
  * 时间轮 trigger scheduler — 替代 Quartz 的"cron → fire 一次回调"调度引擎。
  *
- * <p><b>启用方式</b>:{@code batch.trigger.scheduler-impl=wheel}(默认 quartz)。
- * 详细设计见 {@code docs/architecture/quartz-replacement-design.md}。
+ * <p><b>启用方式</b>:{@code batch.trigger.scheduler-impl=wheel}(默认 quartz)。 详细设计见 {@code
+ * docs/architecture/quartz-replacement-design.md}。
  *
  * <p><b>核心数据流</b>(详见 design.md §1):
  *
@@ -59,8 +59,7 @@ import org.springframework.stereotype.Component;
  *      ↓ advanceAfterFire (next_fire_time += cron.next, 释放 marker)
  * </pre>
  *
- * <p><b>本类作用域</b>:第 2 周交付的最小可用骨架。CRUD 联动 / misfire CATCH_UP / MANUAL_APPROVAL
- * 在第 3 周补充。
+ * <p><b>本类作用域</b>:第 2 周交付的最小可用骨架。CRUD 联动 / misfire CATCH_UP / MANUAL_APPROVAL 在第 3 周补充。
  */
 @Slf4j
 @Component
@@ -142,7 +141,10 @@ public class HashedWheelTriggerScheduler {
     doSlidingWindow();
   }
 
-  /** Public 让 IT 直接调,绕开 {@code @SchedulerLock} proxy(IT 不验证 lock 行为)。生产代码不应调用此方法,走 {@link #slidingWindow()}。 */
+  /**
+   * Public 让 IT 直接调,绕开 {@code @SchedulerLock} proxy(IT 不验证 lock 行为)。生产代码不应调用此方法,走 {@link
+   * #slidingWindow()}。
+   */
   public void doSlidingWindow() {
     boolean previouslyLeader = wasLeader.getAndSet(true);
     if (!previouslyLeader) {
@@ -154,15 +156,13 @@ public class HashedWheelTriggerScheduler {
   /**
    * stale marker 释放:周期清理超过 staleMarkerThresholdSeconds 未释放的占位。
    *
-   * <p>独立定时(默认每 2 min),与 slidingWindow 解耦,避免 leader 漂移期间 stale 占位卡住所有
-   * trigger。
+   * <p>独立定时(默认每 2 min),与 slidingWindow 解耦,避免 leader 漂移期间 stale 占位卡住所有 trigger。
    *
-   * <p>2026-04-26 加 ShedLock:虽然 UPDATE 是幂等的,但 N 实例并发跑会撞同批 stale 行的
-   * PG row lock,造成写放大 + 连接浪费。leader-elect 语义本就该有,迟来的 lint 修复。
+   * <p>2026-04-26 加 ShedLock:虽然 UPDATE 是幂等的,但 N 实例并发跑会撞同批 stale 行的 PG row lock,造成写放大 +
+   * 连接浪费。leader-elect 语义本就该有,迟来的 lint 修复。
    */
   @Scheduled(
-      fixedDelayString =
-          "${batch.trigger.wheel.stale-marker-release-interval-millis:120000}")
+      fixedDelayString = "${batch.trigger.wheel.stale-marker-release-interval-millis:120000}")
   @SchedulerLock(
       name = "wheel_stale_marker_release",
       lockAtMostFor = "PT3M",
@@ -173,8 +173,10 @@ public class HashedWheelTriggerScheduler {
     int released = stateMapper.releaseStaleMarkers(staleBefore);
     if (released > 0) {
       metrics.incrementStaleMarkerReleased(released);
-      log.info("released {} stale trigger_runtime_state markers (older than {}s)",
-          released, props.getStaleMarkerThresholdSeconds());
+      log.info(
+          "released {} stale trigger_runtime_state markers (older than {}s)",
+          released,
+          props.getStaleMarkerThresholdSeconds());
     }
   }
 
@@ -183,8 +185,7 @@ public class HashedWheelTriggerScheduler {
   private void onLeaderAcquire() {
     long startNanos = System.nanoTime();
     metrics.incrementLeaderAcquire();
-    log.info("leader acquired (instanceId={}); running fast-path catch-up scan",
-        leaderInstanceId);
+    log.info("leader acquired (instanceId={}); running fast-path catch-up scan", leaderInstanceId);
     // 1) 清掉本实例 wheel 内可能残留(理论上首次启动应为空)
     timeoutRegistry.values().forEach(Timeout::cancel);
     timeoutRegistry.clear();
@@ -233,11 +234,10 @@ public class HashedWheelTriggerScheduler {
       return false; // DB 层去重(其他 leader 已占,或 marker 非空)
     }
     Instant scheduledFireTime = state.getNextFireTime();
-    long delayMillis = Math.max(
-        0L, scheduledFireTime.toEpochMilli() - System.currentTimeMillis());
+    long delayMillis = Math.max(0L, scheduledFireTime.toEpochMilli() - System.currentTimeMillis());
     Timeout timeout =
-        wheel.newTimeout(_ -> fire(state, scheduledFireTime, dedupKey),
-            delayMillis, TimeUnit.MILLISECONDS);
+        wheel.newTimeout(
+            _ -> fire(state, scheduledFireTime, dedupKey), delayMillis, TimeUnit.MILLISECONDS);
     timeoutRegistry.put(state.getId(), timeout);
     tasksScheduled.updateAndGet(v -> v + 1);
     return true;
@@ -260,8 +260,11 @@ public class HashedWheelTriggerScheduler {
       doFire(state, descriptor, scheduledFireTime, TriggerType.SCHEDULED, groupTag, "FIRED");
     } catch (Exception e) {
       metrics.incrementFireFailed(groupTag, e.getClass().getSimpleName());
-      log.warn("trigger fire outer failure: job={} scheduledFireTime={}",
-          state.getJobCode(), scheduledFireTime, e);
+      log.warn(
+          "trigger fire outer failure: job={} scheduledFireTime={}",
+          state.getJobCode(),
+          scheduledFireTime,
+          e);
       advanceNextFireTime(state, scheduledFireTime, "FAILED", 0);
     } finally {
       timeoutRegistry.remove(state.getId());
@@ -278,8 +281,11 @@ public class HashedWheelTriggerScheduler {
       String groupTag) {
     CatchUpPolicyType policy = CatchUpPolicyType.fromCode(descriptor.getCatchUpPolicy());
     metrics.incrementMisfireHandled(policy.code());
-    log.info("misfire detected: job={} scheduledFireTime={} policy={}",
-        state.getJobCode(), scheduledFireTime, policy.code());
+    log.info(
+        "misfire detected: job={} scheduledFireTime={} policy={}",
+        state.getJobCode(),
+        scheduledFireTime,
+        policy.code());
     switch (policy) {
       // NONE: 跳过本次 fire,只推进 next_fire_time
       case NONE -> advanceNextFireTime(state, scheduledFireTime, "MISFIRE_SKIPPED", 1);
@@ -289,12 +295,17 @@ public class HashedWheelTriggerScheduler {
           catchUpThrottle.acquire();
         } catch (InterruptedException ie) {
           Thread.currentThread().interrupt();
-          log.warn("catch-up throttle interrupted, skip misfire AUTO fire: job={}",
-              state.getJobCode());
+          log.warn(
+              "catch-up throttle interrupted, skip misfire AUTO fire: job={}", state.getJobCode());
           advanceNextFireTime(state, scheduledFireTime, "MISFIRE_SKIPPED", 1);
           return;
         }
-        doFire(state, descriptor, scheduledFireTime, TriggerType.CATCH_UP, groupTag,
+        doFire(
+            state,
+            descriptor,
+            scheduledFireTime,
+            TriggerType.CATCH_UP,
+            groupTag,
             "MISFIRE_CATCH_UP");
       }
       case MANUAL_APPROVAL -> {
@@ -308,8 +319,10 @@ public class HashedWheelTriggerScheduler {
           misfirePendingMapper.insertPending(pending);
         } catch (DuplicateKeyException dup) {
           // 已有相同 (state_id, scheduledFireTime) 待审,幂等跳过
-          log.info("misfire pending already exists, skip insert: job={} scheduledFireTime={}",
-              state.getJobCode(), scheduledFireTime);
+          log.info(
+              "misfire pending already exists, skip insert: job={} scheduledFireTime={}",
+              state.getJobCode(),
+              scheduledFireTime);
         }
         advanceNextFireTime(state, scheduledFireTime, "MISFIRE_PENDING", 1);
       }
@@ -322,12 +335,11 @@ public class HashedWheelTriggerScheduler {
    * <p><b>R-1 重复 fire 三层兜底</b>(无需 trigger_request 自加 fire dedup unique):
    *
    * <ol>
-   *   <li>marker CAS(claimForSchedule + version):同一 trigger 同 next_fire_time 不可能两个 leader
-   *       同时 claim 成功
-   *   <li>LaunchService.persistAndForward 内部 select-by-dedupKey 软幂等:GC pause 旧 leader
-   *       fire 时,LaunchService 看到 existing → return existing.requestId,不再 forward
-   *   <li>job_instance 唯一约束 uk_job_instance_tenant_dedup:即使前两层都漏了,业务侧 INSERT
-   *       job_instance 撞唯一键
+   *   <li>marker CAS(claimForSchedule + version):同一 trigger 同 next_fire_time 不可能两个 leader 同时 claim
+   *       成功
+   *   <li>LaunchService.persistAndForward 内部 select-by-dedupKey 软幂等:GC pause 旧 leader fire
+   *       时,LaunchService 看到 existing → return existing.requestId,不再 forward
+   *   <li>job_instance 唯一约束 uk_job_instance_tenant_dedup:即使前两层都漏了,业务侧 INSERT job_instance 撞唯一键
    * </ol>
    */
   private void doFire(
@@ -354,15 +366,20 @@ public class HashedWheelTriggerScheduler {
       advanceNextFireTime(state, scheduledFireTime, successStatus, 0);
     } catch (Exception e) {
       metrics.incrementFireFailed(groupTag, e.getClass().getSimpleName());
-      log.warn("trigger launch failed: job={} scheduledFireTime={}",
-          state.getJobCode(), scheduledFireTime, e);
+      log.warn(
+          "trigger launch failed: job={} scheduledFireTime={}",
+          state.getJobCode(),
+          scheduledFireTime,
+          e);
       advanceNextFireTime(state, scheduledFireTime, "FAILED", 0);
     }
   }
 
   private void advanceNextFireTime(
-      TriggerRuntimeStateEntity state, Instant scheduledFireTime,
-      String lastFireStatus, long misfireDelta) {
+      TriggerRuntimeStateEntity state,
+      Instant scheduledFireTime,
+      String lastFireStatus,
+      long misfireDelta) {
     try {
       TriggerDescriptor descriptor = loadDescriptor(state);
       Instant next =
@@ -375,7 +392,8 @@ public class HashedWheelTriggerScheduler {
         // next_fire_time 设为遥远未来防止反复扫;实际上业务侧应该 disable
         next = Instant.now().plus(Duration.ofDays(36500));
       }
-      stateMapper.advanceAfterFire(state.getId(), next, scheduledFireTime, lastFireStatus, misfireDelta);
+      stateMapper.advanceAfterFire(
+          state.getId(), next, scheduledFireTime, lastFireStatus, misfireDelta);
     } catch (Exception e) {
       log.warn("advanceAfterFire failed for job={}: {}", state.getJobCode(), e.getMessage());
     }

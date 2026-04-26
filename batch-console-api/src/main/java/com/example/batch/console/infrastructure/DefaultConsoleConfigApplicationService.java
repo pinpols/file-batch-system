@@ -6,6 +6,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleConfigApplicationService;
 import com.example.batch.console.domain.entity.ConfigChangeLogEntity;
 import com.example.batch.console.domain.entity.ConfigReleaseEntity;
@@ -37,18 +38,16 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /**
- * 配置发布单 + 密钥版本治理服务：通过本地 Mapper 维护租户作用域下的 config_release、secret_version
- * 与 config_change_log 三张表。
+ * 配置发布单 + 密钥版本治理服务：通过本地 Mapper 维护租户作用域下的 config_release、secret_version 与 config_change_log 三张表。
  *
- * <p>ConfigRelease 状态机（{@link com.example.batch.common.enums.ConfigLifecycleStatus}）：
- * {@code DRAFT → PUBLISHED / GRAY → ROLLED_BACK}。
+ * <p>ConfigRelease 状态机（{@link com.example.batch.common.enums.ConfigLifecycleStatus}）： {@code DRAFT
+ * → PUBLISHED / GRAY → ROLLED_BACK}。
  *
  * <ul>
- *   <li><b>版本号自增</b>：同 {@code (tenantId, configType, configKey)} 下 {@code selectLatestVersionNo + 1}，
- *       发布新版本不覆盖旧版本——历史版本保留便于回滚比对。
+ *   <li><b>版本号自增</b>：同 {@code (tenantId, configType, configKey)} 下 {@code selectLatestVersionNo +
+ *       1}， 发布新版本不覆盖旧版本——历史版本保留便于回滚比对。
  *   <li><b>GRAY 灰度</b>：允许变更状态时顺带更新 {@code grayScopeJson}，支持渐进式放量。
  *   <li><b>PUBLISH / ROLLBACK 时间戳</b>：由 {@link #changeReleaseStatus} 按 {@code nextStatus} 分支自动打
  *       {@code publishedAt} / {@code rolledBackAt}，调用方无需自己维护。
@@ -57,8 +56,8 @@ import com.example.batch.common.utils.Texts;
  * <p>SecretVersion rotation：插新版前先 {@code deactivateCurrentVersion}，保证同 {@code secretRef} 只有一条
  * {@code currentVersion=true}——严格切版不留两活。
  *
- * <p>所有写操作（create / publish / gray / rollback / rotate）都调 {@link #logChange} 落
- * {@code config_change_log}（operatorId / traceId / reason / 变更摘要），提供完整审计轨迹。
+ * <p>所有写操作（create / publish / gray / rollback / rotate）都调 {@link #logChange} 落 {@code
+ * config_change_log}（operatorId / traceId / reason / 变更摘要），提供完整审计轨迹。
  *
  * <p>JSON 字段（configPayloadJson / grayScopeJson / secretPayloadJson）入库前经 {@link #validateJson}
  * 解析校验格式合法性，防止把坏 JSON 持久化到 jsonb 字段上。

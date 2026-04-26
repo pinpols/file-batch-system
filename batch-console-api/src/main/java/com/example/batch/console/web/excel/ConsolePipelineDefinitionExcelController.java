@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 流水线定义（pipeline_definition + pipeline_step_definition）配置的 Excel 导出与空白模板下载。 回灌合并导入由 tenant-package Excel
- * 流程承担。
+ * 流水线定义（pipeline_definition + pipeline_step_definition）配置的 Excel 导出与空白模板下载。 回灌合并导入由 tenant-package
+ * Excel 流程承担。
  */
 @RestController
 @Validated

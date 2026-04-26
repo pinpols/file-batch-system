@@ -13,9 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * P3-3 archive 系列：SUCCESS / PARTIAL_FAILED job_instance 级联归档业务层。
  *
- * <p>同删除语义对应 {@code cleanup-success-instances.sql}，本类先把运行态树复制到 {@code archive}
- * schema 冷表，再执行 12 步级联删除。单批 {@link SuccessInstanceArchiveProperties#getBatchSize()} 个
- * instance id 在同一事务内完成。
+ * <p>同删除语义对应 {@code cleanup-success-instances.sql}，本类先把运行态树复制到 {@code archive} schema 冷表，再执行 12
+ * 步级联删除。单批 {@link SuccessInstanceArchiveProperties#getBatchSize()} 个 instance id 在同一事务内完成。
  */
 @Slf4j
 @Service
@@ -71,9 +70,9 @@ public class SuccessInstanceArchiveService {
             + " archivedPartitions={}, archivedStepInstances={}, archivedJobTasks={},"
             + " archivedPipelineInstances={}, archivedPipelineStepRuns={}, archivedFileDispatch={},"
             + " archivedWorkflowRuns={}, archivedWorkflowNodeRuns={}, archivedExecutionLogs={},"
-            + " archivedCompensations={}, instances={}, partitions={}, stepInstances={}, jobTasks={},"
-            + " pipelineInstances={}, pipelineStepRuns={}, fileDispatch={}, workflowRuns={},"
-            + " workflowNodeRuns={}, executionLogs={}, compensations={}",
+            + " archivedCompensations={}, instances={}, partitions={}, stepInstances={},"
+            + " jobTasks={}, pipelineInstances={}, pipelineStepRuns={}, fileDispatch={},"
+            + " workflowRuns={}, workflowNodeRuns={}, executionLogs={}, compensations={}",
         cutoff,
         retention,
         archivedInstances,

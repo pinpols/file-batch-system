@@ -1,12 +1,12 @@
 package com.example.batch.worker.exports.jdbc;
 
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
+import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import com.example.batch.common.utils.Texts;
 
 /** 从模板配置的 {@code query_param_schema.jdbcMappedExport} 或 {@code jdbc_mapped_export} 解析而来的导出规格。 */
 public record JdbcMappedExportSpec(

@@ -5,9 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * Quartz 错失触发（misfire）回调：当 scheduler 因 JVM 停顿、长事务、集群故障等错过了 fire time，
- * 在此仅落一条 warn 日志留痕。追赶（catch-up）与补偿策略集中在编排层——{@code CatchUpPolicyType}
- * 结合 {@code batch_day} 语义决定是跳过、自动补跑还是触发审批，trigger 层不做业务决策。
+ * Quartz 错失触发（misfire）回调：当 scheduler 因 JVM 停顿、长事务、集群故障等错过了 fire time， 在此仅落一条 warn
+ * 日志留痕。追赶（catch-up）与补偿策略集中在编排层——{@code CatchUpPolicyType} 结合 {@code batch_day}
+ * 语义决定是跳过、自动补跑还是触发审批，trigger 层不做业务决策。
  */
 @Component
 @Slf4j

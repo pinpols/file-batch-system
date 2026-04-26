@@ -53,7 +53,8 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
           (batch, detail, rowIndex) -> {
             StringBuilder line = new StringBuilder();
             for (ColumnLayout column : columns) {
-              line.append(fixedWidth(resolveDelimitedValue(batch, detail, column.source()), column));
+              line.append(
+                  fixedWidth(resolveDelimitedValue(batch, detail, column.source()), column));
             }
             if (recordLength > 0) {
               line = new StringBuilder(padRight(line.toString(), recordLength));

@@ -24,13 +24,12 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>{@code batch.outbox.pending.events}：NEW + FAILED 状态的 Outbox 事件总数（积压量）
- *   <li>{@code batch.outbox.publishing.stale.events}：卡在 PUBLISHING 且超时的事件数
- *       （正常情况下 {@code resetStalePublishing} 清 0；非 0 说明 poll 本身挂了）
+ *   <li>{@code batch.outbox.publishing.stale.events}：卡在 PUBLISHING 且超时的事件数 （正常情况下 {@code
+ *       resetStalePublishing} 清 0；非 0 说明 poll 本身挂了）
  *   <li>{@code batch.dead_letter.tasks.pending}：NEW + FAILED 状态的死信数
  * </ul>
  *
- * <p>默认 30 秒扫一次，通过 ShedLock 保证多 Pod 下只有一个实例执行；可通过
- * {@code batch.metrics.backlog.enabled=false} 关闭。
+ * <p>默认 30 秒扫一次，通过 ShedLock 保证多 Pod 下只有一个实例执行；可通过 {@code batch.metrics.backlog.enabled=false} 关闭。
  */
 @Slf4j
 @Component

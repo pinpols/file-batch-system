@@ -11,8 +11,8 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
- * Import pipeline 的 FEEDBACK 阶段（终止步骤）：汇总 parse/validate/load 各阶段的记录统计，
- * 以 {@code IMPORT_FEEDBACK} 操作类型写入审计日志，不做任何状态更新。
+ * Import pipeline 的 FEEDBACK 阶段（终止步骤）：汇总 parse/validate/load 各阶段的记录统计， 以 {@code IMPORT_FEEDBACK}
+ * 操作类型写入审计日志，不做任何状态更新。
  *
  * <p>本步骤始终返回成功，是 Import pipeline 的最后一个阶段。
  */

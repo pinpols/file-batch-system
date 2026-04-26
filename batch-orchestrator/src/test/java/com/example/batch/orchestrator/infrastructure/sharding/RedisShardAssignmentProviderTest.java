@@ -1,8 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.sharding;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -14,14 +12,15 @@ import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.DefaultTypedTuple;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
-import org.springframework.data.redis.core.DefaultTypedTuple;
 
 class RedisShardAssignmentProviderTest {
 
   private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+
   @SuppressWarnings("unchecked")
   private final ZSetOperations<String, String> zset = mock(ZSetOperations.class);
 
@@ -50,7 +49,7 @@ class RedisShardAssignmentProviderTest {
     ShardAssignment a = p.current();
 
     assertThat(a.shardTotal()).isEqualTo(3);
-    assertThat(a.shardIndex()).isEqualTo(1);  // orch-1 字典序第 2 位（index=1）
+    assertThat(a.shardIndex()).isEqualTo(1); // orch-1 字典序第 2 位（index=1）
   }
 
   @Test
@@ -121,7 +120,8 @@ class RedisShardAssignmentProviderTest {
     p.current();
 
     // 验证先调 removeRangeByScore 清理超期成员，再调 rangeWithScores
-    verify(zset, times(1)).removeRangeByScore(eq("batch:orchestrator:members"), eq(0D), anyDouble());
+    verify(zset, times(1))
+        .removeRangeByScore(eq("batch:orchestrator:members"), eq(0D), anyDouble());
   }
 
   private static double anyDouble() {

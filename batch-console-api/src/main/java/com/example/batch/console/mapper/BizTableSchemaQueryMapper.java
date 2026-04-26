@@ -5,8 +5,8 @@ import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * 只读查询 {@code batch.biz_table_schema}：上传 Excel 校验 target 列名 / jdbc_mapped_import 列映射时
- * 对照 worker 上报的真实业务库 schema，拦住指向不存在表/列的坏配置。
+ * 只读查询 {@code batch.biz_table_schema}：上传 Excel 校验 target 列名 / jdbc_mapped_import 列映射时 对照 worker
+ * 上报的真实业务库 schema，拦住指向不存在表/列的坏配置。
  */
 public interface BizTableSchemaQueryMapper {
 

@@ -2,7 +2,6 @@ package com.example.batch.common.utils;
 
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 轻量前置校验工具。
@@ -56,9 +55,8 @@ public final class Guard {
   }
 
   /**
-   * S-1.9：带错误码的通用业务条件断言。业务需要 {@link ResultCode#CONFLICT} /
-   * {@link ResultCode#STATE_CONFLICT} / {@link ResultCode#FORBIDDEN} 等非 INVALID_ARGUMENT 语义时，
-   * 通过此重载指定，避免绕过工具类直接 throw。
+   * S-1.9：带错误码的通用业务条件断言。业务需要 {@link ResultCode#CONFLICT} / {@link ResultCode#STATE_CONFLICT} /
+   * {@link ResultCode#FORBIDDEN} 等非 INVALID_ARGUMENT 语义时， 通过此重载指定，避免绕过工具类直接 throw。
    */
   public static void require(boolean condition, ResultCode resultCode, String message) {
     if (!condition) {

@@ -2,6 +2,7 @@ package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.mapper.PlatformFileRuntimeMapper;
@@ -18,20 +19,18 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 所有 Worker 模块的核心数据访问层，负责 file_record、pipeline 实例、步骤运行及审计的全生命周期管理。
  *
- * <p><b>状态安全</b>：每次调用 {@link #updateFileStatus} 前都经过
- * {@link FileStateMachine#assertTransition} 校验，防止非法状态跃迁；
- * {@link #createFileRecord} 调用 {@link FileStateMachine#assertInitialStatus} 验证初始状态。
+ * <p><b>状态安全</b>：每次调用 {@link #updateFileStatus} 前都经过 {@link FileStateMachine#assertTransition}
+ * 校验，防止非法状态跃迁； {@link #createFileRecord} 调用 {@link FileStateMachine#assertInitialStatus} 验证初始状态。
  *
- * <p><b>Pipeline 定义自动创建</b>：{@link #ensurePipelineDefinition} 在 Worker 首次运行时
- * 自动写入 pipeline 定义及默认步骤（通过 {@code ensurePipelineStepDefinitions} 补全缺失步骤），
- * 后续运行直接复用已有定义，无需手工预置。
+ * <p><b>Pipeline 定义自动创建</b>：{@link #ensurePipelineDefinition} 在 Worker 首次运行时 自动写入 pipeline
+ * 定义及默认步骤（通过 {@code ensurePipelineStepDefinitions} 补全缺失步骤）， 后续运行直接复用已有定义，无需手工预置。
  *
  * <p><b>主要操作</b>：
+ *
  * <ul>
  *   <li>{@code createFileRecord} / {@code updateFileStatus} / {@code updateFileMetadata} — 文件记录管理
  *   <li>{@code ensurePipelineDefinition} / {@code createPipelineInstance} — Pipeline 生命周期
@@ -132,9 +131,7 @@ public class PlatformFileRuntimeRepository {
       String workerGroup,
       String description,
       List<PipelineStepTemplate> defaultSteps) {
-    if (!Texts.hasText(tenantId)
-        || !Texts.hasText(jobCode)
-        || !Texts.hasText(pipelineType)) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || !Texts.hasText(pipelineType)) {
       return null;
     }
     Long pipelineDefinitionId =
@@ -273,9 +270,7 @@ public class PlatformFileRuntimeRepository {
 
   public Long startStepRun(
       Long pipelineInstanceId, String stepCode, String stageCode, Object inputSummary) {
-    if (pipelineInstanceId == null
-        || !Texts.hasText(stepCode)
-        || !Texts.hasText(stageCode)) {
+    if (pipelineInstanceId == null || !Texts.hasText(stepCode) || !Texts.hasText(stageCode)) {
       return null;
     }
     Integer nextExecutionSeq =

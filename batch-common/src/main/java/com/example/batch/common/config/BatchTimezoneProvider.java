@@ -9,11 +9,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Component;
 
 /**
- * 全局时区 provider。所有业务代码通过此 bean 读取默认 {@link ZoneId}；禁止继续使用 {@code
- * ZoneId.systemDefault()}（容器 / JVM 默认可能因部署环境漂移）。
+ * 全局时区 provider。所有业务代码通过此 bean 读取默认 {@link ZoneId}；禁止继续使用 {@code ZoneId.systemDefault()}（容器 / JVM
+ * 默认可能因部署环境漂移）。
  *
- * <p>{@link #resolveOrDefault} 供 "优先用业务侧显式配置（比如 business_calendar.timezone），其次退到平台默认"
- * 的模式使用，替换以前 {@code Texts.hasText(tz) ? ZoneId.of(tz) : ZoneId.systemDefault()} 的写法。
+ * <p>{@link #resolveOrDefault} 供 "优先用业务侧显式配置（比如 business_calendar.timezone），其次退到平台默认" 的模式使用，替换以前
+ * {@code Texts.hasText(tz) ? ZoneId.of(tz) : ZoneId.systemDefault()} 的写法。
  */
 @Slf4j
 @Component

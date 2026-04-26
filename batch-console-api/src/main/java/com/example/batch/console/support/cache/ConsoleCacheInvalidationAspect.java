@@ -2,11 +2,11 @@ package com.example.batch.console.support.cache;
 
 import com.example.batch.console.infrastructure.ConsoleConfigCacheInvalidationService;
 import java.lang.reflect.Method;
+import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.expression.Expression;
@@ -18,9 +18,8 @@ import org.springframework.stereotype.Component;
 /**
  * R-4.8：@{@link InvalidatesConsoleCache} 注解的 AOP 切面。
  *
- * <p>方法<b>成功返回</b>后（抛异常不触发 evict，避免异常回滚后误清有效缓存），
- * 根据 target + SpEL 表达式解析 tenantId / code，调 {@link ConsoleConfigCacheInvalidationService}
- * 对应的 evict 方法。evict 内部已是 afterCommit 注册，事务语义保持一致。
+ * <p>方法<b>成功返回</b>后（抛异常不触发 evict，避免异常回滚后误清有效缓存）， 根据 target + SpEL 表达式解析 tenantId / code，调 {@link
+ * ConsoleConfigCacheInvalidationService} 对应的 evict 方法。evict 内部已是 afterCommit 注册，事务语义保持一致。
  */
 @Slf4j
 @Aspect
@@ -31,8 +30,7 @@ public class ConsoleCacheInvalidationAspect {
   private final ExpressionParser spelParser = new SpelExpressionParser();
   private final ParameterNameDiscoverer paramNames = new DefaultParameterNameDiscoverer();
 
-  public ConsoleCacheInvalidationAspect(
-      ConsoleConfigCacheInvalidationService invalidationService) {
+  public ConsoleCacheInvalidationAspect(ConsoleConfigCacheInvalidationService invalidationService) {
     this.invalidationService = invalidationService;
   }
 
@@ -73,12 +71,9 @@ public class ConsoleCacheInvalidationAspect {
 
     switch (annotation.target()) {
       case JOB_DEFINITION -> invalidationService.evictJobDefinition(tenantId, code);
-      case ALL_JOB_DEFINITIONS_BY_TENANT ->
-          invalidationService.evictAllJobDefinitions(tenantId);
-      case WORKFLOW_DEFINITION ->
-          invalidationService.evictWorkflowDefinition(tenantId, code);
-      case BUSINESS_CALENDAR ->
-          invalidationService.evictBusinessCalendar(tenantId, code);
+      case ALL_JOB_DEFINITIONS_BY_TENANT -> invalidationService.evictAllJobDefinitions(tenantId);
+      case WORKFLOW_DEFINITION -> invalidationService.evictWorkflowDefinition(tenantId, code);
+      case BUSINESS_CALENDAR -> invalidationService.evictBusinessCalendar(tenantId, code);
       case BATCH_WINDOW -> invalidationService.evictBatchWindow(tenantId, code);
       case TENANT_QUOTA_POLICIES -> invalidationService.evictQuotaPolicies(tenantId);
       case META_OPTIONS -> invalidationService.evictMetaOptions(tenantId);

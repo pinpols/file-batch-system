@@ -1,9 +1,9 @@
 package com.example.batch.common.utils;
 
 /**
- * 项目内部字符串工具。替代 {@code org.springframework.util.StringUtils}——全仓仅用到
- * {@code hasText} 一个方法，没必要为了它保留外部依赖入口；同时和 {@link ConsoleTextSanitizer} /
- * {@link EncodingUtils} 等 batch-common 自研工具统一风格，避免"两套 StringUtils"混淆。
+ * 项目内部字符串工具。替代 {@code org.springframework.util.StringUtils}——全仓仅用到 {@code hasText}
+ * 一个方法，没必要为了它保留外部依赖入口；同时和 {@link ConsoleTextSanitizer} / {@link EncodingUtils} 等 batch-common
+ * 自研工具统一风格，避免"两套 StringUtils"混淆。
  *
  * <p>语义和 Spring 版本完全等价：{@code null} / 空 / 全空白 → {@code false}，其他情况 → {@code true}。
  */

@@ -1,6 +1,5 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
-import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
@@ -8,6 +7,7 @@ import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.persistence.entity.WorkflowRunEntity;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.application.ratelimit.RateLimitAction;
 import com.example.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
@@ -28,8 +28,8 @@ import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -46,13 +46,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>关键机制：
  *
  * <ul>
- *   <li><b>ShedLock</b> {@code waiting_partition_dispatch}：保证多实例部署下同一时刻只有一台执行，
- *       避免重复消费 WAITING 分片。
+ *   <li><b>ShedLock</b> {@code waiting_partition_dispatch}：保证多实例部署下同一时刻只有一台执行， 避免重复消费 WAITING 分片。
  *   <li><b>公平排序</b>：按 {@code (fairnessScore desc, priority desc, partitionId asc)} 排序后派发，
  *       防止单租户/单优先级独占队列；fairnessScore 由 {@code ResourceScheduler} 结合租户权重/队列权重计算。
  *   <li><b>租户限流</b>：每次 release 走 {@code DISPATCH_RELEASE} 令牌桶，超额直接跳过（下轮再试）。
- *   <li><b>优雅下线</b>：{@code gracefulShutdown.isDraining()} 为 true 时整批跳过，不新派任何分片，
- *       让现有任务收尾后进程退出。
+ *   <li><b>优雅下线</b>：{@code gracefulShutdown.isDraining()} 为 true 时整批跳过，不新派任何分片， 让现有任务收尾后进程退出。
  *   <li><b>连锁状态推进</b>：release 成功后把 job_instance（WAITING→RUNNING）与 workflow_run（CREATED→RUNNING）
  *       同步推进，避免"分片已跑但实例仍在 WAITING"的 UI 口径不一致。
  * </ul>
@@ -92,8 +90,7 @@ public class WaitingPartitionDispatchScheduler {
       log.debug("no WAITING partitions this tick");
       return;
     }
-    log.info("waiting dispatch tick: {} WAITING partitions to evaluate",
-        waitingPartitions.size());
+    log.info("waiting dispatch tick: {} WAITING partitions to evaluate", waitingPartitions.size());
     List<WaitingDispatchCandidate> candidates = new ArrayList<>();
     for (JobPartitionEntity partition : waitingPartitions) {
       WaitingDispatchCandidate candidate;
@@ -181,8 +178,8 @@ public class WaitingPartitionDispatchScheduler {
   }
 
   /**
-   * MDC 包装层：给 {@link #executeDispatch} 套上 tenantId / traceId / jobInstanceId 上下文，
-   * 事务边界由 executeDispatch 自己管。纯粹是 ThreadLocal MDC 操作，不做 DB 调用，因此本方法 <b>不挂
+   * MDC 包装层：给 {@link #executeDispatch} 套上 tenantId / traceId / jobInstanceId 上下文， 事务边界由
+   * executeDispatch 自己管。纯粹是 ThreadLocal MDC 操作，不做 DB 调用，因此本方法 <b>不挂
    * {@code @Transactional}</b>，避免在一个只做 MDC + 代理委派的方法上空开事务。
    */
   public void dispatchWaitingPartition(
@@ -321,8 +318,7 @@ public class WaitingPartitionDispatchScheduler {
       return null;
     }
     try {
-      Object parsed =
-          JsonUtils.fromJson(partition.getInputSnapshot(), Object.class);
+      Object parsed = JsonUtils.fromJson(partition.getInputSnapshot(), Object.class);
       if (parsed instanceof Map<?, ?> map) {
         Object v = map.get(field);
         return v == null ? null : String.valueOf(v);

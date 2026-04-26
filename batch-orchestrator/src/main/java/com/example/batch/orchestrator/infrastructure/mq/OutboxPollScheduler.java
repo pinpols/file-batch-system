@@ -40,11 +40,10 @@ import org.springframework.stereotype.Component;
  * <p>关键机制：
  *
  * <ul>
- *   <li><b>分布式互斥</b>：通过 ShedLock 持锁执行；{@code shardTotal > 1} 时每个分片独立锁
- *       （{@code outbox_poll_shard_N}），允许多实例并行处理不同分片；默认 shardTotal=1 时退化为单锁 {@code outbox_poll}
- *       与原行为兼容。
- *   <li><b>Stale PUBLISHING 重置</b>：每轮开头把超过 {@code publishingTimeoutSeconds} 仍停留在 PUBLISHING 的事件
- *       拨回 FAILED——防止 Kafka send 卡死/JVM 崩溃导致事件永久卡在 PUBLISHING 无人接管。
+ *   <li><b>分布式互斥</b>：通过 ShedLock 持锁执行；{@code shardTotal > 1} 时每个分片独立锁 （{@code
+ *       outbox_poll_shard_N}），允许多实例并行处理不同分片；默认 shardTotal=1 时退化为单锁 {@code outbox_poll} 与原行为兼容。
+ *   <li><b>Stale PUBLISHING 重置</b>：每轮开头把超过 {@code publishingTimeoutSeconds} 仍停留在 PUBLISHING 的事件 拨回
+ *       FAILED——防止 Kafka send 卡死/JVM 崩溃导致事件永久卡在 PUBLISHING 无人接管。
  *   <li><b>熔断联动</b>：{@link OutboxPublishCircuitBreaker} 打开时整轮跳过；advance 完成后把本轮失败数喂回熔断器。
  *   <li><b>优雅下线</b>：{@code gracefulShutdown.isDraining()} 为 true 时跳过本轮，让现有任务收尾后进程退出。
  * </ul>

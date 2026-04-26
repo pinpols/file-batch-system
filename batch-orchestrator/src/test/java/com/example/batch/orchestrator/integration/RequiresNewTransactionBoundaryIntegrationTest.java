@@ -71,12 +71,13 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
 
     // 在外部事务中调用 retryTask（REQUIRES_NEW），然后回滚外部事务
     TransactionTemplate outer = new TransactionTemplate(transactionManager);
-    outer.execute(status -> {
-      retryGovernanceService.retryTask(TENANT, job.taskId, "boundary-test-retry");
-      // 外部事务人工回滚
-      status.setRollbackOnly();
-      return null;
-    });
+    outer.execute(
+        status -> {
+          retryGovernanceService.retryTask(TENANT, job.taskId, "boundary-test-retry");
+          // 外部事务人工回滚
+          status.setRollbackOnly();
+          return null;
+        });
 
     // retryTask 的 REQUIRES_NEW 内部事务应已独立提交：
     // partition 被重置为 READY，outbox 多了一条派发事件
@@ -100,11 +101,12 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     long outboxBefore = countOutbox();
 
     TransactionTemplate outer = new TransactionTemplate(transactionManager);
-    outer.execute(status -> {
-      retryGovernanceService.reclaimTask(TENANT, job.taskId, "boundary-test-reclaim");
-      status.setRollbackOnly();
-      return null;
-    });
+    outer.execute(
+        status -> {
+          retryGovernanceService.reclaimTask(TENANT, job.taskId, "boundary-test-reclaim");
+          status.setRollbackOnly();
+          return null;
+        });
 
     long outboxAfter = countOutbox();
     assertThat(outboxAfter)
@@ -130,11 +132,12 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     long outboxBefore = countOutbox();
 
     TransactionTemplate outer = new TransactionTemplate(transactionManager);
-    outer.execute(status -> {
-      retryGovernanceService.replayDeadLetter(TENANT, deadLetterId);
-      status.setRollbackOnly();
-      return null;
-    });
+    outer.execute(
+        status -> {
+          retryGovernanceService.replayDeadLetter(TENANT, deadLetterId);
+          status.setRollbackOnly();
+          return null;
+        });
 
     long outboxAfter = countOutbox();
     assertThat(outboxAfter)
@@ -177,8 +180,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
-  private record LaunchedJob(
-      Long instanceId, Long partitionId, Long taskId, String workerCode) {}
+  private record LaunchedJob(Long instanceId, Long partitionId, Long taskId, String workerCode) {}
 
   /** 启动任务并让其进入 FAILED 状态（走完 launch → claim → report failure）。 */
   private LaunchedJob launchAndFail(String prefix) {
@@ -214,7 +216,10 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             5, 'q-it', ?, 'API', false, 'NONE',
             'FIXED', 1, 0, true, 1)
         """,
-        TENANT, jobCode, "IT " + jobCode, workerCode);
+        TENANT,
+        jobCode,
+        "IT " + jobCode,
+        workerCode);
 
     jdbcTemplate.update(
         """
@@ -222,7 +227,8 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
         ) values (?, ?, 'IT wf', 'DAG', 1, true)
         """,
-        TENANT, jobCode);
+        TENANT,
+        jobCode);
 
     jdbcTemplate.update(
         """
@@ -231,7 +237,10 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             request_status, trace_id
         ) values (?, ?, 'API', ?, date '2026-01-20', ?, 'ACCEPTED', 'trace-it')
         """,
-        TENANT, requestId, jobCode, dedupKey);
+        TENANT,
+        requestId,
+        jobCode,
+        dedupKey);
 
     jdbcTemplate.update(
         """
@@ -240,21 +249,27 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             heartbeat_at, current_load
         ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
         """,
-        TENANT, workerCode, workerCode);
+        TENANT,
+        workerCode,
+        workerCode);
 
     LaunchResponse response =
         launchService.launch(
             new LaunchRequest(
-                TENANT, jobCode, BIZ_DATE, TriggerType.API, requestId,
-                "trace-" + suffix, Map.of()));
+                TENANT,
+                jobCode,
+                BIZ_DATE,
+                TriggerType.API,
+                requestId,
+                "trace-" + suffix,
+                Map.of()));
 
     JobInstanceEntity instance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
     List<JobPartitionEntity> partitions =
         jobPartitionMapper.selectByQuery(
             new JobPartitionQuery(TENANT, instance.getId(), null, null));
     List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(TENANT, instance.getId(), null, null, null));
+        jobTaskMapper.selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null));
 
     return new LaunchedJob(
         instance.getId(),
@@ -282,7 +297,10 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             5, 'q-it', ?, 'API', false, 'NONE',
             'NONE', 0, 0, true, 1)
         """,
-        TENANT, jobCode, "IT " + jobCode, workerCode);
+        TENANT,
+        jobCode,
+        "IT " + jobCode,
+        workerCode);
 
     jdbcTemplate.update(
         """
@@ -290,7 +308,8 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
         ) values (?, ?, 'IT wf', 'DAG', 1, true)
         """,
-        TENANT, jobCode);
+        TENANT,
+        jobCode);
 
     jdbcTemplate.update(
         """
@@ -299,7 +318,10 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             request_status, trace_id
         ) values (?, ?, 'API', ?, date '2026-01-20', ?, 'ACCEPTED', 'trace-it')
         """,
-        TENANT, requestId, jobCode, dedupKey);
+        TENANT,
+        requestId,
+        jobCode,
+        dedupKey);
 
     jdbcTemplate.update(
         """
@@ -308,20 +330,20 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             heartbeat_at, current_load
         ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
         """,
-        TENANT, workerCode, workerCode);
+        TENANT,
+        workerCode,
+        workerCode);
 
     launchService.launch(
         new LaunchRequest(
-            TENANT, jobCode, BIZ_DATE, TriggerType.API, requestId,
-            "trace-" + suffix, Map.of()));
+            TENANT, jobCode, BIZ_DATE, TriggerType.API, requestId, "trace-" + suffix, Map.of()));
 
     JobInstanceEntity instance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
     List<JobPartitionEntity> partitions =
         jobPartitionMapper.selectByQuery(
             new JobPartitionQuery(TENANT, instance.getId(), null, null));
     List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(
-            new JobTaskQuery(TENANT, instance.getId(), null, null, null));
+        jobTaskMapper.selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null));
 
     Long taskId = tasks.get(0).getId();
     Long partitionId = partitions.isEmpty() ? null : partitions.get(0).getId();

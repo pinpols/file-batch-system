@@ -7,6 +7,7 @@ import com.example.batch.common.enums.SkipAction;
 import com.example.batch.common.enums.SkipThresholdMode;
 import com.example.batch.common.utils.ContentMaskingUtils;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.FileErrorRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -23,22 +24,18 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 导入坏记录治理服务：集中管理跳过策略、阈值判断、坏记录持久化和错误输出汇总。
  *
- * <p><b>跳过策略</b>（{@link SkipAction}）：{@code CONTINUE}（记录后继续）、
- * {@code FAIL_BATCH}（触发跳过即批次失败）、{@code MANUAL_REVIEW}（标记人工审核）。
- * 允许跳过的错误码由 {@code ImportSkipProperties#skipErrorCodes} 逗号分隔配置；空列表表示全部可跳过。
+ * <p><b>跳过策略</b>（{@link SkipAction}）：{@code CONTINUE}（记录后继续）、 {@code FAIL_BATCH}（触发跳过即批次失败）、{@code
+ * MANUAL_REVIEW}（标记人工审核）。 允许跳过的错误码由 {@code ImportSkipProperties#skipErrorCodes} 逗号分隔配置；空列表表示全部可跳过。
  *
- * <p><b>阈值</b>（{@link SkipThresholdMode}）：{@code ABSOLUTE}（最大跳过条数）或
- * {@code PERCENTAGE}（最大跳过率），超阈值通过 {@link #recordThresholdViolation} 写入坏记录
- * 并在上下文中标记 {@code skipThresholdExceeded=true}。
+ * <p><b>阈值</b>（{@link SkipThresholdMode}）：{@code ABSOLUTE}（最大跳过条数）或 {@code PERCENTAGE}（最大跳过率），超阈值通过
+ * {@link #recordThresholdViolation} 写入坏记录 并在上下文中标记 {@code skipThresholdExceeded=true}。
  *
- * <p><b>坏记录落库</b>：每条坏记录同步写入 {@code file_error_record}，
- * 并按 {@link ErrorSinkType} 决定是否额外写入 MinIO 错误文件（{@link ImportErrorOutputStorage}）。
- * 含 {@code error_line_masking_enabled} 配置时对错误信息和原始记录脱敏。
+ * <p><b>坏记录落库</b>：每条坏记录同步写入 {@code file_error_record}， 并按 {@link ErrorSinkType} 决定是否额外写入 MinIO
+ * 错误文件（{@link ImportErrorOutputStorage}）。 含 {@code error_line_masking_enabled} 配置时对错误信息和原始记录脱敏。
  *
  * <p>{@link #finalizeErrorOutput} 在 pipeline 结束时汇总统计并更新 {@code file_record} 元数据 + 审计。
  */
@@ -150,14 +147,12 @@ public class ImportRecordGovernanceService {
     metadata.put("totalCount", numberValue(context.getAttributes().get("totalCount")));
     // C-2.15：把 parse / validate 两阶段的细分计数一并登记，便于问题定位
     metadata.put(
-        KEY_PARSE_SKIPPED_COUNT,
-        numberValue(context.getAttributes().get(KEY_PARSE_SKIPPED_COUNT)));
+        KEY_PARSE_SKIPPED_COUNT, numberValue(context.getAttributes().get(KEY_PARSE_SKIPPED_COUNT)));
     metadata.put(
         KEY_VALIDATE_SKIPPED_COUNT,
         numberValue(context.getAttributes().get(KEY_VALIDATE_SKIPPED_COUNT)));
     metadata.put(
-        KEY_PARSE_FAILED_COUNT,
-        numberValue(context.getAttributes().get(KEY_PARSE_FAILED_COUNT)));
+        KEY_PARSE_FAILED_COUNT, numberValue(context.getAttributes().get(KEY_PARSE_FAILED_COUNT)));
     metadata.put(
         KEY_VALIDATE_FAILED_COUNT,
         numberValue(context.getAttributes().get(KEY_VALIDATE_FAILED_COUNT)));
@@ -187,10 +182,10 @@ public class ImportRecordGovernanceService {
   }
 
   /**
-   * C-2.15：把 stage → stage-scoped counter key 的映射放这里。
-   * PARSE 对应 parseSkippedCount/parseFailedCount；VALIDATE 对应 validateSkippedCount/
-   * validateFailedCount；其他阶段（LOAD / REPORT 等）暂不细分返回 null（不写 stage-scoped counter，
-   * KEY_SKIPPED_COUNT 仍正常累加保持总阈值语义）。
+   * C-2.15：把 stage → stage-scoped counter key 的映射放这里。 PARSE 对应
+   * parseSkippedCount/parseFailedCount；VALIDATE 对应 validateSkippedCount/
+   * validateFailedCount；其他阶段（LOAD / REPORT 等）暂不细分返回 null（不写 stage-scoped counter， KEY_SKIPPED_COUNT
+   * 仍正常累加保持总阈值语义）。
    */
   private String resolveStageScopedKey(ImportStage stage, boolean skipped) {
     if (stage == null) {
@@ -364,7 +359,8 @@ public class ImportRecordGovernanceService {
   }
 
   private SkipThresholdMode resolveThresholdMode() {
-    SkipThresholdMode mode = DictEnum.fromCode(SkipThresholdMode.class, skipProperties.thresholdMode());
+    SkipThresholdMode mode =
+        DictEnum.fromCode(SkipThresholdMode.class, skipProperties.thresholdMode());
     return mode == null ? SkipThresholdMode.ABSOLUTE : mode;
   }
 

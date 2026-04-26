@@ -8,6 +8,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.ContentMaskingUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.domain.entity.FileArrivalGroupEntity;
 import com.example.batch.console.domain.entity.FileErrorRecordEntity;
 import com.example.batch.console.domain.entity.FileRecordEntity;
@@ -40,7 +41,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /** 文件相关查询子服务。 */
 @Service

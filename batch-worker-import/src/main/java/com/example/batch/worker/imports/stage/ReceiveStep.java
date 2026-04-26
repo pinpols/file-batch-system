@@ -1,6 +1,8 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.utils.EncodingUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
@@ -11,7 +13,6 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.example.batch.common.utils.EncodingUtils;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -19,17 +20,17 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * Import pipeline 的第一阶段：接收并登记文件记录。
  *
  * <p><b>主要职责</b>：
+ *
  * <ul>
  *   <li>在任何内存分配前拒绝超过 {@code batch.worker.import.max-payload-size-mb}（默认 100MB）的 payload。
  *   <li>解析 {@link ImportPayload}（优先从上下文取，否则从 JSON rawPayload 解析；支持嵌套 {@code content} 字段回填）。
- *   <li>若上下文中尚无 fileId，创建 {@code file_record}（status=RECEIVED），写入模板安全元数据和用户元数据，
- *       并将文件绑定到当前 pipeline 实例。
+ *   <li>若上下文中尚无 fileId，创建 {@code file_record}（status=RECEIVED），写入模板安全元数据和用户元数据， 并将文件绑定到当前 pipeline
+ *       实例。
  * </ul>
  *
  * <p>保留字段（{@code templateCode}、{@code taskId} 等）不允许被用户 metadata 覆盖。
@@ -49,8 +50,8 @@ public class ReceiveStep implements ImportStageStep {
   private int maxPayloadSizeMb;
 
   /**
-   * payload 相对堆大小的安全比例（默认 20%）。PREPROCESS 阶段会产生 byte[] + String (UTF-16) + decode
-   * 副本等多份中间态，留 80% 给 JVM / GC / 其它业务。
+   * payload 相对堆大小的安全比例（默认 20%）。PREPROCESS 阶段会产生 byte[] + String (UTF-16) + decode 副本等多份中间态，留 80% 给
+   * JVM / GC / 其它业务。
    */
   @Value("${batch.worker.import.payload-heap-ratio:0.2}")
   private double payloadHeapRatio;

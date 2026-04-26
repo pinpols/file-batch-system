@@ -27,9 +27,13 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
   void setUp() {
     tenantGuard = mock(ConsoleTenantGuard.class);
     outboxEventMapper = mock(OutboxEventMapper.class);
-    service = new DefaultConsoleOutboxOpsApplicationService(
-        tenantGuard, outboxEventMapper,
-        mock(com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher.class));
+    service =
+        new DefaultConsoleOutboxOpsApplicationService(
+            tenantGuard,
+            outboxEventMapper,
+            mock(
+                com.example.batch.console.infrastructure.realtime
+                    .ConsoleRealtimeDomainEventPublisher.class));
   }
 
   @Test

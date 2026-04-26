@@ -8,6 +8,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleTenantConfigPackageExcelApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
@@ -20,11 +21,11 @@ import com.example.batch.console.domain.query.WorkflowNodeQuery;
 import com.example.batch.console.infrastructure.ConfigPackageExcelValidator.PackageValidationResult;
 import com.example.batch.console.infrastructure.ConfigPackageExcelValidator.SheetResult;
 import com.example.batch.console.mapper.AlertRoutingConfigMapper;
+import com.example.batch.console.mapper.BizTableSchemaQueryMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.FileChannelConfigMapper;
 import com.example.batch.console.mapper.JobDefinitionMapper;
 import com.example.batch.console.mapper.PipelineDefinitionMapper;
-import com.example.batch.console.mapper.BizTableSchemaQueryMapper;
 import com.example.batch.console.mapper.PipelineStepDefinitionMapper;
 import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.mapper.WorkflowDefinitionMapper;
@@ -42,8 +43,8 @@ import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.ConsoleSingleSheetExcelImportSupport;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import com.example.batch.console.support.TenantConfigPackageExcelImportStore;
-import com.example.batch.console.support.UploadFileGuard;
 import com.example.batch.console.support.TenantConfigPackageExcelImportStore.PackageExcelSession;
+import com.example.batch.console.support.UploadFileGuard;
 import com.example.batch.console.web.request.TenantConfigPackageExcelApplyRequest;
 import com.example.batch.console.web.response.TenantConfigPackageExcelApplyResponse;
 import com.example.batch.console.web.response.TenantConfigPackageExcelPreviewResponse;
@@ -71,37 +72,35 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 租户配置包 Excel 的全生命周期管理：export / template / upload → preview → apply。
  *
  * <p><b>3 阶段导入流程</b>：
+ *
  * <ol>
- *   <li>{@link #upload} — 解析 Excel 字节流（8 sheet），构建 {@code PackageExcelSession}
- *       存入 {@link TenantConfigPackageExcelImportStore}，返回短期 token（内存 TTL）。
- *   <li>{@link #preview} — 用 token 取回 session，调 {@link ConfigPackageExcelValidator} 做
- *       跨 sheet 依赖校验（如 pipelineStep 引用的 jobCode 必须存在），返回每 sheet 的
- *       valid/invalid 统计和逐行错误列表，不写库。
- *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内
- *       按 job → channel → routing → pipeline+step → workflow+node+edge 顺序写库，
- *       完成后 {@code importStore.remove(token)}。
+ *   <li>{@link #upload} — 解析 Excel 字节流（8 sheet），构建 {@code PackageExcelSession} 存入 {@link
+ *       TenantConfigPackageExcelImportStore}，返回短期 token（内存 TTL）。
+ *   <li>{@link #preview} — 用 token 取回 session，调 {@link ConfigPackageExcelValidator} 做 跨 sheet
+ *       依赖校验（如 pipelineStep 引用的 jobCode 必须存在），返回每 sheet 的 valid/invalid 统计和逐行错误列表，不写库。
+ *   <li>{@link #apply} — 再次 validate；若 {@code totalInvalid > 0} 直接拒绝；否则在单事务内 按 job → channel →
+ *       routing → pipeline+step → workflow+node+edge 顺序写库， 完成后 {@code importStore.remove(token)}。
  * </ol>
  *
- * <p><b>8 sheets</b>（顺序即写库顺序）：
- * job、file_channel、alert_routing、pipeline_definition、pipeline_step、
+ * <p><b>8 sheets</b>（顺序即写库顺序）： job、file_channel、alert_routing、pipeline_definition、pipeline_step、
  * workflow_definition、workflow_node、workflow_edge。
  *
  * <p><b>多级结构写法</b>：
+ *
  * <ul>
  *   <li>Pipeline：步骤按 {@code jobCode:version} 分组后与父行对应，apply 时先删再重插 step。
- *   <li>Workflow：节点和边按 {@code wfCode:version} 分组，upsert 节点/边（不删旧节点，依赖
- *       Mapper 的 ON CONFLICT UPDATE 语义）。
+ *   <li>Workflow：节点和边按 {@code wfCode:version} 分组，upsert 节点/边（不删旧节点，依赖 Mapper 的 ON CONFLICT UPDATE
+ *       语义）。
  * </ul>
  *
- * <p><b>租户安全</b>：{@code upload} 从 header 解析租户（拒绝客户端传入），{@link #loadSession}
- * 每次访问都调 {@link ConsoleTenantGuard#assertTenantAllowed} 确保 token 持有者与当前请求租户一致。
+ * <p><b>租户安全</b>：{@code upload} 从 header 解析租户（拒绝客户端传入），{@link #loadSession} 每次访问都调 {@link
+ * ConsoleTenantGuard#assertTenantAllowed} 确保 token 持有者与当前请求租户一致。
  */
 @Service
 @RequiredArgsConstructor
@@ -136,7 +135,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private final ConfigPackageExcelWorkbookWriter workbookWriter =
       new ConfigPackageExcelWorkbookWriter();
 
-
   @Override
   public ResponseEntity<InputStreamResource> exportPackage(String tenantId) {
     String tid = tenantGuard.resolveTenant(tenantId);
@@ -166,7 +164,8 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   public ResponseEntity<InputStreamResource> downloadTemplate() {
     workbookWriter.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
     byte[] bytes = workbookWriter.buildTemplateWorkbook();
-    return ConsoleSingleSheetExcelImportSupport.excelResponse("tenant-config-package-template.xlsx", bytes);
+    return ConsoleSingleSheetExcelImportSupport.excelResponse(
+        "tenant-config-package-template.xlsx", bytes);
   }
 
   /**
@@ -265,7 +264,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
         wfStats.updated());
   }
 
-
   private PackageExcelSession parseWorkbook(byte[] bytes, String tenantId, String fileName) {
     try (Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
       return new PackageExcelSession(
@@ -315,7 +313,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     }
     return rows;
   }
-
 
   private ApplyStats applyJobs(List<Map<String, String>> rows, ApplyContext ctx) {
     int inserted = 0, updated = 0;
@@ -394,8 +391,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       fileChannelConfigMapper.upsertFileChannelConfig(param);
       if (existing == null || existing.isEmpty()) {
         inserted++;
-      }
-      else {
+      } else {
         updated++;
       }
     }
@@ -427,8 +423,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       alertRoutingConfigMapper.upsertAlertRoutingConfig(param);
       if (existing == null || existing.isEmpty()) {
         inserted++;
-      }
-      else {
+      } else {
         updated++;
       }
     }
@@ -513,8 +508,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       workflowDefinitionMapper.upsertWorkflowDefinition(defParam);
       if (existing == null) {
         inserted++;
-      }
-      else {
+      } else {
         updated++;
       }
 
@@ -565,7 +559,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     }
   }
 
-
   private Map<String, Object> buildPipelineInsertParams(Map<String, String> row, ApplyContext ctx) {
     // PipelineDefinitionMapper.xml 的 insert/update 绑定是 snake_case（#{tenant_id} 等），
     // 这里 key 必须与之一致，否则 MyBatis 找不到变量 → 绑 null → 撞 NOT NULL 约束 500。
@@ -608,7 +601,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     p.put(COL_ENABLED, parseBoolean(step.get(COL_ENABLED), true));
     return p;
   }
-
 
   private List<Map<String, Object>> toJobRows(List<JobDefinitionEntity> entities) {
     return entities.stream()
@@ -730,7 +722,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return result;
   }
 
-
   private TenantConfigPackageExcelPreviewResponse toPreviewResponse(
       String uploadToken, String fileName, PackageValidationResult result) {
     List<SheetStats> sheets =
@@ -757,14 +748,12 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     return new SheetStats(r.sheetName(), r.total(), r.valid(), r.invalid());
   }
 
-
   private PackageExcelSession loadSession(String uploadToken) {
     PackageExcelSession session =
         Guard.requireFound(importStore.get(uploadToken), "excel upload session not found");
     tenantGuard.assertTenantAllowed(session.tenantId());
     return session;
   }
-
 
   private static String normalize(String value) {
     return ConsoleTextSanitizer.normalize(value);
@@ -847,7 +836,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   private static String fileNameOrDefault(String originalFileName) {
     return Texts.hasText(originalFileName) ? originalFileName : "tenant-config-package.xlsx";
   }
-
 
   private record ApplyContext(String tenantId, String operatorId, String reason, String traceId) {}
 

@@ -18,6 +18,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleBusinessCalendarExcelApplicationService;
 import com.example.batch.console.mapper.BusinessCalendarMapper;
 import com.example.batch.console.mapper.CalendarHolidayMapper;
@@ -71,7 +72,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -361,7 +361,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     return appliedHolidayRows;
   }
 
-
   private ParsedSession loadSession(String uploadToken) {
     BusinessCalendarExcelImportStore.ExcelImportSession session =
         Guard.requireFound(importStore.get(uploadToken), "excel upload session not found");
@@ -373,7 +372,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         session.calendarRows(),
         session.holidayRows());
   }
-
 
   private ParsedWorkbook parseWorkbook(byte[] bytes, String tenantId, String originalFileName)
       throws IOException {
@@ -435,15 +433,12 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       if (tenantId != null && columns.contains(COL_TENANT_ID)) {
         rowValues.put(
             COL_TENANT_ID,
-            Texts.hasText(rowValues.get(COL_TENANT_ID))
-                ? rowValues.get(COL_TENANT_ID)
-                : tenantId);
+            Texts.hasText(rowValues.get(COL_TENANT_ID)) ? rowValues.get(COL_TENANT_ID) : tenantId);
       }
       rows.add(rowValues);
     }
     return rows;
   }
-
 
   private ValidationResult validateAll(ParsedSession session) {
     List<CalendarRow> calendarRows = new ArrayList<>();
@@ -542,7 +537,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         .build();
   }
 
-
   private String requireText(
       Map<String, String> values, String key, int maxLength, List<String> issues) {
     String normalized = normalize(values.get(key));
@@ -637,7 +631,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     }
   }
 
-
   private String normalize(String value) {
     return ConsoleTextSanitizer.normalize(value);
   }
@@ -685,7 +678,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     return cell == null ? null : formatter.formatCellValue(cell);
   }
 
-
   private byte[] writeWorkbook(
       List<Map<String, Object>> calendars, List<Map<String, Object>> holidays) {
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50);
@@ -719,8 +711,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
   }
 
   /** 按 spec 写入一个 data sheet：创建 sheet + 冻结首行 + 表头 + 数据行 + 校验 + 列宽。 */
-  private void writeDataSheet(
-      Workbook workbook, SheetSpec spec, List<Map<String, Object>> rows) {
+  private void writeDataSheet(Workbook workbook, SheetSpec spec, List<Map<String, Object>> rows) {
     Sheet sheet = workbook.createSheet(spec.name());
     sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, spec.columns(), spec.guides(), workbook);
@@ -910,7 +901,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     ConsoleExcelStyles.createValidationSheet(workbook);
   }
 
-
   private void logChange(
       String tenantId,
       String calendarCode,
@@ -930,7 +920,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
                         "detail", mapOf("calendarCode", calendarCode))))
             .build());
   }
-
 
   private Map<String, Object> mapOf(Object... pairs) {
     Map<String, Object> values = new LinkedHashMap<>();
@@ -971,7 +960,6 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         row.holidayName(),
         row.description());
   }
-
 
   private record ParsedWorkbook(
       String fileName,

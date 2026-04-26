@@ -18,12 +18,12 @@ import org.springframework.stereotype.Component;
  *   <li><b>全局角色</b>（{@code ADMIN / AUDITOR / CONFIG_ADMIN}，见 {@link ConsoleRoles#hasGlobalRole}）：
  *       跨租户操作必须<b>显式</b>传 {@code requestTenantId}；为空直接 {@code INVALID_ARGUMENT} 拒绝
  *       ——防止全局角色因遗漏参数"默认当前租户"或"全量生效"造成意外越界。
- *   <li><b>租户角色</b>：以 JWT 里的 {@code tenantId} 为准，{@code requestTenantId} 非空时必须匹配，
- *       不匹配直接 {@code FORBIDDEN}——跨租户访问一律拒绝，即使是只读请求。
+ *   <li><b>租户角色</b>：以 JWT 里的 {@code tenantId} 为准，{@code requestTenantId} 非空时必须匹配， 不匹配直接 {@code
+ *       FORBIDDEN}——跨租户访问一律拒绝，即使是只读请求。
  * </ul>
  *
- * <p>Session 未激活（例如异步上下文）时 {@code ConsoleRequestMetadata} 读取会静默降级为 null，
- * 由上游兜底或抛 {@code UNAUTHORIZED}。
+ * <p>Session 未激活（例如异步上下文）时 {@code ConsoleRequestMetadata} 读取会静默降级为 null， 由上游兜底或抛 {@code
+ * UNAUTHORIZED}。
  */
 @Component
 @RequiredArgsConstructor
@@ -31,10 +31,7 @@ public class ConsoleTenantGuard {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
-  /**
-   * S-1.3 加固：只允许字母 / 数字 / 下划线 / 连字符；防止 requestTenantId 带路径字符（如
-   * {@code ../x}）或特殊字符绕过后续 DB 查询语义。
-   */
+  /** S-1.3 加固：只允许字母 / 数字 / 下划线 / 连字符；防止 requestTenantId 带路径字符（如 {@code ../x}）或特殊字符绕过后续 DB 查询语义。 */
   private static final java.util.regex.Pattern TENANT_ID_PATTERN =
       java.util.regex.Pattern.compile("^[a-zA-Z0-9_\\-]+$");
 
@@ -69,9 +66,7 @@ public class ConsoleTenantGuard {
     return effectiveTenantId;
   }
 
-  /**
-   * 返回经过 trim + 格式校验的 tenantId；null / 空 / 全空白 → null；非法字符 → INVALID_ARGUMENT。
-   */
+  /** 返回经过 trim + 格式校验的 tenantId；null / 空 / 全空白 → null；非法字符 → INVALID_ARGUMENT。 */
   private String sanitizeTenantId(String raw) {
     if (raw == null) {
       return null;

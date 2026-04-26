@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * P3-3 archive 系列：outbox_event 自动归档业务层。同删除语义对应 {@code cleanup-outbox-events.sql}。
  *
- * <p>策略：每次 tick 选一种状态归档（PUBLISHED 或 GIVE_UP，由调用方决定），先复制到
- * {@code archive} schema 冷表，再删热表中的 FK 子表和 {@code outbox_event}，单批上限。
+ * <p>策略：每次 tick 选一种状态归档（PUBLISHED 或 GIVE_UP，由调用方决定），先复制到 {@code archive} schema 冷表，再删热表中的 FK 子表和
+ * {@code outbox_event}，单批上限。
  */
 @Slf4j
 @Service

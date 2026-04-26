@@ -24,7 +24,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -64,51 +63,122 @@ class ConfigPackageExcelWorkbookWriter {
 
   static final List<String> JOB_COLUMNS =
       List.of(
-          COL_TENANT_ID, COL_JOB_CODE, COL_JOB_NAME, COL_JOB_TYPE, COL_BIZ_TYPE, COL_QUEUE_CODE,
-          COL_WORKER_GROUP, COL_SCHEDULE_TYPE, COL_SCHEDULE_EXPR, COL_CALENDAR_CODE,
-          COL_WINDOW_CODE, COL_RETRY_POLICY, COL_RETRY_MAX_COUNT, COL_TIMEOUT_SECONDS,
-          COL_SHARD_STRATEGY, COL_EXECUTION_HANDLER, COL_PARAM_SCHEMA, COL_DEFAULT_PARAMS,
-          COL_ENABLED, COL_DESCRIPTION);
+          COL_TENANT_ID,
+          COL_JOB_CODE,
+          COL_JOB_NAME,
+          COL_JOB_TYPE,
+          COL_BIZ_TYPE,
+          COL_QUEUE_CODE,
+          COL_WORKER_GROUP,
+          COL_SCHEDULE_TYPE,
+          COL_SCHEDULE_EXPR,
+          COL_CALENDAR_CODE,
+          COL_WINDOW_CODE,
+          COL_RETRY_POLICY,
+          COL_RETRY_MAX_COUNT,
+          COL_TIMEOUT_SECONDS,
+          COL_SHARD_STRATEGY,
+          COL_EXECUTION_HANDLER,
+          COL_PARAM_SCHEMA,
+          COL_DEFAULT_PARAMS,
+          COL_ENABLED,
+          COL_DESCRIPTION);
 
   static final List<String> CHANNEL_COLUMNS =
       List.of(
-          COL_TENANT_ID, COL_CHANNEL_CODE, COL_CHANNEL_NAME, COL_CHANNEL_TYPE, "target_endpoint",
-          COL_AUTH_TYPE, COL_CONFIG_JSON, COL_RECEIPT_POLICY, COL_TIMEOUT_SECONDS, COL_ENABLED);
+          COL_TENANT_ID,
+          COL_CHANNEL_CODE,
+          COL_CHANNEL_NAME,
+          COL_CHANNEL_TYPE,
+          "target_endpoint",
+          COL_AUTH_TYPE,
+          COL_CONFIG_JSON,
+          COL_RECEIPT_POLICY,
+          COL_TIMEOUT_SECONDS,
+          COL_ENABLED);
 
   static final List<String> ROUTING_COLUMNS =
       List.of(
-          COL_TENANT_ID, COL_ROUTE_CODE, COL_ROUTE_NAME, COL_TEAM, COL_ALERT_GROUP, COL_SEVERITY,
-          COL_RECEIVER, "group_by", "group_wait_seconds", "group_interval_seconds",
-          "repeat_interval_seconds", COL_ENABLED, COL_DESCRIPTION);
+          COL_TENANT_ID,
+          COL_ROUTE_CODE,
+          COL_ROUTE_NAME,
+          COL_TEAM,
+          COL_ALERT_GROUP,
+          COL_SEVERITY,
+          COL_RECEIVER,
+          "group_by",
+          "group_wait_seconds",
+          "group_interval_seconds",
+          "repeat_interval_seconds",
+          COL_ENABLED,
+          COL_DESCRIPTION);
 
   static final List<String> PIPELINE_COLUMNS =
       List.of(
-          COL_TENANT_ID, COL_JOB_CODE, COL_PIPELINE_NAME, COL_PIPELINE_TYPE, COL_BIZ_TYPE,
-          COL_WORKER_GROUP, COL_VERSION, COL_ENABLED, COL_DESCRIPTION);
+          COL_TENANT_ID,
+          COL_JOB_CODE,
+          COL_PIPELINE_NAME,
+          COL_PIPELINE_TYPE,
+          COL_BIZ_TYPE,
+          COL_WORKER_GROUP,
+          COL_VERSION,
+          COL_ENABLED,
+          COL_DESCRIPTION);
 
   static final List<String> STEP_COLUMNS =
       List.of(
-          COL_JOB_CODE, COL_VERSION, COL_STEP_CODE, COL_STEP_NAME, COL_STAGE_CODE, "step_order",
-          "impl_code", "step_params", COL_TIMEOUT_SECONDS, COL_RETRY_POLICY, COL_RETRY_MAX_COUNT,
+          COL_JOB_CODE,
+          COL_VERSION,
+          COL_STEP_CODE,
+          COL_STEP_NAME,
+          COL_STAGE_CODE,
+          "step_order",
+          "impl_code",
+          "step_params",
+          COL_TIMEOUT_SECONDS,
+          COL_RETRY_POLICY,
+          COL_RETRY_MAX_COUNT,
           COL_ENABLED);
 
   static final List<String> WF_DEF_COLUMNS =
       List.of(
-          COL_TENANT_ID, COL_WORKFLOW_CODE, COL_WORKFLOW_NAME, COL_WORKFLOW_TYPE, COL_VERSION,
-          COL_ENABLED, COL_DESCRIPTION);
+          COL_TENANT_ID,
+          COL_WORKFLOW_CODE,
+          COL_WORKFLOW_NAME,
+          COL_WORKFLOW_TYPE,
+          COL_VERSION,
+          COL_ENABLED,
+          COL_DESCRIPTION);
 
   static final List<String> WF_NODE_COLUMNS =
       List.of(
-          COL_TENANT_ID, COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION, COL_NODE_CODE, COL_NODE_NAME,
-          COL_NODE_TYPE, COL_RELATED_JOB_CODE, COL_RELATED_PIPELINE_CODE, COL_WORKER_GROUP,
-          COL_WINDOW_CODE, COL_NODE_ORDER, COL_RETRY_POLICY, COL_RETRY_MAX_COUNT,
-          COL_TIMEOUT_SECONDS, COL_NODE_PARAMS, COL_ENABLED);
+          COL_TENANT_ID,
+          COL_WORKFLOW_CODE,
+          COL_WORKFLOW_VERSION,
+          COL_NODE_CODE,
+          COL_NODE_NAME,
+          COL_NODE_TYPE,
+          COL_RELATED_JOB_CODE,
+          COL_RELATED_PIPELINE_CODE,
+          COL_WORKER_GROUP,
+          COL_WINDOW_CODE,
+          COL_NODE_ORDER,
+          COL_RETRY_POLICY,
+          COL_RETRY_MAX_COUNT,
+          COL_TIMEOUT_SECONDS,
+          COL_NODE_PARAMS,
+          COL_ENABLED);
 
   static final List<String> WF_EDGE_COLUMNS =
       List.of(
-          COL_TENANT_ID, COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION, COL_FROM_NODE_CODE,
-          COL_TO_NODE_CODE, COL_EDGE_TYPE, COL_CONDITION_EXPR, COL_ENABLED);
-
+          COL_TENANT_ID,
+          COL_WORKFLOW_CODE,
+          COL_WORKFLOW_VERSION,
+          COL_FROM_NODE_CODE,
+          COL_TO_NODE_CODE,
+          COL_EDGE_TYPE,
+          COL_CONDITION_EXPR,
+          COL_ENABLED);
 
   private record SheetDef(
       String name,
@@ -132,13 +202,19 @@ class ConfigPackageExcelWorkbookWriter {
         List.of(
             new SheetDef(JOB_SHEET, JOB_COLUMNS, buildJobGuides(), this::applyJobValidations),
             new SheetDef(
-                CHANNEL_SHEET, CHANNEL_COLUMNS, buildChannelGuides(),
+                CHANNEL_SHEET,
+                CHANNEL_COLUMNS,
+                buildChannelGuides(),
                 this::applyChannelValidations),
             new SheetDef(
-                ROUTING_SHEET, ROUTING_COLUMNS, buildRoutingGuides(),
+                ROUTING_SHEET,
+                ROUTING_COLUMNS,
+                buildRoutingGuides(),
                 this::applyRoutingValidations),
             new SheetDef(
-                PIPELINE_SHEET, PIPELINE_COLUMNS, buildPipelineGuides(),
+                PIPELINE_SHEET,
+                PIPELINE_COLUMNS,
+                buildPipelineGuides(),
                 this::applyPipelineValidations),
             new SheetDef(STEP_SHEET, STEP_COLUMNS, buildStepGuides(), this::applyStepValidations),
             new SheetDef(
@@ -146,10 +222,8 @@ class ConfigPackageExcelWorkbookWriter {
             new SheetDef(
                 WF_NODE_SHEET, WF_NODE_COLUMNS, buildWfNodeGuides(), this::applyWfNodeValidations),
             new SheetDef(
-                WF_EDGE_SHEET, WF_EDGE_COLUMNS, buildWfEdgeGuides(),
-                this::applyWfEdgeValidations));
+                WF_EDGE_SHEET, WF_EDGE_COLUMNS, buildWfEdgeGuides(), this::applyWfEdgeValidations));
   }
-
 
   byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50);
@@ -217,9 +291,7 @@ class ConfigPackageExcelWorkbookWriter {
     }
   }
 
-
-  private void writeDataSheet(
-      Workbook wb, SheetDef def, List<Map<String, Object>> dataRows) {
+  private void writeDataSheet(Workbook wb, SheetDef def, List<Map<String, Object>> dataRows) {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, def.columns(), def.guides(), wb);
@@ -256,7 +328,6 @@ class ConfigPackageExcelWorkbookWriter {
     ConsoleExcelPreviewWorkbookSupport.addIssueComments(sheet, def.columns(), sheetIssues, 0);
     setWidths(sheet, def.columns());
   }
-
 
   private void createReadmeSheet(Workbook wb) {
     Sheet sheet = wb.createSheet("README");
@@ -342,7 +413,6 @@ class ConfigPackageExcelWorkbookWriter {
     cell.setCellStyle(style);
   }
 
-
   private void applyJobValidations(Sheet sheet) {
     addDropdownValidation(sheet, 3, JOB_TYPES.toArray(String[]::new), COL_JOB_TYPE, "请选择作业类型");
     addDropdownValidation(
@@ -419,7 +489,6 @@ class ConfigPackageExcelWorkbookWriter {
     addBooleanValidation(sheet, new int[] {7}, COL_ENABLED, GUIDE_BOOL_HINT);
   }
 
-
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildJobGuides() {
     return Map.ofEntries(
         Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
@@ -428,15 +497,27 @@ class ConfigPackageExcelWorkbookWriter {
         Map.entry(
             COL_JOB_TYPE,
             requiredColumn(
-                "作业类型。", GUIDE_ENUM, GUIDE_IMPORT, "GENERAL", GUIDE_IMPORT, "EXPORT",
-                GUIDE_DISPATCH, "WORKFLOW")),
+                "作业类型。",
+                GUIDE_ENUM,
+                GUIDE_IMPORT,
+                "GENERAL",
+                GUIDE_IMPORT,
+                "EXPORT",
+                GUIDE_DISPATCH,
+                "WORKFLOW")),
         Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型标识。", GUIDE_STR, "CUSTOMER")),
         Map.entry(COL_QUEUE_CODE, optionalColumn("资源队列编码。", GUIDE_STR, "import-queue")),
         Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
         Map.entry(
             COL_SCHEDULE_TYPE,
             requiredColumn(
-                "调度类型。", GUIDE_ENUM, "MANUAL", "CRON", "FIXED_RATE", "MANUAL", "EVENT",
+                "调度类型。",
+                GUIDE_ENUM,
+                "MANUAL",
+                "CRON",
+                "FIXED_RATE",
+                "MANUAL",
+                "EVENT",
                 "ONE_TIME")),
         Map.entry(COL_SCHEDULE_EXPR, optionalColumn("调度表达式，CRON 时填写。", GUIDE_STR, "0 2 * * *")),
         Map.entry(COL_CALENDAR_CODE, optionalColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
@@ -467,20 +548,36 @@ class ConfigPackageExcelWorkbookWriter {
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildChannelGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(COL_CHANNEL_CODE, requiredColumn("通道唯一编码。", GUIDE_STR, "sftp_inbound")),
         Map.entry(COL_CHANNEL_NAME, requiredColumn("通道名称。", GUIDE_STR, "SFTP 入站通道")),
         Map.entry(
             COL_CHANNEL_TYPE,
             requiredColumn(
-                "通道类型。", GUIDE_ENUM, "SFTP", "SFTP", "API", "EMAIL", "NAS", "OSS", "LOCAL",
+                "通道类型。",
+                GUIDE_ENUM,
+                "SFTP",
+                "SFTP",
+                "API",
+                "EMAIL",
+                "NAS",
+                "OSS",
+                "LOCAL",
                 "API_PUSH")),
         Map.entry("target_endpoint", optionalColumn("目标地址。", GUIDE_STR, "sftp.example.com")),
         Map.entry(
             COL_AUTH_TYPE,
             requiredColumn(
-                "认证类型。", GUIDE_ENUM, "PASSWORD", GUIDE_NONE, "PASSWORD", "KEY_PAIR", "TOKEN",
-                "OAUTH2", "CUSTOM")),
+                "认证类型。",
+                GUIDE_ENUM,
+                "PASSWORD",
+                GUIDE_NONE,
+                "PASSWORD",
+                "KEY_PAIR",
+                "TOKEN",
+                "OAUTH2",
+                "CUSTOM")),
         Map.entry(COL_CONFIG_JSON, requiredColumn("通道配置 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
         Map.entry(
             COL_RECEIPT_POLICY,
@@ -494,7 +591,8 @@ class ConfigPackageExcelWorkbookWriter {
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildRoutingGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(COL_ROUTE_CODE, requiredColumn("路由唯一编码。", GUIDE_STR, "RT_BATCH_ERROR")),
         Map.entry(COL_ROUTE_NAME, requiredColumn("路由名称。", GUIDE_STR, "批处理异常路由")),
         Map.entry(COL_TEAM, requiredColumn("负责团队。", GUIDE_STR, "ops")),
@@ -515,7 +613,8 @@ class ConfigPackageExcelWorkbookWriter {
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildPipelineGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(
             COL_JOB_CODE, requiredColumn("关联作业编码，与 version 组成联合键。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
         Map.entry(COL_PIPELINE_NAME, requiredColumn("流水线名称。", GUIDE_STR, "客户导入流水线")),
@@ -542,8 +641,18 @@ class ConfigPackageExcelWorkbookWriter {
         Map.entry(
             COL_STAGE_CODE,
             requiredColumn(
-                "阶段。", GUIDE_ENUM, "PARSE", "RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD",
-                "GENERATE", "TRANSFER", GUIDE_DISPATCH, "ACK")),
+                "阶段。",
+                GUIDE_ENUM,
+                "PARSE",
+                "RECEIVE",
+                "PREPROCESS",
+                "PARSE",
+                "VALIDATE",
+                "LOAD",
+                "GENERATE",
+                "TRANSFER",
+                GUIDE_DISPATCH,
+                "ACK")),
         Map.entry("step_order", optionalColumn("步骤顺序号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry("impl_code", optionalColumn("实现插件编码。", GUIDE_STR, "csvParser")),
         Map.entry("step_params", optionalColumn("步骤参数 JSON。", GUIDE_JSON, GUIDE_EMPTY_JSON)),
@@ -559,7 +668,8 @@ class ConfigPackageExcelWorkbookWriter {
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildWfDefGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(
             COL_WORKFLOW_CODE,
             requiredColumn("工作流唯一编码，三个工作流 sheet 共用此键。", GUIDE_STR, "WF_SETTLEMENT")),
@@ -576,17 +686,16 @@ class ConfigPackageExcelWorkbookWriter {
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildWfNodeGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
         Map.entry(
-            COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
+        Map.entry(COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry(COL_NODE_CODE, requiredColumn("节点唯一编码。", GUIDE_STR, "NODE_IMPORT")),
         Map.entry(COL_NODE_NAME, requiredColumn("节点名称。", GUIDE_STR, "导入节点")),
         Map.entry(
             COL_NODE_TYPE,
             requiredColumn(
-                "节点类型。", GUIDE_ENUM, "JOB", "TASK", "GATEWAY", "FILE_STEP", "START", "END",
-                "JOB")),
+                "节点类型。", GUIDE_ENUM, "JOB", "TASK", "GATEWAY", "FILE_STEP", "START", "END", "JOB")),
         Map.entry(
             COL_RELATED_JOB_CODE,
             optionalColumn(
@@ -594,7 +703,8 @@ class ConfigPackageExcelWorkbookWriter {
         Map.entry(
             COL_RELATED_PIPELINE_CODE,
             optionalColumn(
-                "关联的流水线 job_code，需在本包 pipeline_definition sheet 或库中存在。", GUIDE_STR,
+                "关联的流水线 job_code，需在本包 pipeline_definition sheet 或库中存在。",
+                GUIDE_STR,
                 GUIDE_JOB_EXAMPLE)),
         Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
         Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
@@ -612,10 +722,10 @@ class ConfigPackageExcelWorkbookWriter {
 
   private Map<String, ConsoleExcelStyles.ColumnGuide> buildWfEdgeGuides() {
     return Map.ofEntries(
-        Map.entry(COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
         Map.entry(
-            COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
+            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
+        Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
+        Map.entry(COL_WORKFLOW_VERSION, requiredColumn("所属工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry(COL_FROM_NODE_CODE, requiredColumn("源节点编码。", GUIDE_STR, "NODE_IMPORT")),
         Map.entry(COL_TO_NODE_CODE, requiredColumn("目标节点编码。", GUIDE_STR, "NODE_EXPORT")),
         Map.entry(

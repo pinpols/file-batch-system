@@ -8,9 +8,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * 任务执行管理服务。
- * 覆盖 JobTask 从创建、分配 Worker、租约续期、状态更新到执行日志追加的完整生命周期，
- * 同时记录工作流节点运行（NodeRun）的就绪、启动与结束状态。
+ * 任务执行管理服务。 覆盖 JobTask 从创建、分配 Worker、租约续期、状态更新到执行日志追加的完整生命周期， 同时记录工作流节点运行（NodeRun）的就绪、启动与结束状态。
  * 实现类须保证所有状态写入由 Orchestrator 发起，Worker 不得直接修改实例状态。
  */
 public interface TaskExecutionService {

@@ -28,8 +28,8 @@ public enum QuotaResetPolicy {
   }
 
   /**
-   * @deprecated 业务代码改用 {@code BatchTimezoneProvider.defaultZone()}；此方法仅遗留给旧测试。
-   *     {@link java.time.ZoneId#systemDefault()} 会随容器 TZ 漂移，新代码禁止使用。
+   * @deprecated 业务代码改用 {@code BatchTimezoneProvider.defaultZone()}；此方法仅遗留给旧测试。 {@link
+   *     java.time.ZoneId#systemDefault()} 会随容器 TZ 漂移，新代码禁止使用。
    */
   @Deprecated(since = "2026-04-20", forRemoval = false)
   public static ZoneId systemZone() {

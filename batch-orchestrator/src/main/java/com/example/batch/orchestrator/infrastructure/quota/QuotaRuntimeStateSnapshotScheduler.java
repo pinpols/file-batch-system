@@ -21,11 +21,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Redis 模式下的 quota 状态周期 snapshot：把 Redis Hash 里的活跃配额状态批量回写到 PG
- * {@code quota_runtime_state}，让 console 历史/审计查询、{@code database} 模式回退仍能基于 PG 数据起步。
+ * Redis 模式下的 quota 状态周期 snapshot：把 Redis Hash 里的活跃配额状态批量回写到 PG {@code quota_runtime_state}，让
+ * console 历史/审计查询、{@code database} 模式回退仍能基于 PG 数据起步。
  *
- * <p>仅 {@code batch.quota.runtime-store=redis}（默认）+ {@code batch.quota.snapshot.enabled=true}
- * 时启用；以 {@code tenant_quota_policy} / {@code resource_queue} 配置作为枚举源避免全库 SCAN。
+ * <p>仅 {@code batch.quota.runtime-store=redis}（默认）+ {@code batch.quota.snapshot.enabled=true} 时启用；以
+ * {@code tenant_quota_policy} / {@code resource_queue} 配置作为枚举源避免全库 SCAN。
  *
  * <p>每轮工作量 ~ O(enabled tenants × (policies + queues)) ≈ 千量级，5 分钟一次开销可忽略。
  */
@@ -69,7 +69,8 @@ public class QuotaRuntimeStateSnapshotScheduler {
       }
     }
     if (snapshotted > 0) {
-      log.debug("quota snapshot tick wrote {} rows across {} tenants", snapshotted, tenantIds.size());
+      log.debug(
+          "quota snapshot tick wrote {} rows across {} tenants", snapshotted, tenantIds.size());
     }
   }
 
@@ -77,25 +78,32 @@ public class QuotaRuntimeStateSnapshotScheduler {
     int written = 0;
     for (TenantQuotaPolicyRecord p :
         tenantQuotaPolicyRepository.findByTenantIdAndEnabled(tenantId, true)) {
-      written += writeIfActive(tenantId, "TENANT_JOBS", tenantId, p.quotaResetPolicy(),
-          p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit()));
-      written += writeIfActive(tenantId, "TENANT_PARTITIONS", tenantId, p.quotaResetPolicy(),
-          p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit()));
+      written +=
+          writeIfActive(
+              tenantId,
+              "TENANT_JOBS",
+              tenantId,
+              p.quotaResetPolicy(),
+              p.burstLimit() == null ? 0 : Math.max(0, p.burstLimit()));
+      written +=
+          writeIfActive(
+              tenantId,
+              "TENANT_PARTITIONS",
+              tenantId,
+              p.quotaResetPolicy(),
+              p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit()));
     }
     for (ResourceQueueRecord q : resourceQueueRepository.findByTenantIdAndEnabled(tenantId, true)) {
       int qburst = q.burstLimit() == null ? 0 : Math.max(0, q.burstLimit());
       written += writeIfActive(tenantId, "QUEUE_JOBS", q.queueCode(), q.quotaResetPolicy(), qburst);
       // 队列分区维度的 burst 当前与队列 burst 共用 burstLimit；如未来分离再追加 partition 列
-      written += writeIfActive(
-          tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
+      written +=
+          writeIfActive(tenantId, "QUEUE_PARTITIONS", q.queueCode(), q.quotaResetPolicy(), qburst);
     }
     return written;
   }
 
-  /**
-   * 读 Redis 当前快照，若窗口活跃且 peak > 0，则 upsert 一条 PG 记录。窗口已过期 / peak=0 的不写，
-   * 避免每轮在 PG 里产出大量空快照行。
-   */
+  /** 读 Redis 当前快照，若窗口活跃且 peak > 0，则 upsert 一条 PG 记录。窗口已过期 / peak=0 的不写， 避免每轮在 PG 里产出大量空快照行。 */
   @Transactional
   protected int writeIfActive(
       String tenantId, String scope, String ownerCode, String policy, int burstLimit) {

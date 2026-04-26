@@ -16,9 +16,7 @@ public interface DictEnum {
 
   String label();
 
-  /**
-   * 按 code 查枚举常量；code 为空或未匹配返回 null。调用者需要默认值或抛异常时，在 callsite 判断。
-   */
+  /** 按 code 查枚举常量；code 为空或未匹配返回 null。调用者需要默认值或抛异常时，在 callsite 判断。 */
   static <E extends Enum<E> & DictEnum> E fromCode(Class<E> enumClass, String code) {
     if (code == null || code.isBlank()) {
       return null;
@@ -41,8 +39,6 @@ public interface DictEnum {
 
   /** 返回枚举全部 label 的有序列表，保持枚举声明顺序。 */
   static <E extends Enum<E> & DictEnum> List<String> labels(Class<E> enumClass) {
-    return Arrays.stream(enumClass.getEnumConstants())
-        .map(DictEnum::label)
-        .toList();
+    return Arrays.stream(enumClass.getEnumConstants()).map(DictEnum::label).toList();
   }
 }

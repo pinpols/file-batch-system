@@ -1,6 +1,7 @@
 package com.example.batch.worker.exports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.exports.domain.ExportJobContext;
@@ -16,7 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /** 导出准备阶段：解析 payload、加载模板配置、确定文件名和对象路径。 */
 @Component
@@ -93,8 +93,7 @@ public class PrepareStep implements ExportStageStep {
             ? null
             : String.valueOf(templateConfig.get("naming_rule"));
     String bizDate = resolveBizDate(context, payload);
-    String bizType =
-        Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
+    String bizType = Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
     String extension =
         switch (fileFormatType.toUpperCase()) {
           case "DELIMITED" -> ".csv";
@@ -118,8 +117,7 @@ public class PrepareStep implements ExportStageStep {
     if (Texts.hasText(payload.objectName())) {
       return payload.objectName();
     }
-    String bizType =
-        Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
+    String bizType = Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
     String bizDate = resolveBizDate(context, payload);
     return BatchFileConstants.outboundObjectName(
         bizType, bizDate, defaultText(payload.batchNo(), "batch"), "v1", fileName);

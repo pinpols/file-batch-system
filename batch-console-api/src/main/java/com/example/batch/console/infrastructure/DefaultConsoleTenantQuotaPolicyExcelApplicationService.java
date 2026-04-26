@@ -6,7 +6,6 @@ import static com.example.batch.console.support.ConsoleExcelStyles.optionalColum
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
-import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.console.application.ConsoleTenantQuotaPolicyExcelApplicationService;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
 import com.example.batch.console.mapper.TenantQuotaPolicyMapper;
@@ -59,16 +58,11 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
           COL_DESCRIPTION);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("policy_code", requiredColumn("策略唯一编码，作为导入匹配键。", GUIDE_STR, "DEFAULT_POLICY")),
           Map.entry(
-              "tenant_id",
-              optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry(
-              "policy_code", requiredColumn("策略唯一编码，作为导入匹配键。", GUIDE_STR, "DEFAULT_POLICY")),
-          Map.entry(
-              "max_running_jobs_per_tenant",
-              requiredColumn("租户最大并行作业数，必须 >= 0。", "整数", "10")),
-          Map.entry(
-              "max_partitions_per_tenant", requiredColumn("租户最大分区数，必须 >= 0。", "整数", "100")),
+              "max_running_jobs_per_tenant", requiredColumn("租户最大并行作业数，必须 >= 0。", "整数", "10")),
+          Map.entry("max_partitions_per_tenant", requiredColumn("租户最大分区数，必须 >= 0。", "整数", "100")),
           Map.entry("max_qps_per_tenant", requiredColumn("租户最大 QPS，必须 >= 0。", "整数", "50")),
           Map.entry("fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", "整数", "1")),
           Map.entry(
@@ -90,7 +84,6 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-
   @Override
   public ResponseEntity<InputStreamResource> exportQuotaPolicies(
       String tenantId, String policyCode, Boolean enabled) {
@@ -105,7 +98,6 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
   public ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request) {
     return doApply(uploadToken, request.getReason());
   }
-
 
   @Override
   protected String sheetName() {
@@ -130,10 +122,8 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
         .rowNo(rowNo)
         .tenantId(effectiveTenant)
         .policyCode(requireText(values, "policy_code", 128, issues))
-        .maxRunningJobsPerTenant(
-            requireInteger(values, "max_running_jobs_per_tenant", 0, issues))
-        .maxPartitionsPerTenant(
-            requireInteger(values, "max_partitions_per_tenant", 0, issues))
+        .maxRunningJobsPerTenant(requireInteger(values, "max_running_jobs_per_tenant", 0, issues))
+        .maxPartitionsPerTenant(requireInteger(values, "max_partitions_per_tenant", 0, issues))
         .maxQpsPerTenant(requireInteger(values, "max_qps_per_tenant", 0, issues))
         .fairShareWeight(requireInteger(values, "fair_share_weight", 1, issues))
         .enabled(optionalBoolean(values, COL_ENABLED, true, issues))
@@ -255,7 +245,6 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
     sheet.setColumnWidth(1, 20 * 256);
     sheet.setColumnWidth(2, 36 * 256);
   }
-
 
   @Builder
   record PolicyRow(

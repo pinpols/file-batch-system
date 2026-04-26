@@ -16,10 +16,10 @@ import java.nio.file.Path;
 /**
  * Immutable parameter object passed to each {@link FormatParser}.
  *
- * <p><b>大文件 spool</b>：当 PREPROCESS 检测到 payload 超过堆安全阈值时不 decode 成
- * {@code String}（UTF-16 放大 1.5-2x），而是把原始字节 spool 到 {@code spoolPath}，让 PARSE
- * 通过 {@link #openTextReader()} 用 {@code InputStreamReader(FileInputStream, charset)} 流式按
- * 行解码消费。{@code spoolPath == null} 时回落 {@code payloadText} 走 {@link StringReader}。
+ * <p><b>大文件 spool</b>：当 PREPROCESS 检测到 payload 超过堆安全阈值时不 decode 成 {@code String}（UTF-16 放大
+ * 1.5-2x），而是把原始字节 spool 到 {@code spoolPath}，让 PARSE 通过 {@link #openTextReader()} 用 {@code
+ * InputStreamReader(FileInputStream, charset)} 流式按 行解码消费。{@code spoolPath == null} 时回落 {@code
+ * payloadText} 走 {@link StringReader}。
  */
 public record FormatParseRequest(
     String payloadText,
@@ -41,12 +41,11 @@ public record FormatParseRequest(
   }
 
   /**
-   * 打开文本 Reader。优先走 {@code spoolPath}（大文件流式）；否则回落 {@code payloadText}（小文件
-   * 整块）。
+   * 打开文本 Reader。优先走 {@code spoolPath}（大文件流式）；否则回落 {@code payloadText}（小文件 整块）。
    *
-   * <p>spool 路径下 {@link CharsetDecoder} 显式设 {@link CodingErrorAction#REPORT}——和 PreprocessStep
-   * 的 A 严格解码等价，非法字节 → {@code MalformedInputException} 沿 {@code reader.readLine()} 抛出，
-   * 避免 JDK 默认 {@code REPLACE} 行为把 U+FFFD 静默写进下游解析结果。调用方 try-with-resources 关闭。
+   * <p>spool 路径下 {@link CharsetDecoder} 显式设 {@link CodingErrorAction#REPORT}——和 PreprocessStep 的 A
+   * 严格解码等价，非法字节 → {@code MalformedInputException} 沿 {@code reader.readLine()} 抛出， 避免 JDK 默认 {@code
+   * REPLACE} 行为把 U+FFFD 静默写进下游解析结果。调用方 try-with-resources 关闭。
    */
   public BufferedReader openTextReader() throws IOException {
     if (spoolPath != null) {
@@ -63,7 +62,6 @@ public record FormatParseRequest(
 
   /** 是否有可消费的文本内容（spool 文件或非空 payloadText）。 */
   public boolean hasText() {
-    return spoolPath != null
-        || (payloadText != null && !payloadText.isEmpty());
+    return spoolPath != null || (payloadText != null && !payloadText.isEmpty());
   }
 }

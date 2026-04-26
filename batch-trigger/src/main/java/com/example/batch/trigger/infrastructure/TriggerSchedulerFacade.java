@@ -29,24 +29,23 @@ import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.stereotype.Service;
 
 /**
- * Quartz 调度器门面，实现 {@link TriggerRegistrationService} 接口，集中管理所有 Quartz job 的
- * 注册、暂停、恢复和状态查询。
+ * Quartz 调度器门面，实现 {@link TriggerRegistrationService} 接口，集中管理所有 Quartz job 的 注册、暂停、恢复和状态查询。
  *
- * <p><b>JobKey 格式</b>：{@code tenantId:jobCode}，group 固定为 {@code batch-trigger}；
- * {@link #pauseByTenant}/{@link #resumeByTenant} 通过前缀匹配实现租户级批量操作。
+ * <p><b>JobKey 格式</b>：{@code tenantId:jobCode}，group 固定为 {@code batch-trigger}； {@link
+ * #pauseByTenant}/{@link #resumeByTenant} 通过前缀匹配实现租户级批量操作。
  *
  * <p><b>调度类型支持</b>：
+ *
  * <ul>
- *   <li>CRON — 使用 {@code withMisfireHandlingInstructionDoNothing}：Quartz 层不补跑，
- *       错失触发由 {@link QuartzLaunchJob} 在执行时根据 drift 自行决策 catch-up 策略。
+ *   <li>CRON — 使用 {@code withMisfireHandlingInstructionDoNothing}：Quartz 层不补跑， 错失触发由 {@link
+ *       QuartzLaunchJob} 在执行时根据 drift 自行决策 catch-up 策略。
  *   <li>FIXED_RATE — 使用 {@code withMisfireHandlingInstructionNextWithExistingCount}：
  *       只补跑丢失的次数，不累积爆发。
  *   <li>EVENT / MANUAL — 静默跳过，无需 Quartz 注册（由外部事件或人工 API 触发）。
  * </ul>
  *
- * <p><b>幂等注册</b>：{@link #scheduleWithReplace} 在 {@code scheduleJob} 前先 deleteJob，
- * 保证每次调用结果一致，无论 job 是否已存在。{@link #registerAll} 持有 ShedLock
- * ({@code lockAtMostFor=PT15M}) 防止多实例并发重复注册。
+ * <p><b>幂等注册</b>：{@link #scheduleWithReplace} 在 {@code scheduleJob} 前先 deleteJob， 保证每次调用结果一致，无论 job
+ * 是否已存在。{@link #registerAll} 持有 ShedLock ({@code lockAtMostFor=PT15M}) 防止多实例并发重复注册。
  */
 @Slf4j
 @Service

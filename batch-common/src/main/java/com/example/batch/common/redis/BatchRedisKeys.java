@@ -25,8 +25,8 @@ public final class BatchRedisKeys {
   }
 
   /**
-   * 配额运行时状态 Hash key：每 (tenantId, scope, ownerCode) 一份；scope 取值 TENANT_JOBS /
-   * TENANT_PARTITIONS / QUEUE_JOBS / QUEUE_PARTITIONS。
+   * 配额运行时状态 Hash key：每 (tenantId, scope, ownerCode) 一份；scope 取值 TENANT_JOBS / TENANT_PARTITIONS /
+   * QUEUE_JOBS / QUEUE_PARTITIONS。
    */
   public static String quotaState(String tenantId, String scope, String ownerCode) {
     return "quota:state:%s:%s:%s".formatted(safe(tenantId), safe(scope), safe(ownerCode));

@@ -10,7 +10,7 @@ import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import com.example.batch.common.enums.BatchWindowEndStrategy;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.OutOfWindowAction;
-import com.example.batch.common.utils.ConsoleTextSanitizer;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleBatchWindowExcelApplicationService;
 import com.example.batch.console.mapper.BatchWindowMapper;
 import com.example.batch.console.mapper.ConfigChangeLogMapper;
@@ -37,7 +37,6 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /** {@link ConsoleBatchWindowExcelApplicationService} 的默认实现。 */
 @Service
@@ -76,32 +75,24 @@ public class DefaultConsoleBatchWindowExcelApplicationService
   private static final Set<String> OUT_OF_WINDOW_ACTIONS = DictEnum.codes(OutOfWindowAction.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry(
-              "tenant_id",
-              optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry(
-              "window_code", requiredColumn("窗口唯一编码，作为导入匹配键。", GUIDE_STR, "WIN_SETTLEMENT")),
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("window_code", requiredColumn("窗口唯一编码，作为导入匹配键。", GUIDE_STR, "WIN_SETTLEMENT")),
           Map.entry("window_name", requiredColumn("控制台展示的窗口名称。", GUIDE_STR, "清算窗口")),
           Map.entry(COL_TIMEZONE, requiredColumn("时区标识。", GUIDE_STR, "Asia/Shanghai")),
-          Map.entry(
-              "start_time", requiredColumn("窗口开始时间，格式 HH:mm 或 HH:mm:ss。", "时间", "08:00")),
-          Map.entry(
-              "end_time", requiredColumn("窗口结束时间，格式 HH:mm 或 HH:mm:ss。", "时间", "18:00")),
+          Map.entry("start_time", requiredColumn("窗口开始时间，格式 HH:mm 或 HH:mm:ss。", "时间", "08:00")),
+          Map.entry("end_time", requiredColumn("窗口结束时间，格式 HH:mm 或 HH:mm:ss。", "时间", "18:00")),
           Map.entry(
               COL_END_STRATEGY,
               requiredColumn(
                   "窗口结束策略。", "枚举", "FINISH_RUNNING", "STOP", "FINISH_RUNNING", "CONTINUE")),
           Map.entry(
-              COL_OUT_OF_WINDOW_ACTION,
-              requiredColumn("窗口外操作策略。", "枚举", "WAIT", "WAIT", "FAIL")),
+              COL_OUT_OF_WINDOW_ACTION, requiredColumn("窗口外操作策略。", "枚举", "WAIT", "WAIT", "FAIL")),
           Map.entry(
               COL_ALLOW_CROSS_DAY,
               optionalColumn("是否允许跨天。", "布尔值", GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(
-              COL_ENABLED,
-              optionalColumn("窗口是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-          Map.entry(
-              COL_DESCRIPTION, optionalColumn("窗口描述信息。", GUIDE_STR, "用于清算批处理的执行窗口")));
+              COL_ENABLED, optionalColumn("窗口是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry(COL_DESCRIPTION, optionalColumn("窗口描述信息。", GUIDE_STR, "用于清算批处理的执行窗口")));
 
   private final BatchWindowMapper batchWindowMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -117,7 +108,6 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-
   @Override
   public ResponseEntity<InputStreamResource> exportBatchWindows(String tenantId) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
@@ -131,7 +121,6 @@ public class DefaultConsoleBatchWindowExcelApplicationService
   public ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request) {
     return doApply(uploadToken, request.getReason());
   }
-
 
   @Override
   protected String sheetName() {
@@ -195,8 +184,7 @@ public class DefaultConsoleBatchWindowExcelApplicationService
 
   @Override
   protected boolean upsertRow(WindowRow row, String tenantId, String operatorId) {
-    Map<String, Object> existing =
-        batchWindowMapper.selectByUniqueKey(tenantId, row.windowCode());
+    Map<String, Object> existing = batchWindowMapper.selectByUniqueKey(tenantId, row.windowCode());
     BatchWindowUpsertParam param = new BatchWindowUpsertParam();
     param.setTenantId(tenantId);
     param.setWindowCode(row.windowCode());
@@ -248,11 +236,7 @@ public class DefaultConsoleBatchWindowExcelApplicationService
   @Override
   protected void applyValidations(Sheet sheet) {
     addDropdownValidation(
-        sheet,
-        6,
-        END_STRATEGIES.toArray(String[]::new),
-        "end_strategy 填写提示",
-        "请从下拉列表中选择窗口结束策略。");
+        sheet, 6, END_STRATEGIES.toArray(String[]::new), "end_strategy 填写提示", "请从下拉列表中选择窗口结束策略。");
     addDropdownValidation(
         sheet,
         7,
@@ -314,9 +298,7 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     sheet.setColumnWidth(2, 36 * 256);
   }
 
-
-  private static String requireTime(
-      Map<String, String> values, String key, List<String> issues) {
+  private static String requireTime(Map<String, String> values, String key, List<String> issues) {
     String normalized = normalize(values.get(key));
     if (!Texts.hasText(normalized)) {
       issues.add(key + " is required");
@@ -327,7 +309,6 @@ public class DefaultConsoleBatchWindowExcelApplicationService
     }
     return normalized;
   }
-
 
   @Builder
   record WindowRow(

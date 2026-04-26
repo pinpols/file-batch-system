@@ -2,6 +2,7 @@ package com.example.batch.worker.exports.plugin;
 
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import com.example.batch.worker.exports.sql.SqlTemplateExportSpec;
 import com.example.batch.worker.exports.sql.SqlTemplateExportSqlValidator;
@@ -16,7 +17,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 执行模板配置的 SELECT SQL（存储于 {@code default_query_sql}）的导出插件。

@@ -21,9 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 触发器核心 REST 控制器，对外暴露任务手动触发与补单审批接口。
- * 每个请求必须携带幂等键请求头；服务进入 draining 状态时，所有写入操作均拒绝并返回
- * {@code STATE_CONFLICT}，调用方应做好重试或降级处理。
+ * 触发器核心 REST 控制器，对外暴露任务手动触发与补单审批接口。 每个请求必须携带幂等键请求头；服务进入 draining 状态时，所有写入操作均拒绝并返回 {@code
+ * STATE_CONFLICT}，调用方应做好重试或降级处理。
  */
 @RestController
 @RequestMapping("/api/triggers")

@@ -36,23 +36,23 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>DB 有 + Quartz 无 → {@link TriggerRegistrationService#registerByJobCode} 注册
  *   <li>DB 无 + Quartz 有 → {@link TriggerRegistrationService#unregisterByJobCode} 清理
- *   <li>DB 有 + Quartz 有 且 schedule drift（cron / interval / timezone 不一致）→ 触发
- *       {@code registerByJobCode}，由 {@link TriggerSchedulerFacade#scheduleWithReplace} 的
- *       delete-and-add 语义把 Quartz 表达式替换为 DB 最新值
+ *   <li>DB 有 + Quartz 有 且 schedule drift（cron / interval / timezone 不一致）→ 触发 {@code
+ *       registerByJobCode}，由 {@link TriggerSchedulerFacade#scheduleWithReplace} 的 delete-and-add
+ *       语义把 Quartz 表达式替换为 DB 最新值
  *   <li>DB 有 + Quartz 有 且完全一致 → 保持
  * </ul>
  *
- * <p><b>为什么需要对账</b>：console 侧 {@code toggleEnabled(false)} / job definition 删除只写 DB，
- * 不直接调用 trigger 模块；本 reconciler 以 30s 周期把 Quartz 收敛到 DB。首次启动在
- * {@link ApplicationReadyEvent} 立即跑一次，避免 30s 启动空窗。
+ * <p><b>为什么需要对账</b>：console 侧 {@code toggleEnabled(false)} / job definition 删除只写 DB， 不直接调用 trigger
+ * 模块；本 reconciler 以 30s 周期把 Quartz 收敛到 DB。首次启动在 {@link ApplicationReadyEvent} 立即跑一次，避免 30s 启动空窗。
  *
- * <p><b>集群并发</b>：ShedLock({@code PT5M}) 保证多实例只有一个在对账；单次对账耗时通常 &lt; 几秒，
- * 5 分钟上限足够兜住大租户规模。
+ * <p><b>集群并发</b>：ShedLock({@code PT5M}) 保证多实例只有一个在对账；单次对账耗时通常 &lt; 几秒， 5 分钟上限足够兜住大租户规模。
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(
-    name = "batch.trigger.scheduler-impl", havingValue = "quartz", matchIfMissing = true)
+    name = "batch.trigger.scheduler-impl",
+    havingValue = "quartz",
+    matchIfMissing = true)
 @RequiredArgsConstructor
 public class TriggerReconciler {
 
@@ -125,7 +125,8 @@ public class TriggerReconciler {
     }
     if (registered > 0 || unregistered > 0 || replaced > 0) {
       log.info(
-          "trigger reconcile drift resolved: registered={}, replaced={}, unregistered={}, expectedTotal={}",
+          "trigger reconcile drift resolved: registered={}, replaced={}, unregistered={},"
+              + " expectedTotal={}",
           registered,
           replaced,
           unregistered,
@@ -134,10 +135,9 @@ public class TriggerReconciler {
   }
 
   /**
-   * 检查 Quartz 里的 Trigger 与 DB descriptor 的 schedule 是否漂移：
-   * CRON 比 cronExpression + timezone；FIXED_RATE 比 repeat interval（秒）。
-   * 用于 DB-Quartz 都存在但表达式/时区被人改了 DB 的情况——本方法返回 true 会触发 re-register 走
-   * {@link TriggerSchedulerFacade#scheduleWithReplace} 的 delete-and-add 替换。
+   * 检查 Quartz 里的 Trigger 与 DB descriptor 的 schedule 是否漂移： CRON 比 cronExpression +
+   * timezone；FIXED_RATE 比 repeat interval（秒）。 用于 DB-Quartz 都存在但表达式/时区被人改了 DB 的情况——本方法返回 true 会触发
+   * re-register 走 {@link TriggerSchedulerFacade#scheduleWithReplace} 的 delete-and-add 替换。
    */
   private boolean hasScheduleDrift(JobKey key, TriggerDescriptor descriptor) {
     String type = descriptor.getScheduleType();
@@ -171,8 +171,10 @@ public class TriggerReconciler {
       }
       return false;
     } catch (SchedulerException exception) {
-      log.warn("failed to inspect quartz trigger for drift check: key={}, reason={}",
-          key, exception.getMessage());
+      log.warn(
+          "failed to inspect quartz trigger for drift check: key={}, reason={}",
+          key,
+          exception.getMessage());
       return false;
     }
   }
