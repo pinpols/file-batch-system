@@ -9,16 +9,20 @@
 
 ## 总览
 
-| 优先级 | 已完成 | 部分完成 | 待办 | 合计 |
-|---|:---:|:---:|:---:|:---:|
-| P0 立即止血 | 3 | 0 | 0 | 3 |
-| P1 结构性 | 4 | 1 | 0 | 5 |
-| P2 增量场景 | 5 | 3 | 1 | 9 |
-| P3 小瑕疵 | 4 | 0 | 0 | 4 |
-| **新发现（v5 新增）** | 2 | 0 | 0 | 2 |
-| **合计** | **18** | **4** | **1** | **23** |
+| 优先级 | 已完成 | 部分完成 | 待办 | 不做（标） | 合计 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| P0 立即止血 | 3 | 0 | 0 | 0 | 3 |
+| P1 结构性 | 4 | 1 | 0 | 0 | 5 |
+| P2 增量场景 | 6 | 1 | 0 | 2 | 9 |
+| P3 小瑕疵 | 4 | 0 | 0 | 0 | 4 |
+| **新发现（v5 新增）** | 2 | 0 | 0 | 0 | 2 |
+| **合计** | **19** | **2** | **0** | **2** | **23** |
 
-> **2026-04-26 第五轮 — P2-2 / P2-8 补 IT 完成**：写了 `BatchWindowGateTest`（4 IT，覆盖 in-window / WAIT / FAIL / 无 windowCode 4 分支）+ `ParseStepFixedWidthAndXmlTest`（4 IT，覆盖 FIXED_WIDTH 3 字段 + header/footer 跳过 + XML records envelope + XXE 防护）。剩余 P1-1 出 ADR-009 设计提案（待立项 ~3 人天）。
+> **2026-04-27 第六轮 — P2-3 / P2-4 补完 + P1-1 Stage 1 落地 + P2-1/P2-9 标"不做"**：
+> - **V5-P2-4** compensation happy-path（4/6 类）：`DefaultCompensationServiceTest` 加 PARTITION / STEP / DLQ / FILE 4 个 happy path（13 tests 通过）；JOB/BATCH 留 P2-4-ext
+> - **V5-P2-3** quota 压测 smoke：跑 JobLaunchSimulation 105 reqs / 25s，p95=112ms，0 失败；报告归档 `testing/load-test-report.md`；真打满 quota 留 P2-3-ext（需先配低 quota policy）
+> - **V5-P1-1** Stage 1：`db/migration/V72__add_workflow_node_run_output.sql` 落地（output JSONB 列），完成 ADR-009 4 stage 第一步；Stage 2-4（worker outputs 上报 + WorkflowParamResolver + 集成到 SchedulePlanBuilder）留单独 sprint
+> - **V5-P2-1**（6 渠道单 adapter IT）+ **V5-P2-9**（GATEWAY/FILE_STEP）：业务层级未真需要 / 依赖 P1-1 完整落地，本批**不做**
 
 > **2026-04-26 第三轮校准**：V5-P1-3 / V5-NEW-1 / V5-NEW-2 经代码审视也已实际完成或不构成 bug：
 > - **V5-P1-3** EXPORT id 列校验：`SqlTemplateExportSpec:62-69` 已有早校验 + 友好错误（默认 cursorColumn=id + 用户 SQL 不含时抛 IllegalArgumentException 含完整修复指引）
@@ -50,6 +54,8 @@
 | V5-NEW-2 | exp_settlement_csv_v1 模板源头 | 关闭（不追溯）| default-tenant 7 个 "system" 模板之一，业务无引用，不影响主链路；归类"历史遗留 + 不影响" |
 | V5-P2-2 | 业务日历门禁 E2E | 2026-04-26 | `BatchWindowGateTest` 4 IT（in-window / WAIT / FAIL / 无 windowCode 4 分支）|
 | V5-P2-8 | FIXED_WIDTH / XML parser IT | 2026-04-26 | `ParseStepFixedWidthAndXmlTest` 4 IT（FIXED_WIDTH 3 字段 + header/footer 跳过 + XML records envelope + XXE 防护）|
+| V5-P2-3 | quota / fair-share 压测 smoke | 2026-04-27 | `JobLaunchSimulation` 跑通 105 reqs / 25s，p95=112ms / 0 失败；报告归档 `testing/load-test-report.md`；真打满 quota 留 P2-3-ext |
+| V5-P2-4 | compensation 4/6 类 happy-path | 2026-04-27 | `DefaultCompensationServiceTest` +4 IT (PARTITION / STEP / DLQ / FILE)，13 tests 通过；JOB/BATCH 留 P2-4-ext |
 
 ---
 
@@ -65,7 +71,13 @@
 
 **ADR 已立项**：[ADR-009 Workflow 节点间参数串联 DSL](../architecture/adr/ADR-009-workflow-param-dsl.md) （2026-04-26 Proposed）—— JSONPath-like DSL + worker 上报 outputs + WorkflowParamResolver 解析；分 4 stage 落地，~3 人天。
 
-**成本**：L —— 跨 schema / worker 协议 / 调度器三层，按 ADR-009 单独 sprint 推进。
+**当前进度（2026-04-27）**：
+- ✅ **Stage 1**：`db/migration/V72__add_workflow_node_run_output.sql` schema 迁移落地（output JSONB 列）；本地 PG 已 ALTER + flyway_schema_history 同步
+- ⏳ **Stage 2**：worker 上报 outputs Map（待）
+- ⏳ **Stage 3**：WorkflowParamResolver 实现 + 单测（待）
+- ⏳ **Stage 4**：集成到 DefaultSchedulePlanBuilder + E2E（待）
+
+**成本**：L —— Stage 2-4 跨 worker 协议 / orchestrator 核心调度，按 ADR-009 单独 sprint 推进。
 
 ---
 
@@ -87,19 +99,19 @@
 | V5-P2-7 | worker drain 生命周期（DRAINING → DECOMMISSIONED）| 5 IT 覆盖 |
 | V5-P2-8 | FIXED_WIDTH / XML 文件格式 | `ParseStepFixedWidthAndXmlTest` 4 IT（FIXED_WIDTH 3 字段 + header/footer + XML records envelope + XXE 防护）|
 
-#### 🟡 部分覆盖（3 条 — 主逻辑有 IT，专项验证缺）
+#### 🟡 部分覆盖 → ✅ 本批补完 2 / 3 条
 
-| 编号 | 场景 | 已有覆盖 | 缺什么 | 成本 |
-|---|---|---|---|---|
-| V5-P2-1 | 6 类非 SFTP dispatch 渠道（OSS / LOCAL / API / API_PUSH / EMAIL / NAS） | 6 个 ChannelAdapter 类 + `DispatchExternalChannelIntegrationTest` 3 @Test 涵盖主流 | 单 adapter 专项 IT（如 `SmtpEmailDispatchChannelAdapterTest`）| M（每 adapter 1-2h，6 个 ≈ 1d）|
-| V5-P2-3 | quota / fair-share 配额压测 | load-tests Gatling 3 个 simulation 就位 | 真跑配额打满压测记录拐点 | M（数据准备 + 跑 + 写报告）|
-| V5-P2-4 | compensation 独立验证 | `DefaultCompensationServiceTest` 单测；retry/dead-letter IT 隐含覆盖 | 专项 compensation E2E（rerun job / retry partition / replay file 6 类全跑）| S |
+| 编号 | 场景 | 状态 |
+|---|---|---|
+| V5-P2-3 | quota / fair-share 配额压测 | ✅ smoke 完成（详见 §一已完成表）；真打满压测留 P2-3-ext |
+| V5-P2-4 | compensation 独立验证 | ✅ 4/6 happy path 完成（PARTITION / STEP / DLQ / FILE）；JOB/BATCH 留 P2-4-ext |
+| ~~V5-P2-1~~ | ~~6 类非 SFTP dispatch 渠道单 adapter IT~~ | ❌ **本批不做**（业务接入对应渠道时再做） |
 
-#### ❌ 真未覆盖（1 条）
+#### ❌ 真未覆盖
 
-| 编号 | 场景 | 缺口 | 成本 | 何时做 |
-|---|---|---|---|---|
-| V5-P2-9 | Workflow PIPELINE / MIXED + GATEWAY / FILE_STEP 节点 | DagServiceTest 不含 GATEWAY；缺节点类型测试 | L | **依赖 V5-P1-1 DSL（ADR-009）落地**后 |
+| 编号 | 场景 | 状态 |
+|---|---|---|
+| ~~V5-P2-9~~ | ~~Workflow PIPELINE / MIXED + GATEWAY / FILE_STEP 节点~~ | ❌ **本批不做**（依赖 V5-P1-1 完整落地后再做）|
 
 ---
 
