@@ -1,7 +1,7 @@
 # Design Docs — 文档索引
 
 按章节切分的设计文档（沿用原 8000 行《批量调度系统设计说明》的章节号）。
-master 完整版已归档为 [`../archive/design/system-design-20260321-snapshot.md`](../archive/design/system-design-20260321-snapshot.md)
+master 完整版已归档为 [`../archive/design/system-design-2026-03-21.md`](../archive/design/system-design-2026-03-21.md)
 （仅作历史快照，不再维护；以下逐章节文件为权威）。
 
 ## 章节速查

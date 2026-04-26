@@ -81,5 +81,5 @@ mc ilm ls batch-mc/batch-error-output
 ## 相关
 
 - v3 分析报告：`docs/analysis/deep-issue-analysis-v3.md` R-4.6 条
-- 设计文档：`docs/design/批量调度系统设计说明.md` §9.11
-- 容量规划：`docs/design/scalability-ha-assessment.md`
+- 设计文档：`docs/archive/design/system-design-2026-03-21.md` §9.11
+- 容量规划：`docs/archive/architecture/scalability-ha-assessment-2026-03-26.md`
