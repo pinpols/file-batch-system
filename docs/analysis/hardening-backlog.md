@@ -13,10 +13,10 @@
 |---|:---:|:---:|:---:|:---:|
 | P0 立即止血 | 3 | 0 | 0 | 3 |
 | P1 结构性 | 4 | 1 | 0 | 5 |
-| P2 增量场景 | 0 | 0 | 9 | 9 |
+| P2 增量场景 | 3 | 4 | 2 | 9 |
 | P3 小瑕疵 | 4 | 0 | 0 | 4 |
 | **新发现（v5 新增）** | 2 | 0 | 0 | 2 |
-| **合计** | **13** | **1** | **9** | **23** |
+| **合计** | **16** | **5** | **2** | **23** |
 
 > **2026-04-26 第三轮校准**：V5-P1-3 / V5-NEW-1 / V5-NEW-2 经代码审视也已实际完成或不构成 bug：
 > - **V5-P1-3** EXPORT id 列校验：`SqlTemplateExportSpec:62-69` 已有早校验 + 友好错误（默认 cursorColumn=id + 用户 SQL 不含时抛 IllegalArgumentException 含完整修复指引）
@@ -24,6 +24,8 @@
 > - **V5-NEW-2** exp_settlement_csv_v1 模板源头：纳入 default-tenant 7 个 "system" 模板集合，业务无引用，不影响主链路；属"历史遗留 + 不影响"，不再追溯
 >
 > 剩余仅 V5-P1-1（Workflow DSL 串联，建议单独立项 ADR-009）+ 9 条 P2 验证型场景（按业务需求触发）。
+
+> **2026-04-26 第四轮校准（P2 9 条逐条核实）**：v4 标"全部未碰"过度悲观，重新分类为 ✅ 3 / 🟡 4 / ❌ 2。详见 §三。
 
 ---
 
@@ -70,35 +72,47 @@
 ## 三、❌ 待办（v5 新优先级）
 
 > **2026-04-26 第三轮校准后**：高优 / 新发现 共 4 条经代码审视已全部完成或不构成 bug，悉数移至上方"已完成"章节。
-> 当前 ❌ 待办 = 仅 P2 9 条（验证型，按业务需求触发）。
+>
+> **2026-04-26 第四轮校准（P2 9 条逐条核实）**：原 v4 标"全部未碰"过度悲观——3 条已完整 IT 覆盖、4 条部分覆盖（主体逻辑测了，专项验证缺）、2 条真未覆盖。重新分类如下。
 
-### 🟢 P2 增量场景覆盖（验证型，9 条原样保留）
+### 🟢 P2 增量场景覆盖
 
-按业务需求优先级取，**不依赖任何前置项**（除 P2-9 等 P1-1）。
+#### ✅ 已完整 IT 覆盖（3 条 — 移到本节但保留 P2 编号）
 
-| 编号 | 场景 | 成本 | 何时做 |
-|---|---|---|---|
-| V5-P2-1 | 6 类非 SFTP dispatch 渠道（OSS / LOCAL / API / API_PUSH / EMAIL / NAS） | M | 业务接入对应渠道时 |
-| V5-P2-2 | 业务日历门禁验证 | S | calendar 真用上时 |
-| V5-P2-3 | quota / fair-share 配额压测 | M | 接近 quota 上限时 |
-| V5-P2-4 | compensation 独立验证 | S | 单独 sprint |
-| V5-P2-5 | 文件 archive / redispatch 控制端点 | S | 运维要清旧数据时 |
-| V5-P2-6 | drain enable/disable | XS | 测试时顺手 |
-| V5-P2-7 | worker drain 生命周期 (DRAINING → DECOMMISSIONED) | S | 同上 |
-| V5-P2-8 | FIXED_WIDTH / XML 文件格式 | M | 业务接入对应格式时 |
-| V5-P2-9 | Workflow PIPELINE / MIXED + GATEWAY / FILE_STEP 节点 | L | **依赖 V5-P1-1 DSL 完成**后 |
+| 编号 | 场景 | 实际覆盖 |
+|---|---|---|
+| V5-P2-5 | 文件 archive / redispatch 控制端点 | `FileGovernanceIntegrationTest`（archive + reconcile + arrival 全套）|
+| V5-P2-6 | drain enable/disable | `OrchestratorDrainControllerTest` 测 GET status + POST enable + POST disable |
+| V5-P2-7 | worker drain 生命周期（DRAINING → DECOMMISSIONED）| 5 IT 覆盖：WorkerControllerTest / DefaultWorkerLifecycleManagerTest / WorkerRegistryIntegrationTest / DefaultWorkerDrainGovernanceServiceTest / WorkerDrainTimeoutSchedulerTest |
+
+#### 🟡 部分覆盖（4 条 — 主逻辑有 IT，专项验证缺）
+
+| 编号 | 场景 | 已有覆盖 | 缺什么 | 成本 |
+|---|---|---|---|---|
+| V5-P2-1 | 6 类非 SFTP dispatch 渠道（OSS / LOCAL / API / API_PUSH / EMAIL / NAS） | 6 个 ChannelAdapter 类 + `DispatchExternalChannelIntegrationTest` 3 @Test 涵盖主流；NAS×2、EMAIL×2、HTTP×1、API_PUSH×1、OSS×3、LOCAL×6、SFTP×3 测试文件引用 | 单 adapter 专项 IT（如 `SmtpEmailDispatchChannelAdapterTest`）| M（每 adapter 1-2h）|
+| V5-P2-2 | 业务日历门禁验证 | 3 IT（OrchestratorConfigCacheServiceIT / StartupSelfCheckIT / BatchDaySqlMigrationsIT）测加载 + 缓存 + migration | "日历不允许时挂起任务"门禁逻辑专项 E2E | S |
+| V5-P2-3 | quota / fair-share 配额压测 | load-tests 模块就位（JobLaunchSimulation / CapacityBaselineSimulation / ConsoleQuerySimulation）+ 单测覆盖 quota mapper | **未真跑配额打满压测**记录拐点 | M（Gatling + 数据准备） |
+| V5-P2-4 | compensation 独立验证 | `DefaultCompensationServiceTest` 单测；retry/dead-letter IT 隐含覆盖 | 专项 compensation E2E（rerun job / retry partition / replay file 6 类全跑）| S |
+
+#### ❌ 真未覆盖（2 条）
+
+| 编号 | 场景 | 缺口 | 成本 | 何时做 |
+|---|---|---|---|---|
+| V5-P2-8 | FIXED_WIDTH / XML 文件格式 | `worker-import/test/.../stage/format` 目录无 parser 测试；只跑过 CSV + JSON | M（写 2 套 parser IT + sample data） | 业务接入对应格式时 |
+| V5-P2-9 | Workflow PIPELINE / MIXED + GATEWAY / FILE_STEP 节点 | DagServiceTest 不含 GATEWAY；缺节点类型测试 | L | **依赖 V5-P1-1 DSL 完成**后 |
 
 ---
 
 ## 推荐 v5 执行顺序
 
-| 批次 | 内容 | 估时 | 收益 |
-|---|---|---|---|
-| **批次 1**（XS-S 快赢）| V5-P3-3 一次性 SQL 清 1224 失败实例 + V5-P3-4 写 DeadLetterArchiveScheduler | 半天 | 主表瘦身，UI 不被历史噪声干扰 |
-| **批次 2**（业务体验）| V5-P1-3 EXPORT id 校验友好错误 + V5-P1-5 DISPATCH non-retryable 标注 | 半天 | 用户配置体验改善 |
-| **批次 3**（结构性）| V5-NEW-1 workflow steps 协议错位 + V5-NEW-2 模板源头追踪 | 1 天 | 防 workflow 异常 |
-| **批次 4**（架构改造）| **V5-P1-1 DSL 串联**（单独立项）| 2-3 天 | 解锁 V5-P2-9 完整 workflow |
-| **批次 5+**（按需）| V5-P2-1 ~ V5-P2-9 验证场景 | 每条 0.5-2 天 | 业务接入 / 上量前 |
+| 批次 | 内容 | 估时 | 收益 | 状态 |
+|---|---|---|---|---|
+| 批次 1（数据 + 调度器）| V5-P3-3 数据清 + 调度器扩展终态 | 半天 | 主表瘦身 | ✅ 已完成 |
+| 批次 2（业务体验）| V5-P1-3 EXPORT id 校验 + V5-P1-5 non-retryable | 半天 | 用户体验 | ✅ 已完成（实际之前就做了） |
+| 批次 3（结构性）| V5-NEW-1 / V5-NEW-2 | 1 天 | 防 workflow 异常 | ✅ 已完成（实际不构成 bug） |
+| 批次 4（P2 验证型）| V5-P2-2 日历门禁 E2E + V5-P2-3 quota 压测 + V5-P2-4 compensation 专项 + V5-P2-1 单 adapter IT | 2-3 天 | P2 部分覆盖项补完 | 🟡 4 项 |
+| 批次 5（架构改造）| **V5-P1-1 DSL 串联**（单独立项 ADR-009）| 2-3 天 | 解锁 P2-9 完整 workflow | 🟡 待立项 |
+| 批次 6（业务驱动）| V5-P2-8 FIXED_WIDTH/XML（业务接入新格式时）+ V5-P2-9（依赖批次 5）| 按需 | 业务接入 | ❌ 等触发 |
 
 ---
 
