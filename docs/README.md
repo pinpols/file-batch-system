@@ -22,7 +22,8 @@
 | 04 | [runbook/](./runbook/README.md) | 运维 SOP（应急 / 部署 / 容量 / 灰度 / 观测）| `incident-response.md` + `feature-switches.md` |
 | 05 | [testing/](./testing/README.md) | 测试计划 / 覆盖矩阵 / release-gate | `full-project-test-plan.md` |
 | 06 | [analysis/](./analysis/README.md) | 演进向：问题 / 修复 / 加固 v4 三件套 | `deep-issue-analysis.md` |
-| 07 | [compliance/](./compliance/README.md) | 第三方依赖许可 + SBOM | `THIRD-PARTY-LICENSES.md` |
+| 07 | [dict/](./dict/README.md) | **Reference dict**（错误码 / 配置键，自动生成）| `error-codes.md` + `config-keys.md` |
+| 08 | [compliance/](./compliance/README.md) | 第三方依赖许可 + SBOM | `THIRD-PARTY-LICENSES.md` |
 | — | [archive/](./archive/README.md) | 历史快照（**不再维护**） | 仅审计参考 |
 | — | [test-data/](./test-data/test-full-coverage-import-suite/README.md) | 测试数据（Excel 配置包）| E2E 准备 |
 

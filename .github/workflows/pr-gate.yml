@@ -200,6 +200,10 @@ jobs:
         shell: bash
         run: bash scripts/ci/security-scan.sh --skip-build -- --mode=secret
 
+      - name: Verify generated dicts in sync
+        shell: bash
+        run: python3 scripts/codegen/gen-error-codes-dict.py --check
+
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@v4
