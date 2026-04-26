@@ -11,6 +11,10 @@ target/security-scan-report/
 .idea/
 *.iml
 .vscode/
+.project
+.classpath
+.factorypath
+.settings/
 *.log
 *.tmp
 *.swp
