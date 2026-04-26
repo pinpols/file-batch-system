@@ -21,6 +21,11 @@ spring:
       max-poll-records: ${BATCH_WORKER_DISPATCH_KAFKA_MAX_POLL_RECORDS:10}
       fetch-min-size: ${BATCH_WORKER_DISPATCH_KAFKA_FETCH_MIN_SIZE:1}
       fetch-max-wait: ${BATCH_WORKER_DISPATCH_KAFKA_FETCH_MAX_WAIT:500}
+      # PATTERN/REGEX topic 订阅须等 metadata 刷新才能发现新 topic。Kafka 客户端默认 5min，
+      # WorkerProcessRestartRecoveryE2eIT 测试 await=5min subprocess Worker 5min 才发现新 topic 已超时。
+      # 注意：KafkaConsumerConfiguration 的 @Value 默认 30s 在 subprocess 不生效（Spring Boot
+      # 的 KafkaProperties auto-binding 优先于 @Value），必须经 spring.kafka.consumer.* 显式覆盖。
+      metadata-max-age-ms: ${BATCH_WORKER_DISPATCH_KAFKA_METADATA_MAX_AGE_MS:30000}
   datasource:
     hikari:
       # dispatch worker platform pool（dispatch 无 business DB，platform DB 是唯一 JDBC 连接池）
