@@ -12,13 +12,18 @@
 | 优先级 | 已完成 | 部分完成 | 待办 | 合计 |
 |---|:---:|:---:|:---:|:---:|
 | P0 立即止血 | 3 | 0 | 0 | 3 |
-| P1 结构性 | 3 | 1 | 1 | 5 |
+| P1 结构性 | 4 | 1 | 0 | 5 |
 | P2 增量场景 | 0 | 0 | 9 | 9 |
 | P3 小瑕疵 | 4 | 0 | 0 | 4 |
-| **新发现（v5 新增）** | — | — | **2** | 2 |
-| **合计** | **10** | **1** | **12** | **23** |
+| **新发现（v5 新增）** | 2 | 0 | 0 | 2 |
+| **合计** | **13** | **1** | **9** | **23** |
 
-> **2026-04-26 第二轮校准**：P1-5 经代码审视已完成（`DefaultRetryGovernanceService:66` 的 `NON_RETRYABLE_ERROR_CODES` set 已含 7 条，包括 `DISPATCH_PREPARE_FILE_MISSING / FILE_NOT_FOUND / CHANNEL_NOT_FOUND / INVALID / PARSE_FAILED + EXPORT_GENERATE_NO_PAYLOAD + STEP_NOT_FOUND`）；P3-3/P3-4 数据清理执行完成（FAILED 1222→0，CANCELLED 24→0，dead_letter NEW 1242→8），并扩展 SuccessInstanceArchiveScheduler SQL 状态集覆盖所有终态。剩余 V5-P1-1（DSL 串联）单独立项。
+> **2026-04-26 第三轮校准**：V5-P1-3 / V5-NEW-1 / V5-NEW-2 经代码审视也已实际完成或不构成 bug：
+> - **V5-P1-3** EXPORT id 列校验：`SqlTemplateExportSpec:62-69` 已有早校验 + 友好错误（默认 cursorColumn=id + 用户 SQL 不含时抛 IllegalArgumentException 含完整修复指引）
+> - **V5-NEW-1** workflow steps 协议错位：worker 代码不读 task_payload.steps（grep 全是局部变量），orchestrator 也不塞；4-24 commit 3dbb6d22 修了 resolveJobCode + node_params 后未复现
+> - **V5-NEW-2** exp_settlement_csv_v1 模板源头：纳入 default-tenant 7 个 "system" 模板集合，业务无引用，不影响主链路；属"历史遗留 + 不影响"，不再追溯
+>
+> 剩余仅 V5-P1-1（Workflow DSL 串联，建议单独立项 ADR-009）+ 9 条 P2 验证型场景（按业务需求触发）。
 
 ---
 
@@ -36,6 +41,9 @@
 | V4-P3-2 | biz.transaction 索引 | 2026-04-22 | 现有 3 索引（pkey + account + tenant_date + unique txn_no） |
 | V4-P3-3 | 失败实例堆积 | 2026-04-26 | SQL 状态集扩展含 FAILED/CANCELLED/TERMINATED；一次性脚本清 1222 FAILED + 24 CANCELLED；下次 30 天 retention 后自动归档 |
 | V4-P3-4 | dead_letter NEW 堆积 | 2026-04-26 | cleanup-historical-failures.sql 顺手清 1242 NEW → 8；FK 顺序修正（先删 event_delivery_log 再删 outbox_event）|
+| V5-P1-3 | EXPORT 强制 id 列友好错误 | 已完成 | `SqlTemplateExportSpec:62-69` 早校验 + 友好错误（默认 cursorColumn=id + 缺失时抛 IllegalArgumentException 含完整修复指引）|
+| V5-NEW-1 | workflow steps 协议错位 | 不构成 bug | worker 代码不读 task_payload.steps；4-24 commit 3dbb6d22 修了 resolveJobCode + node_params 后未复现 |
+| V5-NEW-2 | exp_settlement_csv_v1 模板源头 | 关闭（不追溯）| default-tenant 7 个 "system" 模板之一，业务无引用，不影响主链路；归类"历史遗留 + 不影响" |
 
 ---
 
@@ -61,53 +69,8 @@
 
 ## 三、❌ 待办（v5 新优先级）
 
-### 🔴 高（影响业务 / 噪音）
-
-#### V5-P1-3 · EXPORT sql_template 强制 id 列（未做）
-
-**现象**：用户 default_query_sql 没 `SELECT id, ...` → `bad SQL grammar` 不友好错误
-
-**修法**：
-- 显式检查 query 含 `id` 列，缺失报 `EXPORT_QUERY_MISSING_ID` 友好错误
-- 或 template 声明 `orderBy` 列替代硬编码 id
-- 或复合主键 fallback（ctid）
-
-**文件**：worker-export 包装层 SQL 代码（待精确定位）
-
-**成本**：S（<4h）
-
----
-
-#### ~~V5-P3-4 · dead_letter_task 堆积~~（✅ 2026-04-26 顺手清理完成）
-
-`cleanup-historical-failures.sql` 已在执行 P3-3 时一并清理 dead_letter NEW（1242 → 8）。
-长期归档机制（DeadLetterArchiveScheduler + 冷表）尚未做，但量级已不紧迫，移到 P2 改造视野。
-
----
-
-### 🟡 新发现（v4 备忘录提到）
-
-#### V5-NEW-1 · workflow defaultParams `steps` 被 worker 误解析
-
-**现象**（v4 line 24）：workflow SETTLE 节点被 EXPORT worker 认领，worker step registry 报 `STEP_NOT_FOUND: DISPATCH_PREPARE` —— EXPORT worker 把 payload 里 `steps: ["settle","export","dispatch"]`（workflow defaultParams）当步骤执行链
-
-**根因**：Workflow ↔ worker-side step executor 协议错位
-
-**修法**：worker 侧识别 workflow defaultParams 不是 pipeline steps；或 orchestrator 派发时过滤掉 workflow-level params
-
-**成本**：S（协议层 + worker 守护）
-
----
-
-#### V5-NEW-2 · `default-tenant/exp_settlement_csv_v1` 模板源头未定位
-
-**v4 备忘**：该模板 live DB created_by='system'，应来自租户初始化服务/Console 上传，但源头不明
-
-**待办**：trace 上传路径，要么写文档归类，要么补 seed
-
-**成本**：S
-
----
+> **2026-04-26 第三轮校准后**：高优 / 新发现 共 4 条经代码审视已全部完成或不构成 bug，悉数移至上方"已完成"章节。
+> 当前 ❌ 待办 = 仅 P2 9 条（验证型，按业务需求触发）。
 
 ### 🟢 P2 增量场景覆盖（验证型，9 条原样保留）
 
