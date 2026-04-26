@@ -6,17 +6,9 @@
 
 ---
 
-## 0. ⚠️ 默认值叙述矛盾（先读这条）
-
-`docs/architecture/rework-classification.md` 第 81 行写
-
-> Phase 2 落地策略统一为 opt-in scaffolding：所有开关默认关闭（enabled=false / mode=SINGLE），与历史行为一致
-
-但 **`application.yml` 实际 fallback 多数已是"开启"**。代码注释（如 orchestrator `application.yml` 第 78 行 `WorkerSelector Redis 缓存（默认开启；fail-open 已就位）`）说明这是**有意的设计变更**——scaffolding 验证完毕后默认放开，因 fail-open 兜底已就位。
-
-**本文档以代码 + yml 为权威**，与 rework-classification.md 第 81 行不符时以本文档为准。rework-classification.md 第 81 行待下次结构性 review 时修订。
-
-> 优先级规则：**显式环境变量 > docker-compose `:-` 兜底 > application.yml `${VAR:fallback}` > Java 字段默认**。Java 字段默认（`@Data` 字段初始化值）只在 application.yml 完全没声明该 key 时生效，是兜底中的兜底。
+> **配置优先级**：显式环境变量 > docker-compose `:-` 兜底 > application.yml `${VAR:fallback}` > Java 字段默认（`@Data` 字段初始化值，兜底中的兜底）。
+>
+> **本文档以代码 + yml 为权威**。`rework-classification.md` Phase 2 表格用作交叉对照（已于 2026-04-25 与本文档对齐）。
 
 ---
 
