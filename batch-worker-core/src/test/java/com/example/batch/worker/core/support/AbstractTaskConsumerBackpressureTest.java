@@ -140,7 +140,8 @@ class AbstractTaskConsumerBackpressureTest {
               ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg);
             });
 
-    assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+    // 全 reactor 跑时 JVM 忙，2s pool thread 启动可能不够；放宽到 10s 防 timing flake
+    assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
 
     // 第二次调用应触发 pause 并立即返回（无可用 permit）
     when(container.isPauseRequested()).thenReturn(false).thenReturn(true);
