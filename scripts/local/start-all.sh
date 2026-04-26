@@ -265,26 +265,42 @@ wait_orchestrator_healthy() {
 
 
 
-echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis）..."
-docker compose --env-file "$COMPOSE_ENV_FILE" up -d
+# console-api 读写分离开关需要 postgres-replica 容器（docker-compose 用 profile=replica
+# 控制是否启动）。这里读取 BATCH_CONSOLE_READ_REPLICA_ENABLED 决定要不要带 --profile replica：
+# - true（默认）→ 起 postgres-replica，console-api 启用读路由
+# - false       → 不起 replica，console-api 走单库
+COMPOSE_PROFILES=()
+if [[ "${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}" == "true" ]]; then
+  COMPOSE_PROFILES+=(--profile replica)
+  echo "==> read-replica 已启用 → 同时启动 postgres-replica（流复制 hot standby）"
+else
+  echo "==> read-replica 已显式关闭 → 跳过 postgres-replica 容器"
+fi
+
+echo "==> Docker Compose 启动基础依赖（postgres / kafka / minio / redis${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
+docker compose --env-file "$COMPOSE_ENV_FILE" "${COMPOSE_PROFILES[@]}" up -d
 
 # postgres / minio / redis / kafka-topics 相互无依赖，并发 wait 节省 5-10s
 # minio-init 依赖 minio，仍需串行于 minio healthy 之后
-echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics）..."
+echo "==> 并发等待基础服务就绪（postgres / minio / redis / kafka-topics${BATCH_CONSOLE_READ_REPLICA_ENABLED:+ / postgres-replica}）..."
 wait_postgres & _pid_pg=$!
 wait_container_healthy batch-minio "MinIO" & _pid_minio=$!
 wait_container_healthy batch-redis "Redis" & _pid_redis=$!
 wait_kafka_topics_ready & _pid_kafka=$!
+_pid_replica=
+if [[ "${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}" == "true" ]]; then
+  wait_container_healthy batch-postgres-replica "PG Replica" & _pid_replica=$!
+fi
 
 _basic_failed=0
-for _pid in "$_pid_pg" "$_pid_minio" "$_pid_redis" "$_pid_kafka"; do
+for _pid in "$_pid_pg" "$_pid_minio" "$_pid_redis" "$_pid_kafka" ${_pid_replica:+"$_pid_replica"}; do
   if ! wait "$_pid"; then _basic_failed=1; fi
 done
 if (( _basic_failed == 1 )); then
   echo "ERROR: 部分基础服务等待失败，见上方日志" >&2
   exit 1
 fi
-unset _pid_pg _pid_minio _pid_redis _pid_kafka _basic_failed _pid
+unset _pid_pg _pid_minio _pid_redis _pid_kafka _pid_replica _basic_failed _pid
 
 wait_container_exited_zero batch-minio-init "MinIO bucket init"
 
