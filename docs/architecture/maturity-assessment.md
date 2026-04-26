@@ -206,7 +206,7 @@
 - ✅ **read-replica**（2026-04-26）：`ReadReplicaWiringIntegrationTest` + `ReadReplicaHappyPathIntegrationTest` 两类各跑 prod 默认 + 故障路径
 - ✅ **worker-cache**（2026-04-26）：`application-test.yml` 改 `worker-cache.enabled=true` + `ttl-millis=100`（cache 装配 + Redis 通讯 + JSON 序列化路径全部跑 IT，但 ttl 极短规避动态创建 worker 的时序问题）。23 个相关测试全过
 - ✅ **mq-routing.mode**（2026-04-26）：删 `application-test.yml` 的 `mq.routing.mode: SINGLE`，让 IT 走 prod 默认 TENANT 模式；`OutboxPublishIntegrationTest` + `OutboxEventToKafkaDispatchIntegrationTest` 5 个测试改 subscribe + assert 期望 `base + ".t1"` 后缀 topic；7 个 Kafka 相关测试全过（含 `JobTypeOutboxChainIntegrationTest` / `KafkaOutboxPublisherTest`）
-- ⏸️ **jacoco minCoverage 门控**：pr-gate 加阈值（待办）
+- ✅ **jacoco minCoverage 门控**（2026-04-26）：pom.xml jacoco 阈值降到 25% 起步（实测 trigger 44% / orchestrator 30% / console-api 全跑约 30-40%），CI 脚本 `scripts/ci/run-full-regression.sh` 删 `|| true` 让 `jacoco:check@check` 真正阻断 CI；调用语法用 `@check` execution id（裸 `jacoco:check` 走 default-cli 拿不到 pom 配的 rules）。逐步提升节奏：6 个月内到 40% / 1 年内到 60%
 
 ### P1：PMD 基线 299 条 violation 设清零截止时间
 
