@@ -55,10 +55,9 @@ batch:
   job-instance:
     archive:
       enabled: false
-  # P2-5: 测试锁定 SINGLE 模式（IT 期望的 Kafka topic 是 base topic，无 tenant 后缀）
-  mq:
-    routing:
-      mode: SINGLE
+  # P2-5 收敛 (2026-04-26 maturity-assessment §6 #1): mq.routing.mode 不再覆盖默认 TENANT。
+  # 配套：OutboxPublishIntegrationTest / OutboxEventToKafkaDispatchIntegrationTest 已改 subscribe + assert
+  # 期望 base + ".t1" 后缀 topic（producer 走 BatchTopicResolver TENANT 模式）。
   retry:
     # 拉长轮询周期，避免测试时频繁跑后台任务
     poll-interval-millis: 600000

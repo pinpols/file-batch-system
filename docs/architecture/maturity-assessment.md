@@ -205,8 +205,8 @@
 **进展**：
 - ✅ **read-replica**（2026-04-26）：`ReadReplicaWiringIntegrationTest` + `ReadReplicaHappyPathIntegrationTest` 两类各跑 prod 默认 + 故障路径
 - ✅ **worker-cache**（2026-04-26）：`application-test.yml` 改 `worker-cache.enabled=true` + `ttl-millis=100`（cache 装配 + Redis 通讯 + JSON 序列化路径全部跑 IT，但 ttl 极短规避动态创建 worker 的时序问题）。23 个相关测试全过
-- ⏸️ **mq-routing.mode**：当前 `application-test.yml` 仍设 `mq.routing.mode: SINGLE`。改造涉及至少 `OutboxEventToKafkaDispatchIntegrationTest` 等多个 IT 把 `KafkaConsumer.subscribe(BatchTopics.TASK_DISPATCH_IMPORT)` 改成 pattern 匹配 base + `.tenant.*` 后缀；工作量较大需单独立项
-- ⏸️ **jacoco minCoverage 门控**：pr-gate 加 60% 阈值（待办）
+- ✅ **mq-routing.mode**（2026-04-26）：删 `application-test.yml` 的 `mq.routing.mode: SINGLE`，让 IT 走 prod 默认 TENANT 模式；`OutboxPublishIntegrationTest` + `OutboxEventToKafkaDispatchIntegrationTest` 5 个测试改 subscribe + assert 期望 `base + ".t1"` 后缀 topic；7 个 Kafka 相关测试全过（含 `JobTypeOutboxChainIntegrationTest` / `KafkaOutboxPublisherTest`）
+- ⏸️ **jacoco minCoverage 门控**：pr-gate 加阈值（待办）
 
 ### P1：PMD 基线 299 条 violation 设清零截止时间
 
