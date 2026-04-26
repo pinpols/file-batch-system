@@ -13,10 +13,12 @@
 |---|:---:|:---:|:---:|:---:|
 | P0 立即止血 | 3 | 0 | 0 | 3 |
 | P1 结构性 | 4 | 1 | 0 | 5 |
-| P2 增量场景 | 3 | 4 | 2 | 9 |
+| P2 增量场景 | 5 | 3 | 1 | 9 |
 | P3 小瑕疵 | 4 | 0 | 0 | 4 |
 | **新发现（v5 新增）** | 2 | 0 | 0 | 2 |
-| **合计** | **16** | **5** | **2** | **23** |
+| **合计** | **18** | **4** | **1** | **23** |
+
+> **2026-04-26 第五轮 — P2-2 / P2-8 补 IT 完成**：写了 `BatchWindowGateTest`（4 IT，覆盖 in-window / WAIT / FAIL / 无 windowCode 4 分支）+ `ParseStepFixedWidthAndXmlTest`（4 IT，覆盖 FIXED_WIDTH 3 字段 + header/footer 跳过 + XML records envelope + XXE 防护）。剩余 P1-1 出 ADR-009 设计提案（待立项 ~3 人天）。
 
 > **2026-04-26 第三轮校准**：V5-P1-3 / V5-NEW-1 / V5-NEW-2 经代码审视也已实际完成或不构成 bug：
 > - **V5-P1-3** EXPORT id 列校验：`SqlTemplateExportSpec:62-69` 已有早校验 + 友好错误（默认 cursorColumn=id + 用户 SQL 不含时抛 IllegalArgumentException 含完整修复指引）
@@ -46,6 +48,8 @@
 | V5-P1-3 | EXPORT 强制 id 列友好错误 | 已完成 | `SqlTemplateExportSpec:62-69` 早校验 + 友好错误（默认 cursorColumn=id + 缺失时抛 IllegalArgumentException 含完整修复指引）|
 | V5-NEW-1 | workflow steps 协议错位 | 不构成 bug | worker 代码不读 task_payload.steps；4-24 commit 3dbb6d22 修了 resolveJobCode + node_params 后未复现 |
 | V5-NEW-2 | exp_settlement_csv_v1 模板源头 | 关闭（不追溯）| default-tenant 7 个 "system" 模板之一，业务无引用，不影响主链路；归类"历史遗留 + 不影响" |
+| V5-P2-2 | 业务日历门禁 E2E | 2026-04-26 | `BatchWindowGateTest` 4 IT（in-window / WAIT / FAIL / 无 windowCode 4 分支）|
+| V5-P2-8 | FIXED_WIDTH / XML parser IT | 2026-04-26 | `ParseStepFixedWidthAndXmlTest` 4 IT（FIXED_WIDTH 3 字段 + header/footer 跳过 + XML records envelope + XXE 防护）|
 
 ---
 
@@ -59,13 +63,9 @@
 
 **仍缺**：上游节点 output → 下游节点 param 的 DSL 映射（如 SETTLE 生成的 fileId 自动塞进 DISPATCH partition）
 
-**修法建议**：
-- 设计 JSONPath-like DSL（`node_params.dispatch.fileId = "$.nodes.SETTLE.output.fileId"`）
-- 或 `workflow_node_run` 记录 output schema，下游派发时读上游
+**ADR 已立项**：[ADR-009 Workflow 节点间参数串联 DSL](../architecture/adr/ADR-009-workflow-param-dsl.md) （2026-04-26 Proposed）—— JSONPath-like DSL + worker 上报 outputs + WorkflowParamResolver 解析；分 4 stage 落地，~3 人天。
 
-**成本**：L（<3d）—— 涉及 orchestrator 调度核心，建议**单独立项**（不在 v5 闭环范围）
-
-**单独立项原因**：DSL 设计影响 schema、调度器、worker 协议三层；需要先写设计文档（如 ADR-009）讨论 DSL 语法 + 上游 output 捕获机制 + 下游 param 解析时机，再分阶段实施。一次会话内强行做完会留架构债。
+**成本**：L —— 跨 schema / worker 协议 / 调度器三层，按 ADR-009 单独 sprint 推进。
 
 ---
 
@@ -77,29 +77,29 @@
 
 ### 🟢 P2 增量场景覆盖
 
-#### ✅ 已完整 IT 覆盖（3 条 — 移到本节但保留 P2 编号）
+#### ✅ 已完整 IT 覆盖（5 条 — 移到本节但保留 P2 编号）
 
 | 编号 | 场景 | 实际覆盖 |
 |---|---|---|
+| V5-P2-2 | 业务日历门禁验证 | `BatchWindowGateTest` 4 IT（in-window allow / out-of-window WAIT / out-of-window FAIL / 无 windowCode 跳过）|
 | V5-P2-5 | 文件 archive / redispatch 控制端点 | `FileGovernanceIntegrationTest`（archive + reconcile + arrival 全套）|
 | V5-P2-6 | drain enable/disable | `OrchestratorDrainControllerTest` 测 GET status + POST enable + POST disable |
-| V5-P2-7 | worker drain 生命周期（DRAINING → DECOMMISSIONED）| 5 IT 覆盖：WorkerControllerTest / DefaultWorkerLifecycleManagerTest / WorkerRegistryIntegrationTest / DefaultWorkerDrainGovernanceServiceTest / WorkerDrainTimeoutSchedulerTest |
+| V5-P2-7 | worker drain 生命周期（DRAINING → DECOMMISSIONED）| 5 IT 覆盖 |
+| V5-P2-8 | FIXED_WIDTH / XML 文件格式 | `ParseStepFixedWidthAndXmlTest` 4 IT（FIXED_WIDTH 3 字段 + header/footer + XML records envelope + XXE 防护）|
 
-#### 🟡 部分覆盖（4 条 — 主逻辑有 IT，专项验证缺）
+#### 🟡 部分覆盖（3 条 — 主逻辑有 IT，专项验证缺）
 
 | 编号 | 场景 | 已有覆盖 | 缺什么 | 成本 |
 |---|---|---|---|---|
-| V5-P2-1 | 6 类非 SFTP dispatch 渠道（OSS / LOCAL / API / API_PUSH / EMAIL / NAS） | 6 个 ChannelAdapter 类 + `DispatchExternalChannelIntegrationTest` 3 @Test 涵盖主流；NAS×2、EMAIL×2、HTTP×1、API_PUSH×1、OSS×3、LOCAL×6、SFTP×3 测试文件引用 | 单 adapter 专项 IT（如 `SmtpEmailDispatchChannelAdapterTest`）| M（每 adapter 1-2h）|
-| V5-P2-2 | 业务日历门禁验证 | 3 IT（OrchestratorConfigCacheServiceIT / StartupSelfCheckIT / BatchDaySqlMigrationsIT）测加载 + 缓存 + migration | "日历不允许时挂起任务"门禁逻辑专项 E2E | S |
-| V5-P2-3 | quota / fair-share 配额压测 | load-tests 模块就位（JobLaunchSimulation / CapacityBaselineSimulation / ConsoleQuerySimulation）+ 单测覆盖 quota mapper | **未真跑配额打满压测**记录拐点 | M（Gatling + 数据准备） |
+| V5-P2-1 | 6 类非 SFTP dispatch 渠道（OSS / LOCAL / API / API_PUSH / EMAIL / NAS） | 6 个 ChannelAdapter 类 + `DispatchExternalChannelIntegrationTest` 3 @Test 涵盖主流 | 单 adapter 专项 IT（如 `SmtpEmailDispatchChannelAdapterTest`）| M（每 adapter 1-2h，6 个 ≈ 1d）|
+| V5-P2-3 | quota / fair-share 配额压测 | load-tests Gatling 3 个 simulation 就位 | 真跑配额打满压测记录拐点 | M（数据准备 + 跑 + 写报告）|
 | V5-P2-4 | compensation 独立验证 | `DefaultCompensationServiceTest` 单测；retry/dead-letter IT 隐含覆盖 | 专项 compensation E2E（rerun job / retry partition / replay file 6 类全跑）| S |
 
-#### ❌ 真未覆盖（2 条）
+#### ❌ 真未覆盖（1 条）
 
 | 编号 | 场景 | 缺口 | 成本 | 何时做 |
 |---|---|---|---|---|
-| V5-P2-8 | FIXED_WIDTH / XML 文件格式 | `worker-import/test/.../stage/format` 目录无 parser 测试；只跑过 CSV + JSON | M（写 2 套 parser IT + sample data） | 业务接入对应格式时 |
-| V5-P2-9 | Workflow PIPELINE / MIXED + GATEWAY / FILE_STEP 节点 | DagServiceTest 不含 GATEWAY；缺节点类型测试 | L | **依赖 V5-P1-1 DSL 完成**后 |
+| V5-P2-9 | Workflow PIPELINE / MIXED + GATEWAY / FILE_STEP 节点 | DagServiceTest 不含 GATEWAY；缺节点类型测试 | L | **依赖 V5-P1-1 DSL（ADR-009）落地**后 |
 
 ---
 
