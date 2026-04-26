@@ -12,6 +12,7 @@ import com.example.batch.trigger.mapper.TriggerRuntimeStateMapper;
 import com.example.batch.trigger.wheel.HashedWheelTriggerScheduler;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -151,7 +152,7 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
     preempt.setRequestId("preempt-" + System.nanoTime());
     preempt.setTriggerType("SCHEDULED");
     preempt.setJobCode(jobCode);
-    preempt.setBizDate(java.time.LocalDate.now());
+    preempt.setBizDate(LocalDate.now());
     preempt.setDedupKey(preemptDedupKey);
     preempt.setRequestStatus("ACCEPTED");
     requestMapper.insert(preempt);

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +41,7 @@ class CatchUpThrottleTest {
     }
 
     @Override
-    public Clock withZone(java.time.ZoneId zone) {
+    public Clock withZone(ZoneId zone) {
       throw new UnsupportedOperationException();
     }
 
