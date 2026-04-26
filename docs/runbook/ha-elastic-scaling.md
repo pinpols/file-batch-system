@@ -86,10 +86,12 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 ## 部署前 checklist（**必做**）
 
 ### 1. Redis 必须高可用 ⚠️
-所有协调机制（ShedLock / 限流 / 配额 / 配置 cache / SSE replay）都靠 Redis。**单点 Redis 挂 = 整集群 HA 失效**。生产用：
+**多数**协调机制（orchestrator `ShedLock` / 限流 / 配额 / 配置 cache / SSE replay）靠 Redis；**单点 Redis 挂 ≈ orchestrator 集群 HA 失效**。生产用：
 - AWS ElastiCache cluster mode
 - 自建 Sentinel（≥3 节点）
 - 自建 Redis Cluster（≥6 节点）
+
+> **trigger 不依赖 Redis 锁**：trigger 模块的协调走 PG —— Quartz JobStore 用 `QRTZ_LOCKS`（`SELECT ... FOR UPDATE`），8 处辅助调度（reconciler / forward-retry / cutoff / wheel.* 等）用 ShedLock JDBC（`batch.shedlock` 表）。Redis 故障**不影响** trigger 的集群协调；但会让 orchestrator 的 ShedLock 阻塞 / 退化（archive 调度器在 Redis 恢复前不会 acquire 锁，但因 `lockAtMostFor` 过期机制不会卡死）。
 
 ### 2. Helm chart `terminationGracePeriodSeconds` ✅（已落地）
 `_helpers.tpl` 提供 `gracefulShutdownPod` / `gracefulShutdownLifecycle` helper，
@@ -155,7 +157,9 @@ curl http://console-api/api/console/queries/job-instances?tenantId=t1
 
 ## 相关文件
 
-- `batch-orchestrator/.../config/ShedLockConfiguration.java` — `RedisShedLockProvider`
+- `batch-orchestrator/.../config/ShedLockConfiguration.java` — `RedisShedLockProvider`（orchestrator 用 Redis）
+- `batch-trigger/.../config/ShedLockConfiguration.java` — `JdbcTemplateLockProvider`（trigger 用 PG `batch.shedlock` 表）
+- `batch-common/.../config/ShedLockProviderFactory.java` — JDBC ShedLock 工厂（trigger / worker 共享）
 - `batch-orchestrator/.../application/ratelimit/TokenBucketRateLimiter.java` — Redis 限流实现
 - `batch-orchestrator/.../scheduler/*ArchiveScheduler.java` — 三个 ShedLock'd archive 调度器
 - `batch-worker-core/.../support/AbstractWorkerLoop.java:137` — Worker `@PreDestroy`
