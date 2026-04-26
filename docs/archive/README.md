@@ -24,7 +24,7 @@
 | 主题 | 当前权威 | 归档历史 |
 |---|---|---|
 | 系统流程 | `architecture/system-flow-overview.md` | — |
-| 设计说明 | `design/` 14 个章节文件 + `design/README.md` 索引 | `archive/design/system-design-2026-03-21.md`（8005 行原版）+ [`archive/design/mega-chapter-map.md`](design/mega-chapter-map.md)（mega 20 章 → 当前位置导航） |
+| 设计说明 | `design/` 14 个章节文件 + `design/README.md` 索引 | `archive/design/system-design-2026-03-21.md`（**存根**：20 章+95 子节标题供锚点兼容，正文移到主干 / git 历史）+ [`archive/design/mega-chapter-map.md`](design/mega-chapter-map.md)（mega 20 章 → 当前位置导航） |
 | 扩展性评估 | `architecture/scalability-assessment.md`（2026-04-25）| `archive/architecture/scalability-ha-assessment-2026-03-26.md`（初版 + 6 项改造完成快照）|
 | 深度分析 | `analysis/deep-issue-analysis.md`（2026-04-23 最新）| `archive/analysis/deep-issue-analysis-v1.md`/`-v2`/`-v3`（4-15 / 4-17 / 4-20）|
 | 修复报告 | `analysis/fix-report.md`（2026-04-22 最新）| `archive/analysis/fix-report-v1`/`-v2`/`-v3` |
