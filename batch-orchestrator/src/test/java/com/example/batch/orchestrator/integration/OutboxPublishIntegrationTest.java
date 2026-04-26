@@ -96,11 +96,12 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             new EventDeliveryLogQuery(
                 "t1", OutboxPublishStatus.PUBLISHED.code(), "IMPORT", "key-import-001"));
     assertThat(logs).hasSize(1);
-    assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_IMPORT);
+    // TENANT 路由模式（prod 默认）：base topic + ".<tenantId>" 后缀
+    assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_IMPORT + ".t1");
 
     try (KafkaConsumer<String, String> consumer =
         buildConsumer("import-test-" + System.currentTimeMillis())) {
-      consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT));
+      consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_IMPORT + ".t1"));
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
       ConsumerRecord<String, String> matched = null;
@@ -131,11 +132,12 @@ class OutboxPublishIntegrationTest extends AbstractIntegrationTest {
             new EventDeliveryLogQuery(
                 "t1", OutboxPublishStatus.PUBLISHED.code(), "EXPORT", "key-export-001"));
     assertThat(logs).hasSize(1);
-    assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_EXPORT);
+    // TENANT 路由模式（prod 默认）：base topic + ".<tenantId>" 后缀
+    assertThat(logs.get(0).getTargetTopic()).isEqualTo(BatchTopics.TASK_DISPATCH_EXPORT + ".t1");
 
     try (KafkaConsumer<String, String> consumer =
         buildConsumer("export-test-" + System.currentTimeMillis())) {
-      consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_EXPORT));
+      consumer.subscribe(List.of(BatchTopics.TASK_DISPATCH_EXPORT + ".t1"));
       ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
       assertThat(records.count()).isGreaterThanOrEqualTo(1);
       ConsumerRecord<String, String> matched = null;
