@@ -122,8 +122,17 @@
 
 ### 6.2 当前实现
 
-- 审计：`audit_log` 表（追加每个高风险动作）
-- 审批：`config_release` 表的 `DRAFT → PUBLISHED` 流转（V22 migration），`config_change_log` 表全程审计
+审计按域分表（**没有**单一 `audit_log` 通用表）：
+
+| 表 | 用途 | Migration |
+|---|---|---|
+| `file_audit_log` | 文件流转审计（INBOUND / OUTBOUND / 重发 / 删除） | V6 |
+| `job_execution_log` | 任务执行轨迹审计 | V7 |
+| `console_ai_audit_log` | AI 控制面请求 / 响应审计 | V11 |
+| `config_change_log` | 配置发布 / 灰度 / 回滚审计 | V22 |
+| `event_outbox_log` | Outbox 投递追踪 | V21 |
+
+审批：`config_release` 表的 `DRAFT → PUBLISHED → GRAY → ROLLED_BACK` 流转（V22 migration），`config_change_log` 表全程审计。
 
 ## 7. 安全基线
 
@@ -233,7 +242,7 @@ AI 仅作为 Console 控制面辅助能力，遵循「**先鉴权 → 再裁剪 
 |---|---|
 | `ConsoleAiPromptGuard` | `batch-console-api/.../service/ConsoleAiPromptGuard.java`（关键字阻断 + 长度限制 + 域分类） |
 | `ConsoleAiAuthorizationService` | `batch-console-api/.../service/ConsoleAiAuthorizationService.java` |
-| `DefaultConsoleAiAuditService` | `batch-console-api/.../infrastructure/DefaultConsoleAiAuditService.java`（写 `console_ai_audit` 表） |
+| `DefaultConsoleAiAuditService` | `batch-console-api/.../infrastructure/DefaultConsoleAiAuditService.java`（写 `console_ai_audit_log` 表，V11） |
 | `AiPromptGateResult` | `batch-console-api/.../support/AiPromptGateResult.java` |
 | 阻断策略枚举 | `AiPromptDecision`（`APPROVED` / `REJECTED_DISABLED` / `REJECTED_SAFETY` / `REJECTED_SCOPE`） |
 | 域分类枚举 | `AiPromptCategory`（`PLATFORM` / `WORKFLOW` / `FILE_GOVERNANCE` / `OPERATIONS` / `OUT_OF_SCOPE`） |

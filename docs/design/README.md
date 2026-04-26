@@ -3,7 +3,7 @@
 业务向静态设计：数据模型、链路、能力评估。沿用原 8000 行《批量调度系统设计说明》的章节号切分。
 完整 mega 版已归档为 [`../archive/design/system-design-2026-03-21.md`](../archive/design/system-design-2026-03-21.md)（仅历史快照，**不**再维护）。
 
-> **2026-04-26 拆分完成**：mega 文档原 20 章中真正"独立设计"的 3 章（技术栈 / SLA / 多租户与安全）已抽出为单文件，archive/mega 不再有任何"未拆出的唯一来源"内容。
+> **2026-04-26 拆分完成**：mega 文档原 20 章中"独立设计"的 3 章（技术栈 / SLA / 多租户与安全）已抽出为单文件。其余 5 章（5/7/8/10/13）以**散落在多个子文件 + ADR + runbook** 的形式覆盖，详见 [`../archive/design/mega-chapter-map.md`](../archive/design/mega-chapter-map.md) 章号导航表。
 
 ## 文件清单（编号即推荐阅读顺序）
 
