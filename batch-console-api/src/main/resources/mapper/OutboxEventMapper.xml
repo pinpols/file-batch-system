@@ -20,34 +20,7 @@
         order by publish_status
     </select>
 
-    <delete id="deletePublishedBefore">
-        delete from batch.outbox_event
-        where tenant_id = #{tenantId}
-          and publish_status = 'PUBLISHED'
-          and updated_at &lt; #{beforeTime}
-    </delete>
-
-    <delete id="deleteGiveUpBefore">
-        delete from batch.outbox_event
-        where tenant_id = #{tenantId}
-          and publish_status = 'GIVE_UP'
-          and updated_at &lt; #{beforeTime}
-    </delete>
-
-    <update id="resetToNew">
-        update batch.outbox_event
-        set publish_status = 'NEW',
-            next_publish_at = current_timestamp,
-            updated_at = current_timestamp
-        where tenant_id = #{tenantId}
-          and id in
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
-        </foreach>
-          and publish_status in
-        <foreach collection="fromStatuses" item="s" open="(" separator="," close=")">
-            #{s}
-        </foreach>
-    </update>
+    <!-- 故意只保留 SELECT — CLAUDE.md「Orchestrator 是唯一状态主机」硬约束下，console 不直接写
+         outbox_event；cleanup / republish 由 orchestrator /internal/outbox/* 接口承接。 -->
 
 </mapper>

@@ -15,6 +15,8 @@ import java.util.Map;
  *   <li>partitionAction — 针对分区级别的操作（RETRY_PARTITION / CANCEL_PARTITION 等）
  *   <li>workflowRunAction — 针对 workflow_run 的操作（CANCEL / TERMINATE 等）
  *   <li>workflowRunSkipNode — 跳过指定节点并让 DAG 继续推进，用于卡死节点的人工干预
+ *   <li>outboxCleanup / outboxRepublish — outbox_event 表运维（删除终结事件 / 重投递失败事件）， 由 orchestrator
+ *       在自己事务里执行；console 不直接写 outbox 表
  * </ul>
  *
  * <p>快照查询（schedulerSnapshot / schedulerSnapshotHistory）为只读，不改变编排器状态。
@@ -33,4 +35,18 @@ public interface ConsoleOrchestratorProxyService {
 
   List<ConsoleSchedulerSnapshotHistoryResponse> schedulerSnapshotHistory(
       String tenantId, int limit);
+
+  /**
+   * 转发 outbox cleanup：删除指定租户中 PUBLISHED + GIVE_UP 且 updated_at 早于 retainDays 的事件。
+   *
+   * @return key=published / giveUp 的删除条数
+   */
+  Map<String, Integer> outboxCleanup(String tenantId, int retainDays);
+
+  /**
+   * 转发 outbox republish：把 FAILED / GIVE_UP 状态的指定 id 事件 reset 回 NEW，让 OutboxForwarder 重投递。
+   *
+   * @return key=requested / reset 的统计（reset 可能小于 requested，因有些 id 不在 FAILED/GIVE_UP）
+   */
+  Map<String, Integer> outboxRepublish(String tenantId, List<Long> ids);
 }

@@ -50,6 +50,26 @@ public interface OutboxEventMapper {
       @Param("timeoutSeconds") long timeoutSeconds);
 
   /**
+   * Console 运维清理：按租户删除 PUBLISHED 状态、updated_at 早于 cutoff 的事件。 仅供 OutboxOpsApplicationService 在
+   * orchestrator 内事务调用，console 通过 HTTP 转发触发。
+   */
+  int deletePublishedBefore(
+      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+
+  /** Console 运维清理：按租户删除 GIVE_UP 状态、updated_at 早于 cutoff 的事件。语义同上。 */
+  int deleteGiveUpBefore(
+      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+
+  /**
+   * Console 运维重投递：将指定 id 中、当前状态属于 fromStatuses（如 FAILED/GIVE_UP）的事件 reset 回 NEW， 让 OutboxForwarder
+   * 重新拾起。受 ConsoleOutboxOps 应用层调用，console 通过 HTTP 转发触发。
+   */
+  int resetToNew(
+      @Param("tenantId") String tenantId,
+      @Param("ids") List<Long> ids,
+      @Param("fromStatuses") List<String> fromStatuses);
+
+  /**
    * Outbox archive 调度器：选出指定 status 中、created_at 早于 cutoff 的事件 id（带 limit）。 status 通常是 PUBLISHED 或
    * GIVE_UP；其他状态（NEW/FAILED/PUBLISHING）属于活跃事件不归档。
    */
