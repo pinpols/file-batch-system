@@ -248,3 +248,4 @@ Quartz NEXT_FIRE_TIME 可能差几秒~几分钟。**业务 SLA ±2s 之内可接
 | 日期 | 改动 |
 |---|---|
 | 2026-04-26 | 创建,基于阶段 1 实施完成的代码现状 |
+| 2026-04-26 | **切默认值**：`application.yml` 的 `BATCH_TRIGGER_SCHEDULER_IMPL` fallback 从 `quartz` 改为 `wheel`；`QuartzPauseWhenWheelEnabledCustomizer` 的 `@Value` fallback 同步；`TriggerReconciler` 去掉 `matchIfMissing=true`（原本是 quartz 默认时的兜底语义，现已不需要）。Quartz 仍保留作 opt-in 回退（`BATCH_TRIGGER_SCHEDULER_IMPL=quartz`）。完成判定 §6 的清理仍按"灰度全量 30 天无回归"的节奏走。 |

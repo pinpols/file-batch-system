@@ -7,6 +7,7 @@
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
 ### 2026-04-26
+- **默认调度引擎切换：Quartz → HashedWheelTimer**（phase 1 收尾）。`application.yml` 的 `BATCH_TRIGGER_SCHEDULER_IMPL` fallback 从 `quartz` 改为 `wheel`，`QuartzPauseWhenWheelEnabledCustomizer` 的 `@Value` fallback 同步切到 `wheel`，`TriggerReconciler` 的 `@ConditionalOnProperty` 去掉 `matchIfMissing=true`（原本是 quartz 默认时的兜底语义，现已不需要）。Quartz 仍保留作 opt-in incident 回退路径（显式 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`）。代码层面 wheel 已通过 phase 1 实施期 4 周 + 57 IT 全过的验证（commit a9b38d17 等）；本次仅切换默认值，未删 Quartz codepath；删 codepath 按 `docs/runbook/wheel-scheduler-rollout.md` §6 完成判定的"灰度全量 30 天无回归"节奏走。配套同步 `docs/architecture/system-flow-overview.md` §1 trigger 层视觉权重（QZ→TR 边降级为粗虚线，WHEEL→WS 升级为粗实主路径）+ label 表达。
 - **架构硬约束扩展（2 条）**：
   - **读写分离仅 console-api 启用**；主链路（trigger / orchestrator / worker）严禁引入。原因：状态机依赖 read-after-write 强一致性，PG 异步流复制秒级延迟会引入 race condition；且这些模块写为主，读路径分离也无收益。详见 `docs/runbook/read-replica.md` §六。
   - **模块不得覆盖 batch-common AutoConfiguration 的基础设施 bean**（`taskScheduler` / `lockProvider` 等）。要定制行为就提供扩展点 bean 让 AutoConfiguration 通过 `ObjectProvider` 注入（例：`SchedulerErrorHandlerConfiguration` 只暴露 `ErrorHandler` bean，不重新定义 `taskScheduler`）。重复 `@Bean` 同名定义会触发 `BeanDefinitionOverrideException` 启动失败（实际事故：commit 34bd6cbf 引入此 bug，5a564d9f 修复）。

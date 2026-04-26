@@ -39,7 +39,8 @@ import org.springframework.stereotype.Component;
 /**
  * 时间轮 trigger scheduler — 替代 Quartz 的"cron → fire 一次回调"调度引擎。
  *
- * <p><b>启用方式</b>:{@code batch.trigger.scheduler-impl=wheel}(默认 quartz)。 详细设计见 {@code
+ * <p><b>启用方式</b>:{@code batch.trigger.scheduler-impl=wheel}(2026-04-26 起为默认值; 显式 {@code
+ * BATCH_TRIGGER_SCHEDULER_IMPL=quartz} 切回旧 Quartz 路径)。 详细设计见 {@code
  * docs/architecture/quartz-replacement-design.md}。
  *
  * <p><b>核心数据流</b>(详见 design.md §1):
