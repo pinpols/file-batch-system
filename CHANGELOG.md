@@ -12,6 +12,40 @@
 
 ---
 
+## 2026-04-26 — 文档体系重构 + dict 自动化 + compliance 重生成
+
+### Added
+- **Diátaxis Reference dict**（`docs/dict/`）：错误码 dict（脚本生成自 `ResultCode.java`）、配置键 dict（Spring Boot configuration-processor 编译期自动生成 metadata.json）、业务术语 glossary（41 词手写上限）
+- **`spring-boot-configuration-processor`** 加入根 pom annotationProcessorPaths：8 模块共 440 个 `@ConfigurationProperties` 字段编译期生成 IDE 可消费的 metadata.json；其中 5 个高频类（`BusinessDataSourceProperties` / `RetryGovernanceProperties` / `FileGovernanceProperties` / `ConsoleSecurityProperties` / `ConsoleAiProperties`）补全 javadoc → 156 个 keys 带 description
+- **`scripts/codegen/gen-error-codes-dict.py`**（90 行 Python，零依赖）：解析 ResultCode 枚举生成 `docs/dict/error-codes.md`；CI（`pr-gate.yml`）加 `--check` 步骤，dict 与源不同步即 fail
+- **mega 设计文档拆分剩余 3 章**：`design/tech-stack-and-principles.md`（ch.3）、`design/sla-and-quality.md`（ch.11）、`design/multi-tenant-and-security.md`（ch.15）—— 按当前代码状态校正（角色名 / 表名 / 类名以代码为准）
+- **`archive/design/mega-chapter-map.md`**：mega 8005 行 20 章 → 当前位置精确导航表（含 ✅ 12 / 🟢 3 / 🟡 5 状态标注）
+- **9 个子目录 README**：每个子目录有编号化文件清单 + 角色路径 + 与其他目录分工，按 Diátaxis 分类
+- **`docs/README.md`**：顶层文档导航入口
+
+### Changed
+- **mega 设计文档清空为 redirect 存根**：`archive/design/system-design-2026-03-21.md` 8005 → 372 行（−95%），保留全部 20 章 + 95 子节标题供 `§X.Y` 兼容历史链接，正文移到主干 / git 历史
+- **docs/ 100+ 文档按 5 个 Stage 整理**（A 临时产物清理 / B 重复对合并 / C 8000 行 mega 归档 / D scalability 历史归档 / E archive 命名规范）：128 → 100 .md
+- **docs/ 全英文命名 + .md 强制后缀**：`改造分类.md` → `rework-classification.md`；6 文件 10 处引用同步
+- **docs/ 根 5 → 4 文件**：`AGENT.md` → `agent-baseline.md`、`ci.md` → `runbook/ci.md`、`code-patterns.md` 合并到 `coding-conventions.md` §22
+- **`docs/compliance/THIRD-PARTY-LICENSES.md`** 重生成：版本字段从 `1.0.0-SNAPSHOT` 改为 `${revision}`，加 `spring-boot-configuration-processor` + Netty HashedWheelTimer 条目，generated 日期 → `2026-04-26`
+- **`docs/compliance/sbom.json`** 重生成：30 → 266 个 transitive 依赖（CycloneDX v1.6 完整版）
+- **`design/tech-stack-and-principles.md` §3.4** 交付物表：NOTICE 状态 🟡待补 → ✅
+- **`load-test-report-2026-04-25.md`** → `load-test-report.md`（去日期后缀，遵循"主干无日期 / archive 带日期"约定）
+
+### Removed
+- **`.flattened-pom.xml`** 从 git 跟踪移除并 gitignore（flatten-maven-plugin build artifact，每次 install 重生成）
+- **本地 `.env`**（与 `.env.local` byte-identical 的误生成副本）+ 5 个 `.DS_Store`（macOS Finder 临时文件，已 gitignore 但本地残留）
+- **15 个 deprecated 文档**（v1/v2/v3 老版本、临时跑测产物、对话日志归档）从主干进 archive/
+- **`qodana.yaml`** 删除：JetBrains Qodana 静态分析配置，CI / Makefile / scripts 0 引用，已被 PMD + Spotless + spring-boot-configuration-processor 覆盖
+
+### Notes
+- 文档体系按业界中团队成熟度（Diátaxis + ADR + 自动 dict）落地，13 个 commit 覆盖
+- 维护策略：dict 自动生成（CI 校验同步）+ 手写 glossary（≤50 词上限）+ design 散文档（Diátaxis Explanation 类）
+- 业界对照：mega 不反更新（Linux / Spring / Kubernetes 都走过这条路），存根模式保留 anchor 兼容历史链接
+
+---
+
 ## 2026-04-18 — 版本控制 & 构建脚本
 
 ### Changed

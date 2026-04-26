@@ -93,10 +93,17 @@
 
 | 文件 | 状态 |
 |---|---|
-| `THIRD-PARTY-LICENSES.md`（依赖与许可证清单） | ✅ `docs/compliance/THIRD-PARTY-LICENSES.md` |
-| `SBOM`（CycloneDX 或 SPDX） | ✅ `docs/compliance/sbom.json` |
-| `NOTICE`（保留版权与声明） | 🟡 待补 |
-| `DEPENDENCY-APPROVAL.md`（高风险依赖审批记录） | 🟡 待补 |
+| `THIRD-PARTY-LICENSES.md`（依赖与许可证清单） | ✅ `docs/compliance/THIRD-PARTY-LICENSES.md`（2026-04-26 更新） |
+| `SBOM`（CycloneDX 或 SPDX） | ✅ `docs/compliance/sbom.json`（266 个 transitive 依赖，2026-04-26 重生成） |
+| `NOTICE`（保留版权与声明） | ✅ `/NOTICE`（指向 compliance 文件） |
+| `DEPENDENCY-APPROVAL.md`（高风险依赖审批记录） | 🟡 待补（仅引入 MinIO Server / Grafana 等 AGPL 组件时需要） |
+
+**重生成命令**：
+```bash
+mvn -P compliance package -DskipTests
+cp target/bom.json docs/compliance/sbom.json
+# THIRD-PARTY-GENERATED.txt 已写到 docs/compliance/ 供对照人读版
+```
 
 ## 4. 外部模型服务接入合规（OpenAI）
 
