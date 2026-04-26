@@ -14,10 +14,12 @@
 flowchart LR
   USER([用户 / 前端]):::user
 
-  subgraph TRIG ["触发层 · batch-trigger"]
+  subgraph TRIG ["触发层 · batch-trigger（Quartz → Wheel 双轨过渡）"]
     direction TB
-    QZ[(Quartz<br/>QRTZ_*)]:::store
-    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler"]:::svc
+    WHEEL[("trigger_runtime_state<br/>trigger_misfire_pending<br/>(wheel.enabled=true)")]:::store
+    QZ[(Quartz<br/>QRTZ_*<br/>legacy)]:::store
+    WS["HashedWheelTriggerScheduler<br/>+ WheelTriggerReconciler<br/>+ MisfirePendingExpireScheduler<br/>+ CatchUpThrottle"]:::svc
+    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(legacy)"]:::svc
   end
 
   subgraph SCH ["调度层 · batch-orchestrator"]
@@ -48,10 +50,13 @@ flowchart LR
 
   FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
 
-  %% ─── 触发链路（粗实线 = 主流程） ─────────────────
-  USER ==>|"launch (MANUAL)"| TR
-  QZ   ==>|"cron fire (SCHEDULED)"| TR
-  TR   ==>|"HTTP /internal/launch"| LS
+  %% ─── 触发链路（粗实线 = 主流程；Quartz 与 Wheel 二选一） ──
+  USER  ==>|"launch (MANUAL)"| TR
+  USER  ==>|"launch (MANUAL)"| WS
+  QZ    ==>|"cron fire (SCHEDULED · legacy)"| TR
+  WHEEL ==>|"tick fire (SCHEDULED · 默认/新)"| WS
+  TR    ==>|"HTTP /internal/launch"| LS
+  WS    ==>|"HTTP /internal/launch"| LS
 
   %% ─── 调度写库（粗实线） ─────────────────────────
   LS ==>|"INSERT job_instance<br/>+ partition + outbox_event<br/>(同一 tx)"| PDB
@@ -92,7 +97,7 @@ flowchart LR
 
 ### 一句话叙事
 
-1. **触发**：Quartz 定时（`SCHEDULED`）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 写 `trigger_request` → HTTP 调 orchestrator。
+1. **触发**：定时（`SCHEDULED` — 默认走 HashedWheel，旧 Quartz 路径仍可通过 `batch.trigger.wheel.enabled=false` 切回）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 写 `trigger_request` → HTTP 调 orchestrator。
 2. **调度**：orchestrator `LaunchService` 写入 `job_instance` + `job_partition` + `outbox_event`（同一事务）。
 3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
 4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态 → orchestrator 推进状态机。
