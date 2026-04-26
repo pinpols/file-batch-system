@@ -22,6 +22,7 @@ public record ExportWorkerConfiguration(
   public List<String> capabilityTags() {
     return capabilityTags == null ? List.of() : capabilityTags;
   }
+
   private static final int DEFAULT_PAGE_SIZE = 1000;
   private static final int DEFAULT_FETCH_SIZE = 1000;
   private static final int DEFAULT_CHUNK_SIZE = 500;

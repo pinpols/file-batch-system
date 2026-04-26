@@ -16,11 +16,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 读写分离路由 DataSource，在 {@link AbstractRoutingDataSource} 之上加两层增强：
  *
  * <ol>
- *   <li><b>force-primary 旁路</b>：{@link RoutingHints#isForcePrimary()} 为 true 时直接返回 PRIMARY，
- *       优先级高于 readOnly 标志（read-after-write 场景）
- *   <li><b>fail-open 降级</b>：从库连接失败累计达 {@code failureThreshold} 次后进入 quarantine，
- *       quarantine 期内 readOnly 查询自动落主库（避免从库故障击穿业务）；quarantine 期满后下一次请求重新尝试，
- *       成功即解除，失败则续期。Hikari 自身的连接失败也会被 try-catch 捕获并降级。
+ *   <li><b>force-primary 旁路</b>：{@link RoutingHints#isForcePrimary()} 为 true 时直接返回 PRIMARY， 优先级高于
+ *       readOnly 标志（read-after-write 场景）
+ *   <li><b>fail-open 降级</b>：从库连接失败累计达 {@code failureThreshold} 次后进入 quarantine， quarantine 期内
+ *       readOnly 查询自动落主库（避免从库故障击穿业务）；quarantine 期满后下一次请求重新尝试， 成功即解除，失败则续期。Hikari 自身的连接失败也会被
+ *       try-catch 捕获并降级。
  * </ol>
  *
  * <p>暴露的指标（micrometer）：
@@ -91,9 +91,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
       return conn;
     } catch (SQLException ex) {
       handleReplicaFailure(ex);
-      log.warn(
-          "replica connection failed; failing open to primary: cause={}",
-          rootMessage(ex));
+      log.warn("replica connection failed; failing open to primary: cause={}", rootMessage(ex));
       return primary.getConnection();
     }
   }

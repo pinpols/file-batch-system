@@ -12,8 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * 集成测试：RedisQuotaRuntimeStateService 在真实 Redis 上验证 Lua 脚本语义。 覆盖 SLIDING_WINDOW + CALENDAR_DAY
- * 的 burst 占用 / peak 抬升 / 窗口过期重置 / describe 读路径。
+ * 集成测试：RedisQuotaRuntimeStateService 在真实 Redis 上验证 Lua 脚本语义。 覆盖 SLIDING_WINDOW + CALENDAR_DAY 的
+ * burst 占用 / peak 抬升 / 窗口过期重置 / describe 读路径。
  */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
@@ -76,8 +76,7 @@ class RedisQuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
     assertThat(snap.peakBorrowedCount()).isEqualTo(3);
     assertThat(snap.windowStartedAt()).isNotNull();
     assertThat(snap.windowExpiresAt()).isNotNull();
-    long windowSpan =
-        snap.windowExpiresAt().toEpochMilli() - snap.windowStartedAt().toEpochMilli();
+    long windowSpan = snap.windowExpiresAt().toEpochMilli() - snap.windowStartedAt().toEpochMilli();
     assertThat(windowSpan).isEqualTo(24L * 3600 * 1000);
   }
 

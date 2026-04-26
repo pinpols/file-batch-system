@@ -33,9 +33,7 @@ public interface TriggerMisfirePendingMapper {
       @Param("tenantId") String tenantId, @Param("limit") int limit);
 
   /** 审批通过(只更新 status / approvedBy / approvedAt)。 */
-  int approve(
-      @Param("id") Long id,
-      @Param("approvedBy") String approvedBy);
+  int approve(@Param("id") Long id, @Param("approvedBy") String approvedBy);
 
   /** 审批拒绝(status=REJECTED + 写 rejection_reason)。 */
   int reject(
@@ -44,8 +42,7 @@ public interface TriggerMisfirePendingMapper {
       @Param("rejectionReason") String rejectionReason);
 
   /** 审批通过后补 fire 完成,关联 trigger_request.id。 */
-  int linkCatchUpRequest(
-      @Param("id") Long id, @Param("catchUpRequestId") Long catchUpRequestId);
+  int linkCatchUpRequest(@Param("id") Long id, @Param("catchUpRequestId") Long catchUpRequestId);
 
   /** 周期任务:把超期未审批的 PENDING 改 EXPIRED。 */
   int markExpired(@Param("now") Instant now);

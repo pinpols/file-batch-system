@@ -11,8 +11,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 实例运维（cancel / terminate / partition retry）：状态切换 + 代理下游 orchestrator。
- * 双击会重复调用下游，虽然状态 CAS 能兜住，但会产生额外审计日志 → 类级 @Idempotent。
+ * 实例运维（cancel / terminate / partition retry）：状态切换 + 代理下游 orchestrator。 双击会重复调用下游，虽然状态 CAS
+ * 能兜住，但会产生额外审计日志 → 类级 @Idempotent。
  */
 @RestController
 @Validated

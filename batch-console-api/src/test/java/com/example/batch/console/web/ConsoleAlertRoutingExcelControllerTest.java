@@ -62,8 +62,7 @@ class ConsoleAlertRoutingExcelControllerTest {
   @Test
   void shouldUploadPreviewAndApplyAlertRoutingExcel() throws Exception {
     when(excelService.upload(any()))
-        .thenReturn(
-            new ExcelUploadResponse("token-1", "routing.xlsx", "alert_routing_config", 1));
+        .thenReturn(new ExcelUploadResponse("token-1", "routing.xlsx", "alert_routing_config", 1));
     when(excelService.preview(anyString()))
         .thenReturn(
             new ExcelPreviewResponse<>(

@@ -19,8 +19,8 @@ public class MarkRunningParam {
   private final String retryingStatus;
 
   /**
-   * 以默认状态常量预填 runningStatus/createdStatus/waitingStatus/readyStatus/retryingStatus，
-   * 调用方只需补 tenantId/id/startedAt/expectedVersion 即可。
+   * 以默认状态常量预填 runningStatus/createdStatus/waitingStatus/readyStatus/retryingStatus， 调用方只需补
+   * tenantId/id/startedAt/expectedVersion 即可。
    */
   public static MarkRunningParamBuilder withDefaultStatuses() {
     return builder()

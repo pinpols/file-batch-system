@@ -17,12 +17,13 @@ import org.springframework.stereotype.Component;
  * Spring {@link ContextClosedEvent} 监听器，负责 Worker 进程的有序关机。
  *
  * <p><b>三步关机顺序</b>（顺序不可交换）：
+ *
  * <ol>
  *   <li>将所有已注册 worker 状态更新为 {@code DRAINING}，通知 Orchestrator 在调度层面停止派发新任务。
- *   <li>调用 {@link KafkaListenerEndpointRegistry#stop()} 停止所有 Kafka 消费者容器，
- *       确保不再拉取新消息（即使 DRAINING 信号尚未被 Orchestrator 处理）。
- *   <li>调用 {@link ActiveTaskLeaseRegistry#awaitDrain} 等待 in-flight 任务自然结束，
- *       超时由 {@code batch.worker.graceful-shutdown.timeout-seconds}（默认 120s）控制。
+ *   <li>调用 {@link KafkaListenerEndpointRegistry#stop()} 停止所有 Kafka 消费者容器， 确保不再拉取新消息（即使 DRAINING
+ *       信号尚未被 Orchestrator 处理）。
+ *   <li>调用 {@link ActiveTaskLeaseRegistry#awaitDrain} 等待 in-flight 任务自然结束， 超时由 {@code
+ *       batch.worker.graceful-shutdown.timeout-seconds}（默认 120s）控制。
  * </ol>
  */
 @Slf4j

@@ -1,15 +1,16 @@
 package com.example.batch.worker.core.support;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.List;
 import java.util.Map;
-import com.example.batch.common.utils.Texts;
 
 /**
  * Pipeline 步骤流转工具类：封装"确定下一步"的路由逻辑。
  *
  * <p><b>路由优先级</b>（从高到低）：
+ *
  * <ol>
  *   <li>运行时属性 {@code PIPELINE_NEXT_STEP_CODE} / {@code PIPELINE_NEXT_STAGE_CODE}（由步骤主动写入，读取后立即删除）
  *   <li>当前步骤参数 {@code onSuccessNextStepCode} / {@code onFailureNextStepCode} 等显式路由配置
@@ -18,8 +19,8 @@ import com.example.batch.common.utils.Texts;
  *
  * <p>{@link #popSelector} 在读取属性的同时执行 remove——具有副作用，只可调用一次。
  *
- * <p>{@link #maxTransitionGuard} 返回 {@code steps.size() * 4}（最小 16）作为循环转换上限，
- * 防止 pipeline 因循环跳转导致死循环。
+ * <p>{@link #maxTransitionGuard} 返回 {@code steps.size() * 4}（最小 16）作为循环转换上限， 防止 pipeline
+ * 因循环跳转导致死循环。
  */
 public final class PipelineStepFlowSupport {
 

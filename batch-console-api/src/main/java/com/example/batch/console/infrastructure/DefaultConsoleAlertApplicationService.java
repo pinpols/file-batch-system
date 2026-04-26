@@ -4,6 +4,7 @@ import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.persistence.entity.AlertEventEntity;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleAlertApplicationService;
 import com.example.batch.console.infrastructure.realtime.ConsoleRealtimeDomainEventPublisher;
 import com.example.batch.console.mapper.AlertEventMapper;
@@ -13,7 +14,6 @@ import com.example.batch.console.web.response.ConsoleAlertActionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /** {@link ConsoleAlertApplicationService} 的默认实现： 仅执行告警状态流转，不引入额外的告警事件表。 */
 @Service

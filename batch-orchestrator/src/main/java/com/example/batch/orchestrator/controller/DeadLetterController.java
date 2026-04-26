@@ -9,9 +9,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 死信消息重放内部控制器，基础路径 {@code /internal/dead-letters}。
- * 提供单一端点 {@code POST /{deadLetterId}/replay}，触发指定死信消息的重新投递，
- * 委托 {@link com.example.batch.orchestrator.application.service.RetryGovernanceService} 处理。
+ * 死信消息重放内部控制器，基础路径 {@code /internal/dead-letters}。 提供单一端点 {@code POST
+ * /{deadLetterId}/replay}，触发指定死信消息的重新投递， 委托 {@link
+ * com.example.batch.orchestrator.application.service.RetryGovernanceService} 处理。
  * 仅限内部运维或补偿流程调用，不对外暴露。
  */
 @RestController

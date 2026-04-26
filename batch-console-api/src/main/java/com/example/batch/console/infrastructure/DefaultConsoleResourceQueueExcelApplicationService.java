@@ -73,31 +73,22 @@ public class DefaultConsoleResourceQueueExcelApplicationService
   private static final Set<String> PRIORITY_POLICIES = DictEnum.codes(QueuePriorityPolicy.class);
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry(
-              "tenant_id",
-              optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
-          Map.entry(
-              "queue_code", requiredColumn("队列唯一编码，作为导入匹配键。", GUIDE_STR, "QUEUE_IMPORT_01")),
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("queue_code", requiredColumn("队列唯一编码，作为导入匹配键。", GUIDE_STR, "QUEUE_IMPORT_01")),
           Map.entry("queue_name", requiredColumn("控制台展示的队列名称。", GUIDE_STR, "导入主队列")),
           Map.entry(
               COL_QUEUE_TYPE,
               requiredColumn("队列类型。", "枚举", "IMPORT", "IMPORT", "EXPORT", "DISPATCH", "MIXED")),
-          Map.entry(
-              "max_running_jobs", requiredColumn("最大并行作业数，必须 >= 0。", GUIDE_INT, "10")),
-          Map.entry(
-              "max_running_partitions", requiredColumn("最大并行分区数，必须 >= 0。", GUIDE_INT, "20")),
+          Map.entry("max_running_jobs", requiredColumn("最大并行作业数，必须 >= 0。", GUIDE_INT, "10")),
+          Map.entry("max_running_partitions", requiredColumn("最大并行分区数，必须 >= 0。", GUIDE_INT, "20")),
           Map.entry("max_qps", requiredColumn("最大 QPS 限制，必须 >= 0。", GUIDE_INT, "100")),
           Map.entry("worker_group", optionalColumn("指定 Worker 分组。", GUIDE_STR, "group-a")),
-          Map.entry(
-              "resource_tag", optionalColumn("资源标签，用于资源隔离。", GUIDE_STR, "high-priority")),
+          Map.entry("resource_tag", optionalColumn("资源标签，用于资源隔离。", GUIDE_STR, "high-priority")),
           Map.entry(
               COL_PRIORITY_POLICY,
               requiredColumn("优先级策略。", "枚举", "FIFO", "FIFO", "PRIORITY", "FAIR_SHARE")),
-          Map.entry(
-              "fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", GUIDE_INT, "1")),
-          Map.entry(
-              COL_ENABLED,
-              optionalColumn("队列是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
+          Map.entry("fair_share_weight", requiredColumn("公平调度权重，必须 >= 1。", GUIDE_INT, "1")),
+          Map.entry(COL_ENABLED, optionalColumn("队列是否启用。", "布尔值", GUIDE_TRUE, GUIDE_TRUE, "FALSE")),
           Map.entry(COL_DESCRIPTION, optionalColumn("队列描述信息。", GUIDE_STR, "用于导入任务的主队列")));
 
   private final ResourceQueueMapper resourceQueueMapper;
@@ -114,7 +105,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-
   @Override
   public ResponseEntity<InputStreamResource> exportResourceQueues(
       String tenantId, String queueCode, String queueType, Boolean enabled) {
@@ -129,7 +119,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
   public ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request) {
     return doApply(uploadToken, request.getReason());
   }
-
 
   @Override
   protected String sheetName() {
@@ -196,8 +185,7 @@ public class DefaultConsoleResourceQueueExcelApplicationService
 
   @Override
   protected boolean upsertRow(QueueRow row, String tenantId, String operatorId) {
-    Map<String, Object> existing =
-        resourceQueueMapper.selectByUniqueKey(tenantId, row.queueCode());
+    Map<String, Object> existing = resourceQueueMapper.selectByUniqueKey(tenantId, row.queueCode());
     ResourceQueueUpsertParam param = new ResourceQueueUpsertParam();
     param.setTenantId(tenantId);
     param.setQueueCode(row.queueCode());
@@ -312,7 +300,6 @@ public class DefaultConsoleResourceQueueExcelApplicationService
     sheet.setColumnWidth(1, 20 * 256);
     sheet.setColumnWidth(2, 36 * 256);
   }
-
 
   @Builder
   record QueueRow(

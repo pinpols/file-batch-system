@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.jdbc;
 
 import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
+import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -9,7 +10,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 从 {@code file_template_config.query_param_schema.jdbcMappedImport} 或顶层 {@code
@@ -137,8 +137,8 @@ public record JdbcMappedImportSpec(
   }
 
   /**
-   * A-3.5 严格幂等模式入口：strictIdempotency=true 时 conflictColumns 必须非空，
-   * 否则 {@code parse + validateIdentifiers} 阶段直接拒绝加载模板。
+   * A-3.5 严格幂等模式入口：strictIdempotency=true 时 conflictColumns 必须非空， 否则 {@code parse +
+   * validateIdentifiers} 阶段直接拒绝加载模板。
    */
   public void validateIdentifiers(Collection<String> allowedSchemas, boolean strictIdempotency) {
     validateIdentifiers(allowedSchemas);

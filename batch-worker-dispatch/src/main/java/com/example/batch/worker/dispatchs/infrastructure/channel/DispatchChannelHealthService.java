@@ -3,6 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure.channel;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.utils.SecretMasking;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import com.example.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import com.example.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
@@ -18,16 +19,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 分发渠道健康管理服务，负责探针执行、状态更新及分发前健康门控。
  *
- * <p>健康状态机：HEALTHY → DEGRADED（连续失败未达阈值）→ UNHEALTHY（达阈值）。
- * UNHEALTHY 渠道不直接拦截分发，而是等 {@code nextProbeAt} 过期后放行一次，
- * 让真实分发结果作为隐式探针（half-open 模式），避免独立探针与实际分发结论不一致。
- * 探针调度器定期对启用了探针的渠道类型（SFTP/OSS/NAS 等）主动拨测，
- * 拨测结果与正常分发结果复用同一条 {@code recordDispatchOutcome} 路径写入快照表。
+ * <p>健康状态机：HEALTHY → DEGRADED（连续失败未达阈值）→ UNHEALTHY（达阈值）。 UNHEALTHY 渠道不直接拦截分发，而是等 {@code
+ * nextProbeAt} 过期后放行一次， 让真实分发结果作为隐式探针（half-open 模式），避免独立探针与实际分发结论不一致。
+ * 探针调度器定期对启用了探针的渠道类型（SFTP/OSS/NAS 等）主动拨测， 拨测结果与正常分发结果复用同一条 {@code recordDispatchOutcome} 路径写入快照表。
  */
 @Slf4j
 @Service
@@ -204,10 +202,7 @@ public class DispatchChannelHealthService {
     }
     DispatchChannelProbeResult result =
         RemoteFilesystemDispatchSupport.probeChannel(
-            channelConfig,
-            minioStorageProperties,
-            minioClient,
-            !securityProperties.isBypassMode());
+            channelConfig, minioStorageProperties, minioClient, !securityProperties.isBypassMode());
     recordProbeResult(channelConfig, result);
     if (result.success()) {
       probeSuccessCount.incrementAndGet();
@@ -258,9 +253,9 @@ public class DispatchChannelHealthService {
   }
 
   /**
-   * 渠道健康路径上的身份三元组（tenantId / channelCode / channelType）。把原本在 3 个方法里重复 3 次的
-   * {@code channelConfig.get("tenant_id")} 串键提取收敛到一处，同时明确"什么叫能做健康门控"
-   * （{@link #isTargetable()}）与"什么叫探针目标完整"（{@link #isFullyIdentified()}）两种校验语义。
+   * 渠道健康路径上的身份三元组（tenantId / channelCode / channelType）。把原本在 3 个方法里重复 3 次的 {@code
+   * channelConfig.get("tenant_id")} 串键提取收敛到一处，同时明确"什么叫能做健康门控" （{@link
+   * #isTargetable()}）与"什么叫探针目标完整"（{@link #isFullyIdentified()}）两种校验语义。
    */
   private record ChannelIdentity(String tenantId, String channelCode, String channelType) {
     static ChannelIdentity from(Map<String, Object> channelConfig) {

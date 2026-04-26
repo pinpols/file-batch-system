@@ -7,12 +7,10 @@ import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
-import com.example.batch.common.utils.Texts;
 
 /**
- * 字符集归一工具。配合 CLAUDE.md §字符编码 约束：全系统内部一律 UTF-8，导入边界允许外部以
- * 别名声明（{@code utf8} / {@code UTF8} / {@code utf-8} / {@code UTF-8}），本工具统一把所有
- * 别名归一为 {@link StandardCharsets#UTF_8} 的规范名，并对未识别字符集快速失败。
+ * 字符集归一工具。配合 CLAUDE.md §字符编码 约束：全系统内部一律 UTF-8，导入边界允许外部以 别名声明（{@code utf8} / {@code UTF8} / {@code
+ * utf-8} / {@code UTF-8}），本工具统一把所有 别名归一为 {@link StandardCharsets#UTF_8} 的规范名，并对未识别字符集快速失败。
  *
  * <p>禁止业务代码直接写 {@code Charset.forName("UTF-8")} 或字符串字面量 {@code "UTF-8"}：
  *
@@ -84,19 +82,19 @@ public final class EncodingUtils {
   /**
    * S-1.8：剥离 UTF-8 BOM 前缀。返回一个包装后的流，前 3 个字节是 BOM 就吞掉，否则透传。
    *
-   * <p>外部导出工具（Windows Excel "CSV UTF-8"、部分文本编辑器）写出 UTF-8 文件时会自动加
-   * BOM；系统内部读取这些文件做 parse 时，若不剥 BOM 会让首字段混入 {@code \uFEFF}
-   * 字符，后续 header 匹配 / 数值解析全部失败。{@code PreprocessStep.resolveCharset} 自己
+   * <p>外部导出工具（Windows Excel "CSV UTF-8"、部分文本编辑器）写出 UTF-8 文件时会自动加 BOM；系统内部读取这些文件做 parse 时，若不剥 BOM
+   * 会让首字段混入 {@code \uFEFF} 字符，后续 header 匹配 / 数值解析全部失败。{@code PreprocessStep.resolveCharset} 自己
    * 实现过一份剥 BOM 逻辑，此处抽出供其他编码转换点复用。
    *
-   * <p>要求传入 <b>可 mark/reset 或 {@link PushbackInputStream}</b>——本方法内部用
-   * PushbackInputStream 包装；调用方不需要再关心。返回流的 close 会级联关闭底层。
+   * <p>要求传入 <b>可 mark/reset 或 {@link PushbackInputStream}</b>——本方法内部用 PushbackInputStream
+   * 包装；调用方不需要再关心。返回流的 close 会级联关闭底层。
    */
   public static InputStream stripUtf8Bom(InputStream in) throws IOException {
     if (in == null) {
       return InputStream.nullInputStream();
     }
-    PushbackInputStream pb = in instanceof PushbackInputStream p ? p : new PushbackInputStream(in, 3);
+    PushbackInputStream pb =
+        in instanceof PushbackInputStream p ? p : new PushbackInputStream(in, 3);
     byte[] prefix = new byte[3];
     int read = pb.read(prefix);
     if (read <= 0) {

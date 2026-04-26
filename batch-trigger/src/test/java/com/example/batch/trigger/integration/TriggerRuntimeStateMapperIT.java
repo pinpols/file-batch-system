@@ -20,8 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * trigger_runtime_state Mapper 集成测试 — 覆盖时间轮 leader 调度的关键 DB 路径。
  *
- * <p>每个 test 通过 jobCode 唯一前缀隔离;不用 @Transactional rollback 因为
- * findReadyToSchedule 的 FOR UPDATE SKIP LOCKED 在事务嵌套下行为难预测。
+ * <p>每个 test 通过 jobCode 唯一前缀隔离;不用 @Transactional rollback 因为 findReadyToSchedule 的 FOR UPDATE SKIP
+ * LOCKED 在事务嵌套下行为难预测。
  */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
@@ -42,19 +42,26 @@ class TriggerRuntimeStateMapperIT extends AbstractIntegrationTest {
     jobCode = "job-" + System.nanoTime();
     // tenant 表是 FK 间接依赖,确保有
     jdbcTemplate.update(
-        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on conflict do nothing",
-        tenantId, tenantId);
-    jobDefId = jdbcTemplate.queryForObject(
-        """
-        insert into batch.job_definition (
-          tenant_id, job_code, job_name, job_type,
-          schedule_type, schedule_expr, timezone,
-          enabled, created_by, updated_by
-        ) values (?, ?, ?, 'GENERAL',
-          'CRON', '0 0 * * * ?', 'Asia/Shanghai',
-          true, 'it', 'it')
-        returning id
-        """, Long.class, tenantId, jobCode, jobCode);
+        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on"
+            + " conflict do nothing",
+        tenantId,
+        tenantId);
+    jobDefId =
+        jdbcTemplate.queryForObject(
+            """
+            insert into batch.job_definition (
+              tenant_id, job_code, job_name, job_type,
+              schedule_type, schedule_expr, timezone,
+              enabled, created_by, updated_by
+            ) values (?, ?, ?, 'GENERAL',
+              'CRON', '0 0 * * * ?', 'Asia/Shanghai',
+              true, 'it', 'it')
+            returning id
+            """,
+            Long.class,
+            tenantId,
+            jobCode,
+            jobCode);
   }
 
   @Test
@@ -75,9 +82,10 @@ class TriggerRuntimeStateMapperIT extends AbstractIntegrationTest {
 
   @Test
   void findReadyToScheduleSkipsClaimedRows() {
-    insertWithFireTime(Instant.now().minusSeconds(10));  // due
+    insertWithFireTime(Instant.now().minusSeconds(10)); // due
     long otherJobDef = newJobDefinition();
-    insertWithFireTimeForJobDef(otherJobDef, Instant.now().plusSeconds(120));  // not due in 60s window
+    insertWithFireTimeForJobDef(
+        otherJobDef, Instant.now().plusSeconds(120)); // not due in 60s window
 
     List<TriggerRuntimeStateEntity> due =
         mapper.findReadyToSchedule(Instant.now().plusSeconds(60), 100);
@@ -160,7 +168,8 @@ class TriggerRuntimeStateMapperIT extends AbstractIntegrationTest {
 
     // 模拟 marker 已 7 分钟前写入(超 5 min 阈值)
     jdbcTemplate.update(
-        "update batch.trigger_runtime_state set scheduled_at = now() - interval '7 minutes' where id = ?",
+        "update batch.trigger_runtime_state set scheduled_at = now() - interval '7 minutes' where"
+            + " id = ?",
         loaded.getId());
 
     int released = mapper.releaseStaleMarkers(Instant.now().minus(Duration.ofMinutes(5)));
@@ -234,7 +243,11 @@ class TriggerRuntimeStateMapperIT extends AbstractIntegrationTest {
           'CRON', '0 0 * * * ?', 'Asia/Shanghai',
           true, 'it', 'it')
         returning id
-        """, Long.class, tenantId, code, code);
+        """,
+        Long.class,
+        tenantId,
+        code,
+        code);
   }
 
   private void insertWithFireTimeForJobDef(long otherJobDef, Instant nextFireTime) {

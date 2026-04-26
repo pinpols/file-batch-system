@@ -19,9 +19,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Import worker 启动时扫自己挂的业务库（{@code biz} schema）把 (table, columns) 清单上报到
- * {@code batch.biz_table_schema}。console-api 上传 Excel 时用于拦住 {@code targetColumn} /
- * {@code jdbcMappedImport.columnMappings[*].to} 指向不存在表/列的坏配置。
+ * Import worker 启动时扫自己挂的业务库（{@code biz} schema）把 (table, columns) 清单上报到 {@code
+ * batch.biz_table_schema}。console-api 上传 Excel 时用于拦住 {@code targetColumn} / {@code
+ * jdbcMappedImport.columnMappings[*].to} 指向不存在表/列的坏配置。
  *
  * <p>单租户部署下，worker 挂的 biz DS 代表真实的业务库；多租户 / 分库部署须扩展本类支持多 schema_name。
  */

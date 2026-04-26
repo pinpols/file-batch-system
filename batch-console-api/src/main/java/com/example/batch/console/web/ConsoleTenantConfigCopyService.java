@@ -201,7 +201,6 @@ public class ConsoleTenantConfigCopyService {
             TenantConfigBatchInitRequest::setAlertRoutings));
   }
 
-
   private List<JobDefinitionSpec> readJobDefinitions(String tenantId) {
     JobDefinitionQuery query =
         JobDefinitionQuery.ofTenant(tenantId, new PageRequest(1, MAX_PAGE_SIZE));
@@ -530,7 +529,6 @@ public class ConsoleTenantConfigCopyService {
     }
     return specs;
   }
-
 
   private static String str(Map<String, Object> map, String key) {
     Object v = map.get(key);

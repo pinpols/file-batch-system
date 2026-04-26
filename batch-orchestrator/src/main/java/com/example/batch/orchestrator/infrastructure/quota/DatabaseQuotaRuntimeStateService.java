@@ -20,8 +20,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * PG @Version 乐观锁实现的 quota 状态服务。属于遗留实现，{@code batch.quota.runtime-store=database}
- * 时启用；新部署默认走 {@link RedisQuotaRuntimeStateService}。
+ * PG @Version 乐观锁实现的 quota 状态服务。属于遗留实现，{@code batch.quota.runtime-store=database} 时启用；新部署默认走 {@link
+ * RedisQuotaRuntimeStateService}。
  */
 @Slf4j
 @Service
@@ -146,8 +146,8 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
   }
 
   /**
-   * C-2.8：外层方法不包事务，逐条过期状态走 REQUIRES_NEW 子事务（{@link #reconcileOne}），
-   * 单条 CAS 冲突只跳过该条，不让一次乐观锁失败扳倒整批 reconcile。
+   * C-2.8：外层方法不包事务，逐条过期状态走 REQUIRES_NEW 子事务（{@link #reconcileOne}）， 单条 CAS 冲突只跳过该条，不让一次乐观锁失败扳倒整批
+   * reconcile。
    */
   @Override
   public void reconcileExpiredStates(int slidingWindowHours) {

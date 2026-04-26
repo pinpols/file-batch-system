@@ -8,7 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <ul>
  *   <li>{@code enabled=false}（默认）：完全直通 PG，行为同历史
- *   <li>{@code enabled=true}：按 {@code (tenantId, workerGroup)} 缓存 ONLINE worker 列表，{@code ttlMillis} 过期
+ *   <li>{@code enabled=true}：按 {@code (tenantId, workerGroup)} 缓存 ONLINE worker 列表，{@code
+ *       ttlMillis} 过期
  * </ul>
  */
 @Data

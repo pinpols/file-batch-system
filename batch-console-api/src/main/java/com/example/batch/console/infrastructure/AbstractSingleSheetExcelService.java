@@ -8,6 +8,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.Guard;
 import com.example.batch.common.utils.JsonUtils;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.ConsoleExcelStyles;
@@ -39,7 +40,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
-import com.example.batch.common.utils.Texts;
 import org.springframework.web.multipart.MultipartFile;
 
 /** 单 sheet Excel 导入导出模板基类：export 因查询参数各异由子类实现，复用 {@link #doExport} 生成 workbook。 */
@@ -72,7 +72,9 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
 
   protected abstract RESP toResponse(ROW row);
 
-  /** @return true=新增, false=更新 */
+  /**
+   * @return true=新增, false=更新
+   */
   protected abstract boolean upsertRow(ROW row, String tenantId, String operatorId);
 
   protected abstract void logChange(
@@ -165,11 +167,21 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       }
     }
     logImportAudit(
-        session.tenantId(), session.fileName(), reason, operatorId, traceId,
-        inserted, updated, skipInvalid ? result.invalidRows() : 0);
+        session.tenantId(),
+        session.fileName(),
+        reason,
+        operatorId,
+        traceId,
+        inserted,
+        updated,
+        skipInvalid ? result.invalidRows() : 0);
     importStore.remove(uploadToken);
     return new ExcelApplyResponse(
-        uploadToken, session.tenantId(), result.rows().size(), inserted, updated,
+        uploadToken,
+        session.tenantId(),
+        result.rows().size(),
+        inserted,
+        updated,
         skipInvalid ? result.invalidRows() : 0);
   }
 
@@ -291,7 +303,10 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
   }
 
   protected static String requireEnum(
-      Map<String, String> values, String key, Set<String> allowed, int maxLength,
+      Map<String, String> values,
+      String key,
+      Set<String> allowed,
+      int maxLength,
       List<String> issues) {
     String normalized = requireText(values, key, maxLength, issues);
     if (normalized == null) {
@@ -443,7 +458,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
             .flatMap(
                 issue ->
                     ConsoleExcelPreviewWorkbookSupport.expandIssues(
-                            sheetName(), issue.rowNo(), issue.messages(), columns())
+                        sheetName(), issue.rowNo(), issue.messages(), columns())
                         .stream())
             .toList();
     return ConsoleSingleSheetExcelImportSupport.writePreviewWorkbook(

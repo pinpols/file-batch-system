@@ -6,9 +6,8 @@ import lombok.Data;
 /**
  * MANUAL_APPROVAL 策略 misfire 待审表(对应 batch.trigger_misfire_pending)。
  *
- * <p>当 trigger 的 catch_up_policy=MANUAL_APPROVAL 且发生 misfire 时,时间轮不自动补 fire,
- * 而是落 PENDING 行,等运维通过 console UI 审批。详见
- * docs/architecture/quartz-replacement-design.md §9.4。
+ * <p>当 trigger 的 catch_up_policy=MANUAL_APPROVAL 且发生 misfire 时,时间轮不自动补 fire, 而是落 PENDING 行,等运维通过
+ * console UI 审批。详见 docs/architecture/quartz-replacement-design.md §9.4。
  */
 @Data
 public class TriggerMisfirePendingEntity {

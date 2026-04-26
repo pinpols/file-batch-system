@@ -96,8 +96,8 @@ public class DefaultLaunchService implements LaunchService {
   }
 
   /**
-   * RERUN 语义：哪怕 dedup_key 命中现有实例，也要新建一条 run_attempt = max+1 的实例， 并把 parent_instance_id
-   * 指回上一次尝试；只有非 RERUN 触发类型才沿用旧的幂等短路。
+   * RERUN 语义：哪怕 dedup_key 命中现有实例，也要新建一条 run_attempt = max+1 的实例， 并把 parent_instance_id 指回上一次尝试；只有非
+   * RERUN 触发类型才沿用旧的幂等短路。
    */
   private LaunchResponse maybeShortCircuitDuplicate(
       LaunchRequest request, LaunchLoadResult loaded) {
@@ -281,8 +281,8 @@ public class DefaultLaunchService implements LaunchService {
   /**
    * 计算下一个 run_attempt：查同一 (tenant_id, dedup_key) 已有 MAX+1，首次触发得 1，RERUN 递增。
    *
-   * <p>并发 RERUN 可能两个调用都读到 MAX=N 并尝试写 N+1，其中一条会撞唯一键 (tenant_id, dedup_key,
-   * run_attempt) 抛 23505；由 {@link #launch} 的 {@code resolveConcurrentDuplicate} 路径兜底。
+   * <p>并发 RERUN 可能两个调用都读到 MAX=N 并尝试写 N+1，其中一条会撞唯一键 (tenant_id, dedup_key, run_attempt) 抛 23505；由
+   * {@link #launch} 的 {@code resolveConcurrentDuplicate} 路径兜底。
    */
   private Integer nextRunAttempt(String tenantId, String dedupKey) {
     Integer max = jobMappers.jobInstanceMapper.selectMaxRunAttemptByDedupKey(tenantId, dedupKey);

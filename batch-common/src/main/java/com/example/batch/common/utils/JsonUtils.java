@@ -10,17 +10,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>内部维护两个单例 ObjectMapper：
  *
  * <ul>
- *   <li>{@link #MAPPER} — 宽容模式（{@code FAIL_ON_UNKNOWN_PROPERTIES=false}），用于跨版本
- *       payload / 事件、可扩展字段场景，旧消费者不会因上游加字段而 crash。
- *   <li>{@link #STRICT_MAPPER} — 严格模式（{@code FAIL_ON_UNKNOWN_PROPERTIES=true}），用于
- *       明确契约的 DTO、配置文件、受信任的内部序列化；未知字段立即抛异常，防止上游打错
- *       字段名被静默忽略。
+ *   <li>{@link #MAPPER} — 宽容模式（{@code FAIL_ON_UNKNOWN_PROPERTIES=false}），用于跨版本 payload /
+ *       事件、可扩展字段场景，旧消费者不会因上游加字段而 crash。
+ *   <li>{@link #STRICT_MAPPER} — 严格模式（{@code FAIL_ON_UNKNOWN_PROPERTIES=true}），用于 明确契约的
+ *       DTO、配置文件、受信任的内部序列化；未知字段立即抛异常，防止上游打错 字段名被静默忽略。
  * </ul>
  *
  * <p>序列化或反序列化失败时抛出 {@link IllegalArgumentException}，调用方无需处理受检异常。
  *
- * <p><b>S-1.6 选型建议</b>：新增 DTO 默认走 {@link #fromJsonStrict}；只在对外接收未知 payload
- * 或跨版本消息场景才用 {@link #fromJson}。
+ * <p><b>S-1.6 选型建议</b>：新增 DTO 默认走 {@link #fromJsonStrict}；只在对外接收未知 payload 或跨版本消息场景才用 {@link
+ * #fromJson}。
  */
 public final class JsonUtils {
 
@@ -55,8 +54,8 @@ public final class JsonUtils {
   }
 
   /**
-   * 严格反序列化：未知字段直接抛 {@link IllegalArgumentException}。S-1.6：适合契约 DTO /
-   * 配置文件 / 受信任内部序列化，能在字段重命名或拼写错误时立即暴露。
+   * 严格反序列化：未知字段直接抛 {@link IllegalArgumentException}。S-1.6：适合契约 DTO / 配置文件 /
+   * 受信任内部序列化，能在字段重命名或拼写错误时立即暴露。
    */
   public static <T> T fromJsonStrict(String json, Class<T> type) {
     try {

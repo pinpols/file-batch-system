@@ -26,7 +26,8 @@ class SqlTemplateExportSpecTest {
         SqlTemplateExportSpec.parse(
             Map.of(
                 "default_query_sql",
-                "select id, name, created_at from t where tenant_id = :tenantId and batch_no = :batchNo",
+                "select id, name, created_at from t where tenant_id = :tenantId and batch_no ="
+                    + " :batchNo",
                 "query_param_schema",
                 Map.of("sqlTemplateExport", Map.of("cursorColumn", "created_at"))),
             new ObjectMapper());

@@ -43,8 +43,7 @@ public class DefaultConsoleJobApplicationService implements ConsoleJobApplicatio
   }
 
   @Override
-  public List<Map<String, Object>> batchTrigger(
-      List<TriggerRequest> items, String idempotencyKey) {
+  public List<Map<String, Object>> batchTrigger(List<TriggerRequest> items, String idempotencyKey) {
     return triggerService.batchTrigger(items, idempotencyKey);
   }
 

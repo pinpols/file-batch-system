@@ -16,9 +16,8 @@ import org.springframework.stereotype.Service;
 /**
  * 作业实例与分区的生命周期管理应用服务，提供取消、终止和重试等状态变更操作。
  *
- * <p>状态机约束通过常量集合（{@code CANCELLABLE}、{@code TERMINABLE}）声明，
- * 所有状态转换均基于乐观锁版本号执行 CAS 更新，若并发修改导致更新行数为零则抛出
- * {@link com.example.batch.common.exception.BizException}，要求调用方重试。
+ * <p>状态机约束通过常量集合（{@code CANCELLABLE}、{@code TERMINABLE}）声明， 所有状态转换均基于乐观锁版本号执行 CAS
+ * 更新，若并发修改导致更新行数为零则抛出 {@link com.example.batch.common.exception.BizException}，要求调用方重试。
  * 分区级操作（取消、重试）与实例级操作相互独立，允许细粒度的运维干预。
  */
 @Service

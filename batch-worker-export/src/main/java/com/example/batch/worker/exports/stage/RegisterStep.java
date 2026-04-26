@@ -3,6 +3,7 @@ package com.example.batch.worker.exports.stage;
 import com.example.batch.common.config.MinioStorageProperties;
 import com.example.batch.common.plugin.ExportDataContext;
 import com.example.batch.common.plugin.ExportDataPlugin;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.FileAuditParam;
 import com.example.batch.worker.core.infrastructure.FileRecordParam;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -18,7 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /** 导出注册阶段：在平台创建 file_record，并将文件与 pipeline 实例绑定，触发插件 onRegistered 回调。 */
 @Component

@@ -4,6 +4,7 @@ import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.IdGenerator;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.config.OrchestratorTaskClientProperties;
 import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.support.TaskExecutionClient;
@@ -22,7 +23,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -108,7 +108,8 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     }
   }
 
-  private void recordReportDuration(TaskExecutionReport report, String outcome, long durationNanos) {
+  private void recordReportDuration(
+      TaskExecutionReport report, String outcome, long durationNanos) {
     meterRegistry.ifPresent(
         registry ->
             Timer.builder("batch.worker.report.duration")
@@ -167,8 +168,8 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
   }
 
   /**
-   * 记录失败指标；若已达最大尝试次数直接抛；否则等待退避并返回下次 attempt 的 state。 {@code reasonCode}
-   * 进 metrics，{@code retryHint} 进 log。
+   * 记录失败指标；若已达最大尝试次数直接抛；否则等待退避并返回下次 attempt 的 state。 {@code reasonCode} 进 metrics，{@code retryHint}
+   * 进 log。
    */
   private RetryState handleRetryableReportFailure(
       String reasonCode, String retryHint, RetryState state, RuntimeException ex) {
@@ -227,9 +228,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     throw new IllegalStateException(operation + " exhausted retries without outcome");
   }
 
-  /**
-   * 重试循环的不可变状态：attempt 从 1 起，backoff 每轮乘 2 但夹在 cap 内。 {@link #advance()} 返回下一轮的新 state。
-   */
+  /** 重试循环的不可变状态：attempt 从 1 起，backoff 每轮乘 2 但夹在 cap 内。 {@link #advance()} 返回下一轮的新 state。 */
   record RetryState(int attempt, int max, long backoff, long cap) {
     static RetryState initial(int configuredMax, long initialBackoff, long maxBackoff) {
       int normalizedMax = Math.max(1, configuredMax);

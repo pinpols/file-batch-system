@@ -68,8 +68,7 @@ class WorkerCapabilityTagsAuditSchedulerTest {
   void arrayWithNonStringElementIsFlagged() {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(workerRegistryMapper.selectInvalidCapabilityTags())
-        .thenReturn(
-            List.of(new InvalidCapabilityTagsRecord("tb", "worker-2", "[\"ingest\", 42]")));
+        .thenReturn(List.of(new InvalidCapabilityTagsRecord("tb", "worker-2", "[\"ingest\", 42]")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isEqualTo(1d);
   }
@@ -79,7 +78,8 @@ class WorkerCapabilityTagsAuditSchedulerTest {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(workerRegistryMapper.selectInvalidCapabilityTags())
         .thenReturn(
-            List.of(new InvalidCapabilityTagsRecord("ta", "worker-x", "[\"ingest\",\"delivery\"]")));
+            List.of(
+                new InvalidCapabilityTagsRecord("ta", "worker-x", "[\"ingest\",\"delivery\"]")));
     scheduler.auditCapabilityTags();
     assertThat(readGauge()).isZero();
   }

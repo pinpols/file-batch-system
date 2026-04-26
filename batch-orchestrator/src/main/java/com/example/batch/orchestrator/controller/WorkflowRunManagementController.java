@@ -6,9 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 工作流运行实例管控内部控制器，基础路径 {@code /internal/workflow-runs}。
- * 支持取消（{@code POST /{id}/cancel}）、强制终止（{@code POST /{id}/terminate}）
- * 以及跳过指定节点（{@code POST /{id}/skip-node}，需传入 {@code nodeCode}）三类操作。
+ * 工作流运行实例管控内部控制器，基础路径 {@code /internal/workflow-runs}。 支持取消（{@code POST /{id}/cancel}）、强制终止（{@code
+ * POST /{id}/terminate}） 以及跳过指定节点（{@code POST /{id}/skip-node}，需传入 {@code nodeCode}）三类操作。
  * 仅限内部服务或运维平台调用，不对外暴露。
  */
 @RestController

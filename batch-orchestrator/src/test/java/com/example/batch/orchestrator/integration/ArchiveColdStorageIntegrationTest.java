@@ -164,7 +164,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
         partitionId);
   }
 
-  private Long insertJobStepInstance(String tenantId, Long instanceId, Long partitionId, Long taskId) {
+  private Long insertJobStepInstance(
+      String tenantId, Long instanceId, Long partitionId, Long taskId) {
     return jdbcTemplate.queryForObject(
         """
         insert into batch.job_step_instance(
@@ -181,7 +182,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
   }
 
   private int count(String tableName, Long id) {
-    return jdbcTemplate.queryForObject("select count(*) from " + tableName + " where id = ?", Integer.class, id);
+    return jdbcTemplate.queryForObject(
+        "select count(*) from " + tableName + " where id = ?", Integer.class, id);
   }
 
   private String unique(String prefix) {

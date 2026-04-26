@@ -79,8 +79,7 @@ class WorkflowArchiveServiceTest {
   void hasMoreReturnsTrueWhenCandidatesEqualBatchSize() {
     props.setEnabled(true);
     props.setBatchSize(3);
-    when(mapper.selectArchivableIds(any(Instant.class), anyInt()))
-        .thenReturn(List.of(1L, 2L, 3L));
+    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of(1L, 2L, 3L));
     when(mapper.deleteNodeRunsByWorkflowRunIds(any())).thenReturn(0);
     when(mapper.deleteByIds(any())).thenReturn(3);
 
@@ -93,8 +92,7 @@ class WorkflowArchiveServiceTest {
   void hasMoreReturnsFalseWhenCandidatesUnderBatchSize() {
     props.setEnabled(true);
     props.setBatchSize(100);
-    when(mapper.selectArchivableIds(any(Instant.class), anyInt()))
-        .thenReturn(List.of(1L, 2L));
+    when(mapper.selectArchivableIds(any(Instant.class), anyInt())).thenReturn(List.of(1L, 2L));
     when(mapper.deleteNodeRunsByWorkflowRunIds(any())).thenReturn(0);
     when(mapper.deleteByIds(any())).thenReturn(2);
 

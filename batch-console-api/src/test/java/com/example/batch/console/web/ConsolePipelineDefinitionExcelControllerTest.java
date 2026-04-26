@@ -44,8 +44,7 @@ class ConsolePipelineDefinitionExcelControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
     mockMvc =
-        MockMvcBuilders.standaloneSetup(
-                new ConsolePipelineDefinitionExcelController(excelService))
+        MockMvcBuilders.standaloneSetup(new ConsolePipelineDefinitionExcelController(excelService))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();

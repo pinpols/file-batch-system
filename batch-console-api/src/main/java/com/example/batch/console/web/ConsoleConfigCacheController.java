@@ -16,13 +16,13 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 配置缓存运维（Ops-only）：手动失效 orchestrator 端的 Redis 配置缓存。
  *
- * <p>正常路径：console 通过既有写接口改 job_definition / workflow_definition 等配置时，
- * {@link ConsoleConfigCacheInvalidationService} 会在事务 afterCommit 自动 evict 对应 Redis key，
- * 多个 orchestrator 实例下次读时即刻 cache miss 重新加载。
+ * <p>正常路径：console 通过既有写接口改 job_definition / workflow_definition 等配置时， {@link
+ * ConsoleConfigCacheInvalidationService} 会在事务 afterCommit 自动 evict 对应 Redis key， 多个 orchestrator
+ * 实例下次读时即刻 cache miss 重新加载。
  *
- * <p>需要手动 evict 的场景：运维直接通过 {@code psql} / SQL migration 改 DB 而**没有走** console
- * 写路径（console 拦截不到）。在不重启 orchestrator 的前提下，这条路径可以让缓存立即失效。
- * 否则需要等 {@code OrchestratorConfigCacheService.CONFIG_CACHE_TTL = 5min} 过期。
+ * <p>需要手动 evict 的场景：运维直接通过 {@code psql} / SQL migration 改 DB 而**没有走** console 写路径（console
+ * 拦截不到）。在不重启 orchestrator 的前提下，这条路径可以让缓存立即失效。 否则需要等 {@code
+ * OrchestratorConfigCacheService.CONFIG_CACHE_TTL = 5min} 过期。
  *
  * <p>路径 {@code /api/console/ops/cache/evict-*}，仅 ROLE_ADMIN 可调。
  */

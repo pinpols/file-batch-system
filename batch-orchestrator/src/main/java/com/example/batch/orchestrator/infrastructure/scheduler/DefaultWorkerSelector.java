@@ -29,13 +29,12 @@ import org.springframework.stereotype.Component;
  *
  * <ol>
  *   <li>按 {@code (tenantId, workerGroup, status=ONLINE)} 过滤——workerGroup 缺省时退化为仅按租户 + ONLINE 过滤。
- *       <b>只选 ONLINE</b>：DRAINING / DECOMMISSIONED 状态的 worker 即使 heartbeat 仍在也不选
- *       （与 {@link com.example.batch.orchestrator.service.DefaultWorkerRegistryService} 的"状态不回退"不变量呼应）。
- *   <li>按 {@code resourceTag} 匹配队列要求（队列无标签则全通过）；worker 侧既可用 {@code resource_tag}
- *       单值，也可用 {@code capability_tags} JSONB 数组声明多个能力。队列 tag 与 worker 单值相等、或命中
- *       worker 能力数组中的任意一项均视为匹配（忽略大小写）。
- *   <li>排序 {@code (currentLoad asc, heartbeatAt desc)}：当前负载最小优先，并列时心跳最新者优先——
- *       同时兼顾负载均衡与活跃度（最近心跳的 worker 状态最可信）。
+ *       <b>只选 ONLINE</b>：DRAINING / DECOMMISSIONED 状态的 worker 即使 heartbeat 仍在也不选 （与 {@link
+ *       com.example.batch.orchestrator.service.DefaultWorkerRegistryService} 的"状态不回退"不变量呼应）。
+ *   <li>按 {@code resourceTag} 匹配队列要求（队列无标签则全通过）；worker 侧既可用 {@code resource_tag} 单值，也可用 {@code
+ *       capability_tags} JSONB 数组声明多个能力。队列 tag 与 worker 单值相等、或命中 worker 能力数组中的任意一项均视为匹配（忽略大小写）。
+ *   <li>排序 {@code (currentLoad asc, heartbeatAt desc)}：当前负载最小优先，并列时心跳最新者优先—— 同时兼顾负载均衡与活跃度（最近心跳的
+ *       worker 状态最可信）。
  * </ol>
  *
  * <p>找不到匹配 worker 时返回 {@code available=false} 的 route（不返回 null），让调用方拿到 reasonCode。
@@ -77,8 +76,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
     // 历史数据可能存在 IMPORT / import 大小写不一致；入口统一按大写比较兜底，
     // 长期由 V64__normalize_code_conventions.sql 把 DB 存量归一，之后这里 toUpper 就是纯防御性动作。
     String workerGroup = CodeNormalizer.toUpperOrNull(resolveWorkerGroup(request, queue));
-    List<WorkerRegistryRecord> candidates =
-        findCandidates(request.getTenantId(), workerGroup);
+    List<WorkerRegistryRecord> candidates = findCandidates(request.getTenantId(), workerGroup);
     WorkerRegistryRecord selected = pickBest(candidates, queue);
 
     // 共享 worker 池 fallback（仅本地联调 / 共享 dev 环境）：主租户查不到 ONLINE worker 时，
@@ -110,9 +108,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
       //   - resourceTag 全不匹配说明 queue 配置与 worker 实际 tag 失配
       // 保留阻塞语义以确保任务不会跑到错误环境（安全优先，见 v3 A-3.2）。
       String reason =
-          candidates.isEmpty()
-              ? "no_online_workers_in_group"
-              : "no_worker_matches_resource_tag";
+          candidates.isEmpty() ? "no_online_workers_in_group" : "no_worker_matches_resource_tag";
       log.warn(
           "worker selection returned no match: tenantId={}, workerGroup={}, resourceTag={},"
               + " candidates={}, reason={} — task will block in WAITING until operator"
@@ -168,11 +164,14 @@ public class DefaultWorkerSelector implements WorkerSelector {
     Counter.builder(METRIC_NO_MATCH)
         .tags(
             Tags.of(
-                "tenantId", String.valueOf(request.getTenantId()),
-                "workerType", String.valueOf(request.getWorkerType()),
+                "tenantId",
+                String.valueOf(request.getTenantId()),
+                "workerType",
+                String.valueOf(request.getWorkerType()),
                 "resourceTag",
-                    queue == null || queue.resourceTag() == null ? "none" : queue.resourceTag(),
-                "reason", reason))
+                queue == null || queue.resourceTag() == null ? "none" : queue.resourceTag(),
+                "reason",
+                reason))
         .register(registry)
         .increment();
   }

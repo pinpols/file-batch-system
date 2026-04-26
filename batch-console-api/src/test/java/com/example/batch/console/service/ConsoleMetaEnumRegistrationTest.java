@@ -13,10 +13,11 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 /**
  * 守护测试：batch-common/.../enums 下每个公共枚举必须
+ *
  * <ol>
- *   <li>实现 {@link DictEnum} 契约；</li>
- *   <li>要么在 {@link ConsoleMetaQueryService} 的 REGISTRATIONS 中注册（对外暴露），
- *       要么加入本文件 {@code EXCLUDED} 白名单并注明原因（明确不对外）。</li>
+ *   <li>实现 {@link DictEnum} 契约；
+ *   <li>要么在 {@link ConsoleMetaQueryService} 的 REGISTRATIONS 中注册（对外暴露）， 要么加入本文件 {@code EXCLUDED}
+ *       白名单并注明原因（明确不对外）。
  * </ol>
  *
  * <p>新增枚举忘记登记时，CI 阶段就会失败。
@@ -26,18 +27,17 @@ class ConsoleMetaEnumRegistrationTest {
   private static final String ENUM_PACKAGE = "com.example.batch.common.enums";
 
   /** 不对外暴露的枚举；新增条目必须附上原因。 */
-  private static final Set<String> EXCLUDED = Set.of(
-      "ResultCode",       // RPC 错误码协议，非业务字典
-      "WorkflowNodeCode", // 内部节点标记常量（仅 START/END）
-      "JobStatus"         // 死代码（无其它引用），候选移除
-  );
+  private static final Set<String> EXCLUDED =
+      Set.of(
+          "ResultCode", // RPC 错误码协议，非业务字典
+          "WorkflowNodeCode", // 内部节点标记常量（仅 START/END）
+          "JobStatus" // 死代码（无其它引用），候选移除
+          );
 
   @Test
   void everyCommonEnumImplementsDictEnum() {
     Set<String> scanned = scanEnumSimpleNames();
-    assertThat(scanned)
-        .as("扫描器应能发现至少 50 个公共枚举，否则说明扫描失败")
-        .hasSizeGreaterThan(50);
+    assertThat(scanned).as("扫描器应能发现至少 50 个公共枚举，否则说明扫描失败").hasSizeGreaterThan(50);
 
     Set<String> nonCoded = new TreeSet<>();
     for (String simpleName : scanned) {
@@ -46,17 +46,16 @@ class ConsoleMetaEnumRegistrationTest {
         nonCoded.add(simpleName);
       }
     }
-    assertThat(nonCoded)
-        .as("batch-common 下所有公共枚举必须实现 DictEnum（code/label）")
-        .isEmpty();
+    assertThat(nonCoded).as("batch-common 下所有公共枚举必须实现 DictEnum（code/label）").isEmpty();
   }
 
   @Test
   void everyCommonEnumIsRegisteredOrExplicitlyExcluded() {
     Set<String> scanned = scanEnumSimpleNames();
-    Set<String> registered = ConsoleMetaQueryService.registeredEnumClasses().stream()
-        .map(Class::getSimpleName)
-        .collect(Collectors.toUnmodifiableSet());
+    Set<String> registered =
+        ConsoleMetaQueryService.registeredEnumClasses().stream()
+            .map(Class::getSimpleName)
+            .collect(Collectors.toUnmodifiableSet());
 
     Set<String> unaccounted = new TreeSet<>(scanned);
     unaccounted.removeAll(registered);
@@ -71,9 +70,10 @@ class ConsoleMetaEnumRegistrationTest {
 
   @Test
   void excludedEnumsAreNotRegistered() {
-    Set<String> registered = ConsoleMetaQueryService.registeredEnumClasses().stream()
-        .map(Class::getSimpleName)
-        .collect(Collectors.toUnmodifiableSet());
+    Set<String> registered =
+        ConsoleMetaQueryService.registeredEnumClasses().stream()
+            .map(Class::getSimpleName)
+            .collect(Collectors.toUnmodifiableSet());
 
     assertThat(registered)
         .as("EXCLUDED 白名单中的枚举不应同时出现在 REGISTRATIONS 中")
@@ -83,9 +83,7 @@ class ConsoleMetaEnumRegistrationTest {
   @Test
   void excludedEntriesReferExistingEnums() {
     Set<String> scanned = scanEnumSimpleNames();
-    assertThat(scanned)
-        .as("EXCLUDED 白名单条目必须对应真实存在的枚举（防止原因注释滞留、枚举已删除）")
-        .containsAll(EXCLUDED);
+    assertThat(scanned).as("EXCLUDED 白名单条目必须对应真实存在的枚举（防止原因注释滞留、枚举已删除）").containsAll(EXCLUDED);
   }
 
   private static Set<String> scanEnumSimpleNames() {

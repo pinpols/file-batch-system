@@ -20,9 +20,9 @@ public class SqlTemplateExportSecurityProperties {
   private List<String> requiredParams = new ArrayList<>(List.of("tenantId", "batchNo"));
 
   /**
-   * S-1.10：模板 SQL 允许使用的额外具名参数白名单（除 required + 引擎保留 __cursor / __limit 之外）。
-   * 默认包含常见业务占位符 {@code bizDate}（业务日期过滤常用）；其余扩展参数仍需在 yml 显式列出。
-   * 注：{@code tenantId} / {@code batchNo} 已通过 {@link #requiredParams} 强制，这里不必重复。
+   * S-1.10：模板 SQL 允许使用的额外具名参数白名单（除 required + 引擎保留 __cursor / __limit 之外）。 默认包含常见业务占位符 {@code
+   * bizDate}（业务日期过滤常用）；其余扩展参数仍需在 yml 显式列出。 注：{@code tenantId} / {@code batchNo} 已通过 {@link
+   * #requiredParams} 强制，这里不必重复。
    */
   private List<String> allowedExtraParams = new ArrayList<>(List.of("bizDate"));
 

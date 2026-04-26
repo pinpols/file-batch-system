@@ -12,16 +12,14 @@ import org.springframework.scheduling.annotation.Scheduled;
  * 基于 Redis Sorted Set 的动态 shard 分配：
  *
  * <ul>
- *   <li>每个 Pod 定时 {@link #heartbeat()} 把自己的标识写到 {@code batch:orchestrator:members}，
- *       score = 最近心跳时间戳
- *   <li>读取分配时先 {@code ZREMRANGEBYSCORE} 清理超期（超过 {@link #memberTtl}）成员，
- *       再 {@code ZRANGE} 取活 Pod 列表；成员名按字典序排序得到确定顺序
+ *   <li>每个 Pod 定时 {@link #heartbeat()} 把自己的标识写到 {@code batch:orchestrator:members}， score = 最近心跳时间戳
+ *   <li>读取分配时先 {@code ZREMRANGEBYSCORE} 清理超期（超过 {@link #memberTtl}）成员， 再 {@code ZRANGE} 取活 Pod
+ *       列表；成员名按字典序排序得到确定顺序
  *   <li>当前 Pod 的 index = 自己在排序列表中的位置；total = 列表长度
  * </ul>
  *
- * <p>容错：Redis 读写任何异常发生时，回退到上一次成功读到的 {@link ShardAssignment}，
- * 保证调度不中断。集群启动时若 Redis 不可用，首次 {@link #current()} 返回
- * {@link ShardAssignment#single()}（退化为单实例）。
+ * <p>容错：Redis 读写任何异常发生时，回退到上一次成功读到的 {@link ShardAssignment}， 保证调度不中断。集群启动时若 Redis 不可用，首次 {@link
+ * #current()} 返回 {@link ShardAssignment#single()}（退化为单实例）。
  */
 @Slf4j
 public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
@@ -65,9 +63,7 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
     }
   }
 
-  /**
-   * 优雅退出时移除自己，加速其他 Pod 感知（不强制——即使不调，下次 evict 阶段 TTL 会兜）。
-   */
+  /** 优雅退出时移除自己，加速其他 Pod 感知（不强制——即使不调，下次 evict 阶段 TTL 会兜）。 */
   public void leave() {
     try {
       redis.opsForZSet().remove(MEMBERS_KEY, memberId);
@@ -89,11 +85,12 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
         // 空集合：可能自己心跳还没发（首次 current() 在 heartbeat 之前），降级为单实例
         return cacheAndReturn(ShardAssignment.single());
       }
-      String[] members = tuples.stream()
-          .map(ZSetOperations.TypedTuple::getValue)
-          .filter(v -> v != null && !v.isBlank())
-          .sorted()
-          .toArray(String[]::new);
+      String[] members =
+          tuples.stream()
+              .map(ZSetOperations.TypedTuple::getValue)
+              .filter(v -> v != null && !v.isBlank())
+              .sorted()
+              .toArray(String[]::new);
 
       int total = members.length;
       int index = -1;
@@ -107,7 +104,8 @@ public class RedisShardAssignmentProvider implements ShardAssignmentProvider {
         // 自己不在集合里：可能刚启动还没心跳，或被误清；降级为单实例
         return cacheAndReturn(ShardAssignment.single());
       }
-      return cacheAndReturn(total == 1 ? ShardAssignment.single() : new ShardAssignment(total, index));
+      return cacheAndReturn(
+          total == 1 ? ShardAssignment.single() : new ShardAssignment(total, index));
     } catch (RuntimeException ex) {
       ShardAssignment fallback = lastKnown.get();
       log.warn(

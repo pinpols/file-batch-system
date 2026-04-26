@@ -14,11 +14,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * Outbox shard 分配源的装配：按 {@link OutboxProperties#getShardingMode()} 选择
- * {@link StaticShardAssignmentProvider}（默认）或 {@link RedisShardAssignmentProvider}（动态）。
+ * Outbox shard 分配源的装配：按 {@link OutboxProperties#getShardingMode()} 选择 {@link
+ * StaticShardAssignmentProvider}（默认）或 {@link RedisShardAssignmentProvider}（动态）。
  *
- * <p>DYNAMIC 模式下 {@link RedisShardAssignmentProvider} 自己注入 @Scheduled 心跳，
- * 所以这里需要 {@link EnableScheduling}（但项目其他位置已经启用了，不会重复）。
+ * <p>DYNAMIC 模式下 {@link RedisShardAssignmentProvider} 自己注入 @Scheduled 心跳， 所以这里需要 {@link
+ * EnableScheduling}（但项目其他位置已经启用了，不会重复）。
  */
 @Slf4j
 @Configuration
@@ -33,7 +33,9 @@ public class ShardingConfiguration {
       String memberId = resolveMemberId(outboxProperties);
       Duration memberTtl = Duration.ofMillis(outboxProperties.getSharding().getMemberTtlMs());
       log.info(
-          "Outbox sharding mode=DYNAMIC, memberId={}, memberTtl={}s", memberId, memberTtl.toSeconds());
+          "Outbox sharding mode=DYNAMIC, memberId={}, memberTtl={}s",
+          memberId,
+          memberTtl.toSeconds());
       return new RedisShardAssignmentProvider(stringRedisTemplate, memberId, memberTtl);
     }
     log.info(

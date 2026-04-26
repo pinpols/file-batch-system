@@ -4,15 +4,14 @@ package com.example.batch.console.config;
  * 读写分离 ThreadLocal 路由提示。两类用途：
  *
  * <ul>
- *   <li><b>force-primary 旁路</b>：read-after-write 等强一致场景用 {@link #forcePrimary(Runnable)}
- *       或 {@link com.example.batch.console.config.RouteToPrimary @RouteToPrimary} 注解，强制本调用走主库
- *       而绕过 readOnly 默认路由
+ *   <li><b>force-primary 旁路</b>：read-after-write 等强一致场景用 {@link #forcePrimary(Runnable)} 或 {@link
+ *       com.example.batch.console.config.RouteToPrimary @RouteToPrimary} 注解，强制本调用走主库 而绕过 readOnly
+ *       默认路由
  *   <li><b>fail-open 已降级</b>：{@link ReadReplicaRoutingDataSource} 把从库 quarantine 状态写入此
  *       ThreadLocal，让外层 metric/日志能识别"本次实际走了主库降级"
  * </ul>
  *
- * <p>设计为简单 ThreadLocal（非 InheritableThreadLocal）：跨线程异步任务通常自带独立事务边界，
- * 继承父线程 hint 反而引入误路由风险。
+ * <p>设计为简单 ThreadLocal（非 InheritableThreadLocal）：跨线程异步任务通常自带独立事务边界， 继承父线程 hint 反而引入误路由风险。
  */
 public final class RoutingHints {
 

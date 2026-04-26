@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedWriter;
@@ -19,21 +20,18 @@ import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler;
 import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler.SheetContentsHandler;
 import org.apache.poi.xssf.model.StylesTable;
 import org.apache.poi.xssf.usermodel.XSSFComment;
-import com.example.batch.common.utils.Texts;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
 /**
- * Parses Excel (.xlsx) files into NDJSON records using POI SAX streaming
- * ({@link XSSFReader} + {@link XSSFSheetXMLHandler} event-driven).
+ * Parses Excel (.xlsx) files into NDJSON records using POI SAX streaming ({@link XSSFReader} +
+ * {@link XSSFSheetXMLHandler} event-driven).
  *
- * <p><b>内存模型</b>：不加载整个 workbook 到堆；仅缓存当前行的 cell 值，{@code endRow} 时写入
- * downstream。{@code SharedStringsTable} 走 {@link ReadOnlySharedStringsTable}（流式解析）。
- * 典型 500MB xlsx 堆占用 ~20MB。
+ * <p><b>内存模型</b>：不加载整个 workbook 到堆；仅缓存当前行的 cell 值，{@code endRow} 时写入 downstream。{@code
+ * SharedStringsTable} 走 {@link ReadOnlySharedStringsTable}（流式解析）。 典型 500MB xlsx 堆占用 ~20MB。
  *
- * <p>尺寸硬限 {@link #MAX_EXCEL_BYTES}（默认 200MB，可用系统属性
- * {@code batch.worker.import.max-excel-bytes} 覆盖）——SAX 流式下仍保留是因为 sharedStrings
- * 若极端大（每行唯一字符串）仍会占用堆。
+ * <p>尺寸硬限 {@link #MAX_EXCEL_BYTES}（默认 200MB，可用系统属性 {@code batch.worker.import.max-excel-bytes}
+ * 覆盖）——SAX 流式下仍保留是因为 sharedStrings 若极端大（每行唯一字符串）仍会占用堆。
  */
 public class ExcelFormatParser implements FormatParser {
 
@@ -87,8 +85,7 @@ public class ExcelFormatParser implements FormatParser {
         try (InputStream sheetStream = iter.next()) {
           if (idx == sheetIndex) {
             SaxRowAccumulator accumulator =
-                new SaxRowAccumulator(
-                    context, writer, preserveLogicalRow, headerRows, bindings);
+                new SaxRowAccumulator(context, writer, preserveLogicalRow, headerRows, bindings);
             XMLReader xml = XMLHelper.newXMLReader();
             xml.setContentHandler(
                 new XSSFSheetXMLHandler(styles, strings, accumulator, formatter, false));
@@ -195,9 +192,8 @@ public class ExcelFormatParser implements FormatParser {
   private record ColumnBinding(String source, String target) {}
 
   /**
-   * SAX 行累加器：startRow 清空缓存 → cell 按列号写入 → endRow 时判断 header / blank / record，
-   * 写入 downstream。保持和原 DOM 版相同的业务语义：headerRows 行做表头、全空行跳过、解析异常
-   * 走 {@code recordParseError} 走跳过 / 失败策略。
+   * SAX 行累加器：startRow 清空缓存 → cell 按列号写入 → endRow 时判断 header / blank / record， 写入 downstream。保持和原
+   * DOM 版相同的业务语义：headerRows 行做表头、全空行跳过、解析异常 走 {@code recordParseError} 走跳过 / 失败策略。
    */
   private final class SaxRowAccumulator implements SheetContentsHandler {
 

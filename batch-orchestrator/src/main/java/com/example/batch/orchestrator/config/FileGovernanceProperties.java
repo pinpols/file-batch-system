@@ -98,8 +98,8 @@ public class FileGovernanceProperties {
     private int batchSize = 200;
 
     /**
-     * 未配置 timeout action 时的默认动作。可选：{@code BLOCK_DOWNSTREAM} / {@code WAIT_MORE} /
-     * {@code MANUAL_CONFIRM} / {@code SKIP_BATCH} / {@code EMPTY_RUN}。
+     * 未配置 timeout action 时的默认动作。可选：{@code BLOCK_DOWNSTREAM} / {@code WAIT_MORE} / {@code
+     * MANUAL_CONFIRM} / {@code SKIP_BATCH} / {@code EMPTY_RUN}。
      */
     private String defaultTimeoutAction = "MANUAL_CONFIRM";
 

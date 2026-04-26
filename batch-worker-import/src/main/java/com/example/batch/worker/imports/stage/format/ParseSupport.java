@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
@@ -15,7 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import com.example.batch.common.utils.Texts;
 
 /** Shared utilities used by all {@link FormatParser} implementations. */
 public class ParseSupport {
@@ -37,7 +37,6 @@ public class ParseSupport {
   public ObjectMapper objectMapper() {
     return objectMapper;
   }
-
 
   public Object templateFieldMappings(Object templateConfigObject) {
     if (!(templateConfigObject instanceof Map<?, ?> map)) {
@@ -101,7 +100,6 @@ public class ParseSupport {
     return defaultValue;
   }
 
-
   public void collectSchemaFields(ImportJobContext context, JsonNode node) {
     if (context == null || node == null || !node.isObject()) {
       return;
@@ -132,7 +130,6 @@ public class ParseSupport {
     }
     return fields;
   }
-
 
   public void writeParsedRecord(
       ImportJobContext context,
@@ -166,7 +163,6 @@ public class ParseSupport {
     }
   }
 
-
   public void recordParseError(
       ImportJobContext context, long recordNo, String errorCode, String message, Object rawRecord) {
     if (!recordGovernanceService.isSkippable(errorCode)) {
@@ -184,7 +180,6 @@ public class ParseSupport {
   public boolean withinThreshold(ImportJobContext context) {
     return recordGovernanceService.withinThreshold(context);
   }
-
 
   public long numberValue(Object value) {
     if (value instanceof Number number) {

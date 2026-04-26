@@ -10,8 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * Worker 运行时门面：将 {@link WorkerLifecycleManager}、{@link HeartbeatService} 和
- * {@link TaskExecutionWrapper} 聚合为单一入口，供 {@link AbstractWorkerLoop} 调用。
+ * Worker 运行时门面：将 {@link WorkerLifecycleManager}、{@link HeartbeatService} 和 {@link
+ * TaskExecutionWrapper} 聚合为单一入口，供 {@link AbstractWorkerLoop} 调用。
  *
  * <p>本类不含业务逻辑，只做方法委托，使 AbstractWorkerLoop 无需直接依赖三个不同的服务接口。
  */

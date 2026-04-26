@@ -4,8 +4,8 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * P3-3 archive 系列：SUCCESS / PARTIAL_FAILED job_instance 自动归档配置
- * （{@code batch.job-instance.archive}）。
+ * P3-3 archive 系列：SUCCESS / PARTIAL_FAILED job_instance 自动归档配置 （{@code
+ * batch.job-instance.archive}）。
  *
  * <p>对应人工兜底脚本 {@code scripts/db/cleanup-success-instances.sql}（同删除语义、同级联顺序）。
  *
@@ -22,8 +22,8 @@ public class SuccessInstanceArchiveProperties {
   private int retentionDays = 30;
 
   /**
-   * 单批 instance id 上限。每批要级联删 12+ 张表，batch 太大会拖长事务锁表。
-   * 默认 1000；按 instance 平均 5 partition × 5 step × 5 task 估算，单批 ~75k 行删除。
+   * 单批 instance id 上限。每批要级联删 12+ 张表，batch 太大会拖长事务锁表。 默认 1000；按 instance 平均 5 partition × 5 step × 5
+   * task 估算，单批 ~75k 行删除。
    */
   private int batchSize = 1_000;
 

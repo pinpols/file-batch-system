@@ -5,10 +5,9 @@ import java.util.regex.Pattern;
 import org.springframework.web.util.HtmlUtils;
 
 /**
- * 控制台文本清洗工具类，用于对用户输入和页面展示内容进行安全处理。
- * {@code safeInput} 系列方法执行 NFKC Unicode 规范化、去除不可见控制字符并 strip 首尾空白，可选截断长度；
- * {@code safeDisplay} 系列方法在 {@code safeInput} 基础上追加 HTML 转义，防止 XSS。
- * 输入为 {@code null} 时所有方法均返回 {@code null}，不抛异常。
+ * 控制台文本清洗工具类，用于对用户输入和页面展示内容进行安全处理。 {@code safeInput} 系列方法执行 NFKC Unicode 规范化、去除不可见控制字符并 strip
+ * 首尾空白，可选截断长度； {@code safeDisplay} 系列方法在 {@code safeInput} 基础上追加 HTML 转义，防止 XSS。 输入为 {@code null}
+ * 时所有方法均返回 {@code null}，不抛异常。
  */
 public final class ConsoleTextSanitizer {
 

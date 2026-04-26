@@ -5,12 +5,12 @@ import com.example.batch.common.enums.AiPromptCategory;
 import com.example.batch.common.enums.AiPromptDecision;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleAiProperties;
 import com.example.batch.console.support.AiPromptGateResult;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import com.example.batch.common.utils.Texts;
 
 @Service
 @RequiredArgsConstructor

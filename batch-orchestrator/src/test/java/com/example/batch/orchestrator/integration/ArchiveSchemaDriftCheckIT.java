@@ -14,9 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * ArchiveSchemaDriftCheck 启动期守护测试 — 模拟"运维给 batch.* 加列但忘了同步 archive.*_archive"。
- */
+/** ArchiveSchemaDriftCheck 启动期守护测试 — 模拟"运维给 batch.* 加列但忘了同步 archive.*_archive"。 */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -29,8 +27,7 @@ class ArchiveSchemaDriftCheckIT extends AbstractIntegrationTest {
   @AfterEach
   void cleanup() {
     // 把测试加的临时列删干净,防污染其他 IT
-    jdbcTemplate.execute(
-        "alter table batch.outbox_event drop column if exists drift_test_col");
+    jdbcTemplate.execute("alter table batch.outbox_event drop column if exists drift_test_col");
   }
 
   @Test
@@ -42,8 +39,7 @@ class ArchiveSchemaDriftCheckIT extends AbstractIntegrationTest {
   @Test
   void driftDetectedWhenHotTableHasExtraColumn() {
     // 模拟:运维给 batch.outbox_event 加了 column,但忘了同步 archive.outbox_event_archive
-    jdbcTemplate.execute(
-        "alter table batch.outbox_event add column drift_test_col varchar(64)");
+    jdbcTemplate.execute("alter table batch.outbox_event add column drift_test_col varchar(64)");
 
     assertThatThrownBy(() -> check.checkOnStartup())
         .isInstanceOf(IllegalStateException.class)

@@ -1,5 +1,6 @@
 package com.example.batch.worker.imports.stage.format;
 
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
@@ -8,7 +9,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import com.example.batch.common.utils.Texts;
 
 /** Parses fixed-width text files into NDJSON records. */
 public class FixedWidthFormatParser implements FormatParser {

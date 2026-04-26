@@ -9,9 +9,8 @@ import com.example.batch.console.repository.WebhookDeliveryLogInsertParam;
 import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.time.Duration;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HexFormat;
@@ -27,6 +26,7 @@ import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -50,6 +50,7 @@ import org.springframework.web.client.RestClientResponseException;
 public class WebhookDispatcher {
 
   private static final int MAX_ATTEMPTS = 3;
+
   /** 有界队列容量 — 防止流量尖峰下内存积压。 */
   private static final int QUEUE_CAPACITY = 1024;
 
@@ -81,7 +82,9 @@ public class WebhookDispatcher {
       executor.submit(() -> dispatch(tenantId, eventType, stream, cursor, data, emittedAt));
     } catch (RejectedExecutionException e) {
       log.warn(
-          "webhook dispatch queue full, dropping event: tenant={}, eventType={}", tenantId, eventType);
+          "webhook dispatch queue full, dropping event: tenant={}, eventType={}",
+          tenantId,
+          eventType);
     }
   }
 

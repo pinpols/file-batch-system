@@ -248,8 +248,7 @@ class AbstractTaskConsumerTest {
 
   @Test
   void topicPattern_withoutWorkerCodeStillAllowsTenantSuffix() {
-    AbstractTaskConsumer consumer =
-        buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null);
+    AbstractTaskConsumer consumer = buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null);
     Pattern p = Pattern.compile(consumer.topicPattern());
 
     assertThat(p.matcher("batch.task.dispatch.import").matches()).isTrue();

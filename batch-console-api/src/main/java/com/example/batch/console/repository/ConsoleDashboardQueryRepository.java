@@ -147,7 +147,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
 
   record DaySeverityCountView(LocalDate day, String severity, Long count) {}
 
-
   @Query(
       """
       SELECT id, job_code AS code, job_name AS name
@@ -186,7 +185,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
 
   record ConfigDependentView(Long id, String code, String name) {}
 
-
   @Query(
       """
       SELECT i.id,
@@ -219,7 +217,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
       Integer failedPartitions,
       Instant startedAt,
       Instant finishedAt) {}
-
 
   @Query(
       """
@@ -258,7 +255,6 @@ public interface ConsoleDashboardQueryRepository extends Repository<ConsoleJdbcQ
       SELECT count(1) AS count FROM batch.file_template_config WHERE tenant_id = :tenantId
       """)
   Long countFileTemplates(@Param("tenantId") String tenantId);
-
 
   @Query(
       """

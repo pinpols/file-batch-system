@@ -48,13 +48,13 @@ import org.springframework.stereotype.Service;
  * <p>合规审计（{@link #buildAuditCommand}）：
  *
  * <ul>
- *   <li><b>原文不落库</b>：prompt / response 只落 <b>SHA-256 哈希</b> + 前 512 字符 preview，
- *       防 PII / 敏感业务数据泄露到审计表。
+ *   <li><b>原文不落库</b>：prompt / response 只落 <b>SHA-256 哈希</b> + 前 512 字符 preview， 防 PII /
+ *       敏感业务数据泄露到审计表。
  *   <li><b>拒绝也记录</b>：被 gate 拦下的请求同样写审计（带 refusalReason），便于安全团队复盘。
  * </ul>
  *
- * <p>租户一致性：{@link #resolveTenantId} 要求请求 body 的 tenantId 与 header 携带的 tenantId
- * 必须一致（若两者都给），不一致直接 {@code FORBIDDEN}——防跨租户注入。
+ * <p>租户一致性：{@link #resolveTenantId} 要求请求 body 的 tenantId 与 header 携带的 tenantId 必须一致（若两者都给），不一致直接
+ * {@code FORBIDDEN}——防跨租户注入。
  */
 @Service
 @RequiredArgsConstructor

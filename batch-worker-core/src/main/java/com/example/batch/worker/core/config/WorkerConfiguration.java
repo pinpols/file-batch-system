@@ -27,8 +27,8 @@ public interface WorkerConfiguration {
   String consumerGroupId();
 
   /**
-   * 能力标签列表，心跳上报到 orchestrator 后写入 {@code worker_registry.capability_tags} JSONB。
-   * 配合带 {@code resource_tag} 的 queue 做细粒度路由（参见 {@code DefaultWorkerSelector.matchesResourceTag}）。
+   * 能力标签列表，心跳上报到 orchestrator 后写入 {@code worker_registry.capability_tags} JSONB。 配合带 {@code
+   * resource_tag} 的 queue 做细粒度路由（参见 {@code DefaultWorkerSelector.matchesResourceTag}）。
    * 默认返回空列表；worker 实现若不覆写等同于「不声明任何能力」。
    */
   default List<String> capabilityTags() {

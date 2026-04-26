@@ -14,16 +14,14 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 定时为所有 in-flight 任务续租：从 {@link ActiveTaskLeaseRegistry#snapshot} 取出当前
- * 活跃租约列表，逐条调 Orchestrator 的 {@code renewLease} 接口延长任务心跳超时。
+ * 定时为所有 in-flight 任务续租：从 {@link ActiveTaskLeaseRegistry#snapshot} 取出当前 活跃租约列表，逐条调 Orchestrator 的
+ * {@code renewLease} 接口延长任务心跳超时。
  *
- * <p>若 Orchestrator 返回 false（如任务已被取消或超时驱逐），记录 warn 日志；
- * 续租失败不中断执行——任务仍会继续运行并在完成时正常 report，
- * 但 Orchestrator 侧可能已将其标记为失活并重新派发（罕见情况）。
+ * <p>若 Orchestrator 返回 false（如任务已被取消或超时驱逐），记录 warn 日志； 续租失败不中断执行——任务仍会继续运行并在完成时正常 report， 但
+ * Orchestrator 侧可能已将其标记为失活并重新派发（罕见情况）。
  *
- * <p><b>R-4.4 a</b>：按 taskId 追踪连续失败次数，超阈值时 log.error + micrometer 计数，
- * 让运维可以在 Orchestrator 长时间不可达时告警。仍保持"不熔断"语义（激进熔断会级联），
- * 但不再静默——单次失败 warn、连续 N 次 error + counter、恢复后重置。
+ * <p><b>R-4.4 a</b>：按 taskId 追踪连续失败次数，超阈值时 log.error + micrometer 计数， 让运维可以在 Orchestrator
+ * 长时间不可达时告警。仍保持"不熔断"语义（激进熔断会级联）， 但不再静默——单次失败 warn、连续 N 次 error + counter、恢复后重置。
  */
 @Slf4j
 @Component
@@ -94,8 +92,7 @@ public class WorkerTaskLeaseRenewer {
     }
   }
 
-  private void trackFailure(
-      ActiveTaskLeaseRegistry.ActiveTaskLease lease, String reason) {
+  private void trackFailure(ActiveTaskLeaseRegistry.ActiveTaskLease lease, String reason) {
     int count =
         consecutiveFailures
             .computeIfAbsent(lease.getTaskId(), k -> new AtomicInteger())
@@ -112,10 +109,7 @@ public class WorkerTaskLeaseRenewer {
       MeterRegistry registry = meterRegistryProvider.getIfAvailable();
       if (registry != null) {
         Counter.builder(METRIC_CONSECUTIVE)
-            .tags(
-                Tags.of(
-                    "tenantId", String.valueOf(lease.getTenantId()),
-                    "reason", reason))
+            .tags(Tags.of("tenantId", String.valueOf(lease.getTenantId()), "reason", reason))
             .register(registry)
             .increment();
       }

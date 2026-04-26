@@ -18,9 +18,8 @@ class ChannelConfigMergeTest {
   }
 
   /**
-   * S-1.5：白名单模式下，仅 ALLOWED_CONFIG_KEYS 里登记的键能从 config_json overlay；
-   * 其他键（"endpoint" 这种通用占位名，或 "tenant_id" 这种策略列）一律被拒绝，
-   * 防止渠道配置通过 config_json 绕过管理员策略。
+   * S-1.5：白名单模式下，仅 ALLOWED_CONFIG_KEYS 里登记的键能从 config_json overlay； 其他键（"endpoint" 这种通用占位名，或
+   * "tenant_id" 这种策略列）一律被拒绝， 防止渠道配置通过 config_json 绕过管理员策略。
    */
   @Test
   void shouldOnlyOverlayWhitelistedKeysFromConfigJsonMap() {

@@ -7,6 +7,7 @@ import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import com.example.batch.orchestrator.config.FileGovernanceProperties;
 import com.example.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
@@ -28,7 +29,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.batch.common.utils.Texts;
 
 /**
  * 文件治理统一入口：archive / delete / presign / redispatch / 到达组（arrival group）5 类操作。
@@ -36,13 +36,13 @@ import com.example.batch.common.utils.Texts;
  * <p>公共约束：
  *
  * <ul>
- *   <li><b>安静期要求</b>：改状态类操作（archive / delete）先调 {@link #assertNoActiveRuntime}
- *       确认无活跃 pipeline / pending dispatch，避免与运行中 pipeline 并发写导致状态漂移。
+ *   <li><b>安静期要求</b>：改状态类操作（archive / delete）先调 {@link #assertNoActiveRuntime} 确认无活跃 pipeline /
+ *       pending dispatch，避免与运行中 pipeline 并发写导致状态漂移。
  *   <li><b>统一审计</b>：所有操作——包括失败路径——都写 {@code file_audit_log}，成功/失败都可追溯。
- *   <li><b>presign 安全分路</b>：content_encryption_enabled 的文件不直接 presign S3，改走
- *       console 代理 URL，让解密与下载审计都经过 console 层。
- *   <li><b>redispatch 语义</b>：3 表（dispatch_record / partition / task）同事务复位后，用
- *       {@code RunMode.COMPENSATE} 打标再 outbox 派发，worker 据此区分是补偿重派还是首次执行。
+ *   <li><b>presign 安全分路</b>：content_encryption_enabled 的文件不直接 presign S3，改走 console 代理
+ *       URL，让解密与下载审计都经过 console 层。
+ *   <li><b>redispatch 语义</b>：3 表（dispatch_record / partition / task）同事务复位后，用 {@code
+ *       RunMode.COMPENSATE} 打标再 outbox 派发，worker 据此区分是补偿重派还是首次执行。
  * </ul>
  */
 @Service
@@ -78,13 +78,13 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
    *
    * <ul>
    *   <li>{@code content_encryption_enabled=true}（且非 bypass-mode）：不能直接暴露 S3 presign URL，
-   *       因为原始对象是加密字节；改返回 {@code /api/console/files/{id}/download} 走 console 代理，
-   *       由 console 侧解密 + 审计后再吐给前端。
+   *       因为原始对象是加密字节；改返回 {@code /api/console/files/{id}/download} 走 console 代理， 由 console 侧解密 +
+   *       审计后再吐给前端。
    *   <li>普通文件：直连 MinIO 生成有 TTL 的 presign URL（下限 60s）。
    * </ul>
    *
-   * <p>若模板配置 {@code download_requires_approval}，则请求必须带 {@code approvalId}，否则 400。
-   * 所有成功路径都写 {@code PRESIGN_DOWNLOAD} 审计。
+   * <p>若模板配置 {@code download_requires_approval}，则请求必须带 {@code approvalId}，否则 400。 所有成功路径都写 {@code
+   * PRESIGN_DOWNLOAD} 审计。
    */
   @Override
   @Transactional
@@ -164,9 +164,9 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   }
 
   /**
-   * 手动重派文件：同事务内复位 dispatch_record / partition（→ READY）/ task（→ READY），然后以
-   * {@code RunMode.COMPENSATE} 打标写 outbox 派发事件。COMPENSATE 标记让 worker 走补偿分支——避免被当作首次
-   * 执行重复上报失败导致死信。{@code eventKey} 用 {@code manual-redispatch:{taskId}}，保证同一 task 并发重派幂等。
+   * 手动重派文件：同事务内复位 dispatch_record / partition（→ READY）/ task（→ READY），然后以 {@code
+   * RunMode.COMPENSATE} 打标写 outbox 派发事件。COMPENSATE 标记让 worker 走补偿分支——避免被当作首次 执行重复上报失败导致死信。{@code
+   * eventKey} 用 {@code manual-redispatch:{taskId}}，保证同一 task 并发重派幂等。
    */
   @Override
   @Transactional

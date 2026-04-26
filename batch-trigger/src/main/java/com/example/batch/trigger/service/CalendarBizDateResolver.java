@@ -15,12 +15,12 @@ import org.springframework.stereotype.Component;
  * 将调度触发时间（{@code fireTime}）转换为业务日期（bizDate），实现 batch day 语义。
  *
  * <p><b>bizDate 计算逻辑</b>：
+ *
  * <ol>
  *   <li>以日历时区（缺省 fallbackZoneId）将 fireTime 转为本地日期和本地时间。
- *   <li>若 localTime {@code <} cutoffTime（默认 06:00）→ rawBizDate = 昨天；否则 = 今天。
- *       例：02:00 触发时，业务上仍属前一天的批处理批次。
- *   <li>若 rawBizDate 是节假日，按 {@code holidayRollRule} 调整：
- *       {@code SKIP} → 返回 {@code null}（调用方跳过本次调度）；
+ *   <li>若 localTime {@code <} cutoffTime（默认 06:00）→ rawBizDate = 昨天；否则 = 今天。 例：02:00
+ *       触发时，业务上仍属前一天的批处理批次。
+ *   <li>若 rawBizDate 是节假日，按 {@code holidayRollRule} 调整： {@code SKIP} → 返回 {@code null}（调用方跳过本次调度）；
  *       {@code PREV_WORKDAY} / {@code NEXT_WORKDAY} → 向前/后搜索最近工作日（上限 365 天）。
  *   <li>{@code workdayOverrides} 可将节假日强制转为工作日（优先级高于 holidays）。
  * </ol>

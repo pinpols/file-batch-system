@@ -24,7 +24,8 @@ import lombok.RequiredArgsConstructor;
  *   <li>{@code batch.trigger.wheel.misfire.handled} — Counter (按 policy tag),misfire 处理数
  *   <li>{@code batch.trigger.wheel.leader.acquire} — Counter,leader 切换次数
  *   <li>{@code batch.trigger.wheel.leader.acquire.duration} — Timer,fast-path 耗时
- *   <li>{@code batch.trigger.wheel.runtime_state.stale_marker.released} — Counter,接管的 stale marker 数
+ *   <li>{@code batch.trigger.wheel.runtime_state.stale_marker.released} — Counter,接管的 stale marker
+ *       数
  * </ul>
  */
 @RequiredArgsConstructor
@@ -41,7 +42,8 @@ public class WheelMetrics {
   public static final String FIRE_DUPLICATE_SKIPPED = "batch.trigger.wheel.fire.duplicate.skipped";
   public static final String MISFIRE_HANDLED = "batch.trigger.wheel.misfire.handled";
   public static final String LEADER_ACQUIRE = "batch.trigger.wheel.leader.acquire";
-  public static final String LEADER_ACQUIRE_DURATION = "batch.trigger.wheel.leader.acquire.duration";
+  public static final String LEADER_ACQUIRE_DURATION =
+      "batch.trigger.wheel.leader.acquire.duration";
   public static final String STALE_MARKER_RELEASED =
       "batch.trigger.wheel.runtime_state.stale_marker.released";
 
@@ -75,10 +77,7 @@ public class WheelMetrics {
   }
 
   public void incrementFireSuccess(String jobGroup) {
-    Counter.builder(FIRE_SUCCESS)
-        .tags(Tags.of("group", jobGroup))
-        .register(registry)
-        .increment();
+    Counter.builder(FIRE_SUCCESS).tags(Tags.of("group", jobGroup)).register(registry).increment();
   }
 
   public void incrementFireFailed(String jobGroup, String reason) {
@@ -97,10 +96,7 @@ public class WheelMetrics {
   }
 
   public void incrementMisfireHandled(String policy) {
-    Counter.builder(MISFIRE_HANDLED)
-        .tags(Tags.of("policy", policy))
-        .register(registry)
-        .increment();
+    Counter.builder(MISFIRE_HANDLED).tags(Tags.of("policy", policy)).register(registry).increment();
   }
 
   public void incrementLeaderAcquire() {

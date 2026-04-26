@@ -1,6 +1,7 @@
 package com.example.batch.worker.imports.stage;
 
 import com.example.batch.common.constants.BatchFileConstants;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.imports.config.ImportWorkerConfiguration;
@@ -25,13 +26,13 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
- * Import pipeline 的 VALIDATE 阶段：流式读取 {@code PARSED_RECORDS_PATH} 暂存文件，
- * 对每条记录执行数据质量校验，将通过校验的记录写入 {@code VALIDATED_RECORDS_PATH} 暂存文件。
+ * Import pipeline 的 VALIDATE 阶段：流式读取 {@code PARSED_RECORDS_PATH} 暂存文件， 对每条记录执行数据质量校验，将通过校验的记录写入
+ * {@code VALIDATED_RECORDS_PATH} 暂存文件。
  *
  * <p><b>校验流程</b>：
+ *
  * <ol>
  *   <li>数据集级别校验（行数、checksum、schema 字段）——任意失败且不可跳过则立即返回。
  *   <li>逐行按 {@code chunk_size}（默认取 {@link ImportWorkerConfiguration#chunkSize()}）分块校验，

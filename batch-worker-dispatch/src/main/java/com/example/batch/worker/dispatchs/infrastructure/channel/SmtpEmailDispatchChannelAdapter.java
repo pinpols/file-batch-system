@@ -1,6 +1,7 @@
 package com.example.batch.worker.dispatchs.infrastructure.channel;
 
 import com.example.batch.common.config.BatchSecurityProperties;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
 import jakarta.activation.DataHandler;
 import jakarta.activation.FileDataSource;
@@ -25,7 +26,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
-import com.example.batch.common.utils.Texts;
 
 /**
  * SMTP 邮件邮件分发适配器，将 {@code file_record} 中的文件作为附件通过 SMTP 发送。
@@ -215,11 +215,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     if (size > MAX_ATTACHMENT_BYTES) {
       Files.deleteIfExists(attachmentFile);
       throw new IllegalStateException(
-          "mail attachment size "
-              + size
-              + " bytes exceeds cap "
-              + MAX_ATTACHMENT_BYTES
-              + " bytes");
+          "mail attachment size " + size + " bytes exceeds cap " + MAX_ATTACHMENT_BYTES + " bytes");
     }
     return attachmentFile;
   }

@@ -17,9 +17,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * WheelTriggerReconciler IT — 验证 DB ↔ trigger_runtime_state 同步。
- */
+/** WheelTriggerReconciler IT — 验证 DB ↔ trigger_runtime_state 同步。 */
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -39,8 +37,10 @@ class WheelTriggerReconcilerIT extends AbstractIntegrationTest {
     jdbcTemplate.update("delete from batch.shedlock where name = 'wheel_trigger_reconciler'");
     tenantId = "wrec-it-" + System.nanoTime();
     jdbcTemplate.update(
-        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on conflict do nothing",
-        tenantId, tenantId);
+        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on"
+            + " conflict do nothing",
+        tenantId,
+        tenantId);
   }
 
   @Test
@@ -63,8 +63,7 @@ class WheelTriggerReconcilerIT extends AbstractIntegrationTest {
     assertThat(stateMapper.selectByJobDefinitionId(jobDefId)).isNotNull();
 
     // disable trigger
-    jdbcTemplate.update(
-        "update batch.job_definition set enabled = false where id = ?", jobDefId);
+    jdbcTemplate.update("update batch.job_definition set enabled = false where id = ?", jobDefId);
     reconciler.doReconcile();
 
     assertThat(stateMapper.selectByJobDefinitionId(jobDefId)).isNull();
@@ -113,6 +112,12 @@ class WheelTriggerReconcilerIT extends AbstractIntegrationTest {
           'CRON', ?, 'Asia/Shanghai',
           ?, 'it', 'it')
         returning id
-        """, Long.class, tenantId, jobCode, jobCode, scheduleExpr, enabled);
+        """,
+        Long.class,
+        tenantId,
+        jobCode,
+        jobCode,
+        scheduleExpr,
+        enabled);
   }
 }

@@ -52,8 +52,11 @@ class ConsoleOpsControllerTest {
     mockMvc =
         MockMvcBuilders.standaloneSetup(
                 new ConsoleOpsController(
-                    opsApplicationService, outboxOpsService, responseFactory,
-                    kafkaLagQueryService, passThroughCache()))
+                    opsApplicationService,
+                    outboxOpsService,
+                    responseFactory,
+                    kafkaLagQueryService,
+                    passThroughCache()))
             .setControllerAdvice(exceptionHandler)
             .setValidator(validator)
             .build();

@@ -20,13 +20,13 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>{@code STATIC}：从 params 里读固定值。
- *   <li>{@code DYNAMIC / AUTO}：走 {@link #resolveDynamicPartitionCount}——按 {@code @Order} 串起的
- *       {@link PartitionCountResolver} 策略链，第一个返回正值的结果胜出。
+ *   <li>{@code DYNAMIC / AUTO}：走 {@link #resolveDynamicPartitionCount}——按 {@code @Order} 串起的 {@link
+ *       PartitionCountResolver} 策略链，第一个返回正值的结果胜出。
  *   <li>{@code NONE}：固定为 1。
  * </ul>
  *
- * <p>结果统一经 {@link #normalizePartitionCount} 夹到 {@code [min, max]} 区间，{@code maxPartitionCount}
- * 硬上限为 256 防止失控膨胀。
+ * <p>结果统一经 {@link #normalizePartitionCount} 夹到 {@code [min, max]} 区间，{@code maxPartitionCount} 硬上限为
+ * 256 防止失控膨胀。
  */
 @Component
 @RequiredArgsConstructor

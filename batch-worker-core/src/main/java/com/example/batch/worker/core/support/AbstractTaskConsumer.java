@@ -73,10 +73,12 @@ public abstract class AbstractTaskConsumer {
   private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
   // #6-2: 注入 MeterRegistry 用于暴露信号量可用许可数
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+
   // P2-5 worker 端 Kafka 订阅模式开关；required=false 让旧测试 / 不开启此特性的 e2e 也能起，
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
   @Autowired(required = false)
   private WorkerKafkaSubscribeProperties subscribeProperties;
+
   private volatile Semaphore semaphore;
 
   protected AbstractTaskConsumer(
@@ -286,8 +288,8 @@ public abstract class AbstractTaskConsumer {
    * 返回该消费者监听的 Kafka topic 列表；公开为 public 方法，供子类 {@code @KafkaListener} SpEL 表达式 通过 {@code
    * #{__listener.topics()}} 引用。
    *
-   * <p>P2-5 之后已废弃 — 推荐用 {@link #topicPattern()} 代替；保留本方法兼容老子类（{@code @KafkaListener(topics=...)}）
-   * 仅 SINGLE 模式下能匹配 producer 端实际写出的 topic。
+   * <p>P2-5 之后已废弃 — 推荐用 {@link #topicPattern()} 代替；保留本方法兼容老子类（{@code @KafkaListener(topics=...)}） 仅
+   * SINGLE 模式下能匹配 producer 端实际写出的 topic。
    */
   public String[] topics() {
     WorkerConfiguration cfg = workerConfiguration();
@@ -302,16 +304,17 @@ public abstract class AbstractTaskConsumer {
   }
 
   /**
-   * P2-5 worker 端 Kafka pattern 适配：用宽松 regex 同时匹配 SINGLE / TENANT / PRIORITY 三种 producer
-   * 输出的 topic 形态。Kafka client 按 {@code metadata.max.age.ms} 周期重新发现匹配 topic，新增 tenant /
-   * priority 后缀 topic 会自动被 worker 拾取。
+   * P2-5 worker 端 Kafka pattern 适配：用宽松 regex 同时匹配 SINGLE / TENANT / PRIORITY 三种 producer 输出的 topic
+   * 形态。Kafka client 按 {@code metadata.max.age.ms} 周期重新发现匹配 topic，新增 tenant / priority 后缀 topic 会自动被
+   * worker 拾取。
    *
    * <p>匹配规则（base = 例如 {@code batch.task.dispatch.import}）：
+   *
    * <ul>
    *   <li>{@code base}（exact）：SINGLE 模式 producer 写出的固定 topic
    *   <li>{@code base.node.{ourWorkerCode}}（exact）：直达分发 topic（粘性路由）
-   *   <li>{@code base.<single-segment>}（一段后缀，不含 dot）：TENANT 后缀（{@code .default-tenant}） /
-   *       PRIORITY 后缀（{@code .high}）
+   *   <li>{@code base.<single-segment>}（一段后缀，不含 dot）：TENANT 后缀（{@code .default-tenant}） / PRIORITY
+   *       后缀（{@code .high}）
    * </ul>
    *
    * <p><b>不匹配</b> {@code base.node.{otherWorkerCode}} —— 直达 topic 是双段后缀，由 {@code .[^.]+} 排除。
@@ -380,8 +383,7 @@ public abstract class AbstractTaskConsumer {
   }
 
   private static String escapeRegex(String value) {
-    return value.replaceAll(
-        "([\\\\\\.\\[\\]\\(\\)\\{\\}\\^\\$\\|\\?\\*\\+])", "\\\\$1");
+    return value.replaceAll("([\\\\\\.\\[\\]\\(\\)\\{\\}\\^\\$\\|\\?\\*\\+])", "\\\\$1");
   }
 
   private String resolveBaseTopic(WorkerConfiguration cfg) {

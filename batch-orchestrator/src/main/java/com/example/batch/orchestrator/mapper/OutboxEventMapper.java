@@ -50,13 +50,11 @@ public interface OutboxEventMapper {
       @Param("timeoutSeconds") long timeoutSeconds);
 
   /**
-   * Outbox archive 调度器：选出指定 status 中、created_at 早于 cutoff 的事件 id（带 limit）。
-   * status 通常是 PUBLISHED 或 GIVE_UP；其他状态（NEW/FAILED/PUBLISHING）属于活跃事件不归档。
+   * Outbox archive 调度器：选出指定 status 中、created_at 早于 cutoff 的事件 id（带 limit）。 status 通常是 PUBLISHED 或
+   * GIVE_UP；其他状态（NEW/FAILED/PUBLISHING）属于活跃事件不归档。
    */
   List<Long> selectArchivableIds(
-      @Param("status") String status,
-      @Param("cutoff") Instant cutoff,
-      @Param("limit") int limit);
+      @Param("status") String status, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
 
   /** 将待瘦身 outbox_event 复制到 archive schema；重复 id 跳过，保证归档任务可重入。 */
   int archiveOutboxEventsByIds(@Param("ids") List<Long> ids);

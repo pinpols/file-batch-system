@@ -27,10 +27,7 @@ public class DefaultConsoleTriggerProxyService implements ConsoleTriggerProxySer
   private final Environment environment;
   private final BatchSecurityProperties securityProperties;
 
-  /**
-   * 构造带 X-Internal-Secret 头的 RestClient。
-   * 缺失此头，batch-trigger 侧 InternalSecretFilter 会直接 401。
-   */
+  /** 构造带 X-Internal-Secret 头的 RestClient。 缺失此头，batch-trigger 侧 InternalSecretFilter 会直接 401。 */
   private RestClient newClient() {
     return restClientBuilder
         .baseUrl(resolveUrl(triggerClientProperties.getBaseUrl()))

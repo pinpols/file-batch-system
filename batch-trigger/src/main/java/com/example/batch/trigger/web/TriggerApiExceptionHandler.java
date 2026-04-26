@@ -14,9 +14,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Trigger 模块全局异常处理器：继承 {@link AbstractApiExceptionHandler} 取得
- * Biz / System / 通用异常的统一处理；额外追加 Spring Web 校验相关异常
- * （MethodArgumentNotValid / ConstraintViolation / MissingRequestHeader）的映射。
+ * Trigger 模块全局异常处理器：继承 {@link AbstractApiExceptionHandler} 取得 Biz / System / 通用异常的统一处理；额外追加 Spring
+ * Web 校验相关异常 （MethodArgumentNotValid / ConstraintViolation / MissingRequestHeader）的映射。
  */
 @RestControllerAdvice
 public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {

@@ -26,22 +26,21 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /**
  * 控制台实时事件总线：把事件分发给本机的 SSE 订阅者。
  *
- * <p>分工边界：本类<b>只</b>做本机连接管理与 fanout，不轮询 DB；跨实例的事件共享由 Redis Streams
- * （见 {@code ConsoleRealtimeReplayStore} 与发布端）负责。
+ * <p>分工边界：本类<b>只</b>做本机连接管理与 fanout，不轮询 DB；跨实例的事件共享由 Redis Streams （见 {@code
+ * ConsoleRealtimeReplayStore} 与发布端）负责。
  *
  * <p>关键机制：
  *
  * <ul>
  *   <li><b>事务提交后广播</b>（{@link #publishAfterCommit}）：检测到当前有事务时注册 {@code afterCommit}
  *       synchronization，只在事务成功提交后才 fanout——避免把最终会回滚的中间态推到前端造成 UI 幻读。
- *   <li><b>3 维过滤</b>：订阅按 {@code (tenantId, stream, eventType)} 严格匹配事件，{@code stream="*"}
- *       或 eventType 为 null/blank 视为通配。
- *   <li><b>心跳保活</b>：默认 25s 发 heartbeat 事件，防止代理/负载均衡在空闲连接上断线；
- *       下限 clamp 到 10s 防止客户端指定过短间隔打爆线程。
+ *   <li><b>3 维过滤</b>：订阅按 {@code (tenantId, stream, eventType)} 严格匹配事件，{@code stream="*"} 或
+ *       eventType 为 null/blank 视为通配。
+ *   <li><b>心跳保活</b>：默认 25s 发 heartbeat 事件，防止代理/负载均衡在空闲连接上断线； 下限 clamp 到 10s 防止客户端指定过短间隔打爆线程。
  *   <li><b>断线回放</b>（{@link #replay}）：新订阅带 {@code cursor} 时从 replay store 拉该 cursor 之后的历史
  *       事件补推；cursor 已被回收或不存在时发 {@code reset-required} 事件要求前端重连并拿新 cursor。
- *   <li><b>生命周期</b>：emitter 的 onCompletion / onTimeout / onError 统一走 {@link #close}，
- *       用 {@code AtomicBoolean} 保证幂等清理（取消心跳 future + 从订阅列表移除 + 指标递减）。
+ *   <li><b>生命周期</b>：emitter 的 onCompletion / onTimeout / onError 统一走 {@link #close}， 用 {@code
+ *       AtomicBoolean} 保证幂等清理（取消心跳 future + 从订阅列表移除 + 指标递减）。
  * </ul>
  */
 @Service

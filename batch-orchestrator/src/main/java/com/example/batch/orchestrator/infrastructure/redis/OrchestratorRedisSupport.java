@@ -14,9 +14,8 @@ import org.springframework.stereotype.Component;
 /**
  * Orchestrator Redis 操作工具类：封装常用 Redis 操作，统一序列化/反序列化并提供原子化操作支持。
  *
- * <p>主要能力：JSON 值的 get/set/delete（反序列化失败时自动删除脏数据）、
- * Hash 整体写入、滑动窗口计数器（{@code incrementWithinWindow}，首次写入时设置 TTL），
- * 以及执行 Lua 脚本（{@code evalLong}）。
+ * <p>主要能力：JSON 值的 get/set/delete（反序列化失败时自动删除脏数据）、 Hash 整体写入、滑动窗口计数器（{@code
+ * incrementWithinWindow}，首次写入时设置 TTL）， 以及执行 Lua 脚本（{@code evalLong}）。
  */
 @Component
 @RequiredArgsConstructor
@@ -80,8 +79,8 @@ public class OrchestratorRedisSupport {
   }
 
   /**
-   * 执行 Lua 脚本并返回 List 结果。元素类型依赖 Lua return 的形态：number → Long，string → String。
-   * 调用方按需 toString 后 parseLong / 直接用。Quota 状态服务等需要原子返回多字段的场景使用。
+   * 执行 Lua 脚本并返回 List 结果。元素类型依赖 Lua return 的形态：number → Long，string → String。 调用方按需 toString 后
+   * parseLong / 直接用。Quota 状态服务等需要原子返回多字段的场景使用。
    */
   @SuppressWarnings("unchecked")
   public List<Object> evalList(String script, String key, String... args) {

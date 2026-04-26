@@ -11,10 +11,9 @@ import org.springframework.stereotype.Component;
 /**
  * 重试计划轮询调度器。
  *
- * <p>默认每 10 秒触发一次，将到期的重试记录下发给 {@link RetryGovernanceService#dispatchDueRetries()}
- * 重新进入调度链路。ShedLock 锁名 {@code retry_schedule_poll}，最长持锁 1 分钟，最短持锁 5 秒。
- * 使用 {@link java.util.concurrent.atomic.AtomicBoolean} 防止单节点并发重入；
- * Orchestrator 优雅停机时直接跳过。
+ * <p>默认每 10 秒触发一次，将到期的重试记录下发给 {@link RetryGovernanceService#dispatchDueRetries()} 重新进入调度链路。ShedLock
+ * 锁名 {@code retry_schedule_poll}，最长持锁 1 分钟，最短持锁 5 秒。 使用 {@link
+ * java.util.concurrent.atomic.AtomicBoolean} 防止单节点并发重入； Orchestrator 优雅停机时直接跳过。
  */
 @Component
 @RequiredArgsConstructor

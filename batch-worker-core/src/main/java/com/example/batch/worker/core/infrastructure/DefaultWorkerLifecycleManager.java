@@ -13,9 +13,9 @@ import org.springframework.stereotype.Service;
 /**
  * Worker 生命周期管理器默认实现：封装注册、心跳、状态迁移和关机流程。
  *
- * <p><b>关机顺序</b>：先将 worker 状态更新为 {@code DRAINING}（通知 Orchestrator 停止派发新任务），
- * 若此时 {@link ActiveTaskLeaseRegistry} 中无 in-flight 任务则直接迁移到 {@code DECOMMISSIONED}；
- * 否则保留 DRAINING 状态，由 {@link GracefulKafkaShutdown} 负责等待排空后调 deactivate。
+ * <p><b>关机顺序</b>：先将 worker 状态更新为 {@code DRAINING}（通知 Orchestrator 停止派发新任务）， 若此时 {@link
+ * ActiveTaskLeaseRegistry} 中无 in-flight 任务则直接迁移到 {@code DECOMMISSIONED}； 否则保留 DRAINING 状态，由 {@link
+ * GracefulKafkaShutdown} 负责等待排空后调 deactivate。
  *
  * <p>状态流：{@code ONLINE → DRAINING → DECOMMISSIONED}
  */

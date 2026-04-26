@@ -19,10 +19,9 @@ import org.springframework.stereotype.Service;
  *
  * <ul>
  *   <li>{@link #fromApiRequest} — 直接透传 API 请求字段，bizDate 由调用方提供。
- *   <li>{@link #fromScheduledTrigger} — Quartz 触发路径：bizDate 由 {@link CalendarBizDateResolver}
- *       根据 fireTime + 日历配置（时区、cutoffTime、节假日）计算得出；
- *       {@code bizDate=null} 表示当天是节假日且 rollRule=SKIP，调用方据此跳过本次调度；
- *       params 中额外写入 scheduleType、catchUp、catchUpApprovalRequired 等元数据，
+ *   <li>{@link #fromScheduledTrigger} — Quartz 触发路径：bizDate 由 {@link CalendarBizDateResolver} 根据
+ *       fireTime + 日历配置（时区、cutoffTime、节假日）计算得出； {@code bizDate=null} 表示当天是节假日且
+ *       rollRule=SKIP，调用方据此跳过本次调度； params 中额外写入 scheduleType、catchUp、catchUpApprovalRequired 等元数据，
  *       供 Orchestrator 记录审计和决策 catch-up 流程。
  * </ul>
  */

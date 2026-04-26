@@ -38,11 +38,12 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@TestPropertySource(properties = {
-    "batch.trigger.scheduler-impl=wheel",
-    "batch.trigger.wheel.sliding-window-scan-interval-seconds=2",
-    "batch.trigger.wheel.tick-millis=50"
-})
+@TestPropertySource(
+    properties = {
+      "batch.trigger.scheduler-impl=wheel",
+      "batch.trigger.wheel.sliding-window-scan-interval-seconds=2",
+      "batch.trigger.wheel.tick-millis=50"
+    })
 @Transactional(propagation = Propagation.NEVER)
 class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
 
@@ -58,24 +59,34 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
   @BeforeEach
   void seed() {
     // 清 ShedLock 残留(@SchedulerLock lockAtLeastFor 在 IT 之间会保留锁)
-    jdbcTemplate.update("delete from batch.shedlock where name in (?, ?, ?)",
-        "trigger_wheel_leader", "wheel_stale_marker_release", "wheel_trigger_reconciler");
+    jdbcTemplate.update(
+        "delete from batch.shedlock where name in (?, ?, ?)",
+        "trigger_wheel_leader",
+        "wheel_stale_marker_release",
+        "wheel_trigger_reconciler");
     tenantId = "wheel-it-" + System.nanoTime();
     jobCode = "job-" + System.nanoTime();
     jdbcTemplate.update(
-        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on conflict do nothing",
-        tenantId, tenantId);
-    jobDefId = jdbcTemplate.queryForObject(
-        """
-        insert into batch.job_definition (
-          tenant_id, job_code, job_name, job_type,
-          schedule_type, schedule_expr, timezone,
-          enabled, created_by, updated_by
-        ) values (?, ?, ?, 'GENERAL',
-          'CRON', '0 * * * * ?', 'Asia/Shanghai',
-          true, 'it', 'it')
-        returning id
-        """, Long.class, tenantId, jobCode, jobCode);
+        "insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE') on"
+            + " conflict do nothing",
+        tenantId,
+        tenantId);
+    jobDefId =
+        jdbcTemplate.queryForObject(
+            """
+            insert into batch.job_definition (
+              tenant_id, job_code, job_name, job_type,
+              schedule_type, schedule_expr, timezone,
+              enabled, created_by, updated_by
+            ) values (?, ?, ?, 'GENERAL',
+              'CRON', '0 * * * * ?', 'Asia/Shanghai',
+              true, 'it', 'it')
+            returning id
+            """,
+            Long.class,
+            tenantId,
+            jobCode,
+            jobCode);
   }
 
   @Test
@@ -110,10 +121,11 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(8))
         .pollInterval(Duration.ofMillis(200))
-        .until(() -> {
-          TriggerRuntimeStateEntity state = stateMapper.selectByJobDefinitionId(jobDefId);
-          return state != null && state.getLastFireStatus() != null;
-        });
+        .until(
+            () -> {
+              TriggerRuntimeStateEntity state = stateMapper.selectByJobDefinitionId(jobDefId);
+              return state != null && state.getLastFireStatus() != null;
+            });
 
     TriggerRuntimeStateEntity afterFire = stateMapper.selectByJobDefinitionId(jobDefId);
     // FIRED(orchestrator 可达)or FAILED(IT 不可达,但 fire 流程跑全)or
@@ -124,15 +136,15 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
   }
 
   /**
-   * R-1 重复 fire 防御:wheel 不再自己 INSERT trigger_request 走 DB UNIQUE 兜底
-   * (已通过 V70 撤销)。改为依赖三层防御:marker CAS + LaunchService persistAndForward
-   * 软幂等 + job_instance.uk_job_instance_tenant_dedup。
+   * R-1 重复 fire 防御:wheel 不再自己 INSERT trigger_request 走 DB UNIQUE 兜底 (已通过 V70 撤销)。改为依赖三层防御:marker
+   * CAS + LaunchService persistAndForward 软幂等 + job_instance.uk_job_instance_tenant_dedup。
    *
-   * <p>本测试覆盖第二层:模拟"另一 leader 已经写了 trigger_request 同 dedupKey 行",
-   * 然后 wheel 调 launchScheduled,LaunchService select-by-dedupKey 应当看到 existing →
-   * 直接 return existing.requestId,**不再 INSERT 新行 + 不再 forward 到 orchestrator**。
+   * <p>本测试覆盖第二层:模拟"另一 leader 已经写了 trigger_request 同 dedupKey 行", 然后 wheel 调
+   * launchScheduled,LaunchService select-by-dedupKey 应当看到 existing → 直接 return
+   * existing.requestId,**不再 INSERT 新行 + 不再 forward 到 orchestrator**。
    *
    * <p>验证点:
+   *
    * <ul>
    *   <li>fire 流程跑完(last_fire_status 非 null)
    *   <li>没有第二行 trigger_request(还是 1 行 — preempt 写的那一行)
@@ -157,9 +169,11 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
     preempt.setRequestStatus("ACCEPTED");
     requestMapper.insert(preempt);
 
-    int countBefore = jdbcTemplate.queryForObject(
-        "select count(*) from batch.trigger_request where dedup_key = ?",
-        Integer.class, preemptDedupKey);
+    int countBefore =
+        jdbcTemplate.queryForObject(
+            "select count(*) from batch.trigger_request where dedup_key = ?",
+            Integer.class,
+            preemptDedupKey);
     assertThat(countBefore).isEqualTo(1);
 
     wheelScheduler.scanAndSchedule(Duration.ofSeconds(30));
@@ -167,10 +181,11 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
     await()
         .atMost(Duration.ofSeconds(8))
         .pollInterval(Duration.ofMillis(200))
-        .until(() -> {
-          TriggerRuntimeStateEntity s = stateMapper.selectByJobDefinitionId(jobDefId);
-          return s != null && s.getLastFireStatus() != null;
-        });
+        .until(
+            () -> {
+              TriggerRuntimeStateEntity s = stateMapper.selectByJobDefinitionId(jobDefId);
+              return s != null && s.getLastFireStatus() != null;
+            });
 
     TriggerRuntimeStateEntity afterFire = stateMapper.selectByJobDefinitionId(jobDefId);
     // wheel 视角:fire 流程跑完(LaunchService 软幂等返回 existing 视为成功);next_fire_time 推进
@@ -178,9 +193,11 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
     assertThat(afterFire.getScheduledFireMarker()).isNull();
 
     // 关键:LaunchService 软幂等生效 — 没有第二行 trigger_request(只有 preempt 那一行)
-    int countAfter = jdbcTemplate.queryForObject(
-        "select count(*) from batch.trigger_request where dedup_key = ?",
-        Integer.class, preemptDedupKey);
+    int countAfter =
+        jdbcTemplate.queryForObject(
+            "select count(*) from batch.trigger_request where dedup_key = ?",
+            Integer.class,
+            preemptDedupKey);
     assertThat(countAfter).isEqualTo(1);
   }
 

@@ -3,6 +3,7 @@ package com.example.batch.console.support;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -31,7 +32,6 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import com.example.batch.common.utils.Texts;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
@@ -91,11 +91,11 @@ public final class ConsoleSingleSheetExcelImportSupport {
       Set<String> requiredHeaders)
       throws IOException {
     if (bytes.length > SAX_THRESHOLD_BYTES) {
-      return parseWorkbookSax(bytes, tenantId, originalFileName, defaultFileName, columns,
-          requiredHeaders);
+      return parseWorkbookSax(
+          bytes, tenantId, originalFileName, defaultFileName, columns, requiredHeaders);
     }
-    return parseWorkbookDom(bytes, tenantId, originalFileName, defaultFileName, columns,
-        requiredHeaders);
+    return parseWorkbookDom(
+        bytes, tenantId, originalFileName, defaultFileName, columns, requiredHeaders);
   }
 
   /** DOM 模式（小文件 ≤ 2MB）：加载整个 Workbook 到内存。 */
@@ -156,8 +156,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
       XSSFReader reader = new XSSFReader(pkg);
       StylesTable styles = reader.getStylesTable();
 
-      XSSFReader.SheetIterator sheetIter =
-          (XSSFReader.SheetIterator) reader.getSheetsData();
+      XSSFReader.SheetIterator sheetIter = (XSSFReader.SheetIterator) reader.getSheetsData();
       if (!sheetIter.hasNext()) {
         throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
       }
@@ -165,10 +164,8 @@ public final class ConsoleSingleSheetExcelImportSupport {
       List<Map<String, String>> rows = new ArrayList<>();
       try (InputStream sheetStream = sheetIter.next()) {
         sheetName = sheetIter.getSheetName();
-        SaxSheetHandler handler =
-            new SaxSheetHandler(columns, requiredHeaders, tenantId);
-        XMLReader xmlReader =
-            SAXParserFactory.newDefaultInstance().newSAXParser().getXMLReader();
+        SaxSheetHandler handler = new SaxSheetHandler(columns, requiredHeaders, tenantId);
+        XMLReader xmlReader = SAXParserFactory.newDefaultInstance().newSAXParser().getXMLReader();
         xmlReader.setContentHandler(
             new XSSFSheetXMLHandler(styles, strings, handler, new DataFormatter(), false));
         xmlReader.parse(new InputSource(sheetStream));
@@ -190,15 +187,11 @@ public final class ConsoleSingleSheetExcelImportSupport {
     if (columns.contains(COL_TENANT_ID)) {
       rowValues.put(
           COL_TENANT_ID,
-          Texts.hasText(rowValues.get(COL_TENANT_ID))
-              ? rowValues.get(COL_TENANT_ID)
-              : tenantId);
+          Texts.hasText(rowValues.get(COL_TENANT_ID)) ? rowValues.get(COL_TENANT_ID) : tenantId);
     }
   }
 
-  /**
-   * SAX 事件处理器：逐行收集单元格值，第一行作为 header 映射，后续行作为数据。
-   */
+  /** SAX 事件处理器：逐行收集单元格值，第一行作为 header 映射，后续行作为数据。 */
   private static class SaxSheetHandler implements XSSFSheetXMLHandler.SheetContentsHandler {
 
     private final List<String> columns;
@@ -231,12 +224,13 @@ public final class ConsoleSingleSheetExcelImportSupport {
     public void endRow(int rowNum) {
       if (isHeaderRow) {
         headerIndex = new LinkedHashMap<>();
-        currentCells.forEach((colIdx, value) -> {
-          String header = normalize(value);
-          if (Texts.hasText(header)) {
-            headerIndex.put(header, colIdx);
-          }
-        });
+        currentCells.forEach(
+            (colIdx, value) -> {
+              String header = normalize(value);
+              if (Texts.hasText(header)) {
+                headerIndex.put(header, colIdx);
+              }
+            });
         validateHeaders(headerIndex, requiredHeaders);
         isHeaderRow = false;
         return;
@@ -257,10 +251,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
     }
 
     @Override
-    public void cell(
-        String cellReference,
-        String formattedValue,
-        XSSFComment comment) {
+    public void cell(String cellReference, String formattedValue, XSSFComment comment) {
       int colIdx = cellRefToIndex(cellReference);
       currentCells.put(colIdx, formattedValue);
     }

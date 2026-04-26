@@ -13,12 +13,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 /**
- * 通用 API 异常处理基类：把 BizException / SystemException / 未预期异常的处理集中到一处，
- * 子类只在 {@link #modulePrefix()} 里提供日志前缀即可，避免 Trigger / Orchestrator /
- * Console 三个模块各写一份 99% 相同的 handler。
+ * 通用 API 异常处理基类：把 BizException / SystemException / 未预期异常的处理集中到一处， 子类只在 {@link #modulePrefix()}
+ * 里提供日志前缀即可，避免 Trigger / Orchestrator / Console 三个模块各写一份 99% 相同的 handler。
  *
- * <p>子类仍可通过 {@code @ExceptionHandler} 追加模块特有异常（如 Orchestrator 的
- * {@code ResponseStatusException}、Trigger 的 {@code MissingRequestHeaderException}）。
+ * <p>子类仍可通过 {@code @ExceptionHandler} 追加模块特有异常（如 Orchestrator 的 {@code
+ * ResponseStatusException}、Trigger 的 {@code MissingRequestHeaderException}）。
  */
 public abstract class AbstractApiExceptionHandler {
 
@@ -42,8 +41,8 @@ public abstract class AbstractApiExceptionHandler {
   }
 
   /**
-   * 乐观锁冲突：两个线程同时改同一行记录（@Version CAS 失败）。属可预期并发，
-   * 返回 409 CONFLICT + WARN（不是 ERROR）；上游可按 "同样 tick 重试" 处理。
+   * 乐观锁冲突：两个线程同时改同一行记录（@Version CAS 失败）。属可预期并发， 返回 409 CONFLICT + WARN（不是 ERROR）；上游可按 "同样 tick 重试"
+   * 处理。
    */
   @ExceptionHandler(OptimisticLockingFailureException.class)
   public ResponseEntity<CommonResponse<Void>> handleOptimisticLock(
@@ -57,8 +56,8 @@ public abstract class AbstractApiExceptionHandler {
   }
 
   /**
-   * 唯一键冲突：create-if-absent 并发撞键。属可预期并发，返回 409 CONFLICT + WARN，
-   * 上游应该用"重新读取→改走 update 分支"的方式恢复，不是当成 500 重试。
+   * 唯一键冲突：create-if-absent 并发撞键。属可预期并发，返回 409 CONFLICT + WARN， 上游应该用"重新读取→改走 update 分支"的方式恢复，不是当成
+   * 500 重试。
    */
   @ExceptionHandler(DuplicateKeyException.class)
   public ResponseEntity<CommonResponse<Void>> handleDuplicateKey(DuplicateKeyException exception) {

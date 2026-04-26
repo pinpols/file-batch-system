@@ -22,20 +22,21 @@ import org.springframework.stereotype.Service;
  * Redis Lua 脚本实现的 quota 状态服务。{@code batch.quota.runtime-store=redis}（默认）启用。
  *
  * <p><b>关键设计</b>：
+ *
  * <ul>
- *   <li>每 (tenant, scope, owner) 对应一个 Redis Hash（key 见 {@link
- *       BatchRedisKeys#quotaState(String, String, String)}），字段含 peakBorrowedCount / windowStartedAt /
- *       windowExpiresAt / lastResetAt / quotaResetPolicy。
- *   <li>{@link #evaluateAndReserve} 走单条 Lua 脚本——窗口判定、peak CAS 抬升、TTL 续命一次原子完成；
- *       多 orchestrator 实例并发也不会互相覆盖。
- *   <li>时区敏感的 calendarDay 边界由 Java 侧用 {@link BatchTimezoneProvider} 计算后透传给 Lua，
- *       避免 Lua server 时区与平台默认时区不一致。
+ *   <li>每 (tenant, scope, owner) 对应一个 Redis Hash（key 见 {@link BatchRedisKeys#quotaState(String,
+ *       String, String)}），字段含 peakBorrowedCount / windowStartedAt / windowExpiresAt / lastResetAt /
+ *       quotaResetPolicy。
+ *   <li>{@link #evaluateAndReserve} 走单条 Lua 脚本——窗口判定、peak CAS 抬升、TTL 续命一次原子完成； 多 orchestrator
+ *       实例并发也不会互相覆盖。
+ *   <li>时区敏感的 calendarDay 边界由 Java 侧用 {@link BatchTimezoneProvider} 计算后透传给 Lua， 避免 Lua server
+ *       时区与平台默认时区不一致。
  *   <li>窗口 TTL = 窗口剩余时长 + 60s 缓冲，过期自动回收，不需要后台 reconcile 调度器。
  *   <li>Redis 故障 fail-open（返回 allow + WARN）：限流故障不应放大成业务故障。
  * </ul>
  *
- * <p><b>租户索引</b>：成功 reserve 后把 owner 标识 SADD 入 {@link BatchRedisKeys#quotaStateIndex(String)}，
- * 供 console / snapshot 调度器按租户列出所有 owner，避免全库 SCAN。
+ * <p><b>租户索引</b>：成功 reserve 后把 owner 标识 SADD 入 {@link BatchRedisKeys#quotaStateIndex(String)}， 供
+ * console / snapshot 调度器按租户列出所有 owner，避免全库 SCAN。
  */
 @Slf4j
 @Service
@@ -174,9 +175,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
 
     String key =
         BatchRedisKeys.quotaState(
-            request.owner().tenantId(),
-            request.owner().quotaScope(),
-            request.owner().ownerCode());
+            request.owner().tenantId(), request.owner().quotaScope(), request.owner().ownerCode());
 
     List<Object> result;
     try {
@@ -236,12 +235,10 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
     QuotaResetPolicy policy = QuotaResetPolicy.from(request.quotaResetPolicy());
 
     if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
-      return new QuotaRuntimeSnapshot(
-          policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }
     if (!policy.isRuntimeManaged() || burstLimit <= 0) {
-      return new QuotaRuntimeSnapshot(
-          policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }
 
     String key = BatchRedisKeys.quotaState(tenantId, quotaScope, ownerCode);
@@ -256,8 +253,7 @@ public class RedisQuotaRuntimeStateService implements QuotaRuntimeStateService {
           quotaScope,
           ownerCode,
           ex.getMessage());
-      return new QuotaRuntimeSnapshot(
-          policy.name(), burstLimit, 0, burstLimit, null, null, null);
+      return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);
     }
     if (entries == null || entries.isEmpty()) {
       return new QuotaRuntimeSnapshot(policy.name(), burstLimit, 0, burstLimit, null, null, null);

@@ -126,17 +126,14 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   private static final int[] BOOLEAN_VALIDATION_COLUMNS = {8, 27, 31, 32, 33, 34, 36, 38};
   private static final Map<String, ColumnGuide> COLUMN_GUIDES =
       Map.ofEntries(
-          Map.entry(
-              "tenant_id",
-              optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
+          Map.entry("tenant_id", optionalColumn("当前行所属租户。留空时，上传时自动使用当前租户。", GUIDE_STR, "tenant-a")),
           Map.entry(
               "template_code",
               requiredColumn("模板唯一编码，与 version 一起作为导入匹配键。", GUIDE_STR, "TPL_SETTLEMENT_001")),
           Map.entry("template_name", requiredColumn("控制台展示的模板名称。", GUIDE_STR, "清算导出模板")),
           Map.entry(
               COL_TEMPLATE_TYPE,
-              requiredColumn(
-                  "文件模板在链路中的角色。", GUIDE_ENUM, "EXPORT", "IMPORT", "EXPORT", "SHARED")),
+              requiredColumn("文件模板在链路中的角色。", GUIDE_ENUM, "EXPORT", "IMPORT", "EXPORT", "SHARED")),
           Map.entry("biz_type", optionalColumn("用于检索和治理的业务分类标签。", GUIDE_STR, "SETTLEMENT")),
           Map.entry(
               COL_FILE_FORMAT_TYPE,
@@ -154,45 +151,31 @@ public class DefaultConsoleFileTemplateExcelApplicationService
           Map.entry("target_charset", optionalColumn("导出转换时的目标字符集。", GUIDE_STR, "GBK")),
           Map.entry(
               COL_WITH_BOM,
-              optionalColumn(
-                  "文本文件是否写入 BOM。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn("文本文件是否写入 BOM。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry("line_separator", optionalColumn("文本输出使用的换行符。", GUIDE_STR, "\\n")),
           Map.entry("delimiter", optionalColumn("分隔文本使用的列分隔符。", GUIDE_STR, ",")),
           Map.entry("quote_char", optionalColumn("分隔文本使用的引号字符。", GUIDE_STR, "\"")),
           Map.entry("escape_char", optionalColumn("分隔文本使用的转义字符。", GUIDE_STR, "\\")),
-          Map.entry(
-              "record_length", optionalColumn("定长文件的记录长度，必须大于等于 0。", GUIDE_INT, "200")),
+          Map.entry("record_length", optionalColumn("定长文件的记录长度，必须大于等于 0。", GUIDE_INT, "200")),
           Map.entry("header_rows", optionalColumn("文件头行数，必须大于等于 0。", GUIDE_INT, "1")),
           Map.entry("footer_rows", optionalColumn("文件尾行数，必须大于等于 0。", GUIDE_INT, "0")),
           Map.entry(
               "header_template",
-              optionalColumn(
-                  "文件头模板定义，请保持为合法 JSON。", GUIDE_JSON, "{\"recordType\":\"H\"}")),
+              optionalColumn("文件头模板定义，请保持为合法 JSON。", GUIDE_JSON, "{\"recordType\":\"H\"}")),
           Map.entry(
               "trailer_template",
-              optionalColumn(
-                  "文件尾模板定义，请保持为合法 JSON。", GUIDE_JSON, "{\"recordType\":\"T\"}")),
+              optionalColumn("文件尾模板定义，请保持为合法 JSON。", GUIDE_JSON, "{\"recordType\":\"T\"}")),
           Map.entry(
               COL_CHECKSUM_TYPE,
-              requiredColumn(
-                  "文件使用的校验算法。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA-256")),
+              requiredColumn("文件使用的校验算法。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "MD5", "SHA-256")),
           Map.entry(
               COL_COMPRESS_TYPE,
-              requiredColumn(
-                  "文件使用的压缩算法。", GUIDE_ENUM, "ZIP", GUIDE_NONE, "ZIP", "GZIP")),
+              requiredColumn("文件使用的压缩算法。", GUIDE_ENUM, "ZIP", GUIDE_NONE, "ZIP", "GZIP")),
           Map.entry(
               COL_ENCRYPT_TYPE,
               requiredColumn(
-                  "文件使用的加密算法。",
-                  GUIDE_ENUM,
-                  GUIDE_NONE,
-                  GUIDE_NONE,
-                  "AES",
-                  "PGP",
-                  "CUSTOM")),
-          Map.entry(
-              "naming_rule",
-              optionalColumn("文件命名规则或命名模板。", "表达式", "${bizDate}_${seq}.csv")),
+                  "文件使用的加密算法。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "AES", "PGP", "CUSTOM")),
+          Map.entry("naming_rule", optionalColumn("文件命名规则或命名模板。", "表达式", "${bizDate}_${seq}.csv")),
           Map.entry(
               "field_mappings",
               optionalColumn(
@@ -210,63 +193,43 @@ public class DefaultConsoleFileTemplateExcelApplicationService
               optionalColumn("导出步骤引用的默认查询编码。", GUIDE_STR, "QRY_SETTLEMENT_EXPORT")),
           Map.entry(
               "default_query_sql",
-              optionalColumn(
-                  "模板中可选的内联 SQL。", "SQL", "select * from settlement_result")),
+              optionalColumn("模板中可选的内联 SQL。", "SQL", "select * from settlement_result")),
           Map.entry(
               "query_param_schema",
-              optionalColumn(
-                  "查询参数 Schema，请保持为合法 JSON。", GUIDE_JSON, "{\"type\":\"object\"}")),
+              optionalColumn("查询参数 Schema，请保持为合法 JSON。", GUIDE_JSON, "{\"type\":\"object\"}")),
           Map.entry(
               COL_STREAMING_ENABLED,
-              optionalColumn(
-                  "大结果集导出时是否启用流式处理。",
-                  GUIDE_BOOL,
-                  GUIDE_TRUE,
-                  GUIDE_TRUE,
-                  GUIDE_FALSE)),
-          Map.entry(
-              "page_size", optionalColumn("分页读取大小，必须大于等于 0。", GUIDE_INT, "1000")),
-          Map.entry(
-              "fetch_size", optionalColumn("数据库抓取大小，必须大于等于 0。", GUIDE_INT, "1000")),
-          Map.entry(
-              "chunk_size",
-              optionalColumn("分段生成文件时的块大小，必须大于等于 0。", GUIDE_INT, "500")),
+              optionalColumn("大结果集导出时是否启用流式处理。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+          Map.entry("page_size", optionalColumn("分页读取大小，必须大于等于 0。", GUIDE_INT, "1000")),
+          Map.entry("fetch_size", optionalColumn("数据库抓取大小，必须大于等于 0。", GUIDE_INT, "1000")),
+          Map.entry("chunk_size", optionalColumn("分段生成文件时的块大小，必须大于等于 0。", GUIDE_INT, "500")),
           Map.entry(
               "preview_masking_enabled",
-              optionalColumn(
-                  "预览结果是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn("预览结果是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(
               "error_line_masking_enabled",
-              optionalColumn(
-                  "错误明细导出是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn("错误明细导出是否脱敏。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(
               "log_masking_enabled",
-              optionalColumn(
-                  "日志是否对敏感字段脱敏。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn("日志是否对敏感字段脱敏。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(
               "content_encryption_enabled",
-              optionalColumn(
-                  "存储中的文件内容是否加密。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn("存储中的文件内容是否加密。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(
               "encryption_key_ref",
-              optionalColumn(
-                  "加密所使用的密钥引用。", GUIDE_STR, "kms://file-template/settlement")),
+              optionalColumn("加密所使用的密钥引用。", GUIDE_STR, "kms://file-template/settlement")),
           Map.entry(
               COL_DOWNLOAD_REQUIRES_APPROVAL,
-              optionalColumn(
-                  "下载前是否需要人工审批。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn("下载前是否需要人工审批。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(
               "masking_rule_set",
               optionalColumn("脱敏规则集标识或表达式。", GUIDE_STR, "MASK_RULE_SETTLEMENT")),
           Map.entry(
               COL_ENABLED,
-              optionalColumn(
-                  "文件模板是否启用。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+              optionalColumn("文件模板是否启用。", GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
           Map.entry(
-              "version",
-              optionalColumn("模板版本号，template_code + version 必须唯一。", GUIDE_INT, "1")),
-          Map.entry(
-              COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "清算导出模板")));
+              "version", optionalColumn("模板版本号，template_code + version 必须唯一。", GUIDE_INT, "1")),
+          Map.entry(COL_DESCRIPTION, optionalColumn("面向运维人员的说明信息。", GUIDE_STR, "清算导出模板")));
 
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final ConfigChangeLogMapper configChangeLogMapper;
@@ -282,10 +245,8 @@ public class DefaultConsoleFileTemplateExcelApplicationService
     this.configChangeLogMapper = configChangeLogMapper;
   }
 
-
   @Override
-  public ResponseEntity<InputStreamResource> exportFileTemplates(
-      FileTemplateQueryRequest request) {
+  public ResponseEntity<InputStreamResource> exportFileTemplates(FileTemplateQueryRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     List<Map<String, Object>> rows =
         fileTemplateConfigMapper.selectByQuery(
@@ -306,7 +267,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService
   public ExcelApplyResponse apply(String uploadToken, ExcelApplyRequest request) {
     return doApply(uploadToken, request.getReason());
   }
-
 
   @Override
   protected String sheetName() {
@@ -442,25 +402,12 @@ public class DefaultConsoleFileTemplateExcelApplicationService
         "file_format_type 填写提示",
         "请从下拉列表中选择物理文件格式。");
     addDropdownValidation(
-        sheet,
-        18,
-        CHECKSUM_TYPES.toArray(String[]::new),
-        "checksum_type 填写提示",
-        "请从下拉列表中选择校验算法。");
+        sheet, 18, CHECKSUM_TYPES.toArray(String[]::new), "checksum_type 填写提示", "请从下拉列表中选择校验算法。");
     addDropdownValidation(
-        sheet,
-        19,
-        COMPRESS_TYPES.toArray(String[]::new),
-        "compress_type 填写提示",
-        "请从下拉列表中选择压缩算法。");
+        sheet, 19, COMPRESS_TYPES.toArray(String[]::new), "compress_type 填写提示", "请从下拉列表中选择压缩算法。");
     addDropdownValidation(
-        sheet,
-        20,
-        ENCRYPT_TYPES.toArray(String[]::new),
-        "encrypt_type 填写提示",
-        "请从下拉列表中选择加密算法。");
-    addBooleanValidation(
-        sheet, BOOLEAN_VALIDATION_COLUMNS, "布尔字段填写提示", "请填写 TRUE 或 FALSE。");
+        sheet, 20, ENCRYPT_TYPES.toArray(String[]::new), "encrypt_type 填写提示", "请从下拉列表中选择加密算法。");
+    addBooleanValidation(sheet, BOOLEAN_VALIDATION_COLUMNS, "布尔字段填写提示", "请填写 TRUE 或 FALSE。");
   }
 
   @Override
@@ -532,7 +479,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService
     sheet.setColumnWidth(1, 20 * 256);
     sheet.setColumnWidth(2, 36 * 256);
   }
-
 
   private static void extractBasicFields(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
@@ -669,7 +615,6 @@ public class DefaultConsoleFileTemplateExcelApplicationService
     param.setAudit(audit);
     return param;
   }
-
 
   @Getter
   @Builder

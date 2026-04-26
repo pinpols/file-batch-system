@@ -2,13 +2,13 @@ package com.example.batch.worker.dispatchs.infrastructure;
 
 import com.example.batch.common.enums.FileDispatchStatus;
 import com.example.batch.common.enums.FileReceiptStatus;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.dispatchs.mapper.FileDispatchMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import com.example.batch.common.utils.Texts;
 
 /** 文件分发数据仓库，封装分发记录、渠道配置的增删改查操作。 */
 @Repository

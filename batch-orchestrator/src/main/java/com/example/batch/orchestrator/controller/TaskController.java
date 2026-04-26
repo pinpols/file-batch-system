@@ -10,10 +10,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 任务执行生命周期内部控制器，基础路径 {@code /internal/tasks}。
- * 提供 Worker 与 Orchestrator 之间的任务交互端点：
- * {@code POST /{taskId}/claim} 认领任务、{@code POST /{taskId}/report} 上报执行结果、
- * {@code POST /{taskId}/renew} 续期心跳租约。仅限 Worker 节点通过内部网络调用。
+ * 任务执行生命周期内部控制器，基础路径 {@code /internal/tasks}。 提供 Worker 与 Orchestrator 之间的任务交互端点： {@code POST
+ * /{taskId}/claim} 认领任务、{@code POST /{taskId}/report} 上报执行结果、 {@code POST /{taskId}/renew}
+ * 续期心跳租约。仅限 Worker 节点通过内部网络调用。
  */
 @RestController
 @RequestMapping("/internal/tasks")

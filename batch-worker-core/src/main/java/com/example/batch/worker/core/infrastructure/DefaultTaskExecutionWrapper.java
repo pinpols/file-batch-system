@@ -16,13 +16,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 单任务执行包装器：将 {@link PulledTask} 转换为 {@link StepExecutionRequest}，
- * 驱动业务 pipeline，并将执行结果通过 {@link TaskExecutionClient#report} 上报 Orchestrator。
+ * 单任务执行包装器：将 {@link PulledTask} 转换为 {@link StepExecutionRequest}， 驱动业务 pipeline，并将执行结果通过 {@link
+ * TaskExecutionClient#report} 上报 Orchestrator。
  *
  * <p><b>生命周期</b>：
+ *
  * <ol>
- *   <li>在 {@link ActiveTaskLeaseRegistry} 注册任务租约（供 {@link WorkerTaskLeaseRenewer} 定时续租，
- *       防止 Orchestrator 因心跳超时误判任务失活并重新派发）。
+ *   <li>在 {@link ActiveTaskLeaseRegistry} 注册任务租约（供 {@link WorkerTaskLeaseRenewer} 定时续租， 防止
+ *       Orchestrator 因心跳超时误判任务失活并重新派发）。
  *   <li>调用 {@link StepExecutionAdapter#execute} 执行业务 pipeline（阻塞）。
  *   <li>无论成功或失败，finally 块内移除租约并上报结果——不存在"执行完成但不上报"的状态。
  * </ol>

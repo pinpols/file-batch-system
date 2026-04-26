@@ -14,11 +14,11 @@ import org.quartz.TriggerListener;
 /**
  * Quartz JobListener + TriggerListener，记录 fire / misfire / 执行耗时三类指标。
  *
- * <p>{@code start} 时间戳从 {@code jobToBeExecuted} 起算，写入 {@link #startTimes} ConcurrentMap；
- * {@code jobWasExecuted} 时取出并 record 到 timer，然后从 map 移除避免内存泄漏。
+ * <p>{@code start} 时间戳从 {@code jobToBeExecuted} 起算，写入 {@link #startTimes} ConcurrentMap； {@code
+ * jobWasExecuted} 时取出并 record 到 timer，然后从 map 移除避免内存泄漏。
  *
- * <p>同名 JobKey 不会并发触发（Quartz 默认 @DisallowConcurrentExecution + 状态机），所以
- * map 里同 key 不会被覆盖；即使覆盖了也只是丢一次执行的耗时记录，不影响语义。
+ * <p>同名 JobKey 不会并发触发（Quartz 默认 @DisallowConcurrentExecution + 状态机），所以 map 里同 key
+ * 不会被覆盖；即使覆盖了也只是丢一次执行的耗时记录，不影响语义。
  */
 @Slf4j
 @RequiredArgsConstructor

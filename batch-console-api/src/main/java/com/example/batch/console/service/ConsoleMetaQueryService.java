@@ -15,8 +15,6 @@ import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.ErrorSinkType;
 import com.example.batch.common.enums.FileAuditOperationType;
-import com.example.batch.common.enums.LogType;
-import com.example.batch.common.enums.NotificationChannelType;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
 import com.example.batch.common.enums.FileChecksumType;
@@ -32,6 +30,8 @@ import com.example.batch.common.enums.FileTemplateType;
 import com.example.batch.common.enums.HolidayRollRule;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.JobType;
+import com.example.batch.common.enums.LogType;
+import com.example.batch.common.enums.NotificationChannelType;
 import com.example.batch.common.enums.OperationResult;
 import com.example.batch.common.enums.OutOfWindowAction;
 import com.example.batch.common.enums.OutboxPublishStatus;
@@ -45,24 +45,24 @@ import com.example.batch.common.enums.RetryPolicyType;
 import com.example.batch.common.enums.RetryScheduleStatus;
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.common.enums.ScheduleType;
-import com.example.batch.common.enums.TenantConfigInitAction;
-import com.example.batch.common.enums.TenantStatus;
 import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.enums.ShardStrategy;
 import com.example.batch.common.enums.SkipAction;
 import com.example.batch.common.enums.SkipThresholdMode;
 import com.example.batch.common.enums.StepInstanceStatus;
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.enums.TenantConfigInitAction;
+import com.example.batch.common.enums.TenantStatus;
 import com.example.batch.common.enums.TriggerMode;
 import com.example.batch.common.enums.TriggerResourceType;
 import com.example.batch.common.enums.TriggerStatus;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.enums.WebhookDeliveryStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
+import com.example.batch.common.enums.WorkflowDefinitionStatus;
 import com.example.batch.common.enums.WorkflowEdgeType;
 import com.example.batch.common.enums.WorkflowJoinMode;
 import com.example.batch.common.enums.WorkflowNodeRunStatus;
-import com.example.batch.common.enums.WorkflowDefinitionStatus;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowRunStatus;
 import com.example.batch.common.enums.WorkflowType;
@@ -116,40 +116,50 @@ public class ConsoleMetaQueryService {
   public List<ConsoleMetaOption> queues(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":queues", ConsoleQueryCacheService.META_OPTION_TTL,
-        List.class, () -> toOptions(repository.queueOptions(resolved)));
+        "meta:" + resolved + ":queues",
+        ConsoleQueryCacheService.META_OPTION_TTL,
+        List.class,
+        () -> toOptions(repository.queueOptions(resolved)));
   }
 
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> calendars(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":calendars", ConsoleQueryCacheService.META_OPTION_TTL,
-        List.class, () -> toOptions(repository.calendarOptions(resolved)));
+        "meta:" + resolved + ":calendars",
+        ConsoleQueryCacheService.META_OPTION_TTL,
+        List.class,
+        () -> toOptions(repository.calendarOptions(resolved)));
   }
 
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> windows(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":windows", ConsoleQueryCacheService.META_OPTION_TTL,
-        List.class, () -> toOptions(repository.windowOptions(resolved)));
+        "meta:" + resolved + ":windows",
+        ConsoleQueryCacheService.META_OPTION_TTL,
+        List.class,
+        () -> toOptions(repository.windowOptions(resolved)));
   }
 
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> workerGroups(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":workerGroups", ConsoleQueryCacheService.META_OPTION_TTL,
-        List.class, () -> toOptions(repository.workerGroupOptions(resolved)));
+        "meta:" + resolved + ":workerGroups",
+        ConsoleQueryCacheService.META_OPTION_TTL,
+        List.class,
+        () -> toOptions(repository.workerGroupOptions(resolved)));
   }
 
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> bizTypes(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        "meta:" + resolved + ":bizTypes", ConsoleQueryCacheService.META_OPTION_TTL,
-        List.class, () -> toOptions(repository.bizTypeOptions(resolved)));
+        "meta:" + resolved + ":bizTypes",
+        ConsoleQueryCacheService.META_OPTION_TTL,
+        List.class,
+        () -> toOptions(repository.bizTypeOptions(resolved)));
   }
 
   private List<ConsoleMetaOption> toOptions(
@@ -159,9 +169,7 @@ public class ConsoleMetaQueryService {
 
   /** 供守护测试读取当前已注册的枚举类集合（校验新增枚举必须注册或显式排除）。 */
   static Set<Class<?>> registeredEnumClasses() {
-    return REGISTRATIONS.stream()
-        .map(EnumReg::enumClass)
-        .collect(Collectors.toUnmodifiableSet());
+    return REGISTRATIONS.stream().map(EnumReg::enumClass).collect(Collectors.toUnmodifiableSet());
   }
 
   private record EnumReg<E extends Enum<E> & DictEnum>(String key, Class<E> enumClass) {

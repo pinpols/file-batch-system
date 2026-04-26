@@ -5,10 +5,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * 审批工作流服务接口，定义人工审批节点的完整生命周期操作：提交、审批、拒绝、标记已执行和查询。
  *
- * <p>接口内通过嵌套 record 将多字段参数封装为语义明确的值对象（{@link ApprovalSubmitCommand}、
- * {@link ApprovalRecord} 等），既遵守方法参数不超过 6 个的编码规范，又保持调用侧可读性。
- * {@link ApprovalSubmitCommand} 采用静态工厂方法构造，隐藏内部聚合结构；
- * {@link ApprovalRecord} 使用 {@code @JsonProperty} 注解直接支持 HTTP 响应序列化。
+ * <p>接口内通过嵌套 record 将多字段参数封装为语义明确的值对象（{@link ApprovalSubmitCommand}、 {@link ApprovalRecord}
+ * 等），既遵守方法参数不超过 6 个的编码规范，又保持调用侧可读性。 {@link ApprovalSubmitCommand} 采用静态工厂方法构造，隐藏内部聚合结构； {@link
+ * ApprovalRecord} 使用 {@code @JsonProperty} 注解直接支持 HTTP 响应序列化。
  *
  * <p>所有操作均以租户 ID 为隔离边界，审批编号（approvalNo）在租户内唯一标识一次审批流程。
  */

@@ -7,8 +7,7 @@ import org.apache.ibatis.annotations.Param;
 /**
  * P3-3 archive 系列：SUCCESS / PARTIAL_FAILED job_instance 级联归档专用 mapper。
  *
- * <p>所有删除按 job_instance.id 列表批处理，对应 {@code cleanup-success-instances.sql} 同语义。
- * 删除顺序（FK 依赖）：
+ * <p>所有删除按 job_instance.id 列表批处理，对应 {@code cleanup-success-instances.sql} 同语义。 删除顺序（FK 依赖）：
  *
  * <ol>
  *   <li>job_step_instance（依赖 job_partition）

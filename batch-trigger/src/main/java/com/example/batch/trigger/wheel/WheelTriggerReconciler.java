@@ -14,15 +14,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.event.EventListener;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Wheel 模式下的 trigger reconciler — 周期对账 {@code job_definition} 与
- * {@code trigger_runtime_state}。详见 quartz-replacement-design.md §10。
+ * Wheel 模式下的 trigger reconciler — 周期对账 {@code job_definition} 与 {@code trigger_runtime_state}。详见
+ * quartz-replacement-design.md §10。
  *
  * <p>对账逻辑:
  *
@@ -33,8 +33,8 @@ import org.springframework.stereotype.Component;
  *   <li>cron 表达式不变,只更新 next_fire_time(non-impact)
  * </ul>
  *
- * <p><b>未做的事</b>(留待 CRUD 联动):wheel 内 task cancel — 当前依赖 stale marker 自然过期 +
- * advanceAfterFire 找不到 state 时静默失败,不影响业务正确性。
+ * <p><b>未做的事</b>(留待 CRUD 联动):wheel 内 task cancel — 当前依赖 stale marker 自然过期 + advanceAfterFire 找不到
+ * state 时静默失败,不影响业务正确性。
  */
 @Slf4j
 @Component
@@ -65,7 +65,10 @@ public class WheelTriggerReconciler {
     }
   }
 
-  /** Public 让 IT 直接调,绕开 {@code @SchedulerLock} proxy(IT 不验证 lock 行为)。生产代码不应调用此方法,走 {@link #reconcile()}。 */
+  /**
+   * Public 让 IT 直接调,绕开 {@code @SchedulerLock} proxy(IT 不验证 lock 行为)。生产代码不应调用此方法,走 {@link
+   * #reconcile()}。
+   */
   public void doReconcile() {
     List<TriggerDescriptor> dbDescriptors = definitionLoader.loadAll();
     Map<Long, TriggerDescriptor> wantedById = new HashMap<>();
@@ -82,7 +85,8 @@ public class WheelTriggerReconciler {
 
     // 1) 同步 INSERT + 漂移检测
     for (TriggerDescriptor d : wantedById.values()) {
-      TriggerRuntimeStateEntity existing = stateMapper.selectByJobDefinitionId(d.getJobDefinitionId());
+      TriggerRuntimeStateEntity existing =
+          stateMapper.selectByJobDefinitionId(d.getJobDefinitionId());
       if (existing == null) {
         if (insertRuntimeState(d)) {
           inserted++;
@@ -96,7 +100,9 @@ public class WheelTriggerReconciler {
           updated++;
           log.info(
               "wheel reschedule due to drift: jobDefId={} jobCode={} newNextFireTime={}",
-              d.getJobDefinitionId(), d.getJobCode(), next);
+              d.getJobDefinitionId(),
+              d.getJobCode(),
+              next);
         }
       }
     }
@@ -108,21 +114,28 @@ public class WheelTriggerReconciler {
       if (!wantedById.containsKey(state.getJobDefinitionId())) {
         stateMapper.deleteByJobDefinitionId(state.getJobDefinitionId());
         deleted++;
-        log.info("wheel delete runtime_state: jobDefId={} jobCode={} (DB disabled or removed)",
-            state.getJobDefinitionId(), state.getJobCode());
+        log.info(
+            "wheel delete runtime_state: jobDefId={} jobCode={} (DB disabled or removed)",
+            state.getJobDefinitionId(),
+            state.getJobCode());
       }
     }
 
     if (inserted > 0 || updated > 0 || deleted > 0) {
-      log.info("wheel reconcile drift resolved: inserted={} updated={} deleted={} expectedTotal={}",
-          inserted, updated, deleted, wantedById.size());
+      log.info(
+          "wheel reconcile drift resolved: inserted={} updated={} deleted={} expectedTotal={}",
+          inserted,
+          updated,
+          deleted,
+          wantedById.size());
     }
   }
 
   private boolean insertRuntimeState(TriggerDescriptor d) {
     Instant next = computeNext(d, Instant.now());
     if (next == null) {
-      log.warn("trigger has no future fire time, skip INSERT runtime_state: jobCode={}", d.getJobCode());
+      log.warn(
+          "trigger has no future fire time, skip INSERT runtime_state: jobCode={}", d.getJobCode());
       return false;
     }
     TriggerRuntimeStateEntity entity = new TriggerRuntimeStateEntity();
@@ -141,7 +154,7 @@ public class WheelTriggerReconciler {
 
   private boolean hasScheduleDrift(TriggerRuntimeStateEntity state, TriggerDescriptor d) {
     if (!cronAdapter.isValid(d.getScheduleExpression())) {
-      return false;  // 表达式无效,跳过 drift 检查(下个 reconcile 等运维修)
+      return false; // 表达式无效,跳过 drift 检查(下个 reconcile 等运维修)
     }
     // 用 desc 当前 cron + 时区,从 last_fire_time(或 now)计算 next,与 DB 现存对比
     Instant baseline = state.getLastFireTime() != null ? state.getLastFireTime() : Instant.now();
@@ -155,9 +168,6 @@ public class WheelTriggerReconciler {
 
   private Instant computeNext(TriggerDescriptor d, Instant after) {
     return cronAdapter.next(
-        d.getScheduleExpression(),
-        timezoneProvider.resolveOrDefault(d.getTimezone()),
-        after);
+        d.getScheduleExpression(), timezoneProvider.resolveOrDefault(d.getTimezone()), after);
   }
-
 }

@@ -9,10 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/**
- * 周期把 PENDING 但已过期(默认 7 天)的 trigger_misfire_pending 改为 EXPIRED。
- * 仅 wheel 模式启用。
- */
+/** 周期把 PENDING 但已过期(默认 7 天)的 trigger_misfire_pending 改为 EXPIRED。 仅 wheel 模式启用。 */
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "batch.trigger.scheduler-impl", havingValue = "wheel")

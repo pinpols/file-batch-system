@@ -1,7 +1,7 @@
 package com.example.batch.e2e.support;
 
-import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.enums.TriggerType;
+import com.example.batch.common.utils.CodeNormalizer;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -103,13 +103,13 @@ public final class E2eScenarioFixture {
     spec.jdbc()
         .update(
             """
-            insert into batch.job_definition (
-                tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
-            priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
-            retry_policy, retry_max_count, timeout_seconds, enabled, version
-        ) values (?, ?, ?, ?, ?, 'MANUAL', 'UTC',
-            5, 'e2e-q', ?, 'API', false, 'NONE',
-            ?, ?, 0, true, 1)
+                insert into batch.job_definition (
+                    tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
+                priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
+                retry_policy, retry_max_count, timeout_seconds, enabled, version
+            ) values (?, ?, ?, ?, ?, 'MANUAL', 'UTC',
+                5, 'e2e-q', ?, 'API', false, 'NONE',
+                ?, ?, 0, true, 1)
             """,
             spec.tenantId(),
             jobCode,

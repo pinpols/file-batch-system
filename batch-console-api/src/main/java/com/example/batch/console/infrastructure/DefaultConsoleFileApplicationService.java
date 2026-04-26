@@ -28,19 +28,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 /**
- * 文件治理 BFF：把 console 的文件操作 HTTP 请求转发到 orchestrator
- * {@code /internal/files/**}，承担自由文本清洗与审批门控。
+ * 文件治理 BFF：把 console 的文件操作 HTTP 请求转发到 orchestrator {@code /internal/files/**}，承担自由文本清洗与审批门控。
  *
  * <p>操作集：{@code archive / delete / redispatch / presignDownload / operateArrivalGroup /
  * presignUpload / confirmArrival}。其中：
  *
  * <ul>
- *   <li><b>presignDownload 两阶段</b>：请求未带 {@code approvalId} 时先发审批（返回 approvalNo，前端保存后再调）；
- *       带 {@code approvalId} 时先 {@link #requireApprovedApproval} 校验审批已通过或已执行，再拿 presign URL。
- *       与 {@link DefaultConsoleFileGovernanceService} 里加密文件走 console 代理 URL 的逻辑配合，
- *       保证敏感文件下载全程有审批留痕。
- *   <li><b>请求三件套</b>：所有下游调用都带 {@code Idempotency-Key / X-Request-Id / X-Trace-Id}
- *       （与 {@link ConsoleJobOpsSupport} 协议一致）。
+ *   <li><b>presignDownload 两阶段</b>：请求未带 {@code approvalId} 时先发审批（返回 approvalNo，前端保存后再调）； 带 {@code
+ *       approvalId} 时先 {@link #requireApprovedApproval} 校验审批已通过或已执行，再拿 presign URL。 与 {@link
+ *       DefaultConsoleFileGovernanceService} 里加密文件走 console 代理 URL 的逻辑配合， 保证敏感文件下载全程有审批留痕。
+ *   <li><b>请求三件套</b>：所有下游调用都带 {@code Idempotency-Key / X-Request-Id / X-Trace-Id} （与 {@link
+ *       ConsoleJobOpsSupport} 协议一致）。
  *   <li><b>文本入参清洗</b>：channelCode / reason / operatorId 经 {@link ConsoleTextSanitizer#safeInput}
  *       截断并过滤控制字符再落到下游。
  * </ul>

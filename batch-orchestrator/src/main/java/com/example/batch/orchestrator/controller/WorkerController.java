@@ -18,11 +18,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Worker 节点注册与生命周期管控内部控制器，基础路径 {@code /internal/workers}。
- * 覆盖注册（{@code register}）、心跳上报（{@code heartbeat}）、下线（{@code deactivate}）、
- * 状态更新（{@code status}）、优雅排空（{@code drain}）、强制下线（{@code force-offline}）、
- * 接管（{@code takeover}）及已认领任务查询（{@code claimed-tasks}）等完整生命周期端点。
- * 仅限 Worker 节点与内部运维系统调用，不对外暴露。
+ * Worker 节点注册与生命周期管控内部控制器，基础路径 {@code /internal/workers}。 覆盖注册（{@code register}）、心跳上报（{@code
+ * heartbeat}）、下线（{@code deactivate}）、 状态更新（{@code status}）、优雅排空（{@code drain}）、强制下线（{@code
+ * force-offline}）、 接管（{@code takeover}）及已认领任务查询（{@code claimed-tasks}）等完整生命周期端点。 仅限 Worker
+ * 节点与内部运维系统调用，不对外暴露。
  */
 @RestController
 @RequestMapping("/internal/workers")

@@ -15,11 +15,9 @@ public class WorkerDrainProperties {
 
   private boolean enabled = true;
 
-
-
   /**
-   * Worker 心跳超时阈值（秒）：{@code heartbeat_at} 超过该阈值未更新即视为失联， 由
-   * {@code WorkerHeartbeatTimeoutScheduler} 降级为 {@code OFFLINE}。
+   * Worker 心跳超时阈值（秒）：{@code heartbeat_at} 超过该阈值未更新即视为失联， 由 {@code WorkerHeartbeatTimeoutScheduler}
+   * 降级为 {@code OFFLINE}。
    */
   private int heartbeatTimeoutSeconds = 90;
 

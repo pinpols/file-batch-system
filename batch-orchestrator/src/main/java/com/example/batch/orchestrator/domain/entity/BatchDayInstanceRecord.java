@@ -10,11 +10,11 @@ import org.springframework.data.relational.core.mapping.Table;
 /**
  * 批次日实例投影。
  *
- * <p>{@link #version} 是 Spring Data JDBC {@code @Version} 乐观锁列：save 时若值与 DB 不一致会抛
- * {@code OptimisticLockingFailureException}，由 settle / reopen 调用方负责重试或跳过。
+ * <p>{@link #version} 是 Spring Data JDBC {@code @Version} 乐观锁列：save 时若值与 DB 不一致会抛 {@code
+ * OptimisticLockingFailureException}，由 settle / reopen 调用方负责重试或跳过。
  *
- * <p>{@link #timezoneSnapshot} 是创建时从 business_calendar.timezone 抓的快照 —— 事后日历改时区不影响
- * 历史批次日的 cutoff_at / sla_deadline_at 重放语义。
+ * <p>{@link #timezoneSnapshot} 是创建时从 business_calendar.timezone 抓的快照 —— 事后日历改时区不影响 历史批次日的 cutoff_at
+ * / sla_deadline_at 重放语义。
  */
 @Table(schema = "batch", value = "batch_day_instance")
 public record BatchDayInstanceRecord(

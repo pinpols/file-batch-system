@@ -1,6 +1,7 @@
 package com.example.batch.console.support;
 
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.utils.Texts;
 import com.example.batch.console.config.ConsoleRateLimitProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,7 +15,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import com.example.batch.common.utils.Texts;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -24,7 +24,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <ol>
  *   <li><b>登录接口</b>（POST {@code /api/console/auth/login}）：基于客户端 IP 限流， 防止账户暴力破解（默认 10 次/分钟/IP）。
- *   <li><b>敏感变更接口</b>（POST {@code /api/console/ops/triggers/**}）：基于已认证用户名限流， 防止单用户耗尽资源（默认 30 次/分钟/用户）。
+ *   <li><b>敏感变更接口</b>（POST {@code /api/console/ops/triggers/**}）：基于已认证用户名限流， 防止单用户耗尽资源（默认 30
+ *       次/分钟/用户）。
  * </ol>
  *
  * <p>超限时返回 HTTP 429，响应体为标准 {@code CommonResponse} 格式。
@@ -83,8 +84,8 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
   }
 
   /**
-   * R-4.1：Redis 不可达时 <b>fail-open</b>（放行并记 warn），避免把限流模块的
-   * 可用性故障升级为整站不可用。业务正确性由上游 DDoS 保护 + Grafana 告警兜底。
+   * R-4.1：Redis 不可达时 <b>fail-open</b>（放行并记 warn），避免把限流模块的 可用性故障升级为整站不可用。业务正确性由上游 DDoS 保护 + Grafana
+   * 告警兜底。
    *
    * @return true 表示放行（正常通过 / Redis 故障兜底），false 表示超限拒绝
    */
