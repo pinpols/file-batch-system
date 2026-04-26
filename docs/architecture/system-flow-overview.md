@@ -185,6 +185,28 @@ flowchart LR
   AI     ==>|"chat / classify"| OPENAI
   LAUNCH ==>|"HTTP forward"| TRG
 
+  %% ─── 边按协议着色（与主图同套色编码，下标从 0 起） ─────────
+  %%   0     USER → AUTH（蓝 = HTTP 入站）
+  linkStyle 0 stroke:#1565c0,stroke-width:2.5px
+  %%   1..5  AUTH → 5 个 handler（灰细 = 内部路由）
+  linkStyle 1,2,3,4,5 stroke:#616161,stroke-width:1.2px
+  %%   6     CFG → PRIM 写（绿）
+  linkStyle 6 stroke:#2e7d32,stroke-width:2.5px
+  %%   7     CFG → REDIS pub/sub evict（黄虚 = 控制信号）
+  linkStyle 7 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   8     CFG → ORCH 手动 evict（蓝虚 = HTTP 控制）
+  linkStyle 8 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   9     QRY → REPL 读（紫）
+  linkStyle 9 stroke:#7b1fa2,stroke-width:2.5px
+  %%   10    QRY → PRIM fail-open 退主（紫虚 = 降级控制）
+  linkStyle 10 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   11    SSE → REDIS Streams（黄虚 = Redis pub/sub）
+  linkStyle 11 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   12    AI → OpenAI（红 = 外部副作用）
+  linkStyle 12 stroke:#c62828,stroke-width:2.5px
+  %%   13    LAUNCH → TRG（蓝 = HTTP 同步）
+  linkStyle 13 stroke:#1565c0,stroke-width:2.5px
+
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
   classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
