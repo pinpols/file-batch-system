@@ -158,14 +158,20 @@ public class OutboxPollScheduler {
       lockingTaskExecutor.executeWithLock(
           (LockingTaskExecutor.Task) () -> holder[0] = executeAdvance(), lockConfig());
     } catch (DataAccessException dae) {
-      // #7-1: 数据库连接/查询异常 — 可能是瞬时故障，下轮退避重试
-      log.error("Outbox 轮询数据库异常（瞬时故障，等待退避重试）", dae);
+      // 数据库连接/查询异常 — 瞬时故障（PG 重启 / 网络抖动），自动退避重试，不需要人介入
+      // 用 WARN 而非 ERROR：ERROR 留给真正不可恢复 / 需要人介入的场景
+      log.warn(
+          "Outbox 轮询数据库瞬时异常，下轮重试: {}",
+          dae.getMostSpecificCause() == null
+              ? dae.getMessage()
+              : dae.getMostSpecificCause().getMessage());
+      log.debug("Outbox 轮询数据库异常详细堆栈", dae);
     } catch (OutOfMemoryError oom) {
-      // #7-1: 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管
+      // 内存溢出 — 严重故障，记录后让 JVM 默认 OOM handler 接管
       log.error("Outbox 轮询遭遇 OOM，进程可能需要重启", oom);
       throw oom;
     } catch (Throwable t) {
-      // #7-1: 其他异常（Kafka 故障、序列化错误等）
+      // 其他异常（Kafka 故障、序列化错误等）—— 真异常用 ERROR
       log.error("Outbox 轮询异常（非数据库类）", t);
     } finally {
       running.set(false);
@@ -205,7 +211,13 @@ public class OutboxPollScheduler {
         log.warn("重置 {} 条滞留 PUBLISHING 状态的 outbox 事件为 FAILED", reset);
       }
     } catch (DataAccessException ex) {
-      log.error("重置滞留 PUBLISHING 事件失败（数据库异常，下轮重试）", ex);
+      // 瞬时 PG 不可用，下轮自然重试；ERROR 留给真异常
+      log.warn(
+          "重置滞留 PUBLISHING 事件失败（数据库瞬时异常，下轮重试）: {}",
+          ex.getMostSpecificCause() == null
+              ? ex.getMessage()
+              : ex.getMostSpecificCause().getMessage());
+      log.debug("重置滞留 PUBLISHING 事件异常详细堆栈", ex);
     }
   }
 
