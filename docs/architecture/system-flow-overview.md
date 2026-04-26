@@ -53,7 +53,6 @@ flowchart LR
   end
 
   FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
-  DLQ[("Kafka<br/>batch.task.dead-letter")]:::store
 
   %% ─── 触发链路（HTTP 入站 + 时序触发；scheduler-impl 决定走哪条） ──
   USER    ==>|"POST /api/console/triggers/launch"| CONSOLE
@@ -95,12 +94,6 @@ flowchart LR
   WD -. "GET object" .-> M
   WD ==>|"deliver (cp / scp / POST)"| FS
 
-  %% ─── DLQ：worker 失败 publish 死信 + console 监控读取 ──────
-  WI ==>|"publish DLQ on fail"| DLQ
-  WE ==>|"publish DLQ on fail"| DLQ
-  WD ==>|"publish DLQ on fail"| DLQ
-  CONSOLE -. "consume + 死信审计 / approve replay" .-> DLQ
-
   %% ─── 边按协议着色（顺序与上面声明一致；linkStyle index 从 0 起） ──
   %%   0..7  HTTP / 触发层入站 (蓝色)
   linkStyle 0,1,2,3,4 stroke:#1565c0,stroke-width:2.5px
@@ -130,10 +123,6 @@ flowchart LR
   linkStyle 24 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
   %%   25    worker-dispatch → 外部 target（红）
   linkStyle 25 stroke:#c62828,stroke-width:2.5px
-  %%   26..28 三类 worker → DLQ topic（橙 = Kafka 异步消息）
-  linkStyle 26,27,28 stroke:#ef6c00,stroke-width:2.5px
-  %%   29    console → DLQ 消费 / 审计 / approve replay（橙虚 = Kafka 控制信号）
-  linkStyle 29 stroke:#ef6c00,stroke-width:1.5px,stroke-dasharray:4 3
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
