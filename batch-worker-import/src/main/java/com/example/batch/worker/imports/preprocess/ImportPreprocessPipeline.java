@@ -403,8 +403,8 @@ public final class ImportPreprocessPipeline {
   private static final long CHARSET_TRANSCODE_MIN_CAP_BYTES = 16L * 1024L * 1024L;
 
   private static byte[] charsetTranscode(byte[] input, Map<String, Object> step) {
-    String from = firstNonBlank(stringProp(step, "fromCharset"), "UTF-8");
-    String to = firstNonBlank(stringProp(step, "toCharset"), "UTF-8");
+    String from = firstNonBlank(stringProp(step, "fromCharset"), EncodingUtils.UTF_8);
+    String to = firstNonBlank(stringProp(step, "toCharset"), EncodingUtils.UTF_8);
     Charset fromCs = EncodingUtils.resolve(from);
     Charset toCs = EncodingUtils.resolve(to);
     long computedCap = Math.max((long) input.length * 2L + 1_048_576L, CHARSET_TRANSCODE_MIN_CAP_BYTES);

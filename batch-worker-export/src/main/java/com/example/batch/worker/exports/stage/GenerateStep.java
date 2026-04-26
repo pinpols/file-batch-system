@@ -160,7 +160,7 @@ public class GenerateStep implements ExportStageStep {
   @SuppressWarnings("unchecked")
   private Map<String, Object> toStringKeyMap(Object raw) {
     if (raw instanceof Map<?, ?> m) {
-      Map<String, Object> out = new java.util.LinkedHashMap<>();
+      Map<String, Object> out = new LinkedHashMap<>();
       m.forEach((k, val) -> out.put(String.valueOf(k), val));
       return out;
     }

@@ -3,6 +3,8 @@ package com.example.batch.orchestrator.config;
 import com.example.batch.orchestrator.infrastructure.sharding.RedisShardAssignmentProvider;
 import com.example.batch.orchestrator.infrastructure.sharding.ShardAssignmentProvider;
 import com.example.batch.orchestrator.infrastructure.sharding.StaticShardAssignmentProvider;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -52,8 +54,8 @@ public class ShardingConfiguration {
       return pod;
     }
     try {
-      return java.net.InetAddress.getLocalHost().getHostName();
-    } catch (Exception e) {
+      return InetAddress.getLocalHost().getHostName();
+    } catch (UnknownHostException e) {
       return "orchestrator-unknown-" + System.nanoTime();
     }
   }

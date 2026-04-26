@@ -12,6 +12,7 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessException;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -254,7 +255,7 @@ public class PreprocessStep implements ImportStageStep {
       spool = Files.createTempFile("batch-preprocess-", ".raw");
       Files.write(
           spool, processed, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-    } catch (java.io.IOException ex) {
+    } catch (IOException ex) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_SPOOL_FAILED",
           "failed to spool large payload to temp file: " + ex.getMessage(),

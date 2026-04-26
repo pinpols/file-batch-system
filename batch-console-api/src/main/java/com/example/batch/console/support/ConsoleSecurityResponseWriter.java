@@ -2,6 +2,7 @@ package com.example.batch.console.support;
 
 import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.utils.EncodingUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -23,7 +24,7 @@ public class ConsoleSecurityResponseWriter {
       return;
     }
     response.setStatus(status.value());
-    response.setCharacterEncoding("UTF-8");
+    response.setCharacterEncoding(EncodingUtils.UTF_8);
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     objectMapper.writeValue(response.getWriter(), CommonResponse.failure(code, message));
   }

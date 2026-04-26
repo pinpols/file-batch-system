@@ -19,6 +19,7 @@ import org.quartz.SchedulerException;
 import org.quartz.SimpleTrigger;
 import org.quartz.Trigger;
 import org.quartz.impl.matchers.GroupMatcher;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -50,7 +51,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+@ConditionalOnProperty(
     name = "batch.trigger.scheduler-impl", havingValue = "quartz", matchIfMissing = true)
 @RequiredArgsConstructor
 public class TriggerReconciler {

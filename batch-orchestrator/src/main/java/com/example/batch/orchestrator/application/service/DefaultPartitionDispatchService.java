@@ -25,6 +25,7 @@ import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -303,7 +304,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
 
   static Map<String, Object> enrichPayload(
       LaunchRequest request, JobInstanceEntity jobInstance, Map<String, Object> params) {
-    Map<String, Object> payload = new java.util.LinkedHashMap<>();
+    Map<String, Object> payload = new LinkedHashMap<>();
     if (params != null) {
       payload.putAll(params);
     }

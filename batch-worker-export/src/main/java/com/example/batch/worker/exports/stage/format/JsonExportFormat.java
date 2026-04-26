@@ -4,6 +4,7 @@ import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -63,7 +64,7 @@ public class JsonExportFormat extends AbstractExportFormat {
     return recordCount;
   }
 
-  private void writeJsonValue(Writer writer, Object value) throws java.io.IOException {
+  private void writeJsonValue(Writer writer, Object value) throws IOException {
     try (JsonGenerator generator = objectMapper.getFactory().createGenerator(writer)) {
       generator.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
       objectMapper.writeValue(generator, value);

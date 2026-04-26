@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.infrastructure.scheduler;
 
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.enums.JobInstanceStatus;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.TaskStatus;
@@ -27,6 +28,7 @@ import com.example.batch.orchestrator.mapper.MarkInstanceRunningParam;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -320,9 +322,8 @@ public class WaitingPartitionDispatchScheduler {
     }
     try {
       Object parsed =
-          com.example.batch.common.utils.JsonUtils.fromJson(
-              partition.getInputSnapshot(), Object.class);
-      if (parsed instanceof java.util.Map<?, ?> map) {
+          JsonUtils.fromJson(partition.getInputSnapshot(), Object.class);
+      if (parsed instanceof Map<?, ?> map) {
         Object v = map.get(field);
         return v == null ? null : String.valueOf(v);
       }
