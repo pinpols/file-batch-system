@@ -134,6 +134,14 @@ DELETE FROM batch.trigger_request
    AND id NOT IN (SELECT trigger_request_id FROM batch.job_instance WHERE trigger_request_id IS NOT NULL);
 
 -- 3) outbox：已发布 > 24h 的删（保留近期事件供调试）
+--    注意：先删 event_delivery_log（FK 引用 outbox_event.id）再删 outbox_event 本身
+DELETE FROM batch.event_delivery_log
+ WHERE outbox_event_id IN (
+   SELECT id FROM batch.outbox_event
+    WHERE publish_status = 'PUBLISHED'
+      AND created_at < now() - interval '24 hours'
+ );
+
 DELETE FROM batch.outbox_event
  WHERE publish_status = 'PUBLISHED'
    AND created_at < now() - interval '24 hours';
