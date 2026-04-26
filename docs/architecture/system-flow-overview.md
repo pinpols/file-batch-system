@@ -17,13 +17,13 @@ flowchart LR
   USER([用户 / 前端]):::user
   CONSOLE["batch-console-api<br/>(BFF · 鉴权/限流/审计)"]:::svc
 
-  subgraph TRIG ["触发层 · batch-trigger（Quartz → Wheel 双轨过渡）"]
+  subgraph TRIG ["触发层 · batch-trigger（quartz 默认 / wheel 可选 · 严格二选一）"]
     direction TB
-    WHEEL[("trigger_runtime_state<br/>trigger_misfire_pending<br/>(wheel.enabled=true)")]:::store
-    QZ[(Quartz<br/>QRTZ_*<br/>legacy)]:::store
-    WS["HashedWheelTriggerScheduler<br/>+ WheelTriggerReconciler<br/>+ MisfirePendingExpireScheduler<br/>+ CatchUpThrottle"]:::svc
-    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(legacy)"]:::svc
-    FLAG{{"QuartzPauseWhenWheelEnabledCustomizer<br/>switch on batch.trigger.wheel.enabled"}}:::flag
+    QZ[("Quartz<br/>QRTZ_*<br/>scheduler-impl=quartz (默认)")]:::store
+    WHEEL[("trigger_runtime_state<br/>trigger_misfire_pending<br/>scheduler-impl=wheel (新)")]:::store
+    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(quartz 模式 fire)"]:::svc
+    WS["HashedWheelTriggerScheduler<br/>+ WheelTriggerReconciler<br/>+ MisfirePendingExpireScheduler<br/>+ CatchUpThrottle<br/>(@ConditionalOnProperty wheel)"]:::svc
+    FLAG{{"QuartzPauseWhenWheelEnabledCustomizer<br/>scheduler-impl=wheel → Quartz autoStartup=false<br/>(Quartz bean 仍创建供 TriggerSchedulerFacade 引用，但不 fire)"}}:::flag
   end
 
   subgraph SCH ["调度层 · batch-orchestrator"]
@@ -54,13 +54,13 @@ flowchart LR
 
   FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
 
-  %% ─── 触发链路（HTTP 入站 + 时序触发；Quartz 与 Wheel 二选一） ──
+  %% ─── 触发链路（HTTP 入站 + 时序触发；scheduler-impl 决定走哪条） ──
   USER    ==>|"POST /api/console/triggers/launch"| CONSOLE
   CONSOLE ==>|"HTTP forward (MANUAL)"| TR
   CONSOLE ==>|"HTTP forward (MANUAL)"| WS
-  QZ      ==>|"cron fire (SCHEDULED · legacy)"| TR
-  WHEEL   ==>|"tick fire (SCHEDULED · 默认/新)"| WS
-  FLAG    -. "wheel.enabled=true → 暂停 Quartz" .-> QZ
+  QZ      ==>|"cron fire (SCHEDULED · 默认)"| TR
+  WHEEL   ==>|"tick fire (SCHEDULED · 新可选)"| WS
+  FLAG    -. "scheduler-impl=wheel → autoStartup=false" .-> QZ
   TR      ==>|"HTTP /internal/launch"| LS
   WS      ==>|"HTTP /internal/launch"| LS
 
@@ -134,7 +134,7 @@ flowchart LR
 
 ### 一句话叙事
 
-1. **触发**：定时（`SCHEDULED` — 默认走 HashedWheel，旧 Quartz 路径仍可通过 `batch.trigger.wheel.enabled=false` 切回）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 写 `trigger_request` → HTTP 调 orchestrator。
+1. **触发**：定时（`SCHEDULED` — **默认 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`** 走 Quartz；切到 `wheel` 走新 HashedWheel；二者**严格互斥**，由 `QuartzPauseWhenWheelEnabledCustomizer` 在 wheel 模式下把 Quartz `autoStartup=false` 让其挂着不 fire）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 写 `trigger_request` → HTTP 调 orchestrator。
 2. **调度**：orchestrator `LaunchService` 写入 `job_instance` + `job_partition` + `outbox_event`（同一事务）。
 3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
 4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态 → orchestrator 推进状态机。
