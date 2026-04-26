@@ -18,7 +18,9 @@ import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 
 @SpringBootTest(
     classes = BatchTriggerApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    // 2026-04-26 默认调度器切到 wheel，但本测试专门验证 Quartz JDBC cluster 行为，强制 override
+    properties = {"batch.trigger.scheduler-impl=quartz"})
 class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired private Scheduler scheduler;

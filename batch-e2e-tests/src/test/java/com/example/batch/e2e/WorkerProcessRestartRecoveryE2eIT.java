@@ -160,8 +160,11 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
       publishPendingOutbox(tenantId);
 
+      // 480s（8 min）：full reactor 跑时 worker subprocess 重启 + Kafka PATTERN topic
+      // metadata 刷新（最长 5 min）+ JVM 启动 + CLAIM 重新建立 在资源竞争下经常踩 5 min 边界。
+      // 8 min 给足够缓冲；e2e 单跑通常 < 60s 完成。
       await()
-          .atMost(Duration.ofSeconds(300))
+          .atMost(Duration.ofSeconds(480))
           .pollInterval(Duration.ofMillis(200))
           .untilAsserted(
               () -> {
