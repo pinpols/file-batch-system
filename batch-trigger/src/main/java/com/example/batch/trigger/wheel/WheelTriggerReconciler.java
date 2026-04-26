@@ -55,7 +55,8 @@ public class WheelTriggerReconciler {
   }
 
   @Scheduled(fixedDelayString = "${batch.trigger.reconcile-interval-millis:30000}")
-  @SchedulerLock(name = "wheel_trigger_reconciler", lockAtMostFor = "PT5M", lockAtLeastFor = "PT10S")
+  // lockAtLeastFor PT1S:reconcile 是幂等扫描,允许多实例间快速接管;不需要长持锁防 thrashing
+  @SchedulerLock(name = "wheel_trigger_reconciler", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")
   public void reconcile() {
     try {
       doReconcile();
@@ -64,7 +65,8 @@ public class WheelTriggerReconciler {
     }
   }
 
-  private void doReconcile() {
+  /** Public 让 IT 直接调,绕开 {@code @SchedulerLock} proxy(IT 不验证 lock 行为)。生产代码不应调用此方法,走 {@link #reconcile()}。 */
+  public void doReconcile() {
     List<TriggerDescriptor> dbDescriptors = definitionLoader.loadAll();
     Map<Long, TriggerDescriptor> wantedById = new HashMap<>();
     for (TriggerDescriptor d : dbDescriptors) {
