@@ -1,25 +1,20 @@
 package com.example.batch.console.mapper;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
+/**
+ * Console 端 outbox_event 只读查询 mapper。
+ *
+ * <p>故意只保留 SELECT — CLAUDE.md「Orchestrator 是唯一状态主机」硬约束下，console 不能直接 UPDATE/DELETE
+ * outbox_event；cleanup / republish 等运维操作由 ConsoleOrchestratorProxyService 转发到 orchestrator
+ * 内部接口（/internal/outbox/*）执行。
+ */
 public interface OutboxEventMapper {
 
   long countByStatus(
       @Param("tenantId") String tenantId, @Param("publishStatus") String publishStatus);
 
   List<Map<String, Object>> statsByStatus(@Param("tenantId") String tenantId);
-
-  int deletePublishedBefore(
-      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
-
-  int deleteGiveUpBefore(
-      @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
-
-  int resetToNew(
-      @Param("tenantId") String tenantId,
-      @Param("ids") List<Long> ids,
-      @Param("fromStatuses") List<String> fromStatuses);
 }

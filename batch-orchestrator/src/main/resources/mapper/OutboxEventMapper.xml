@@ -104,6 +104,36 @@
           and id = #{id}
     </update>
 
+    <delete id="deletePublishedBefore">
+        delete from batch.outbox_event
+        where tenant_id = #{tenantId}
+          and publish_status = 'PUBLISHED'
+          and updated_at &lt; #{beforeTime}
+    </delete>
+
+    <delete id="deleteGiveUpBefore">
+        delete from batch.outbox_event
+        where tenant_id = #{tenantId}
+          and publish_status = 'GIVE_UP'
+          and updated_at &lt; #{beforeTime}
+    </delete>
+
+    <update id="resetToNew">
+        update batch.outbox_event
+        set publish_status = 'NEW',
+            next_publish_at = current_timestamp,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          and publish_status in
+        <foreach collection="fromStatuses" item="s" open="(" separator="," close=")">
+            #{s}
+        </foreach>
+    </update>
+
     <update id="resetStalePublishing">
         update batch.outbox_event
         set publish_status = #{failedStatus},

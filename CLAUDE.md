@@ -129,9 +129,13 @@ public enum XxxType implements DictEnum {
 
 - 任务分发主链：`DB → Outbox → Kafka → CLAIM → EXECUTE → REPORT`
 - Orchestrator 是唯一状态主机；Worker 不能直接改写 job_instance / workflow_run / workflow_node_run
+- **Console-api 也不能直接 UPDATE/DELETE outbox_event**（runtime 状态表外延）；运维操作（cleanup / republish）必须经 `ConsoleOrchestratorProxyService` 转发到 orchestrator `/internal/outbox/*` 接口执行
 - outbox_event 必须与任务状态写入处于同一事务
 - Worker 执行前必须先 CLAIM，不能绕过
 - 禁止 JPA/Hibernate；持久层 MyBatis（运行态）/ Spring Data JDBC（配置态）不混用
+  - **Console-api 豁免**：console-api 因 read-write 混合（既读 runtime 状态表又写配置表）+ 复杂分页/聚合查询，配置表写入也使用 MyBatis（如 `secret_version` / `workflow_node` / `tenant_quota_policy` / `file_channel_config` / `pipeline_step_definition` / `alert_routing_config` / `calendar_holiday` / `config_change_log`）。orchestrator 内仍严格按运行态 MyBatis / 配置态 Spring Data JDBC 分层
+- **读写分离仅 console-api 启用**；主链路（trigger / orchestrator / worker）严禁引入。原因：状态机依赖 read-after-write 强一致性（`INSERT job_instance` → 立即 `SELECT` 验证、worker `CLAIM` 后立即读自己的 lease），PG 异步流复制秒级延迟会引入 race condition；且这些模块写为主，读路径分离也无收益。详见 `docs/runbook/read-replica.md` §六。
+- **模块不得覆盖 batch-common AutoConfiguration 的基础设施 bean**（`taskScheduler` / `lockProvider` / 等）。要定制行为就提供扩展点 bean 让 AutoConfiguration 通过 `ObjectProvider` 注入（例：`SchedulerErrorHandlerConfiguration` 只暴露 `ErrorHandler` bean，不重新定义 `taskScheduler`）。重复 `@Bean` 同名定义会触发 `BeanDefinitionOverrideException` 启动失败。
 
 ## 时区策略
 

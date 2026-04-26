@@ -6,6 +6,13 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-04-26
+- **架构硬约束扩展（2 条）**：
+  - **读写分离仅 console-api 启用**；主链路（trigger / orchestrator / worker）严禁引入。原因：状态机依赖 read-after-write 强一致性，PG 异步流复制秒级延迟会引入 race condition；且这些模块写为主，读路径分离也无收益。详见 `docs/runbook/read-replica.md` §六。
+  - **模块不得覆盖 batch-common AutoConfiguration 的基础设施 bean**（`taskScheduler` / `lockProvider` 等）。要定制行为就提供扩展点 bean 让 AutoConfiguration 通过 `ObjectProvider` 注入（例：`SchedulerErrorHandlerConfiguration` 只暴露 `ErrorHandler` bean，不重新定义 `taskScheduler`）。重复 `@Bean` 同名定义会触发 `BeanDefinitionOverrideException` 启动失败（实际事故：commit 34bd6cbf 引入此 bug，5a564d9f 修复）。
+- **架构硬约束扩展：Console-api 不能直接 UPDATE/DELETE outbox_event**。在模块边界审计中发现 console-api 的 `DefaultConsoleOutboxOpsApplicationService` 直接通过 MyBatis 写 outbox_event（cleanup 删 PUBLISHED/GIVE_UP，republish reset FAILED/GIVE_UP → NEW），等价于绕过 orchestrator 触发任务重新分发。`outbox_event` 是分发主链核心环节，应纳入「Orchestrator 是唯一状态主机」的保护范围。修复：orchestrator 加 `OutboxOpsApplicationService` + `OutboxOpsController`（`/internal/outbox/cleanup` + `/internal/outbox/republish`），console 通过 `ConsoleOrchestratorProxyService` HTTP 转发；console 端 `OutboxEventMapper` 删除 3 个写方法，仅保留 SELECT。
+- **持久层分层规则增加 console-api 豁免**。原规则「MyBatis（运行态）/ Spring Data JDBC（配置态）不混用」适用于 orchestrator；console-api 因 read-write 混合（既读 runtime 状态表又写配置表）+ 复杂分页/聚合查询，配置表写入也用 MyBatis（`secret_version` / `workflow_node` / `tenant_quota_policy` / `file_channel_config` / `pipeline_step_definition` / `alert_routing_config` / `calendar_holiday` / `config_change_log` 等）。orchestrator 内仍严格遵守原分层。
+
 ### 2026-04-25
 - **`ensurePipelineDefinition` 跨 worker 错位污染 pipeline_step_definition**：worker 启动一次任务时调 `runtimeRepository.ensurePipelineDefinition(tenantId, jobCode, pipelineType, defaultSteps)`，发现已有 pipeline 时仍**会追加** default steps（`ensurePipelineStepDefinitions` 用 step_code Set 判存在但**不检查 pipeline_type 是否一致**）。结果：当 sourcePayload 跨节点继承泄露字段（昨日修过），EXPORT worker 拿到带 `targetJobCode=TC_IMPORT_RISK_SCORE` 的 task → resolveJobCode 用错 jobCode → ensurePipelineDefinition 把 EXPORT_* 默认 steps 写入 IMPORT pipeline；DISPATCH worker 同理把 DISPATCH_PREPARE 写进 EXPORT pipeline。多次跨 worker 错位调用后，TC_EXPORT_RISK_ALERT 的 pipeline_step 长成 IMPORT_*+EXPORT_*+DISPATCH_* 大杂烩，跑起来报"找不到步骤实现: DISPATCH_PREPARE"。
   - **代码层**：`ensurePipelineDefinition` 仅在首次创建 pipeline_definition 时才调 `ensurePipelineStepDefinitions`；已存在则只读不写，避免跨 worker 错位再污染。

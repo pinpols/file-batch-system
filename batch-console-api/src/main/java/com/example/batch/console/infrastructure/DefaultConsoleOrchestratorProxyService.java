@@ -125,6 +125,42 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
         .body(new ParameterizedTypeReference<List<ConsoleSchedulerSnapshotHistoryResponse>>() {});
   }
 
+  @Override
+  public Map<String, Integer> outboxCleanup(String tenantId, int retainDays) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    RestClient client =
+        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    return client
+        .post()
+        .uri(
+            uriBuilder ->
+                uriBuilder
+                    .path("/internal/outbox/cleanup")
+                    .queryParam("tenantId", resolved)
+                    .queryParam("retainDays", retainDays)
+                    .build())
+        .retrieve()
+        .body(new ParameterizedTypeReference<Map<String, Integer>>() {});
+  }
+
+  @Override
+  public Map<String, Integer> outboxRepublish(String tenantId, List<Long> ids) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    RestClient client =
+        restClientBuilder.baseUrl(resolveUrl(orchestratorClientProperties.getBaseUrl())).build();
+    return client
+        .post()
+        .uri(
+            uriBuilder ->
+                uriBuilder
+                    .path("/internal/outbox/republish")
+                    .queryParam("tenantId", resolved)
+                    .build())
+        .body(Map.of("ids", ids == null ? List.of() : ids))
+        .retrieve()
+        .body(new ParameterizedTypeReference<Map<String, Integer>>() {});
+  }
+
   private void publishRefresh(String tenantId) {
     domainEventPublisher.publishChanged(tenantId, "workflow-runs", "workflow-run-updated");
     domainEventPublisher.publishChanged(tenantId, "job-instances", "job-instance-updated");
