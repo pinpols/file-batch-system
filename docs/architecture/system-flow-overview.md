@@ -38,7 +38,6 @@ flowchart LR
   RDS[("Redis<br/>ShedLock / config-cache (pub/sub)<br/>shard-assignment / quota Lua")]:::store
 
   K[("Kafka<br/>batch.task.dispatch.*")]:::store
-  DLQ[("Kafka<br/>batch.task.dead-letter")]:::store
 
   subgraph WORKERS ["执行层 · 三类 Worker"]
     direction TB
@@ -54,6 +53,7 @@ flowchart LR
   end
 
   FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
+  DLQ[("Kafka<br/>batch.task.dead-letter")]:::store
 
   %% ─── 触发链路（HTTP 入站 + 时序触发；scheduler-impl 决定走哪条） ──
   USER    ==>|"POST /api/console/triggers/launch"| CONSOLE
