@@ -138,7 +138,7 @@ Postgres / Kafka / Redis 跑在单独 VM 集群，**不在 K8s 里**；应用 K8
 | 多租户隔离 + KMS 密钥管理 + 审计日志 + HTTP MDC traceId | `ConsoleTenantGuard`、`BatchSecurityProperties` | 合规驱动开发 |
 | 批次日（batch_day）+ catch-up 审批 + SLA 监控 + Outbox | V32 迁移脚本、`ConsoleApprovalController` | 银行 / 金融批处理业务域 |
 | Quartz JDBC 集群模式 + ShedLock + 分布式一致性 | `application.yml` Quartz 配置、`V30__create_shedlock.sql` | 企业级可靠性要求 |
-| 完整的 `security-scan.md` / `structured-logging-pipeline.md` / `otel-integration.md` | `docs/runbook/` | 严肃 SRE 思维 |
+| 完整的 `security-scan.md` / `observability-stack.md` / `observability-stack.md` | `docs/runbook/` | 严肃 SRE 思维 |
 
 **综合判断**：本项目大概率定位于**中大型企业内部批处理平台**，**传统部署（方案 3）** 是默认
 落地姿势——基础服务（Postgres / Kafka / Redis）走独立 VM 集群或 DBA 自管，应用层（6 个 jar）
@@ -326,7 +326,7 @@ orchestrator / console-api 新增 `@Scheduled(fixedDelay=...)` 方法时，**必
 ## 相关文档
 
 - [本地开发指南](local-development.md) — 本地联调流程
-- [本地环境变量](local-env.md) — `.env.local` 字段说明
+- [本地环境变量](local-development.md) — `.env.local` 字段说明
 - [Docker 部署基线](docker-deployment.md) — `docker-compose.*.yml` 编排
 - [滚动升级 worker](rolling-upgrade-workers.md) — 生产 worker 灰度策略
 - [orchestrator 迁移到 StatefulSet](orchestrator-statefulset-migration.md) — **仅首次** 升级到新 chart 时的一次性操作步骤

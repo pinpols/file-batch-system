@@ -313,7 +313,7 @@ flowchart LR
 4. Tempo span 右上 **"Logs for this span"** → Loki 自动按 traceId+service 过滤展开 ±5min
 5. 同时看 Tempo 自带 **service graph + span metrics**（`metrics_generator`），定位下游依赖问题
 
-详见 [`docs/runbook/observability-loki-tempo.md`](../runbook/observability-loki-tempo.md)。
+详见 [`docs/runbook/observability-stack.md`](../runbook/observability-stack.md)。
 
 ---
 

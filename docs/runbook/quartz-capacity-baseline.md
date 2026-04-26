@@ -17,7 +17,7 @@ batch-trigger 在 2026-04-25 加入了观测埋点（`com.example.batch.trigger.
 | `batch.trigger.quartz.misfire.total` | Counter | `triggerMisfired` 回调 +1 | rate > 0 持续 5 min = 黄色，> 100/分钟 = 红色 |
 | `batch.trigger.quartz.triggers.active` | Gauge（按 group=all） | `Scheduler.getJobKeys().size()` | 信息性指标，配合 fire QPS 算"每 trigger 平均 fire 率" |
 
-> WAL 字节占比指标改由 pg_exporter + Grafana 直查 `pg_stat_database`，不在 Java 侧维护。`prometheus-grafana-baseline.md` 已含 PG 指标采集；只需在 Grafana 加一个 panel：`rate(pg_stat_database_xact_commit{datname='batch_platform'}[5m])` 拆按 schema 即可。
+> WAL 字节占比指标改由 pg_exporter + Grafana 直查 `pg_stat_database`，不在 Java 侧维护。`observability-stack.md` 已含 PG 指标采集；只需在 Grafana 加一个 panel：`rate(pg_stat_database_xact_commit{datname='batch_platform'}[5m])` 拆按 schema 即可。
 
 ---
 
@@ -225,4 +225,4 @@ QRTZ_LOCKS 抢锁等待已成主因
 
 - [`docs/architecture/quartz-replacement-evaluation.md`](../architecture/quartz-replacement-evaluation.md) §7 拐点预警
 - [`docs/runbook/feature-switches.md`](./feature-switches.md) §3.4（Phase 2 quartz-datasource 开关移除说明）
-- [`docs/runbook/prometheus-grafana-baseline.md`](./prometheus-grafana-baseline.md) PG 监控
+- [`docs/runbook/observability-stack.md`](./observability-stack.md) PG 监控
