@@ -14,6 +14,7 @@
 | 006 | [ADR-006-compensation-requires-new.md](./ADR-006-compensation-requires-new.md) | 补偿 / 重试方法用 `REQUIRES_NEW`，避免外层事务 rollback 把补偿也回滚 |
 | 007 | [ADR-007-dual-datasource.md](./ADR-007-dual-datasource.md) | 单 PG 实例双 schema 隔离 platform / business |
 | 008 | [ADR-008-god-class-decomposition.md](./ADR-008-god-class-decomposition.md) | God Class 分解为子服务 + Facade 模式（实例：`DefaultLaunchApplicationService`）|
+| 009 | [ADR-009-workflow-param-dsl.md](./ADR-009-workflow-param-dsl.md) | Workflow 节点间参数串联 DSL（JSONPath-like `$.nodes.X.output.fileId`，分 4 stage 落地，~3 人天） |
 
 ## 写新 ADR 的姿势
 
