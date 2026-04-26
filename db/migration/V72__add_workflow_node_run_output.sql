@@ -25,5 +25,13 @@ ALTER TABLE batch.workflow_node_run
 COMMENT ON COLUMN batch.workflow_node_run.output IS
   'ADR-009: 节点 SUCCESS 时由 worker 上报的产出 Map，供下游节点 $.nodes.<X>.output.<key> 引用';
 
+-- 同步给 archive 冷表加 output 列：ArchiveSchemaDriftCheck 启动自检要求
+-- archive.* 与 batch.* schema 一致；不同步会让 orchestrator 启动失败。
+ALTER TABLE archive.workflow_node_run_archive
+  ADD COLUMN output JSONB;
+
+COMMENT ON COLUMN archive.workflow_node_run_archive.output IS
+  'ADR-009: 同 batch.workflow_node_run.output，归档时直接复制';
+
 -- 暂不加索引：当前 workflow_node_run 量级（千级/天）下 JSON 引用查询走 FK 直连，
 -- 不依赖 output 字段过滤。等量级上来再评估 GIN 索引。
