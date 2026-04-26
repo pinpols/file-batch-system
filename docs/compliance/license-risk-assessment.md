@@ -1,7 +1,7 @@
 # 许可证风险评估（License Risk Assessment）
 
 > 评估时间：2026-04-26  
-> 数据源：`docs/compliance/THIRD-PARTY-GENERATED.txt`（`mvn -P compliance license:aggregate-add-third-party` 实跑产出，252 个 runtime + transitive 依赖）  
+> 数据源：`docs/compliance/sbom.json`（CycloneDX 1.6，`mvn -P compliance cyclonedx:makeAggregateBom` 产出，266 个 runtime + transitive 组件）  
 > 项目自身许可：**Apache License 2.0**（见 `LICENSE`，`Copyright 2026 Dengchao`）
 
 本文档**只评估 license 兼容性 / 分发义务 / copyleft 传染风险**，不涉及业务运行时的服务条款（OpenAI ToS、云服务 EULA 等）。
@@ -22,7 +22,7 @@
 
 ## 1. License 家族分布（按依赖数量）
 
-来自 `THIRD-PARTY-GENERATED.txt` 实跑统计。
+来自 `sbom.json` 实跑统计（jq 查询，参见 §5.2）。
 
 | License 家族 | 代表组件 | 风险等级 | 说明 |
 |---|---|---|---|
@@ -90,7 +90,7 @@
 - ⚠️ 对外分发 fat jar 给客户、公开发 release artifact → 严格的法务团队可能要求把上游（Spring/Flyway/POI/Apache POI 等大头）的 NOTICE 文本嵌入到本项目 NOTICE 里
 - 行业实际：大量 OSS 项目（包括 Spring Boot 自身的某些子模块）也只放指针式 NOTICE，社区接受度高，但不代表严格合规
 
-**修复**（5 分钟）：跑 `mvn -P compliance license:aggregate-add-third-party`，把生成的 `docs/compliance/THIRD-PARTY-GENERATED.txt` 内容（或精简版）追加到 `NOTICE` 文件，或在 `NOTICE` 里明确链接到该文件。
+**修复**（5 分钟）：跑 `mvn -P compliance license:aggregate-add-third-party`，把生成的 `target/generated-sources/license/THIRD-PARTY.txt`（或基于 `sbom.json` 的精简版）内容追加到 `NOTICE` 文件，或在 `NOTICE` 里明确链接到 `THIRD-PARTY-LICENSES.md`。
 
 ### 3.2 BSD-3-Clause attribution 文字未原文嵌入
 
