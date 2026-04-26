@@ -368,6 +368,115 @@ flowchart LR
 
 ---
 
+## 1.8 死信旁路（DLQ）— Kafka 隔离 + DB 落盘 + console 重放
+
+主图省略了 DLQ，因为是**异常旁路**，不在 happy-path 主链上。但生产环境必跑，独立画。
+
+DLQ 在本系统里**走两条互补轨**：
+- **Kafka 隔离轨**：worker 处理失败的"毒丸消息"立即转发到 `batch.task.dead-letter` topic 隔离，
+  防止毒丸阻塞主派发队列（`DeadLetterPublisher`），运维侧用 Kafka 工具消费查看
+- **DB 落盘轨**：orchestrator 把 retry 耗尽的失败任务 INSERT `dead_letter_task` 表，
+  console 可查询 + 调 `POST /api/console/jobs/dead-letters/replay` 触发重放
+  （`DefaultRetryGovernanceService`）
+
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
+flowchart LR
+  subgraph WORKERS ["执行层 · 三类 Worker"]
+    direction TB
+    WI["worker-import / export / dispatch"]:::worker
+    DLP["DeadLetterPublisher<br/>(D-3 毒丸隔离)"]:::svc
+  end
+
+  ORCH["batch-orchestrator<br/>DefaultRetryGovernanceService"]:::svc
+  RETRY[("retry_schedule<br/>(retry 调度表)")]:::store
+  DLT[("dead_letter_task<br/>replay_status NEW→REPLAYING<br/>→SUCCESS/FAILED/GIVE_UP<br/>source_type ∈ {JOB_INSTANCE / JOB_PARTITION /<br/>JOB_TASK / PIPELINE_INSTANCE / FILE_DISPATCH /<br/>MQ_MESSAGE}")]:::store
+  KDLQ[("Kafka<br/>batch.task.dead-letter<br/>(毒丸隔离 topic)")]:::store
+  K[("Kafka<br/>batch.task.dispatch.*<br/>(主派发，重放回流到这里)")]:::store
+  CONSOLE["batch-console-api<br/>DLQ Query / Replay"]:::svc
+  USER([运营]):::user
+
+  %% ─── 轨道一：Kafka 隔离（毒丸消息） ─────────────
+  WI -->|"反序列化错<br/>/ 不可恢复异常"| DLP
+  DLP ==>|"publish (D-3)"| KDLQ
+
+  %% ─── 轨道二：DB 落盘（业务级失败重放） ──────────
+  WI -.->|"report FAILED + retry_count >= max"| ORCH
+  ORCH ==>|"INSERT (replay_status=NEW)"| DLT
+  ORCH -.->|"耗尽前先调度 retry"| RETRY
+
+  %% ─── console 查询 + 重放 ─────────────────────
+  USER ==>|"POST /api/console/jobs/dead-letters/replay<br/>+ select for review"| CONSOLE
+  CONSOLE -.->|"SELECT (走 read replica)"| DLT
+  CONSOLE ==>|"HTTP /internal/dead-letters/{id}/replay"| ORCH
+  ORCH ==>|"markReplaying<br/>+ INSERT outbox(REPLAY)"| DLT
+  ORCH ==>|"重新 publish 到原 dispatch topic"| K
+  ORCH ==>|"成功 → markReplaySuccess<br/>失败 → markReplayFailure"| DLT
+
+  %% ─── 协议色 ─────────────────────
+  %%   0    worker → DLP（灰内部）
+  linkStyle 0 stroke:#616161,stroke-width:1.5px
+  %%   1    DLP → KDLQ（橙 = Kafka publish）
+  linkStyle 1 stroke:#ef6c00,stroke-width:2.5px
+  %%   2    worker report FAILED → ORCH（蓝虚 = HTTP 控制信号）
+  linkStyle 2 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   3    ORCH → DLT INSERT（绿 = JDBC 写）
+  linkStyle 3 stroke:#2e7d32,stroke-width:2.5px
+  %%   4    ORCH -.-> RETRY（绿虚 = JDBC 控制）
+  linkStyle 4 stroke:#2e7d32,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   5    USER → CONSOLE replay（蓝 = HTTP）
+  linkStyle 5 stroke:#1565c0,stroke-width:2.5px
+  %%   6    CONSOLE → DLT 查询（紫虚 = JDBC 读）
+  linkStyle 6 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   7    CONSOLE → ORCH replay（蓝 = HTTP 同步）
+  linkStyle 7 stroke:#1565c0,stroke-width:2.5px
+  %%   8    ORCH → DLT markReplaying（绿）
+  linkStyle 8 stroke:#2e7d32,stroke-width:2.5px
+  %%   9    ORCH → K 重新 publish（橙）
+  linkStyle 9 stroke:#ef6c00,stroke-width:2.5px
+  %%   10   ORCH → DLT mark Success/Failure（绿）
+  linkStyle 10 stroke:#2e7d32,stroke-width:2.5px
+
+  classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
+  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
+  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+```
+
+### `dead_letter_task.replay_status` 状态机
+
+```
+       worker FAILED + retry 耗尽
+                │
+                ▼
+              NEW ──────────► GIVE_UP（运营标记放弃）
+                │
+       console approve replay
+                │
+                ▼
+           REPLAYING
+                │
+        ┌───────┴───────┐
+        ▼               ▼
+     SUCCESS         FAILED
+                        │
+                  console 决定
+                        │
+              ┌─────────┴─────────┐
+              ▼                   ▼
+            NEW                GIVE_UP
+        (重新 replay)        (停止处理)
+```
+
+### 关键约束
+
+- **两轨独立**：Kafka 隔离轨（`DeadLetterPublisher → batch.task.dead-letter`）与 DB 落盘轨（`dead_letter_task` 表）**互不依赖**。前者纯 Kafka 隔离避免阻塞，后者支持业务侧重放治理。
+- **重放幂等**：`markReplaying` 用乐观锁（`replay_status='NEW' AND id=?`），避免并发 replay；重放写新 `outbox_event(eventType=REPLAY)`，复用主链 publish 路径，**不绕过状态机**。
+- **GIVE_UP 是终态**：人工标记后不再 replay，需重置回 NEW 才能再走重放路径。
+- **source_type 决定重放粒度**：可重放 task / partition / instance / pipeline_instance / file_dispatch / mq_message 6 类，由 `RetryGovernanceService` 路由分发。
+
+---
+
 ## 2. 三类 Worker 的 Stage 流程
 
 每类 worker 都按"固定顺序的 stage 链"跑一个 partition。stage 定义在 `pipeline_step_definition` 表里，与 `job_code` 关联。
