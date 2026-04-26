@@ -43,7 +43,7 @@
 | 16 | [wheel-scheduler-rollout.md](./wheel-scheduler-rollout.md) | Quartz → HashedWheelTimer 灰度上线 SOP |
 | 17 | [mq-topic-routing-rollout.md](./mq-topic-routing-rollout.md) | MQ topic 分流（PATTERN / FIXED / TENANT_SCOPED）切换 |
 
-### 五、观测 / 安全 / 验证
+### 五、观测 / 安全 / 验证 / CI
 
 | # | 文件 | 作用 |
 |---|---|---|
@@ -51,6 +51,7 @@
 | 19 | [quartz-capacity-baseline.md](./quartz-capacity-baseline.md) | Quartz 容量基线压测（找拐点）|
 | 20 | [worker-stage-coverage.md](./worker-stage-coverage.md) | 三类 Worker 全 Stage 真实覆盖端到端验证 |
 | 21 | [security-scan.md](./security-scan.md) | 本地安全扫描 SOP（trivy / dependency-check）|
+| 22 | [ci.md](./ci.md) | CI 流水线说明（PR / merge / staging-gate 三条线 + 触发时机 + 超时）|
 
 ## 角色路径
 
