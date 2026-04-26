@@ -1,9 +1,9 @@
 # Third-Party Software Licenses
 
 **Product**: `batch-platform`  
-**Version**: `1.0.0-SNAPSHOT`  
-**Generated**: `2026-04-09`  
-**Source**: curated from the current `pom.xml` / module POM files
+**Version**: `${revision}` (默认 `1.0.0`，CI-friendly)  
+**Generated**: `2026-04-26`  
+**Source**: curated from the current `pom.xml` / module POM files; verified against `mvn -P compliance` 输出（266 个 transitive 依赖见 `sbom.json`）
 
 This document is a human-readable snapshot of the third-party components referenced by the repository at the time of generation.
 Internal modules under `com.example.batch:*` are excluded.
@@ -71,6 +71,8 @@ These are the main runtime-facing third-party components currently used by the p
 | Project Lombok | 1.18.42 | MIT | all (provided) | Annotation processor |
 | JSqlParser | 4.5 | Apache-2.0 | export | SQL parsing / schema whitelist |
 | ShedLock | 6.3.0 | Apache-2.0 | common | Distributed lock |
+| Spring Boot Configuration Processor | managed by Spring Boot 4.0.3 | Apache-2.0 | all (annotation processor) | 编译期生成 `spring-configuration-metadata.json`，IDE 提示 / dict 自动化 |
+| Netty (HashedWheelTimer) | managed by Spring Boot 4.0.3 | Apache-2.0 | trigger | Wheel scheduler 实现（`batch.trigger.scheduler-impl=wheel` 启用） |
 
 ## Test and Tooling Dependencies
 
