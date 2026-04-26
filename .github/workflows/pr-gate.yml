@@ -204,6 +204,10 @@ jobs:
         shell: bash
         run: python3 scripts/codegen/gen-error-codes-dict.py --check
 
+      - name: Verify yml ↔ docker-compose default sync
+        shell: bash
+        run: python3 scripts/ci/check-config-defaults-sync.py --check
+
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@v4
