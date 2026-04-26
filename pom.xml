@@ -331,8 +331,9 @@
                             </execution>
                         </executions>
                         <configuration>
-                            <outputDirectory>${project.basedir}/docs/compliance</outputDirectory>
-                            <thirdPartyFilename>THIRD-PARTY-GENERATED.txt</thirdPartyFilename>
+                            <!-- 输出到 target/generated-sources/license/THIRD-PARTY.txt（默认路径），
+                                 仅作开发时人工校验用，不入库。权威依赖清单走 sbom.json（CycloneDX 1.6），
+                                 人工 curated 摘要走 docs/compliance/THIRD-PARTY-LICENSES.md。 -->
                             <excludedGroups>com\.example\.batch</excludedGroups>
                             <includeTransitiveDependencies>true</includeTransitiveDependencies>
                             <excludedScopes>test,provided,system</excludedScopes>

@@ -8,6 +8,7 @@
 |---|---|---|---|
 | 01 | [THIRD-PARTY-LICENSES.md](./THIRD-PARTY-LICENSES.md) | 全部第三方依赖的 license 清单（人读）| 发版前合规 review / 法务问询 |
 | 02 | [sbom.json](./sbom.json) | CycloneDX 格式 Software Bill of Materials（机读，供 trivy / dependency-track 等扫描器消费）| CI 安全扫描 / 漏洞溯源 |
+| 03 | [license-risk-assessment.md](./license-risk-assessment.md) | 许可证风险评估（266 依赖按 license 家族分类 + copyleft 传染风险 + 分发义务）| 对外分发 fat jar 前 / 法务问"这个项目能不能开源/商用" |
 
 ## 生成 / 更新流程
 
