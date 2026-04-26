@@ -172,16 +172,16 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
    * 从 {@code batch.step_registry} 查 (module → bean 列表)，供 Excel 模板 / 导出的 impl_code 下拉用。
    * 查询失败或结果为空时返回空 map，writer 会降级为不加下拉（首次部署无 worker 启动的兼容路径）。
    */
-  private java.util.Map<String, java.util.List<String>> loadRegisteredImplCodesByModule() {
-    java.util.Map<String, java.util.List<String>> result = new java.util.LinkedHashMap<>();
+  private Map<String, List<String>> loadRegisteredImplCodesByModule() {
+    Map<String, List<String>> result = new LinkedHashMap<>();
     try {
-      for (java.util.Map<String, String> row : stepRegistryQueryMapper.selectAllImplEntries()) {
+      for (Map<String, String> row : stepRegistryQueryMapper.selectAllImplEntries()) {
         String module = row.get("module");
         String implCode = row.get("implCode");
         if (module == null || implCode == null) {
           continue;
         }
-        result.computeIfAbsent(module, k -> new java.util.ArrayList<>()).add(implCode);
+        result.computeIfAbsent(module, k -> new ArrayList<>()).add(implCode);
       }
     } catch (RuntimeException ignored) {
       // step_registry 表尚未创建 / 查询失败时降级为空，writer 跳过 impl_code 下拉

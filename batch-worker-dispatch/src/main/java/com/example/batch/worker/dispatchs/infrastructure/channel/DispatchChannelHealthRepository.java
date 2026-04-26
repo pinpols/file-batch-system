@@ -16,6 +16,15 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class DispatchChannelHealthRepository {
 
+  // PMD AvoidDuplicateLiterals 触发：mapper 参数 map key 在多个方法里重复，提常量统一管理
+  private static final String P_TENANT_ID = "tenantId";
+  private static final String P_CHANNEL_CODE = "channelCode";
+  private static final String P_CHANNEL_TYPE = "channelType";
+  private static final String P_NOW = "now";
+  private static final String P_NEXT_PROBE_AT = "nextProbeAt";
+  private static final String P_PROBE_MESSAGE = "probeMessage";
+  private static final String P_PROBE_EVIDENCE = "probeEvidence";
+
   private final DispatchChannelHealthMapper mapper;
 
   public List<Map<String, Object>> findEnabledProbeChannels(List<String> types, int limit) {
@@ -39,9 +48,9 @@ public class DispatchChannelHealthRepository {
   public boolean tryClaimHalfOpenProbe(
       String tenantId, String channelCode, Instant now, Instant newNextProbeAt) {
     Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", tenantId);
-    params.put("channelCode", channelCode);
-    params.put("now", toTimestamp(now));
+    params.put(P_TENANT_ID, tenantId);
+    params.put(P_CHANNEL_CODE, channelCode);
+    params.put(P_NOW, toTimestamp(now));
     params.put("newNextProbeAt", toTimestamp(newNextProbeAt));
     return mapper.tryClaimHalfOpenProbe(params) > 0;
   }
@@ -51,13 +60,13 @@ public class DispatchChannelHealthRepository {
    */
   public void upsertSuccess(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", cmd.tenantId());
-    params.put("channelCode", cmd.channelCode());
-    params.put("channelType", cmd.channelType());
-    params.put("now", toTimestamp(cmd.now()));
-    params.put("nextProbeAt", toTimestamp(cmd.nextProbeAt()));
-    params.put("probeMessage", cmd.probeMessage());
-    params.put("probeEvidence", cmd.probeEvidence());
+    params.put(P_TENANT_ID, cmd.tenantId());
+    params.put(P_CHANNEL_CODE, cmd.channelCode());
+    params.put(P_CHANNEL_TYPE, cmd.channelType());
+    params.put(P_NOW, toTimestamp(cmd.now()));
+    params.put(P_NEXT_PROBE_AT, toTimestamp(cmd.nextProbeAt()));
+    params.put(P_PROBE_MESSAGE, cmd.probeMessage());
+    params.put(P_PROBE_EVIDENCE, cmd.probeEvidence());
     mapper.upsertSuccess(params);
   }
 
@@ -71,22 +80,22 @@ public class DispatchChannelHealthRepository {
    */
   public void upsertFailureAndBump(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", cmd.tenantId());
-    params.put("channelCode", cmd.channelCode());
-    params.put("channelType", cmd.channelType());
-    params.put("now", toTimestamp(cmd.now()));
+    params.put(P_TENANT_ID, cmd.tenantId());
+    params.put(P_CHANNEL_CODE, cmd.channelCode());
+    params.put(P_CHANNEL_TYPE, cmd.channelType());
+    params.put(P_NOW, toTimestamp(cmd.now()));
     params.put("firstFailureBackoffAt", toTimestamp(cmd.nextProbeAt()));
     params.put("failureThreshold", Math.max(1, cmd.failureThreshold()));
-    params.put("probeMessage", cmd.probeMessage());
-    params.put("probeEvidence", cmd.probeEvidence());
+    params.put(P_PROBE_MESSAGE, cmd.probeMessage());
+    params.put(P_PROBE_EVIDENCE, cmd.probeEvidence());
     mapper.upsertFailureAndBump(params);
   }
 
   public void recalcBackoff(DispatchHealthUpsertCommand cmd) {
     Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", cmd.tenantId());
-    params.put("channelCode", cmd.channelCode());
-    params.put("now", toTimestamp(cmd.now()));
+    params.put(P_TENANT_ID, cmd.tenantId());
+    params.put(P_CHANNEL_CODE, cmd.channelCode());
+    params.put(P_NOW, toTimestamp(cmd.now()));
     params.put("probeIntervalMillis", cmd.probeIntervalMillis());
     params.put("maxBackoffMillis", cmd.maxBackoffMillis());
     mapper.recalcBackoff(params);
@@ -94,17 +103,17 @@ public class DispatchChannelHealthRepository {
 
   public void upsertHealth(DispatchChannelHealthSnapshot s) {
     Map<String, Object> params = new HashMap<>();
-    params.put("tenantId", s.tenantId());
-    params.put("channelCode", s.channelCode());
-    params.put("channelType", s.channelType());
+    params.put(P_TENANT_ID, s.tenantId());
+    params.put(P_CHANNEL_CODE, s.channelCode());
+    params.put(P_CHANNEL_TYPE, s.channelType());
     params.put("healthStatus", s.healthStatus());
     params.put("consecutiveFailures", s.consecutiveFailures());
     params.put("lastProbeAt", toTimestamp(s.lastProbeAt()));
     params.put("lastSuccessAt", toTimestamp(s.lastSuccessAt()));
     params.put("lastFailureAt", toTimestamp(s.lastFailureAt()));
-    params.put("nextProbeAt", toTimestamp(s.nextProbeAt()));
-    params.put("probeMessage", s.probeMessage());
-    params.put("probeEvidence", s.probeEvidence());
+    params.put(P_NEXT_PROBE_AT, toTimestamp(s.nextProbeAt()));
+    params.put(P_PROBE_MESSAGE, s.probeMessage());
+    params.put(P_PROBE_EVIDENCE, s.probeEvidence());
     mapper.upsertHealth(params);
   }
 

@@ -167,14 +167,15 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       }
     }
     logImportAudit(
-        session.tenantId(),
-        session.fileName(),
-        reason,
-        operatorId,
-        traceId,
-        inserted,
-        updated,
-        skipInvalid ? result.invalidRows() : 0);
+        new ImportAuditContext(
+            session.tenantId(),
+            session.fileName(),
+            reason,
+            operatorId,
+            traceId,
+            inserted,
+            updated,
+            skipInvalid ? result.invalidRows() : 0));
     importStore.remove(uploadToken);
     return new ExcelApplyResponse(
         uploadToken,
@@ -227,8 +228,17 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
         previewWorkbookUrl);
   }
 
-  /** 默认为空（已有逐行 logChange）；子类可覆盖写入批次级审计。 */
-  protected void logImportAudit(
+  /**
+   * 默认为空（已有逐行 logChange）；子类可覆盖写入批次级审计。
+   *
+   * <p>参数封装为 {@link ImportAuditContext} 满足 CLAUDE.md「方法参数 ≤6」硬约束。
+   */
+  protected void logImportAudit(ImportAuditContext ctx) {
+    // 默认空实现 — 逐行变更日志已由 doApply 中的 logChange 记录
+  }
+
+  /** 批次级审计参数对象，封装 logImportAudit 的 8 个上下文字段。 */
+  public record ImportAuditContext(
       String tenantId,
       String fileName,
       String reason,
@@ -236,9 +246,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       String traceId,
       int inserted,
       int updated,
-      int skipped) {
-    // 默认空实现 — 逐行变更日志已由 doApply 中的 logChange 记录
-  }
+      int skipped) {}
 
   // 校验框架
 

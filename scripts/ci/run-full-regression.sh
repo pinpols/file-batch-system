@@ -96,7 +96,13 @@ run_step "Version alignment (pom.xml / Chart.yaml / .env.*)" bash scripts/ci/che
 
 run_step "Dependency boundary checks" python3 scripts/ci/check-dependency-boundaries.py
 
-run_step "PMD — code conventions" run_mvn pmd:check -fae || true
+# PMD 0 violation 基线达成 (2026-04-26 maturity §6 P1 #2 收尾)，删 `|| true` 让 PMD 真正阻断 CI。
+# 调试模式可显式 export BATCH_CI_SKIP_PMD_GATE=1 让 dev 本地 escape；CI 不应设此变量。
+if [[ "${BATCH_CI_SKIP_PMD_GATE:-}" == "1" ]]; then
+  echo "[PMD gate] skipped via BATCH_CI_SKIP_PMD_GATE=1 (debug only)"
+else
+  run_step "PMD — code conventions (fail PR if violations introduced)" run_mvn pmd:check -fae
+fi
 
 run_step "Spotless — code formatting" run_mvn spotless:check -fae || true
 

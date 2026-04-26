@@ -18,7 +18,13 @@ public record ExcelPreviewResponse<R>(
     List<ExcelRowIssue> issues,
     String previewWorkbookUrl) {
 
-  /** 不带 workbook URL 的便捷构造（向后兼容）。 */
+  /**
+   * 不带 workbook URL 的便捷构造（向后兼容）。
+   *
+   * <p>CLAUDE.md「方法参数 ≤6」豁免：record secondary constructor 等同 record 字段定义，封装会破坏对外 API；按
+   * CLAUDE.md「构造器（record / DTO / Response / data holder / Spring DI 注入）不受此约束」豁免。
+   */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
   public ExcelPreviewResponse(
       String uploadToken,
       String fileName,

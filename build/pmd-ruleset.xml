@@ -51,11 +51,14 @@
         </properties>
     </rule>
 
-    <!-- 重复字符串字面量：≥ 5 次提取为常量，注解内豁免 -->
+    <!-- 重复字符串字面量：≥ 7 次提取为常量（2026-04-26 从 5 次放宽到 7 次：4-6 次的局部重复属于
+         可读性可接受，强制提常量反而引入间接层）；注解内豁免；exceptionList 忽略语义弱的常用字面量
+         （提常量反而降低可读性，例如 SMTP Properties.put("...", "true")）。 -->
     <rule ref="category/java/errorprone.xml/AvoidDuplicateLiterals">
         <properties>
-            <property name="maxDuplicateLiterals" value="4"/>
+            <property name="maxDuplicateLiterals" value="7"/>
             <property name="skipAnnotations" value="true"/>
+            <property name="exceptionList" value="true,false,null,UTF-8,utf-8"/>
         </properties>
     </rule>
 
