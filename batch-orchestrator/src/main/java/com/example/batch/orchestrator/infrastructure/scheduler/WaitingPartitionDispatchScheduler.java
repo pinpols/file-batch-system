@@ -90,7 +90,9 @@ public class WaitingPartitionDispatchScheduler {
       log.debug("no WAITING partitions this tick");
       return;
     }
-    log.info("waiting dispatch tick: {} WAITING partitions to evaluate", waitingPartitions.size());
+    // 每 10 秒一次 tick，evaluate 数本身没业务进展信息（仍 WAITING 表明一直被限流挡）；
+    // 改 DEBUG 防 3 小时积 1000+ 噪音。真有 partition 被释放时由 line 269 的"released" 日志体现。
+    log.debug("waiting dispatch tick: {} WAITING partitions to evaluate", waitingPartitions.size());
     List<WaitingDispatchCandidate> candidates = new ArrayList<>();
     for (JobPartitionEntity partition : waitingPartitions) {
       WaitingDispatchCandidate candidate;
