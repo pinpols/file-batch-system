@@ -7,12 +7,15 @@
 
 ## 1. 一张图看完整链路
 
-> **图例**：粗实线 `══>` = 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号。
+> **图例**：
+> - 线**类型**：粗实线 `══>` = 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号。
+> - 线**颜色**（按协议分类）：🔵 蓝 = HTTP/REST 同步调用；🟢 绿 = SQL/JDBC 写；🟣 紫 = SQL/JDBC 读；🟠 橙 = Kafka 异步消息；🟡 黄 = Redis（cache / Streams / pub-sub）；🔴 红 = 外部副作用（MinIO PUT / SFTP 投递 / OpenAI）；⚫ 灰 = 控制信号 / 监控 / 心跳。
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 70, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
 flowchart LR
   USER([用户 / 前端]):::user
+  CONSOLE["batch-console-api<br/>(BFF · 鉴权/限流/审计)"]:::svc
 
   subgraph TRIG ["触发层 · batch-trigger（Quartz → Wheel 双轨过渡）"]
     direction TB
@@ -20,6 +23,7 @@ flowchart LR
     QZ[(Quartz<br/>QRTZ_*<br/>legacy)]:::store
     WS["HashedWheelTriggerScheduler<br/>+ WheelTriggerReconciler<br/>+ MisfirePendingExpireScheduler<br/>+ CatchUpThrottle"]:::svc
     TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(legacy)"]:::svc
+    FLAG{{"QuartzPauseWhenWheelEnabledCustomizer<br/>switch on batch.trigger.wheel.enabled"}}:::flag
   end
 
   subgraph SCH ["调度层 · batch-orchestrator"]
@@ -50,49 +54,82 @@ flowchart LR
 
   FS[("外部 target<br/>LOCAL / SFTP / NAS<br/>OSS / API")]:::extern
 
-  %% ─── 触发链路（粗实线 = 主流程；Quartz 与 Wheel 二选一） ──
-  USER  ==>|"launch (MANUAL)"| TR
-  USER  ==>|"launch (MANUAL)"| WS
-  QZ    ==>|"cron fire (SCHEDULED · legacy)"| TR
-  WHEEL ==>|"tick fire (SCHEDULED · 默认/新)"| WS
-  TR    ==>|"HTTP /internal/launch"| LS
-  WS    ==>|"HTTP /internal/launch"| LS
+  %% ─── 触发链路（HTTP 入站 + 时序触发；Quartz 与 Wheel 二选一） ──
+  USER    ==>|"POST /api/console/triggers/launch"| CONSOLE
+  CONSOLE ==>|"HTTP forward (MANUAL)"| TR
+  CONSOLE ==>|"HTTP forward (MANUAL)"| WS
+  QZ      ==>|"cron fire (SCHEDULED · legacy)"| TR
+  WHEEL   ==>|"tick fire (SCHEDULED · 默认/新)"| WS
+  FLAG    -. "wheel.enabled=true → 暂停 Quartz" .-> QZ
+  TR      ==>|"HTTP /internal/launch"| LS
+  WS      ==>|"HTTP /internal/launch"| LS
 
-  %% ─── 调度写库（粗实线） ─────────────────────────
+  %% ─── 调度写库（JDBC INSERT） ─────────────────────
   LS ==>|"INSERT job_instance<br/>+ partition + outbox_event<br/>(同一 tx)"| PDB
 
-  %% ─── orchestrator 内部读 / 写 PDB（虚线 = 控制） ──
-  PA  -. "write partition status" .-> PDB
-  SEL -. "read worker_registry<br/>+ resource_queue" .-> PDB
-  OUT -. "poll outbox_event" .-> PDB
+  %% ─── orchestrator 内部读 / 写 PDB（控制） ────────
+  PA  -. "write partition status (JDBC)" .-> PDB
+  SEL -. "read worker_registry<br/>+ resource_queue (JDBC)" .-> PDB
+  OUT -. "poll outbox_event (JDBC)" .-> PDB
 
   %% ─── Redis 辅助：ShedLock + config cache + shard-assignment ──
-  SCH -. "ShedLock (@Scheduled 防多实例)<br/>+ config cache + quota Lua" .-> RDS
+  SCH -. "ShedLock + config cache + quota Lua" .-> RDS
 
-  %% ─── outbox → Kafka → workers（粗实线 = 消息流） ──
+  %% ─── outbox → Kafka → workers（异步消息流） ──────
   OUT ==>|"publish task"| K
-  K ==>|"consume<br/>(import topic)"| WI
-  K ==>|"consume<br/>(export topic)"| WE
-  K ==>|"consume<br/>(dispatch topic)"| WD
+  K ==>|"consume (import)"| WI
+  K ==>|"consume (export)"| WE
+  K ==>|"consume (dispatch)"| WD
 
-  %% ─── worker 上报回 LS（虚线 = 控制信号） ────────
-  WI -. "claim / heartbeat / report" .-> LS
-  WE -. "claim / heartbeat / report" .-> LS
-  WD -. "claim / heartbeat / report" .-> LS
-  LS ==>|"UPDATE job_instance<br/>+ partition (状态机)"| PDB
+  %% ─── worker 上报回 LS（控制信号 HTTP） ───────────
+  WI -. "claim / heartbeat / report (HTTP)" .-> LS
+  WE -. "claim / heartbeat / report (HTTP)" .-> LS
+  WD -. "claim / heartbeat / report (HTTP)" .-> LS
+  LS ==>|"UPDATE job_instance<br/>+ partition (状态机, JDBC)"| PDB
 
-  %% ─── worker 数据落地（写 = 粗实线，读 = 虚线） ──
-  WI ==>|"INSERT biz.*"| BIZ
-  WE -. "SELECT biz.*" .-> BIZ
+  %% ─── worker 数据落地（业务写 / 外部副作用） ─────
+  WI ==>|"INSERT biz.* (JDBC)"| BIZ
+  WE -. "SELECT biz.* (JDBC)" .-> BIZ
   WE ==>|"PUT object"| M
   WD -. "GET object" .-> M
   WD ==>|"deliver (cp / scp / POST)"| FS
+
+  %% ─── 边按协议着色（顺序与上面声明一致；linkStyle index 从 0 起） ──
+  %%   0..7  HTTP / 触发层入站 (蓝色)
+  linkStyle 0,1,2,3,4 stroke:#1565c0,stroke-width:2.5px
+  %%   5     feature flag 控制（虚线灰）
+  linkStyle 5 stroke:#616161,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   6,7   trigger → orchestrator（HTTP 蓝）
+  linkStyle 6,7 stroke:#1565c0,stroke-width:2.5px
+  %%   8     LS → PDB 写（绿）
+  linkStyle 8 stroke:#2e7d32,stroke-width:2.5px
+  %%   9..11 PA/SEL/OUT 读 PDB（紫虚）
+  linkStyle 9,10,11 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   12    SCH ↔ Redis（黄虚）
+  linkStyle 12 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   13..16 Kafka 链（橙）
+  linkStyle 13,14,15,16 stroke:#ef6c00,stroke-width:2.5px
+  %%   17..19 worker → LS 上报（HTTP 蓝虚 = 控制信号）
+  linkStyle 17,18,19 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   20    LS → PDB 状态机更新（绿）
+  linkStyle 20 stroke:#2e7d32,stroke-width:2.5px
+  %%   21    worker-import → biz 写（绿）
+  linkStyle 21 stroke:#2e7d32,stroke-width:2.5px
+  %%   22    worker-export 读 biz（紫虚）
+  linkStyle 22 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   23    worker-export → MinIO（外部红）
+  linkStyle 23 stroke:#c62828,stroke-width:2.5px
+  %%   24    worker-dispatch 读 MinIO（紫虚）
+  linkStyle 24 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   25    worker-dispatch → 外部 target（红）
+  linkStyle 25 stroke:#c62828,stroke-width:2.5px
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
   classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
   classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
   classDef extern  fill:#fce4ec,stroke:#ad1457,stroke-width:1.5px,color:#880e4f;
+  classDef flag    fill:#fffde7,stroke:#f9a825,stroke-width:1.5px,color:#f57f17;
 ```
 
 ### 一句话叙事
@@ -102,6 +139,64 @@ flowchart LR
 3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
 4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态 → orchestrator 推进状态机。
 5. **落地**：IMPORT 写 `batch_business.biz.*` 表；EXPORT 把生成的文件 PUT 到 MinIO 并登记 `file_record`；DISPATCH 把 `file_record` 派到外部通道（LOCAL / SFTP / NAS / OSS / API）。
+
+---
+
+## 1.5 运营视角 — console-api 的四个支线
+
+主图聚焦「一条任务的生命周期」，console-api（BFF）只在主图体现「人工 launch」这一跳。
+以下补充其余三条职责：配置管理、查询 / 报表、实时监控。
+
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
+flowchart LR
+  USER([用户 / 前端]):::user
+
+  subgraph BFF ["batch-console-api"]
+    direction TB
+    AUTH["AuthN/Z + RateLimit<br/>+ Audit + Idempotent"]:::svc
+    CFG[Config CRUD]:::svc
+    QRY["Query / Report<br/>(@Transactional readOnly)"]:::svc
+    SSE["RealtimeEventHub<br/>(SSE)"]:::svc
+    AI["AI Assistant<br/>(OpenAI proxy)"]:::svc
+    LAUNCH["Manual Launch<br/>+ Compensate / Rerun"]:::svc
+  end
+
+  PRIM[("PG primary<br/>:15432<br/>(写)")]:::store
+  REPL[("PG replica<br/>:15433<br/>readOnly 路由<br/>fail-open 退主")]:::store
+  REDIS[("Redis Streams<br/>+ pub/sub config evict")]:::store
+  TRG["batch-trigger<br/>(/internal/launch)"]:::svc
+  ORCH["batch-orchestrator<br/>(/internal/compensate /<br/>config-cache evict)"]:::svc
+  OPENAI[(OpenAI / 私有化代理)]:::extern
+
+  USER ==> AUTH
+  AUTH --> CFG
+  AUTH --> QRY
+  AUTH --> SSE
+  AUTH --> AI
+  AUTH --> LAUNCH
+
+  CFG    ==>|"INSERT / UPDATE<br/>job_definition / workflow_definition<br/>file_channel / batch_window"| PRIM
+  CFG    -.->|"afterCommit pub/sub<br/>evict orchestrator cache"| REDIS
+  CFG    -.->|"DB 直改场景手动 evict<br/>POST /api/console/ops/cache/evict-*"| ORCH
+  QRY    ==>|"SELECT 走 read replica"| REPL
+  QRY    -.->|"replica 挂 → fail-open 退主"| PRIM
+  SSE    -.->|"消费 stream<br/>+ 推 SSE 给前端"| REDIS
+  AI     ==>|"chat / classify"| OPENAI
+  LAUNCH ==>|"HTTP forward"| TRG
+
+  classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
+  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+  classDef extern  fill:#fce4ec,stroke:#ad1457,stroke-width:1.5px,color:#880e4f;
+```
+
+### 关键约束
+
+- **写路径只走 primary**：CRUD 接口的 `@Transactional`（默认 readWrite）路由到 primary；查询接口类级 `@Transactional(readOnly = true)` 路由到 replica。`ReadReplicaRoutingDataSource` 在 replica 异常时 fail-open 退回 primary（per-instance quarantine，详见 `ReadReplicaProperties`）。
+- **配置改动必须走 console**：直改 DB 不会触发 afterCommit 事件 → orchestrator Redis 缓存失效要等 5min TTL；运维场景请用 `POST /api/console/ops/cache/evict-*` 6 个端点手动 evict（详见 `ConsoleConfigCacheController`）。
+- **SSE 客户端绑定到具体实例**：实例死亡 → SSE 断开 → 浏览器 reconnect 落到新实例 → 从 Redis Streams replay buffer 续推（见 `ConsoleRealtimeEventHub` + `ConsoleRealtimeReplayStore`）。
+- **AI 走代理出网**：所有 prompt 经 `ConsoleAiPromptGuard` 过滤分类（PLATFORM / REJECTED_*），结果写 `console_ai_audit_log` 留痕。
 
 ---
 
