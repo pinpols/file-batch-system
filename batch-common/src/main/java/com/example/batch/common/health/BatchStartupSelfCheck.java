@@ -8,17 +8,16 @@ import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 通用启动自检：检查项完全由 {@link BatchStartupSelfCheckProperties} 配置，避免各模块复制 JDBC 校验逻辑。 */
+@Slf4j
 public class BatchStartupSelfCheck {
 
-  private static final Logger log = LoggerFactory.getLogger(BatchStartupSelfCheck.class);
   private static final List<String> QUARTZ_STANDARD_TABLES =
       List.of(
           "qrtz_job_details",

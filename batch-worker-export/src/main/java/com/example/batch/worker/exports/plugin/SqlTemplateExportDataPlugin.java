@@ -11,8 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -28,10 +27,9 @@ import com.example.batch.common.utils.Texts;
  * SELECT *、必填参数）。 当 {@code explainCheckEnabled=true} 时，首页前还会执行 {@code EXPLAIN (FORMAT JSON)}
  * 防止全表扫描。
  */
+@Slf4j
 @Component
 public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
-
-  private static final Logger log = LoggerFactory.getLogger(SqlTemplateExportDataPlugin.class);
 
   public static final String PLUGIN_ID = "sql_template_export";
 
