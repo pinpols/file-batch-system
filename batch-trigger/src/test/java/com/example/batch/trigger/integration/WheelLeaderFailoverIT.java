@@ -51,6 +51,9 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
 
   @BeforeEach
   void seed() {
+    // 清 ShedLock 残留 + 重置 wheelScheduler.wasLeader 状态(每个 test 独立验证 fast-path 翻转)
+    jdbcTemplate.update("delete from batch.shedlock where name in (?, ?)",
+        "trigger_wheel_leader", "wheel_stale_marker_release");
     tenantId = "fover-it-" + System.nanoTime();
     jobCode = "job-" + System.nanoTime();
     jdbcTemplate.update(
@@ -84,7 +87,7 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
     double staleReleasedBefore = staleReleasedCount();
 
     // 2) 调 slidingWindow — 触发 wasLeader: false → true → onLeaderAcquire fast-path
-    wheelScheduler.slidingWindow();
+    wheelScheduler.doSlidingWindow();
 
     // 3) 验证 fast-path 行为:
     //    - leader.acquire metric +1
@@ -106,10 +109,10 @@ class WheelLeaderFailoverIT extends AbstractIntegrationTest {
   void secondSlidingWindowCallDoesNotRetriggerFastPath() {
     insertState(Instant.now().plusSeconds(60));
 
-    wheelScheduler.slidingWindow();  // 第 1 次 — 触发 fast-path
+    wheelScheduler.doSlidingWindow();  // 第 1 次 — 触发 fast-path
     double afterFirstAcquire = leaderAcquireCount();
 
-    wheelScheduler.slidingWindow();  // 第 2 次 — wasLeader 已 true,不再触发
+    wheelScheduler.doSlidingWindow();  // 第 2 次 — wasLeader 已 true,不再触发
     double afterSecondAcquire = leaderAcquireCount();
 
     assertThat(afterSecondAcquire)

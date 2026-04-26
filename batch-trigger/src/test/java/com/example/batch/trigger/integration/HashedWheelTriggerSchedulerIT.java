@@ -56,6 +56,9 @@ class HashedWheelTriggerSchedulerIT extends AbstractIntegrationTest {
 
   @BeforeEach
   void seed() {
+    // 清 ShedLock 残留(@SchedulerLock lockAtLeastFor 在 IT 之间会保留锁)
+    jdbcTemplate.update("delete from batch.shedlock where name in (?, ?, ?)",
+        "trigger_wheel_leader", "wheel_stale_marker_release", "wheel_trigger_reconciler");
     tenantId = "wheel-it-" + System.nanoTime();
     jobCode = "job-" + System.nanoTime();
     jdbcTemplate.update(

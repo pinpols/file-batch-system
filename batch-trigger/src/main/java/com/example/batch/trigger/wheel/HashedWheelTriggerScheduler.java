@@ -139,6 +139,11 @@ public class HashedWheelTriggerScheduler {
       lockAtMostFor = "PT2M",
       lockAtLeastFor = "PT30S")
   public void slidingWindow() {
+    doSlidingWindow();
+  }
+
+  /** Public 让 IT 直接调,绕开 {@code @SchedulerLock} proxy(IT 不验证 lock 行为)。生产代码不应调用此方法,走 {@link #slidingWindow()}。 */
+  public void doSlidingWindow() {
     boolean previouslyLeader = wasLeader.getAndSet(true);
     if (!previouslyLeader) {
       onLeaderAcquire();

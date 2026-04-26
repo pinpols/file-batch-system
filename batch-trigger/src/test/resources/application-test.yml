@@ -5,3 +5,8 @@ spring:
   quartz:
     jdbc:
       schema: classpath:db/quartz/tables_postgres_quartz_schema.sql
+
+# IT 让 ShedLockProviderFactory 自动建 batch.shedlock 表(生产由 docker init 002-batch-shedlock.sql 建)
+batch:
+  shedlock:
+    auto-create: true
