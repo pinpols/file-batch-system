@@ -77,6 +77,10 @@ batch:
     snapshot-persist-enabled: false
     # 拉长周期（理论上不应触发），兜底避免误触发
     snapshot-persist-ms: 600000
-    # P2-3: 测试禁用 WorkerSelector Redis 缓存，避免缓存的 worker 列表与测试动态创建的 worker 时序不一致
+    # P2-3 收敛 (2026-04-26 maturity-assessment §6 #1): worker-cache 改为开启 + ttl 极短 (100ms)。
+    # 之前一刀切 enabled=false 导致 prod 主路径 (Redis 缓存 + JSON 序列化 + fail-open) 在 IT 层不被
+    # 真实覆盖。改为 enabled=true 让 wiring + 序列化 + Redis 通讯路径都跑过 IT，但 ttl=100ms 让
+    # 缓存近似无效（每次几乎都 miss），避免动态创建 worker 时 cache 时序不一致。
     worker-cache:
-      enabled: false
+      enabled: true
+      ttl-millis: 100
