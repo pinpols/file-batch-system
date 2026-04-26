@@ -106,3 +106,52 @@ mvn gatling:test \
 - 复现条件：所有 6 个 JVM 进程 healthy，`disp_local_probe` 是 default-tenant MANUAL job
 - 真实生产压测需要在 staging（pool=30 + 多实例 + k8s autoscale）跑 CapacityBaselineSimulation 30 分钟
 - 此次只做了写路径（JobLaunchSimulation），读路径（ConsoleQuerySimulation）和混合（CapacityBaselineSimulation）未跑
+
+---
+
+## 2026-04-27 — V5-P2-3 quota 压测 smoke
+
+### 目的
+
+验证 Gatling 工具链 + 应用响应能力 ok；为后续真"打满 quota 触发 RATE_LIMITED"测试铺基础。
+
+### 命令
+
+```bash
+cd load-tests
+mvn gatling:test \
+    -Dgatling.includes=com.example.batch.loadtest.simulations.JobLaunchSimulation \
+    -Dtrigger.baseUrl=http://localhost:18081 \
+    -DtenantId=default-tenant \
+    -DjobCode=disp_local_probe \
+    -DbizDate=2026-04-26 \
+    -Dusers.peak=5 -Dduration.seconds=20 -Dramp.seconds=5 \
+    -Dslo.write.p95ms=2000 -Dslo.maxErrorPct=5.0
+```
+
+### 结果
+
+| 指标 | 值 |
+|---|---|
+| 请求总数 | 105 |
+| 持续时间 | 25s |
+| 平均吞吐 | **4.2 req/s** |
+| Min / Mean / Max | 30ms / 59ms / 270ms |
+| p50 / p75 / p95 / p99 | 52ms / 63ms / 112ms / 210ms |
+| 失败率 | **0%** |
+| t < 800 ms | 100% |
+
+SLO 验证：
+- `slo.write.p95ms < 2000ms` ✅（实际 112ms）
+- `slo.maxErrorPct < 5.0%` ✅（实际 0%）
+
+### 局限 + follow-up
+
+本次**未真触发 quota 限流**——`default-tenant` 当前 `tenant_quota_policy` 阈值远高于 105 req / 25s。要真观察 RATE_LIMITED + 拐点：
+
+1. 配低 quota：`max_qps_per_tenant=2 / max_running_jobs_per_tenant=10`
+2. 跑 `CapacityBaselineSimulation` 30 min，10 → 50 用户递增
+3. 看 orchestrator metrics `quota.allow.count` vs `quota.deny.count` 拐点
+4. 记录 launcher SLO 退化点（p95 → 何时跨过 1s）
+
+→ 留 V5-P2-3-ext 后续 sprint 真做。

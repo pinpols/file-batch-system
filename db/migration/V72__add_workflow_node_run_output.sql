@@ -1,0 +1,29 @@
+-- =========================================================
+-- V72: workflow_node_run.output JSONB 列
+--
+-- ADR-009 Stage 1：上游节点产出捕获，供下游节点 DSL 引用
+-- （参见 docs/architecture/adr/ADR-009-workflow-param-dsl.md）
+--
+-- 字段语义：
+--   key   = 业务字段名（worker 决定，例如 fileId / recordCount / receiptCode）
+--   value = 任意 JSON 类型（标量 / 对象 / 数组）
+--
+-- 写入时机：worker 上报 task SUCCESS 时；orchestrator 在
+--   DefaultTaskOutcomeService.persistOutcome 写本字段。
+--
+-- 读取时机：DefaultSchedulePlanBuilder 派发下游 partition payload 前，
+--   WorkflowParamResolver 解析 node_params 中的 $.nodes.<X>.output.<key> 引用。
+--
+-- 兼容性：
+--   - 旧 worker 不上报 outputs → 字段保持 NULL → DSL 解析返回 null（保持现行为）
+--   - 新增字段 nullable，无 default，平滑升级
+-- =========================================================
+
+ALTER TABLE batch.workflow_node_run
+  ADD COLUMN output JSONB;
+
+COMMENT ON COLUMN batch.workflow_node_run.output IS
+  'ADR-009: 节点 SUCCESS 时由 worker 上报的产出 Map，供下游节点 $.nodes.<X>.output.<key> 引用';
+
+-- 暂不加索引：当前 workflow_node_run 量级（千级/天）下 JSON 引用查询走 FK 直连，
+-- 不依赖 output 字段过滤。等量级上来再评估 GIN 索引。
