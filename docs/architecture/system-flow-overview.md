@@ -9,17 +9,17 @@
 
 > **重要前提（先读这段再看图）**：系统**主入口是定时器**（Quartz cron / wheel tick），生产环境 95%+ 的任务由 trigger 模块自动 fire，**根本不经过 console-api**。前台 `USER → CONSOLE → 触发` 是少数场景（联调 / 失败重跑 / 运维介入），看图时把它当辅助入口。
 >
-> 下图为了完整性把两条入口都画了，但**当前默认主路径是 `QZ → TR`**（Quartz cron fire，蓝粗实线 = 生产正在用）；前台 `USER → CONSOLE → TR/WS` 已**降级为灰色细虚线**作"可选入口"标记，方便视觉一眼分清主辅。
+> 下图为了完整性把两条入口都画了，但**当前默认主路径是 `WHEEL → WS`**（HashedWheelTimer tick fire，2026-04-26 起切为默认）；前台 `USER → CONSOLE → TR/WS` 已**降级为灰色细虚线**作"可选入口"标记，方便视觉一眼分清主辅。
 >
 > **触发层新旧两套实现并存（严格二选一）**：
 >
 > | 实现 | 状态表 | 调度 svc | fire 路径 | 何时 active |
 > |---|---|---|---|---|
-> | **Quartz**（**旧 / 当前默认**） | `QRTZ_*` | `TR`（TriggerSchedulerFacade） | `QZ → TR → LS`（蓝粗实） | `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`（默认值） |
-> | **HashedWheelTimer**（**新 / 可选切换**） | `trigger_runtime_state` + `trigger_misfire_pending` | `WS`（HashedWheelTriggerScheduler） | `WHEEL → WS → LS`（蓝**虚线** = 默认不生效，需开关） | `BATCH_TRIGGER_SCHEDULER_IMPL=wheel` |
-> | **互斥控制器** | — | `FLAG`（QuartzPauseWhenWheelEnabledCustomizer） | 切到 wheel 模式时把 `QZ.autoStartup=false` 让 Quartz bean 仍存在但不 fire | 自动 |
+> | **HashedWheelTimer**（**新 / 当前默认**） | `trigger_runtime_state` + `trigger_misfire_pending` | `WS`（HashedWheelTriggerScheduler） | `WHEEL → WS → LS`（蓝粗实） | `BATCH_TRIGGER_SCHEDULER_IMPL=wheel`（默认值，2026-04-26 切换） |
+> | **Quartz**（**旧 / 回退路径**） | `QRTZ_*` | `TR`（TriggerSchedulerFacade） | `QZ → TR → LS` | 显式 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz` 切回（incident 回退用） |
+> | **互斥控制器** | — | `FLAG`（QuartzPauseWhenWheelEnabledCustomizer） | wheel 模式下把 `QZ.autoStartup=false` 让 Quartz bean 仍存在但不 fire | 自动 |
 >
-> 图里 `QZ → TR` 是粗实线（默认在跑），`WHEEL → WS` 改为粗虚线（可选实现，需开关激活）。这两条**永远只有一条会 fire**，由配置决定。详见 [`docs/architecture/quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md)。
+> 这两条 fire 边**永远只有一条会激活**，由配置决定；2026-04-26 已把 application.yml fallback 从 quartz 切到 wheel（phase 1 收尾，57 IT 全过）。详见 [`docs/architecture/quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md) 和 [`docs/runbook/wheel-scheduler-rollout.md`](../runbook/wheel-scheduler-rollout.md)。
 >
 > **图例**：
 > - 线**主次**：粗实线 `══>` = 生产主路径 / 主数据流 / 写入 / publish；细虚线 `┄┄>` = 读取 / 上报 / 控制信号 / 前台可选入口。
@@ -31,13 +31,13 @@ flowchart LR
   USER([用户 / 前端]):::user
   CONSOLE["batch-console-api<br/>(BFF · 鉴权/限流/审计)"]:::svc
 
-  subgraph TRIG ["触发层 · batch-trigger（quartz 默认 / wheel 可选 · 严格二选一）"]
+  subgraph TRIG ["触发层 · batch-trigger（wheel 默认 / quartz 回退 · 严格二选一·2026-04-26 切换）"]
     direction TB
-    WHEEL[("trigger_runtime_state<br/>trigger_misfire_pending<br/>scheduler-impl=wheel (新)")]:::store
-    QZ[("Quartz<br/>QRTZ_*<br/>scheduler-impl=quartz (默认)")]:::store
+    WHEEL[("trigger_runtime_state<br/>trigger_misfire_pending<br/>scheduler-impl=wheel (当前默认)")]:::store
+    QZ[("Quartz<br/>QRTZ_*<br/>scheduler-impl=quartz (回退路径)")]:::store
     WS["HashedWheelTriggerScheduler<br/>+ WheelTriggerReconciler<br/>+ MisfirePendingExpireScheduler<br/>+ CatchUpThrottle<br/>(@ConditionalOnProperty wheel)"]:::svc
-    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(quartz 模式 fire)"]:::svc
-    FLAG{{"QuartzPauseWhenWheelEnabledCustomizer<br/>scheduler-impl=wheel → Quartz autoStartup=false<br/>(Quartz bean 仍创建供 TriggerSchedulerFacade 引用，但不 fire)"}}:::flag
+    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(quartz 模式 fire · @ConditionalOnProperty quartz)"]:::svc
+    FLAG{{"QuartzPauseWhenWheelEnabledCustomizer<br/>scheduler-impl=wheel(默认) → Quartz autoStartup=false<br/>(Quartz bean 仍创建供 TriggerSchedulerFacade 引用，但不 fire)"}}:::flag
   end
 
   subgraph SCH ["调度层 · batch-orchestrator"]
@@ -73,8 +73,8 @@ flowchart LR
   USER    ==>|"POST /api/console/triggers/launch<br/>📉 < 5% · 联调 / 重跑 / ops"| CONSOLE
   CONSOLE ==>|"HTTP forward (MANUAL · < 5%)"| TR
   CONSOLE ==>|"HTTP forward (MANUAL · < 5%)"| WS
-  QZ      ==>|"cron fire (SCHEDULED · 默认)<br/>📈 生产 95%+ 触发量"| TR
-  WHEEL   ==>|"tick fire (SCHEDULED · 新可选)<br/>开关切换后承接同等流量"| WS
+  QZ      ==>|"cron fire (SCHEDULED · 回退路径)<br/>需显式 BATCH_TRIGGER_SCHEDULER_IMPL=quartz"| TR
+  WHEEL   ==>|"tick fire (SCHEDULED · 当前默认)<br/>📈 生产 95%+ 触发量"| WS
   FLAG    -. "scheduler-impl=wheel → autoStartup=false" .-> QZ
   TR      ==>|"HTTP /internal/launch"| LS
   WS      ==>|"HTTP /internal/launch"| LS
@@ -112,8 +112,10 @@ flowchart LR
   %% ─── 边按协议着色（顺序与上面声明一致；linkStyle index 从 0 起） ──
   %%   0,1,2  前台 MANUAL 入口（灰细虚 = 辅助路径，少数场景）：USER→CONSOLE / CONSOLE→TR / CONSOLE→WS
   linkStyle 0,1,2 stroke:#9e9e9e,stroke-width:1.5px,stroke-dasharray:5 4
-  %%   3,4    定时 SCHEDULED 主入口（蓝粗实 = 生产 95%+ 触发量）：QZ→TR / WHEEL→WS
-  linkStyle 3,4 stroke:#1565c0,stroke-width:2.5px
+  %%   3      Quartz cron fire → TR（蓝粗虚 = 回退路径，2026-04-26 不再是默认）
+  linkStyle 3 stroke:#1565c0,stroke-width:2px,stroke-dasharray:6 4
+  %%   4      Wheel tick fire → WS（蓝粗实 = 当前默认主入口，生产 95%+ 触发量）
+  linkStyle 4 stroke:#1565c0,stroke-width:2.5px
   %%   5      feature flag 控制（虚线灰）
   linkStyle 5 stroke:#616161,stroke-width:1.5px,stroke-dasharray:4 3
   %%   6,7    trigger → orchestrator（HTTP 蓝，MANUAL 与 SCHEDULED 在此汇合）

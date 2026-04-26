@@ -49,10 +49,9 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-    name = "batch.trigger.scheduler-impl",
-    havingValue = "quartz",
-    matchIfMissing = true)
+// matchIfMissing=false：application.yml 一定提供 scheduler-impl 默认值（已切 wheel），缺省装配
+// 不再回落到 quartz；仅当显式 BATCH_TRIGGER_SCHEDULER_IMPL=quartz 时本 reconciler 装配。
+@ConditionalOnProperty(name = "batch.trigger.scheduler-impl", havingValue = "quartz")
 @RequiredArgsConstructor
 public class TriggerReconciler {
 

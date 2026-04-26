@@ -50,9 +50,10 @@ batch:
     quartz-standard-tables: true
     quartz-schema: quartz
   trigger:
-    # 调度引擎选择(quartz / wheel),默认 quartz;wheel 模式仍在阶段 1 实施期,生产暂不切。
-    # 切换流程见 docs/architecture/quartz-replacement-design.md §11。
-    scheduler-impl: ${BATCH_TRIGGER_SCHEDULER_IMPL:quartz}
+    # 调度引擎选择(quartz / wheel),默认 wheel(2026-04-26 phase 1 收尾切换;57 IT 全过)。
+    # quartz 仍保留作 opt-in 回退路径(BATCH_TRIGGER_SCHEDULER_IMPL=quartz),
+    # 后续 codepath 收敛见 docs/architecture/quartz-replacement-evaluation.md。
+    scheduler-impl: ${BATCH_TRIGGER_SCHEDULER_IMPL:wheel}
     # 注：原 quartz-datasource opt-in 开关已于 2026-04-25 移除（Phase 2 半成品清理）。
     # Quartz JobStore 共享主 DataSource，业务表与 QRTZ_* 同 PG 实例不同 schema。
     # 业务量级到拐点时演进路径见 docs/architecture/quartz-replacement-evaluation.md（直接换时间轮，不做独立库）。

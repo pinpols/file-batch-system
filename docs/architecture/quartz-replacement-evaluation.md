@@ -277,7 +277,7 @@ public class HashedWheelTriggerScheduler implements TriggerScheduler {
 
 | 动作 | 工作量 |
 |---|---|
-| 1. 加 `batch.trigger.scheduler-impl` 配置项(quartz / wheel 二选一,默认 quartz) | 0.5 天 |
+| 1. 加 `batch.trigger.scheduler-impl` 配置项(quartz / wheel 二选一,默认 quartz **→ 2026-04-26 切默认 wheel**) | 0.5 天 |
 | 2. 实现 `HashedWheelTriggerScheduler`(§5.4 骨架) | 5 天 |
 | 3. 实现 `TriggerStore`(基于 trigger_request 表) | 2 天 |
 | 4. 实现 misfire / catch-up(对接现有 `CatchUpPolicyType`) | 2 天 |
