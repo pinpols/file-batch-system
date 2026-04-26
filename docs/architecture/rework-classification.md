@@ -82,7 +82,7 @@
 
 | 开关 | application.yml 默认 | docker-compose 默认 | 备注 |
 |---|---|---|---|
-| `batch.console.read-replica.enabled` | true | **false**（compose 显式覆盖） | 唯一保持 opt-in 的开关；从库就位再翻 |
+| `batch.console.read-replica.enabled` | true | **true**（与 yml 一致） | fail-open 已就位；测试 `application-test.yml` 覆盖 false |
 | `batch.scheduler.worker-cache.enabled` | true | true | Redis fail-open 已就位 |
 | `batch.mq.routing.mode` | TENANT | TENANT | 切换需 worker 端 topicPattern 配套 |
 | ~~`batch.trigger.quartz-datasource.enabled`~~ | — | — | **已移除**（2026-04-25 半成品清理）；演进直接换时间轮见 [`quartz-replacement-evaluation.md`](./quartz-replacement-evaluation.md) |

@@ -14,12 +14,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   <li>从库连接连续失败 ≥ {@code failureThreshold} 次后 fail-open 降级到主库，进入 {@code quarantineSeconds} 隔离期
  * </ul>
  *
- * <p>未启用（默认）时不创建从库连接池，行为同历史（Spring Boot 主 DataSource 自动配置）。
+ * <p>启用控制：实际默认由 application.yml 的 {@code ${BATCH_CONSOLE_READ_REPLICA_ENABLED:true}}
+ * 决定（生产 + 本地 docker-compose + .env.example 都为 true）；测试在 application-test.yml
+ * 覆盖为 {@code false}。Java 字段默认 {@code false} 仅作 yml 完全缺失时的兜底。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.console.read-replica")
 public class ReadReplicaProperties {
 
+  /**
+   * 读写分离总开关。yml fallback {@code true}；测试 {@code false}。关闭时不创建从库
+   * 连接池，行为同 Spring Boot 默认主 DataSource。
+   */
   private boolean enabled = false;
 
   /** fail-open 触发阈值：连续从库连接失败次数。默认 3，达阈值后进入 quarantine。 */

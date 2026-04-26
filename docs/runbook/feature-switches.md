@@ -16,7 +16,7 @@
 
 | 配置 key | 模块 | 实际默认 (jar 直跑) | docker-compose 默认 | 风险等级 | env 变量 |
 |---|---|---|---|---|---|
-| `batch.console.read-replica.enabled` | console-api | **true**（yml fallback） | **false**（compose 显式覆盖） | 🟢 低 | `BATCH_CONSOLE_READ_REPLICA_ENABLED` |
+| `batch.console.read-replica.enabled` | console-api | **true**（yml fallback / compose / .env.example 一致） | **true** | 🟢 低 | `BATCH_CONSOLE_READ_REPLICA_ENABLED`；测试在 `application-test.yml` 覆盖为 `false` |
 | `batch.scheduler.worker-cache.enabled` | orchestrator | **true** | **true**（继承 yml） | 🟢 低 | `BATCH_SCHEDULER_WORKER_CACHE_ENABLED` |
 | `batch.mq.routing.mode` | orchestrator | **TENANT** | **TENANT**（继承 yml） | 🟡 中 | `BATCH_MQ_ROUTING_MODE` |
 | ~~`batch.trigger.quartz-datasource.enabled`~~ | ~~trigger~~ | **已移除**（2026-04-25 清理 Phase 2 半成品） | — | — | — |
@@ -32,7 +32,7 @@
 | 部署形态 | 业务量级 | 建议开关组合 |
 |---|---|---|
 | 本地开发 / 联调 | 极小 | 全保持默认；想关掉减少依赖时设 `worker-cache=false` / `quota.runtime-store=database` |
-| docker-compose 演示 | < 1 万/天 | 默认即可；read-replica 保持 false（compose 已覆盖） |
+| docker-compose 演示 | < 1 万/天 | 默认即可；read-replica 默认 true（启 `--profile replica` 即用，未启走 fail-open 兜底，前几次请求 WARN 后 quarantine 静默走主库） |
 | 单机生产 | < 100 万/天 | `worker-cache=true` + `quota=redis`（默认）；其他保持 false |
 | 中等生产 | 100 万 ~ 1000 万/天 | 全部默认（含 read-replica 翻 true） |
 | 海量 | > 1000 万/天 | 全开 + `mq.routing.mode=PRIORITY`；Quartz 拐点临近时直接换时间轮（见 `docs/architecture/quartz-replacement-evaluation.md`），不做独立库；这是 Phase 3 范畴，需配套分库分表 |
@@ -47,8 +47,9 @@
 
 **默认**：
 - application.yml fallback：`true`
-- docker-compose.app.yml 显式覆盖：`false`（这是唯一被覆盖回 false 的开关）
-- `.env.example`：`false`
+- docker-compose.app.yml：`true`（`${BATCH_CONSOLE_READ_REPLICA_ENABLED:-true}`）
+- `.env.example`：`true`
+- 测试 `application-test.yml`：`false`（测试容器不起 replica）
 
 **配套依赖**：
 - 必须启动 PG 从库（`docker compose --profile replica up -d postgres-replica`）
