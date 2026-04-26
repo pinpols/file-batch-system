@@ -38,6 +38,7 @@ flowchart LR
   RDS[("Redis<br/>ShedLock / config-cache (pub/sub)<br/>shard-assignment / quota Lua")]:::store
 
   K[("Kafka<br/>batch.task.dispatch.*")]:::store
+  DLQ[("Kafka<br/>batch.task.dead-letter")]:::store
 
   subgraph WORKERS ["执行层 · 三类 Worker"]
     direction TB
@@ -94,6 +95,12 @@ flowchart LR
   WD -. "GET object" .-> M
   WD ==>|"deliver (cp / scp / POST)"| FS
 
+  %% ─── DLQ：worker 失败 publish 死信 + console 监控读取 ──────
+  WI ==>|"publish DLQ on fail"| DLQ
+  WE ==>|"publish DLQ on fail"| DLQ
+  WD ==>|"publish DLQ on fail"| DLQ
+  CONSOLE -. "consume + 死信审计 / approve replay" .-> DLQ
+
   %% ─── 边按协议着色（顺序与上面声明一致；linkStyle index 从 0 起） ──
   %%   0..7  HTTP / 触发层入站 (蓝色)
   linkStyle 0,1,2,3,4 stroke:#1565c0,stroke-width:2.5px
@@ -123,6 +130,10 @@ flowchart LR
   linkStyle 24 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
   %%   25    worker-dispatch → 外部 target（红）
   linkStyle 25 stroke:#c62828,stroke-width:2.5px
+  %%   26..28 三类 worker → DLQ topic（橙 = Kafka 异步消息）
+  linkStyle 26,27,28 stroke:#ef6c00,stroke-width:2.5px
+  %%   29    console → DLQ 消费 / 审计 / approve replay（橙虚 = Kafka 控制信号）
+  linkStyle 29 stroke:#ef6c00,stroke-width:1.5px,stroke-dasharray:4 3
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
@@ -142,10 +153,10 @@ flowchart LR
 
 ---
 
-## 1.5 运营视角 — console-api 的四个支线
+## 1.5 运营视角 — console-api 的五个支线
 
 主图聚焦「一条任务的生命周期」，console-api（BFF）只在主图体现「人工 launch」这一跳。
-以下补充其余三条职责：配置管理、查询 / 报表、实时监控。
+以下补充其余四条职责：配置管理、查询 / 报表、实时监控、补偿命令。
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
@@ -159,12 +170,14 @@ flowchart LR
     QRY["Query / Report<br/>(@Transactional readOnly)"]:::svc
     SSE["RealtimeEventHub<br/>(SSE)"]:::svc
     AI["AI Assistant<br/>(OpenAI proxy)"]:::svc
-    LAUNCH["Manual Launch<br/>+ Compensate / Rerun"]:::svc
+    LAUNCH[Manual Launch]:::svc
+    COMP["Compensate / Rerun<br/>(POST /api/console/.../compensate)"]:::svc
   end
 
   PRIM[("PG primary<br/>:15432<br/>(写)")]:::store
   REPL[("PG replica<br/>:15433<br/>readOnly 路由<br/>fail-open 退主")]:::store
   REDIS[("Redis Streams<br/>+ pub/sub config evict")]:::store
+  COMPDB[("compensation_command<br/>(在 PRIM 之内)")]:::store
   TRG["batch-trigger<br/>(/internal/launch)"]:::svc
   ORCH["batch-orchestrator<br/>(/internal/compensate /<br/>config-cache evict)"]:::svc
   OPENAI[(OpenAI / 私有化代理)]:::extern
@@ -175,6 +188,7 @@ flowchart LR
   AUTH --> SSE
   AUTH --> AI
   AUTH --> LAUNCH
+  AUTH --> COMP
 
   CFG    ==>|"INSERT / UPDATE<br/>job_definition / workflow_definition<br/>file_channel / batch_window"| PRIM
   CFG    -.->|"afterCommit pub/sub<br/>evict orchestrator cache"| REDIS
@@ -184,28 +198,34 @@ flowchart LR
   SSE    -.->|"消费 stream<br/>+ 推 SSE 给前端"| REDIS
   AI     ==>|"chat / classify"| OPENAI
   LAUNCH ==>|"HTTP forward"| TRG
+  COMP   ==>|"HTTP /internal/compensate<br/>(operatorId / reason)"| ORCH
+  ORCH   ==>|"INSERT compensation_command<br/>+ outbox(COMPENSATE event)"| COMPDB
 
   %% ─── 边按协议着色（与主图同套色编码，下标从 0 起） ─────────
   %%   0     USER → AUTH（蓝 = HTTP 入站）
   linkStyle 0 stroke:#1565c0,stroke-width:2.5px
-  %%   1..5  AUTH → 5 个 handler（灰细 = 内部路由）
-  linkStyle 1,2,3,4,5 stroke:#616161,stroke-width:1.2px
-  %%   6     CFG → PRIM 写（绿）
-  linkStyle 6 stroke:#2e7d32,stroke-width:2.5px
-  %%   7     CFG → REDIS pub/sub evict（黄虚 = 控制信号）
-  linkStyle 7 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   8     CFG → ORCH 手动 evict（蓝虚 = HTTP 控制）
-  linkStyle 8 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   9     QRY → REPL 读（紫）
-  linkStyle 9 stroke:#7b1fa2,stroke-width:2.5px
-  %%   10    QRY → PRIM fail-open 退主（紫虚 = 降级控制）
-  linkStyle 10 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   11    SSE → REDIS Streams（黄虚 = Redis pub/sub）
-  linkStyle 11 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   12    AI → OpenAI（红 = 外部副作用）
-  linkStyle 12 stroke:#c62828,stroke-width:2.5px
-  %%   13    LAUNCH → TRG（蓝 = HTTP 同步）
-  linkStyle 13 stroke:#1565c0,stroke-width:2.5px
+  %%   1..6  AUTH → 6 个 handler（灰细 = 内部路由）
+  linkStyle 1,2,3,4,5,6 stroke:#616161,stroke-width:1.2px
+  %%   7     CFG → PRIM 写（绿）
+  linkStyle 7 stroke:#2e7d32,stroke-width:2.5px
+  %%   8     CFG → REDIS pub/sub evict（黄虚 = 控制信号）
+  linkStyle 8 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   9     CFG → ORCH 手动 evict（蓝虚 = HTTP 控制）
+  linkStyle 9 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   10    QRY → REPL 读（紫）
+  linkStyle 10 stroke:#7b1fa2,stroke-width:2.5px
+  %%   11    QRY → PRIM fail-open 退主（紫虚 = 降级控制）
+  linkStyle 11 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   12    SSE → REDIS Streams（黄虚 = Redis pub/sub）
+  linkStyle 12 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   13    AI → OpenAI（红 = 外部副作用）
+  linkStyle 13 stroke:#c62828,stroke-width:2.5px
+  %%   14    LAUNCH → TRG（蓝 = HTTP 同步）
+  linkStyle 14 stroke:#1565c0,stroke-width:2.5px
+  %%   15    COMP → ORCH 补偿（蓝 = HTTP 同步）
+  linkStyle 15 stroke:#1565c0,stroke-width:2.5px
+  %%   16    ORCH → compensation_command 落库（绿 = JDBC 写）
+  linkStyle 16 stroke:#2e7d32,stroke-width:2.5px
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
@@ -219,6 +239,143 @@ flowchart LR
 - **配置改动必须走 console**：直改 DB 不会触发 afterCommit 事件 → orchestrator Redis 缓存失效要等 5min TTL；运维场景请用 `POST /api/console/ops/cache/evict-*` 6 个端点手动 evict（详见 `ConsoleConfigCacheController`）。
 - **SSE 客户端绑定到具体实例**：实例死亡 → SSE 断开 → 浏览器 reconnect 落到新实例 → 从 Redis Streams replay buffer 续推（见 `ConsoleRealtimeEventHub` + `ConsoleRealtimeReplayStore`）。
 - **AI 走代理出网**：所有 prompt 经 `ConsoleAiPromptGuard` 过滤分类（PLATFORM / REJECTED_*），结果写 `console_ai_audit_log` 留痕。
+- **补偿命令落库 + outbox 派发**：`POST .../compensate` 经 console → orchestrator `/internal/compensate` → INSERT `compensation_command` + 同事务 `outbox_event(eventType=COMPENSATE)`，由 OutboxPollScheduler 异步发到 Kafka，对应 worker 反向执行（DELETE biz / 删 MinIO 对象 / 通知外部对端撤销）。
+
+---
+
+## 1.6 观测栈 — Metrics / Traces / Logs 三件套
+
+主图省略了观测链路，因为每个 service 节点都向 OTel Collector 上报，画进主图会变意大利面。
+单独画一张图说明：所有进程怎么把可观测信号送出去 + 运营怎么从 Grafana 一站排障。
+
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 50, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
+flowchart LR
+  subgraph APPS ["应用进程（每个 JVM 独立上报）"]
+    direction TB
+    SVC1["batch-trigger"]:::svc
+    SVC2["batch-orchestrator"]:::svc
+    SVC3["batch-console-api"]:::svc
+    SVC4["worker-import / export / dispatch"]:::worker
+  end
+
+  OTEL["otel-collector<br/>memory_limiter + batch + resource attr<br/>(deployment.environment / service.namespace)"]:::svc
+
+  TEMPO[("Tempo<br/>traces · OTLP gRPC :4317<br/>metrics_generator: service-graph + span-metrics")]:::store
+  JAEGER[("Jaeger<br/>traces · UI 兼容")]:::store
+  LOKI[("Loki<br/>logs · OTLP /otlp/v1/logs<br/>structured metadata + schema v13")]:::store
+  PROM[("Prometheus<br/>metrics · scrape /actuator/prometheus<br/>retention 7d")]:::store
+  ALERT["Alertmanager"]:::svc
+  GRAF["Grafana<br/>(三件套统一入口)"]:::svc
+  USER([运营 / SRE]):::user
+
+  SVC1 ==>|"OTLP HTTP :4318<br/>(traces + logs · micrometer-tracing-bridge-otel)"| OTEL
+  SVC2 ==>|"OTLP HTTP :4318"| OTEL
+  SVC3 ==>|"OTLP HTTP :4318"| OTEL
+  SVC4 ==>|"OTLP HTTP :4318"| OTEL
+
+  OTEL ==>|"traces fan-out (主)"| TEMPO
+  OTEL ==>|"traces fan-out (兼容)"| JAEGER
+  OTEL ==>|"logs"| LOKI
+
+  PROM -.->|"scrape /actuator/prometheus<br/>+ exporters (postgres / redis / kafka / node / cAdvisor)"| SVC1
+  PROM -.->|"scrape"| SVC2
+  PROM -.->|"scrape"| SVC3
+  PROM -.->|"scrape"| SVC4
+  PROM ==>|"alert rules<br/>batch.yml"| ALERT
+
+  GRAF -.->|"datasource: Prometheus<br/>(exemplars → Tempo)"| PROM
+  GRAF -.->|"datasource: Tempo<br/>(tracesToLogsV2 → Loki<br/>+ tracesToMetrics → Prometheus)"| TEMPO
+  GRAF -.->|"datasource: Loki<br/>(derivedFields traceId → Tempo)"| LOKI
+  GRAF -.->|"datasource: Jaeger<br/>(legacy fallback)"| JAEGER
+
+  USER ==>|"http://localhost:13000<br/>(主入口 · 一站排障)"| GRAF
+  USER -.->|"http://localhost:16686<br/>(legacy)"| JAEGER
+
+  %% ─── 协议色编码（与主图同套色板） ─────────
+  %%   0..3 应用 → OTel（橙 = OTLP 异步，但语义是上报，画粗实更直观）
+  linkStyle 0,1,2,3 stroke:#ef6c00,stroke-width:2.5px
+  %%   4,5  OTel → traces 后端（橙）
+  linkStyle 4,5 stroke:#ef6c00,stroke-width:2.5px
+  %%   6    OTel → Loki（橙）
+  linkStyle 6 stroke:#ef6c00,stroke-width:2.5px
+  %%   7..10 Prometheus scrape（灰虚 = 控制平面拉取）
+  linkStyle 7,8,9,10 stroke:#616161,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   11   Prometheus → Alertmanager 推告警（红）
+  linkStyle 11 stroke:#c62828,stroke-width:2.5px
+  %%   12..15 Grafana datasource 链（紫虚 = 查询）
+  linkStyle 12,13,14,15 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   16   USER → Grafana（蓝）
+  linkStyle 16 stroke:#1565c0,stroke-width:2.5px
+  %%   17   USER → Jaeger legacy（蓝虚）
+  linkStyle 17 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
+
+  classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
+  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
+  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+```
+
+### 一站排障路径（典型）
+
+1. Grafana **Dashboards** 看 metric outlier（`outbox_publish_latency_seconds.p99` 飙高）
+2. 在 metric 图点 **exemplar 钻石** → 跳到 Tempo 那条 trace
+3. Tempo **trace view** 找最长 span（`OutboxPublisher.publish`）
+4. Tempo span 右上 **"Logs for this span"** → Loki 自动按 traceId+service 过滤展开 ±5min
+5. 同时看 Tempo 自带 **service graph + span metrics**（`metrics_generator`），定位下游依赖问题
+
+详见 [`docs/runbook/observability-loki-tempo.md`](../runbook/observability-loki-tempo.md)。
+
+---
+
+## 1.7 Workflow DAG 编排 — Worker 之上的另一层
+
+主图把 worker 当独立任务来画。但很多业务是**多 job 编排**：例如「先 IMPORT → 再 EXPORT → 最后 DISPATCH」。
+这种场景由 `workflow_definition` + `workflow_node` + `workflow_edge` 描述拓扑，运行时用
+`workflow_run` + `workflow_node_run` 跟踪。
+
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear', 'nodeSpacing': 40, 'rankSpacing': 60, 'htmlLabels': true}, 'themeVariables': {'fontSize': '13px'}}}%%
+flowchart LR
+  subgraph DEF ["配置态（job_definition + workflow_definition）"]
+    direction TB
+    JD[("job_definition<br/>job_code -> workerType")]:::store
+    WD[(workflow_definition<br/>workflow_code)]:::store
+    WN[(workflow_node<br/>type=START/TASK/GATEWAY/END<br/>+ join_mode=ALL/ANY/N_OF_M)]:::store
+    WE[(workflow_edge<br/>edge_type=SUCCESS/FAILURE/<br/>CONDITION/ALWAYS)]:::store
+  end
+
+  subgraph RUN ["运行态（每次执行的实例）"]
+    direction TB
+    WR[(workflow_run<br/>status=RUNNING/SUCCESS/FAILED)]:::store
+    WNR[(workflow_node_run<br/>每个 node 一行)]:::store
+    JI[(job_instance<br/>node 触发时创建一个)]:::store
+  end
+
+  ENG["WorkflowDispatchService<br/>(orchestrator)"]:::svc
+  WORKER[(三类 Worker)]:::worker
+
+  WD --> WN
+  WN --> WE
+  WN -.->|"node_type=TASK<br/>引用 job_code"| JD
+
+  ENG ==>|"launch workflow_code<br/>→ INSERT workflow_run"| WR
+  ENG ==>|"按 START → ... DAG 推进<br/>每次一个 node"| WNR
+  ENG ==>|"node_type=TASK<br/>→ INSERT job_instance + outbox"| JI
+  JI -. "走主图 Outbox → Kafka 链路" .-> WORKER
+  WORKER -. "report SUCCESS/FAILED<br/>orchestrator 推进 workflow_node_run<br/>+ 评估 join_mode 决定下一批 node" .-> ENG
+
+  classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
+  classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
+  classDef store   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+```
+
+### 关键决策点
+
+- **node_type**：`START` / `END`（占位，无 job）/ `TASK`（绑 job_code）/ `GATEWAY`（条件分支）/ `FILE_STEP`（短路本地步骤）/ `JOB`（同 TASK 别名兼容）
+- **edge_type**：`SUCCESS`（前 node 成功才走）/ `FAILURE`（前 node 失败才走，常用于补偿/通知）/ `CONDITION`（带表达式）/ `ALWAYS`（无视前态）
+- **join_mode** in `workflow_node`：`ALL`（所有入边都满足才触发）/ `ANY`（任一入边满足即触发）/ `N_OF_M`（指定数量）—— 详见 `docs/architecture/workflow-dependency-guide.md`
+- 与 worker pipeline stage 的关系：**workflow 编排"多个 job"，stage 编排"一个 job 内的多步"**，两层正交
 
 ---
 
