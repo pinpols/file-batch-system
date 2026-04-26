@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * P3-3 archive 系列：outbox_event 自动归档业务层。同删除语义对应 {@code cleanup-outbox-events.sql}。
  *
- * <p>策略：每次 tick 选一种状态归档（PUBLISHED 或 GIVE_UP，由调用方决定），先删
- * {@code event_delivery_log}（FK 子表）再删 {@code outbox_event}，单批上限。
+ * <p>策略：每次 tick 选一种状态归档（PUBLISHED 或 GIVE_UP，由调用方决定），先复制到
+ * {@code archive} schema 冷表，再删热表中的 FK 子表和 {@code outbox_event}，单批上限。
  */
 @Slf4j
 @Service
@@ -38,15 +38,25 @@ public class OutboxArchiveService {
     if (ids.isEmpty()) {
       return ArchiveBatchResult.empty(cutoff);
     }
+    int deliveryLogsArchived = outboxEventMapper.archiveEventDeliveryLogsByOutboxIds(ids);
+    int retriesArchived = outboxEventMapper.archiveEventOutboxRetriesByOutboxIds(ids);
+    int outboxArchived = outboxEventMapper.archiveOutboxEventsByIds(ids);
     int deliveryLogsDeleted = outboxEventMapper.deleteEventDeliveryLogsByOutboxIds(ids);
+    int retriesDeleted = outboxEventMapper.deleteEventOutboxRetriesByOutboxIds(ids);
     int outboxDeleted = outboxEventMapper.deleteByIds(ids);
     log.info(
-        "outbox archive tick: status={}, cutoff={}, retention={}d, outbox={}, deliveryLog={}",
+        "outbox archive tick: status={}, cutoff={}, retention={}d, outboxArchived={},"
+            + " deliveryLogArchived={}, retryArchived={}, outboxDeleted={}, deliveryLogDeleted={},"
+            + " retryDeleted={}",
         publishStatus,
         cutoff,
         retention,
+        outboxArchived,
+        deliveryLogsArchived,
+        retriesArchived,
         outboxDeleted,
-        deliveryLogsDeleted);
+        deliveryLogsDeleted,
+        retriesDeleted);
     return new ArchiveBatchResult(true, cutoff, ids.size(), outboxDeleted, deliveryLogsDeleted);
   }
 
