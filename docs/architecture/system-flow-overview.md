@@ -19,10 +19,10 @@ flowchart LR
 
   subgraph TRIG ["触发层 · batch-trigger（quartz 默认 / wheel 可选 · 严格二选一）"]
     direction TB
-    QZ[("Quartz<br/>QRTZ_*<br/>scheduler-impl=quartz (默认)")]:::store
     WHEEL[("trigger_runtime_state<br/>trigger_misfire_pending<br/>scheduler-impl=wheel (新)")]:::store
-    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(quartz 模式 fire)"]:::svc
+    QZ[("Quartz<br/>QRTZ_*<br/>scheduler-impl=quartz (默认)")]:::store
     WS["HashedWheelTriggerScheduler<br/>+ WheelTriggerReconciler<br/>+ MisfirePendingExpireScheduler<br/>+ CatchUpThrottle<br/>(@ConditionalOnProperty wheel)"]:::svc
+    TR["TriggerSchedulerFacade<br/>+ TriggerReconciler<br/>(quartz 模式 fire)"]:::svc
     FLAG{{"QuartzPauseWhenWheelEnabledCustomizer<br/>scheduler-impl=wheel → Quartz autoStartup=false<br/>(Quartz bean 仍创建供 TriggerSchedulerFacade 引用，但不 fire)"}}:::flag
   end
 
