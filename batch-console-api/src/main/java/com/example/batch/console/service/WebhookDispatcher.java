@@ -8,6 +8,9 @@ import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import com.example.batch.console.repository.WebhookDeliveryLogInsertParam;
 import jakarta.annotation.PreDestroy;
 import java.net.URI;
+import java.net.UnknownHostException;
+import java.time.Duration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
@@ -161,7 +164,7 @@ public class WebhookDispatcher {
 
   private void deliver(
       WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson)
-      throws java.net.UnknownHostException {
+      throws UnknownHostException {
     // S-2.6: 分发前二次 DNS 解析并校验 IP，防止 rebinding 到内网
     String callbackHost = URI.create(subscription.getCallbackUrl()).getHost();
     DnsResolveGuard.resolveAndValidate(callbackHost);
@@ -170,10 +173,10 @@ public class WebhookDispatcher {
     RestClient client =
         restClientBuilder
             .requestFactory(
-                new org.springframework.http.client.SimpleClientHttpRequestFactory() {
+                new SimpleClientHttpRequestFactory() {
                   {
-                    setConnectTimeout(java.time.Duration.ofSeconds(5));
-                    setReadTimeout(java.time.Duration.ofSeconds(10));
+                    setConnectTimeout(Duration.ofSeconds(5));
+                    setReadTimeout(Duration.ofSeconds(10));
                   }
                 })
             .build();

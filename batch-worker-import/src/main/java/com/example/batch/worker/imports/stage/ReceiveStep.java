@@ -11,6 +11,7 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.batch.common.utils.EncodingUtils;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -140,7 +141,7 @@ public class ReceiveStep implements ImportStageStep {
                   .fileName(fileName)
                   .originalFileName(defaultText(importPayload.originalFileName(), fileName))
                   .fileFormatType(fileFormatType)
-                  .charset(defaultText(importPayload.charset(), "UTF-8"))
+                  .charset(defaultText(importPayload.charset(), EncodingUtils.UTF_8))
                   .fileSizeBytes(payloadLength)
                   .checksumType(defaultText(importPayload.checksumType(), "NONE"))
                   .checksumValue(importPayload.checksumValue())
