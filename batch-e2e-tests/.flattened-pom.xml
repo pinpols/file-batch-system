@@ -120,6 +120,17 @@
                     <systemPropertyVariables>
                         <api.version>1.44</api.version>
                     </systemPropertyVariables>
+                    <!--
+                      e2e IT 间共享 JVM 时，前一个 IT 的 Spring context (Kafka producer/consumer +
+                      LettuceConnectionFactory) 在下一个 IT context 启动期间被 stop()，导致
+                      OutboxPollScheduler 后台轮询在 STOPPED Lettuce 上 ERROR，且更严重地让
+                      ImportFailurePipeline / ExportPipeline / ExportContent / MultiTenantConcurrent
+                      4 个 IT 顺序跑 task 卡 READY/CREATED 超时（隔离运行皆 ✅）。
+                      每个 IT class 独立 fork JVM 彻底解决此污染，代价 ~16 × 5s JVM 启动；
+                      Testcontainer 由各 JVM 自己起（每 JVM 一份），整体 +5 分钟左右。
+                    -->
+                    <reuseForks>false</reuseForks>
+                    <forkCount>1</forkCount>
                 </configuration>
             </plugin>
         </plugins>
