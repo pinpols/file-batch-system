@@ -3,6 +3,8 @@
 业务向静态设计：数据模型、链路、能力评估。沿用原 8000 行《批量调度系统设计说明》的章节号切分。
 完整 mega 版已归档为 [`../archive/design/system-design-2026-03-21.md`](../archive/design/system-design-2026-03-21.md)（仅历史快照，**不**再维护）。
 
+> **2026-04-26 拆分完成**：mega 文档原 20 章中真正"独立设计"的 3 章（技术栈 / SLA / 多租户与安全）已抽出为单文件，archive/mega 不再有任何"未拆出的唯一来源"内容。
+
 ## 文件清单（编号即推荐阅读顺序）
 
 | # | 文件 | 作用 | 何时看 |
@@ -18,6 +20,9 @@
 | 09 | [runtime-default-parameters.md](./runtime-default-parameters.md) | 运行时默认参数基线（pool / timeout / batch size 等）| 调参前看默认值 |
 | 10 | [console-sidebar-menu-tree.md](./console-sidebar-menu-tree.md) | 控制台侧边栏菜单树 + 角色可见性 | 加 console 页面 |
 | 11 | [api-gap-analysis.md](./api-gap-analysis.md) | Console API 设计与实现差距分析 | 补接口前 |
+| 12 | [tech-stack-and-principles.md](./tech-stack-and-principles.md) | 技术栈清单 / 双 ORM 原则 / 开源协议合规 / AI 接入合规 | 加新依赖 / 评估技术选型 |
+| 13 | [sla-and-quality.md](./sla-and-quality.md) | 任务 SLA / 文件到达 SLA / 数据质量校验 | 配 SLA / 补质量校验规则 |
+| 14 | [multi-tenant-and-security.md](./multi-tenant-and-security.md) | 多租户隔离边界 / 角色权限 / 密钥轮换 / 配置发布治理 / AI 输入边界 | 安全评审 / 加敏感字段 |
 
 ## 与 architecture/ 的分工
 
@@ -34,3 +39,6 @@
 | 文件链路 | 03 file-pipeline-design | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §4 | [`../runbook/worker-stage-coverage.md`](../runbook/worker-stage-coverage.md) |
 | Redis | 04 redis-usage-design | — | [`../runbook/feature-switches.md`](../runbook/feature-switches.md) |
 | 日志 | 05 logging-architecture | — | [`../runbook/observability-stack.md`](../runbook/observability-stack.md) |
+| 技术栈 / 合规 | 12 tech-stack-and-principles | [`../architecture/adr/ADR-001-dual-orm.md`](../architecture/adr/ADR-001-dual-orm.md) | [`../runbook/security-scan.md`](../runbook/security-scan.md) |
+| SLA / 质量 | 13 sla-and-quality | — | [`../runbook/incident-response.md`](../runbook/incident-response.md) |
+| 多租户 / 安全 | 14 multi-tenant-and-security | — | [`../runbook/feature-switches.md`](../runbook/feature-switches.md) |
