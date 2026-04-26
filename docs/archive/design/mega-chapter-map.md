@@ -1,7 +1,7 @@
 # mega 设计文档章节 → 当前位置导航表
 
-> 配套阅读：[`system-design-2026-03-21.md`](./system-design-2026-03-21.md)（8005 行 mega 原版）。
-> mega 文档已不再维护，本表把 20 章每章的内容指向**当前权威位置**，方便从 mega 章号反查。
+> 配套阅读：[`system-design-2026-03-21.md`](./system-design-2026-03-21.md)（**已变存根**：仅保留 20 章 + 95 子节标题供锚点兼容；原 8005 行正文需 `git show 5b72df9b:docs/archive/design/system-design-2026-03-21.md` 找回）。
+> 本表把 20 章每章的内容指向**当前权威位置**，方便从 mega 章号反查。
 
 ## 三类状态
 
