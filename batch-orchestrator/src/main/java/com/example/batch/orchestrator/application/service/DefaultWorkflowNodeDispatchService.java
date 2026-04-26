@@ -35,6 +35,8 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +56,7 @@ import org.springframework.transaction.annotation.Transactional;
  *       创建任务 + 落 outbox 派发事件（同事务）。
  * </ul>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchService {
@@ -698,11 +701,10 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       String sql, org.springframework.jdbc.core.namedparam.MapSqlParameterSource params) {
     try {
       return jdbcTemplate.queryForObject(sql, params, Long.class);
-    } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
+    } catch (EmptyResultDataAccessException ignored) {
       return null;
     } catch (RuntimeException ex) {
-      org.slf4j.LoggerFactory.getLogger(DefaultWorkflowNodeDispatchService.class)
-          .warn("file_record lookup failed: params={}, error={}", params.getValues(), ex.getMessage());
+      log.warn("file_record lookup failed: params={}, error={}", params.getValues(), ex.getMessage());
       return null;
     }
   }

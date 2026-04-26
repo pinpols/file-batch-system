@@ -6,8 +6,7 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.expression.Expression;
@@ -23,11 +22,10 @@ import org.springframework.stereotype.Component;
  * 根据 target + SpEL 表达式解析 tenantId / code，调 {@link ConsoleConfigCacheInvalidationService}
  * 对应的 evict 方法。evict 内部已是 afterCommit 注册，事务语义保持一致。
  */
+@Slf4j
 @Aspect
 @Component
 public class ConsoleCacheInvalidationAspect {
-
-  private static final Logger log = LoggerFactory.getLogger(ConsoleCacheInvalidationAspect.class);
 
   private final ConsoleConfigCacheInvalidationService invalidationService;
   private final ExpressionParser spelParser = new SpelExpressionParser();
