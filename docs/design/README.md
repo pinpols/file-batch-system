@@ -17,7 +17,6 @@ master 完整版已归档为 [`../archive/design/system-design-20260321-snapshot
 | 模块结构 / POM | [project-structure-pom.md](project-structure-pom.md) |
 | Redis 使用设计 | [redis-usage-design.md](redis-usage-design.md) |
 | 运行时默认参数 | [runtime-default-parameters.md](runtime-default-parameters.md) |
-| 扩展性与 HA 评估 | [scalability-ha-assessment.md](scalability-ha-assessment.md) |
 | Console 侧边栏菜单树 | [console-sidebar-menu-tree.md](console-sidebar-menu-tree.md) |
 | API gap 分析 | [api-gap-analysis.md](api-gap-analysis.md) |
 
