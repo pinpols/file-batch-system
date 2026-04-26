@@ -21,6 +21,8 @@ import com.example.batch.console.mapper.StepRegistryQueryMapper;
 import com.example.batch.console.support.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import com.example.batch.console.support.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -459,7 +461,7 @@ class ConfigPackageExcelValidator {
                 r -> normalize(r.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
             .collect(Collectors.toSet());
     // pipelineKey → pipeline_type（IMPORT / EXPORT / DISPATCH）；step 校验 impl_code 时按此定位模块
-    java.util.Map<String, String> pipelineKeyToType = new java.util.HashMap<>();
+    Map<String, String> pipelineKeyToType = new HashMap<>();
     for (Map<String, String> p : validPipelineRows) {
       String key = normalize(p.get(COL_JOB_CODE)) + KEY_SEP_COLON + normalize(p.get(COL_VERSION));
       String type = normalizeEnum(p.get(COL_PIPELINE_TYPE));
@@ -469,7 +471,7 @@ class ConfigPackageExcelValidator {
     }
     // 按模块懒加载 step_registry 白名单；空集表示该 module 的 worker 未启动过登记，降级为不校验
     // （防止首次部署没跑 worker 就导致所有上传被拒）
-    java.util.Map<String, Set<String>> registryByModule = new java.util.HashMap<>();
+    Map<String, Set<String>> registryByModule = new HashMap<>();
     List<WorkbookIssue> issues = new ArrayList<>();
     List<Map<String, String>> valid = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
@@ -527,43 +529,7 @@ class ConfigPackageExcelValidator {
           && !seen.add(pipelineKey + KEY_SEP_HASH + stepCode)) {
         ri.add("duplicate step_code in pipeline: " + stepCode);
       }
-      // impl_code 白名单 + 模块匹配：
-      //   - 支持 MODULE:beanName 前缀格式（模板下载时的下拉项格式），前缀必须等于 pipeline_type；
-      //   - 剥掉前缀后 beanName 必须在 step_registry[module] 中；
-      //   - registry 为空（worker 从未启动）时降级为不校验，允许老数据导入。
-      // 规范化：无论是否带前缀，最终回写到 row 里的 impl_code 都是纯 beanName（DB 存 fileReceive，不存 IMPORT:fileReceive）。
-      if (hasText(implCode) && pipelineKeyToType.containsKey(pipelineKey)) {
-        String pipelineType = pipelineKeyToType.get(pipelineKey);
-        String normalizedImpl = implCode;
-        int colonIdx = implCode.indexOf(':');
-        if (colonIdx > 0 && colonIdx < implCode.length() - 1) {
-          String prefix = implCode.substring(0, colonIdx);
-          if (PIPELINE_TYPES.contains(prefix)) {
-            if (!prefix.equals(pipelineType)) {
-              ri.add(
-                  "impl_code prefix '"
-                      + prefix
-                      + "' 与 pipeline_type '"
-                      + pipelineType
-                      + "' 不匹配，请改选同模块的 Step");
-            }
-            normalizedImpl = implCode.substring(colonIdx + 1).trim();
-            row.put(COL_IMPL_CODE, normalizedImpl);
-          }
-        }
-        Set<String> registered =
-            registryByModule.computeIfAbsent(
-                pipelineType,
-                m -> new java.util.HashSet<>(stepRegistryQueryMapper.selectImplCodesByModule(m)));
-        if (!registered.isEmpty() && !registered.contains(normalizedImpl)) {
-          ri.add(
-              "impl_code '"
-                  + normalizedImpl
-                  + "' not registered in module "
-                  + pipelineType
-                  + "（检查 Spring bean name 是否存在或 worker 是否启动过以刷新 step_registry）");
-        }
-      }
+      validateImplCode(row, implCode, pipelineKey, pipelineKeyToType, registryByModule, ri);
 
       // 业务表/列精确校验的"硬拦截"故意不放在这里——Validator 只做 Excel 格式 + 枚举 / registry
       // 层面的校验，不耦合业务 schema。biz_table_schema 的信息通过模板下拉在 ConfigPackageExcelWorkbookWriter
@@ -575,6 +541,57 @@ class ConfigPackageExcelValidator {
       rowNo++;
     }
     return new SheetResult(STEP_SHEET, rows.size(), valid, issues);
+  }
+
+  /**
+   * impl_code 白名单 + 模块匹配（从 {@link #validateStepRows} 提取）：
+   *
+   * <ul>
+   *   <li>支持 MODULE:beanName 前缀格式（模板下载时的下拉项格式），前缀必须等于 pipeline_type
+   *   <li>剥掉前缀后 beanName 必须在 step_registry[module] 中
+   *   <li>registry 为空（worker 从未启动）时降级为不校验，允许老数据导入
+   *   <li>规范化：无论是否带前缀，最终回写到 row 里的 impl_code 都是纯 beanName（DB 存 fileReceive，不存 IMPORT:fileReceive）
+   * </ul>
+   */
+  private void validateImplCode(
+      Map<String, String> row,
+      String implCode,
+      String pipelineKey,
+      Map<String, String> pipelineKeyToType,
+      Map<String, Set<String>> registryByModule,
+      List<String> ri) {
+    if (!hasText(implCode) || !pipelineKeyToType.containsKey(pipelineKey)) {
+      return;
+    }
+    String pipelineType = pipelineKeyToType.get(pipelineKey);
+    String normalizedImpl = implCode;
+    int colonIdx = implCode.indexOf(':');
+    if (colonIdx > 0 && colonIdx < implCode.length() - 1) {
+      String prefix = implCode.substring(0, colonIdx);
+      if (PIPELINE_TYPES.contains(prefix)) {
+        if (!prefix.equals(pipelineType)) {
+          ri.add(
+              "impl_code prefix '"
+                  + prefix
+                  + "' 与 pipeline_type '"
+                  + pipelineType
+                  + "' 不匹配，请改选同模块的 Step");
+        }
+        normalizedImpl = implCode.substring(colonIdx + 1).trim();
+        row.put(COL_IMPL_CODE, normalizedImpl);
+      }
+    }
+    Set<String> registered =
+        registryByModule.computeIfAbsent(
+            pipelineType, m -> new HashSet<>(stepRegistryQueryMapper.selectImplCodesByModule(m)));
+    if (!registered.isEmpty() && !registered.contains(normalizedImpl)) {
+      ri.add(
+          "impl_code '"
+              + normalizedImpl
+              + "' not registered in module "
+              + pipelineType
+              + "（检查 Spring bean name 是否存在或 worker 是否启动过以刷新 step_registry）");
+    }
   }
 
   private SheetResult validateWfDefRows(String tenantId, List<Map<String, String>> rows) {

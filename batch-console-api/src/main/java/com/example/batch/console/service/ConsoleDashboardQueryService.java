@@ -16,6 +16,8 @@ public class ConsoleDashboardQueryService {
   private static final String KEY_DAILY_TREND = "dailyTrend";
   private static final String KEY_DAY = "day";
   private static final String KEY_COUNT = "count";
+  // null status / day 占位，13 处使用提常量
+  private static final String UNKNOWN = "UNKNOWN";
 
   private final ConsoleDashboardQueryRepository repository;
   private final ConsoleTenantGuard tenantGuard;
@@ -34,7 +36,7 @@ public class ConsoleDashboardQueryService {
     for (ConsoleDashboardQueryRepository.StatusCountView row :
         repository.jobStatusCounts(resolved)) {
       long count = row.count() == null ? 0L : row.count();
-      byStatus.put(row.status() == null ? "UNKNOWN" : row.status(), count);
+      byStatus.put(row.status() == null ? UNKNOWN : row.status(), count);
       total += count;
     }
     result.put("byStatus", byStatus);
@@ -45,8 +47,8 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put(KEY_DAY, row.day() == null ? "UNKNOWN" : row.day());
-                  m.put("status", row.status() == null ? "UNKNOWN" : row.status());
+                  m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
+                  m.put("status", row.status() == null ? UNKNOWN : row.status());
                   m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
                   return m;
                 })
@@ -63,7 +65,7 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("type", row.type() == null ? "UNKNOWN" : row.type());
+                  m.put("type", row.type() == null ? UNKNOWN : row.type());
                   m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
                   return m;
                 })
@@ -74,7 +76,7 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put(KEY_DAY, row.day() == null ? "UNKNOWN" : row.day());
+                  m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
                   m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
                   return m;
                 })
@@ -86,14 +88,14 @@ public class ConsoleDashboardQueryService {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> result = new LinkedHashMap<>();
     // 以下三个聚合查询的分组列（status / workerGroup / workerCode）DB 侧允许 null，
-    // 但 Map.of(...) 禁止 null value —— 用 LinkedHashMap 容错 + "UNKNOWN" 占位。
+    // 但 Map.of(...) 禁止 null value —— 用 LinkedHashMap 容错 + UNKNOWN 占位。
     result.put(
         "byStatus",
         repository.workerStatusCounts(resolved).stream()
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("status", row.status() == null ? "UNKNOWN" : row.status());
+                  m.put("status", row.status() == null ? UNKNOWN : row.status());
                   m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
                   return m;
                 })
@@ -104,8 +106,8 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("workerGroup", row.workerGroup() == null ? "UNKNOWN" : row.workerGroup());
-                  m.put("status", row.status() == null ? "UNKNOWN" : row.status());
+                  m.put("workerGroup", row.workerGroup() == null ? UNKNOWN : row.workerGroup());
+                  m.put("status", row.status() == null ? UNKNOWN : row.status());
                   m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
                   return m;
                 })
@@ -116,7 +118,7 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("workerCode", row.workerCode() == null ? "UNKNOWN" : row.workerCode());
+                  m.put("workerCode", row.workerCode() == null ? UNKNOWN : row.workerCode());
                   m.put(
                       "activePartitions",
                       row.activePartitions() == null ? 0L : row.activePartitions());
@@ -135,7 +137,7 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("severity", row.severity() == null ? "UNKNOWN" : row.severity());
+                  m.put("severity", row.severity() == null ? UNKNOWN : row.severity());
                   m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
                   return m;
                 })
@@ -146,8 +148,8 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put(KEY_DAY, row.day() == null ? "UNKNOWN" : row.day());
-                  m.put("severity", row.severity() == null ? "UNKNOWN" : row.severity());
+                  m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
+                  m.put("severity", row.severity() == null ? UNKNOWN : row.severity());
                   m.put(KEY_COUNT, row.count() == null ? 0L : row.count());
                   return m;
                 })
@@ -244,7 +246,7 @@ public class ConsoleDashboardQueryService {
             .map(
                 row -> {
                   Map<String, Object> m = new LinkedHashMap<>();
-                  m.put(KEY_DAY, row.day() == null ? "UNKNOWN" : row.day());
+                  m.put(KEY_DAY, row.day() == null ? UNKNOWN : row.day());
                   m.put("breached", row.breached() == null ? 0L : row.breached());
                   m.put("onTime", row.onTime() == null ? 0L : row.onTime());
                   return m;
