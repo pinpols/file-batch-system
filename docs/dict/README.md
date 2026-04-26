@@ -10,6 +10,7 @@
 |---|---|---|---|
 | 01 | [error-codes.md](./error-codes.md) | `batch-common/.../enums/ResultCode.java` | `python3 scripts/codegen/gen-error-codes-dict.py` |
 | 02 | [config-keys.md](./config-keys.md) | 各模块 `@ConfigurationProperties` | `mvn compile`（Spring Boot configuration-processor 自动生成 metadata.json） |
+| 03 | [glossary.md](./glossary.md) | **手写** | 跨团队术语共识，~50 词上限 |
 
 ## 自动化机制
 
