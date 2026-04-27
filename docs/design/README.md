@@ -23,6 +23,7 @@
 | 12 | [tech-stack-and-principles.md](./tech-stack-and-principles.md) | 技术栈清单 / 双 ORM 原则 / 开源协议合规 / AI 接入合规 | 加新依赖 / 评估技术选型 |
 | 13 | [sla-and-quality.md](./sla-and-quality.md) | 任务 SLA / 文件到达 SLA / 数据质量校验 | 配 SLA / 补质量校验规则 |
 | 14 | [multi-tenant-and-security.md](./multi-tenant-and-security.md) | 多租户隔离边界 / 角色权限 / 密钥轮换 / 配置发布治理 / AI 输入边界 | 安全评审 / 加敏感字段 |
+| 15 | [batch-classification-and-gaps.md](./batch-classification-and-gaps.md) | 批量类型 3 维分类法（BatchType / ExecutionMode / TriggerType） + 系统缺口与 P0 落地草案 | 加新业务类型 / 评估增量执行 / 抽公共状态机 |
 
 ## 与 architecture/ 的分工
 
