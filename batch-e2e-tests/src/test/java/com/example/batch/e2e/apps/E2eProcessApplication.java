@@ -71,6 +71,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
           type = FilterType.ASSIGNABLE_TYPE,
           classes = com.example.batch.orchestrator.config.ShedLockConfiguration.class),
       @ComponentScan.Filter(
+          type = FilterType.ASSIGNABLE_TYPE,
+          classes = com.example.batch.worker.processes.config.ShedLockConfiguration.class),
+      @ComponentScan.Filter(
           type = FilterType.REGEX,
           pattern =
               "com\\.example\\.batch\\.worker\\.processes\\.config\\.PlatformDataSourceConfiguration"),

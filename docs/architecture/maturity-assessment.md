@@ -26,7 +26,7 @@
 | 文档 | 113 markdown | 13 architecture + 23 runbook + others |
 | GitHub Actions | 4 workflow | pr-gate / full-ci / staging / capacity 分层 |
 | Changelog 活跃天数 | 最近 3 天连续登记 | 规范条款自演进机制运转中 |
-| 模块数 | 8 | batch-common / -trigger / -orchestrator / -worker-{core,import,export,dispatch} / -console-api |
+| 模块数 | 9 | batch-common / -trigger / -orchestrator / -worker-{core,import,export,process,dispatch} / -console-api |
 
 ---
 

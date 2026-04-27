@@ -2,7 +2,7 @@
 # 前提：集群已装 KEDA operator（helm install keda kedacore/keda -n keda）
 #
 # 策略：
-#   - Worker（import/export/dispatch）：KEDA 按 Kafka consumer lag 扩缩
+#   - Worker（import/export/process/dispatch）：KEDA 按 Kafka consumer lag 扩缩
 #   - Console-api：CPU HPA
 #   - Orchestrator：sharding.mode=dynamic + CPU HPA（默认）；
 #                   或改 keda 按 Outbox backlog 扩（需先创建 Secret，见下方注释）
@@ -51,6 +51,15 @@ workerExport:
     lagThreshold: "20"
     topic: "batch.task.dispatch.export"
     consumerGroup: "batch-worker-export"
+
+workerProcess:
+  keda:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    lagThreshold: "20"
+    topic: "batch.task.dispatch.process"
+    consumerGroup: "batch-worker-process"
 
 workerDispatch:
   keda:

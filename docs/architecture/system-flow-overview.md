@@ -1273,6 +1273,106 @@ ctx.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, maxUpdateTime.t
 
 ---
 
+## 7.9 PROCESS WAP+bookends — 五段加工流水线
+
+### 7.9.1 用途
+
+PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类 worker,定位"系统内部数据加工"(聚合 / 清洗 / 状态推进)。落地依据:[`docs/design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5。
+
+不是简单"跑一段 SQL",而是 **WAP+bookends**(Write-Audit-Publish + 前后置)模式:**先写 staging,后审核,再原子 publish**。与 dbt build / Iceberg branch / Netflix Atlas 的成熟数据平台一致,避免脏数据落到生产 target 表。
+
+### 7.9.2 一张图看完整回路
+
+```mermaid
+flowchart LR
+  CFG[("pipeline_step_definition<br/>step_params.sqlTransformCompute<br/>(sourceSql/targetTable/columns/<br/>conflictColumns/validations/watermark)")]:::store
+  PR[PREPARE<br/>spec.parse + jsqlparser AST<br/>identifier + schema allowlist<br/>查 information_schema.tables]:::stage
+  CO["COMPUTE (Write)<br/>跑源 SELECT<br/>逐行 jsonb_build_object<br/>写 staging"]:::stage
+  VL["VALIDATE (Audit)<br/>row_count_positive 默认<br/>+ user validations checkSql"]:::stage
+  CM["COMMIT (Publish)<br/>jsonb_populate_record<br/>反序列化 staging<br/>原子 INSERT...ON CONFLICT"]:::stage
+  FB[FEEDBACK<br/>DELETE staging WHERE batch_key<br/>highWaterMarkOut 透传]:::stage
+  STG[("batch.process_staging<br/>(batch_key, payload jsonb,<br/>tenant_id, target_*, staged_at)")]:::store
+  TGT[("biz.target_table<br/>(业务目标表)")]:::store
+  JI[("job_instance.high_water_mark_out<br/>(orchestrator 回写)")]:::store
+  SRC[("biz.source_table*<br/>(业务源表)")]:::store
+
+  CFG ==>|"读 spec"| PR
+  PR ==>|"生成 batchKey<br/>缓存 spec 到 context"| CO
+  CO ==>|"SELECT FROM 源"| SRC
+  CO ==>|"INSERT staging<br/>(JSONB 序列化)"| STG
+  CO ==>|"max(watermarkColumn)<br/>= highWaterMarkOut"| FB
+  VL ==>|"SELECT staging<br/>WHERE batch_key=:bk"| STG
+  CM ==>|"INSERT FROM staging<br/>+ jsonb_populate_record<br/>+ ON CONFLICT"| TGT
+  FB ==>|"DELETE staging<br/>WHERE batch_key=:bk"| STG
+  FB ==>|"worker report → orchestrator<br/>UPDATE job_instance"| JI
+
+  PR --> CO --> VL --> CM --> FB
+
+  classDef stage  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
+  classDef store  fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#4a148c;
+```
+
+### 7.9.3 关键不变量
+
+- **target 表干净**:VALIDATE 失败时 COMMIT 不跑,target 完全不变;失败本批数据留在 staging 供运维复盘
+- **batchKey 唯一性**:PREPARE 阶段生成 `process-<taskId>-<traceId>`,5 个 stage 共享;不同 task 不同 batchKey,staging 行天然隔离
+- **原子 publish**:COMMIT 是单 SQL `INSERT ... SELECT FROM staging ... ON CONFLICT DO UPDATE`,不存在"写一半"——PG 单语句要么全成要么全失败
+- **staging 不堆积**:成功路径 FEEDBACK 必清(`DELETE WHERE batch_key`);失败路径 staging 保留供 forensics,直到下次 PREPARE 同 batchKey 才清(实际由 retry 触发的新 task 是新 batchKey,旧 batchKey 需运维按 staged_at 清理)
+- **plugin opt-in**:`ProcessComputePlugin` 5 个 lifecycle 方法都有默认 no-op,自定义插件只重写 `compute()` 也合法,框架仍跑全 5 stage
+
+### 7.9.4 关键代码位
+
+| 位置 | 职责 |
+|---|---|
+| `batch-worker-process/.../stage/DefaultProcessStageExecutor.java` | 5 段循环 + plugin 解析(扫 step_definition 找 COMPUTE step impl_code 缓存到 context) |
+| `batch-worker-process/.../stage/ProcessComputePlugin.java` | 5 lifecycle 接口 (prepare/compute/validate/commit/feedback,默认 no-op) |
+| `batch-worker-process/.../sql/SqlTransformComputePlugin.java` | 内置插件:解析 spec / 写 staging / 跑 validations / `jsonb_populate_record` 发布 / 清 staging |
+| `batch-worker-process/.../sql/SqlTransformComputeSpec.java` | step_params 解析 + identifier 校验 + `validations` 列表 |
+| `batch-worker-process/.../sql/SqlTransformComputeSqlValidator.java` | jsqlparser AST 校验 + SELECT-only + schema allowlist + `validateUserCheckSelect`(给 VALIDATE 用,跳过 schema allowlist) |
+| `db/migration/V75__add_process_staging_table.sql` | 共享 `batch.process_staging` 表(JSONB payload + batch_key/staged_at 索引) |
+
+### 7.9.5 业务侧使用模板
+
+```yaml
+# pipeline_step_definition.step_params 示例(YAML 表示,实际是 JSONB)
+sqlTransformCompute:
+  sourceSql: |
+    SELECT tenant_id, account_id, biz_date,
+           sum(amount) AS total_amount,
+           max(event_id) AS high_water_mark
+    FROM biz.process_order_event
+    WHERE tenant_id = :tenantId
+      AND biz_date = cast(:bizDate as date)
+      AND event_id > cast(:highWaterMarkIn as bigint)
+    GROUP BY tenant_id, account_id, biz_date
+  targetSchema: biz
+  targetTable: process_account_summary
+  writeMode: UPSERT          # INSERT / UPSERT / INSERT_IGNORE
+  columns:                   # source → target 映射
+    - {source: tenant_id, target: tenant_id}
+    - {source: account_id, target: account_id}
+    - {source: biz_date, target: biz_date}
+    - {source: total_amount, target: total_amount}
+    - {source: high_water_mark, target: high_water_mark}
+  conflictColumns: [tenant_id, account_id, biz_date]
+  watermarkColumn: high_water_mark   # max(列) 作为本批 highWaterMarkOut
+  validations:               # 可选,失败阻 commit
+    - name: total_non_negative
+      checkSql: |
+        SELECT bool_and((payload->>'total_amount')::numeric >= 0) AS pass,
+               'negative total amount detected' AS message
+        FROM batch.process_staging
+        WHERE batch_key = :batchKey
+```
+
+业务调用方只需要在 `pipeline_step_definition` 表 INSERT 一行 stage_code=COMPUTE 的记录,impl_code=`sqlTransformCompute`,step_params 写上面 spec。其余 4 个 stage(PREPARE/VALIDATE/COMMIT/FEEDBACK)框架自动 no-op 占位即可——除非你需要自定义验证规则才在 step_params.validations 配。
+
+### 7.9.6 与 ExecutionMode.INCREMENTAL(§7.8)的协作
+
+PROCESS 与 ExecutionMode 正交:既可以做 FULL 全量(每次重新聚合),也可以做 INCREMENTAL 增量(读取上次 OUT 当本次 IN)。`watermarkColumn` 字段就是给 INCREMENTAL 模式用的——COMPUTE 阶段算出 `max(watermarkColumn)` 写入 `attributes.HIGH_WATER_MARK_OUT`,FEEDBACK 透传 → orchestrator 回写 `job_instance.high_water_mark_out`,下次该 job 启动时被加载为 `highWaterMarkIn` 命名参数,业务 SQL 用 `WHERE event_id > :highWaterMarkIn` 取增量。
+
+---
+
 ## 8. 进一步阅读
 
 | 你想看 | 文档 |

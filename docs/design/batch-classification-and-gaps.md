@@ -350,6 +350,8 @@ E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 - 当前 staging 没有 retention 清理 scheduler;运维对孤儿行(任务挂了没走到 FEEDBACK)需靠 `staged_at` 索引手动清,下一轮可加自动清理。
 - 跨 workflow 依赖仍不随 PROCESS 一起做,继续由 §4.6 的触发模型单独评估。
 
+> ⚠️ **2026-04-28 深度评估发现的洞**：详细列表见 [`process-worker-known-issues.md`](./process-worker-known-issues.md)。简版：**2 个 P0**（WAP COMMIT/FEEDBACK 非原子 → 孤儿 staging；staging 缺 tenant_id 强过滤 → 防御纵深缺失）、**5 个 P1**（重跑 staging 永久泄漏 / attributes 污染 SQL 命名参数 / COMPUTE 二次跑 sourceSql / writeMode=INSERT 重跑必 UK 冲突 / staging 无写入上限）、**9 个 P2**。按该文档 §5 sprint 切片推进，先修 P0+P1-6。
+
 ### 4.6 P2：`TriggerType.DEPENDENCY` 评估 ✅ 已闭环，暂缓实现
 
 > **2026-04-27 状态**：不新增 `TriggerType.DEPENDENCY`，不新增 `dependency_definition` 表。跨 workflow 编排继续用显式 trigger API、EVENT 触发，或在同一 workflow 内用 `workflow_edge` 表达节点依赖。
@@ -378,6 +380,7 @@ E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 | `BatchType.SYNC` worker 模块 | SYNC 业务实质等同于 CDC；CDC 不做，SYNC 也不做。`BatchType.SYNC` 枚举值保留占位。 | 同 CDC。 |
 | `TriggerType.DEPENDENCY`（跨 workflow 依赖） | 跨 workflow 编排复杂度接近 mini Airflow（等待策略 / 失败传播 / 循环依赖检测 / 重跑语义 / bizDate 对齐），业务 DSL 未稳定就平台化等于猜。替代方案：多 job 串起来 → 包成同一 workflow 用 `workflow_edge`；真要跨 workflow → 上游末节点 emit 业务事件 + 下游 `TriggerType.EVENT` 监听（耦合在事件协议里，不耦合在调用代码里）。 | ≥3 个跨 workflow 案例 + 等待 / 失败 / 重跑策略已收敛 + 由运维 / 配置人员维护（而非业务代码）。详见 §4.6。 |
 | Pipeline stage 完全数据化（自定义 stage 序列） | (1) PROCESS 已半数据化（`pipeline_step_definition` + `ProcessComputePlugin`）覆盖"业务自定义阶段"诉求；(2) IMPORT / EXPORT / DISPATCH 的 stage 序列工业上稳定；(3) 平台是 SaaS 不是 PaaS，给业务稳定模板 + 可插拔实现即可，不应任由编排 stage。ROI 倒挂：模型优雅 vs. 大量重构 + 测试矩阵 + 兼容老数据。 | ≥3 个不同插入点的自定义 stage 诉求（不只是 IMPORT 加 ENRICH 一处），或新增 BatchType worker 需完全不同的 stage 序列。 |
+| 新增 `BatchType.EXEC` / `TASK_RUNNER`（跑用户脚本 / 远程命令 / SSH / `bash xxx.sh` / K8s job 等通用执行模型） | 四项 BatchType 应满足的属性全部不达标：(1) **没有稳定业务模板**——"跑用户给的命令"不带业务语义，stage 序列无从约束；(2) **失败模式平台无法定义**——命令的失败语义取决于命令本身，平台只能数 exit code；(3) **观测口径退化**——没有 counter/latency/error rate 这种业务维度，只剩黑盒轮询；(4) **重跑等价性框架层无法保证**——完全靠用户脚本自证幂等，PROCESS 的 WAP staging 那套护栏失效。开口子的代价：脚本质量决定平台 SLA、多租户安全边界变薄（执行权限/文件系统隔离/kill 语义全是独立项目）、状态机契约破坏。**真有跑遗留脚本的诉求，三条退路（按推荐度）**：①重写成 `ProcessComputePlugin` 走 PROCESS WAP；②业务侧自跑 cron/Airflow/K8s CronJob，跑完发 EVENT，平台用 `TriggerType.EVENT` 接；③包成 HTTP service，IMPORT 用 `API` channel 拉、DISPATCH 用 `API_PUSH` 推，至少把熔断/重试/超时收敛到现有 channel 框架。 | 同时满足三条：≥10 个业务团队明确诉求 + 跨租户安全模型先行（执行环境隔离 / 权限收敛 / kill 语义） + 框架层能给出比"调 exit code"更强的失败语义（如结构化进度上报 / 可中断信号）。三个都满足才回头评估，否则一律拒。 |
 | 拆 console-api 的 `JobType` 之外另起一份 enum | 重复就该合并；不要再开第三份。 | — |
 | 给 RunMode 加新值（如 `INCREMENTAL`） | RunMode 应**收缩**到"为啥跑这一次"语义；增量是 ExecutionMode 的事。 | — |
 
@@ -399,6 +402,6 @@ E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 系统在"运维原语 / 调度 / DAG / 容错"维度已经超过工业批处理框架平均水平。**模型层已收敛，下一步不是继续补枚举**：
 
 - `BatchType` / `ExecutionMode` 已一等公民化（FULL / INCREMENTAL 端到端打通），PROCESS 已有最小 worker 模块。
-- **三件事明确不做**（详见 §5，含重启条件）：`ExecutionMode.CDC` / `BatchType.SYNC` worker、`TriggerType.DEPENDENCY` 跨 workflow 依赖、Pipeline stage 完全数据化。占位枚举值（`CDC` / `SYNC`）保留以避免后续破坏性变更。
+- **四件事明确不做**（详见 §5，含重启条件）：`ExecutionMode.CDC` / `BatchType.SYNC` worker、`TriggerType.DEPENDENCY` 跨 workflow 依赖、Pipeline stage 完全数据化、`BatchType.EXEC` / `TASK_RUNNER` 通用执行模型（跑脚本 / 远程命令）。占位枚举值（`CDC` / `SYNC`）保留以避免后续破坏性变更。
 
 真正的工作转向让真实 PROCESS 业务插件沉淀 `VALIDATE / COMMIT / FEEDBACK` 的边界。
