@@ -20,4 +20,18 @@ public enum PartitionStatus implements DictEnum {
 
   private final String code;
   private final String label;
+
+  /** 投影到公共生命周期状态。RETRYING 归类为 RUNNING（仍在推进中）。 */
+  public BatchLifecycleStatus lifecycle() {
+    return switch (this) {
+      case CREATED -> BatchLifecycleStatus.CREATED;
+      case WAITING -> BatchLifecycleStatus.WAITING;
+      case READY -> BatchLifecycleStatus.READY;
+      case RUNNING, RETRYING -> BatchLifecycleStatus.RUNNING;
+      case SUCCESS -> BatchLifecycleStatus.SUCCESS;
+      case FAILED -> BatchLifecycleStatus.FAILED;
+      case CANCELLED -> BatchLifecycleStatus.CANCELLED;
+      case TERMINATED -> BatchLifecycleStatus.TERMINATED;
+    };
+  }
 }
