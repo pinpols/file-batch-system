@@ -460,7 +460,9 @@ class DefaultLaunchServiceTest {
         Map.of(),
         1,
         true,
-        "desc");
+        "desc",
+        null,
+        null);
   }
 
   private Instant expectedSlaDeadline() {

@@ -99,7 +99,8 @@ public class TaskDispatchOutboxService {
             taskPayload,
             traceId,
             idempotencyKey,
-            Instant.now());
+            Instant.now(),
+            jobInstance.getHighWaterMarkIn());
 
     OutboxEventEntity event = new OutboxEventEntity();
     event.setTenantId(task.getTenantId());

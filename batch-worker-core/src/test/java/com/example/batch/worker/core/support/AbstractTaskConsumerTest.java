@@ -99,6 +99,7 @@ class AbstractTaskConsumerTest {
             "{}",
             "tr",
             "k",
+            null,
             null);
     boolean result =
         (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
@@ -131,6 +132,7 @@ class AbstractTaskConsumerTest {
             "{}",
             "tr",
             "k",
+            null,
             null);
     ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
 
@@ -450,6 +452,7 @@ class AbstractTaskConsumerTest {
         "{}",
         "tr",
         "k",
+        null,
         null);
   }
 }

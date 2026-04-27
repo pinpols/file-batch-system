@@ -132,6 +132,7 @@ class AbstractTaskConsumerBackpressureTest {
                 "{}",
                 "tr",
                 "k",
+                null,
                 null));
 
     Future<?> f1 =
@@ -233,6 +234,7 @@ class AbstractTaskConsumerBackpressureTest {
                 "{\"run_mode\":\"RETRY\"}",
                 "tr",
                 "k",
+                null,
                 null));
 
     ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg);

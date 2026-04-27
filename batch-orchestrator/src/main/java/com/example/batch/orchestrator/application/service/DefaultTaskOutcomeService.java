@@ -238,6 +238,12 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
     if (command.success()) {
       applySuccessOutcome(command, partition);
+      // ExecutionMode.INCREMENTAL:把 worker 上报的新水位回写到 job_instance。null/空跳过
+      // (保留旧值,下次启动时同 IN 不变);仅成功路径推水位,失败/重试不应推进。
+      if (command.highWaterMarkOut() != null && !command.highWaterMarkOut().isBlank()) {
+        jobMappers.jobInstanceMapper.updateHighWaterMarkOut(
+            command.tenantId(), task.getJobInstanceId(), command.highWaterMarkOut());
+      }
     } else {
       applyFailureOutcome(command, partition, retryScheduled);
     }
@@ -583,7 +589,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             nodeSuccess,
             JsonUtils.toJson(Map.of("childInstanceStatus", childInstanceStatus)),
             nodeSuccess ? null : childCommand.errorCode(),
-            nodeSuccess ? null : childCommand.errorMessage()));
+            nodeSuccess ? null : childCommand.errorMessage(),
+            // 父虚拟任务不直接推父水位:子作业自己的 outcome 已经写过对应实例的
+            // high_water_mark_out;父侧不与子作业共享水位。
+            null));
   }
 
   @SuppressWarnings("unchecked")

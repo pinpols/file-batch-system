@@ -96,6 +96,7 @@ class OrchestratorConfigCacheServiceTest {
   private static JobDefinitionRecord jobDefinitionRecord(String tenantId, String jobCode) {
     return new JobDefinitionRecord(
         1L, tenantId, jobCode, "Job", "IMPORT", "BIZ", "MANUAL", null, "UTC", "default", "default",
-        null, null, "MANUAL", false, null, null, null, null, null, null, 5, null, 1, true, null);
+        null, null, "MANUAL", false, null, null, null, null, null, null, 5, null, 1, true, null,
+        null, null);
   }
 }

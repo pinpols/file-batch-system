@@ -62,6 +62,10 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     if (runMode != null) {
       executionContext.put(PipelineRuntimeKeys.RUN_MODE, runMode);
     }
+    if (task.getHighWaterMarkIn() != null) {
+      // INCREMENTAL pipeline 业务读 attributes 拼 SQL 水位条件;FULL/CDC/历史首跑为 null。
+      executionContext.put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, task.getHighWaterMarkIn());
+    }
     StepExecutionRequest request =
         new StepExecutionRequest(
             task.getTenantId(),
@@ -90,6 +94,12 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
               Map.of(
                   "code", response.code(),
                   "message", response.message())));
+      // INCREMENTAL pipeline 在 attributes 写出新水位 → 透传给 orchestrator;
+      // 业务没显式写就保持 null,orchestrator 跳过持久化(保留旧值)。
+      Object highWaterMarkOut = executionContext.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT);
+      if (highWaterMarkOut != null) {
+        report.setHighWaterMarkOut(String.valueOf(highWaterMarkOut));
+      }
       taskExecutionClient.report(report);
       return new WorkerExecutionResult(task.getTaskId(), response.success(), response.message());
     } finally {

@@ -39,6 +39,7 @@ public class TaskDispatchExecutor {
     task.setTaskSeq(message.taskSeq());
     task.setIdempotencyKey(message.idempotencyKey());
     task.setPayload(message.payload());
+    task.setHighWaterMarkIn(message.highWaterMarkIn());
     return workerRuntimeFacade.execute(task);
   }
 }

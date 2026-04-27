@@ -130,6 +130,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
             true,
             "{\"records\":100,\"status\":\"processed\"}",
             null,
+            null,
             null));
 
     // 5) Verify task SUCCESS

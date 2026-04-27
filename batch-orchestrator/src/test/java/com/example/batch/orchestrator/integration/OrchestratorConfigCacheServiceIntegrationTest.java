@@ -125,6 +125,8 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
         null,
         1,
         true,
+        null,
+        null,
         null);
   }
 }
