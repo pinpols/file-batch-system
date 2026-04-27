@@ -158,7 +158,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     // 3) Report failure → retry should be scheduled
     taskExecutionService.applyTaskOutcome(
         new TaskOutcomeCommand(
-            TENANT, task.getId(), null, false, null, "SIMULATED_ERROR", "retry flow test"));
+            TENANT, task.getId(), null, false, null, "SIMULATED_ERROR", "retry flow test", null));
 
     // 验证已为该分区创建了 WAITING 状态的 retry_schedule 行
     List<RetryScheduleEntity> retries =

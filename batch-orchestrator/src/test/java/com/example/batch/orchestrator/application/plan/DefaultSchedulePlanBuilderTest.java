@@ -202,6 +202,8 @@ class DefaultSchedulePlanBuilderTest {
         defaultParams,
         null,
         true,
+        null,
+        null,
         null);
   }
 }

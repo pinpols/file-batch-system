@@ -87,6 +87,7 @@ class BatchTopicResolverTest {
         "{}",
         "trace-1",
         "idem-1",
-        Instant.now());
+        Instant.now(),
+        null);
   }
 }

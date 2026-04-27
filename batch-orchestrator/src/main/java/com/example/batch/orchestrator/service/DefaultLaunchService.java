@@ -184,6 +184,7 @@ public class DefaultLaunchService implements LaunchService {
             : (loaded.existingInstance() == null ? null : loaded.existingInstance().getId());
     Integer priority =
         loaded.jobDefinition().priority() == null ? 5 : loaded.jobDefinition().priority();
+    String highWaterMarkIn = resolveHighWaterMarkIn(request.tenantId(), loaded);
     return JobInstanceEntity.builder()
         .tenantId(request.tenantId())
         .jobDefinitionId(loaded.jobDefinition().id())
@@ -223,7 +224,26 @@ public class DefaultLaunchService implements LaunchService {
         .expectedDurationSeconds(
             launchParamResolver.resolveExpectedDurationSeconds(
                 loaded.jobDefinition(), effectiveParams))
+        .highWaterMarkIn(highWaterMarkIn)
         .build();
+  }
+
+  /**
+   * INCREMENTAL 模式下,从同一 (tenant, jobDefinition) 上一次成功实例的 {@code high_water_mark_out} 读出,作为本次
+   * IN。FULL/CDC/未配置时一律返回 null。 首次跑没有历史成功实例时也返回 null,worker 解释为"从头开始扫"。
+   */
+  private String resolveHighWaterMarkIn(String tenantId, LaunchLoadResult loaded) {
+    String mode = loaded.jobDefinition().executionMode();
+    if (!"INCREMENTAL".equals(mode)) {
+      return null;
+    }
+    Long jobDefinitionId = loaded.jobDefinition().id();
+    if (jobDefinitionId == null) {
+      return null;
+    }
+    JobInstanceEntity prev =
+        jobMappers.jobInstanceMapper.selectLastSuccessByJobDefinition(tenantId, jobDefinitionId);
+    return prev == null ? null : prev.getHighWaterMarkOut();
   }
 
   private PreparedLaunch prepareWorkflowRunAndNodes(

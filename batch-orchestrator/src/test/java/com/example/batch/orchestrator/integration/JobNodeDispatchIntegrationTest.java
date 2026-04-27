@@ -303,7 +303,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
     // 模拟子任务成功完成
     taskOutcomeService.applyTaskOutcome(
-        new TaskOutcomeCommand(TENANT, childTaskId, null, true, "{}", null, null));
+        new TaskOutcomeCommand(TENANT, childTaskId, null, true, "{}", null, null, null));
 
     // 子 job instance 应为 SUCCESS
     String childStatus =
@@ -376,7 +376,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
     taskOutcomeService.applyTaskOutcome(
         new TaskOutcomeCommand(
-            TENANT, childTaskId, null, false, "{}", "ERR_CHILD", "child task failed"));
+            TENANT, childTaskId, null, false, "{}", "ERR_CHILD", "child task failed", null));
 
     // 父任务应为 FAILED（子任务失败，无重试策略）
     String parentStatus =

@@ -71,4 +71,19 @@ public interface JobInstanceMapper {
       @Param("instanceStatus") String instanceStatus,
       @Param("finishedAt") Instant finishedAt,
       @Param("expectedVersion") Long expectedVersion);
+
+  /**
+   * 取同一 (tenantId, jobDefinitionId) 下最近一次成功(SUCCESS / PARTIAL_FAILED)实例。 用于增量模式启动新实例时把上一次的 {@code
+   * high_water_mark_out} 当作本次 IN。没有历史成功实例(首次跑)返回 null, worker 在业务侧按"从头跑"处理。
+   */
+  JobInstanceEntity selectLastSuccessByJobDefinition(
+      @Param("tenantId") String tenantId, @Param("jobDefinitionId") Long jobDefinitionId);
+
+  /**
+   * worker report 成功时把 OUT 水位回写。null 直接跳过(由调用方决策),非 null 才覆盖,避免把可能存在的旧水位清空。 不做版本检查:水位是单调推进的最终一致字段。
+   */
+  int updateHighWaterMarkOut(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("highWaterMarkOut") String highWaterMarkOut);
 }

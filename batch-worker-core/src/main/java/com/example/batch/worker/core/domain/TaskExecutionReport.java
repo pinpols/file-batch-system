@@ -18,4 +18,11 @@ public class TaskExecutionReport {
   private String resultSummary;
   private String errorCode;
   private String errorMessage;
+
+  /**
+   * 增量执行模式(ExecutionMode.INCREMENTAL)下 worker 上报的新水位高点。业务逻辑通过 {@code
+   * ExecutionContext.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, ...)}
+   * 写入;框架不自动推进。null 表示本次执行无水位变化,orchestrator 不更新 job_instance.high_water_mark_out。
+   */
+  private String highWaterMarkOut;
 }

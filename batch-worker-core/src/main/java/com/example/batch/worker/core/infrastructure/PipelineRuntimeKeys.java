@@ -53,5 +53,17 @@ public final class PipelineRuntimeKeys {
   /** 导出快照：snapshotMode、snapshotTs、sourcePartitions（可 JSON 序列化的 Map） */
   public static final String EXPORT_SNAPSHOT = "exportSnapshot";
 
+  /**
+   * 增量执行模式的水位起点。orchestrator 派发时通过 TaskDispatchMessage 透传过来, worker 业务逻辑通过 attributes 读取拼
+   * SQL。FULL/CDC 模式下不存在或为 null。
+   */
+  public static final String HIGH_WATER_MARK_IN = "highWaterMarkIn";
+
+  /**
+   * 增量执行模式下 worker 上报的新水位高点。worker 业务逻辑写入 attributes, DefaultTaskExecutionWrapper 从 attributes
+   * 读出后填进 TaskExecutionReport, orchestrator 在成功路径回写 {@code job_instance.high_water_mark_out}。
+   */
+  public static final String HIGH_WATER_MARK_OUT = "highWaterMarkOut";
+
   private PipelineRuntimeKeys() {}
 }

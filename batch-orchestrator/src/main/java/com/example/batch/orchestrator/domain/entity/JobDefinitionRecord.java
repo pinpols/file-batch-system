@@ -32,4 +32,6 @@ public record JobDefinitionRecord(
     @Column("default_params") Map<String, Object> defaultParams,
     @Column("version") Integer version,
     @Column("enabled") Boolean enabled,
-    @Column("description") String description) {}
+    @Column("description") String description,
+    @Column("execution_mode") String executionMode,
+    @Column("watermark_field") String watermarkField) {}

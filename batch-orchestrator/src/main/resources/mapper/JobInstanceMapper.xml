@@ -306,4 +306,26 @@
           and id = #{id}
           and version = #{expectedVersion}
     </update>
+
+    <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下最近一次成功(含 PARTIAL_FAILED)实例,
+         供新实例启动时把上一次的 high_water_mark_out 当成本次 IN。
+         按 finished_at desc, id desc 排序:finished_at 是真实完成时间(优先);若并发场景下
+         finished_at 出现 NULL/相同,id 兜底保证确定性。 -->
+    <select id="selectLastSuccessByJobDefinition" resultMap="JobInstanceResultMap">
+        select *
+        from batch.job_instance
+        where tenant_id = #{tenantId}
+          and job_definition_id = #{jobDefinitionId}
+          and instance_status in ('SUCCESS', 'PARTIAL_FAILED')
+        order by finished_at desc nulls last, id desc
+        limit 1
+    </select>
+
+    <update id="updateHighWaterMarkOut">
+        update batch.job_instance
+        set high_water_mark_out = #{highWaterMarkOut},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
 </mapper>

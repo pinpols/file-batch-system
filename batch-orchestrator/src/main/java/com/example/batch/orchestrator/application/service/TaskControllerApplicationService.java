@@ -51,7 +51,8 @@ public class TaskControllerApplicationService {
             request.isSuccess(),
             request.getResultSummary(),
             errorCode,
-            errorMessage));
+            errorMessage,
+            request.getHighWaterMarkOut()));
   }
 
   public void renew(Long taskId, TaskClaimRequest request) {

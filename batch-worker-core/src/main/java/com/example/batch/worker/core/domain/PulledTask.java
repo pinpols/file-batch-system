@@ -21,4 +21,11 @@ public class PulledTask {
   private Integer taskSeq;
   private String idempotencyKey;
   private String payload;
+
+  /**
+   * 增量执行模式(ExecutionMode.INCREMENTAL)的水位起点,从 TaskDispatchMessage 透传过来。 Worker 业务逻辑可通过 {@code
+   * ExecutionContext.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN)} 读取并 拼接 SQL,例
+   * `WHERE update_time > :highWaterMarkIn`。
+   */
+  private String highWaterMarkIn;
 }
