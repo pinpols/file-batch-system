@@ -14,6 +14,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /** 业务数据源配置，提供 PROCESS 配置驱动 SQL 加工访问业务库的连接池。 */
 @org.springframework.context.annotation.Configuration(
@@ -74,5 +75,11 @@ public class BusinessDataSourceConfiguration {
       @Qualifier("processBusinessSqlSessionFactory")
           SqlSessionFactory processBusinessSqlSessionFactory) {
     return new SqlSessionTemplate(processBusinessSqlSessionFactory);
+  }
+
+  @Bean(name = "processBusinessTransactionManager")
+  public DataSourceTransactionManager processBusinessTransactionManager(
+      @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource) {
+    return new DataSourceTransactionManager(processBusinessDataSource);
   }
 }

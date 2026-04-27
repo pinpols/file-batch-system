@@ -49,6 +49,8 @@ class SqlTransformComputeSpecTest {
     assertThat(spec.conflictColumns()).containsExactly("tenant_id", "account_id");
     assertThat(spec.watermarkColumn()).isEqualTo("event_id");
     assertThat(spec.validations()).isEmpty();
+    assertThat(spec.emptyResultPolicy())
+        .isEqualTo(SqlTransformComputeSpec.EmptyResultPolicy.SUCCESS);
   }
 
   @Test
@@ -96,5 +98,50 @@ class SqlTransformComputeSpecTest {
     assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("columns");
+  }
+
+  @Test
+  void parse_rejectsParamsOverridingReservedRuntimeNames() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src where tenant_id = :tenantId",
+                "targetTable",
+                "daily_summary",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount")),
+                "params",
+                Map.of("tenantId", "evil-tenant")));
+
+    assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("reserved parameter");
+  }
+
+  @Test
+  void parse_acceptsEmptyResultPolicySuccess() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src",
+                "targetTable",
+                "daily_summary",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount")),
+                "emptyResultPolicy",
+                "SUCCESS"));
+
+    SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
+
+    assertThat(spec.emptyResultPolicy())
+        .isEqualTo(SqlTransformComputeSpec.EmptyResultPolicy.SUCCESS);
   }
 }

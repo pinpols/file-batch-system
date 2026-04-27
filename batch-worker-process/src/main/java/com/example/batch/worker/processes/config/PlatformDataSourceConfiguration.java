@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /** 平台数据源配置，提供 PROCESS Worker 所需的平台库 MyBatis SqlSession。 */
 @org.springframework.context.annotation.Configuration
@@ -62,5 +63,12 @@ public class PlatformDataSourceConfiguration {
   public SqlSessionTemplate processPlatformSqlSessionTemplate(
       @Qualifier("processPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
     return new SqlSessionTemplate(sqlSessionFactory);
+  }
+
+  @Bean(name = "transactionManager")
+  @Primary
+  public DataSourceTransactionManager transactionManager(
+      @Qualifier("processPlatformDataSource") DataSource processPlatformDataSource) {
+    return new DataSourceTransactionManager(processPlatformDataSource);
   }
 }

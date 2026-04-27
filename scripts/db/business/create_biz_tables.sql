@@ -25,6 +25,30 @@
 -- =========================================================
 
 CREATE SCHEMA IF NOT EXISTS biz;
+CREATE SCHEMA IF NOT EXISTS batch;
+
+-- PROCESS WAP staging table lives with PROCESS business source/target tables.
+-- sqlTransformCompute uses processBusinessDataSource for source, staging and target so
+-- INSERT ... SELECT ... COMMIT can stay inside one physical database.
+CREATE TABLE IF NOT EXISTS batch.process_staging (
+    batch_key      TEXT        NOT NULL,
+    row_seq        BIGSERIAL   NOT NULL,
+    tenant_id      TEXT        NOT NULL,
+    target_schema  TEXT        NOT NULL,
+    target_table   TEXT        NOT NULL,
+    payload        JSONB       NOT NULL,
+    staged_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (batch_key, row_seq)
+);
+
+CREATE INDEX IF NOT EXISTS idx_process_staging_batch_key
+    ON batch.process_staging (batch_key);
+CREATE INDEX IF NOT EXISTS idx_process_staging_tenant_batch
+    ON batch.process_staging (tenant_id, batch_key);
+CREATE INDEX IF NOT EXISTS idx_process_staging_target_batch
+    ON batch.process_staging (tenant_id, target_schema, target_table, batch_key);
+CREATE INDEX IF NOT EXISTS idx_process_staging_staged_at
+    ON batch.process_staging (staged_at);
 
 CREATE TABLE IF NOT EXISTS biz.customer_account (
     id                BIGSERIAL PRIMARY KEY,

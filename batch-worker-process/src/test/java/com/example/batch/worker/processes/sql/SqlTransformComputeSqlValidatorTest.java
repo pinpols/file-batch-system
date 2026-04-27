@@ -44,4 +44,30 @@ class SqlTransformComputeSqlValidatorTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("disallowed schema");
   }
+
+  @Test
+  void validateUserCheckSelect_rejectsReadingNonStagingTables() {
+    SqlTransformComputeSqlValidator validator =
+        new SqlTransformComputeSqlValidator(new SqlTransformComputeSecurityProperties());
+
+    assertThatThrownBy(
+            () ->
+                validator.validateUserCheckSelect(
+                    "select true AS pass, 'ok' AS message from biz.order_event"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("validation SQL may only read batch.process_staging");
+  }
+
+  @Test
+  void validateUserCheckSelect_allowsReadingProcessStaging() {
+    SqlTransformComputeSqlValidator validator =
+        new SqlTransformComputeSqlValidator(new SqlTransformComputeSecurityProperties());
+
+    String sql =
+        validator.validateUserCheckSelect(
+            "select bool_and(tenant_id = :tenantId) AS pass from batch.process_staging"
+                + " where batch_key = :batchKey");
+
+    assertThat(sql).contains("batch.process_staging");
+  }
 }
