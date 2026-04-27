@@ -160,6 +160,8 @@ class ConsoleJobQueryService {
         entity.getRetryMaxCount(),
         entity.getTimeoutSeconds(),
         display(entity.getShardStrategy()),
+        display(entity.getExecutionMode()),
+        display(entity.getWatermarkField()),
         display(entity.getExecutionHandler()),
         display(entity.getParamSchema()),
         display(entity.getDefaultParams()),

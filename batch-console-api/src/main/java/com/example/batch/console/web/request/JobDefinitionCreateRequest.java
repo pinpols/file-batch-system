@@ -28,6 +28,19 @@ public class JobDefinitionCreateRequest {
   private String windowCode;
   private Boolean dagEnabled;
   private String shardStrategy;
+
+  /**
+   * 执行模式 ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,缺省 FULL。
+   *
+   * <p>INCREMENTAL 必须配合 watermarkField 才生效;CDC 当前是占位,worker 暂不实现。
+   */
+  @Size(max = 16)
+  private String executionMode;
+
+  /** 增量模式下的水位字段名(例:update_time / id);FULL 模式下应为空。 */
+  @Size(max = 64)
+  private String watermarkField;
+
   private String retryPolicy;
   private Integer retryMaxCount;
   private Integer timeoutSeconds;

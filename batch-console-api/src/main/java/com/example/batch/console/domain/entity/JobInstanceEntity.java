@@ -26,6 +26,13 @@ public class JobInstanceEntity {
   private Integer priority;
   private String traceId;
   private String paramsSnapshot;
+
+  /** 增量模式下本次执行的水位起点(由 orchestrator 派发时填),见 V73 migration。 */
+  private String highWaterMarkIn;
+
+  /** 增量模式下本次执行结束后的新水位(由 worker 完成时上报)。 */
+  private String highWaterMarkOut;
+
   private String resultSummary;
   private Instant deadlineAt;
   private Integer expectedDurationSeconds;

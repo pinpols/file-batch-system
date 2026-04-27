@@ -22,6 +22,8 @@ public record ConsoleJobDefinitionResponse(
     Integer retryMaxCount,
     Integer timeoutSeconds,
     String shardStrategy,
+    String executionMode,
+    String watermarkField,
     String executionHandler,
     String paramSchema,
     String defaultParams,

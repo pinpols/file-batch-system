@@ -83,6 +83,9 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setDagEnabled(request.getDagEnabled() != null && request.getDagEnabled());
     entity.setShardStrategy(
         request.getShardStrategy() == null ? "NONE" : request.getShardStrategy());
+    entity.setExecutionMode(
+        request.getExecutionMode() == null ? "FULL" : request.getExecutionMode());
+    entity.setWatermarkField(request.getWatermarkField());
     entity.setRetryPolicy(request.getRetryPolicy() == null ? "NONE" : request.getRetryPolicy());
     entity.setRetryMaxCount(request.getRetryMaxCount());
     entity.setTimeoutSeconds(request.getTimeoutSeconds());
@@ -143,6 +146,14 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getShardStrategy() != null
             ? request.getShardStrategy()
             : existing.getShardStrategy());
+    param.setExecutionMode(
+        request.getExecutionMode() != null
+            ? request.getExecutionMode()
+            : existing.getExecutionMode());
+    param.setWatermarkField(
+        request.getWatermarkField() != null
+            ? request.getWatermarkField()
+            : existing.getWatermarkField());
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : existing.getEnabled());
     param.setDescription(
         request.getDescription() != null ? request.getDescription() : existing.getDescription());
@@ -241,6 +252,8 @@ public class DefaultConsoleJobDefinitionApplicationService
             ? request.getTimeoutSeconds()
             : copied.getTimeoutSeconds());
     param.setShardStrategy(copied.getShardStrategy());
+    param.setExecutionMode(copied.getExecutionMode());
+    param.setWatermarkField(copied.getWatermarkField());
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : copied.getEnabled());
     param.setDescription(
         request.getDescription() != null ? request.getDescription() : copied.getDescription());
@@ -271,6 +284,8 @@ public class DefaultConsoleJobDefinitionApplicationService
         e.getRetryMaxCount(),
         e.getTimeoutSeconds(),
         e.getShardStrategy(),
+        e.getExecutionMode(),
+        e.getWatermarkField(),
         e.getExecutionHandler(),
         e.getParamSchema(),
         e.getDefaultParams(),
