@@ -23,4 +23,5 @@ docker compose \
   -f docker-compose.yml \
   -f docker-compose.app.yml \
   --profile apps \
+  --profile replica \
   stop

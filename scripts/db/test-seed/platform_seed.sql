@@ -467,4 +467,15 @@ BEGIN
     END LOOP;
 END $$;
 
+-- V64__normalize_code_conventions.sql 之后所有 code 列（worker_group / job_type 等）以
+-- upper-case 为准；selector / dispatcher 入口都做 toUpperOrNull 严格匹配。本 seed 历史
+-- 有大量 INSERT 用了小写（'import' / 'export' / 'dispatch'），加载后必须统一大写化，
+-- 否则 worker selection 匹配不到 → 任务永远 WAITING。
+UPDATE batch.worker_registry SET worker_group = upper(worker_group) WHERE worker_group <> upper(worker_group);
+UPDATE batch.resource_queue SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
+UPDATE batch.job_definition SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
+UPDATE batch.job_instance SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
+UPDATE batch.job_partition SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
+UPDATE batch.pipeline_step_definition SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
+
 COMMIT;

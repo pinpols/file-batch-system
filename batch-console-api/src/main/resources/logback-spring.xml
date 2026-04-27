@@ -52,6 +52,11 @@
         </logger>
     </springProfile>
 
+    <!-- 抑制 CglibAopProxy 对 AbstractSingleSheetExcelService final 模板方法的 WARN 噪声。
+         模板方法故意 final 防止子类破坏统一流程，业务 AOP（@Transactional 等）已正确切到
+         非 final 子类方法上，这条 WARN 没有实际影响，仅是 Spring 创建代理时的提示噪声。 -->
+    <logger name="org.springframework.aop.framework.CglibAopProxy" level="ERROR"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>

@@ -38,6 +38,10 @@ spring:
     schemas:
       - batch
       - quartz
+    # 与 orchestrator 同源：docker init 预置空 batch + quartz schema，必须 baseline-on-migrate=true
+    # 才能在 trigger 与 orchestrator 并行启动时不抢着抛 "non-empty schema but no history table"。
+    baseline-on-migrate: true
+    baseline-version: 1
 
 batch:
   # 注：batch.security.internal-secret 已抽到 batch-defaults.yml 统一管理
