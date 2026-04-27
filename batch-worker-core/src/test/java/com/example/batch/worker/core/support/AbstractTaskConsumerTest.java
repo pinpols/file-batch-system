@@ -83,24 +83,7 @@ class AbstractTaskConsumerTest {
     // Message targets worker-B, but this consumer is worker-A
     TaskDispatchMessage msg =
         new TaskDispatchMessage(
-            "v1",
-            "t1",
-            1L,
-            null,
-            1L,
-            null,
-            null,
-            "EXECUTION",
-            1,
-            "IMPORT",
-            "worker-B",
-            null,
-            null,
-            "{}",
-            "tr",
-            "k",
-            null,
-            null);
+            "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-B", null, "tr", "k", null);
     boolean result =
         (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
 
@@ -116,24 +99,7 @@ class AbstractTaskConsumerTest {
 
     TaskDispatchMessage msg =
         new TaskDispatchMessage(
-            "v1",
-            "t1",
-            1L,
-            null,
-            1L,
-            null,
-            null,
-            "EXECUTION",
-            1,
-            "IMPORT",
-            "worker-A",
-            null,
-            null,
-            "{}",
-            "tr",
-            "k",
-            null,
-            null);
+            "v2", "t1", 1L, null, 1L, null, null, "IMPORT", "worker-A", null, "tr", "k", null);
     ReflectionTestUtils.invokeMethod(consumer, "doConsume", JsonUtils.toJson(msg));
 
     verify(executor).execute(any(), anyString());
@@ -431,28 +397,22 @@ class AbstractTaskConsumerTest {
 
   private TaskDispatchMessage buildMessage(
       Long taskId, String tenantId, String workerType, String selectedWorkerId) {
-    // field order: schemaVersion, tenantId, jobInstanceId, jobPartitionId, taskId, instanceNo,
-    // jobCode,
-    //              taskType, taskSeq, workerType, selectedWorkerId, priorityBand, businessKey,
-    //              payload, traceId, idempotencyKey, dispatchAt
+    // P1-2.2 v2 字段顺序:schemaVersion, tenantId, jobInstanceId, jobPartitionId, taskId,
+    //                   instanceNo, jobCode, workerType, selectedWorkerId, priorityBand,
+    //                   traceId, idempotencyKey, dispatchAt
     return new TaskDispatchMessage(
-        "v1",
+        "v2",
         tenantId,
         1L,
         null,
         taskId,
         null,
         null,
-        "EXECUTION",
-        1,
         workerType,
         selectedWorkerId,
         null,
-        null,
-        "{}",
         "tr",
         "k",
-        null,
         null);
   }
 }

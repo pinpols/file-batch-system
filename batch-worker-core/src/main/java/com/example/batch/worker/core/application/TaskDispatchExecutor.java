@@ -14,8 +14,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>保证 Orchestrator 是唯一状态主机：Kafka 仅负责任务路由，Worker 不能绕过 CLAIM 直接执行。
  *
- * <p>P1-2.1:CLAIM 成功时 orchestrator 回 {@link EffectiveTaskConfig} 快照,本类拼 {@link PulledTask}时优先 读
- * response 字段(确保管理员改完 retry/timeout 立即生效),缺字段时 fallback 到 message 旧字段(对接旧 orchestrator 部署的过渡场景)。
+ * <p>P1-2.2 起 message v2 已瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn 等) 全部从 CLAIM 返回的
+ * {@link EffectiveTaskConfig} 实时读,本类不再 fallback 到 message。task key +
+ * 路由元数据(tenantId/taskId/instanceId 等)继续从 message 读。
  */
 @Service
 @RequiredArgsConstructor
@@ -35,24 +36,21 @@ public class TaskDispatchExecutor {
     }
     EffectiveTaskConfig effective = claimed.get();
     PulledTask task = new PulledTask();
+    // task key:从 message 直读(消息携带就够了,与 effective 等价)
     task.setTaskId(String.valueOf(message.taskId()));
-    task.setTaskType(preferConfig(effective.taskType(), message.taskType()));
-    task.setJobCode(preferConfig(effective.jobCode(), message.jobCode()));
     task.setTenantId(message.tenantId());
     task.setWorkerId(workerId);
-    task.setTraceId(preferConfig(effective.traceId(), message.traceId()));
-    task.setBusinessKey(preferConfig(effective.businessKey(), message.businessKey()));
+    task.setJobCode(message.jobCode());
+    task.setTraceId(message.traceId());
+    task.setIdempotencyKey(message.idempotencyKey());
     task.setJobInstanceId(message.jobInstanceId());
     task.setJobPartitionId(message.jobPartitionId());
-    task.setTaskSeq(preferConfig(effective.taskSeq(), message.taskSeq()));
-    task.setIdempotencyKey(preferConfig(effective.idempotencyKey(), message.idempotencyKey()));
-    task.setPayload(preferConfig(effective.payload(), message.payload()));
-    task.setHighWaterMarkIn(preferConfig(effective.highWaterMarkIn(), message.highWaterMarkIn()));
+    // 业务字段:从 CLAIM 返回的 effective config 读(确保管理员改完 retry/payload 立即生效)
+    task.setTaskType(effective.taskType());
+    task.setBusinessKey(effective.businessKey());
+    task.setTaskSeq(effective.taskSeq());
+    task.setPayload(effective.payload());
+    task.setHighWaterMarkIn(effective.highWaterMarkIn());
     return workerRuntimeFacade.execute(task);
-  }
-
-  /** P1-2.1:优先 response,空时 fallback 到 message。 */
-  private static <T> T preferConfig(T fromConfig, T fromMessage) {
-    return fromConfig != null ? fromConfig : fromMessage;
   }
 }

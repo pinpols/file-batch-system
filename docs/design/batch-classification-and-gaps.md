@@ -170,7 +170,7 @@ Worker 拿到 effective config 走两个通道：
 | **P0** ✅ | `ExecutionMode` 一等公民化（FULL / INCREMENTAL / CDC） + `job_definition.execution_mode` + `job_instance.high_water_mark_in/out` 字段 + 运行时 IN/OUT 双向打通 | 增量 / 全量分明，统一限流 / 补数视角 | DB 迁移 + console UI 加字段 + worker SDK 加 watermark 接口 | M |
 | **P0** ✅ | `BatchLifecycleStatus` 公共投影（5 个 Status 加 `lifecycle()` 方法） | 跨层逻辑统一防漂移 | 纯加方法，不破坏 DB | S |
 | **P1** ✅ | `JobType` ↔ `PipelineType` 合并为 `BatchType`（含 PROCESS） | 加 PROCESS / SYNC 改一处 | 一次 rename + 投影 | S |
-| **P1** 🟡 | claim() 强制返回 effective config | 配置一致性 | orchestrator + worker 接口契约改动 | M |
+| **P1** ✅ | claim() 强制返回 effective config | 配置一致性 | orchestrator + worker 接口契约改动 | M |
 | **P2** | `batch-worker-process` 模块（或 worker-core 加 `ProcessStageStep`） | 把"加工类"业务从 GENERAL / 业务自写脚本里收敛 | 看业务是否真有典型场景 | M |
 | **P2** | `TriggerType.DEPENDENCY`（跨 workflow 依赖） | 业务侧解耦上下游 trigger 调用 | 一次 trigger 通道 + DSL | M |
 | **P3** | SYNC（CDC / binlog 通道） | 中长期 | 新模块 + Debezium / Flink CDC 选型 | L |
@@ -250,11 +250,15 @@ public BatchType batchType() { /* 1:1 映射 */ }
 
 `ConsoleMetaQueryService.REGISTRATIONS` 加 `batchType` + `docs/api/console-api.openapi.yaml` 的 `CommonResponseMetaEnums` 同步追加 `batchType` / `executionMode`（后者补 P0-1 漏登记）。
 
-### 4.4 P1 第二步：claim() 返回 effective config 🟡 Stage 1 已落地
+### 4.4 P1 第二步：claim() 返回 effective config ✅ 已落地（含 Stage 2）
 
-> **2026-04-27 状态**：Stage 1 完成 — orchestrator 在 `/internal/tasks/{taskId}/claim` 认领成功时回 `EffectiveTaskConfig` body，worker 优先用其字段，缺字段时 fallback 到 `TaskDispatchMessage` 旧字段。Stage 2（`TaskDispatchMessage` 瘦身只留 task key + schemaVersion v1→v2）留下一轮提交。
+> **2026-04-27 状态**：Stage 1 + Stage 2 全部完成。
+>
+> - **Stage 1**：orchestrator 在 `/internal/tasks/{taskId}/claim` 认领成功时回 `EffectiveTaskConfig` body，worker 优先用其字段。
+> - **Stage 2**：`TaskDispatchMessage` schemaVersion v1→v2 瘦身完成 —— 删 `taskType` / `taskSeq` / `businessKey` / `payload` / `highWaterMarkIn`（业务字段全部走 claim），只保留 task key（tenantId / taskId / jobInstanceId / jobPartitionId / instanceNo / jobCode / traceId / idempotencyKey / dispatchAt）+ 路由元数据（workerType / selectedWorkerId / priorityBand —— publisher 路由 / consumer accepts 必需，不能从 DB 重读）。
+> - retry / reclaim 的 `RunMode` override 改由 `JobTaskMapper.updatePayload` 持久化到 `job_task.task_payload`，worker CLAIM 时 `EffectiveTaskConfig` 实时读到。
 
-**Stage 1 改动**（本批）：
+**Stage 1 改动**：
 
 ```java
 // batch-common/src/main/java/com/example/batch/common/dto/EffectiveTaskConfig.java
@@ -277,7 +281,32 @@ public record EffectiveTaskConfig(
 - 旧 orchestrator 返 bodyless 200，新 worker 收到 `EMPTY_EFFECTIVE_CONFIG` sentinel（全 null），fallback 到 message
 - `TaskDispatchExecutor.preferConfig(fromConfig, fromMessage)` 在 PulledTask 拼装时 per-field 优先 response
 
-**Stage 2 留下一批**（`TaskDispatchMessage` schemaVersion v1→v2 瘦身，只保留 task key：tenantId / taskId / jobInstanceId / jobPartitionId / instanceNo / jobCode / traceId / idempotencyKey / dispatchAt；workerType / payload / businessKey / priorityBand / highWaterMarkIn 等业务字段下线）。
+**Stage 2 改动**（合入本批）：
+
+```java
+// batch-common/src/main/java/com/example/batch/common/kafka/TaskDispatchMessage.java
+// schemaVersion 从 "v1" 升 "v2";删 taskType / taskSeq / businessKey / payload /
+// highWaterMarkIn(全部 worker 走 claim 拿);保留 task key + 路由元数据。
+public record TaskDispatchMessage(
+    String schemaVersion,    // "v2"
+    String tenantId, Long jobInstanceId, Long jobPartitionId, Long taskId, String instanceNo,
+    String jobCode,
+    String workerType,       // 路由元数据:worker accepts() 过滤
+    String selectedWorkerId, // 路由元数据:direct dispatch topic
+    String priorityBand,     // 路由元数据:PRIORITY 模式 topic 后缀
+    String traceId, String idempotencyKey, Instant dispatchAt) {}
+
+// TaskDispatchExecutor 删 preferConfig 兼容层,业务字段直接读 effective:
+// task.setPayload(effective.payload());      // 不再 fallback 到 message.payload
+// task.setBusinessKey(effective.businessKey());
+// task.setHighWaterMarkIn(effective.highWaterMarkIn());
+
+// retry/reclaim 的 RunMode override 改持久化到 job_task.task_payload:
+// JobTaskMapper.updatePayload(tenantId, taskId, mergedPayloadWithRunMode)
+// worker CLAIM 时 EffectiveTaskConfig 实时读 job_task.task_payload,看到 run_mode。
+```
+
+兼容性（沿用 Stage 1 的滚动升级思路）：Stage 2 部署 orchestrator 时所有 worker 已是 P1-2.1+，以 effective config 为权威，message v2 缺字段不影响业务执行。Jackson 反序列化未知字段被忽略，旧 v1 消息（含已删字段）被新 worker 解析为 v2 时已删字段直接丢弃。
 
 ---
 

@@ -19,8 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * P1-2.1 兼容性测试:CLAIM 成功后用 EffectiveTaskConfig 字段优先填充 PulledTask;字段为 null 时 fallback 到
- * TaskDispatchMessage 旧字段;CLAIM 失败时 execute 不被调用。
+ * P1-2.2 行为:CLAIM 失败时 execute 不被调用;CLAIM 成功时业务字段从 EffectiveTaskConfig 读、task key 从 message v2 读, 不再
+ * fallback (message v2 已无 payload/businessKey/taskSeq/highWaterMarkIn 等业务字段)。
  */
 class TaskDispatchExecutorTest {
 
@@ -35,7 +35,7 @@ class TaskDispatchExecutorTest {
 
   @Test
   void shouldReturnNullWhenClaimDenied() {
-    TaskDispatchMessage message = sampleMessage("MSG_PAYLOAD");
+    TaskDispatchMessage message = sampleMessage();
     when(workerRuntimeFacade.claim(eq("t1"), eq(42L), eq("w1"))).thenReturn(Optional.empty());
 
     WorkerExecutionResult result = executor.execute(message, "w1");
@@ -45,8 +45,8 @@ class TaskDispatchExecutorTest {
   }
 
   @Test
-  void shouldPreferEffectiveConfigFieldsOverMessage() {
-    TaskDispatchMessage message = sampleMessage("MSG_PAYLOAD");
+  void shouldReadBusinessFieldsFromClaimAndKeysFromMessage() {
+    TaskDispatchMessage message = sampleMessage();
     EffectiveTaskConfig fresh =
         new EffectiveTaskConfig(
             "t1",
@@ -77,51 +77,36 @@ class TaskDispatchExecutorTest {
     ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
     verify(workerRuntimeFacade).execute(captor.capture());
     PulledTask task = captor.getValue();
-    assertThat(task.getJobCode()).isEqualTo("FRESH_JOB");
+    // task key 从 message 读(自带,无需 claim 重复)
+    assertThat(task.getTaskId()).isEqualTo("42");
+    assertThat(task.getTenantId()).isEqualTo("t1");
+    assertThat(task.getJobCode()).isEqualTo("MSG_JOB");
+    assertThat(task.getTraceId()).isEqualTo("msg-trace");
+    assertThat(task.getIdempotencyKey()).isEqualTo("msg-idem");
+    assertThat(task.getJobInstanceId()).isEqualTo(100L);
+    assertThat(task.getJobPartitionId()).isEqualTo(200L);
+    // 业务字段全部从 effective config 读(message v2 已无这些字段)
     assertThat(task.getTaskType()).isEqualTo("FRESH_TYPE");
-    assertThat(task.getTraceId()).isEqualTo("fresh-trace");
     assertThat(task.getBusinessKey()).isEqualTo("fresh-biz");
     assertThat(task.getTaskSeq()).isEqualTo(99);
-    assertThat(task.getIdempotencyKey()).isEqualTo("fresh-idem");
     assertThat(task.getPayload()).isEqualTo("FRESH_PAYLOAD");
     assertThat(task.getHighWaterMarkIn()).isEqualTo("fresh-watermark");
   }
 
   @Test
-  void shouldFallbackToMessageFieldsWhenEffectiveConfigIsEmpty() {
-    // 模拟旧 orchestrator:claim 成功但 body 为 null,worker 收到全 null 的 sentinel config
-    TaskDispatchMessage message = sampleMessage("MSG_PAYLOAD");
-    EffectiveTaskConfig sentinel =
-        new EffectiveTaskConfig(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null);
-    when(workerRuntimeFacade.claim(eq("t1"), eq(42L), eq("w1"))).thenReturn(Optional.of(sentinel));
-    when(workerRuntimeFacade.execute(any())).thenReturn(new WorkerExecutionResult("42", true, ""));
-
-    executor.execute(message, "w1");
-
-    ArgumentCaptor<PulledTask> captor = ArgumentCaptor.forClass(PulledTask.class);
-    verify(workerRuntimeFacade).execute(captor.capture());
-    PulledTask task = captor.getValue();
-    assertThat(task.getJobCode()).isEqualTo("MSG_JOB");
-    assertThat(task.getTaskType()).isEqualTo("IMPORT");
-    assertThat(task.getTraceId()).isEqualTo("msg-trace");
-    assertThat(task.getBusinessKey()).isEqualTo("msg-biz");
-    assertThat(task.getPayload()).isEqualTo("MSG_PAYLOAD");
-    assertThat(task.getHighWaterMarkIn()).isEqualTo("msg-watermark");
-  }
-
-  @Test
   void shouldRejectInvalidInputs() {
     assertThat(executor.execute(null, "w1")).isNull();
-    assertThat(executor.execute(sampleMessage("p"), null)).isNull();
-    assertThat(executor.execute(sampleMessage("p"), "")).isNull();
+    assertThat(executor.execute(sampleMessage(), null)).isNull();
+    assertThat(executor.execute(sampleMessage(), "")).isNull();
     verify(workerRuntimeFacade, never()).claim(any(), any(), any());
   }
 
-  private static TaskDispatchMessage sampleMessage(String payload) {
+  private static TaskDispatchMessage sampleMessage() {
+    // P1-2.2 v2 字段:schemaVersion, tenantId, jobInstanceId, jobPartitionId, taskId,
+    //                instanceNo, jobCode, workerType, selectedWorkerId, priorityBand,
+    //                traceId, idempotencyKey, dispatchAt
     return new TaskDispatchMessage(
-        "v1",
+        "v2",
         "t1",
         100L,
         200L,
@@ -129,15 +114,10 @@ class TaskDispatchExecutorTest {
         "INST-1",
         "MSG_JOB",
         "IMPORT",
-        7,
-        "IMPORT",
         "w-pre-selected",
         "HIGH",
-        "msg-biz",
-        payload,
         "msg-trace",
         "msg-idem",
-        Instant.parse("2026-04-27T12:00:00Z"),
-        "msg-watermark");
+        Instant.parse("2026-04-27T12:00:00Z"));
   }
 }

@@ -1,6 +1,5 @@
 package com.example.batch.worker.core.support;
 
-import com.example.batch.common.context.RunModeSupport;
 import com.example.batch.common.kafka.BatchTopics;
 import com.example.batch.common.kafka.TaskDispatchMessage;
 import com.example.batch.common.logging.BatchMdc;
@@ -265,23 +264,9 @@ public abstract class AbstractTaskConsumer {
     BatchMdc.put(StructuredLogField.WORKER_TYPE, workerConfiguration().workerType());
     BatchMdc.put(
         StructuredLogField.WORKER_ID, registration == null ? null : registration.getWorkerId());
-    BatchMdc.put(StructuredLogField.RUN_MODE, resolveRunMode(message));
-  }
-
-  @SuppressWarnings("unchecked")
-  private String resolveRunMode(TaskDispatchMessage message) {
-    if (message == null || message.payload() == null || message.payload().isBlank()) {
-      return null;
-    }
-    try {
-      Object payloadObject = JsonUtils.fromJson(message.payload(), Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        return RunModeSupport.resolveCode((Map<String, Object>) payloadMap);
-      }
-    } catch (RuntimeException ignored) {
-      // payload 格式异常时忽略，保持日志正常输出（不含 run_mode）。
-    }
-    return null;
+    // P1-2.2:RUN_MODE 不再注入到 pre-claim MDC(payload 已从 message 移除);
+    // worker 业务 pipeline 通过 ExecutionContext.attributes 拿 run_mode(由
+    // DefaultTaskExecutionWrapper 在 claim 后注入),业务日志依然能看到。
   }
 
   /**

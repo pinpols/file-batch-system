@@ -59,4 +59,15 @@ public interface JobTaskMapper {
       @Param("expectedVersion") Long expectedVersion);
 
   int finishTask(FinishTaskParam param);
+
+  /**
+   * 覆盖写 task_payload(retry/reclaim 把 RunMode 持久化到 payload 用,P1-2.2 起 Kafka message 不再透传
+   * payload,worker CLAIM 时 EffectiveTaskConfig 实时读 job_task.task_payload)。
+   *
+   * @return 更新行数(0 表示 task 不存在或并发改写)
+   */
+  int updatePayload(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("taskPayload") String taskPayload);
 }
