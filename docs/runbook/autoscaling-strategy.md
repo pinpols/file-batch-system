@@ -9,6 +9,7 @@
 | **console-api** | CPU HPA | CPU 使用率 > 70% | `enabled: false` | BFF 无状态，CPU 随流量线性涨；标准做法 |
 | **worker-import** | **KEDA** by Kafka lag | consumer lag > 20 | `enabled: false` | KEDA 直接读消费滞后，比 CPU 准 |
 | **worker-export** | **KEDA** by Kafka lag | consumer lag > 20 | `enabled: false` | 同上 |
+| **worker-process** | **KEDA** by Kafka lag | consumer lag > 20 | `enabled: false` | SQL 加工任务,可能较长(staging publish)阈值同 import |
 | **worker-dispatch** | **KEDA** by Kafka lag | consumer lag > 10 | `enabled: false` | 单 dispatch 较重，阈值更小 |
 | **orchestrator** | **静态分片（默认）/ DYNAMIC + CPU HPA 或 KEDA Postgres backlog** | CPU % 或 Outbox 积压 | 2 副本 | 切到 `sharding.mode=dynamic` 才能安全自动扩，下文详述 |
 | **trigger** | **静态 HA 2 副本** | — | 1 副本（生产改 2） | Quartz 集群锁天然决定 |
@@ -196,6 +197,7 @@ helm upgrade batch helm/batch-platform/ -n batch-prod \
 - console-api: CPU HPA（min 2, max 6）
 - worker-import: KEDA Kafka lag（lagThreshold 20, max 8）
 - worker-export: KEDA Kafka lag（lagThreshold 20, max 8）
+- worker-process: KEDA Kafka lag（lagThreshold 20, max 8）
 - worker-dispatch: KEDA Kafka lag（lagThreshold 10, max 6）
 
 orchestrator / trigger 保持 values.yaml 里的 `replicaCount`，不动。

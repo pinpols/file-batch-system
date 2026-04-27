@@ -1,0 +1,130 @@
+{{- $component := "worker-process" }}
+{{- $svc := .Values.workerProcess }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  {{- if and (not $svc.hpa.enabled) (not (and $svc.keda $svc.keda.enabled)) }}
+  replicas: {{ $svc.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "batch-platform.imagePullSecrets" . | nindent 6 }}
+      {{- include "batch-platform.gracefulShutdownPod" $svc.gracefulShutdown | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "batch-platform.image" (dict "root" . "name" "batch-worker-process") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "batch-platform.gracefulShutdownLifecycle" $svc.gracefulShutdown | nindent 10 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+              protocol: TCP
+          {{- include "batch-platform.envFrom" . | nindent 10 }}
+          {{- with $svc.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- toYaml $svc.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $svc.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- include "batch-platform.scheduling" . | nindent 6 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  type: {{ $svc.service.type }}
+  selector:
+    {{- include "batch-platform.selectorLabels" (merge (dict "component" $component) .) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $svc.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- if and $svc.hpa.enabled (not (and $svc.keda $svc.keda.enabled)) }}
+---
+# CPU-based HPA（作为 KEDA 的 fallback；KEDA 开启时本 HPA 自动跳过）
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  minReplicas: {{ $svc.hpa.minReplicas }}
+  maxReplicas: {{ $svc.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.hpa.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- if and $svc.keda $svc.keda.enabled }}
+---
+# KEDA ScaledObject：按 Kafka consumer lag 扩缩，CPU HPA 让位给它
+# 前提：集群已安装 KEDA operator（helm install kedacore/keda -n keda）
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "batch-platform.labels" (merge (dict "component" $component) .) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "batch-platform.fullname" . }}-{{ $component }}
+  minReplicaCount: {{ $svc.keda.minReplicas }}
+  maxReplicaCount: {{ $svc.keda.maxReplicas }}
+  pollingInterval: {{ $svc.keda.pollingInterval | default 30 }}
+  cooldownPeriod: {{ $svc.keda.cooldownPeriod | default 120 }}
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ $.Values.kafka.bootstrapServers | quote }}
+        consumerGroup: {{ $svc.keda.consumerGroup | quote }}
+        topic: {{ $svc.keda.topic | quote }}
+        lagThreshold: {{ $svc.keda.lagThreshold | quote }}
+        offsetResetPolicy: latest
+{{- end }}

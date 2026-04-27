@@ -69,6 +69,14 @@ workerExport:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
 
+workerProcess:
+  replicaCount: 3
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
 workerDispatch:
   replicaCount: 2
   hpa:

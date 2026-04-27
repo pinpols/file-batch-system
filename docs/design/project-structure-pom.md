@@ -12,6 +12,7 @@ batch-platform
 ├── batch-worker-core
 ├── batch-worker-import
 ├── batch-worker-export
+├── batch-worker-process
 ├── batch-worker-dispatch
 ├── batch-console-api
 └── batch-e2e-tests        ← 端到端验收测试模块（独立 Maven 模块，非前端）
@@ -38,6 +39,7 @@ batch-platform
 - `batch-worker-core`：Worker 公共执行框架、任务 SPI、Kafka 消费基座，不直接承载业务持久化
 - `batch-worker-import`：文件接收 / 入库 / 导入运行日志
 - `batch-worker-export`：数据导出 / 文件生成 / 导出运行日志
+- `batch-worker-process`：系统内 SQL 加工 / 数据质量校验,WAP+bookends 5 段 + 共享 batch.process_staging
 - `batch-worker-dispatch`：文件分发 / 回执处理 / 分发运行日志
 - `batch-console-api`：控制台后端 API、检索接口、审计接口、配置维护接口，以及可选 AI 助手入口
 - `batch-e2e-tests`：端到端验收测试模块，包含全链路 E2E 用例（Import/Export/Dispatch/Outbox/多租户并发等）及 Verifier 断言框架
@@ -108,7 +110,7 @@ batch-worker-dispatch
 
 - MyBatis 持久层统一使用 `mapper/*.java + resources/mapper/*.xml`
 - Spring Data JDBC 统一使用 `repository/*.java`，且只出现在明确的定义态/配置态模块中
-- `batch-worker` 单模块表述全部废弃，统一为 `batch-worker-core / batch-worker-import / batch-worker-export / batch-worker-dispatch`
+- `batch-worker` 单模块表述全部废弃，统一为 `batch-worker-core / batch-worker-import / batch-worker-export / batch-worker-process / batch-worker-dispatch`
 - 运行态核心表的主写路径集中在 `batch-orchestrator` 和对应业务 Worker 中，不在多个模块重复维护
 
 **依赖规划原则**：
@@ -1519,6 +1521,7 @@ batch-platform
 ├── batch-worker-core
 ├── batch-worker-import
 ├── batch-worker-export
+├── batch-worker-process
 ├── batch-worker-dispatch
 ├── batch-console-api
 └── batch-e2e-tests        ← 端到端验收测试（E2E，独立模块）
@@ -1663,6 +1666,7 @@ batch-platform
 ├── batch-worker-core
 ├── batch-worker-import
 ├── batch-worker-export
+├── batch-worker-process
 ├── batch-worker-dispatch
 ├── batch-console-api
 └── batch-console-web（可选）

@@ -68,8 +68,8 @@ WHERE tenant_id='tc' AND job_code='TC_EXPORT_RISK_ALERT';
 local 环境下 worker 进程在 macOS 上闲置数小时会被系统杀掉（验证过两次）。每次场景跑前先：
 
 ```bash
-jps -l | grep worker          # 确认 3 个 worker.jar 都在
-./scripts/local/restart.sh worker-import worker-export worker-dispatch  # 必要时拉起
+jps -l | grep worker          # 确认 4 个 worker.jar 都在
+./scripts/local/restart.sh worker-import worker-export worker-process worker-dispatch  # 必要时拉起
 ```
 
 ### 2.4 异常路径需要 retry_max_count ≥ 1

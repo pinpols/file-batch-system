@@ -5,8 +5,8 @@
 # 1) 等待 Kafka 可用后创建平台需要的 topics。
 # 2) 默认使用 kafka:29092，可通过环境变量覆盖。
 # =========================================================
-#   - topic 列表: batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.dispatch,
-#                batch.task.result,batch.task.retry,batch.task.dead-letter
+#   - topic 列表: batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,
+#                batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter
 #   - 分区数：默认全部 3；可通过 KAFKA_PARTITIONS_DISPATCH / _RESULT / _RETRY / _DEAD_LETTER 单独覆盖
 #   - replication factor: 1
 #
@@ -25,7 +25,7 @@
 set -eu
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
-topics_csv="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter}"
+topics_csv="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter}"
 default_partitions="${KAFKA_TOPIC_PARTITIONS:-3}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 

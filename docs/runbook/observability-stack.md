@@ -180,7 +180,7 @@ Loki 同理：本地 filesystem，生产换对象存储 + 多副本。
 
 各 Spring Boot 服务在 `management.endpoints.web.exposure.include` 中已包含 `prometheus`，并依赖 `micrometer-registry-prometheus` 后，`GET /actuator/prometheus` 暴露 Micrometer 指标。
 
-当前控制台、调度器和全部 worker 模块都已补齐 `micrometer-registry-prometheus`，包括 `batch-console-api`、`batch-orchestrator`、`batch-trigger`、`batch-worker-import`、`batch-worker-export`、`batch-worker-dispatch`。
+当前控制台、调度器和全部 worker 模块都已补齐 `micrometer-registry-prometheus`，包括 `batch-console-api`、`batch-orchestrator`、`batch-trigger`、`batch-worker-import`、`batch-worker-export`、`batch-worker-process`、`batch-worker-dispatch`。
 
 基础设施监控已补齐 `Prometheus + Redis exporter + Kafka exporter + PostgreSQL exporter + MinIO metrics + node_exporter + cAdvisor`，对应配置见 `docker-compose.observability.yml` 和 `docs/observability/prometheus.yml`。
 
@@ -198,6 +198,7 @@ Prometheus 本地 UI 默认可通过 `http://localhost:${PROMETHEUS_PORT:-19090}
 | batch-worker-import | 18083 | `/actuator/prometheus` |
 | batch-worker-export | 18084 | `/actuator/prometheus` |
 | batch-worker-dispatch | 18085 | `/actuator/prometheus` |
+| batch-worker-process | 18086 | `/actuator/prometheus` |
 | node-exporter | 9100 | `/metrics` |
 | cadvisor | 8080 | `/metrics` |
 | redis-exporter | 9121 | `/metrics` |
@@ -205,7 +206,7 @@ Prometheus 本地 UI 默认可通过 `http://localhost:${PROMETHEUS_PORT:-19090}
 | kafka-exporter | 9308 | `/metrics` |
 | minio | 9000 | `/minio/v2/metrics/cluster` |
 
-上表为 **本仓库 Docker 网络内** Java 监听端口（`server.port` 默认 18080–18085）。MinIO 在网内为 `9000`；宿主机映射见 `.env.local`（如 `MINIO_API_PORT=19000`）。
+上表为 **本仓库 Docker 网络内** Java 监听端口（`server.port` 默认 18080–18086）。MinIO 在网内为 `9000`；宿主机映射见 `.env.local`（如 `MINIO_API_PORT=19000`）。
 
 ## Prometheus 抓取配置片段
 
@@ -235,6 +236,10 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['worker-dispatch:18085']
+  - job_name: batch-worker-process
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['worker-process:18086']
   - job_name: redis-exporter
     static_configs:
       - targets: ['redis-exporter:9121']
