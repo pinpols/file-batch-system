@@ -24,6 +24,7 @@
 | 13 | [sla-and-quality.md](./sla-and-quality.md) | 任务 SLA / 文件到达 SLA / 数据质量校验 | 配 SLA / 补质量校验规则 |
 | 14 | [multi-tenant-and-security.md](./multi-tenant-and-security.md) | 多租户隔离边界 / 角色权限 / 密钥轮换 / 配置发布治理 / AI 输入边界 | 安全评审 / 加敏感字段 |
 | 15 | [batch-classification-and-gaps.md](./batch-classification-and-gaps.md) | 批量类型 3 维分类法（BatchType / ExecutionMode / TriggerType） + 系统缺口与 P0 落地草案 | 加新业务类型 / 评估增量执行 / 抽公共状态机 |
+| 16 | [process-worker-known-issues.md](./process-worker-known-issues.md) | PROCESS Worker 落地后的漏洞、bug、设计缺陷与下一步修复计划 | 修 PROCESS / SQL transform / staging / watermark 前 |
 
 ## 与 architecture/ 的分工
 

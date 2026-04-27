@@ -18,9 +18,10 @@
 # 前置：docker-compose 基础服务已启动（make dev-start 或
 # docker compose --env-file .env.local up -d）
 
-# 构建 6 个 app 镜像并打 batch-* 前缀（Dockerfile.app 会 COPY entrypoint.sh）
+# 构建 7 个 app 镜像并打 batch-* 前缀（Dockerfile.app 会 COPY entrypoint.sh）
 for m in batch-console-api batch-trigger batch-orchestrator \
-         batch-worker-import batch-worker-export batch-worker-dispatch; do
+         batch-worker-import batch-worker-export batch-worker-process \
+         batch-worker-dispatch; do
   DOCKER_BUILDKIT=1 docker build \
     --build-arg MODULE="$m" -f docker/Dockerfile.app \
     -t "batch-${m#batch-}:latest" --quiet .

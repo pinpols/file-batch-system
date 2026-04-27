@@ -70,7 +70,7 @@
 
 ### 4.2 Kafka topic 设计要细化
 
-当前 3 个主 topic（`batch.task.dispatch.{import|export|dispatch}`）+ 每 worker 节点的 `.node.<worker_code>` 子 topic 已经够 lo。海量场景需要：
+当前 4 个主 topic（`batch.task.dispatch.{import|export|process|dispatch}`）+ 每 worker 节点的 `.node.<worker_code>` 子 topic 已经够 lo。海量场景需要：
 
 - **按租户分 topic**（防"大租户压垮所有 worker"）：`batch.task.dispatch.import.tenant.<group>`
 - **按优先级分 topic**（高优 quotation 类 ↔ 低优 archive 类不抢线程）：`batch.task.dispatch.import.priority.{p0|p1|p2}`

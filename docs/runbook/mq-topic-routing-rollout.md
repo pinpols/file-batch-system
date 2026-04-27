@@ -24,8 +24,8 @@
 | mode | 何时选 | 代价 |
 |---|---|---|
 | `SINGLE` | 单租户 / 总量小（< 10 万/天）/ 想关分流 | topic 数最少；任何租户高峰会争抢 base topic 分区 |
-| `TENANT`（默认） | 多租户，存在大租户挤占小租户的风险 | topic 数 = 租户数 × 3（import/export/dispatch）；万级租户会让 broker 元数据膨胀 |
-| `PRIORITY` | 业务有 HIGH/NORMAL/LOW 三档优先级且高优不能被低优阻塞 | topic 数 = 3 × 3 = 9（每个 worker 类型 3 个 priorityBand）；consumer group 需按 band 拆分配合才有效果 |
+| `TENANT`（默认） | 多租户，存在大租户挤占小租户的风险 | topic 数 = 租户数 × 4（import/export/process/dispatch）；万级租户会让 broker 元数据膨胀 |
+| `PRIORITY` | 业务有 HIGH/NORMAL/LOW 三档优先级且高优不能被低优阻塞 | topic 数 = 4 × 3 = 12（每个 worker 类型 3 个 priorityBand）；consumer group 需按 band 拆分配合才有效果 |
 
 > 注意:**`TENANT` 和 `PRIORITY` 互斥**(`MqRoutingProperties.Mode` 是单值枚举),不能同时按 tenant 和 priority 分。需要双维度的话,要在代码里扩展（不在本 runbook 范围）。
 
@@ -53,7 +53,7 @@ TENANTS=(default-tenant tenant-a tenant-b)
 PARTITIONS=${KAFKA_PARTITIONS_DISPATCH:-40}
 REPLICATION=${KAFKA_REPLICATION_FACTOR:-3}
 
-for TYPE in import export dispatch; do
+for TYPE in import export process dispatch; do
   for TENANT in "${TENANTS[@]}"; do
     docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 \
       --create --if-not-exists \
@@ -65,7 +65,7 @@ done
 
 # 验证
 docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 --list \
-  | grep -E "batch.task.dispatch.(import|export|dispatch).(default-tenant|tenant-a|tenant-b)"
+  | grep -E "batch.task.dispatch.(import|export|process|dispatch).(default-tenant|tenant-a|tenant-b)"
 ```
 
 > ⚠️ 新增租户时**必须**回到这一步给新租户预创建 topic,否则 producer 写失败、outbox 堆积。建议把这套脚本放到 `tenant_config` INSERT 的 ops 流程里,做成一键。
@@ -119,7 +119,7 @@ docker exec batch-kafka kafka-consumer-groups --bootstrap-server localhost:9092 
 PARTITIONS=${KAFKA_PARTITIONS_DISPATCH:-40}
 REPLICATION=${KAFKA_REPLICATION_FACTOR:-3}
 
-for TYPE in import export dispatch; do
+for TYPE in import export process dispatch; do
   for BAND in high normal low; do
     docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 \
       --create --if-not-exists \
