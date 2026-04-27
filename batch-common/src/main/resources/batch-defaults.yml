@@ -69,6 +69,13 @@ spring:
       # 所有 worker 统一手动确认：业务处理成功后显式 ack，避免"处理失败但已提交 offset"
       # 非 worker 模块（不消费 Kafka）不受影响
       ack-mode: manual_immediate
+    consumer:
+      # 任务派发语义不能漏消息：worker 第一次订阅一个新 topic（例如 P2-5 worker-specific
+      # topic `task.dispatch.import.node.<workerId>`）时，必须从 earliest 开始消费，
+      # 否则 dispatcher 比 worker 先把消息写进去 → consumer rebalance 后 reset 到 latest
+      # 直接跳过那条任务，partition 永远 READY 不动。worker 端的 CLAIM 已是幂等
+      # （CLAIM 失败就 skip）兜底，重复消费旧消息无副作用。
+      auto-offset-reset: ${BATCH_KAFKA_CONSUMER_AUTO_OFFSET_RESET:earliest}
   data:
     redis:
       # Redis：本地 compose 宿主机映射 16379→6379；容器内由环境变量覆盖为 redis:6379

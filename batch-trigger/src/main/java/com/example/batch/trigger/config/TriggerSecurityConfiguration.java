@@ -65,6 +65,14 @@ public class TriggerSecurityConfiguration {
     private final BatchSecurityProperties securityProperties;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+      // actuator 健康检查由 docker / k8s 探针调用，不可能携带 X-Internal-Secret；
+      // SecurityFilterChain 已对 /actuator/** permitAll，但 OncePerRequestFilter 链
+      // 优先于 SecurityFilterChain 执行，必须在此显式放行。
+      return request.getRequestURI().startsWith("/actuator/");
+    }
+
+    @Override
     protected void doFilterInternal(
         HttpServletRequest request, HttpServletResponse response, FilterChain chain)
         throws ServletException, IOException {

@@ -61,6 +61,57 @@ psql_business -f "${SEED_DIR}/business_seed.sql"
 echo "Loading business edge cases..."
 psql_business -f "${SEED_DIR}/business_edge_cases.sql"
 
+# platform_seed.sql 末尾的 setval DO BLOCK 只在自身 INSERT 后推进序列；
+# platform_edge_cases.sql 也用 hardcoded id 继续插入，但没再跑 setval，
+# 导致 batch.*_id_seq 落后于实际 max(id) → orchestrator 新建实例时撞 PK 冲突
+# (Detail: Key (id)=(4006/4007) already exists)。
+# 统一在所有 seed 加载完成后再跑一次，覆盖 batch schema 全部 *_id_seq。
+echo "Aligning batch.*_id_seq with max(id) (seed 用 hardcoded id 后必须同步序列)..."
+psql_platform -c "
+DO \$\$
+DECLARE
+    rec RECORD;
+    seq_name text;
+BEGIN
+    FOR rec IN
+        SELECT c.relname AS tbl
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'batch' AND c.relkind = 'r'
+    LOOP
+        seq_name := pg_get_serial_sequence('batch.' || rec.tbl, 'id');
+        IF seq_name IS NOT NULL THEN
+            EXECUTE format(
+                'SELECT setval(%L, COALESCE((SELECT MAX(id) FROM batch.%I), 1), true)',
+                seq_name, rec.tbl);
+        END IF;
+    END LOOP;
+END \$\$;
+"
+
+# seed 注入了大量 in-progress runtime 行（job_instance/partition/task/step_instance/workflow_run
+# 处于 RUNNING/READY/WAITING/CREATED/RETRYING）。这些行的存在会让真实 launch 撞两类冲突：
+#   1) quota：占住 max_running_jobs / max_partitions_per_tenant 名额；
+#   2) CLAIM：worker 对同 partition_id 发 CLAIM 时 step_instance 已是 RUNNING/READY → 抛
+#      `job step instance claim conflict`，新 task 永远 stuck READY。
+# seed 的设计意图是「展示运行中的样例数据给前端看」，但跑真实任务时这些行会阻塞链路。
+# 加载完成后强制把所有非终态 runtime 行收尾到 TERMINATED，保留行数据但释放约束。
+echo "Closing seed-injected in-progress runtime rows to TERMINATED (避免 CLAIM/quota 冲突)..."
+psql_platform -c "
+UPDATE batch.job_instance SET instance_status='TERMINATED', finished_at=COALESCE(finished_at, now())
+  WHERE instance_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
+UPDATE batch.job_partition SET partition_status='TERMINATED', finished_at=COALESCE(finished_at, now())
+  WHERE partition_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
+UPDATE batch.job_task SET task_status='TERMINATED', finished_at=COALESCE(finished_at, now())
+  WHERE task_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
+UPDATE batch.job_step_instance SET step_status='TERMINATED', finished_at=COALESCE(finished_at, now())
+  WHERE step_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
+UPDATE batch.workflow_run SET run_status='TERMINATED', finished_at=COALESCE(finished_at, now())
+  WHERE run_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
+UPDATE batch.workflow_node_run SET node_status='TERMINATED', finished_at=COALESCE(finished_at, now())
+  WHERE node_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
+"
+
 if command -v mc >/dev/null 2>&1; then
   echo "Seeding MinIO objects..."
   tmp_dir="$(mktemp -d)"

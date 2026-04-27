@@ -25,6 +25,12 @@ spring:
     schemas:
       - batch
       - quartz
+    # docker/postgres/init/001-create-schemas.sql 在 PG initdb 阶段先创建空 batch + quartz schema，
+    # Flyway 默认拒绝在「非空 schema 但无 history 表」上 migrate。baseline-on-migrate=true 让 Flyway
+    # 把 baseline-version=1 标记为已应用（即「V1 建 schema 已由 docker init 完成」），从 V2 开始迁移。
+    # 不要把 baseline-version 改成最新版本号——那会跳过中间所有迁移。
+    baseline-on-migrate: true
+    baseline-version: 1
   datasource:
     hikari:
       # 调度侧平台库 Hikari 连接池（调度 / 状态推进 / 查询为主）
