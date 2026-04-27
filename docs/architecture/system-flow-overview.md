@@ -53,10 +53,11 @@ flowchart LR
 
   K[("Kafka<br/>batch.task.dispatch.*")]:::store
 
-  subgraph WORKERS ["执行层 · 三类 Worker"]
+  subgraph WORKERS ["执行层 · 四类 Worker"]
     direction TB
     WI["worker-import<br/>RECEIVE → ... → FEEDBACK"]:::worker
     WE["worker-export<br/>PREPARE → ... → COMPLETE"]:::worker
+    WP["worker-process<br/>PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK<br/>(WAP+bookends · staging 中转)"]:::worker
     WD["worker-dispatch<br/>PREPARE → ... → COMPLETE"]:::worker
   end
 
@@ -94,11 +95,13 @@ flowchart LR
   OUT ==>|"publish task"| K
   K ==>|"consume (import)"| WI
   K ==>|"consume (export)"| WE
+  K ==>|"consume (process)"| WP
   K ==>|"consume (dispatch)"| WD
 
   %% ─── worker 上报回 LS（控制信号 HTTP） ───────────
   WI -. "claim / heartbeat / report (HTTP)" .-> LS
   WE -. "claim / heartbeat / report (HTTP)" .-> LS
+  WP -. "claim / heartbeat / report (HTTP)" .-> LS
   WD -. "claim / heartbeat / report (HTTP)" .-> LS
   LS ==>|"UPDATE job_instance<br/>+ partition (状态机, JDBC)"| PDB
 
@@ -126,22 +129,22 @@ flowchart LR
   linkStyle 9,10,11 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
   %%   12    SCH ↔ Redis（黄虚）
   linkStyle 12 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   13..16 Kafka 链（橙）
-  linkStyle 13,14,15,16 stroke:#ef6c00,stroke-width:2.5px
-  %%   17..19 worker → LS 上报（HTTP 蓝虚 = 控制信号）
-  linkStyle 17,18,19 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   20    LS → PDB 状态机更新（绿）
-  linkStyle 20 stroke:#2e7d32,stroke-width:2.5px
-  %%   21    worker-import → biz 写（绿）
-  linkStyle 21 stroke:#2e7d32,stroke-width:2.5px
-  %%   22    worker-export 读 biz（紫虚）
-  linkStyle 22 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   23    worker-export → MinIO（外部红）
-  linkStyle 23 stroke:#c62828,stroke-width:2.5px
-  %%   24    worker-dispatch 读 MinIO（紫虚）
+  %%   13..17 Kafka 链(橙) — OUT→K + 4 条 K→worker(import/export/process/dispatch)
+  linkStyle 13,14,15,16,17 stroke:#ef6c00,stroke-width:2.5px
+  %%   18..21 worker → LS 上报(HTTP 蓝虚 = 控制信号,4 条 worker)
+  linkStyle 18,19,20,21 stroke:#1565c0,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   22    LS → PDB 状态机更新(绿)
+  linkStyle 22 stroke:#2e7d32,stroke-width:2.5px
+  %%   23    worker-import → biz 写(绿)
+  linkStyle 23 stroke:#2e7d32,stroke-width:2.5px
+  %%   24    worker-export 读 biz(紫虚)
   linkStyle 24 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
-  %%   25    worker-dispatch → 外部 target（红）
+  %%   25    worker-export → MinIO(外部红)
   linkStyle 25 stroke:#c62828,stroke-width:2.5px
+  %%   26    worker-dispatch 读 MinIO(紫虚)
+  linkStyle 26 stroke:#7b1fa2,stroke-width:1.5px,stroke-dasharray:4 3
+  %%   27    worker-dispatch → 外部 target(红)
+  linkStyle 27 stroke:#c62828,stroke-width:2.5px
 
   classDef user    fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
@@ -522,6 +525,7 @@ flowchart LR
     W_IMPORT["worker-import<br/>📈 2 → 20 实例<br/>KEDA: Kafka lag"]:::worker
     W_EXPORT["worker-export<br/>📈 1 → 10 实例<br/>KEDA: Kafka lag"]:::worker
     W_DISP["worker-dispatch<br/>📈 1 → 10 实例<br/>KEDA: Kafka lag<br/>+ 渠道熔断"]:::worker
+    W_PROCESS["worker-process<br/>📈 2 → 8 实例<br/>KEDA: Kafka lag<br/>+ WAP staging"]:::worker
   end
 
   subgraph COORD ["扩缩时的协调机制（防止多实例冲突）"]
@@ -547,6 +551,7 @@ flowchart LR
   KAFKA_LAG -.->|topic lag| W_IMPORT
   KAFKA_LAG -.->|topic lag| W_EXPORT
   KAFKA_LAG -.->|topic lag| W_DISP
+  KAFKA_LAG -.->|topic lag| W_PROCESS
 
   PROM ==> KAFKA_LAG
   PROM ==> CPU
@@ -559,9 +564,11 @@ flowchart LR
   W_IMPORT -->|consumer group| KAFKA_GROUP
   W_EXPORT -->|consumer group| KAFKA_GROUP
   W_DISP -->|consumer group| KAFKA_GROUP
+  W_PROCESS -->|consumer group| KAFKA_GROUP
   W_IMPORT -->|partition CLAIM| LEASE
   W_EXPORT -->|partition CLAIM| LEASE
   W_DISP -->|partition CLAIM| LEASE
+  W_PROCESS -->|partition CLAIM| LEASE
 
   CONSOLE -.-> PG_CONN
   ORCH -.-> PG_CONN
@@ -570,16 +577,17 @@ flowchart LR
   W_IMPORT -.-> KAFKA_PART
   W_EXPORT -.-> KAFKA_PART
   W_DISP -.-> KAFKA_PART
+  W_PROCESS -.-> KAFKA_PART
   ORCH -.-> REDIS_HA
 
   %% 信号 → 应用：黄色虚线（控制流）
-  linkStyle 0,1,2,3,4,5,6 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
+  linkStyle 0,1,2,3,4,5,6,7 stroke:#f9a825,stroke-width:1.5px,stroke-dasharray:4 3
   %% Prometheus → 信号：橙色实线（指标流）
-  linkStyle 7,8,9 stroke:#ef6c00,stroke-width:2.5px
+  linkStyle 8,9,10 stroke:#ef6c00,stroke-width:2.5px
   %% 应用 → 协调：紫色实线（DB/Redis 写）
-  linkStyle 10,11,12,13,14,15,16,17,18,19 stroke:#7b1fa2,stroke-width:1.5px
+  linkStyle 11,12,13,14,15,16,17,18,19,20,21,22 stroke:#7b1fa2,stroke-width:1.5px
   %% 应用 → 上限：红色虚线（capacity ceiling）
-  linkStyle 20,21,22,23,24,25,26,27 stroke:#c62828,stroke-width:1.2px,stroke-dasharray:5 4
+  linkStyle 23,24,25,26,27,28,29,30,31 stroke:#c62828,stroke-width:1.2px,stroke-dasharray:5 4
 
   classDef svc     fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
   classDef worker  fill:#fff3e0,stroke:#ef6c00,stroke-width:1.5px,color:#e65100;
@@ -611,7 +619,7 @@ flowchart LR
 
 ---
 
-## 2. 三类 Worker 的 Stage 流程
+## 2. 四类 Worker 的 Stage 流程
 
 每类 worker 都按"固定顺序的 stage 链"跑一个 partition。stage 定义在 `pipeline_step_definition` 表里，与 `job_code` 关联。
 
@@ -700,6 +708,41 @@ flowchart LR
 > R2: PREPARE✓ → DISPATCH✗ → RETRY✗ → COMPENSATE✓
 > R3: PREPARE✓ → DISPATCH✗ → RETRY✗ → COMPENSATE✓ → DL
 > ```
+
+### 2.4 PROCESS — 5 stage（WAP+bookends）
+
+PROCESS 解决"系统内部加工"（聚合 / 清洗 / 状态推进），**Write-Audit-Publish** 模式：先把计算结果写到 staging 隔离区，校验通过后再原子发布到 target，避免脏数据落到生产表。`COMPUTE` 由插件分派（`sqlTransformCompute` 配置驱动 / `ProcessComputePlugin` 业务自定义）。
+
+```mermaid
+flowchart LR
+  R0([task_payload<br/>含 bizDate + jobCode<br/>+ 命名参数])
+  R1[PREPARE<br/>解析 spec / 校验<br/>生成 batchKey<br/>清旧 staging]
+  R2["COMPUTE<br/>跑 sourceSql<br/>结果写 batch.process_staging<br/>(按 batchKey 隔离)"]
+  R3[VALIDATE<br/>跑 user validations<br/>SELECT bool_and ... AS pass]
+  R4["COMMIT<br/>staging → target<br/>(INSERT/UPSERT/INSERT_IGNORE)<br/>原子发布"]
+  R5[FEEDBACK<br/>清 staging<br/>上报 highWaterMarkOut]
+  END([target 表 + job_instance.high_water_mark_out])
+  STAGING([staging 保留<br/>供 forensics])
+
+  R0 --> R1 --> R2 --> R3
+  R3 -- pass --> R4 --> R5 --> END
+  R3 -- fail --> STAGING
+```
+
+| Stage | 关键动作 | 输入 | 输出 |
+|---|---|---|---|
+| PREPARE | 校验 sqlTransformCompute spec / target 表存在性 / schema allowlist；生成 `batchKey`；删除本 batchKey 历史 staging | `step_params.sqlTransformCompute` + `payload.bizDate` | `attributes.batchKey` |
+| COMPUTE | 用 `processBusinessDataSource` 跑 `sourceSql`，逐行 `jsonb_build_object` 写入 `batch.process_staging`（按 batchKey 隔离）。或走自定义 `ProcessComputePlugin.compute()` | sourceSql + 命名参数（`:tenantId / :bizDate / :highWaterMarkIn`） | staging 行数 + `attributes.stagedCount` |
+| VALIDATE | 按 `validations[].checkSql` 跑用户校验（典型：`SELECT bool_and(...) AS pass, ... AS message`）；任何一条 `pass=false` 即失败 | staging 行 + checkSql | pass/fail（fail → 跳过 COMMIT） |
+| COMMIT | `INSERT INTO target SELECT jsonb_populate_record(...) FROM staging WHERE batch_key=?` 一句原子发布；按 `writeMode` 走 INSERT / UPSERT / INSERT_IGNORE | staging | target 表写入 + `attributes.publishedCount` |
+| FEEDBACK | `DELETE FROM staging WHERE batch_key=?` 清场；从插件 / 配置写 `highWaterMarkOut` 到 attributes（orchestrator 在 success 路径下回写 `job_instance`） | publishedCount + watermark column | `high_water_mark_out` |
+
+> **失败语义差异（与 IMPORT/EXPORT/DISPATCH 对比）**：
+> - VALIDATE 失败：staging **保留**（不清），target 不变 → forensics 友好；下次 PREPARE 同 batchKey 才会清
+> - COMMIT 失败：staging 保留 + target 部分写（INSERT/UPSERT 是单语句原子，但跨语句 batch 失败可能留半成品），需业务在 target 上做幂等键防重
+> - DISPATCH 有独立的 RETRY / COMPENSATE 阶段；PROCESS **没有**——整个 task 失败由 task 层 `retry_policy` 重跑，每次重跑生成新 batchKey 走完整 5 stage
+
+> 详细 SQL 模板与运行回路见 [`../design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5；ExecutionMode.INCREMENTAL 水位回路见 §7.8。
 
 ---
 
