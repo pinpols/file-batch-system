@@ -6,6 +6,7 @@ import com.example.batch.common.enums.AlertSeverity;
 import com.example.batch.common.enums.AlertStatus;
 import com.example.batch.common.enums.ApprovalCommandStatus;
 import com.example.batch.common.enums.ApprovalType;
+import com.example.batch.common.enums.BatchType;
 import com.example.batch.common.enums.BatchWindowEndStrategy;
 import com.example.batch.common.enums.CalendarDayType;
 import com.example.batch.common.enums.CatchUpPolicyType;
@@ -191,6 +192,7 @@ public class ConsoleMetaQueryService {
     list.add(new EnumReg<>("triggerMode", TriggerMode.class));
     list.add(new EnumReg<>("catchUpPolicy", CatchUpPolicyType.class));
     list.add(new EnumReg<>("jobType", JobType.class));
+    list.add(new EnumReg<>("batchType", BatchType.class));
     list.add(new EnumReg<>("shardStrategy", ShardStrategy.class));
     list.add(new EnumReg<>("executionMode", ExecutionMode.class));
     list.add(new EnumReg<>("retryPolicy", RetryPolicyType.class));
