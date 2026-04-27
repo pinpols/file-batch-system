@@ -282,7 +282,7 @@ Redis / MinIO，应用进程本身零本地状态。审计证据见下表。
 | **orchestrator** | 分片复制（`shard-total` 控制并行度） | 每 Pod 按 `SHARD_INDEX` 只处理自己那片 outbox；ShedLock 协调"单例"定时任务 |
 | **trigger** | 完全对等复制 | Quartz 集群模式抢占触发；多实例同时跑不会重复执行 job |
 | **console-api** | 完全无状态，任意副本数 | JWT 验签无共享状态；SSE 推送通过 Redis Pub/Sub 广播到所有实例 |
-| **worker-import / export / dispatch** | **HPA 已配置**，按 Kafka lag 或 CPU 自动伸缩 | Kafka partition 自动再平衡；新 Pod 加入 consumer group 自动分到任务 |
+| **worker-import / export / process / dispatch** | **HPA 已配置**，按 Kafka lag 或 CPU 自动伸缩 | Kafka partition 自动再平衡；新 Pod 加入 consumer group 自动分到任务 |
 
 ### 多副本防重复机制（已全部落地）
 

@@ -27,7 +27,7 @@
 批量调度平台是一套**多租户、多工作类型**的企业级批量任务编排与执行系统。核心职责：
 
 - **调度与编排**（batch-orchestrator）：接收触发请求、构建执行计划、通过 DAG 编排工作流节点、管理分区生命周期
-- **任务执行**（batch-worker-import / export / dispatch）：从 Kafka 消费分发事件、执行业务阶段管道（parse → validate → load 等）、回报结果
+- **任务执行**（batch-worker-import / export / process / dispatch）：从 Kafka 消费分发事件、执行业务阶段管道（PROCESS 走 WAP+bookends:prepare → compute → validate → commit → feedback;其它 worker 各自固定 stage 模板）、回报结果
 - **文件治理**：延迟告警、到达组聚合、归档清理、SLA 监控
 - **可观测性**：结构化日志（MDC 7 字段）、Prometheus 指标、Grafana 仪表盘、AlertManager 告警
 
@@ -66,6 +66,7 @@ batch-worker-core          ← Worker 基础框架（库）
 batch-worker-import        ← 导入 Worker（端口 8083）
 batch-worker-export        ← 导出 Worker（端口 8084）
 batch-worker-dispatch      ← 分发 Worker（端口 8085）
+batch-worker-process       ← 加工 Worker（端口 8086,WAP+bookends 5 段 + ProcessComputePlugin 扩展点）
     └── 各自实现插件注册表 + 阶段步骤
 
 batch-console-api          ← 控制台 API + AI 网关（端口 8080）
@@ -209,6 +210,7 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | batch-worker-import | 8083 | `/api/worker/` |
 | batch-worker-export | 8084 | `/api/worker/` |
 | batch-worker-dispatch | 8085 | `/api/worker/` |
+| batch-worker-process | 8086 | `/api/worker/` |
 
 **Worker → Orchestrator 关键调用**（由 `HttpTaskExecutionClient` 执行，韧性策略：5xx/IO 指数退避，429 立即终止）：
 

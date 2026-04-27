@@ -6,8 +6,10 @@ import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
+import com.example.batch.worker.processes.domain.ProcessPayload;
 import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
+import com.example.batch.worker.processes.domain.ProcessWorkerType;
 import com.example.batch.worker.processes.stage.ComputeStep;
 import com.example.batch.worker.processes.stage.ProcessStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,7 +38,7 @@ public class ProcessStepExecutionAdapter
 
   @Override
   protected String pipelineType() {
-    return "PROCESS";
+    return ProcessWorkerType.PROCESS;
   }
 
   @Override
@@ -82,6 +84,10 @@ public class ProcessStepExecutionAdapter
         attributes.putIfAbsent(ComputeStep.ATTR_PROCESS_IMPL_CODE, String.valueOf(processImplCode));
       }
     }
+    // 与 IMPORT/EXPORT 一致:除散开 Map 外,再放一份强类型 ProcessPayload,业务 stage 可按需取
+    // attributes["processPayload"] 拿到 typed record(参考 ExportPayload / ImportPayload)。
+    attributes.putIfAbsent(
+        "processPayload", objectMapper.readValue(rawPayload, ProcessPayload.class));
   }
 
   @Override

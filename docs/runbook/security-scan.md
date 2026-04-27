@@ -165,6 +165,7 @@ trivy image batch-console-api:local
 - `batch-trigger`
 - `batch-worker-import`
 - `batch-worker-export`
+- `batch-worker-process`
 - `batch-worker-dispatch`
 
 ### 6. HTTP 动态探测

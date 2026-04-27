@@ -37,6 +37,7 @@
 - `batch-orchestrator`
 - `batch-worker-import`
 - `batch-worker-export`
+- `batch-worker-process`
 - `batch-worker-dispatch`
 - `batch-console-api`
 

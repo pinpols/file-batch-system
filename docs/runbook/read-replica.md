@@ -203,6 +203,7 @@ console-api 启动时不会创建从库连接池，走 Spring Boot 默认主 Dat
 | batch-worker-core | ❌（框架，无 DB 直连）| ❌ | — |
 | batch-worker-import | ✅ 直连主库 | ✅ 直连主库 | ❌ |
 | batch-worker-export | ✅ 直连主库 | ✅ 直连主库 | ❌ |
+| batch-worker-process | ✅ 直连主库 | ✅ 直连主库 | ❌ |
 | batch-worker-dispatch | ✅ 直连主库 | ❌ | ❌ |
 
 ### 6.2 为什么不给主链路加（**核心理由**）

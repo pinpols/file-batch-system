@@ -309,6 +309,52 @@ workerExport:
 
 # ── worker-dispatch ────────────────────────────────────────────────────────────
 
+workerProcess:
+  replicaCount: 2
+  port: 18086
+  # PROCESS 任务可能很长(SQL 加工 / staging publish);需要充分的优雅停机时间。
+  gracefulShutdown:
+    terminationGracePeriodSeconds: 180
+    preStopSleepSeconds: 15
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  service:
+    type: ClusterIP
+    port: 18086
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  keda:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 8
+    pollingInterval: 30
+    cooldownPeriod: 120
+    topic: "batch.task.dispatch.process"
+    consumerGroup: "batch-worker-process"
+    lagThreshold: "20"
+  livenessProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 18086
+    initialDelaySeconds: 40
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /actuator/health/readiness
+      port: 18086
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+
 workerDispatch:
   replicaCount: 2
   port: 18085

@@ -191,3 +191,24 @@ CREATE INDEX IF NOT EXISTS idx_risk_alert_tenant_date
     ON biz.risk_alert (tenant_id, alert_date);
 CREATE INDEX IF NOT EXISTS idx_risk_alert_entity
     ON biz.risk_alert (tenant_id, entity_id, alert_date);
+
+-- ---------------------------------------------------------
+-- PROCESS WAP demo: order event source + account summary target.
+-- 用于 sqlTransformCompute e2e:聚合 process_order_event → process_account_summary。
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS biz.process_order_event (
+    tenant_id   VARCHAR(32)    NOT NULL,
+    account_id  VARCHAR(32)    NOT NULL,
+    biz_date    DATE           NOT NULL,
+    event_id    BIGINT         NOT NULL,
+    amount      NUMERIC(18, 2) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS biz.process_account_summary (
+    tenant_id        VARCHAR(32)    NOT NULL,
+    account_id       VARCHAR(32)    NOT NULL,
+    biz_date         DATE           NOT NULL,
+    total_amount     NUMERIC(18, 2) NOT NULL,
+    high_water_mark  BIGINT         NOT NULL,
+    PRIMARY KEY (tenant_id, account_id, biz_date)
+);

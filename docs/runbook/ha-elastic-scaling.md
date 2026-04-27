@@ -105,11 +105,12 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 | worker-dispatch | 120s | 15s | Kafka leave + 完成在跑 task |
 | worker-import | 180s | 15s | 长 task（>1 min 常见）需要 |
 | worker-export | 180s | 15s | 大文件生成更长，超时仍由 PartitionLeaseReclaim 兜底 |
+| worker-process | 180s | 15s | SQL 加工 + staging publish 可能跨多 stage,与 import/export 同档 |
 
 **单 task 平均执行时间长于上面默认值时**，要在 values 里调高对应组件，否则 SIGKILL
 仍会强杀 in-flight task（虽然有 reclaim 兜底，但产生不必要的重派）。
 
-helm rendered 验证：6 个 deploy/sts 全部正确渲染 `terminationGracePeriodSeconds` +
+helm rendered 验证：7 个 deploy/sts 全部正确渲染 `terminationGracePeriodSeconds` +
 container `lifecycle.preStop` block。
 
 ### 3. DB max_connections 容量核算 ⚠️
