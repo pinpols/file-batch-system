@@ -123,10 +123,12 @@ class ConfigPackageExcelValidator {
           "LOAD",
           "FEEDBACK",
           "PREPARE",
+          "COMPUTE",
           "GENERATE",
           "STORE",
           "REGISTER",
           "COMPLETE",
+          "COMMIT",
           "DISPATCH",
           "ACK",
           "RETRY",
@@ -135,6 +137,7 @@ class ConfigPackageExcelValidator {
       Map.of(
           "IMPORT", Set.of("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK"),
           "EXPORT", Set.of("PREPARE", "GENERATE", "STORE", "REGISTER", "COMPLETE"),
+          "PROCESS", Set.of("PREPARE", "COMPUTE", "VALIDATE", "COMMIT", "FEEDBACK"),
           "DISPATCH", Set.of("PREPARE", "DISPATCH", "ACK", "RETRY", "COMPENSATE", "COMPLETE"));
   static final Set<String> WORKFLOW_TYPES = DictEnum.codes(WorkflowType.class);
   static final Set<String> NODE_TYPES = DictEnum.codes(WorkflowNodeType.class);

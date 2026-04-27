@@ -17,6 +17,7 @@ import lombok.experimental.Accessors;
 public enum PipelineType implements DictEnum {
   IMPORT("IMPORT", "导入"),
   EXPORT("EXPORT", "导出"),
+  PROCESS("PROCESS", "加工"),
   DISPATCH("DISPATCH", "派发");
 
   private final String code;
@@ -27,6 +28,7 @@ public enum PipelineType implements DictEnum {
     return switch (this) {
       case IMPORT -> BatchType.IMPORT;
       case EXPORT -> BatchType.EXPORT;
+      case PROCESS -> BatchType.PROCESS;
       case DISPATCH -> BatchType.DISPATCH;
     };
   }

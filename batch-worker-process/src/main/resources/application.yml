@@ -1,0 +1,49 @@
+server:
+  port: ${BATCH_WORKER_PROCESS_PORT:18086}
+
+spring:
+  application:
+    name: batch-worker-process
+  flyway:
+    enabled: false
+  config:
+    import: "classpath:batch-defaults.yml"
+  kafka:
+    listener:
+      concurrency: ${BATCH_WORKER_PROCESS_KAFKA_CONCURRENCY:4}
+    consumer:
+      max-poll-records: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_RECORDS:20}
+      fetch-min-size: ${BATCH_WORKER_PROCESS_KAFKA_FETCH_MIN_SIZE:1024}
+      fetch-max-wait: ${BATCH_WORKER_PROCESS_KAFKA_FETCH_MAX_WAIT:500}
+      max-poll-interval-ms: ${BATCH_WORKER_PROCESS_KAFKA_MAX_POLL_INTERVAL_MS:600000}
+
+batch:
+  worker:
+    type: PROCESS
+    max-concurrent-tasks: ${BATCH_WORKER_PROCESS_MAX_CONCURRENT_TASKS:4}
+    kafka:
+      subscribe-mode: ${BATCH_WORKER_KAFKA_SUBSCRIBE_MODE:PATTERN}
+      tenant-allowlist: ${BATCH_WORKER_KAFKA_TENANT_ALLOWLIST:}
+    process:
+      worker-code: ${BATCH_WORKER_PROCESS_CODE:process-node-1}
+      worker-type: PROCESS
+      tenant-id: ${BATCH_WORKER_PROCESS_TENANT_ID:default-tenant}
+      heartbeat-interval-millis: ${BATCH_WORKER_PROCESS_HEARTBEAT_INTERVAL_MILLIS:15000}
+      topic: ${BATCH_TOPIC_PROCESS_DISPATCH:batch.task.dispatch.process}
+      consumer-group-id: ${BATCH_WORKER_PROCESS_CONSUMER_GROUP_ID:batch-worker-process}
+      sql-transform:
+        allowed-schemas:
+          - biz
+        forbid-select-star: true
+        query-timeout-seconds: ${BATCH_WORKER_PROCESS_SQL_TRANSFORM_TIMEOUT_SECONDS:60}
+
+  datasource:
+    hikari:
+      maximum-pool-size: ${BATCH_WORKER_PROCESS_PLATFORM_DB_MAX_POOL_SIZE:10}
+      minimum-idle: ${BATCH_WORKER_PROCESS_PLATFORM_DB_MIN_IDLE:3}
+      connection-timeout: ${BATCH_WORKER_PROCESS_PLATFORM_DB_CONNECTION_TIMEOUT_MS:3000}
+    business:
+      hikari:
+        maximum-pool-size: ${BATCH_WORKER_PROCESS_BUSINESS_DB_MAX_POOL_SIZE:20}
+        minimum-idle: ${BATCH_WORKER_PROCESS_BUSINESS_DB_MIN_IDLE:5}
+        leak-detection-threshold: ${BATCH_WORKER_PROCESS_BUSINESS_DB_LEAK_DETECTION_THRESHOLD_MS:60000}

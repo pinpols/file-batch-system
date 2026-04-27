@@ -1,0 +1,134 @@
+package com.example.batch.worker.processes.sql;
+
+import com.example.batch.common.utils.Texts;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.List;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.select.AllColumns;
+import net.sf.jsqlparser.statement.select.AllTableColumns;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.statement.select.SelectBody;
+import net.sf.jsqlparser.statement.select.SelectItem;
+import net.sf.jsqlparser.statement.select.SetOperationList;
+import net.sf.jsqlparser.statement.select.SubSelect;
+import net.sf.jsqlparser.statement.select.WithItem;
+import net.sf.jsqlparser.util.TablesNamesFinder;
+
+/** SQL Transform 只允许配置 SELECT/WITH 源 SQL，并限制可访问 schema。 */
+public class SqlTransformComputeSqlValidator {
+
+  private final SqlTransformComputeSecurityProperties security;
+
+  public SqlTransformComputeSqlValidator(SqlTransformComputeSecurityProperties security) {
+    this.security = security;
+  }
+
+  /** 业务源 SQL 校验:AST + 禁 SELECT * + schema allowlist。 */
+  public String validateSelect(String raw) {
+    return validate(raw, true);
+  }
+
+  /**
+   * 校验 VALIDATE 阶段的用户 check SQL:AST + 禁 SELECT *,但跳过 schema allowlist (因为校验规则需要读
+   * batch.process_staging,不在业务 schema allowlist 里)。
+   */
+  public String validateUserCheckSelect(String raw) {
+    return validate(raw, false);
+  }
+
+  private String validate(String raw, boolean enforceSchemaAllowlist) {
+    String sql = raw == null ? "" : raw.trim();
+    if (!Texts.hasText(sql)) {
+      throw new IllegalArgumentException("sqlTransformCompute SQL is blank");
+    }
+
+    Statement statement;
+    try {
+      statement = CCJSqlParserUtil.parse(sql);
+    } catch (Exception e) {
+      throw new IllegalArgumentException(
+          "sqlTransformCompute SQL parse error: " + e.getMessage(), e);
+    }
+    if (!(statement instanceof Select select)) {
+      throw new IllegalArgumentException(
+          "sqlTransformCompute only allows SELECT/WITH queries, got: "
+              + statement.getClass().getSimpleName());
+    }
+    if (security == null || security.isForbidSelectStar()) {
+      checkNoSelectStar(select);
+    }
+    if (enforceSchemaAllowlist
+        && security != null
+        && security.getAllowedSchemas() != null
+        && !security.getAllowedSchemas().isEmpty()) {
+      checkAllowedSchemas(statement, security.getAllowedSchemas());
+    }
+    return sql;
+  }
+
+  private void checkNoSelectStar(Select select) {
+    Deque<SelectBody> queue = new ArrayDeque<>();
+    if (select.getSelectBody() != null) {
+      queue.add(select.getSelectBody());
+    }
+    if (select.getWithItemsList() != null) {
+      for (WithItem item : select.getWithItemsList()) {
+        if (item.getSubSelect() != null && item.getSubSelect().getSelectBody() != null) {
+          queue.add(item.getSubSelect().getSelectBody());
+        }
+      }
+    }
+
+    while (!queue.isEmpty()) {
+      SelectBody body = queue.poll();
+      if (body instanceof PlainSelect plainSelect) {
+        if (plainSelect.getSelectItems() != null) {
+          for (SelectItem item : plainSelect.getSelectItems()) {
+            if (item instanceof AllColumns || item instanceof AllTableColumns) {
+              throw new IllegalArgumentException(
+                  "sqlTransformCompute forbids SELECT * / SELECT table.*;"
+                      + " enumerate columns explicitly");
+            }
+          }
+        }
+        if (plainSelect.getFromItem() instanceof SubSelect subSelect
+            && subSelect.getSelectBody() != null) {
+          queue.add(subSelect.getSelectBody());
+        }
+        if (plainSelect.getJoins() != null) {
+          plainSelect.getJoins().stream()
+              .filter(join -> join.getRightItem() instanceof SubSelect)
+              .map(join -> ((SubSelect) join.getRightItem()).getSelectBody())
+              .filter(selectBody -> selectBody != null)
+              .forEach(queue::add);
+        }
+      } else if (body instanceof SetOperationList setOperationList
+          && setOperationList.getSelects() != null) {
+        queue.addAll(setOperationList.getSelects());
+      }
+    }
+  }
+
+  private void checkAllowedSchemas(Statement statement, List<String> allowedSchemas) {
+    List<String> tableNames = new TablesNamesFinder().getTableList(statement);
+    for (String name : tableNames) {
+      int dot = name.indexOf('.');
+      if (dot <= 0) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute requires fully-qualified table names (schema.table), found: "
+                + name);
+      }
+      String schema = name.substring(0, dot).toLowerCase();
+      if (!allowedSchemas.contains(schema)) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute references disallowed schema '"
+                + schema
+                + "' - allowed: "
+                + allowedSchemas);
+      }
+    }
+  }
+}

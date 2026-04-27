@@ -4,6 +4,7 @@ public final class BatchTopics {
 
   public static final String TASK_DISPATCH_IMPORT = "batch.task.dispatch.import";
   public static final String TASK_DISPATCH_EXPORT = "batch.task.dispatch.export";
+  public static final String TASK_DISPATCH_PROCESS = "batch.task.dispatch.process";
   public static final String TASK_DISPATCH_DISPATCH = "batch.task.dispatch.dispatch";
   public static final String TASK_RESULT = "batch.task.result";
   public static final String TASK_RETRY = "batch.task.retry";

@@ -12,6 +12,7 @@ public class BatchMqTopicsProperties {
 
   private String importDispatch = BatchTopics.TASK_DISPATCH_IMPORT;
   private String exportDispatch = BatchTopics.TASK_DISPATCH_EXPORT;
+  private String processDispatch = BatchTopics.TASK_DISPATCH_PROCESS;
   private String dispatchDispatch = BatchTopics.TASK_DISPATCH_DISPATCH;
   private String taskResult = BatchTopics.TASK_RESULT;
   private String deadLetter = BatchTopics.TASK_DEAD_LETTER;
@@ -26,6 +27,9 @@ public class BatchMqTopicsProperties {
     }
     if (JobType.EXPORT.code().equalsIgnoreCase(workerType)) {
       return exportDispatch;
+    }
+    if (JobType.PROCESS.code().equalsIgnoreCase(workerType)) {
+      return processDispatch;
     }
     if (JobType.DISPATCH.code().equalsIgnoreCase(workerType)) {
       return dispatchDispatch;

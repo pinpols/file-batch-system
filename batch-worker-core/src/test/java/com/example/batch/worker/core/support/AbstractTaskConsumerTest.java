@@ -182,6 +182,14 @@ class AbstractTaskConsumerTest {
   }
 
   @Test
+  void topics_resolvesProcessWorkerTypeToProcessDispatchTopic() {
+    AbstractTaskConsumer consumer =
+        buildConsumer("PROCESS", mock(TaskDispatchExecutor.class), null);
+    String[] topics = consumer.topics();
+    assertThat(topics).containsExactly("batch.task.dispatch.process");
+  }
+
+  @Test
   void topics_returnsBothBaseAndDirectTopicWhenWorkerCodePresent() {
     AbstractTaskConsumer consumer =
         buildConsumer("IMPORT", mock(TaskDispatchExecutor.class), null, "w1");

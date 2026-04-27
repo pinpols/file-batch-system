@@ -99,6 +99,7 @@ port_for() {
     console)         echo "${BATCH_CONSOLE_PORT:-18080}" ;;
     worker-import)   echo "${BATCH_WORKER_IMPORT_PORT:-18083}" ;;
     worker-export)   echo "${BATCH_WORKER_EXPORT_PORT:-18084}" ;;
+    worker-process)  echo "${BATCH_WORKER_PROCESS_PORT:-18086}" ;;
     worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-18085}" ;;
     *) echo "ERROR: 未知模块 '$1'" >&2; exit 1 ;;
   esac
@@ -112,6 +113,7 @@ maven_module_for() {
     console)         echo "batch-console-api" ;;
     worker-import)   echo "batch-worker-import" ;;
     worker-export)   echo "batch-worker-export" ;;
+    worker-process)  echo "batch-worker-process" ;;
     worker-dispatch) echo "batch-worker-dispatch" ;;
   esac
 }

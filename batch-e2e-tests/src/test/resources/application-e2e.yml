@@ -47,6 +47,13 @@ batch:
       heartbeat-interval-millis: 600000
       topic: batch.task.dispatch.export
       consumer-group-id: batch-worker-export-e2e
+    process:
+      tenant-id: t1
+      worker-code: e2e-process-1
+      worker-type: PROCESS
+      heartbeat-interval-millis: 600000
+      topic: batch.task.dispatch.process
+      consumer-group-id: batch-worker-process-e2e
     dispatch:
       tenant-id: t1
       worker-code: e2e-dispatch-1

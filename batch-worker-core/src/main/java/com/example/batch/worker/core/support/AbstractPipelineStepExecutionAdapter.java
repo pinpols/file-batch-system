@@ -49,18 +49,32 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
 
   @Override
   public final StepExecutionResponse execute(StepExecutionRequest request) {
+    Map<String, Object> sourceAttributes = request.context();
     Map<String, Object> attributes =
-        new LinkedHashMap<>(request.context() == null ? Map.of() : request.context());
+        new LinkedHashMap<>(sourceAttributes == null ? Map.of() : sourceAttributes);
     String traceId = resolveTraceId(attributes);
     injectMdc(request, attributes, traceId);
     try {
       return doExecute(request, attributes, traceId);
     } finally {
+      propagateRuntimeAttributes(sourceAttributes, attributes);
       BatchMdc.remove(StructuredLogField.TENANT_ID);
       BatchMdc.remove(StructuredLogField.TRACE_ID);
       BatchMdc.remove(StructuredLogField.JOB_INSTANCE_ID);
       BatchMdc.remove(StructuredLogField.WORKER_ID);
       BatchMdc.remove(StructuredLogField.RUN_MODE);
+    }
+  }
+
+  private void propagateRuntimeAttributes(
+      Map<String, Object> sourceAttributes, Map<String, Object> runtimeAttributes) {
+    if (sourceAttributes == null || sourceAttributes == runtimeAttributes) {
+      return;
+    }
+    try {
+      sourceAttributes.putAll(runtimeAttributes);
+    } catch (UnsupportedOperationException ignored) {
+      // Some unit tests pass immutable maps; production execution contexts are mutable.
     }
   }
 

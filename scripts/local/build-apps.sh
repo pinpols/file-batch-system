@@ -44,12 +44,12 @@ fi
   -Dlicense.skip=true \
   -Dmaven.javadoc.skip=true \
   -Dflatten.skip=true \
-  -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api \
+  -pl batch-trigger,batch-orchestrator,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-console-api \
   -am ${_CLEAN_GOAL} package -T 2C
 
 echo "==> 复制可执行 jar 到 build/runtime-jars/..."
-MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-dispatch)
-NAMES=(orchestrator trigger console worker-import worker-export worker-dispatch)
+MODULES=(batch-orchestrator batch-trigger batch-console-api batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch)
+NAMES=(orchestrator trigger console worker-import worker-export worker-process worker-dispatch)
 for i in "${!MODULES[@]}"; do
   module="${MODULES[$i]}"
   name="${NAMES[$i]}"

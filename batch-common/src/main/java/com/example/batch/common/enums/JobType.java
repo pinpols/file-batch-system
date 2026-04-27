@@ -18,6 +18,7 @@ public enum JobType implements DictEnum {
   GENERAL("GENERAL", "通用任务"),
   IMPORT("IMPORT", "导入任务"),
   EXPORT("EXPORT", "导出任务"),
+  PROCESS("PROCESS", "加工任务"),
   DISPATCH("DISPATCH", "分发任务"),
   WORKFLOW("WORKFLOW", "工作流任务");
 
@@ -30,6 +31,7 @@ public enum JobType implements DictEnum {
       case GENERAL -> BatchType.GENERAL;
       case IMPORT -> BatchType.IMPORT;
       case EXPORT -> BatchType.EXPORT;
+      case PROCESS -> BatchType.PROCESS;
       case DISPATCH -> BatchType.DISPATCH;
       case WORKFLOW -> BatchType.WORKFLOW;
     };

@@ -320,6 +320,7 @@ _clear_occupied_ports() {
     "console"
     "worker-import"
     "worker-export"
+    "worker-process"
     "worker-dispatch"
   )
   local ports=(
@@ -328,6 +329,7 @@ _clear_occupied_ports() {
     "${BATCH_CONSOLE_PORT:-18080}"
     "${BATCH_WORKER_IMPORT_PORT:-18083}"
     "${BATCH_WORKER_EXPORT_PORT:-18084}"
+    "${BATCH_WORKER_PROCESS_PORT:-18086}"
     "${BATCH_WORKER_DISPATCH_PORT:-18085}"
   )
   local found=0
@@ -363,7 +365,7 @@ _clear_occupied_ports
 START_CONSOLE="${START_CONSOLE:-1}"
 START_TRIGGER="${START_TRIGGER:-1}"
 START_WORKERS="${START_WORKERS:-1}"
-WORKERS="${WORKERS:-import,export,dispatch}"
+WORKERS="${WORKERS:-import,export,process,dispatch}"
 
 # console-api 读写分离：与 application.yml fallback / docker-compose / .env.example 对齐默认 true。
 # 本地裸 jar 若没起 postgres-replica 容器，ReadReplicaRoutingDataSource fail-open 会
@@ -400,7 +402,7 @@ trap - EXIT
 
 echo ""
 echo "全部进程已在后台运行。端口（默认）："
-echo "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | dispatch 18085"
+echo "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | process 18086 | dispatch 18085"
 echo "  Postgres 15432 | Kafka 19092 | MinIO 19000 | Redis 16379（宿主机映射）"
 echo "停止请执行: ./scripts/local/stop-all.sh"
 
@@ -415,6 +417,7 @@ _port_for_app() {
     console)        echo "${BATCH_CONSOLE_PORT:-18080}" ;;
     worker-import)  echo "${BATCH_WORKER_IMPORT_PORT:-18083}" ;;
     worker-export)  echo "${BATCH_WORKER_EXPORT_PORT:-18084}" ;;
+    worker-process) echo "${BATCH_WORKER_PROCESS_PORT:-18086}" ;;
     worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-18085}" ;;
   esac
 }

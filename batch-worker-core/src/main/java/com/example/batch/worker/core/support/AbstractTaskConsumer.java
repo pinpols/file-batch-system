@@ -398,6 +398,7 @@ public abstract class AbstractTaskConsumer {
       Map.of(
           "IMPORT", BatchTopics.TASK_DISPATCH_IMPORT,
           "EXPORT", BatchTopics.TASK_DISPATCH_EXPORT,
+          "PROCESS", BatchTopics.TASK_DISPATCH_PROCESS,
           "DISPATCH", BatchTopics.TASK_DISPATCH_DISPATCH);
 
   // workerCode 推断：按 contains 关键词顺序匹配，顺序有意义（import → export → dispatch）
@@ -405,6 +406,7 @@ public abstract class AbstractTaskConsumer {
       List.of(
           Map.entry("import", BatchTopics.TASK_DISPATCH_IMPORT),
           Map.entry("export", BatchTopics.TASK_DISPATCH_EXPORT),
+          Map.entry("process", BatchTopics.TASK_DISPATCH_PROCESS),
           Map.entry("dispatch", BatchTopics.TASK_DISPATCH_DISPATCH));
 
   private String resolveTopicByWorkerType(String workerType) {
