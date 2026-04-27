@@ -24,6 +24,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 内置 PROCESS 加工插件:基于 step_params 的"配置驱动 SQL transform",落 WAP+bookends 五段式。
@@ -115,7 +116,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     context.getAttributes().put("processedCount", stagedRows);
 
     if (Texts.hasText(spec.watermarkColumn())) {
-      Object highWaterMarkOut = queryMaxWatermark(spec, params);
+      Object highWaterMarkOut = queryMaxWatermark(spec, batchKey, context.getTenantId());
       if (highWaterMarkOut != null) {
         context
             .getAttributes()
@@ -141,11 +142,17 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     int stagedRows =
         toIntegerOrZero(context.getAttributes().get(ProcessRuntimeKeys.PROCESS_STAGED_COUNT));
     if (stagedRows == 0) {
+      if (spec.emptyResultPolicy() == SqlTransformComputeSpec.EmptyResultPolicy.SUCCESS) {
+        return ProcessStageResult.success(ProcessStage.VALIDATE);
+      }
       return ProcessStageResult.failure(
           ProcessStage.VALIDATE, "PROCESS_STAGED_EMPTY", "no rows staged for batchKey=" + batchKey);
     }
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchKey", batchKey);
+    params.put("tenantId", context.getTenantId());
+    params.put("targetSchema", spec.targetSchema());
+    params.put("targetTable", spec.targetTable());
     for (SqlTransformComputeSpec.ValidationRule rule : spec.validations()) {
       String checkSql = sqlValidator.validateUserCheckSelect(rule.checkSql());
       validateNamedParameters(checkSql, params);
@@ -176,21 +183,28 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   // ─── COMMIT ──────────────────────────────────────────────────────────────────
 
   @Override
+  @Transactional(transactionManager = "processBusinessTransactionManager")
   public ProcessStageResult commit(ProcessJobContext context) {
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchKey", batchKey);
+    params.put("tenantId", context.getTenantId());
+    params.put("targetSchema", spec.targetSchema());
+    params.put("targetTable", spec.targetTable());
     String publishSql = buildPublishSql(spec);
     int publishedRows = jdbc.update(publishSql, params);
+    int cleaned = cleanupCommittedStaging(params);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, publishedRows);
     log.info(
-        "sqlTransformCompute published: tenantId={}, batchKey={}, target={}.{}, publishedRows={}",
+        "sqlTransformCompute published: tenantId={}, batchKey={}, target={}.{}, publishedRows={},"
+            + " cleanedRows={}",
         context.getTenantId(),
         batchKey,
         spec.targetSchema(),
         spec.targetTable(),
-        publishedRows);
+        publishedRows,
+        cleaned);
     return ProcessStageResult.success(ProcessStage.COMMIT);
   }
 
@@ -199,10 +213,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   @Override
   public ProcessStageResult feedback(ProcessJobContext context) {
     String batchKey = requireBatchKey(context);
+    SqlTransformComputeSpec spec = parsedSpec(context);
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchKey", batchKey);
-    int cleaned =
-        jdbc.update("DELETE FROM batch.process_staging WHERE batch_key = :batchKey", params);
+    params.put("tenantId", context.getTenantId());
+    params.put("targetSchema", spec.targetSchema());
+    params.put("targetTable", spec.targetTable());
+    int cleaned = cleanupCommittedStaging(params);
     log.info(
         "sqlTransformCompute feedback cleaned staging: tenantId={}, batchKey={}, deletedRows={}",
         context.getTenantId(),
@@ -362,6 +379,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             SELECT jsonb_populate_record(NULL::%s, payload) AS rec
             FROM batch.process_staging
             WHERE batch_key = :batchKey
+              AND tenant_id = :tenantId
+              AND target_schema = :targetSchema
+              AND target_table = :targetTable
         ) staged
         """
             .formatted(target, columnList, selectColumns, target);
@@ -391,16 +411,35 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     return sql + " ON CONFLICT (" + conflictColumns + ") DO UPDATE SET " + update;
   }
 
-  private Object queryMaxWatermark(SqlTransformComputeSpec spec, Map<String, Object> params) {
+  private Object queryMaxWatermark(SqlTransformComputeSpec spec, String batchKey, String tenantId) {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("batchKey", batchKey);
+    params.put("tenantId", tenantId);
+    params.put("targetSchema", spec.targetSchema());
+    params.put("targetTable", spec.targetTable());
+    params.put("watermarkColumn", spec.watermarkColumn());
     String sql =
         """
-        SELECT max(base.%s)
-        FROM (
-        %s
-        ) base
-        """
-            .formatted(JdbcMappedSqlValidator.quotePg(spec.watermarkColumn()), spec.sourceSql());
+        SELECT max((payload ->> :watermarkColumn)::numeric)
+        FROM batch.process_staging
+        WHERE batch_key = :batchKey
+          AND tenant_id = :tenantId
+          AND target_schema = :targetSchema
+          AND target_table = :targetTable
+        """;
     return jdbc.queryForObject(sql, params, Object.class);
+  }
+
+  private int cleanupCommittedStaging(Map<String, Object> params) {
+    return jdbc.update(
+        """
+        DELETE FROM batch.process_staging
+        WHERE batch_key = :batchKey
+          AND tenant_id = :tenantId
+          AND target_schema = :targetSchema
+          AND target_table = :targetTable
+        """,
+        params);
   }
 
   private static int toIntegerOrZero(Object value) {

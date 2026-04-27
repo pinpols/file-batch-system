@@ -100,6 +100,8 @@ class SqlTransformComputePluginIntegrationTest {
         "insert into biz.order_event values (?, ?, ?, ?)", "t1", "A", 2L, new BigDecimal("20.00"));
     jdbcTemplate.update(
         "insert into biz.order_event values (?, ?, ?, ?)", "t1", "B", 3L, new BigDecimal("7.00"));
+    jdbcTemplate.update(
+        "insert into biz.order_event values (?, ?, ?, ?)", "t2", "X", 9L, new BigDecimal("99.00"));
   }
 
   @Test
@@ -179,6 +181,82 @@ class SqlTransformComputePluginIntegrationTest {
             jdbcTemplate.queryForObject(
                 "select count(*) from batch.process_staging", Integer.class))
         .isEqualTo(2);
+  }
+
+  @Test
+  void commitAndFeedback_filterStagingByTenantAndTarget() {
+    ProcessJobContext context = newContextWithSpec();
+
+    plugin.prepare(context);
+    plugin.compute(context);
+    jdbcTemplate.update(
+        """
+        insert into batch.process_staging (batch_key, tenant_id, target_schema, target_table, payload)
+        values (?, 't2', 'biz', 'account_summary',
+                '{"tenant_id":"t2","account_id":"X","total_amount":99.00,"high_water_mark":9}'::jsonb)
+        """,
+        context.getBatchKey());
+    ProcessStageResult validate = plugin.validate(context);
+    ProcessStageResult commit = plugin.commit(context);
+    ProcessStageResult feedback = plugin.feedback(context);
+
+    assertThat(validate.success()).isTrue();
+    assertThat(commit.success()).isTrue();
+    assertThat(feedback.success()).isTrue();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from biz.account_summary where tenant_id='t2'", Integer.class))
+        .isZero();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from batch.process_staging where tenant_id='t2'", Integer.class))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void compute_advancesWatermarkFromStagingRows_notSecondSourceQuery() {
+    jdbcTemplate.execute("drop sequence if exists biz.watermark_seq");
+    jdbcTemplate.execute("create sequence biz.watermark_seq start 1 increment 1");
+    ProcessJobContext context = newContextWithSpec();
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    spec.put(
+        "sourceSql",
+        """
+        select tenant_id,
+               account_id,
+               sum(amount) as total_amount,
+               nextval('biz.watermark_seq') as high_water_mark
+        from biz.order_event
+        where tenant_id = :tenantId
+          and event_id > cast(:highWaterMarkIn as bigint)
+        group by tenant_id, account_id
+        order by account_id
+        """);
+
+    plugin.prepare(context);
+    ProcessStageResult compute = plugin.compute(context);
+
+    assertThat(compute.success()).isTrue();
+    assertThat(context.getAttributes()).containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "2");
+  }
+
+  @Test
+  void validate_allowsEmptyResultWhenPolicyIsSuccess() {
+    ProcessJobContext context = newContextWithSpec();
+    context.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, 999L);
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    spec.put("emptyResultPolicy", "SUCCESS");
+
+    plugin.prepare(context);
+    ProcessStageResult compute = plugin.compute(context);
+    ProcessStageResult validate = plugin.validate(context);
+
+    assertThat(compute.success()).isTrue();
+    assertThat(validate.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, 0)
+        .containsEntry("processedCount", 0);
+    assertThat(context.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT);
   }
 
   @Test

@@ -5,9 +5,11 @@ import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /** 从 {@code pipeline_step_definition.step_params} 解析出的配置驱动 SQL 加工规格。 */
 public record SqlTransformComputeSpec(
@@ -20,12 +22,18 @@ public record SqlTransformComputeSpec(
     List<String> conflictColumns,
     String watermarkColumn,
     Map<String, Object> params,
-    List<ValidationRule> validations) {
+    List<ValidationRule> validations,
+    EmptyResultPolicy emptyResultPolicy) {
 
   public enum WriteMode {
     INSERT,
     UPSERT,
     INSERT_IGNORE
+  }
+
+  public enum EmptyResultPolicy {
+    FAIL,
+    SUCCESS
   }
 
   public record ColumnMapping(String source, String target) {}
@@ -35,6 +43,18 @@ public record SqlTransformComputeSpec(
    * TEXT};{@code pass=false} 即整体校验失败。框架隐式注入 {@code :batchKey} 命名参数。
    */
   public record ValidationRule(String name, String checkSql) {}
+
+  private static final Set<String> RESERVED_PARAMS =
+      Set.of(
+          "tenantId",
+          "jobCode",
+          "workerId",
+          "highWaterMarkIn",
+          "traceId",
+          "stepCode",
+          "batchKey",
+          "targetSchema",
+          "targetTable");
 
   public static SqlTransformComputeSpec parse(
       Map<String, Object> stepParams, ObjectMapper objectMapper) {
@@ -62,6 +82,9 @@ public record SqlTransformComputeSpec(
         text(firstNonNull(root.get("watermarkColumn"), root.get("watermark_column")));
     Map<String, Object> params = parseMap(firstNonNull(root.get("params"), root.get("sqlParams")));
     List<ValidationRule> validations = parseValidations(root.get("validations"));
+    EmptyResultPolicy emptyResultPolicy =
+        parseEmptyResultPolicy(
+            firstNonNull(root.get("emptyResultPolicy"), root.get("empty_result_policy")));
 
     SqlTransformComputeSpec spec =
         new SqlTransformComputeSpec(
@@ -74,7 +97,8 @@ public record SqlTransformComputeSpec(
             conflictColumns,
             watermarkColumn,
             params,
-            validations);
+            validations,
+            emptyResultPolicy);
     spec.validateIdentifiers();
     return spec;
   }
@@ -117,6 +141,13 @@ public record SqlTransformComputeSpec(
     if (Texts.hasText(watermarkColumn)) {
       JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");
     }
+    Set<String> reserved = new LinkedHashSet<>(RESERVED_PARAMS);
+    for (String paramName : params.keySet()) {
+      if (reserved.contains(paramName)) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute.params contains reserved parameter: " + paramName);
+      }
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -147,6 +178,14 @@ public record SqlTransformComputeSpec(
       return WriteMode.INSERT;
     }
     return WriteMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
+  }
+
+  private static EmptyResultPolicy parseEmptyResultPolicy(Object raw) {
+    String value = text(raw);
+    if (!Texts.hasText(value)) {
+      return EmptyResultPolicy.SUCCESS;
+    }
+    return EmptyResultPolicy.valueOf(value.trim().toUpperCase(Locale.ROOT));
   }
 
   private static List<ColumnMapping> parseColumns(Object raw) {

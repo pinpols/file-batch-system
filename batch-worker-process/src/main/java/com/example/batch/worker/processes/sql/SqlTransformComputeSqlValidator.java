@@ -31,12 +31,19 @@ public class SqlTransformComputeSqlValidator {
     return validate(raw, true);
   }
 
-  /**
-   * 校验 VALIDATE 阶段的用户 check SQL:AST + 禁 SELECT *,但跳过 schema allowlist (因为校验规则需要读
-   * batch.process_staging,不在业务 schema allowlist 里)。
-   */
+  /** 校验 VALIDATE 阶段的用户 check SQL:AST + 禁 SELECT *,且只能读取 batch.process_staging。 */
   public String validateUserCheckSelect(String raw) {
-    return validate(raw, false);
+    String sql = validate(raw, false);
+    Statement statement = parse(sql);
+    List<String> tableNames = new TablesNamesFinder().getTableList(statement);
+    for (String tableName : tableNames) {
+      if (!"batch.process_staging".equals(tableName.toLowerCase())) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute validation SQL may only read batch.process_staging, found: "
+                + tableName);
+      }
+    }
+    return sql;
   }
 
   private String validate(String raw, boolean enforceSchemaAllowlist) {
@@ -45,13 +52,7 @@ public class SqlTransformComputeSqlValidator {
       throw new IllegalArgumentException("sqlTransformCompute SQL is blank");
     }
 
-    Statement statement;
-    try {
-      statement = CCJSqlParserUtil.parse(sql);
-    } catch (Exception e) {
-      throw new IllegalArgumentException(
-          "sqlTransformCompute SQL parse error: " + e.getMessage(), e);
-    }
+    Statement statement = parse(sql);
     if (!(statement instanceof Select select)) {
       throw new IllegalArgumentException(
           "sqlTransformCompute only allows SELECT/WITH queries, got: "
@@ -67,6 +68,15 @@ public class SqlTransformComputeSqlValidator {
       checkAllowedSchemas(statement, security.getAllowedSchemas());
     }
     return sql;
+  }
+
+  private Statement parse(String sql) {
+    try {
+      return CCJSqlParserUtil.parse(sql);
+    } catch (Exception e) {
+      throw new IllegalArgumentException(
+          "sqlTransformCompute SQL parse error: " + e.getMessage(), e);
+    }
   }
 
   private void checkNoSelectStar(Select select) {
