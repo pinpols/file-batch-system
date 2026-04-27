@@ -169,7 +169,7 @@ Worker 拿到 effective config 走两个通道：
 |---|---|---|---|---|
 | **P0** ✅ | `ExecutionMode` 一等公民化（FULL / INCREMENTAL / CDC） + `job_definition.execution_mode` + `job_instance.high_water_mark_in/out` 字段 + 运行时 IN/OUT 双向打通 | 增量 / 全量分明，统一限流 / 补数视角 | DB 迁移 + console UI 加字段 + worker SDK 加 watermark 接口 | M |
 | **P0** ✅ | `BatchLifecycleStatus` 公共投影（5 个 Status 加 `lifecycle()` 方法） | 跨层逻辑统一防漂移 | 纯加方法，不破坏 DB | S |
-| **P1** | `JobType` ↔ `PipelineType` 合并为 `BatchType`（含 PROCESS） | 加 PROCESS / SYNC 改一处 | 一次 rename + 投影 | S |
+| **P1** ✅ | `JobType` ↔ `PipelineType` 合并为 `BatchType`（含 PROCESS） | 加 PROCESS / SYNC 改一处 | 一次 rename + 投影 | S |
 | **P1** | claim() 强制返回 effective config | 配置一致性 | orchestrator + worker 接口契约改动 | M |
 | **P2** | `batch-worker-process` 模块（或 worker-core 加 `ProcessStageStep`） | 把"加工类"业务从 GENERAL / 业务自写脚本里收敛 | 看业务是否真有典型场景 | M |
 | **P2** | `TriggerType.DEPENDENCY`（跨 workflow 依赖） | 业务侧解耦上下游 trigger 调用 | 一次 trigger 通道 + DSL | M |
@@ -231,6 +231,24 @@ public enum JobInstanceStatus {
 ```
 
 不改 DB，只新增方法 + 单测投影一致性（5 个枚举的所有值必须能映射到一个 lifecycle）。
+
+### 4.3 P1 第一步：`BatchType` 公共投影 ✅ 已落地
+
+> **2026-04-27 状态**：新增 `batch-common/.../enums/BatchType.java` 含 7 个枚举值（IMPORT / EXPORT / PROCESS / DISPATCH / SYNC / GENERAL / WORKFLOW），其中 PROCESS / SYNC 为占位（worker 模块按需补，§5 边界）。`JobType` / `PipelineType` 各加 `batchType()` 投影方法，单测覆盖投影完整性 + 共享业务类型一致性（IMPORT / EXPORT / DISPATCH 两边映射相等）。
+
+```java
+// batch-common/src/main/java/com/example/batch/common/enums/BatchType.java
+public enum BatchType implements DictEnum {
+  IMPORT, EXPORT, PROCESS, DISPATCH, SYNC, GENERAL, WORKFLOW
+}
+
+// JobType / PipelineType 加投影
+public BatchType batchType() { /* 1:1 映射 */ }
+```
+
+不改 DB（`job_definition.job_type` 和 `pipeline_step_definition.pipeline_type` 仍写各自字典码），仅新增公共投影,业务"按业务类型派发"的逻辑可改为依赖 `batchType()`,加 PROCESS / SYNC 时只需扩 `BatchType`。
+
+`ConsoleMetaQueryService.REGISTRATIONS` 加 `batchType` + `docs/api/console-api.openapi.yaml` 的 `CommonResponseMetaEnums` 同步追加 `batchType` / `executionMode`（后者补 P0-1 漏登记）。
 
 ---
 
