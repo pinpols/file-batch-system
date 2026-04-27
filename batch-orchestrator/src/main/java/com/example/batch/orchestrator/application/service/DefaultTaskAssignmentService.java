@@ -1,14 +1,18 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.enums.SchedulingPriorityBand;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.enums.WorkerRegistryStatus;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.orchestrator.config.PartitionLeaseProperties;
 import com.example.batch.orchestrator.config.ResourceSchedulerProperties;
+import com.example.batch.orchestrator.domain.entity.JobDefinitionRecord;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -17,11 +21,13 @@ import com.example.batch.orchestrator.domain.query.JobExecutionLogQuery;
 import com.example.batch.orchestrator.mapper.AssignWorkerParam;
 import com.example.batch.orchestrator.mapper.ClaimPartitionParam;
 import com.example.batch.orchestrator.mapper.JobExecutionLogMapper;
+import com.example.batch.orchestrator.mapper.JobInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobPartitionMapper;
 import com.example.batch.orchestrator.mapper.JobStepInstanceMapper;
 import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.MarkRunningParam;
 import com.example.batch.orchestrator.mapper.UpdateTaskStatusParam;
+import com.example.batch.orchestrator.repository.JobDefinitionRepository;
 import com.example.batch.orchestrator.repository.WorkerRegistryRepository;
 import java.time.Instant;
 import java.util.List;
@@ -56,9 +62,11 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
   private final JobTaskMapper jobTaskMapper;
   private final JobPartitionMapper jobPartitionMapper;
+  private final JobInstanceMapper jobInstanceMapper;
   private final JobStepInstanceMapper jobStepInstanceMapper;
   private final JobExecutionLogMapper jobExecutionLogMapper;
   private final WorkerRegistryRepository workerRegistryRepository;
+  private final JobDefinitionRepository jobDefinitionRepository;
   private final PartitionLeaseProperties partitionLeaseProperties;
   private final ResourceSchedulerProperties resourceSchedulerProperties;
 
@@ -220,6 +228,61 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
       throw new BizException(ResultCode.STATE_CONFLICT, "job step instance running conflict");
     }
     return jobTaskMapper.selectById(tenantId, taskId);
+  }
+
+  @Override
+  public EffectiveTaskConfig loadEffectiveConfig(String tenantId, Long taskId) {
+    JobTaskEntity task = jobTaskMapper.selectById(tenantId, taskId);
+    if (task == null) {
+      return null;
+    }
+    JobInstanceEntity instance = jobInstanceMapper.selectById(tenantId, task.getJobInstanceId());
+    if (instance == null) {
+      return null;
+    }
+    JobPartitionEntity partition =
+        task.getJobPartitionId() == null
+            ? null
+            : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
+    JobDefinitionRecord definition =
+        jobDefinitionRepository.findById(instance.getJobDefinitionId()).orElse(null);
+    String businessKey =
+        partition != null && partition.getBusinessKey() != null ? partition.getBusinessKey() : null;
+    String idempotencyKey =
+        partition != null && partition.getIdempotencyKey() != null
+            ? partition.getIdempotencyKey()
+            : null;
+    return new EffectiveTaskConfig(
+        tenantId,
+        taskId,
+        task.getJobInstanceId(),
+        task.getJobPartitionId(),
+        instance.getInstanceNo(),
+        instance.getJobCode(),
+        task.getTaskType(),
+        task.getTaskSeq(),
+        task.getTaskType(),
+        resolvePriorityBand(instance.getPriority()),
+        businessKey,
+        idempotencyKey,
+        task.getTaskPayload(),
+        instance.getTraceId(),
+        definition == null ? null : definition.executionMode(),
+        definition == null ? null : definition.watermarkField(),
+        instance.getHighWaterMarkIn(),
+        definition == null ? null : definition.retryPolicy(),
+        definition == null ? null : definition.retryMaxCount(),
+        definition == null ? null : definition.timeoutSeconds());
+  }
+
+  private static String resolvePriorityBand(Integer priority) {
+    if (priority == null || priority <= 3) {
+      return SchedulingPriorityBand.HIGH.code();
+    }
+    if (priority <= 6) {
+      return SchedulingPriorityBand.MEDIUM.code();
+    }
+    return SchedulingPriorityBand.LOW.code();
   }
 
   private boolean isWorkerClaimable(String tenantId, String workerCode, JobTaskEntity task) {

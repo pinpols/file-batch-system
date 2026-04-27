@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.context.RunModeSupport;
+import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.worker.core.domain.PulledTask;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
@@ -12,6 +13,7 @@ import com.example.batch.worker.core.support.TaskExecutionClient;
 import com.example.batch.worker.core.support.TaskExecutionWrapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -37,7 +39,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
 
   @Override
-  public boolean claim(String tenantId, Long taskId, String workerId) {
+  public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
     return taskExecutionClient.claim(tenantId, taskId, workerId);
   }
 

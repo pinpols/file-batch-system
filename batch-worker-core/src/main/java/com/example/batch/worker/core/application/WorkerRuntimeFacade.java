@@ -1,11 +1,13 @@
 package com.example.batch.worker.core.application;
 
+import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.worker.core.domain.PulledTask;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.domain.WorkerRegistration;
 import com.example.batch.worker.core.support.HeartbeatService;
 import com.example.batch.worker.core.support.TaskExecutionWrapper;
 import com.example.batch.worker.core.support.WorkerLifecycleManager;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -35,7 +37,7 @@ public class WorkerRuntimeFacade {
     workerLifecycleManager.shutdown(workerId);
   }
 
-  public boolean claim(String tenantId, Long taskId, String workerId) {
+  public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
     return taskExecutionWrapper.claim(tenantId, taskId, workerId);
   }
 
