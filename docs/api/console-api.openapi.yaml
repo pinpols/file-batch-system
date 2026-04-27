@@ -9303,6 +9303,12 @@ components:
           format: int32
         shardStrategy:
           type: string
+        executionMode:
+          type: string
+          description: "执行模式 ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,缺省 FULL"
+        watermarkField:
+          type: string
+          description: "增量模式下的水位字段名(例:update_time / id);FULL 模式下应为空"
         executionHandler:
           type: string
         paramSchema:
@@ -9317,7 +9323,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, tenantId, jobCode, jobName, jobType, queueCode, workerGroup, scheduleType, scheduleExpr, calendarCode, windowCode, retryPolicy, retryMaxCount, timeoutSeconds, shardStrategy, executionHandler, paramSchema, defaultParams, enabled, createdAt, updatedAt]
+      required: [id, tenantId, jobCode, jobName, jobType, queueCode, workerGroup, scheduleType, scheduleExpr, calendarCode, windowCode, retryPolicy, retryMaxCount, timeoutSeconds, shardStrategy, executionMode, executionHandler, paramSchema, defaultParams, enabled, createdAt, updatedAt]
     ConsoleJobInstanceResponse:
       type: object
       properties:

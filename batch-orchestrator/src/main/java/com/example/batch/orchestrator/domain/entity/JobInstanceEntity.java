@@ -41,6 +41,13 @@ public class JobInstanceEntity implements Stateful {
   private Integer failedPartitionCount;
   private String traceId;
   private String paramsSnapshot;
+
+  /** 增量模式下本次执行的水位起点(orchestrator 派发时从上次成功实例的 OUT 读出)。 */
+  private String highWaterMarkIn;
+
+  /** 增量模式下本次执行结束后的新水位(worker 完成时上报)。 */
+  private String highWaterMarkOut;
+
   private String resultSummary;
   private Instant deadlineAt;
   private Integer expectedDurationSeconds;

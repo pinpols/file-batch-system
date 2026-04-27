@@ -25,6 +25,13 @@ public class JobDefinitionEntity {
   private Integer retryMaxCount;
   private Integer timeoutSeconds;
   private String shardStrategy;
+
+  /** ExecutionMode 枚举 code:FULL / INCREMENTAL / CDC,默认 FULL,见 V73 migration。 */
+  private String executionMode;
+
+  /** 增量模式下的水位字段名(例:update_time / id);FULL 模式下可空。 */
+  private String watermarkField;
+
   private String executionHandler;
   private String paramSchema;
   private String defaultParams;

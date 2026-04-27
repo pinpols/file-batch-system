@@ -21,6 +21,8 @@
         <result column="priority" property="priority"/>
         <result column="trace_id" property="traceId"/>
         <result column="params_snapshot" property="paramsSnapshot"/>
+        <result column="high_water_mark_in" property="highWaterMarkIn"/>
+        <result column="high_water_mark_out" property="highWaterMarkOut"/>
         <result column="result_summary" property="resultSummary"/>
         <result column="deadline_at" property="deadlineAt"/>
         <result column="expected_duration_seconds" property="expectedDurationSeconds"/>

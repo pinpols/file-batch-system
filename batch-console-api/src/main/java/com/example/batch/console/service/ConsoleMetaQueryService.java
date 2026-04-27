@@ -14,6 +14,7 @@ import com.example.batch.common.enums.ConfigLifecycleStatus;
 import com.example.batch.common.enums.DeadLetterReplayStatus;
 import com.example.batch.common.enums.DictEnum;
 import com.example.batch.common.enums.ErrorSinkType;
+import com.example.batch.common.enums.ExecutionMode;
 import com.example.batch.common.enums.FileAuditOperationType;
 import com.example.batch.common.enums.FileChannelAuthType;
 import com.example.batch.common.enums.FileChannelType;
@@ -191,6 +192,7 @@ public class ConsoleMetaQueryService {
     list.add(new EnumReg<>("catchUpPolicy", CatchUpPolicyType.class));
     list.add(new EnumReg<>("jobType", JobType.class));
     list.add(new EnumReg<>("shardStrategy", ShardStrategy.class));
+    list.add(new EnumReg<>("executionMode", ExecutionMode.class));
     list.add(new EnumReg<>("retryPolicy", RetryPolicyType.class));
     list.add(new EnumReg<>("taskStatus", TaskStatus.class));
     list.add(new EnumReg<>("partitionStatus", PartitionStatus.class));

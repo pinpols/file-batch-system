@@ -17,6 +17,8 @@ public class JobDefinitionMaintenanceUpdateParam {
   private Integer retryMaxCount;
   private Integer timeoutSeconds;
   private String shardStrategy;
+  private String executionMode;
+  private String watermarkField;
   private Boolean enabled;
   private String description;
   private String updatedBy;
