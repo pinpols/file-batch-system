@@ -10,6 +10,7 @@ import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
+import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TaskDispatchOutboxService {
 
   private final OutboxEventMapper outboxEventMapper;
+  private final JobTaskMapper jobTaskMapper;
 
   /**
    * 写入一条“任务派发事件”到 outbox。
@@ -71,19 +73,18 @@ public class TaskDispatchOutboxService {
       String eventKey,
       RunMode runModeOverride) {
     Long jobPartitionId = partition != null ? partition.getId() : null;
-    String businessKey =
-        partition != null
-            ? partition.getBusinessKey()
-            : buildFallbackBusinessKey(jobInstance, task);
     String idempotencyKey =
         partition != null
             ? partition.getIdempotencyKey()
             : resolveIdempotencyKeyWithoutPartition(task, eventKey);
-    String taskPayload =
-        resolveDispatchPayload(task == null ? null : task.getTaskPayload(), runModeOverride);
+    // P1-2.2:v2 消息瘦身,业务字段(payload/businessKey/taskSeq/highWaterMarkIn)走 worker CLAIM
+    // 时 EffectiveTaskConfig 实时读 DB;此处只保留 task key + 路由元数据。
+    // runModeOverride 在 v1 时通过 payload 注入,v2 后改由 worker CLAIM 读 job_task.task_payload —
+    // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非塞进 message 临时透传。
+    persistRunModeOverride(task, runModeOverride);
     TaskDispatchMessage message =
         new TaskDispatchMessage(
-            "v1",
+            "v2",
             task.getTenantId(),
             jobInstance.getId(),
             jobPartitionId,
@@ -91,16 +92,11 @@ public class TaskDispatchOutboxService {
             jobInstance.getInstanceNo(),
             jobInstance.getJobCode(),
             task.getTaskType(),
-            task.getTaskSeq(),
-            task.getTaskType(),
             task.getAssignedWorkerCode(),
             resolvePriorityBand(jobInstance.getPriority()),
-            businessKey,
-            taskPayload,
             traceId,
             idempotencyKey,
-            Instant.now(),
-            jobInstance.getHighWaterMarkIn());
+            Instant.now());
 
     OutboxEventEntity event = new OutboxEventEntity();
     event.setTenantId(task.getTenantId());
@@ -118,13 +114,20 @@ public class TaskDispatchOutboxService {
     outboxEventMapper.insert(event);
   }
 
-  private String resolveDispatchPayload(String payloadJson, RunMode runModeOverride) {
-    if (runModeOverride == null) {
-      return payloadJson == null ? "{}" : payloadJson;
+  /**
+   * P1-2.2:把 RunMode 持久化到 job_task.task_payload。worker CLAIM 时 EffectiveTaskConfig 实时读
+   * task_payload, 看到 run_mode 即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
+   */
+  private void persistRunModeOverride(JobTaskEntity task, RunMode runModeOverride) {
+    if (runModeOverride == null || task == null || task.getId() == null) {
+      return;
     }
-    Map<String, Object> payload = parsePayloadMap(payloadJson);
+    Map<String, Object> payload = parsePayloadMap(task.getTaskPayload());
     RunModeSupport.putCanonical(payload, runModeOverride);
-    return JsonUtils.toJson(payload);
+    String merged = JsonUtils.toJson(payload);
+    jobTaskMapper.updatePayload(task.getTenantId(), task.getId(), merged);
+    // 同步内存对象,避免后续逻辑读到陈旧 payload
+    task.setTaskPayload(merged);
   }
 
   @SuppressWarnings("unchecked")
@@ -141,15 +144,6 @@ public class TaskDispatchOutboxService {
       // 载荷 JSON 异常时忽略并退回空 Map，仍可为消息打上 run_mode。
     }
     return new LinkedHashMap<>();
-  }
-
-  private static String buildFallbackBusinessKey(
-      JobInstanceEntity jobInstance, JobTaskEntity task) {
-    String instanceNo =
-        jobInstance != null && jobInstance.getInstanceNo() != null
-            ? jobInstance.getInstanceNo()
-            : "unknown";
-    return instanceNo + ":task:" + task.getId();
   }
 
   // C-9.1: idempotencyKey 不含 version，避免 Kafka 投递成功但 DB 回滚时因 version 变化生成新幂等键导致重复执行

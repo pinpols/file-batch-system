@@ -2,13 +2,14 @@ package com.example.batch.orchestrator.application.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 import com.example.batch.common.enums.RunMode;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
-import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
+import com.example.batch.orchestrator.mapper.JobTaskMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,12 +25,13 @@ import org.springframework.transaction.annotation.Transactional;
 class TaskDispatchOutboxServiceMandatoryTest {
 
   @Mock private OutboxEventMapper outboxEventMapper;
+  @Mock private JobTaskMapper jobTaskMapper;
 
   private TaskDispatchOutboxService service;
 
   @BeforeEach
   void setUp() {
-    service = new TaskDispatchOutboxService(outboxEventMapper);
+    service = new TaskDispatchOutboxService(outboxEventMapper, jobTaskMapper);
   }
 
   @Test
@@ -58,7 +60,9 @@ class TaskDispatchOutboxServiceMandatoryTest {
   }
 
   @Test
-  void writeDispatchEvent_withRunModeOverride_setsRunModeInPayload() {
+  void writeDispatchEvent_withRunModeOverride_persistsToTaskPayload() {
+    // P1-2.2:RunMode 不再塞进 Kafka message,而是 UPDATE job_task.task_payload,
+    // worker CLAIM 时由 EffectiveTaskConfig 实时读到。
     JobInstanceEntity jobInstance = new JobInstanceEntity();
     jobInstance.setId(1L);
     jobInstance.setInstanceNo("inst-002");
@@ -74,9 +78,10 @@ class TaskDispatchOutboxServiceMandatoryTest {
 
     service.writeDispatchEvent(jobInstance, task, null, "trace-2", "evt-key-2", RunMode.RETRY);
 
-    var captor = ArgumentCaptor.forClass(OutboxEventEntity.class);
-    verify(outboxEventMapper).insert(captor.capture());
-    assertThat(captor.getValue().getPayloadJson()).contains("run_mode");
+    var payloadCaptor = ArgumentCaptor.forClass(String.class);
+    verify(jobTaskMapper).updatePayload(eq("t1"), eq(20L), payloadCaptor.capture());
+    assertThat(payloadCaptor.getValue()).contains("run_mode").contains("RETRY").contains("\"key\"");
+    verify(outboxEventMapper).insert(any());
   }
 
   @Test

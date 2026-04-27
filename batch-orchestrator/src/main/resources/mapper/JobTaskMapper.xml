@@ -179,4 +179,13 @@
           and task_status = #{fromStatus}
           and version = #{expectedVersion}
     </update>
+
+    <update id="updatePayload">
+        update batch.job_task
+        set task_payload = #{taskPayload}::jsonb,
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+    </update>
 </mapper>

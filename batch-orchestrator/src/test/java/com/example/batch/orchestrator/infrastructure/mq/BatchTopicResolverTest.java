@@ -71,23 +71,18 @@ class BatchTopicResolverTest {
 
   private static TaskDispatchMessage message(String tenantId, String priorityBand) {
     return new TaskDispatchMessage(
-        "v1",
+        "v2",
         tenantId,
         1L,
         2L,
         3L,
         "INST-1",
         "JOB",
-        "TASK",
-        1,
         "IMPORT",
         null,
         priorityBand,
-        "biz-1",
-        "{}",
         "trace-1",
         "idem-1",
-        Instant.now(),
-        null);
+        Instant.now());
   }
 }

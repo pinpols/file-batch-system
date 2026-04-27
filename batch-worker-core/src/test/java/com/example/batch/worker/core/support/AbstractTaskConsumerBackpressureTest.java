@@ -24,7 +24,6 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
@@ -116,24 +115,7 @@ class AbstractTaskConsumerBackpressureTest {
     String msg =
         JsonUtils.toJson(
             new TaskDispatchMessage(
-                "v1",
-                "t1",
-                1L,
-                null,
-                1L,
-                null,
-                null,
-                "EXECUTION",
-                1,
-                "IMPORT",
-                null,
-                null,
-                null,
-                "{}",
-                "tr",
-                "k",
-                null,
-                null));
+                "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null));
 
     Future<?> f1 =
         pool.submit(
@@ -157,90 +139,11 @@ class AbstractTaskConsumerBackpressureTest {
     verify(container, times(1)).resume();
   }
 
-  @Test
-  void shouldExposeRunModeInMdcDuringConsumption() {
-    KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
-    TaskDispatchExecutor executor = mock(TaskDispatchExecutor.class);
-    WorkerRuntimeFacade runtimeFacade = mock(WorkerRuntimeFacade.class);
-    when(runtimeFacade.start(any())).thenAnswer(inv -> inv.getArgument(0));
-    when(executor.execute(any(), anyString()))
-        .thenAnswer(
-            inv -> {
-              assertThat(MDC.get("runMode")).isEqualTo("RETRY");
-              return new WorkerExecutionResult("1", true, "ok");
-            });
-
-    @SuppressWarnings("unchecked")
-    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
-    AbstractTaskConsumer consumer =
-        new AbstractTaskConsumer(registry, meterRegistryProvider) {
-          @Override
-          protected AbstractWorkerLoop workerLoop() {
-            return new AbstractWorkerLoop(runtimeFacade) {
-              @Override
-              protected WorkerConfiguration workerConfiguration() {
-                return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
-              }
-
-              @Override
-              protected String workerGroup() {
-                return "test";
-              }
-
-              @Override
-              protected int workerPort() {
-                return 0;
-              }
-            };
-          }
-
-          @Override
-          protected WorkerConfiguration workerConfiguration() {
-            return AbstractTaskConsumerBackpressureTest.this.workerConfiguration();
-          }
-
-          @Override
-          protected TaskDispatchExecutor taskDispatchExecutor() {
-            return executor;
-          }
-
-          @Override
-          protected String listenerId() {
-            return "test-listener";
-          }
-
-          @Override
-          protected DeadLetterPublisher deadLetterPublisher() {
-            return null;
-          }
-        };
-
-    String msg =
-        JsonUtils.toJson(
-            new TaskDispatchMessage(
-                "v1",
-                "t1",
-                1L,
-                null,
-                1L,
-                null,
-                null,
-                "EXECUTION",
-                1,
-                "IMPORT",
-                null,
-                null,
-                null,
-                "{\"run_mode\":\"RETRY\"}",
-                "tr",
-                "k",
-                null,
-                null));
-
-    ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg);
-
-    assertThat(MDC.get("runMode")).isNull();
-  }
+  // P1-2.2:删除原 shouldExposeRunModeInMdcDuringConsumption 测试。
+  // 原测试断言 message.payload 解析后把 run_mode 注入 MDC,P1-2.2 起 message v2 已无 payload,
+  // run_mode 改由 worker CLAIM 后通过 EffectiveTaskConfig.payload → ExecutionContext.attributes
+  // 透传给业务 pipeline,不再走 MDC。等价路径覆盖见 DefaultTaskExecutionWrapperTest
+  // .shouldExposeRunModeFromTaskPayload。
 
   private WorkerConfiguration workerConfiguration() {
     return new WorkerConfiguration() {
