@@ -167,8 +167,8 @@ Worker 拿到 effective config 走两个通道：
 
 | 优先级 | 事项 | 价值 | 影响面 | 估工 |
 |---|---|---|---|---|
-| **P0** | `ExecutionMode` 一等公民化（FULL / INCREMENTAL / CDC） + `job_definition.execution_mode` + `job_instance.high_water_mark_in/out` 字段 | 增量 / 全量分明，统一限流 / 补数视角 | DB 迁移 + console UI 加字段 + worker SDK 加 watermark 接口 | M |
-| **P0** | `BatchLifecycleStatus` 公共投影（5 个 Status 加 `lifecycle()` 方法） | 跨层逻辑统一防漂移 | 纯加方法，不破坏 DB | S |
+| **P0** ✅ | `ExecutionMode` 一等公民化（FULL / INCREMENTAL / CDC） + `job_definition.execution_mode` + `job_instance.high_water_mark_in/out` 字段 + 运行时 IN/OUT 双向打通 | 增量 / 全量分明，统一限流 / 补数视角 | DB 迁移 + console UI 加字段 + worker SDK 加 watermark 接口 | M |
+| **P0** ✅ | `BatchLifecycleStatus` 公共投影（5 个 Status 加 `lifecycle()` 方法） | 跨层逻辑统一防漂移 | 纯加方法，不破坏 DB | S |
 | **P1** | `JobType` ↔ `PipelineType` 合并为 `BatchType`（含 PROCESS） | 加 PROCESS / SYNC 改一处 | 一次 rename + 投影 | S |
 | **P1** | claim() 强制返回 effective config | 配置一致性 | orchestrator + worker 接口契约改动 | M |
 | **P2** | `batch-worker-process` 模块（或 worker-core 加 `ProcessStageStep`） | 把"加工类"业务从 GENERAL / 业务自写脚本里收敛 | 看业务是否真有典型场景 | M |
@@ -178,7 +178,9 @@ Worker 拿到 effective config 走两个通道：
 
 > 估工档位：S = 1 PR；M = 2-3 PR；L = 一个迭代。
 
-### 4.1 P0 第一步：`ExecutionMode` 落地草案
+### 4.1 P0 第一步：`ExecutionMode` 落地草案 ✅ 已落地
+
+> **2026-04-27 状态**：commit `7584359f`(模型层 + V73 migration)+ `0d64f69c`(运行时 IN/OUT 双向打通)。完整运行时回路与时序见 [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §7.8。
 
 新增枚举：
 
@@ -210,7 +212,9 @@ console-api 与 worker SDK：
 
 不做 storage migration（旧 job 默认 FULL，行为不变）。
 
-### 4.2 P0 第二步：`BatchLifecycleStatus`
+### 4.2 P0 第二步：`BatchLifecycleStatus` ✅ 已落地
+
+> **2026-04-27 状态**：commit `6ee278ab`。5 个具体 Status 投影 `lifecycle()` 方法均通过单测覆盖；`ConsoleMetaEnumRegistrationTest.EXCLUDED` 加白(派生公共投影,不对外暴露)。
 
 ```java
 // batch-common/src/main/java/com/example/batch/common/enums/BatchLifecycleStatus.java
