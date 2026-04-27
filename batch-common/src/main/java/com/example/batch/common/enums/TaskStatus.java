@@ -18,4 +18,17 @@ public enum TaskStatus implements DictEnum {
 
   private final String code;
   private final String label;
+
+  /** 投影到公共生命周期状态。TaskStatus 没有 WAITING 态（worker 视角拿到 task 时已 READY）。 */
+  public BatchLifecycleStatus lifecycle() {
+    return switch (this) {
+      case CREATED -> BatchLifecycleStatus.CREATED;
+      case READY -> BatchLifecycleStatus.READY;
+      case RUNNING -> BatchLifecycleStatus.RUNNING;
+      case SUCCESS -> BatchLifecycleStatus.SUCCESS;
+      case FAILED -> BatchLifecycleStatus.FAILED;
+      case CANCELLED -> BatchLifecycleStatus.CANCELLED;
+      case TERMINATED -> BatchLifecycleStatus.TERMINATED;
+    };
+  }
 }

@@ -20,4 +20,18 @@ public enum JobInstanceStatus implements DictEnum {
 
   private final String code;
   private final String label;
+
+  /** 投影到公共生命周期状态。PARTIAL_FAILED 归类为 FAILED 终态。 */
+  public BatchLifecycleStatus lifecycle() {
+    return switch (this) {
+      case CREATED -> BatchLifecycleStatus.CREATED;
+      case WAITING -> BatchLifecycleStatus.WAITING;
+      case READY -> BatchLifecycleStatus.READY;
+      case RUNNING -> BatchLifecycleStatus.RUNNING;
+      case SUCCESS -> BatchLifecycleStatus.SUCCESS;
+      case PARTIAL_FAILED, FAILED -> BatchLifecycleStatus.FAILED;
+      case CANCELLED -> BatchLifecycleStatus.CANCELLED;
+      case TERMINATED -> BatchLifecycleStatus.TERMINATED;
+    };
+  }
 }
