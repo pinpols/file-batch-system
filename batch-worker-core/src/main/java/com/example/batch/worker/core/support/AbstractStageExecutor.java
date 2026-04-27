@@ -45,6 +45,7 @@ public abstract class AbstractStageExecutor<
           (String) context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE);
       runtimeRepository.updatePipelineStage(
           pipelineInstanceId, currentStep.stageCode(), lastSuccessStage);
+      injectCurrentStepAttributes(context, currentStep);
       Long stepRunId =
           runtimeRepository.startStepRun(
               pipelineInstanceId,
@@ -73,6 +74,14 @@ public abstract class AbstractStageExecutor<
       }
     }
     return results;
+  }
+
+  private void injectCurrentStepAttributes(C context, PipelineStepDefinition currentStep) {
+    Map<String, Object> attributes = context.getAttributes();
+    attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_CODE, currentStep.stepCode());
+    attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STAGE_CODE, currentStep.stageCode());
+    attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_IMPL_CODE, currentStep.implCode());
+    attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS, currentStep.stepParams());
   }
 
   /** 加载本次 pipeline 运行的有序步骤定义列表。 */

@@ -13,7 +13,8 @@ import lombok.experimental.Accessors;
  *   <li>{@link #FULL} —— 每次全量,框架不维护水位
  *   <li>{@link #INCREMENTAL} —— 按 watermark_field 增量,job_instance 持久化 high_water_mark_in /
  *       high_water_mark_out;下次实例的 IN = 上次成功的 OUT
- *   <li>{@link #CDC} —— 流式跟踪(binlog / Debezium / Flink CDC),首期占位, worker 实现按需补,目的是预留枚举位置避免后续破坏性变更
+ *   <li>{@link #CDC} —— 流式跟踪(binlog / Debezium / Flink CDC),明确不做(见
+ *       docs/design/batch-classification-and-gaps.md §5),枚举值保留为占位避免后续破坏性变更
  * </ul>
  *
  * <p>持久化字段:{@code job_definition.execution_mode}(NOT NULL DEFAULT 'FULL', 见 V73 migration)。

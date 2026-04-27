@@ -1,0 +1,231 @@
+package com.example.batch.worker.processes.sql;
+
+import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
+import com.example.batch.common.utils.Texts;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/** 从 {@code pipeline_step_definition.step_params} 解析出的配置驱动 SQL 加工规格。 */
+public record SqlTransformComputeSpec(
+    String implCode,
+    String sourceSql,
+    String targetSchema,
+    String targetTable,
+    WriteMode writeMode,
+    List<ColumnMapping> columns,
+    List<String> conflictColumns,
+    String watermarkColumn,
+    Map<String, Object> params,
+    List<ValidationRule> validations) {
+
+  public enum WriteMode {
+    INSERT,
+    UPSERT,
+    INSERT_IGNORE
+  }
+
+  public record ColumnMapping(String source, String target) {}
+
+  /**
+   * VALIDATE 阶段在 staging 上跑的数据质量规则。每条 checkSql 必须返回单行,带列 {@code pass BOOLEAN} 与可选 {@code message
+   * TEXT};{@code pass=false} 即整体校验失败。框架隐式注入 {@code :batchKey} 命名参数。
+   */
+  public record ValidationRule(String name, String checkSql) {}
+
+  public static SqlTransformComputeSpec parse(
+      Map<String, Object> stepParams, ObjectMapper objectMapper) {
+    Map<String, Object> root = extractSpecRoot(stepParams, objectMapper);
+    if (root.isEmpty()) {
+      throw new IllegalArgumentException(
+          "sqlTransformCompute spec missing in pipeline_step_definition.step_params");
+    }
+
+    String sourceSql = required(root, "sourceSql", "source_sql", "querySql", "query_sql");
+    String targetSchema = text(firstNonNull(root.get("targetSchema"), root.get("schema")));
+    if (!Texts.hasText(targetSchema)) {
+      targetSchema = "biz";
+    }
+    String targetTable = required(root, "targetTable", "target_table", "table");
+    WriteMode writeMode =
+        parseWriteMode(firstNonNull(root.get("writeMode"), root.get("write_mode")));
+    List<ColumnMapping> columns = parseColumns(root.get("columns"));
+    if (columns.isEmpty()) {
+      throw new IllegalArgumentException("sqlTransformCompute.columns is required");
+    }
+    List<String> conflictColumns =
+        parseStringList(firstNonNull(root.get("conflictColumns"), root.get("conflict_columns")));
+    String watermarkColumn =
+        text(firstNonNull(root.get("watermarkColumn"), root.get("watermark_column")));
+    Map<String, Object> params = parseMap(firstNonNull(root.get("params"), root.get("sqlParams")));
+    List<ValidationRule> validations = parseValidations(root.get("validations"));
+
+    SqlTransformComputeSpec spec =
+        new SqlTransformComputeSpec(
+            SqlTransformComputePlugin.PLUGIN_ID,
+            sourceSql,
+            targetSchema,
+            targetTable,
+            writeMode,
+            columns,
+            conflictColumns,
+            watermarkColumn,
+            params,
+            validations);
+    spec.validateIdentifiers();
+    return spec;
+  }
+
+  private static List<ValidationRule> parseValidations(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<ValidationRule> out = new ArrayList<>();
+    for (Object item : list) {
+      if (item instanceof Map<?, ?> m) {
+        String name = text(m.get("name"));
+        String checkSql = text(firstNonNull(m.get("checkSql"), m.get("check_sql")));
+        if (Texts.hasText(name) && Texts.hasText(checkSql)) {
+          out.add(new ValidationRule(name, checkSql));
+        }
+      }
+    }
+    return List.copyOf(out);
+  }
+
+  public void validateIdentifiers() {
+    JdbcMappedSqlValidator.requireIdentifier(targetSchema, "targetSchema");
+    JdbcMappedSqlValidator.requireIdentifier(targetTable, "targetTable");
+    for (ColumnMapping column : columns) {
+      JdbcMappedSqlValidator.requireIdentifier(column.source(), "source column");
+      JdbcMappedSqlValidator.requireIdentifier(column.target(), "target column");
+    }
+    for (String conflictColumn : conflictColumns) {
+      JdbcMappedSqlValidator.requireIdentifier(conflictColumn, "conflictColumn");
+      if (columns.stream().noneMatch(column -> column.target().equals(conflictColumn))) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute.conflictColumns must appear in target columns: " + conflictColumn);
+      }
+    }
+    if (writeMode != WriteMode.INSERT && conflictColumns.isEmpty()) {
+      throw new IllegalArgumentException(
+          "sqlTransformCompute.conflictColumns is required for " + writeMode);
+    }
+    if (Texts.hasText(watermarkColumn)) {
+      JdbcMappedSqlValidator.requireIdentifier(watermarkColumn, "watermarkColumn");
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> extractSpecRoot(
+      Map<String, Object> stepParams, ObjectMapper objectMapper) {
+    if (stepParams == null || stepParams.isEmpty()) {
+      return Map.of();
+    }
+    Object nested =
+        firstNonNull(
+            stepParams.get("sqlTransformCompute"), stepParams.get("sql_transform_compute"));
+    if (nested instanceof Map<?, ?> m) {
+      return copyMap(m);
+    }
+    if (nested instanceof String text && Texts.hasText(text)) {
+      try {
+        return objectMapper.readValue(text, Map.class);
+      } catch (Exception ignored) {
+        return Map.of();
+      }
+    }
+    return new LinkedHashMap<>(stepParams);
+  }
+
+  private static WriteMode parseWriteMode(Object raw) {
+    String value = text(raw);
+    if (!Texts.hasText(value)) {
+      return WriteMode.INSERT;
+    }
+    return WriteMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
+  }
+
+  private static List<ColumnMapping> parseColumns(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<ColumnMapping> out = new ArrayList<>();
+    for (Object item : list) {
+      if (item instanceof String name && Texts.hasText(name)) {
+        String column = name.trim();
+        out.add(new ColumnMapping(column, column));
+      } else if (item instanceof Map<?, ?> m) {
+        String source = text(firstNonNull(m.get("source"), m.get("from")));
+        String target = text(firstNonNull(m.get("target"), m.get("to")));
+        if (Texts.hasText(source) && Texts.hasText(target)) {
+          out.add(new ColumnMapping(source, target));
+        }
+      }
+    }
+    return List.copyOf(out);
+  }
+
+  private static List<String> parseStringList(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<String> out = new ArrayList<>();
+    for (Object item : list) {
+      String value = text(item);
+      if (Texts.hasText(value)) {
+        out.add(value);
+      }
+    }
+    return List.copyOf(out);
+  }
+
+  private static Map<String, Object> parseMap(Object raw) {
+    if (raw instanceof Map<?, ?> m) {
+      return copyMap(m);
+    }
+    return Map.of();
+  }
+
+  private static Map<String, Object> copyMap(Map<?, ?> raw) {
+    Map<String, Object> out = new LinkedHashMap<>();
+    raw.forEach((key, value) -> out.put(String.valueOf(key), value));
+    return out;
+  }
+
+  private static String required(Map<String, Object> root, String... keys) {
+    String value = text(firstNonNull(values(root, keys)));
+    if (!Texts.hasText(value)) {
+      throw new IllegalArgumentException("sqlTransformCompute." + keys[0] + " is required");
+    }
+    return value;
+  }
+
+  private static Object[] values(Map<String, Object> root, String[] keys) {
+    Object[] values = new Object[keys.length];
+    for (int i = 0; i < keys.length; i++) {
+      values[i] = root.get(keys[i]);
+    }
+    return values;
+  }
+
+  private static Object firstNonNull(Object... values) {
+    for (Object value : values) {
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private static String text(Object value) {
+    if (value == null) {
+      return null;
+    }
+    String text = String.valueOf(value).trim();
+    return Texts.hasText(text) ? text : null;
+  }
+}

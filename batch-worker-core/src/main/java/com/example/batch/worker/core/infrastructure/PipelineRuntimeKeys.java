@@ -26,6 +26,10 @@ public final class PipelineRuntimeKeys {
   public static final String PIPELINE_STEP_RUN_ID = "pipelineStepRunId";
   public static final String PIPELINE_STEP_DEFINITIONS = "pipelineStepDefinitions";
   public static final String PIPELINE_LAST_SUCCESS_STAGE = "pipelineLastSuccessStage";
+  public static final String PIPELINE_CURRENT_STEP_CODE = "pipelineCurrentStepCode";
+  public static final String PIPELINE_CURRENT_STAGE_CODE = "pipelineCurrentStageCode";
+  public static final String PIPELINE_CURRENT_STEP_IMPL_CODE = "pipelineCurrentStepImplCode";
+  public static final String PIPELINE_CURRENT_STEP_PARAMS = "pipelineCurrentStepParams";
   public static final String PIPELINE_NEXT_STEP_CODE = "pipelineNextStepCode";
   public static final String PIPELINE_NEXT_STAGE_CODE = "pipelineNextStageCode";
   public static final String JOB_INSTANCE_ID = "jobInstanceId";

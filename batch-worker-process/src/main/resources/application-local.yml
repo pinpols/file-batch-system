@@ -1,0 +1,12 @@
+server:
+  port: 18086
+
+batch:
+  worker:
+    process:
+      worker-code: process-node-local
+      worker-type: PROCESS
+      tenant-id: default-tenant
+      heartbeat-interval-millis: 15000
+      topic: batch.task.dispatch.process
+      consumer-group-id: batch-worker-process-local

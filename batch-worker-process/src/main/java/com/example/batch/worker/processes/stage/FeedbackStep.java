@@ -1,0 +1,43 @@
+package com.example.batch.worker.processes.stage;
+
+import com.example.batch.worker.processes.domain.ProcessJobContext;
+import com.example.batch.worker.processes.domain.ProcessStage;
+import com.example.batch.worker.processes.domain.ProcessStageResult;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+/**
+ * PROCESS FEEDBACK 阶段:推进水位、清理 staging、写审计 / 指标,委托到 plugin.feedback()。
+ *
+ * <p>FEEDBACK 在主链路成功后跑,异常应仅 log warn 不抛(避免一个失败的清理把整个 task 标失败,业务结果其实已写入 target)。
+ */
+@Slf4j
+@Component
+public class FeedbackStep implements ProcessStageStep {
+
+  @Override
+  public ProcessStage stage() {
+    return ProcessStage.FEEDBACK;
+  }
+
+  @Override
+  public ProcessStageResult execute(ProcessJobContext context) {
+    ProcessComputePlugin plugin = context.getResolvedPlugin();
+    if (plugin == null) {
+      return ProcessStageResult.success(stage());
+    }
+    try {
+      ProcessStageResult result = plugin.feedback(context);
+      return result == null ? ProcessStageResult.success(stage()) : result;
+    } catch (RuntimeException ex) {
+      log.warn(
+          "process feedback step swallowed exception (target row already published): tenantId={},"
+              + " jobCode={}, batchKey={}",
+          context.getTenantId(),
+          context.getJobCode(),
+          context.getBatchKey(),
+          ex);
+      return ProcessStageResult.success(stage());
+    }
+  }
+}

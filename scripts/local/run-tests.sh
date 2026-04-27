@@ -73,6 +73,7 @@ declare -a CORE_TEST_MODULES=(
   batch-worker-core
   batch-worker-import
   batch-worker-export
+  batch-worker-process
   batch-worker-dispatch
   batch-console-api
 )

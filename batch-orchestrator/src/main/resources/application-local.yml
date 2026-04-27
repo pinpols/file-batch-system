@@ -129,6 +129,7 @@ batch:
     topics:
       import-dispatch: batch.task.dispatch.import
       export-dispatch: batch.task.dispatch.export
+      process-dispatch: batch.task.dispatch.process
       dispatch-dispatch: batch.task.dispatch.dispatch
       task-result: batch.task.result
       task-retry: batch.task.retry

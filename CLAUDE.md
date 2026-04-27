@@ -93,7 +93,7 @@ public enum XxxType implements DictEnum {
 
 **核心字典：**
 - `schedule_type`：`CRON` / `FIXED_RATE` / `MANUAL`（`ScheduleType`）
-- `job_type`：`GENERAL` / `IMPORT` / `EXPORT` / `DISPATCH` / `WORKFLOW`（`JobType`）
+- `job_type`：`GENERAL` / `IMPORT` / `EXPORT` / `PROCESS` / `DISPATCH` / `WORKFLOW`（`JobType`）
 - `retry_policy`：`NONE` / `FIXED` / `EXPONENTIAL`（`RetryPolicyType`）
 - `catch_up_policy`：`NONE` / `AUTO` / `MANUAL_APPROVAL`（`CatchUpPolicyType`）
 - `workflow_type`：`DAG` / `PIPELINE` / `MIXED`（`WorkflowType`）
@@ -163,4 +163,4 @@ public enum XxxType implements DictEnum {
 模块结构固定，不可擅自增删：
 `batch-common` / `batch-trigger` / `batch-orchestrator` /
 `batch-worker-core` / `batch-worker-import` / `batch-worker-export` /
-`batch-worker-dispatch` / `batch-console-api`
+`batch-worker-process` / `batch-worker-dispatch` / `batch-console-api`

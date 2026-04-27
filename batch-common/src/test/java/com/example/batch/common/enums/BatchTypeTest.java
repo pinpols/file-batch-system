@@ -38,6 +38,7 @@ class BatchTypeTest {
     assertThat(JobType.GENERAL.batchType()).isEqualTo(BatchType.GENERAL);
     assertThat(JobType.IMPORT.batchType()).isEqualTo(BatchType.IMPORT);
     assertThat(JobType.EXPORT.batchType()).isEqualTo(BatchType.EXPORT);
+    assertThat(JobType.PROCESS.batchType()).isEqualTo(BatchType.PROCESS);
     assertThat(JobType.DISPATCH.batchType()).isEqualTo(BatchType.DISPATCH);
     assertThat(JobType.WORKFLOW.batchType()).isEqualTo(BatchType.WORKFLOW);
     for (JobType t : JobType.values()) {
@@ -49,6 +50,7 @@ class BatchTypeTest {
   void pipelineTypeProjectsToBatchType() {
     assertThat(PipelineType.IMPORT.batchType()).isEqualTo(BatchType.IMPORT);
     assertThat(PipelineType.EXPORT.batchType()).isEqualTo(BatchType.EXPORT);
+    assertThat(PipelineType.PROCESS.batchType()).isEqualTo(BatchType.PROCESS);
     assertThat(PipelineType.DISPATCH.batchType()).isEqualTo(BatchType.DISPATCH);
     for (PipelineType t : PipelineType.values()) {
       assertThat(t.batchType()).as("%s 投影不能为 null", t).isNotNull();
@@ -60,6 +62,7 @@ class BatchTypeTest {
     // 两个枚举对同一业务类型的投影必须一致,否则 console 配置和 worker 执行会脱钩
     assertThat(JobType.IMPORT.batchType()).isEqualTo(PipelineType.IMPORT.batchType());
     assertThat(JobType.EXPORT.batchType()).isEqualTo(PipelineType.EXPORT.batchType());
+    assertThat(JobType.PROCESS.batchType()).isEqualTo(PipelineType.PROCESS.batchType());
     assertThat(JobType.DISPATCH.batchType()).isEqualTo(PipelineType.DISPATCH.batchType());
   }
 }

@@ -230,6 +230,8 @@ batch:
       import-dispatch: ${BATCH_TOPIC_IMPORT_DISPATCH:batch.task.dispatch.import}
       # Export 派发 Topic
       export-dispatch: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
+      # Process 派发 Topic
+      process-dispatch: ${BATCH_TOPIC_PROCESS_DISPATCH:batch.task.dispatch.process}
       # Dispatch 派发 Topic
       dispatch-dispatch: ${BATCH_TOPIC_DISPATCH_DISPATCH:batch.task.dispatch.dispatch}
       # 任务结果 Topic（worker → orchestrator）

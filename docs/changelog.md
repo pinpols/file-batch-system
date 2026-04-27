@@ -6,6 +6,11 @@
 >
 > 按日期倒序，使用绝对日期（`YYYY-MM-DD`）。
 
+### 2026-04-28
+- **模块边界新增 `batch-worker-process`**(CLAUDE.md "## 模块边界" 同步加)。配合 P2 PROCESS 一等公民化:`JobType`/`PipelineType` 各加 `PROCESS` 枚举值,新增独立 worker 模块,与 import/export/dispatch 完全对称。
+- **`job_type` 字典加 `PROCESS`**(CLAUDE.md "核心字典" 同步)。完整列表:`GENERAL / IMPORT / EXPORT / PROCESS / DISPATCH / WORKFLOW`。`PipelineType` 同步加 `PROCESS`。`BatchTopics.TASK_DISPATCH_PROCESS` 路由到 `batch.task.dispatch.process` topic。
+- **PROCESS pipeline stage_code 字典扩展**(`pipeline_step_definition.stage_code` CHECK 约束):新增 `COMPUTE / COMMIT` 两个值,V74 migration 把 `pipeline_step_definition.stage_code` CHECK 重建为 superset。`ConfigPackageExcelValidator` 同步识别 PROCESS 5 stage:`PREPARE / COMPUTE / VALIDATE / COMMIT / FEEDBACK`。
+
 ### 2026-04-26
 - **PMD 基线 0 violation 达成 + CI 真正阻断**（maturity-assessment §6 P1 #2 收尾）。本次集中收尾后 `mvn pmd:check -fae` 全模块 BUILD SUCCESS：DispatchChannelHealthRepository 提 7 个 mapper param key 常量；ConsoleMenuRegistry 提 ROLE_VIEWER/OPERATOR/ADMIN 常量替换 53 处；ConsoleDashboardQueryService 提 UNKNOWN 常量替换 13 处；ConfigPackageExcelValidator.validateStepRows 抽出 validateImplCode 子方法（NcssCount 解除）；AbstractSingleSheetExcelService.logImportAudit 8 参数改 ImportAuditContext record；ExcelPreviewResponse secondary constructor 加 @SuppressWarnings 豁免（CLAUDE.md record 豁免规则）；9 处 FQN 改短名。Ruleset 调整：`AvoidDuplicateLiterals.maxDuplicateLiterals` 4 → 7（4-6 次局部重复属可接受），加 `exceptionList=true,false,null,UTF-8,utf-8`（语义弱字面量提常量丑）。`scripts/ci/run-full-regression.sh` 删 `\|\| true`，PMD 失败真正阻断 CI（同 jacoco 同模式）；提供 `BATCH_CI_SKIP_PMD_GATE=1` escape hatch。
 - **jacoco 覆盖率门控启用**（maturity-assessment §6 P1 第 3 步）。`pom.xml` jacoco 阈值从 60%（不可达）降到 25%（起步基线，实测各模块 30-44%）；`scripts/ci/run-full-regression.sh` 删 `|| true` 让 `jacoco:check@check` 真正阻断 CI（之前覆盖率不达标完全静默）。调用语法注意：必须用 `jacoco:check@check` 而非裸 `jacoco:check`（后者走 default-cli execution 拿不到 pom 配的 rules）。提供 `BATCH_CI_SKIP_COVERAGE_GATE=1` env escape hatch（dev 本地 debug 用，CI 不应设）。提升节奏：6 个月内到 40% / 1 年内到 60%。

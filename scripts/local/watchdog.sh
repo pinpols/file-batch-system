@@ -10,7 +10,7 @@
 #
 # 行为：
 #   - 每 :interval_seconds (默认 30s) 检查一次：trigger / orchestrator / console-api /
-#     worker-import / worker-export / worker-dispatch 6 个进程是否存在。
+#     worker-import / worker-export / worker-process / worker-dispatch 7 个进程是否存在。
 #   - 缺失则自动调用 scripts/local/restart.sh 把缺失的拉起来。
 #   - 持续运行，Ctrl+C 退出（不是 daemon）。
 #
@@ -26,8 +26,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INTERVAL="${INTERVAL:-30}"
 
-# 监控的 6 个模块（与 jar 名匹配）
-MODULES=(trigger orchestrator console worker-import worker-export worker-dispatch)
+# 监控的 7 个模块（与 jar 名匹配）
+MODULES=(trigger orchestrator console worker-import worker-export worker-process worker-dispatch)
 
 is_running() {
   local mod="$1"
