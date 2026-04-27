@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.common.exception.BizException;
@@ -28,7 +29,7 @@ public class TaskControllerApplicationService {
 
   private final TaskExecutionService taskExecutionService;
 
-  public void claim(Long taskId, TaskClaimRequest request) {
+  public EffectiveTaskConfig claim(Long taskId, TaskClaimRequest request) {
     JobTaskEntity task =
         Guard.requireFound(
             taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId()),
@@ -36,6 +37,8 @@ public class TaskControllerApplicationService {
     if (!isClaimedBy(task, request.workerId())) {
       throw new BizException(ResultCode.CONFLICT, "task already claimed");
     }
+    // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
+    return taskExecutionService.loadEffectiveConfig(request.tenantId(), taskId);
   }
 
   public void report(Long taskId, TaskExecutionReportDto request) {

@@ -8,8 +8,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.enums.TaskStatus;
 import com.example.batch.orchestrator.application.service.TaskControllerApplicationService;
 import com.example.batch.orchestrator.application.service.TaskExecutionService;
@@ -46,6 +49,50 @@ class TaskControllerTest {
                 .contentType(APPLICATION_JSON)
                 .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isOk());
+  }
+
+  @Test
+  void shouldReturnEffectiveConfigBodyWhenClaimSucceeds() throws Exception {
+    JobTaskEntity task = new JobTaskEntity();
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setAssignedWorkerCode("w1");
+    when(taskExecutionService.assignWorker(eq("t1"), eq(10L), eq("w1"))).thenReturn(task);
+    EffectiveTaskConfig config =
+        new EffectiveTaskConfig(
+            "t1",
+            10L,
+            100L,
+            200L,
+            "INST-1",
+            "JOB-X",
+            "IMPORT",
+            1,
+            "IMPORT",
+            "HIGH",
+            "biz",
+            "idem",
+            "{}",
+            "trace-1",
+            "INCREMENTAL",
+            "update_time",
+            "wm-1",
+            "EXPONENTIAL",
+            5,
+            600);
+    when(taskExecutionService.loadEffectiveConfig("t1", 10L)).thenReturn(config);
+
+    mockMvc
+        .perform(
+            post("/internal/tasks/10/claim")
+                .contentType(APPLICATION_JSON)
+                .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+        .andExpect(jsonPath("$.jobCode").value("JOB-X"))
+        .andExpect(jsonPath("$.executionMode").value("INCREMENTAL"))
+        .andExpect(jsonPath("$.retryMaxCount").value(5))
+        .andExpect(jsonPath("$.timeoutSeconds").value(600))
+        .andExpect(jsonPath("$.highWaterMarkIn").value("wm-1"));
   }
 
   @Test

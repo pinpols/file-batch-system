@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -38,6 +39,11 @@ public class DefaultTaskExecutionService implements TaskExecutionService {
   @Override
   public JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode) {
     return taskAssignmentService.assignWorker(tenantId, taskId, workerCode);
+  }
+
+  @Override
+  public EffectiveTaskConfig loadEffectiveConfig(String tenantId, Long taskId) {
+    return taskAssignmentService.loadEffectiveConfig(tenantId, taskId);
   }
 
   @Override

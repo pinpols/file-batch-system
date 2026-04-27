@@ -170,7 +170,7 @@ Worker 拿到 effective config 走两个通道：
 | **P0** ✅ | `ExecutionMode` 一等公民化（FULL / INCREMENTAL / CDC） + `job_definition.execution_mode` + `job_instance.high_water_mark_in/out` 字段 + 运行时 IN/OUT 双向打通 | 增量 / 全量分明，统一限流 / 补数视角 | DB 迁移 + console UI 加字段 + worker SDK 加 watermark 接口 | M |
 | **P0** ✅ | `BatchLifecycleStatus` 公共投影（5 个 Status 加 `lifecycle()` 方法） | 跨层逻辑统一防漂移 | 纯加方法，不破坏 DB | S |
 | **P1** ✅ | `JobType` ↔ `PipelineType` 合并为 `BatchType`（含 PROCESS） | 加 PROCESS / SYNC 改一处 | 一次 rename + 投影 | S |
-| **P1** | claim() 强制返回 effective config | 配置一致性 | orchestrator + worker 接口契约改动 | M |
+| **P1** 🟡 | claim() 强制返回 effective config | 配置一致性 | orchestrator + worker 接口契约改动 | M |
 | **P2** | `batch-worker-process` 模块（或 worker-core 加 `ProcessStageStep`） | 把"加工类"业务从 GENERAL / 业务自写脚本里收敛 | 看业务是否真有典型场景 | M |
 | **P2** | `TriggerType.DEPENDENCY`（跨 workflow 依赖） | 业务侧解耦上下游 trigger 调用 | 一次 trigger 通道 + DSL | M |
 | **P3** | SYNC（CDC / binlog 通道） | 中长期 | 新模块 + Debezium / Flink CDC 选型 | L |
@@ -249,6 +249,35 @@ public BatchType batchType() { /* 1:1 映射 */ }
 不改 DB（`job_definition.job_type` 和 `pipeline_step_definition.pipeline_type` 仍写各自字典码），仅新增公共投影,业务"按业务类型派发"的逻辑可改为依赖 `batchType()`,加 PROCESS / SYNC 时只需扩 `BatchType`。
 
 `ConsoleMetaQueryService.REGISTRATIONS` 加 `batchType` + `docs/api/console-api.openapi.yaml` 的 `CommonResponseMetaEnums` 同步追加 `batchType` / `executionMode`（后者补 P0-1 漏登记）。
+
+### 4.4 P1 第二步：claim() 返回 effective config 🟡 Stage 1 已落地
+
+> **2026-04-27 状态**：Stage 1 完成 — orchestrator 在 `/internal/tasks/{taskId}/claim` 认领成功时回 `EffectiveTaskConfig` body，worker 优先用其字段，缺字段时 fallback 到 `TaskDispatchMessage` 旧字段。Stage 2（`TaskDispatchMessage` 瘦身只留 task key + schemaVersion v1→v2）留下一轮提交。
+
+**Stage 1 改动**（本批）：
+
+```java
+// batch-common/src/main/java/com/example/batch/common/dto/EffectiveTaskConfig.java
+public record EffectiveTaskConfig(
+    String tenantId, Long taskId, Long jobInstanceId, Long jobPartitionId, String instanceNo,
+    String jobCode, String taskType, Integer taskSeq, String workerType, String priorityBand,
+    String businessKey, String idempotencyKey, String payload, String traceId,
+    // ExecutionMode + 水位:从 job_definition + job_instance 实时读
+    String executionMode, String watermarkField, String highWaterMarkIn,
+    // Retry / timeout:从 job_definition 实时读,管理员改完立即生效
+    String retryPolicy, Integer retryMaxCount, Integer timeoutSeconds) {}
+
+// TaskExecutionClient.claim 签名:boolean → Optional<EffectiveTaskConfig>
+//   Optional.empty()  = HTTP 4xx 失败
+//   Optional.of(cfg)  = HTTP 200 成功(cfg 字段可能全 null,旧 orchestrator 兼容)
+```
+
+兼容性：
+- 旧 worker（P1-2.1 之前）忽略 response body，继续走 `TaskDispatchMessage` 字段，无感
+- 旧 orchestrator 返 bodyless 200，新 worker 收到 `EMPTY_EFFECTIVE_CONFIG` sentinel（全 null），fallback 到 message
+- `TaskDispatchExecutor.preferConfig(fromConfig, fromMessage)` 在 PulledTask 拼装时 per-field 优先 response
+
+**Stage 2 留下一批**（`TaskDispatchMessage` schemaVersion v1→v2 瘦身，只保留 task key：tenantId / taskId / jobInstanceId / jobPartitionId / instanceNo / jobCode / traceId / idempotencyKey / dispatchAt；workerType / payload / businessKey / priorityBand / highWaterMarkIn 等业务字段下线）。
 
 ---
 

@@ -2,6 +2,7 @@ package com.example.batch.worker.core.infrastructure;
 
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.constants.CommonConstants;
+import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.common.logging.StructuredLogField;
 import com.example.batch.common.utils.IdGenerator;
 import com.example.batch.common.utils.Texts;
@@ -54,22 +55,36 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     this.meterRegistry = Optional.ofNullable(meterRegistry);
   }
 
+  /**
+   * 旧 orchestrator(P1-2.1 之前)claim 返空 body 时回的占位:fields 全 null,worker 走 fallback 到
+   * TaskDispatchMessage 旧字段。语义上等价于"claim 成功但无 fresh config"。
+   */
+  private static final EffectiveTaskConfig EMPTY_EFFECTIVE_CONFIG =
+      new EffectiveTaskConfig(
+          null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+          null, null, null, null, null);
+
   @Override
-  public boolean claim(String tenantId, Long taskId, String workerId) {
+  public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
     String traceId = currentTraceId();
     String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
-    return executeClaimLike(
-        "claim",
-        () ->
-            client()
-                .post()
-                .uri("/internal/tasks/{taskId}/claim", taskId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                .body(new ClaimRequest(tenantId, workerId))
-                .retrieve()
-                .toBodilessEntity());
+    ClaimOutcome<EffectiveTaskConfig> outcome =
+        executeClaimLike(
+            "claim",
+            () ->
+                client()
+                    .post()
+                    .uri("/internal/tasks/{taskId}/claim", taskId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                    .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                    .body(new ClaimRequest(tenantId, workerId))
+                    .retrieve()
+                    .body(EffectiveTaskConfig.class));
+    if (!outcome.success()) {
+      return Optional.empty();
+    }
+    return Optional.of(outcome.body() != null ? outcome.body() : EMPTY_EFFECTIVE_CONFIG);
   }
 
   @Override
@@ -77,17 +92,18 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     String traceId = currentTraceId();
     String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
     return executeClaimLike(
-        "renew",
-        () ->
-            client()
-                .post()
-                .uri("/internal/tasks/{taskId}/renew", taskId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
-                .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
-                .body(new ClaimRequest(tenantId, workerId))
-                .retrieve()
-                .toBodilessEntity());
+            "renew",
+            () ->
+                client()
+                    .post()
+                    .uri("/internal/tasks/{taskId}/renew", taskId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, tenantId)
+                    .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, resolvedTraceId)
+                    .body(new ClaimRequest(tenantId, workerId))
+                    .retrieve()
+                    .toBodilessEntity())
+        .success();
   }
 
   @Override
@@ -194,7 +210,8 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     throw ex;
   }
 
-  private boolean executeClaimLike(String operation, Runnable call) {
+  private <T> ClaimOutcome<T> executeClaimLike(
+      String operation, java.util.function.Supplier<T> call) {
     RetryState state =
         RetryState.initial(
             properties.getClaimMaxAttempts(),
@@ -202,12 +219,13 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
             properties.getClaimMaxBackoffMillis());
     while (state.canAttempt()) {
       try {
-        call.run();
-        return true;
+        // body 可能为 null(旧 orchestrator 返 bodyless;或 renew 路径用 toBodilessEntity)。
+        // 这里只用 success() 区分"4xx 失败"vs"成功(body 是 null 还是 record 由 caller 处理)"。
+        return ClaimOutcome.success(call.get());
       } catch (HttpClientErrorException ex) {
         if (ex.getStatusCode() == HttpStatus.CONFLICT
             || ex.getStatusCode() == HttpStatus.NOT_FOUND) {
-          return false;
+          return ClaimOutcome.failed();
         }
         throw ex;
       } catch (HttpServerErrorException | ResourceAccessException ex) {
@@ -226,6 +244,17 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
       }
     }
     throw new IllegalStateException(operation + " exhausted retries without outcome");
+  }
+
+  /** claim/renew 调用结果:success=false 即 HTTP 4xx;body 仅 success=true 时有效,可能为 null。 */
+  private record ClaimOutcome<T>(boolean success, T body) {
+    static <T> ClaimOutcome<T> failed() {
+      return new ClaimOutcome<>(false, null);
+    }
+
+    static <T> ClaimOutcome<T> success(T body) {
+      return new ClaimOutcome<>(true, body);
+    }
   }
 
   /** 重试循环的不可变状态：attempt 从 1 起，backoff 每轮乘 2 但夹在 cap 内。 {@link #advance()} 返回下一轮的新 state。 */

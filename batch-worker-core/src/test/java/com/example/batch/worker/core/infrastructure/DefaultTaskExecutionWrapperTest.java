@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.dto.EffectiveTaskConfig;
 import com.example.batch.worker.core.domain.PulledTask;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
@@ -15,6 +16,7 @@ import com.example.batch.worker.core.domain.TaskExecutionReport;
 import com.example.batch.worker.core.domain.WorkerExecutionResult;
 import com.example.batch.worker.core.support.StepExecutionAdapter;
 import com.example.batch.worker.core.support.TaskExecutionClient;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -37,19 +39,23 @@ class DefaultTaskExecutionWrapperTest {
 
   @Test
   void shouldDelegateClaimToTaskExecutionClient() {
-    when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(true);
+    EffectiveTaskConfig sample =
+        new EffectiveTaskConfig(
+            "t1", 42L, 100L, 200L, "INST-1", "JOB", "IMPORT", 1, "IMPORT", "HIGH", "biz", "idem",
+            "{}", "trace", "FULL", null, null, "NONE", 0, 60);
+    when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(Optional.of(sample));
 
-    boolean result = wrapper.claim("t1", 42L, "w1");
+    Optional<EffectiveTaskConfig> result = wrapper.claim("t1", 42L, "w1");
 
-    assertThat(result).isTrue();
+    assertThat(result).contains(sample);
     verify(taskExecutionClient).claim("t1", 42L, "w1");
   }
 
   @Test
-  void shouldReturnFalseWhenClaimDenied() {
-    when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(false);
+  void shouldReturnEmptyWhenClaimDenied() {
+    when(taskExecutionClient.claim("t1", 42L, "w1")).thenReturn(Optional.empty());
 
-    assertThat(wrapper.claim("t1", 42L, "w1")).isFalse();
+    assertThat(wrapper.claim("t1", 42L, "w1")).isEmpty();
   }
 
   @Test
