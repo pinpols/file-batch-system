@@ -99,7 +99,7 @@ public class DefaultConsoleFileTemplateApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     int rows = mapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "file template not found: " + id);
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file_template.not_found", id);
     }
   }
 

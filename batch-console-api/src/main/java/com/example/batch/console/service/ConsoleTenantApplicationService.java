@@ -70,10 +70,10 @@ public class ConsoleTenantApplicationService {
   @Transactional
   public ConsoleTenantResponse createTenant(CreateTenantCommand cmd) {
     if (tenantMapper.selectByTenantId(cmd.tenantId()) != null) {
-      throw new BizException(ResultCode.CONFLICT, "tenant already exists: " + cmd.tenantId());
+      throw BizException.of(ResultCode.CONFLICT, "error.tenant.already_exists", cmd.tenantId());
     }
     if (userAccountMapper.selectByUsername(cmd.username()) != null) {
-      throw new BizException(ResultCode.CONFLICT, "username already exists: " + cmd.username());
+      throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", cmd.username());
     }
     insertTenantWithAccount(
         cmd.tenantId(),
@@ -90,11 +90,11 @@ public class ConsoleTenantApplicationService {
     String prefix = cmd.usernamePrefix();
     for (TenantSpec spec : cmd.tenants()) {
       if (tenantMapper.selectByTenantId(spec.tenantId()) != null) {
-        throw new BizException(ResultCode.CONFLICT, "tenant already exists: " + spec.tenantId());
+        throw BizException.of(ResultCode.CONFLICT, "error.tenant.already_exists", spec.tenantId());
       }
       String username = prefix + spec.tenantId();
       if (userAccountMapper.selectByUsername(username) != null) {
-        throw new BizException(ResultCode.CONFLICT, "username already exists: " + username);
+        throw BizException.of(ResultCode.CONFLICT, "error.username.already_exists", username);
       }
     }
     String passwordHash = passwordHasher.encode(cmd.plainPassword());

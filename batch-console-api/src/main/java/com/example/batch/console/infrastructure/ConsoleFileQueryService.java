@@ -262,7 +262,7 @@ class ConsoleFileQueryService {
         fileMappers.filePipelineMapper.selectByQuery(
             new FilePipelineQuery(resolved, null, id, null, null, null, null, null, pageSingle));
     if (rows.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "pipeline instance not found: " + id);
+      throw BizException.of(ResultCode.NOT_FOUND, "error.pipeline.instance_not_found", id);
     }
     return toFilePipelineResponse(rows.get(0));
   }

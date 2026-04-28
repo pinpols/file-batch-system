@@ -68,7 +68,7 @@ class ConsoleWebhookServiceTest {
 
     assertThatThrownBy(() -> service.getSubscription("t1", 99L))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("not found");
+        .hasMessageContaining("not_found");
   }
 
   @Test
@@ -109,7 +109,7 @@ class ConsoleWebhookServiceTest {
                     true,
                     "admin"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("already exists");
+        .hasMessageContaining("subscription_exists");
   }
 
   @Test
@@ -145,7 +145,7 @@ class ConsoleWebhookServiceTest {
                 service.updateSubscription(
                     "t1", 99L, "https://example.com", "JOB_SUCCESS", "s", true, "admin"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("not found");
+        .hasMessageContaining("not_found");
   }
 
   @Test

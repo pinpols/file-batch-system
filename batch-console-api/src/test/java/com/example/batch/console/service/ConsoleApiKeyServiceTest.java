@@ -63,7 +63,7 @@ class ConsoleApiKeyServiceTest {
 
     assertThatThrownBy(() -> service.detail("t1", 99L))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("not found");
+        .hasMessageContaining("not_found");
   }
 
   @Test
@@ -102,7 +102,7 @@ class ConsoleApiKeyServiceTest {
 
     assertThatThrownBy(() -> service.create("t1", "dup-key", "read", Instant.now(), "admin"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("already exists");
+        .hasMessageContaining("name_exists");
   }
 
   @Test
@@ -122,6 +122,6 @@ class ConsoleApiKeyServiceTest {
 
     assertThatThrownBy(() -> service.revoke("t1", 99L, "admin"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("not found");
+        .hasMessageContaining("not_found");
   }
 }

@@ -347,7 +347,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     }
     Object parsed = JsonUtils.fromJson(value, Object.class);
     if (parsed == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must be valid JSON");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.field.must_be_valid_json", fieldName);
     }
   }
 
@@ -358,7 +359,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     try {
       return Instant.parse(value);
     } catch (DateTimeParseException exception) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must be ISO-8601 datetime");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.field.iso_datetime_required", fieldName);
     }
   }
 

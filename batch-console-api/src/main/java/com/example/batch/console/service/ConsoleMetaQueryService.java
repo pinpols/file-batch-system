@@ -77,9 +77,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -90,28 +93,48 @@ public class ConsoleMetaQueryService {
   private final ConsoleMetaQueryRepository repository;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleQueryCacheService cacheService;
+  private final MessageSource messageSource;
 
   public ConsoleMetaQueryService(
       ConsoleMetaQueryRepository repository,
       ConsoleTenantGuard tenantGuard,
-      ConsoleQueryCacheService cacheService) {
+      ConsoleQueryCacheService cacheService,
+      MessageSource messageSource) {
     this.repository = repository;
     this.tenantGuard = tenantGuard;
     this.cacheService = cacheService;
+    this.messageSource = messageSource;
   }
 
   @SuppressWarnings("unchecked")
   public Map<String, List<ConsoleMetaEnumItem>> enums() {
+    Locale locale = LocaleContextHolder.getLocale();
     return cacheService.getOrLoad(
-        "meta:enums", ConsoleQueryCacheService.META_ENUM_TTL, Map.class, this::buildEnums);
+        "meta:enums:" + locale.toLanguageTag(),
+        ConsoleQueryCacheService.META_ENUM_TTL,
+        Map.class,
+        () -> buildEnums(locale));
   }
 
-  private Map<String, List<ConsoleMetaEnumItem>> buildEnums() {
+  private Map<String, List<ConsoleMetaEnumItem>> buildEnums(Locale locale) {
     Map<String, List<ConsoleMetaEnumItem>> result = new LinkedHashMap<>();
     for (EnumReg<?> reg : REGISTRATIONS) {
-      result.put(reg.key(), reg.toItems());
+      result.put(reg.key(), reg.toItems(messageSource, locale));
     }
     return result;
+  }
+
+  /**
+   * 按当前 Locale 解析枚举 label。messageSource 命中 {@link DictEnum#messageKey()} 返回翻译值,缺失回退到 {@link
+   * DictEnum#label()} (中文硬编码)。
+   */
+  private static String localizedLabel(DictEnum item, MessageSource messageSource, Locale locale) {
+    String key = item.messageKey();
+    String fallback = item.label();
+    if (key == null || messageSource == null) {
+      return fallback;
+    }
+    return messageSource.getMessage(key, null, fallback, locale);
   }
 
   @SuppressWarnings("unchecked")
@@ -176,9 +199,12 @@ public class ConsoleMetaQueryService {
 
   private record EnumReg<E extends Enum<E> & DictEnum>(String key, Class<E> enumClass) {
 
-    List<ConsoleMetaEnumItem> toItems() {
+    List<ConsoleMetaEnumItem> toItems(MessageSource messageSource, Locale locale) {
       return Arrays.stream(enumClass.getEnumConstants())
-          .map(e -> new ConsoleMetaEnumItem(e.code(), e.label()))
+          .map(
+              e ->
+                  new ConsoleMetaEnumItem(
+                      e.code(), ConsoleMetaQueryService.localizedLabel(e, messageSource, locale)))
           .toList();
     }
   }

@@ -52,7 +52,8 @@ public class ExportFormatStrategyRegistry {
     ExportFormatStrategy strategy =
         strategiesByType.get(fileFormatType == null ? "" : fileFormatType.trim().toUpperCase());
     if (strategy == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "不支持的导出格式类型: " + fileFormatType);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.export.format_not_supported", fileFormatType);
     }
     return strategy;
   }

@@ -191,7 +191,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode);
     if (existing != null) {
-      throw new BizException(ResultCode.CONFLICT, "job code already exists: " + newJobCode);
+      throw BizException.of(ResultCode.CONFLICT, "error.job.code_already_exists", newJobCode);
     }
     String operator = requestMetadataResolver.current().operatorId();
     jobDefinitionMapper.copyJobDefinition(resolved, id, newJobCode, operator);

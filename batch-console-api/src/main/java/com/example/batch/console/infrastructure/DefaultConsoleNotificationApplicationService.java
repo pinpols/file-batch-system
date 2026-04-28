@@ -91,7 +91,8 @@ public class DefaultConsoleNotificationApplicationService
           ResultCode.INVALID_ARGUMENT, "channelType must be one of " + CHANNEL_TYPES);
     }
     if (channelMapper.selectByCode(resolved, channelCode) != null) {
-      throw new BizException(ResultCode.CONFLICT, "channel code already exists: " + channelCode);
+      throw BizException.of(
+          ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
     }
     String operator = metadataResolver.current().operatorId();
     channelMapper.insert(

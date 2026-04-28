@@ -39,7 +39,8 @@ public class WorkflowRunManagementApplicationService {
   public Map<String, Object> cancel(String tenantId, Long id) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!CANCELLABLE.contains(run.getRunStatus())) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "cannot cancel from " + run.getRunStatus());
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.workflow.cancel_invalid_state", run.getRunStatus());
     }
     workflowRunMapper.updateStatus(
         tenantId, id, STATUS_TERMINATED, run.getCurrentNodeCode(), Instant.now());

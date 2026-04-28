@@ -82,9 +82,9 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
     try (Workbook workbook = WorkbookFactory.create(response.getBody().getInputStream())) {
       assertThat(workbook.getNumberOfSheets()).isEqualTo(4);
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("file_template_config");
-      assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("README");
-      assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("DICT");
-      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("VALIDATION");
+      assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("说明");
+      assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("字典");
+      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("校验");
       XSSFSheet sheet = (XSSFSheet) workbook.getSheetAt(0);
       Row header = sheet.getRow(0);
       assertThat(header.getCell(1).getStringCellValue()).isEqualTo("template_code");
