@@ -55,6 +55,8 @@ public class TaskControllerApplicationService {
             request.getResultSummary(),
             errorCode,
             errorMessage,
+            request.getErrorKey(),
+            request.getErrorArgs(),
             request.getHighWaterMarkOut()));
   }
 

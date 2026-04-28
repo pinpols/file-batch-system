@@ -14,6 +14,8 @@
         <result column="dedup_key" property="dedupKey"/>
         <result column="last_error_code" property="lastErrorCode"/>
         <result column="last_error_message" property="lastErrorMessage"/>
+        <result column="last_error_key" property="lastErrorKey"/>
+        <result column="last_error_args" property="lastErrorArgs"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
@@ -31,7 +33,9 @@
             retry_status,
             dedup_key,
             last_error_code,
-            last_error_message
+            last_error_message,
+            last_error_key,
+            last_error_args
         ) values (
             #{tenantId},
             #{relatedType},
@@ -92,6 +96,8 @@
         set retry_status = #{retryStatus},
             last_error_code = #{lastErrorCode},
             last_error_message = #{lastErrorMessage},
+            last_error_key = #{lastErrorKey},
+            last_error_args = #{lastErrorArgs,jdbcType=VARCHAR}::jsonb,
             next_retry_at = #{nextRetryAt},
             updated_at = current_timestamp
         where id = #{id}

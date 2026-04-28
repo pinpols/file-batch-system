@@ -15,6 +15,8 @@
         <result column="result_summary" property="resultSummary"/>
         <result column="error_code" property="errorCode"/>
         <result column="error_message" property="errorMessage"/>
+        <result column="error_key" property="errorKey"/>
+        <result column="error_args" property="errorArgs"/>
         <result column="version" property="version"/>
         <result column="started_at" property="startedAt"/>
         <result column="finished_at" property="finishedAt"/>
@@ -37,6 +39,8 @@
             result_summary,
             error_code,
             error_message,
+            error_key,
+            error_args,
             version,
             started_at,
             finished_at
@@ -53,6 +57,8 @@
             #{resultSummary,jdbcType=VARCHAR}::jsonb,
             #{errorCode},
             #{errorMessage},
+            #{errorKey},
+            #{errorArgs,jdbcType=VARCHAR}::jsonb,
             #{version},
             #{startedAt},
             #{finishedAt}
@@ -101,6 +107,8 @@
             result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             error_code = #{errorCode},
             error_message = #{errorMessage},
+            error_key = #{errorKey},
+            error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             finished_at = #{finishedAt},
             version = version + 1,
             updated_at = current_timestamp
@@ -116,6 +124,8 @@
             result_summary = null,
             error_code = null,
             error_message = null,
+            error_key = null,
+            error_args = null,
             started_at = null,
             finished_at = null,
             version = version + 1,

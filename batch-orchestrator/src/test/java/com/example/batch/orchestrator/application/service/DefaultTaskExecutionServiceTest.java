@@ -116,7 +116,7 @@ class DefaultTaskExecutionServiceTest {
   @Test
   void applyTaskOutcome_delegatesToOutcomeService() {
     TaskOutcomeCommand command =
-        new TaskOutcomeCommand("t1", 1L, null, true, null, null, null, null);
+        new TaskOutcomeCommand("t1", 1L, null, true, null, null, null, null, null, null);
     JobTaskEntity task = new JobTaskEntity();
     when(taskOutcomeService.applyTaskOutcome(command)).thenReturn(task);
 

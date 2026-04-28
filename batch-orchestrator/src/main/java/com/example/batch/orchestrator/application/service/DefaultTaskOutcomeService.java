@@ -177,6 +177,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                     : WorkflowNodeRunStatus.FAILED.code())
             .errorCode(command.errorCode())
             .errorMessage(command.errorMessage())
+            .errorKey(command.errorKey())
+            .errorArgs(command.errorArgs())
             .durationMs(duration)
             .finishedAt(command.finishedAt())
             .build());
@@ -228,6 +230,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .resultSummary(command.resultSummary())
                 .errorCode(command.errorCode())
                 .errorMessage(command.errorMessage())
+                .errorKey(command.errorKey())
+                .errorArgs(command.errorArgs())
                 .expectedVersion(task.getVersion())
                 .build());
     if (updated <= 0) {
@@ -438,6 +442,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 ctx.nodeProgress().failedCount() == 0,
                 ctx.command().errorCode(),
                 ctx.command().errorMessage(),
+                ctx.command().errorKey(),
+                ctx.command().errorArgs(),
                 resolveNodeStartedAt(
                     ctx.workflowRun().getId(),
                     ctx.currentNodeCode(),
@@ -473,6 +479,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                       ctx.nodeProgress().failedCount() == 0,
                       ctx.command().errorCode(),
                       ctx.command().errorMessage(),
+                      ctx.command().errorKey(),
+                      ctx.command().errorArgs(),
                       ctx.finishedAt(),
                       ctx.finishedAt())));
         }
@@ -519,6 +527,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .resultSummary(buildOutputSummary(command, task))
                 .errorCode(command.errorCode())
                 .errorMessage(command.errorMessage())
+                .errorKey(command.errorKey())
+                .errorArgs(command.errorArgs())
                 .finishedAt(retryScheduled ? null : finishedAt)
                 .expectedVersion(stepInstance.getVersion())
                 .build());
@@ -590,6 +600,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             JsonUtils.toJson(Map.of("childInstanceStatus", childInstanceStatus)),
             nodeSuccess ? null : childCommand.errorCode(),
             nodeSuccess ? null : childCommand.errorMessage(),
+            nodeSuccess ? null : childCommand.errorKey(),
+            nodeSuccess ? null : childCommand.errorArgs(),
             // 父虚拟任务不直接推父水位:子作业自己的 outcome 已经写过对应实例的
             // high_water_mark_out;父侧不与子作业共享水位。
             null));

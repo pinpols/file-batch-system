@@ -13,6 +13,13 @@ public class UpdateTaskStatusParam {
   private final String resultSummary;
   private final String errorCode;
   private final String errorMessage;
+
+  /** i18n message key,V77+ 写入 job_task.error_key。 */
+  private final String errorKey;
+
+  /** i18n 占位符参数 JSON 数组,V77+ 写入 job_task.error_args。 */
+  private final String errorArgs;
+
   private final String terminalStatus1;
   private final String terminalStatus2;
   private final String terminalStatus3;

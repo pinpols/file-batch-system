@@ -16,6 +16,8 @@
             external_request_id,
             error_code,
             error_message,
+            error_key,
+            error_args,
             dispatched_at,
             ack_at,
             created_at,

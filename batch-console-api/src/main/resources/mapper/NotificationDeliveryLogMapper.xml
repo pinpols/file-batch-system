@@ -4,7 +4,8 @@
 
     <select id="selectByTenant" resultType="map">
         SELECT id, tenant_id, rule_id, channel_code, event_type, alert_event_id,
-               payload_json, delivery_status, error_message, attempt, created_at
+               payload_json, delivery_status, error_message, error_key, error_args,
+               attempt, created_at
           FROM batch.notification_delivery_log
          WHERE tenant_id = #{tenantId}
          ORDER BY created_at DESC
@@ -22,6 +23,8 @@
         UPDATE batch.notification_delivery_log
            SET delivery_status = #{deliveryStatus},
                error_message = #{errorMessage},
+               error_key = #{errorKey},
+               error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
                attempt = #{attempt}
          WHERE id = #{id}
     </update>

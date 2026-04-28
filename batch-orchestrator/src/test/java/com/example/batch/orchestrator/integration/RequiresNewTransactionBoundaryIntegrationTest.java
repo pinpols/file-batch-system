@@ -187,7 +187,16 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     LaunchedJob job = launchAndClaim(prefix);
     taskExecutionService.applyTaskOutcome(
         new TaskOutcomeCommand(
-            TENANT, job.taskId, null, false, null, "SIMULATED_ERROR", "boundary test", null));
+            TENANT,
+            job.taskId,
+            null,
+            false,
+            null,
+            "SIMULATED_ERROR",
+            "boundary test",
+            null,
+            null,
+            null));
     return job;
   }
 
@@ -352,7 +361,16 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     taskExecutionService.assignWorker(TENANT, taskId, workerCode);
     taskExecutionService.applyTaskOutcome(
         new TaskOutcomeCommand(
-            TENANT, taskId, null, false, null, "EXHAUST_ERROR", "exhaust retries", null));
+            TENANT,
+            taskId,
+            null,
+            false,
+            null,
+            "EXHAUST_ERROR",
+            "exhaust retries",
+            null,
+            null,
+            null));
 
     return new LaunchedJob(instance.getId(), partitionId, taskId, workerCode);
   }

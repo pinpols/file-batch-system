@@ -21,6 +21,8 @@
         <result column="result_summary" property="resultSummary"/>
         <result column="error_code" property="errorCode"/>
         <result column="error_message" property="errorMessage"/>
+        <result column="error_key" property="errorKey"/>
+        <result column="error_args" property="errorArgs"/>
         <result column="created_at" property="createdAt"/>
         <result column="finished_at" property="finishedAt"/>
     </resultMap>
@@ -46,6 +48,8 @@
             result_summary,
             error_code,
             error_message,
+            error_key,
+            error_args,
             finished_at
         ) values (
             #{tenantId},
@@ -66,6 +70,8 @@
             #{resultSummary,jdbcType=VARCHAR}::jsonb,
             #{errorCode},
             #{errorMessage},
+            #{errorKey},
+            #{errorArgs,jdbcType=VARCHAR}::jsonb,
             #{finishedAt}
         )
     </insert>
@@ -85,6 +91,8 @@
             result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             error_code = #{errorCode},
             error_message = #{errorMessage},
+            error_key = #{errorKey},
+            error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             finished_at = #{finishedAt}
         where tenant_id = #{tenantId}
           and id = #{id}
