@@ -1371,6 +1371,65 @@ sqlTransformCompute:
 
 PROCESS 与 ExecutionMode 正交:既可以做 FULL 全量(每次重新聚合),也可以做 INCREMENTAL 增量(读取上次 OUT 当本次 IN)。`watermarkColumn` 字段就是给 INCREMENTAL 模式用的——COMPUTE 阶段算出 `max(watermarkColumn)` 写入 `attributes.HIGH_WATER_MARK_OUT`,FEEDBACK 透传 → orchestrator 回写 `job_instance.high_water_mark_out`,下次该 job 启动时被加载为 `highWaterMarkIn` 命名参数,业务 SQL 用 `WHERE event_id > :highWaterMarkIn` 取增量。
 
+### 7.9.7 资源上限与孤儿清理(P1-6 / P1-7)
+
+| 防护 | 配置 | 默认 | 触发后果 |
+|---|---|---|---|
+| **maxStagedRows**(P1-6) | `step_params.sqlTransformCompute.maxStagedRows` | `1_000_000` | COMPUTE 写完 staging 后 row count > limit 立即失败(`PROCESS_STAGED_OVERFLOW`)+ 同步删本批 staging,target 完全不写,task FAILED |
+| **orphan staging cleanup**(P1-7) | `batch.worker.process.staging-cleanup.{enabled,interval,retentionHours,batchSize}` | enabled=true / 15 分钟 / 24 小时 / 5000 行 | ShedLock 互斥的定时任务,删除 `staged_at < now() - retentionHours` 的孤儿行(VALIDATE 失败保留 / 崩溃残留 / 测试残留),指标 `process_staging_orphan_cleaned_total` + `process_staging_oldest_age_seconds` |
+
+> 调优建议:
+>
+> - 业务 SQL 写错或笛卡尔积可能瞬时撑大几千万行,默认 100 万的 `maxStagedRows` 足以拦截大多数事故,生产可按业务体量上调到 500 万 / 1000 万。
+> - VALIDATE 失败需要保留 staging 给运维取证;`retentionHours` 默认 24 小时是 forensics 与磁盘占用的折中,关键业务可调到 72 小时。
+> - 多 worker 实例只有一个会真正跑 cleanup(ShedLock 互斥);单 worker 部署可以把 enabled 关掉,等手工触发。
+
+### 7.9.8 边界与重跑语义(P2-1 / P2-2 / P2-7)
+
+**writeMode 的重跑语义(P2-1)**:
+
+| `writeMode` | 重跑/retry 行为 | 推荐场景 |
+|---|---|---|
+| `INSERT` | 撞 PK/UK 直接 SQLException;只适合无唯一键的临时聚合表 | 不推荐生产用 |
+| `UPSERT`(默认推荐) | `ON CONFLICT (...) DO UPDATE SET col = EXCLUDED.col` 幂等覆盖,retry 安全 | 大多数业务聚合 / 状态推进 |
+| `INSERT_IGNORE` | `ON CONFLICT (...) DO NOTHING`,retry 时已有行保持原值 | 历史数据不可改写的事实表追加 |
+
+**JSONB 列类型矩阵(P2-2)**:`jsonb_populate_record(NULL::biz.target, payload)` 的反序列化已验证类型:
+
+- ✅ 已验证:`text / varchar / bigint / int / numeric / boolean / date / timestamptz`
+- ⚠️ 待验证:`bytea`(JSONB 不能直接 hex/base64,需要业务层显式转码)、`enum`(PG 自定义 enum 类型)、`uuid`(应该 OK 但未单测)
+- ❌ 不支持:数组类型(`int[]` / `text[]`)、复合类型(custom composite)、PostGIS 几何类型 — 需走应用层转换或自定义 plugin
+
+业务上线前对非常用类型做最小冒烟即可。
+
+**自定义 ProcessComputePlugin SPI 边界(P2-7)**:
+
+`ProcessComputePlugin` 5 个 lifecycle 方法都有默认 no-op,自定义插件按需 opt-in:
+
+```java
+@Component
+public class MyProcessPlugin implements ProcessComputePlugin {
+  @Override public String implCode() { return "myDailyAggregate"; }
+
+  // 简单插件:只重写 compute(),其它 stage 走默认 no-op
+  @Override public ProcessStageResult compute(ProcessJobContext ctx) {
+    // 自己用 JdbcTemplate / MyBatis 直接读源表写 target 表(不走 staging)
+    int rows = doYourBusinessLogic(ctx);
+    ctx.getAttributes().put("processedCount", rows);
+    return ProcessStageResult.success(ProcessStage.COMPUTE);
+  }
+}
+```
+
+**关键约束:**
+
+1. **不写 staging 的自定义插件,等于绕过 WAP+bookends 保障** —— VALIDATE/COMMIT/FEEDBACK 没事可做,失败时无法 forensics 也无法 atomic publish。除非业务能用其他机制(target 表自身幂等键 + 应用层事务)代偿,否则建议至少把数据先 INSERT staging 让框架走完整 5 段。
+2. **写 staging 必须遵守 staging 表 schema 与 batch_key 隔离** —— `tenant_id / target_schema / target_table / batch_key` 4 列必填(P0-2 多租户隔离前提)。
+3. **highWaterMarkOut 上报方式** —— 业务在 compute()/feedback() 里 `ctx.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "...")`,DefaultTaskExecutionWrapper 会回报 orchestrator 持久化到 `job_instance.high_water_mark_out`。
+4. **失败保留语义** —— compute() 返回 failure 即跳过后续 stage;插件应在 compute() 内部决定要不要清自己写的 staging,框架只在框架视角的 P1-6/P1-7 兜底清理。
+
+完整代码示例见 `batch-worker-process/src/test/java/.../ProcessPipelineE2eIT.java` 的 `e2eProcessCompute` 测试桩。
+
 ---
 
 ## 8. 进一步阅读

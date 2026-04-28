@@ -285,6 +285,31 @@ class SqlTransformComputePluginIntegrationTest {
         .hasMessageContaining("forbidden");
   }
 
+  @Test
+  void compute_failsAndCleansStaging_whenStagedRowsExceedMaxStagedRows() {
+    // P1-6:把 maxStagedRows 设为 1,源数据 t1 有 A/B 两个 account → 聚合后 2 行 staging > 1 → overflow
+    ProcessJobContext context = newContextWithSpec();
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    spec.put("maxStagedRows", 1);
+
+    plugin.prepare(context);
+    ProcessStageResult compute = plugin.compute(context);
+
+    assertThat(compute.success()).isFalse();
+    assertThat(compute.code()).isEqualTo("PROCESS_STAGED_OVERFLOW");
+    assertThat(compute.message()).contains("exceeded maxStagedRows 1");
+    // 立即清本批 staging,不会污染后续 stage
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from batch.process_staging where batch_key = 'batch-test-1'",
+                Integer.class))
+        .isZero();
+    // target 表仍然为空
+    assertThat(
+            jdbcTemplate.queryForObject("select count(*) from biz.account_summary", Integer.class))
+        .isZero();
+  }
+
   // ─── 辅助 ────────────────────────────────────────────────────────────────────
 
   private ProcessJobContext newContextWithSpec() {

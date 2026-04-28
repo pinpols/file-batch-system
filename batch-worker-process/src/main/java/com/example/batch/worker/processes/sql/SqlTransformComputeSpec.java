@@ -23,7 +23,11 @@ public record SqlTransformComputeSpec(
     String watermarkColumn,
     Map<String, Object> params,
     List<ValidationRule> validations,
-    EmptyResultPolicy emptyResultPolicy) {
+    EmptyResultPolicy emptyResultPolicy,
+    int maxStagedRows) {
+
+  /** P1-6:单批 staging 行数上限默认值。配置 SQL 写错或数据激增时,防止把业务库 + staging 表打爆。 */
+  public static final int DEFAULT_MAX_STAGED_ROWS = 1_000_000;
 
   public enum WriteMode {
     INSERT,
@@ -95,6 +99,8 @@ public record SqlTransformComputeSpec(
     EmptyResultPolicy emptyResultPolicy =
         parseEmptyResultPolicy(
             firstNonNull(root.get("emptyResultPolicy"), root.get("empty_result_policy")));
+    int maxStagedRows =
+        parseMaxStagedRows(firstNonNull(root.get("maxStagedRows"), root.get("max_staged_rows")));
 
     SqlTransformComputeSpec spec =
         new SqlTransformComputeSpec(
@@ -108,9 +114,36 @@ public record SqlTransformComputeSpec(
             watermarkColumn,
             params,
             validations,
-            emptyResultPolicy);
+            emptyResultPolicy,
+            maxStagedRows);
     spec.validateIdentifiers();
     return spec;
+  }
+
+  private static int parseMaxStagedRows(Object raw) {
+    if (raw == null) {
+      return DEFAULT_MAX_STAGED_ROWS;
+    }
+    int value;
+    if (raw instanceof Number n) {
+      value = n.intValue();
+    } else {
+      String text = String.valueOf(raw).trim();
+      if (text.isEmpty()) {
+        return DEFAULT_MAX_STAGED_ROWS;
+      }
+      try {
+        value = Integer.parseInt(text);
+      } catch (NumberFormatException ex) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute.maxStagedRows must be a positive integer, got: " + text);
+      }
+    }
+    if (value <= 0) {
+      throw new IllegalArgumentException(
+          "sqlTransformCompute.maxStagedRows must be > 0, got: " + value);
+    }
+    return value;
   }
 
   private static List<ValidationRule> parseValidations(Object raw) {
