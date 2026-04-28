@@ -1,12 +1,13 @@
 package com.example.batch.orchestrator.mapper;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import java.time.Instant;
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 @Builder
-public class UpdateStepProgressParam {
+public class UpdateStepProgressParam implements LocalizedErrorCarrier {
   private final String tenantId;
   private final Long id;
   private final String stepStatus;

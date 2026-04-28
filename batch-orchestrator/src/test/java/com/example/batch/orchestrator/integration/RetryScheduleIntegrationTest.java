@@ -132,6 +132,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
             RetryScheduleStatus.FAILED.code(),
             "DISPATCH_FAILED",
             "connection refused",
+            null,
+            null,
             Instant.now().plusSeconds(120));
 
     assertThat(updated).isEqualTo(1);

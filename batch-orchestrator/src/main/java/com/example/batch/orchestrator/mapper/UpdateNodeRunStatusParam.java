@@ -1,12 +1,13 @@
 package com.example.batch.orchestrator.mapper;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import java.time.Instant;
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 @Builder
-public class UpdateNodeRunStatusParam {
+public class UpdateNodeRunStatusParam implements LocalizedErrorCarrier {
   private final Long id;
   private final String nodeStatus;
   private final String errorCode;

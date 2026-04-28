@@ -78,6 +78,8 @@
             receipt_status = 'NONE',
             error_code = null,
             error_message = null,
+            error_key = null,
+            error_args = null,
             ack_at = null,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}

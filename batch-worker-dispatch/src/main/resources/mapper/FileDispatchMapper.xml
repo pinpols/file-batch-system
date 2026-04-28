@@ -75,6 +75,8 @@
             receipt_status = #{receiptStatus},
             error_code = #{errorCode},
             error_message = #{errorMessage},
+            error_key = #{errorKey},
+            error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and file_id = #{fileId}
@@ -99,6 +101,8 @@
             end,
             error_code = #{errorCode},
             error_message = #{errorMessage},
+            error_key = #{errorKey},
+            error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and file_id = #{fileId}

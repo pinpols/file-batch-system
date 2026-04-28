@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure;
 
 import static com.example.batch.console.infrastructure.ConsoleQuerySupport.*;
 
+import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.persistence.entity.AlertEventEntity;
@@ -66,6 +67,7 @@ class ConsoleOpsQueryService {
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleOpsQueryMappers opsMappers;
+  private final LocalizedErrorRenderer localizedErrorRenderer;
 
   PageResponse<ConsoleAuditLogResponse> auditLogs(AuditLogQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
@@ -318,6 +320,11 @@ class ConsoleOpsQueryService {
   }
 
   private ConsoleOutboxDeliveryLogResponse toOutboxDeliveryResponse(Map<String, Object> row) {
+    String errorMessage =
+        localizedErrorRenderer.render(
+            stringValue(row, "error_key"),
+            stringValue(row, "error_args"),
+            stringValue(row, "error_message"));
     return new ConsoleOutboxDeliveryLogResponse(
         longValue(row, "id"),
         stringValue(row, "tenant_id"),
@@ -326,7 +333,7 @@ class ConsoleOpsQueryService {
         stringValue(row, "delivery_status"),
         stringValue(row, "target_topic"),
         intValue(row, "delivery_attempt"),
-        stringValue(row, "error_message"),
+        errorMessage,
         instantValue(row, "created_at"),
         instantValue(row, "updated_at"));
   }
@@ -494,6 +501,9 @@ class ConsoleOpsQueryService {
   }
 
   private ConsoleRetryScheduleResponse toRetryScheduleResponse(RetryScheduleEntity entity) {
+    String lastErrorMessage =
+        localizedErrorRenderer.render(
+            entity.getLastErrorKey(), entity.getLastErrorArgs(), entity.getLastErrorMessage());
     return new ConsoleRetryScheduleResponse(
         entity.getId(),
         display(entity.getTenantId()),
@@ -506,7 +516,7 @@ class ConsoleOpsQueryService {
         display(entity.getRetryStatus()),
         display(entity.getDedupKey()),
         display(entity.getLastErrorCode()),
-        display(entity.getLastErrorMessage()),
+        display(lastErrorMessage),
         entity.getCreatedAt(),
         entity.getUpdatedAt());
   }

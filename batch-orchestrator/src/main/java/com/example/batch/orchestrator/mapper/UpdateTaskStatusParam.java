@@ -1,12 +1,13 @@
 package com.example.batch.orchestrator.mapper;
 
 import com.example.batch.common.enums.TaskStatus;
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 @Builder
-public class UpdateTaskStatusParam {
+public class UpdateTaskStatusParam implements LocalizedErrorCarrier {
   private final String tenantId;
   private final Long id;
   private final String taskStatus;

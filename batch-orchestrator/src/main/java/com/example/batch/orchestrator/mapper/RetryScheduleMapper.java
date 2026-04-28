@@ -26,6 +26,8 @@ public interface RetryScheduleMapper {
       @Param("retryStatus") String retryStatus,
       @Param("lastErrorCode") String lastErrorCode,
       @Param("lastErrorMessage") String lastErrorMessage,
+      @Param("lastErrorKey") String lastErrorKey,
+      @Param("lastErrorArgs") String lastErrorArgs,
       @Param("nextRetryAt") Instant nextRetryAt);
 
   int resetToWaiting(@Param("id") Long id, @Param("waitingStatus") String waitingStatus);
