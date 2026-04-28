@@ -352,9 +352,17 @@ _clear_occupied_ports() {
     local pids
     pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
     [[ -z "$pids" ]] && continue
-    echo "  端口 ${port} (${name}) 被占用，清理残留进程..."
     while IFS= read -r pid; do
       [[ -z "$pid" ]] && continue
+      # 跳过 PID_FILE 里登记且仍活着的进程：那是上一次本脚本启动留下的 in-flight 服务,
+      # start_java 会基于 PID_FILE 做幂等跳过。盲杀会让"独立顺序起 worker"场景下
+      # 已起来的 trigger / console / 其它 worker 被本次清理误伤。
+      if [[ -f "$PID_FILE" ]] && grep -Fq "	${pid}	" "$PID_FILE" 2>/dev/null; then
+        continue
+      fi
+      if (( found == 0 )); then
+        echo "  端口 ${port} (${name}) 被占用，清理残留进程..."
+      fi
       echo "    kill -9 pid=${pid}"
       kill -9 "$pid" 2>/dev/null || true
       ((found += 1)) || true
@@ -409,6 +417,20 @@ if [[ "${START_WORKERS}" == "1" ]]; then
   unset _WORKERS_ARR
 fi
 
+# 合并:把原 PID_FILE 里本轮未触及但仍 alive 的 entry 保留下来。否则
+# "顺序独立起 worker"场景下,前一轮启动的 worker 会从 PID_FILE 消失,
+# 下次再跑 start-all 时 _clear_occupied_ports 会因为 PID 不在 PID_FILE 而误杀。
+if [[ -f "$PID_FILE" ]]; then
+  while IFS=$'\t' read -r prev_name prev_pid prev_jar; do
+    [[ -z "$prev_name" || -z "$prev_pid" ]] && continue
+    if awk -F'\t' -v n="$prev_name" '$1 == n {found=1; exit} END {exit !found}' "$PID_FILE_NEW"; then
+      continue   # 本轮已重新写过该 module 的新 PID,以新值为准
+    fi
+    if kill -0 "$prev_pid" 2>/dev/null; then
+      printf '%s\t%s\t%s\n' "$prev_name" "$prev_pid" "$prev_jar" >>"$PID_FILE_NEW"
+    fi
+  done < "$PID_FILE"
+fi
 mv "$PID_FILE_NEW" "$PID_FILE"
 trap - EXIT
 
