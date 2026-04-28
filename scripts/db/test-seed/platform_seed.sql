@@ -476,6 +476,6 @@ UPDATE batch.resource_queue SET worker_group = upper(worker_group) WHERE worker_
 UPDATE batch.job_definition SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
 UPDATE batch.job_instance SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
 UPDATE batch.job_partition SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
-UPDATE batch.pipeline_step_definition SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
+UPDATE batch.pipeline_definition SET worker_group = upper(worker_group) WHERE worker_group IS NOT NULL AND worker_group <> upper(worker_group);
 
 COMMIT;
