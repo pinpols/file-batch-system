@@ -41,6 +41,7 @@ class ConsoleWorkflowQueryService {
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleWorkflowQueryMappers workflowMappers;
+  private final com.example.batch.common.i18n.LocalizedErrorRenderer localizedErrorRenderer;
 
   PageResponse<ConsoleWorkflowDefinitionResponse> workflowDefinitions(
       WorkflowDefinitionQueryRequest request) {
@@ -299,6 +300,10 @@ class ConsoleWorkflowQueryService {
   }
 
   private ConsoleWorkflowNodeRunResponse toWorkflowNodeRunResponse(WorkflowNodeRunEntity entity) {
+    // i18n 持久化:有 errorKey 时按当前 Locale 重渲染,否则透传 errorMessage(老 literal / 第三方异常)。
+    String errorMessage =
+        localizedErrorRenderer.render(
+            entity.getErrorKey(), entity.getErrorArgs(), entity.getErrorMessage());
     return new ConsoleWorkflowNodeRunResponse(
         entity.getId(),
         entity.getWorkflowRunId(),
@@ -308,7 +313,7 @@ class ConsoleWorkflowQueryService {
         display(entity.getNodeStatus()),
         entity.getRetryCount(),
         display(entity.getErrorCode()),
-        display(entity.getErrorMessage()),
+        display(errorMessage),
         entity.getStartedAt(),
         entity.getFinishedAt(),
         entity.getDurationMs());

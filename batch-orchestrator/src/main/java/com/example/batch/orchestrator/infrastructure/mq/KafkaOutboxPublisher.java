@@ -154,7 +154,11 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
             (result, ex) -> {
               if (ex == null) {
                 recordDelivery(
-                    event, fallbackTopic, null, OutboxPublishStatus.PUBLISHED.code(), null);
+                    event,
+                    fallbackTopic,
+                    null,
+                    OutboxPublishStatus.PUBLISHED.code(),
+                    LocalizedError.EMPTY);
                 return true;
               }
               recordDelivery(
