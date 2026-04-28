@@ -14,16 +14,17 @@ COPY batch-trigger/pom.xml batch-trigger/pom.xml
 COPY batch-worker-core/pom.xml batch-worker-core/pom.xml
 COPY batch-worker-import/pom.xml batch-worker-import/pom.xml
 COPY batch-worker-export/pom.xml batch-worker-export/pom.xml
+COPY batch-worker-process/pom.xml batch-worker-process/pom.xml
 COPY batch-worker-dispatch/pom.xml batch-worker-dispatch/pom.xml
 COPY batch-e2e-tests/pom.xml batch-e2e-tests/pom.xml
 
-RUN --mount=type=cache,target=/root/.m2 \
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
     set -eux; \
     mvn -q -pl "${MODULE}" -am -DskipTests dependency:go-offline
 
 COPY . .
 
-RUN --mount=type=cache,target=/root/.m2 \
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
     set -eux; \
     mvn -q -pl batch-common -am -DskipTests install; \
     mvn -q -pl "${MODULE}" -am -DskipTests package; \
