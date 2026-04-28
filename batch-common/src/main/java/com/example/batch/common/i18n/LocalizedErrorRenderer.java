@@ -2,6 +2,8 @@ package com.example.batch.common.i18n;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Locale;
+import org.springframework.context.MessageSource;
+import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
@@ -11,21 +13,22 @@ import org.springframework.stereotype.Component;
  * <p>策略:
  *
  * <ol>
- *   <li>{@code error_key} 非空 → {@link BizMessageResolver} 用当前 Locale + parsed args 重渲染
- *   <li>渲染结果为空 / 等于 key 本身(资源未找到)→ 回退到 {@code error_message}
+ *   <li>{@code error_key} 非空 → {@code messageSource} 用当前 Locale + parsed args 重渲染
+ *   <li>资源未找到 / 渲染结果为空 → 回退到 {@code error_message}
  *   <li>{@code error_key} 为空 → 直接返回 {@code error_message}(老 literal / 第三方异常)
  * </ol>
  *
- * <p>callsite 可以传入 db 行的三个值,无需自行组装异常。
+ * <p>callsite 可以传入 db 行的三个值,无需自行组装异常。直接走 {@link MessageSource} 而非 {@link BizMessageResolver},因为
+ * resolver 在 NoSuchMessage 时会回退到 ResultCode.label(),不适合持久化场景的 "key 未注册时回到原始 message" 语义。
  */
 @Component
 public class LocalizedErrorRenderer {
 
-  private final BizMessageResolver resolver;
+  private final MessageSource messageSource;
   private final ObjectMapper objectMapper;
 
-  public LocalizedErrorRenderer(BizMessageResolver resolver, ObjectMapper objectMapper) {
-    this.resolver = resolver;
+  public LocalizedErrorRenderer(MessageSource messageSource, ObjectMapper objectMapper) {
+    this.messageSource = messageSource;
     this.objectMapper = objectMapper;
   }
 
@@ -35,8 +38,16 @@ public class LocalizedErrorRenderer {
   }
 
   public String render(String errorKey, String errorArgsJson, String fallback, Locale locale) {
+    if (errorKey == null || errorKey.isBlank()) {
+      return fallback;
+    }
     Object[] args = BizExceptionUtils.parseArgs(errorArgsJson, objectMapper);
-    return BizExceptionUtils.renderOrFallback(resolver, errorKey, args, fallback, locale);
+    try {
+      String rendered = messageSource.getMessage(errorKey, args, locale);
+      return (rendered == null || rendered.isBlank()) ? fallback : rendered;
+    } catch (NoSuchMessageException ignored) {
+      return fallback;
+    }
   }
 
   /** 等价的 record 形态。 */

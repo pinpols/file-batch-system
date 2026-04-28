@@ -3,7 +3,6 @@ package com.example.batch.console.support;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.batch.common.constants.CommonConstants;
-import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -50,7 +49,8 @@ class ConsoleRequestContextFilterTest {
     assertThat(chainCalled).isFalse();
     assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
     assertThat(response.getContentAsString()).contains(ResultCode.FORBIDDEN.name());
-    assertThat(response.getContentAsString()).contains(CommonErrorMessages.TENANT_MISMATCH);
+    // i18n 迁移后:Filter 通过 ExceptionHandler 翻译,zh_CN 默认 Locale 渲染为"租户不匹配"。
+    assertThat(response.getContentAsString()).contains("租户不匹配");
   }
 
   @Test
