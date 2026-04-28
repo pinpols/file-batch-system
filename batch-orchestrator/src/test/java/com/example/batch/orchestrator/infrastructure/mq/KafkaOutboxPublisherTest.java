@@ -46,7 +46,14 @@ class KafkaOutboxPublisherTest {
         new BatchTopicResolver(batchMqTopicsProperties, new MqRoutingProperties());
     publisher =
         new KafkaOutboxPublisher(
-            kafkaTemplate, governance, eventDeliveryLogMapper, topicResolver, Runnable::run);
+            kafkaTemplate,
+            governance,
+            eventDeliveryLogMapper,
+            topicResolver,
+            new com.example.batch.common.i18n.BizMessageResolver(
+                new org.springframework.context.support.ResourceBundleMessageSource()),
+            new com.fasterxml.jackson.databind.ObjectMapper(),
+            Runnable::run);
   }
 
   @Test
