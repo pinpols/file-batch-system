@@ -67,11 +67,12 @@ public class DefaultConsoleConfigApprovalApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
     if (!ConfigLifecycleStatus.DRAFT.code().equals(release.getConfigStatus())) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "only DRAFT release can submit approval");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.config_release.only_draft_can_submit");
     }
     Map<String, Object> latest = configApprovalMapper.selectLatestByRelease(tenantId, releaseId);
     if (latest != null && STATUS_PENDING.equals(String.valueOf(latest.get(KEY_APPROVAL_STATUS)))) {
-      throw new BizException(ResultCode.CONFLICT, "config approval already pending");
+      throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");
     }
     configApprovalMapper.insert(
         mapOf(
@@ -134,7 +135,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> approval = requireApproval(tenantId, approvalId);
     if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "config approval is not pending");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_approval.not_pending");
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
@@ -150,7 +151,7 @@ public class DefaultConsoleConfigApprovalApplicationService
                 "reviewComment",
                 ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
     if (rows == 0) {
-      throw new BizException(ResultCode.CONFLICT, "config approval already processed");
+      throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
     configReleaseMapper.updateConfigReleaseStatus(
         mapOf(
@@ -182,7 +183,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> approval = requireApproval(tenantId, approvalId);
     if (!STATUS_PENDING.equals(String.valueOf(approval.get(KEY_APPROVAL_STATUS)))) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "config approval is not pending");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.config_approval.not_pending");
     }
     Long releaseId = longValue(approval.get(KEY_RELEASE_ID));
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
@@ -198,7 +199,7 @@ public class DefaultConsoleConfigApprovalApplicationService
                 "reviewComment",
                 ConsoleTextSanitizer.safeInput(request.getReason(), 1024)));
     if (rows == 0) {
-      throw new BizException(ResultCode.CONFLICT, "config approval already processed");
+      throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_processed");
     }
     configReleaseMapper.updateConfigReleaseStatus(
         mapOf(
@@ -262,7 +263,7 @@ public class DefaultConsoleConfigApprovalApplicationService
     try {
       return Instant.parse(text);
     } catch (DateTimeParseException ex) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "expiredAt must be ISO-8601 instant");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.expired_at_format");
     }
   }
 

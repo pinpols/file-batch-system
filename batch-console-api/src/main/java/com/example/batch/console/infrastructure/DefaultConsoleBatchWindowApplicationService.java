@@ -122,7 +122,7 @@ public class DefaultConsoleBatchWindowApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     int rows = batchWindowMapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "batch window not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.batch_window.not_found");
     }
     Map<String, Object> window = batchWindowMapper.selectById(resolved, id);
     if (window != null) {

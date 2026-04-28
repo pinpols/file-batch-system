@@ -94,7 +94,7 @@ class DefaultConsoleJobApprovalService implements ConsoleJobApprovalService {
     Map<String, Object> calendar =
         businessCalendarMapper.selectActiveByTenantAndCalendarCode(tenantId, calendarCode);
     if (calendar == null || calendar.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "business calendar not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.business_calendar.not_found");
     }
     String catchUpPolicy = stringValue(calendar.get("catchUpPolicy"));
     CatchUpPolicyType policyType = CatchUpPolicyType.fromCode(catchUpPolicy);
@@ -161,7 +161,7 @@ class DefaultConsoleJobApprovalService implements ConsoleJobApprovalService {
             .retrieve()
             .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
     if (response == null || response.data() == null) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "trigger service returned empty response");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
     }
     return response.data().instanceNo();
   }

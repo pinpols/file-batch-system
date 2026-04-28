@@ -64,7 +64,7 @@ public final class UploadFileGuard {
 
   private static void requireNonEmpty(MultipartFile file) {
     if (file == null || file.isEmpty()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "uploaded file is empty");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.upload.empty");
     }
   }
 

@@ -33,7 +33,7 @@ public class ConsoleWebhookService {
     return subscriptionRepository
         .findByTenantAndId(tenantGuard.resolveTenant(tenantId), id)
         .orElseThrow(
-            () -> new BizException(ResultCode.NOT_FOUND, "webhook subscription not found"));
+            () -> BizException.of(ResultCode.NOT_FOUND, "error.webhook.subscription_not_found"));
   }
 
   public WebhookSubscriptionEntity createSubscription(
@@ -50,7 +50,7 @@ public class ConsoleWebhookService {
         .findByTenantAndName(resolved, name)
         .ifPresent(
             existing -> {
-              throw new BizException(ResultCode.CONFLICT, "webhook subscription already exists");
+              throw BizException.of(ResultCode.CONFLICT, "error.webhook.subscription_exists");
             });
     subscriptionRepository.insert(
         resolved, name, callbackUrl, normalizeEventTypes(eventTypes), secret, enabled, operator);
@@ -58,8 +58,8 @@ public class ConsoleWebhookService {
         .findByTenantAndName(resolved, name)
         .orElseThrow(
             () ->
-                new BizException(
-                    ResultCode.SYSTEM_ERROR, "webhook subscription created but not found"));
+                BizException.of(
+                    ResultCode.SYSTEM_ERROR, "error.webhook.subscription_created_but_not_found"));
   }
 
   public WebhookSubscriptionEntity updateSubscription(
@@ -72,7 +72,7 @@ public class ConsoleWebhookService {
       String operator) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     if (subscriptionRepository.findByTenantAndId(resolved, id).isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "webhook subscription not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.webhook.subscription_not_found");
     }
     callbackUrlValidator.validate(callbackUrl);
     subscriptionRepository.update(
@@ -81,8 +81,8 @@ public class ConsoleWebhookService {
         .findByTenantAndId(resolved, id)
         .orElseThrow(
             () ->
-                new BizException(
-                    ResultCode.SYSTEM_ERROR, "webhook subscription updated but not found"));
+                BizException.of(
+                    ResultCode.SYSTEM_ERROR, "error.webhook.subscription_updated_but_not_found"));
   }
 
   public void deleteSubscription(String tenantId, Long id) {
@@ -113,7 +113,9 @@ public class ConsoleWebhookService {
             .distinct()
             .reduce((left, right) -> left + "," + right)
             .orElseThrow(
-                () -> new BizException(ResultCode.INVALID_ARGUMENT, "eventTypes is required"));
+                () ->
+                    BizException.of(
+                        ResultCode.INVALID_ARGUMENT, "error.webhook.event_types_required"));
     if (Objects.equals(normalized, "*")) {
       return normalized;
     }

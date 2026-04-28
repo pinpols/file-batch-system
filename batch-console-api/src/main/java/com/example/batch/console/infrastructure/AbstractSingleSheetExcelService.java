@@ -149,7 +149,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
     ConsoleSingleSheetExcelImportSupport.ParsedSession session = loadSession(uploadToken);
     Validated<ROW> result = validateRows(session);
     if (!skipInvalid && result.invalidRows() > 0) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "excel contains invalid rows");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_rows");
     }
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String operatorId = metadata.operatorId();

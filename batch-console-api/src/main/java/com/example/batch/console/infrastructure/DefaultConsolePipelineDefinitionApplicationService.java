@@ -147,7 +147,7 @@ public class DefaultConsolePipelineDefinitionApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     int rows = pipelineDefinitionMapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "pipeline definition not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.pipeline.definition_not_found");
     }
     PipelineDefinitionDetailResponse response = loadDetailResponse(resolved, id);
     publishRealtimeEvent(resolved, "pipeline-definition-toggled", response);

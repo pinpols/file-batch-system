@@ -50,7 +50,7 @@ public class InstanceManagementApplicationService {
         jobPartitionMapper.promoteStatus(
             tenantId, id, partition.getPartitionStatus(), "CANCELLED", partition.getVersion());
     if (rows == 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
     return Map.of("id", id, "status", "CANCELLED");
   }
@@ -66,7 +66,7 @@ public class InstanceManagementApplicationService {
         jobPartitionMapper.markRetrying(
             tenantId, id, partition.getRetryCount() + 1, "RETRYING", partition.getVersion());
     if (rows == 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
     return Map.of("id", id, "status", "RETRYING");
   }
@@ -88,7 +88,7 @@ public class InstanceManagementApplicationService {
         jobInstanceMapper.updateStatus(
             tenantId, id, targetStatus, Instant.now(), instance.getVersion());
     if (rows == 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "concurrent modification, please retry");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
     return Map.of("id", id, "instanceNo", instance.getInstanceNo(), "status", targetStatus);
   }

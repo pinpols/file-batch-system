@@ -379,7 +379,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
     ParsedSession session = loadSession(uploadToken);
     ValidationResult validationResult = validate(session);
     if (validationResult.invalidRows() > 0) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "excel contains invalid workflow rows");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_workflow_rows");
     }
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String operatorId = metadata.operatorId();
@@ -396,7 +396,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
           workflowDefinitionMapper.selectByUniqueKey(
               row.tenantId(), row.workflowCode(), row.version());
       if (saved == null || saved.getId() == null) {
-        throw new BizException(ResultCode.SYSTEM_ERROR, "failed to resolve workflow definition id");
+        throw BizException.of(ResultCode.SYSTEM_ERROR, "error.workflow.resolve_definition_failed");
       }
       List<WorkflowNodeRow> workflowNodes = nodesByWorkflow.getOrDefault(key, List.of());
       List<WorkflowEdgeRow> workflowEdges = edgesByWorkflow.getOrDefault(key, List.of());
@@ -824,7 +824,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
           workbook, definitionSheet, nodeSheet, edgeSheet, validationResult);
       return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
     } catch (IOException exception) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate preview excel workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_workbook_failed");
     }
   }
 
@@ -938,7 +938,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
       workbook.write(out);
       return out.toByteArray();
     } catch (IOException exception) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.generate_failed");
     }
   }
 
@@ -1303,7 +1303,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
       throws IOException {
     try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
       if (workbook.getNumberOfSheets() == 0) {
-        throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
       }
       List<WorkflowDefinitionRow> definitions =
           parseDefinitionSheet(findSheet(workbook, DEF_SHEET), tenantId);

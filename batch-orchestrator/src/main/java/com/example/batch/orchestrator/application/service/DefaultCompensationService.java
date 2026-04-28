@@ -112,8 +112,7 @@ public class DefaultCompensationService implements CompensationService {
     try {
       compensationCommandMapper.insert(entity);
     } catch (DataIntegrityViolationException ex) {
-      throw new BizException(
-          ResultCode.CONFLICT, "compensation command already running for this target", ex);
+      throw BizException.of(ResultCode.CONFLICT, "error.compensation.already_running", ex);
     }
     try {
       Map<String, Object> result = execute(command, commandNo, traceId, entity);
@@ -284,7 +283,7 @@ public class DefaultCompensationService implements CompensationService {
       String traceId,
       CompensationCommandEntity entity) {
     if (command.targetId() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "partition targetId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.partition.target_id_required");
     }
     retryGovernanceService.retryPartition(
         command.tenantId(),
@@ -326,8 +325,7 @@ public class DefaultCompensationService implements CompensationService {
       String traceId,
       CompensationCommandEntity entity) {
     if (!Texts.hasText(command.jobCode()) || command.bizDate() == null) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "jobCode and bizDate are required for batch rerun");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.batch_rerun_args_required");
     }
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("operationType", "BATCH_RERUN");
@@ -366,7 +364,7 @@ public class DefaultCompensationService implements CompensationService {
       String traceId,
       CompensationCommandEntity entity) {
     if (command.targetId() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "dead letter targetId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.dead_letter.target_id_required");
     }
     retryGovernanceService.replayDeadLetter(command.tenantId(), command.targetId());
     Map<String, Object> result = new LinkedHashMap<>();
@@ -439,7 +437,7 @@ public class DefaultCompensationService implements CompensationService {
         return entity;
       }
     }
-    throw new BizException(ResultCode.NOT_FOUND, "job instance not found");
+    throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
   }
 
   private record CompensationLogContext(
@@ -486,8 +484,7 @@ public class DefaultCompensationService implements CompensationService {
         compensationCommandMapper.countRunningByTarget(
             command.tenantId(), type, targetId, CompensationCommandStatus.RUNNING.code());
     if (running > 0) {
-      throw new BizException(
-          ResultCode.CONFLICT, "compensation command already running for this target");
+      throw BizException.of(ResultCode.CONFLICT, "error.compensation.already_running");
     }
   }
 
@@ -506,10 +503,10 @@ public class DefaultCompensationService implements CompensationService {
   private void validate(CompensationSubmitCommand command) {
     Guard.require(command != null, "compensation command is required");
     if (!Texts.hasText(command.tenantId())) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
     if (!Texts.hasText(command.compensationType())) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "compensationType is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.compensation.type_required");
     }
   }
 

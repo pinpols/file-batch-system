@@ -134,7 +134,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                     .expectedVersion(stepInstance.getVersion())
                     .build())
             <= 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "job step instance claim conflict");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_claim_conflict");
     }
     return jobTaskMapper.selectById(tenantId, taskId);
   }
@@ -225,7 +225,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
                     .expectedVersion(stepInstance.getVersion())
                     .build())
             <= 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "job step instance running conflict");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_running_conflict");
     }
     return jobTaskMapper.selectById(tenantId, taskId);
   }

@@ -264,7 +264,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
             .retrieve()
             .body(ApprovalResponse.class);
     if (response == null || response.approvalNo() == null || response.approvalNo().isBlank()) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "approval service returned empty response");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
     }
     return new ConsolePresignDownloadResponse(response.approvalNo(), null);
   }
@@ -283,7 +283,7 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
             response == null ? null : response.getRecord(), "approval request not found");
     String status = record.getApprovalStatus();
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
     }
   }
 

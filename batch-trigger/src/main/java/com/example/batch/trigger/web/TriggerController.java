@@ -41,7 +41,7 @@ public class TriggerController {
           String traceId,
       @Valid @RequestBody TriggerLaunchRequest request) {
     if (gracefulShutdown.isDraining()) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "trigger service is draining");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
     }
     String finalRequestId =
         requestId == null || requestId.isBlank() ? IdGenerator.newBusinessNo("req") : requestId;
@@ -56,7 +56,7 @@ public class TriggerController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody TriggerCatchUpRequest request) {
     if (gracefulShutdown.isDraining()) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "trigger service is draining");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
     }
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
     command.setTenantId(request.getTenantId());

@@ -60,8 +60,7 @@ public class WorkflowRunManagementApplicationService {
   public Map<String, Object> skipNode(String tenantId, Long id, String nodeCode) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!"RUNNING".equals(run.getRunStatus()) && !"FAILED".equals(run.getRunStatus())) {
-      throw new BizException(
-          ResultCode.STATE_CONFLICT, "workflow run must be RUNNING or FAILED to skip a node");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.skip_node_state_invalid");
     }
     WorkflowNodeRunEntity nodeRun =
         Guard.requireFound(

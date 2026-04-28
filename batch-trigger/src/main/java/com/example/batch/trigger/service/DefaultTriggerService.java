@@ -133,11 +133,10 @@ public class DefaultTriggerService implements TriggerService {
                       command.getTenantId(), command.getRequestId());
               Guard.requireFound(pendingRequest, "pending catch-up request not found");
               if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
-                throw new BizException(
-                    ResultCode.BUSINESS_ERROR, "request is not a catch-up request");
+                throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.not_catch_up");
               }
               if ("REJECTED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-                throw new BizException(ResultCode.BUSINESS_ERROR, "request is already rejected");
+                throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
               }
               if ("LAUNCHED".equalsIgnoreCase(pendingRequest.getRequestStatus())) {
                 return null; // sentinel: already launched
@@ -267,8 +266,7 @@ public class DefaultTriggerService implements TriggerService {
           r.jobCode(),
           r.tenantId(),
           e.getResponseBodyAsString());
-      throw new BizException(
-          ResultCode.NOT_FOUND, "orchestrator rejected trigger: job or tenant not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.orchestrator.trigger_rejected");
     }
     if (e.getStatusCode() == HttpStatusCode.valueOf(422)) {
       // Business rejection (e.g. outside batch window, late arrival, tenant closed, validation).
@@ -405,29 +403,29 @@ public class DefaultTriggerService implements TriggerService {
           ResultCode.MISSING_IDEMPOTENCY_KEY, ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
     }
     if (command.request() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "request body is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
     }
     if (command.request().getTenantId() == null || command.request().getTenantId().isBlank()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
     if (command.request().getJobCode() == null || command.request().getJobCode().isBlank()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "jobCode is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.code_required");
     }
     if (command.request().getBizDate() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "bizDate is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.biz_date_required");
     }
     if (command.request().getTriggerType() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "triggerType is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.type_required");
     }
   }
 
   private void validatePendingApproval(PendingCatchUpApprovalCommand command) {
     Guard.require(command != null, "approval command is required");
     if (command.getTenantId() == null || command.getTenantId().isBlank()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
     if (command.getRequestId() == null || command.getRequestId().isBlank()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "requestId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_id_required");
     }
   }
 }

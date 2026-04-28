@@ -28,7 +28,7 @@ public class LaunchController {
   @PostMapping("/launch")
   public LaunchResponse launch(@RequestBody LaunchRequest request) {
     if (gracefulShutdown.isDraining()) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "orchestrator is draining");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.orchestrator.draining");
     }
     return launchApplicationService.launch(request);
   }

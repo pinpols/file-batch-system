@@ -263,7 +263,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     ParsedSession session = loadSession(uploadToken);
     ValidationResult result = validateAll(session);
     if (result.invalidCalendarRows() > 0 || result.invalidHolidayRows() > 0) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "excel contains invalid rows");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_rows");
     }
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String operatorId = metadata.operatorId();
@@ -379,7 +379,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       throws IOException {
     try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
       if (workbook.getNumberOfSheets() == 0) {
-        throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
       }
       DataFormatter formatter = new DataFormatter();
       List<Map<String, String>> calendarRows =
@@ -708,7 +708,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       workbook.write(out);
       return out.toByteArray();
     } catch (IOException exception) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.generate_failed");
     }
   }
 
@@ -821,7 +821,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
 
       return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
     } catch (IOException exception) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate preview excel workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_workbook_failed");
     }
   }
 

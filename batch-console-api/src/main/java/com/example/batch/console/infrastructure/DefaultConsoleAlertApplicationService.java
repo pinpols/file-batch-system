@@ -60,12 +60,11 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
       return new ConsoleAlertActionResponse(alertId, tenantId, action, currentStatus);
     }
     if (STATUS_CLOSED.equals(currentStatus) && !STATUS_CLOSED.equals(nextStatus)) {
-      throw new BizException(
-          ResultCode.STATE_CONFLICT, "closed alert cannot be reopened by this action");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.alert.closed_cannot_reopen");
     }
     int updated = alertEventMapper.updateStatus(tenantId, alertId, nextStatus);
     if (updated == 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "failed to update alert status");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.alert.update_status_failed");
     }
     domainEventPublisher.publishChanged(tenantId, "alerts", "alert-updated");
     domainEventPublisher.publishSummaryRefresh(tenantId);

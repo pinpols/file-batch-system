@@ -24,8 +24,7 @@ public class ConsolePasswordHasher {
       return false;
     }
     if (!encodedPassword.startsWith("$argon2")) {
-      throw new BizException(
-          ResultCode.SYSTEM_ERROR, "unsupported password hash format (expected Argon2id)");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.auth.unsupported_password_hash");
     }
     return ARGON2.matches(rawPassword, encodedPassword);
   }

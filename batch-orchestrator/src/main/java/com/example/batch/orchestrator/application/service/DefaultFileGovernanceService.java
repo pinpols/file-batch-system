@@ -93,13 +93,12 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     Map<String, Object> fileRecord =
         fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
     if (fileRecord.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "file record not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     Map<String, Object> security =
         fileGovernanceRepository.loadTemplateSecurityForFile(command.tenantId(), command.fileId());
     if (requiresDownloadApproval(security) && !Texts.hasText(command.approvalId())) {
-      throw new BizException(
-          ResultCode.BUSINESS_ERROR, "approvalId is required for download on this file template");
+      throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
     }
     if (truthy(security.get("content_encryption_enabled"))
         && !batchSecurityProperties.isBypassMode()) {
@@ -129,7 +128,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     String storagePath = stringValue(fileRecord.get("storage_path"));
     String storageBucket = stringValue(fileRecord.get("storage_bucket"));
     if (storagePath == null || storagePath.isBlank()) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "file storage path is missing");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
     int expirySeconds =
         Math.max(60, fileGovernanceProperties.getAccess().getPresignExpirySeconds());
@@ -175,20 +174,19 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     Map<String, Object> fileRecord =
         fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
     if (fileRecord.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "file record not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     Map<String, Object> dispatchRecord =
         fileGovernanceRepository.loadLatestDispatchRecord(
             command.tenantId(), command.fileId(), command.channelCode());
     if (dispatchRecord.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "dispatch record not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.dispatch.record_not_found");
     }
     Long pipelineInstanceId = toLong(dispatchRecord.get("pipeline_instance_id"));
     Long relatedJobInstanceId =
         fileGovernanceRepository.loadRelatedJobInstanceId(pipelineInstanceId);
     if (relatedJobInstanceId == null) {
-      throw new BizException(
-          ResultCode.STATE_CONFLICT, "dispatch pipeline is not bound to a job instance");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.dispatch.pipeline_unbound");
     }
     JobInstanceEntity jobInstance =
         Guard.requireFound(
@@ -237,7 +235,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         fileGovernanceRepository.selectArrivalGroupFiles(
             command.tenantId(), command.fileGroupCode());
     if (groupFiles.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "arrival group not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.arrival_group.not_found");
     }
     Instant now = Instant.now();
     String action = command.action().trim().toUpperCase();
@@ -251,10 +249,11 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
                   ResultCode.INVALID_ARGUMENT, "unsupported arrival action: " + command.action());
         };
     if ("EMPTY_RUN".equals(action) && !toBoolean(groupFiles.get(0).get("allow_empty_run"))) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "arrival group does not allow empty run");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.arrival_group.empty_run_not_allowed");
     }
     if ("SKIP_BATCH".equals(action) && !toBoolean(groupFiles.get(0).get("allow_skip_biz_date"))) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "arrival group does not allow skip batch");
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.arrival_group.skip_batch_not_allowed");
     }
     long extensionSeconds =
         command.extendWaitSeconds() == null || command.extendWaitSeconds() <= 0
@@ -333,7 +332,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     Map<String, Object> fileRecord =
         fileGovernanceRepository.loadFileRecord(command.tenantId(), command.fileId());
     if (fileRecord.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "file record not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     String currentStatus = stringValue(fileRecord.get("file_status"));
     try {
@@ -390,7 +389,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             Comparator.comparing(
                 JobTaskEntity::getTaskSeq, Comparator.nullsLast(Integer::compareTo)))
         .findFirst()
-        .orElseThrow(() -> new BizException(ResultCode.NOT_FOUND, "dispatch task not found"));
+        .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.dispatch.task_not_found"));
   }
 
   private Map<String, Object> buildRedispatchDetail(
@@ -411,35 +410,35 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     long activePipelines =
         fileGovernanceRepository.countActivePipelineInstances(command.tenantId(), command.fileId());
     if (activePipelines > 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "file still has active pipeline instances");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.has_active_pipelines");
     }
     long pendingDispatches =
         fileGovernanceRepository.countPendingDispatchRecords(command.tenantId(), command.fileId());
     if (pendingDispatches > 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "file still has pending dispatch records");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.has_pending_dispatches");
     }
   }
 
   private void validateCommand(FileGovernanceCommand command) {
     Guard.require(command != null, "file governance command is required");
     if (!Texts.hasText(command.tenantId())) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
     if (command.fileId() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "fileId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.id_required");
     }
   }
 
   private void validateArrivalGroupCommand(ArrivalGroupGovernanceCommand command) {
     Guard.require(command != null, "arrival group command is required");
     if (!Texts.hasText(command.tenantId())) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
     if (!Texts.hasText(command.fileGroupCode())) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "fileGroupCode is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.file.group_code_required");
     }
     if (!Texts.hasText(command.action())) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "action is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.action_required");
     }
   }
 

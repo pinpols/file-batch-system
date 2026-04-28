@@ -239,7 +239,7 @@ class ConfigPackageExcelWorkbookWriter {
       wb.write(out);
       return out.toByteArray();
     } catch (IOException e) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate export workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.export_workbook_failed");
     }
   }
 
@@ -255,7 +255,7 @@ class ConfigPackageExcelWorkbookWriter {
       wb.write(out);
       return out.toByteArray();
     } catch (IOException e) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate template workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.template_workbook_failed");
     }
   }
 
@@ -288,7 +288,7 @@ class ConfigPackageExcelWorkbookWriter {
       ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(wb, result.allIssues());
       return ConsoleExcelPreviewWorkbookSupport.toBytes(wb);
     } catch (IOException e) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate preview workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_failed");
     }
   }
 

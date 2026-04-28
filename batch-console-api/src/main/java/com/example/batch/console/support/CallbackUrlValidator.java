@@ -34,28 +34,26 @@ public class CallbackUrlValidator {
     try {
       uri = new URI(callbackUrl);
     } catch (URISyntaxException e) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "callbackUrl is not a valid URL");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.invalid_url");
     }
 
     String scheme = uri.getScheme();
     if (!"https".equalsIgnoreCase(scheme)) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "callbackUrl must use HTTPS in production");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.https_required");
     }
 
     String host = uri.getHost();
     if (host == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "callbackUrl has no host");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.no_host");
     }
 
     // S-2.6: DNS 解析后校验真实 IP，消除 DNS rebinding 窗口
     try {
       DnsResolveGuard.resolveAndValidate(host);
     } catch (BlockedAddressException e) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "callbackUrl points to a restricted network address");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.restricted_address");
     } catch (UnknownHostException e) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "callbackUrl host cannot be resolved");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.host_unresolved");
     }
   }
 }

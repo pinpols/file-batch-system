@@ -164,7 +164,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
         Guard.requireFound(calendarMapper.selectById(resolved, id), ERR_CALENDAR_NOT_FOUND);
     int rows = holidayMapper.deleteById(holidayId);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "holiday not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.holiday.not_found");
     }
     cacheInvalidationService.evictBusinessCalendar(
         resolved, String.valueOf(calendar.get(KEY_CALENDAR_CODE)));

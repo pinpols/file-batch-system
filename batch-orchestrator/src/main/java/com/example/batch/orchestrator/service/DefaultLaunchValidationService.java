@@ -52,7 +52,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     if (jobDefinition == null) {
       triggerRequestMapper.updateAcceptance(
           request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
-      throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
     }
 
     // workflow definition 仅对 WORKFLOW 类型 job 必须存在；IMPORT/EXPORT/DISPATCH/GENERAL 无需关联 workflow
@@ -64,7 +64,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       if (workflowDefinition == null) {
         triggerRequestMapper.updateAcceptance(
             request.tenantId(), request.requestId(), BatchStatusConstants.REJECTED, null);
-        throw new BizException(ResultCode.NOT_FOUND, "workflow definition not found for job code");
+        throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found_for_job");
       }
     }
 
@@ -79,16 +79,16 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
   private void validate(LaunchRequest request) {
     Guard.require(request != null, "launch request is required");
     if (request.tenantId() == null || request.tenantId().isBlank()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "tenantId is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
     if (request.jobCode() == null || request.jobCode().isBlank()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "jobCode is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.code_required");
     }
     if (request.bizDate() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "bizDate is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.biz_date_required");
     }
     if (request.triggerType() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "triggerType is required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.type_required");
     }
   }
 }

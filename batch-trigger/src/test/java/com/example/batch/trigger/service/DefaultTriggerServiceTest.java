@@ -186,7 +186,7 @@ class DefaultTriggerServiceTest {
 
     assertThatThrownBy(() -> service.approvePendingCatchUp(command))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("not a catch-up request");
+        .hasMessageContaining("not_catch_up");
 
     verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
   }
