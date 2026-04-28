@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.infrastructure.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -59,9 +60,9 @@ class BatchWindowGateTest {
     // 这样 in-window 路径才能跑到底；否则 NPE on `concurrencyCheck.allowed()`。
     // 用 doReturn().when() 形态绕开 Mockito strict-stubs 对 null arg 的 issue。
     ConcurrencyLimiter concLimit = mock(ConcurrencyLimiter.class);
-    org.mockito.Mockito.doReturn(ResourceCheck.allow()).when(concLimit).check(any(), any());
+    doReturn(ResourceCheck.allow()).when(concLimit).check(any(), any());
     PartitionThrottle partThrottle = mock(PartitionThrottle.class);
-    org.mockito.Mockito.doReturn(ResourceCheck.allow()).when(partThrottle).check(any(), any());
+    doReturn(ResourceCheck.allow()).when(partThrottle).check(any(), any());
 
     scheduler =
         new DefaultResourceScheduler(

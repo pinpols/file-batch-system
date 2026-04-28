@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -92,8 +93,7 @@ class OutboxArchiveServiceTest {
     service.archivePublished();
     service.archiveGiveUp();
 
-    org.mockito.ArgumentCaptor<Instant> cutoffCaptor =
-        org.mockito.ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
     verify(mapper).selectArchivableIds(eq("PUBLISHED"), cutoffCaptor.capture(), anyInt());
     Instant publishedCutoff = cutoffCaptor.getValue();
     verify(mapper).selectArchivableIds(eq("GIVE_UP"), cutoffCaptor.capture(), anyInt());

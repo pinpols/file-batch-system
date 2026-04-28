@@ -3,6 +3,7 @@ package com.example.batch.worker.processes.stage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -141,7 +142,7 @@ class DefaultProcessStageExecutorTest {
   void execute_returnsBusinessError_whenPluginPrepareThrowsBizException() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("p1");
-    org.mockito.BDDMockito.willThrow(new BizException(ResultCode.INVALID_ARGUMENT, "bad spec"))
+    willThrow(new BizException(ResultCode.INVALID_ARGUMENT, "bad spec"))
         .given(plugin)
         .prepare(any());
 
@@ -167,7 +168,7 @@ class DefaultProcessStageExecutorTest {
   void execute_returnsInfraError_whenPluginPrepareThrowsRuntimeException() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("p1");
-    org.mockito.BDDMockito.willThrow(new RuntimeException("io fail")).given(plugin).prepare(any());
+    willThrow(new RuntimeException("io fail")).given(plugin).prepare(any());
 
     DefaultProcessStageExecutor executor =
         new DefaultProcessStageExecutor(

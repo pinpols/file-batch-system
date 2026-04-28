@@ -3,6 +3,7 @@ package com.example.batch.orchestrator.application.archive;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -16,6 +17,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class WorkflowArchiveServiceTest {
 
@@ -70,7 +72,7 @@ class WorkflowArchiveServiceTest {
     assertThat(result.workflowRunsDeleted()).isEqualTo(3);
     assertThat(result.workflowNodeRunsDeleted()).isEqualTo(7);
     // 顺序断言：node_runs 先于 runs
-    var inOrder = org.mockito.Mockito.inOrder(mapper);
+    var inOrder = inOrder(mapper);
     inOrder.verify(mapper).deleteNodeRunsByWorkflowRunIds(ids);
     inOrder.verify(mapper).deleteByIds(ids);
   }
@@ -109,8 +111,7 @@ class WorkflowArchiveServiceTest {
 
     service.archiveOnce();
 
-    org.mockito.ArgumentCaptor<Instant> cutoffCaptor =
-        org.mockito.ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
     verify(mapper, times(1)).selectArchivableIds(cutoffCaptor.capture(), anyInt());
     Instant cutoff = cutoffCaptor.getValue();
     Instant now = Instant.now();

@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.infrastructure.sharding;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -125,6 +126,6 @@ class RedisShardAssignmentProviderTest {
   }
 
   private static double anyDouble() {
-    return org.mockito.ArgumentMatchers.anyDouble();
+    return anyDouble();
   }
 }

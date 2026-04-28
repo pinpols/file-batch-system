@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,7 +59,7 @@ class RedisQuotaRuntimeStateServiceTest {
                 1,
                 new QuotaRuntimeStateService.QuotaReservationReason("OVER", "over")));
     assertThat(result.allowed()).isTrue();
-    verify(redis, org.mockito.Mockito.never())
+    verify(redis, never())
         .evalList(
             anyString(),
             anyString(),
@@ -230,7 +231,7 @@ class RedisQuotaRuntimeStateServiceTest {
   @Test
   void reconcileShouldBeNoOp() {
     service.reconcileExpiredStates(2);
-    verify(redis, org.mockito.Mockito.never())
+    verify(redis, never())
         .evalList(
             anyString(),
             anyString(),
