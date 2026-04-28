@@ -11,6 +11,8 @@
         <result column="retry_count" property="retryCount"/>
         <result column="error_code" property="errorCode"/>
         <result column="error_message" property="errorMessage"/>
+        <result column="error_key" property="errorKey"/>
+        <result column="error_args" property="errorArgs"/>
         <result column="started_at" property="startedAt"/>
         <result column="finished_at" property="finishedAt"/>
         <result column="duration_ms" property="durationMs"/>
