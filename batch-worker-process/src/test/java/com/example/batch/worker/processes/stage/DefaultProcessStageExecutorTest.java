@@ -18,6 +18,7 @@ import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
+import com.example.batch.worker.processes.metrics.ProcessMetrics;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +48,8 @@ class DefaultProcessStageExecutorTest {
   @Test
   void defaultStepDefinitions_useWapBookendsOrder() {
     DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(allStageStepBeans(), List.of(), runtimeRepository);
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(), runtimeRepository, ProcessMetrics.noop());
 
     List<PipelineStepTemplate> templates = executor.defaultStepDefinitions();
 
@@ -77,7 +79,8 @@ class DefaultProcessStageExecutorTest {
             });
 
     DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(allStageStepBeans(), List.of(plugin), runtimeRepository);
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(plugin), runtimeRepository, ProcessMetrics.noop());
 
     ProcessJobContext context = newContext();
     context
@@ -114,7 +117,8 @@ class DefaultProcessStageExecutorTest {
         .thenReturn(ProcessStageResult.failure(ProcessStage.COMPUTE, "ERR", "boom"));
 
     DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(allStageStepBeans(), List.of(plugin), runtimeRepository);
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(plugin), runtimeRepository, ProcessMetrics.noop());
 
     ProcessJobContext context = newContext();
     context
@@ -142,7 +146,8 @@ class DefaultProcessStageExecutorTest {
         .prepare(any());
 
     DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(allStageStepBeans(), List.of(plugin), runtimeRepository);
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(plugin), runtimeRepository, ProcessMetrics.noop());
 
     ProcessJobContext context = newContext();
     context
@@ -165,7 +170,8 @@ class DefaultProcessStageExecutorTest {
     org.mockito.BDDMockito.willThrow(new RuntimeException("io fail")).given(plugin).prepare(any());
 
     DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(allStageStepBeans(), List.of(plugin), runtimeRepository);
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(plugin), runtimeRepository, ProcessMetrics.noop());
 
     ProcessJobContext context = newContext();
     context
@@ -187,7 +193,8 @@ class DefaultProcessStageExecutorTest {
     when(plugin.compute(any())).thenReturn(ProcessStageResult.success(ProcessStage.COMPUTE));
 
     DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(allStageStepBeans(), List.of(plugin), runtimeRepository);
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(plugin), runtimeRepository, ProcessMetrics.noop());
 
     ProcessJobContext context = newContext();
     // COMPUTE step impl_code 是默认 sentinel(PROCESS_COMPUTE),走 payload 注入的 processImplCode 兜底
@@ -205,7 +212,8 @@ class DefaultProcessStageExecutorTest {
   @Test
   void execute_runsAll5StagesAsNoOp_whenNoPluginConfigured() {
     DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(allStageStepBeans(), List.of(), runtimeRepository);
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(), runtimeRepository, ProcessMetrics.noop());
 
     ProcessJobContext context = newContext();
     context
@@ -223,7 +231,8 @@ class DefaultProcessStageExecutorTest {
   @Test
   void execute_returnsPipelineStepMissing_whenNoStepsConfigured() {
     DefaultProcessStageExecutor executor =
-        new DefaultProcessStageExecutor(allStageStepBeans(), List.of(), runtimeRepository);
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(), runtimeRepository, ProcessMetrics.noop());
 
     ProcessJobContext context = newContext();
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
@@ -237,6 +246,31 @@ class DefaultProcessStageExecutorTest {
   }
 
   @Test
+  void execute_failsFastWithPluginNotFound_whenComputeImplCodeNotRegistered() {
+    // P2-5:COMPUTE step 显式配了 impl_code "ghostPlugin"(非默认 sentinel),但 plugin 注册表里没有
+    // → PrepareStep 应直接返回 PROCESS_COMPUTE_PLUGIN_NOT_FOUND failure,后续 stage 全部跳过。
+    DefaultProcessStageExecutor executor =
+        new DefaultProcessStageExecutor(
+            allStageStepBeans(), List.of(), runtimeRepository, ProcessMetrics.noop());
+
+    ProcessJobContext context = newContext();
+    context
+        .getAttributes()
+        .put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, fullPipelineWith("ghostPlugin"));
+
+    List<ProcessStageResult> results = executor.execute(context);
+
+    assertThat(results).hasSize(1);
+    assertThat(results.get(0).stage()).isEqualTo(ProcessStage.PREPARE);
+    assertThat(results.get(0).success()).isFalse();
+    assertThat(results.get(0).code()).isEqualTo("PROCESS_COMPUTE_PLUGIN_NOT_FOUND");
+    assertThat(results.get(0).message()).contains("ghostPlugin");
+    assertThat(context.getResolvedPlugin()).isNull();
+    assertThat(context.getAttributes())
+        .containsEntry(ProcessRuntimeKeys.PROCESS_PLUGIN_NOT_FOUND, "ghostPlugin");
+  }
+
+  @Test
   void execute_failsWithStepNotFound_whenStageBeanMissingForConfiguredStage() {
     // 故意构造缺 PREPARE bean 的 step 列表(模拟 Spring DI 漏注册)
     List<ProcessStageStep> incomplete = new ArrayList<>();
@@ -247,7 +281,9 @@ class DefaultProcessStageExecutorTest {
     }
     // executor 构造期会因 buildDefaultStepDefinitions 缺 PREPARE bean 抛 IllegalStateException
     org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> new DefaultProcessStageExecutor(incomplete, List.of(), runtimeRepository))
+            () ->
+                new DefaultProcessStageExecutor(
+                    incomplete, List.of(), runtimeRepository, ProcessMetrics.noop()))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("missing process step bean for stage");
   }

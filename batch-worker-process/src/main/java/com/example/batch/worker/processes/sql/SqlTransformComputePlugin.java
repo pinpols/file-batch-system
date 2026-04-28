@@ -9,6 +9,7 @@ import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessPayload;
 import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
+import com.example.batch.worker.processes.metrics.ProcessMetrics;
 import com.example.batch.worker.processes.stage.ProcessComputePlugin;
 import com.example.batch.worker.processes.stage.ProcessRuntimeKeys;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,11 +54,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private final ObjectMapper objectMapper;
   private final SqlTransformComputeSecurityProperties security;
   private final SqlTransformComputeSqlValidator sqlValidator;
+  private final ProcessMetrics metrics;
 
   public SqlTransformComputePlugin(
       @Qualifier("processBusinessDataSource") DataSource processBusinessDataSource,
       ObjectMapper objectMapper,
-      SqlTransformComputeSecurityProperties security) {
+      SqlTransformComputeSecurityProperties security,
+      ProcessMetrics metrics) {
     JdbcTemplate template = new JdbcTemplate(processBusinessDataSource);
     template.setQueryTimeout(
         Math.max(1, security == null ? 60 : security.getQueryTimeoutSeconds()));
@@ -65,6 +68,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     this.objectMapper = objectMapper;
     this.security = security;
     this.sqlValidator = new SqlTransformComputeSqlValidator(security);
+    this.metrics = metrics;
   }
 
   @Override
@@ -107,6 +111,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     int stagedRows = jdbc.update(stageSql, params);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, stagedRows);
     context.getAttributes().put("processedCount", stagedRows);
+    metrics.recordComputeStagedRows(context.getTenantId(), stagedRows);
 
     // P1-6:超过 maxStagedRows 立即清本批 staging,避免后续 stage 处理超大集合 / target 表雪崩。
     // 在事务边界外删除即可,因 PR-3 P0-3 已让 commit+cleanup 同事务,这里只是补"提前刹车"。
@@ -187,6 +192,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       try {
         row = jdbc.queryForMap(checkSql, params);
       } catch (EmptyResultDataAccessException ex) {
+        metrics.incrementValidationFailed(context.getTenantId(), rule.name());
         return ProcessStageResult.failure(
             ProcessStage.VALIDATE,
             "PROCESS_VALIDATION_NO_ROW",
@@ -195,6 +201,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       Object pass = row.get("pass");
       if (!(pass instanceof Boolean booleanPass) || !booleanPass) {
         Object message = row.get("message");
+        metrics.incrementValidationFailed(context.getTenantId(), rule.name());
         return ProcessStageResult.failure(
             ProcessStage.VALIDATE,
             "PROCESS_VALIDATION_FAILED",
@@ -223,6 +230,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     int publishedRows = jdbc.update(publishSql, params);
     int cleaned = cleanupCommittedStaging(params);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, publishedRows);
+    metrics.recordCommitPublishedRows(context.getTenantId(), publishedRows);
     log.info(
         "sqlTransformCompute published: tenantId={}, batchKey={}, target={}.{}, publishedRows={},"
             + " cleanedRows={}",

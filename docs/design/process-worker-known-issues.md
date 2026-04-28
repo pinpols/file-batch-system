@@ -18,10 +18,10 @@ PROCESS Worker 的 happy path 已跑通：配置 `pipeline_step_definition.impl_
 
 本轮 hardening 状态（2026-04-28）：
 
-- 已修：P0-2 / P0-3 / P0-4 / P1-1 / P1-2 / P1-3 / P1-4 / P1-5 / **P1-6 / P1-7**。
-- 已缓解：P0-1 已把 `batch.process_staging` 纳入业务库初始化脚本；平台 Flyway 中的历史 V75 表保留兼容，后续仍建议补真双库 E2E。
+- 已修：P0-2 / P0-3 / P0-4 / P1-1 / P1-2 / P1-3 / P1-4 / P1-5 / P1-6 / P1-7 / **P2-4 / P2-5**。
+- 已缓解：P0-1 已把 `batch.process_staging` 纳入业务库初始化脚本；平台 Flyway 中的历史 V75 表保留兼容,后续仍建议补真双库 E2E。
 - 已文档化:**P2-1 / P2-2 / P2-7**(`system-flow-overview.md` §7.9.8 给出 writeMode 重跑表 / JSONB 类型矩阵 / 自定义 plugin SPI 边界与示例)。
-- 未修：P2-3 / P2-4 / P2-5 / P2-6 / 双库 E2E 待补。
+- 未修：P2-3 / P2-6 / 双库 E2E 待补。
 
 ## 1. P0 — 必须先修
 
@@ -297,22 +297,20 @@ V75 有 `staged_at` 索引，文档也承认 VALIDATE 失败会保留 staging，
 
 当前 attributes 既作为运行时 Map，也会参与 step summary 构建。强类型对象不一定可 JSON 序列化。建议将 plugin 私有状态放进 `ProcessJobContext` 的 typed field，或保证 summary 不会序列化该对象。
 
-### P2-4. 缺 Micrometer 指标
+### P2-4. 缺 Micrometer 指标 ✅ 已修
 
-建议补：
+落地于 `ProcessMetrics`(`batch-worker-process/.../metrics/ProcessMetrics.java`),无 `MeterRegistry` 时全部退化为 no-op:
 
-- `process_compute_staged_rows`
-- `process_commit_published_rows`
-- `process_validation_failed_total`
-- `process_staging_orphan_cleaned_total`
-- `process_stage_duration_seconds`
+- `process_compute_staged_rows`(DistributionSummary,tag: tenantId)—— `SqlTransformComputePlugin.compute()` 写 staging 后记录
+- `process_commit_published_rows`(DistributionSummary,tag: tenantId)—— `SqlTransformComputePlugin.commit()` 落 target 表后记录
+- `process_validation_failed_total`(Counter,tag: tenantId, ruleName)—— VALIDATE 阶段单条 rule 失败 / 无行返回时 +1
+- `process_stage_duration_seconds`(Timer,tag: stage, tenantId, success)—— `DefaultProcessStageExecutor.executeOneStep` 包裹每段计时
+- `process_staging_orphan_cleaned_total` —— 已在 PR-3 P1-7 由 `ProcessStagingOrphanCleaner` 提供
 
-### P2-5. unknown plugin 的行为需要产品化决策
+### P2-5. unknown plugin 的行为需要产品化决策 ✅ 已修
 
-当前找不到 plugin 时，5 个 stage 走默认 success/no-op，`processedCount=0`。这有利于默认空模板跑通，但生产配置 typo 会静默成功。建议：
-
-- 默认 pipeline 的 `PROCESS_COMPUTE` sentinel 允许 no-op；
-- 非 sentinel 的 `impl_code` 找不到时 fail-fast：`PROCESS_COMPUTE_PLUGIN_NOT_FOUND`。
+`DefaultProcessStageExecutor.resolvePluginAndAttachToContext` 命中 `pluginsByImplCode.get()` 返回 null 时,把 `impl_code` 写入 `ProcessRuntimeKeys.PROCESS_PLUGIN_NOT_FOUND`;`PrepareStep` 检测到该 attribute 立即返回 `PROCESS_COMPUTE_PLUGIN_NOT_FOUND` failure。默认 sentinel `PROCESS_COMPUTE` 仍允许 5 个 stage 走 no-op success(空模板可跑)。
+回归测试:`DefaultProcessStageExecutorTest#execute_failsFastWithPluginNotFound_whenComputeImplCodeNotRegistered`。
 
 ### P2-6. PROCESS 优先级与隔离 topic 尚未设计
 
