@@ -301,7 +301,10 @@ class ConfigPackageExcelWorkbookWriter {
       Row dataRow = sheet.createRow(idx++);
       for (int c = 0; c < def.columns().size(); c++) {
         Object val = row.get(def.columns().get(c));
-        dataRow.createCell(c).setCellValue(val == null ? EMPTY : String.valueOf(val));
+        dataRow
+            .createCell(c)
+            .setCellValue(
+                val == null ? EMPTY : ConsoleExcelStyles.escapeFormula(String.valueOf(val)));
       }
     }
     def.validationApplier().accept(sheet);
@@ -331,20 +334,20 @@ class ConfigPackageExcelWorkbookWriter {
   }
 
   private void createReadmeSheet(Workbook wb) {
-    Sheet sheet = wb.createSheet("README");
+    Sheet sheet = wb.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
     sheet.setColumnWidth(0, 18000);
     CellStyle title = createReadmeTitleStyle(wb);
     String[] lines = {
-      "Tenant Config Package Import Template",
-      "Contains 8 sheets: job_definition / file_channel_config / alert_routing_config",
+      "租户配置包导入模板",
+      "包含 8 个 sheet:job_definition / file_channel_config / alert_routing_config",
       "  / pipeline_definition / pipeline_step_definition",
       "  / workflow_definition / workflow_node / workflow_edge",
-      "Import flow: upload -> preview -> apply (single transaction)",
-      "Cross-sheet references validated: pipeline.job_code -> job_definition,",
-      "  wf_node.related_job_code -> job_definition,",
-      "  wf_node.related_pipeline_code -> pipeline_definition",
-      "Job definitions: INSERT if not found, UPDATE mutable fields if found.",
-      "All other types: UPSERT by unique key."
+      "导入流程:上传 → 预览 → 应用(单事务原子提交)",
+      "跨 sheet 引用校验:pipeline.job_code → job_definition,",
+      "  wf_node.related_job_code → job_definition,",
+      "  wf_node.related_pipeline_code → pipeline_definition",
+      "Job 定义:未找到则 INSERT,已存在则更新可变字段。",
+      "其他类型:按唯一键 UPSERT。"
     };
     for (int i = 0; i < lines.length; i++) {
       Row row = sheet.createRow(i);
@@ -357,7 +360,7 @@ class ConfigPackageExcelWorkbookWriter {
   }
 
   private void createFieldGuideSheet(Workbook wb) {
-    Sheet sheet = wb.createSheet("填写说明");
+    Sheet sheet = wb.createSheet(ConsoleExcelStyles.SHEET_NAME_GUIDE);
     sheet.setColumnWidth(0, 7000);
     sheet.setColumnWidth(1, 7000);
     sheet.setColumnWidth(2, 3500);

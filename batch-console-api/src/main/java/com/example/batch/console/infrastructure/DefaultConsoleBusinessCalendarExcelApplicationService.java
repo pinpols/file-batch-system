@@ -5,6 +5,8 @@ import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownVa
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setGuideColumnWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
@@ -722,7 +724,8 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
         String header = spec.columns().get(i);
         Cell cell = dataRow.createCell(i);
         Object value = spec.valueMapper().apply(header, row);
-        cell.setCellValue(value == null ? "" : String.valueOf(value));
+        cell.setCellValue(
+            value == null ? "" : ConsoleExcelStyles.escapeFormula(String.valueOf(value)));
       }
     }
     spec.validator().accept(sheet);
@@ -844,21 +847,17 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
   }
 
   private void createReadmeSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("README");
-    sheet.setColumnWidth(0, 16000);
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
+    setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
     String[] lines = {
-      "business calendar maintenance template",
-      "1. This workbook contains two sheets: business_calendar and calendar_holiday.",
-      "2. Orange headers mark required fields. Hover the header to see field rules and"
-          + " examples.",
-      "3. calendar_code is the unique key for calendars. calendar_code + biz_date is the"
-          + " unique key for holidays.",
-      "4. holiday_roll_rule, catch_up_policy, day_type, and enabled have built-in dropdown"
-          + " validation.",
-      "5. calendar_code in calendar_holiday sheet must reference a calendar_code in"
-          + " business_calendar sheet.",
-      "6. Import flow is upload -> preview -> apply."
+      "业务日历维护模板",
+      "1. 工作簿包含两个数据 sheet:business_calendar 与 calendar_holiday。",
+      "2. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
+      "3. calendar_code 是日历的唯一键;calendar_code + biz_date 是节假日的唯一键。",
+      "4. holiday_roll_rule / catch_up_policy / day_type / enabled 已内置下拉值校验。",
+      "5. calendar_holiday sheet 中的 calendar_code 必须引用 business_calendar 中的 calendar_code。",
+      "6. 导入流程：上传 → 预览 → 应用。"
     };
     for (int i = 0; i < lines.length; i++) {
       Row row = sheet.createRow(i);
@@ -870,7 +869,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
   }
 
   private void createDictSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("DICT");
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_DICT);
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
@@ -892,9 +891,7 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
       row.createCell(1).setCellValue(rows[i][1]);
       row.createCell(2).setCellValue(rows[i][2]);
     }
-    sheet.setColumnWidth(0, 24 * 256);
-    sheet.setColumnWidth(1, 20 * 256);
-    sheet.setColumnWidth(2, 36 * 256);
+    setGuideColumnWidths(sheet);
   }
 
   private void createValidationSheet(Workbook workbook) {

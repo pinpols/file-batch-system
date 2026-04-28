@@ -5,6 +5,8 @@ import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownVa
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setGuideColumnWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeTemplateHeaders;
@@ -713,7 +715,8 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         String header = PIPELINE_COLUMNS.get(i);
         Cell cell = dataRow.createCell(i);
         Object value = row.get(header);
-        cell.setCellValue(value == null ? "" : String.valueOf(value));
+        cell.setCellValue(
+            value == null ? "" : ConsoleExcelStyles.escapeFormula(String.valueOf(value)));
       }
     }
     applyPipelineValidations(sheet);
@@ -731,7 +734,8 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
         String header = STEP_COLUMNS.get(i);
         Cell cell = dataRow.createCell(i);
         Object value = row.get(header);
-        cell.setCellValue(value == null ? "" : String.valueOf(value));
+        cell.setCellValue(
+            value == null ? "" : ConsoleExcelStyles.escapeFormula(String.valueOf(value)));
       }
     }
     applyStepValidations(sheet);
@@ -817,20 +821,17 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   }
 
   private void createReadmeSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("README");
-    sheet.setColumnWidth(0, 16000);
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
+    setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
     String[] lines = {
-      "pipeline definition maintenance template",
-      "1. Sheet 'pipeline_definition' contains pipeline definitions. Orange headers mark"
-          + " required fields.",
-      "2. Sheet 'pipeline_step_definition' contains step definitions, linked by job_code +"
-          + " version.",
-      "3. pipeline_type, stage_code, retry_policy, and enabled have built-in dropdown"
-          + " validation.",
-      "4. step_params must stay valid JSON (or leave empty).",
-      "5. Import flow is upload -> preview -> apply.",
-      "6. Hover the header cells to see field rules and examples."
+      "Pipeline 定义维护模板",
+      "1. 'pipeline_definition' sheet 维护 pipeline 定义；橙色表头表示必填字段。",
+      "2. 'pipeline_step_definition' sheet 维护 step 定义,按 job_code + version 关联。",
+      "3. pipeline_type / stage_code / retry_policy / enabled 已内置下拉值校验。",
+      "4. step_params 必须保持合法 JSON(或留空)。",
+      "5. 导入流程：上传 → 预览 → 应用。",
+      "6. 鼠标悬停表头单元格可查看字段规则与示例。"
     };
     for (int i = 0; i < lines.length; i++) {
       Row row = sheet.createRow(i);
@@ -842,7 +843,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
   }
 
   private void createDictSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("DICT");
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_DICT);
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
@@ -871,9 +872,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       row.createCell(1).setCellValue(rows[i][1]);
       row.createCell(2).setCellValue(rows[i][2]);
     }
-    sheet.setColumnWidth(0, 24 * 256);
-    sheet.setColumnWidth(1, 20 * 256);
-    sheet.setColumnWidth(2, 36 * 256);
+    setGuideColumnWidths(sheet);
   }
 
   private void createValidationSheet(Workbook workbook) {

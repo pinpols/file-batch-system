@@ -4,6 +4,8 @@ import static com.example.batch.console.support.ConsoleExcelStyles.addBooleanVal
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setGuideColumnWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
 import com.example.batch.console.application.ConsoleTenantQuotaPolicyExcelApplicationService;
@@ -204,17 +206,16 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
 
   @Override
   protected void createReadmeSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("README");
-    sheet.setColumnWidth(0, 16000);
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
+    setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
     String[] lines = {
-      "tenant quota policy maintenance template",
-      "1. Orange headers mark required fields. Hover the header to see field rules and"
-          + " examples.",
-      "2. policy_code is the unique key used during preview and apply.",
-      "3. enabled has built-in dropdown validation (TRUE / FALSE).",
-      "4. All integer fields must be >= 0, fair_share_weight must be >= 1.",
-      "5. Import flow is upload -> preview -> apply."
+      "租户配额策略维护模板",
+      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
+      "2. policy_code 是预览与应用阶段使用的唯一键。",
+      "3. enabled 已内置下拉值校验(TRUE / FALSE)。",
+      "4. 全部整数字段必须 ≥ 0,fair_share_weight 必须 ≥ 1。",
+      "5. 导入流程：上传 → 预览 → 应用。"
     };
     for (int i = 0; i < lines.length; i++) {
       Row row = sheet.createRow(i);
@@ -227,7 +228,7 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
 
   @Override
   protected void createDictSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("DICT");
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_DICT);
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
@@ -241,9 +242,7 @@ public class DefaultConsoleTenantQuotaPolicyExcelApplicationService
       row.createCell(1).setCellValue(rows[i][1]);
       row.createCell(2).setCellValue(rows[i][2]);
     }
-    sheet.setColumnWidth(0, 24 * 256);
-    sheet.setColumnWidth(1, 20 * 256);
-    sheet.setColumnWidth(2, 36 * 256);
+    setGuideColumnWidths(sheet);
   }
 
   @Builder

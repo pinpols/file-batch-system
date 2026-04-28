@@ -5,6 +5,8 @@ import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownVa
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setGuideColumnWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
 import com.example.batch.common.enums.BatchWindowEndStrategy;
@@ -248,18 +250,16 @@ public class DefaultConsoleBatchWindowExcelApplicationService
 
   @Override
   protected void createReadmeSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("README");
-    sheet.setColumnWidth(0, 16000);
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
+    setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
     String[] lines = {
-      "batch window config maintenance template",
-      "1. Orange headers mark required fields. Hover the header to see field rules and"
-          + " examples.",
-      "2. window_code is the unique key used during preview and apply.",
-      "3. end_strategy, out_of_window_action, allow_cross_day, and enabled have built-in"
-          + " dropdown validation.",
-      "4. start_time and end_time must be in HH:mm or HH:mm:ss format.",
-      "5. Import flow is upload -> preview -> apply."
+      "批处理窗口配置维护模板",
+      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
+      "2. window_code 是预览与应用阶段使用的唯一键。",
+      "3. end_strategy / out_of_window_action / allow_cross_day / enabled 已内置下拉值校验。",
+      "4. start_time 与 end_time 必须采用 HH:mm 或 HH:mm:ss 格式。",
+      "5. 导入流程：上传 → 预览 → 应用。"
     };
     for (int i = 0; i < lines.length; i++) {
       Row row = sheet.createRow(i);
@@ -272,7 +272,7 @@ public class DefaultConsoleBatchWindowExcelApplicationService
 
   @Override
   protected void createDictSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("DICT");
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_DICT);
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
@@ -293,9 +293,7 @@ public class DefaultConsoleBatchWindowExcelApplicationService
       row.createCell(1).setCellValue(rows[i][1]);
       row.createCell(2).setCellValue(rows[i][2]);
     }
-    sheet.setColumnWidth(0, 24 * 256);
-    sheet.setColumnWidth(1, 20 * 256);
-    sheet.setColumnWidth(2, 36 * 256);
+    setGuideColumnWidths(sheet);
   }
 
   private static String requireTime(Map<String, String> values, String key, List<String> issues) {

@@ -2,14 +2,18 @@ package com.example.batch.console.infrastructure;
 
 import static com.example.batch.console.support.ConsoleExcelStyles.createHeaderStyle;
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
+import static com.example.batch.console.support.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.console.application.ConsoleConfigApplicationService;
 import com.example.batch.console.application.ConsoleQueryApplicationService;
 import com.example.batch.console.application.ConsoleReportExcelApplicationService;
 import com.example.batch.console.config.ConsoleOrchestratorClientProperties;
+import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.web.query.AuditLogQueryRequest;
 import com.example.batch.console.web.query.ConfigChangeLogQueryRequest;
 import com.example.batch.console.web.query.ConfigReleaseQueryRequest;
@@ -241,7 +245,8 @@ public class DefaultConsoleReportExcelApplicationService
       workbook.write(out);
       return out.toByteArray();
     } catch (Exception exception) {
-      throw new IllegalStateException("failed to generate report excel workbook", exception);
+      throw new BizException(
+          ResultCode.SYSTEM_ERROR, "导出报表生成失败:" + exception.getMessage(), exception);
     }
   }
 
@@ -264,7 +269,8 @@ public class DefaultConsoleReportExcelApplicationService
           .sorted()
           .collect(Collectors.toCollection(ArrayList::new));
     } catch (Exception exception) {
-      throw new IllegalStateException("failed to inspect bean headers", exception);
+      throw new BizException(
+          ResultCode.SYSTEM_ERROR, "导出报表表头解析失败:" + exception.getMessage(), exception);
     }
   }
 
@@ -289,7 +295,8 @@ public class DefaultConsoleReportExcelApplicationService
           values.add(component == null ? null : component.getAccessor().invoke(row));
         }
       } catch (Exception exception) {
-        throw new IllegalStateException("failed to extract record values", exception);
+        throw new BizException(
+            ResultCode.SYSTEM_ERROR, "导出报表 record 字段读取失败:" + exception.getMessage(), exception);
       }
       return values;
     }
@@ -308,21 +315,22 @@ public class DefaultConsoleReportExcelApplicationService
                 : descriptor.getReadMethod().invoke(row));
       }
     } catch (Exception exception) {
-      throw new IllegalStateException("failed to extract bean values", exception);
+      throw new BizException(
+          ResultCode.SYSTEM_ERROR, "导出报表 bean 字段读取失败:" + exception.getMessage(), exception);
     }
     return values;
   }
 
   private void createReadmeSheet(Workbook workbook, String title) {
-    Sheet sheet = workbook.createSheet("README");
-    sheet.setColumnWidth(0, 16000);
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
+    setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
     String[] lines = {
-      title + " export report",
-      "1. This workbook is export-only and is not intended for re-upload.",
-      "2. The first sheet contains the report data.",
-      "3. Sheet columns follow the current API response model.",
-      "4. Exported data can be filtered and archived by downstream users."
+      title + " 导出报表",
+      "1. 本工作簿仅供导出,不接受回传上传。",
+      "2. 第一个 sheet 为报表数据。",
+      "3. 列结构与当前 API 响应模型对齐。",
+      "4. 导出数据可由下游消费者过滤与归档。"
     };
     for (int i = 0; i < lines.length; i++) {
       Row row = sheet.createRow(i);

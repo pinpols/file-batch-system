@@ -44,6 +44,13 @@ public final class ConsoleExcelStyles {
   private static final byte[] REQUIRED_HEADER_RGB = {(byte) 0xC6, 0x59, 0x11};
   private static final byte[] READ_ONLY_HEADER_RGB = {0x5B, 0x6B, 0x7A};
 
+  /** 模板/导出 workbook 4 类辅助 sheet 的统一中文名,所有写入器走这里,避免英中混用。 */
+  public static final String SHEET_NAME_README = "说明";
+
+  public static final String SHEET_NAME_GUIDE = "填写说明";
+  public static final String SHEET_NAME_DICT = "字典";
+  public static final String SHEET_NAME_VALIDATION = "校验";
+
   private ConsoleExcelStyles() {}
 
   public static ResponseEntity<InputStreamResource> excelResponse(
@@ -231,9 +238,9 @@ public final class ConsoleExcelStyles {
   /**
    * 防止 Excel 公式注入（CSV Injection / Formula Injection）。
    *
-   * <p>以 {@code = + - @} 开头的单元格值会被 Excel 解析为公式；加前缀 {@code '} 强制按文本处理。
+   * <p>以 {@code = + - @} 开头的单元格值会被 Excel 解析为公式；加前缀 {@code '} 强制按文本处理。所有写 Cell 字符串的入口都应过这层。
    */
-  static String escapeFormula(String value) {
+  public static String escapeFormula(String value) {
     if (value == null || value.isEmpty()) {
       return value;
     }
@@ -250,11 +257,49 @@ public final class ConsoleExcelStyles {
     }
   }
 
+  /**
+   * 设置 README / 说明类单列 sheet 的标准列宽（约 65 个字符宽度）。
+   *
+   * <p>替代散落各处的硬编码 {@code sheet.setColumnWidth(0, 16000)} / {@code 18000}。
+   */
+  public static void setReadmeColumnWidth(Sheet sheet) {
+    ConsoleExcelStyles.setReadmeColumnWidth(sheet);
+  }
+
+  /**
+   * 设置 GUIDE / 填写说明类三列 sheet 的标准列宽:列名 / 类型 / 说明。
+   *
+   * <p>替代散落各处的硬编码 {@code 24*256 / 20*256 / 36*256} 三件套。
+   */
+  public static void setGuideColumnWidths(Sheet sheet) {
+    ConsoleExcelStyles.setGuideColumnWidths(sheet);
+  }
+
+  /** 数据校验下拉默认作用行数:从第 2 行(数据区起点)到第 5001 行;批量导入超 5000 行需手动扩。 */
+  public static final int DEFAULT_DROPDOWN_MAX_ROW = 5000;
+
   public static void addDropdownValidation(
       Sheet sheet, int columnIndex, String[] values, String promptTitle, String promptText) {
+    addDropdownValidation(
+        sheet, columnIndex, values, promptTitle, promptText, DEFAULT_DROPDOWN_MAX_ROW);
+  }
+
+  /**
+   * 加下拉数据校验,作用范围 = 第 2 行 ~ 第 {@code maxRow} 行(包含)。
+   *
+   * <p>单 sheet 数据量超 5000 行时调用方应显式传 {@code maxRow},否则尾部行不会触发校验。
+   */
+  public static void addDropdownValidation(
+      Sheet sheet,
+      int columnIndex,
+      String[] values,
+      String promptTitle,
+      String promptText,
+      int maxRow) {
     DataValidationHelper helper = sheet.getDataValidationHelper();
     DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
-    CellRangeAddressList addressList = new CellRangeAddressList(1, 5000, columnIndex, columnIndex);
+    CellRangeAddressList addressList =
+        new CellRangeAddressList(1, Math.max(1, maxRow), columnIndex, columnIndex);
     DataValidation validation = helper.createValidation(constraint, addressList);
     validation.setSuppressDropDownArrow(false);
     validation.setShowErrorBox(true);
@@ -286,7 +331,7 @@ public final class ConsoleExcelStyles {
   }
 
   public static void createValidationSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("VALIDATION");
+    Sheet sheet = workbook.createSheet(SHEET_NAME_VALIDATION);
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = createHeaderStyle(workbook);
     Row header = sheet.createRow(0);
@@ -320,6 +365,18 @@ public final class ConsoleExcelStyles {
   private static void addGuideCommentIfPresent(
       Cell cell, ColumnGuide guide, CreationHelper creationHelper, Drawing<?> drawing) {
     String commentText = buildGuideCommentText(guide);
+    if (!hasText(commentText)) {
+      return;
+    }
+    attachStandardComment(cell, commentText, creationHelper, drawing);
+  }
+
+  /**
+   * 标准 cell comment anchor:从单元格自身开始,4 列 × 7 行的弹出框。够装 6-8 行中文 + 列表说明而不被裁。所有 createCellComment /
+   * setCellComment 入口都应过这层,避免不同 sheet 出现尺寸不一的悬浮框。
+   */
+  public static void attachStandardComment(
+      Cell cell, String commentText, CreationHelper creationHelper, Drawing<?> drawing) {
     if (!hasText(commentText)) {
       return;
     }
