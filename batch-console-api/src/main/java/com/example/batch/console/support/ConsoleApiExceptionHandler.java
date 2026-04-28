@@ -7,12 +7,14 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
+import com.example.batch.common.i18n.BizMessageResolver;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -59,11 +61,22 @@ public class ConsoleApiExceptionHandler {
   private final ConsoleResponseFactory responseFactory;
   private final BatchSecurityProperties batchSecurityProperties;
 
+  // setter 注入,保持 @RequiredArgsConstructor 生成的构造器签名不变(避免破坏所有
+  // 已构造该 handler 的测试)。BizMessageResolver 在 batch-common 自动装配。
+  private BizMessageResolver bizMessageResolver;
+
+  @Autowired
+  public void setBizMessageResolver(BizMessageResolver bizMessageResolver) {
+    this.bizMessageResolver = bizMessageResolver;
+  }
+
   @ExceptionHandler(BizException.class)
   public ResponseEntity<?> handleBizException(BizException exception) {
     log.warn("console biz exception", exception);
+    String message =
+        bizMessageResolver == null ? exception.getMessage() : bizMessageResolver.resolve(exception);
     return ResponseEntity.status(exception.getCode().httpStatus())
-        .body(responseFactory.failure(exception.getCode(), exception.getMessage()));
+        .body(responseFactory.failure(exception.getCode(), message));
   }
 
   @ExceptionHandler(SystemException.class)

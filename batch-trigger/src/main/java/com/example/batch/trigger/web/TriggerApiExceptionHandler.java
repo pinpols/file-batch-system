@@ -53,6 +53,9 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
         CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
             ? ResultCode.MISSING_IDEMPOTENCY_KEY
             : ResultCode.INVALID_ARGUMENT;
-    return ResponseEntity.badRequest().body(CommonResponse.failure(code, exception.getMessage()));
+    // 不再透出 Spring 默认英文 "Required request header 'X' for method parameter type ..."
+    // 走 i18n,前端按 Accept-Language 拿中/英文。
+    return ResponseEntity.badRequest()
+        .body(CommonResponse.failure(code, resolveCommonCode(code, code.label())));
   }
 }

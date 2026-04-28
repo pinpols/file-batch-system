@@ -4,8 +4,10 @@ import com.example.batch.common.dto.CommonResponse;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
+import com.example.batch.common.i18n.BizMessageResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -18,10 +20,20 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
  *
  * <p>子类仍可通过 {@code @ExceptionHandler} 追加模块特有异常（如 Orchestrator 的 {@code
  * ResponseStatusException}、Trigger 的 {@code MissingRequestHeaderException}）。
+ *
+ * <p>i18n:BizException 的展示文案统一过 {@link BizMessageResolver},按 Accept-Language 翻译; 老 literal 异常仍透出原
+ * message 不变,逐步迁移到 {@code BizException.of(code, key, args)} 路径。
  */
 public abstract class AbstractApiExceptionHandler {
 
   private final Logger log = LoggerFactory.getLogger(getClass());
+
+  private BizMessageResolver bizMessageResolver;
+
+  @Autowired
+  public void setBizMessageResolver(BizMessageResolver bizMessageResolver) {
+    this.bizMessageResolver = bizMessageResolver;
+  }
 
   /** 日志前缀，用于区分模块来源（"trigger" / "orchestrator" / "console"）。 */
   protected abstract String modulePrefix();
@@ -30,7 +42,7 @@ public abstract class AbstractApiExceptionHandler {
   public ResponseEntity<CommonResponse<Void>> handleBizException(BizException exception) {
     log.warn("{} biz exception", modulePrefix(), exception);
     return ResponseEntity.status(exception.getCode().httpStatus())
-        .body(CommonResponse.failure(exception.getCode(), exception.getMessage()));
+        .body(CommonResponse.failure(exception.getCode(), resolveBizMessage(exception)));
   }
 
   @ExceptionHandler(SystemException.class)
@@ -52,7 +64,9 @@ public abstract class AbstractApiExceptionHandler {
         modulePrefix(),
         exception.getMessage());
     return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(CommonResponse.failure(ResultCode.CONFLICT, "concurrent modification; retry"));
+        .body(
+            CommonResponse.failure(
+                ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发修改冲突,请重试")));
   }
 
   /**
@@ -66,7 +80,9 @@ public abstract class AbstractApiExceptionHandler {
         modulePrefix(),
         exception.getMessage());
     return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(CommonResponse.failure(ResultCode.CONFLICT, "concurrent insert; retry"));
+        .body(
+            CommonResponse.failure(
+                ResultCode.CONFLICT, resolveCommonCode(ResultCode.CONFLICT, "并发插入冲突,请重试")));
   }
 
   @ExceptionHandler(Exception.class)
@@ -75,6 +91,22 @@ public abstract class AbstractApiExceptionHandler {
     return ResponseEntity.internalServerError()
         .body(
             CommonResponse.failure(
-                ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.defaultMessage()));
+                ResultCode.SYSTEM_ERROR,
+                resolveCommonCode(ResultCode.SYSTEM_ERROR, ResultCode.SYSTEM_ERROR.label())));
+  }
+
+  private String resolveBizMessage(BizException exception) {
+    return bizMessageResolver == null
+        ? exception.getMessage()
+        : bizMessageResolver.resolve(exception);
+  }
+
+  /** 子类可调用,按当前 Locale 把通用 ResultCode 翻译成本地化文案;无 resolver 时返回 fallback。 */
+  protected String resolveCommonCode(ResultCode code, String fallback) {
+    if (bizMessageResolver == null) {
+      return fallback;
+    }
+    String resolved = bizMessageResolver.resolve(code);
+    return resolved == null || resolved.isBlank() ? fallback : resolved;
   }
 }
