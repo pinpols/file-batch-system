@@ -79,6 +79,14 @@ BEGIN
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'batch' AND c.relkind = 'r'
     LOOP
+        -- pg_get_serial_sequence 对不存在的列会抛 undefined_column(例如 shedlock 表 PK 是 name 不是 id)。
+        -- 先查 information_schema 确认 id 列存在,再去拿 sequence,避免整段 DO inline 被拒。
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'batch' AND table_name = rec.tbl AND column_name = 'id'
+        ) THEN
+            CONTINUE;
+        END IF;
         seq_name := pg_get_serial_sequence('batch.' || rec.tbl, 'id');
         IF seq_name IS NOT NULL THEN
             EXECUTE format(
@@ -108,7 +116,10 @@ UPDATE batch.job_step_instance SET step_status='TERMINATED', finished_at=COALESC
   WHERE step_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
 UPDATE batch.workflow_run SET run_status='TERMINATED', finished_at=COALESCE(finished_at, now())
   WHERE run_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
-UPDATE batch.workflow_node_run SET node_status='TERMINATED', finished_at=COALESCE(finished_at, now())
+-- workflow_node_run.node_status 的 CHECK 约束(ck_workflow_node_run_status)只允许
+-- READY/RUNNING/SUCCESS/FAILED/SKIPPED,不接受 TERMINATED(其它 batch.* 表的命名)。
+-- 用 FAILED 收尾"未跑完"的 in-progress 节点行,与上下游收尾语义对齐。
+UPDATE batch.workflow_node_run SET node_status='FAILED', finished_at=COALESCE(finished_at, now())
   WHERE node_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
 "
 
