@@ -19,6 +19,8 @@
         <result column="result_summary" property="resultSummary"/>
         <result column="error_code" property="errorCode"/>
         <result column="error_message" property="errorMessage"/>
+        <result column="error_key" property="errorKey"/>
+        <result column="error_args" property="errorArgs"/>
         <result column="started_at" property="startedAt"/>
         <result column="finished_at" property="finishedAt"/>
         <result column="created_at" property="createdAt"/>
@@ -39,6 +41,8 @@
             result_summary,
             error_code,
             error_message,
+            error_key,
+            error_args,
             started_at,
             finished_at
         ) values (
@@ -53,6 +57,8 @@
             #{resultSummary,jdbcType=VARCHAR}::jsonb,
             #{errorCode},
             #{errorMessage},
+            #{errorKey},
+            #{errorArgs,jdbcType=VARCHAR}::jsonb,
             #{startedAt},
             #{finishedAt}
         )
@@ -113,6 +119,8 @@
             result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             error_code = #{errorCode},
             error_message = #{errorMessage},
+            error_key = #{errorKey},
+            error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             finished_at = case
                 when #{taskStatus} in (#{terminalStatus1}, #{terminalStatus2}, #{terminalStatus3}, #{terminalStatus4}) then current_timestamp
                 else finished_at
@@ -130,6 +138,8 @@
             result_summary = #{resultSummary,jdbcType=VARCHAR}::jsonb,
             error_code = #{errorCode},
             error_message = #{errorMessage},
+            error_key = #{errorKey},
+            error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             finished_at = current_timestamp,
             version = version + 1,
             updated_at = current_timestamp
@@ -159,6 +169,8 @@
             assigned_worker_code = null,
             error_code = null,
             error_message = null,
+            error_key = null,
+            error_args = null,
             result_summary = null,
             started_at = null,
             finished_at = null,

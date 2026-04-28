@@ -13,6 +13,8 @@
         <result column="delivery_attempt" property="deliveryAttempt"/>
         <result column="delivery_summary" property="deliverySummary"/>
         <result column="error_message" property="errorMessage"/>
+        <result column="error_key" property="errorKey"/>
+        <result column="error_args" property="errorArgs"/>
         <result column="trace_id" property="traceId"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
@@ -31,6 +33,8 @@
             delivery_attempt,
             delivery_summary,
             error_message,
+            error_key,
+            error_args,
             trace_id
         ) values (
             #{tenantId},
@@ -43,6 +47,8 @@
             #{deliveryAttempt},
             #{deliverySummary,jdbcType=VARCHAR}::jsonb,
             #{errorMessage},
+            #{errorKey},
+            #{errorArgs,jdbcType=VARCHAR}::jsonb,
             #{traceId}
         )
     </insert>
