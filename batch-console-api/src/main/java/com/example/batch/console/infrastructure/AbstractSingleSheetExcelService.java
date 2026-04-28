@@ -444,7 +444,8 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
         for (int i = 0; i < columns().size(); i++) {
           Cell cell = dataRow.createCell(i);
           Object value = row.get(columns().get(i));
-          cell.setCellValue(value == null ? "" : String.valueOf(value));
+          cell.setCellValue(
+              value == null ? "" : ConsoleExcelStyles.escapeFormula(String.valueOf(value)));
         }
       }
       applyValidations(dataSheet);
@@ -455,7 +456,7 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       workbook.write(out);
       return out.toByteArray();
     } catch (IOException e) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
+      throw new BizException(ResultCode.SYSTEM_ERROR, "Excel 工作簿生成失败:" + e.getMessage(), e);
     }
   }
 

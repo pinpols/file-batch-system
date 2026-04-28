@@ -9,8 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.ClientAnchor;
-import org.apache.poi.ss.usermodel.Comment;
 import org.apache.poi.ss.usermodel.CreationHelper;
 import org.apache.poi.ss.usermodel.Drawing;
 import org.apache.poi.ss.usermodel.Row;
@@ -60,10 +58,10 @@ public final class ConsoleExcelPreviewWorkbookSupport {
   }
 
   public static void populateValidationSheet(Workbook workbook, List<WorkbookIssue> issues) {
-    Sheet sheet = workbook.getSheet("VALIDATION");
+    Sheet sheet = workbook.getSheet(ConsoleExcelStyles.SHEET_NAME_VALIDATION);
     if (sheet == null) {
       ConsoleExcelStyles.createValidationSheet(workbook);
-      sheet = workbook.getSheet("VALIDATION");
+      sheet = workbook.getSheet(ConsoleExcelStyles.SHEET_NAME_VALIDATION);
     }
     int rowIndex = 1;
     for (WorkbookIssue issue : issues) {
@@ -103,15 +101,7 @@ public final class ConsoleExcelPreviewWorkbookSupport {
         cell = row.createCell(columnIndex);
       }
       String commentText = String.join("\n", new LinkedHashSet<>(entry.getValue()));
-      ClientAnchor anchor = creationHelper.createClientAnchor();
-      anchor.setCol1(columnIndex);
-      anchor.setCol2(columnIndex + 4);
-      anchor.setRow1(rowIndex);
-      anchor.setRow2(rowIndex + 6);
-      Comment comment = drawing.createCellComment(anchor);
-      comment.setString(creationHelper.createRichTextString(commentText));
-      comment.setAuthor("batch-console-preview");
-      cell.setCellComment(comment);
+      ConsoleExcelStyles.attachStandardComment(cell, commentText, creationHelper, drawing);
     }
   }
 

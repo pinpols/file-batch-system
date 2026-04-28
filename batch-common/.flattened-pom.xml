@@ -57,6 +57,12 @@
             <artifactId>spring-web</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- BatchI18nAutoConfiguration 用 LocaleResolver / AcceptHeaderLocaleResolver；provided 由各应用模块的 spring-boot-starter-web 传递,batch-common 自身只编译期依赖。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-restclient</artifactId>

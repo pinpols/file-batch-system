@@ -5,6 +5,8 @@ import static com.example.batch.console.support.ConsoleExcelStyles.addDropdownVa
 import static com.example.batch.console.support.ConsoleExcelStyles.createReadmeTitleStyle;
 import static com.example.batch.console.support.ConsoleExcelStyles.optionalColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setGuideColumnWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
@@ -1040,18 +1042,16 @@ public class DefaultConsoleWorkflowExcelApplicationService
   }
 
   private void createReadmeSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("README");
-    sheet.setColumnWidth(0, 16000);
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
+    setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
     String[] lines = {
-      "workflow definition / node / edge maintenance template",
-      "1. Orange headers mark required fields. Hover the header to see field rules and"
-          + " examples.",
-      "2. The workbook must keep the sheet order: definition, node, edge, README, DICT,"
-          + " VALIDATION.",
-      "3. workflow_code + version is the cross-sheet key for definitions, nodes, and edges.",
-      "4. node_params must stay valid JSON. CONDITION edges can use condition_expr.",
-      "5. Import flow is upload -> preview -> apply."
+      "Workflow 定义 / 节点 / 边维护模板",
+      "1. 橙色表头表示必填字段；鼠标悬停表头可查看字段规则与示例。",
+      "2. 工作簿必须保持 sheet 顺序:definition / node / edge / 说明 / 字典 / 校验。",
+      "3. workflow_code + version 是 definition / node / edge 三表之间的关联键。",
+      "4. node_params 必须保持合法 JSON;CONDITION 类型边可使用 condition_expr。",
+      "5. 导入流程：上传 → 预览 → 应用。"
     };
     for (int i = 0; i < lines.length; i++) {
       Row row = sheet.createRow(i);
@@ -1063,7 +1063,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
   }
 
   private void createDictSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("DICT");
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_DICT);
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
@@ -1093,9 +1093,7 @@ public class DefaultConsoleWorkflowExcelApplicationService
       row.createCell(1).setCellValue(rows[i][1]);
       row.createCell(2).setCellValue(rows[i][2]);
     }
-    sheet.setColumnWidth(0, 24 * 256);
-    sheet.setColumnWidth(1, 20 * 256);
-    sheet.setColumnWidth(2, 36 * 256);
+    setGuideColumnWidths(sheet);
   }
 
   private void createValidationSheet(Workbook workbook) {

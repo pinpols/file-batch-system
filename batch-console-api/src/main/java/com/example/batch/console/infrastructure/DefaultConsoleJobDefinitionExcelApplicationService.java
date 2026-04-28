@@ -6,6 +6,8 @@ import static com.example.batch.console.support.ConsoleExcelStyles.optionalColum
 import static com.example.batch.console.support.ConsoleExcelStyles.readOnlyColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredColumn;
 import static com.example.batch.console.support.ConsoleExcelStyles.requiredReadOnlyColumn;
+import static com.example.batch.console.support.ConsoleExcelStyles.setGuideColumnWidths;
+import static com.example.batch.console.support.ConsoleExcelStyles.setReadmeColumnWidth;
 import static com.example.batch.console.support.ConsoleExcelStyles.setWidths;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeCell;
 import static com.example.batch.console.support.ConsoleExcelStyles.writeHeaders;
@@ -634,17 +636,16 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
   }
 
   private void createReadmeSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("README");
-    sheet.setColumnWidth(0, 16000);
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_README);
+    setReadmeColumnWidth(sheet);
     CellStyle titleStyle = createReadmeTitleStyle(workbook);
     String[] lines = {
-      "job definition safe-field maintenance template",
-      "1. Orange headers mean key fields; gray-blue headers are read-only consistency" + " fields.",
-      "2. Hover the header cells to see field purpose, format hints, dropdown values, and"
-          + " examples.",
-      "3. Import rows are matched by tenant_id + job_code.",
-      "4. Leave editable cells blank to keep the current exported value.",
-      "5. Import flow is upload -> preview -> apply."
+      "Job 定义安全字段维护模板",
+      "1. 橙色表头表示关键字段;灰蓝色表头表示只读一致性字段。",
+      "2. 鼠标悬停表头单元格可查看字段用途、格式提示、下拉值与示例。",
+      "3. 导入按 tenant_id + job_code 匹配。",
+      "4. 可编辑单元格留空时保持当前导出值。",
+      "5. 导入流程：上传 → 预览 → 应用。"
     };
     for (int i = 0; i < lines.length; i++) {
       Row row = sheet.createRow(i);
@@ -656,7 +657,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
   }
 
   private void createDictSheet(Workbook workbook) {
-    Sheet sheet = workbook.createSheet("DICT");
+    Sheet sheet = workbook.createSheet(ConsoleExcelStyles.SHEET_NAME_DICT);
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle dictHeaderStyle = ConsoleExcelStyles.createHeaderStyle(workbook);
     writeHeaders(sheet, List.of("field", "value", COL_DESCRIPTION), dictHeaderStyle);
@@ -677,9 +678,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       row.createCell(1).setCellValue(rows[i][1]);
       row.createCell(2).setCellValue(rows[i][2]);
     }
-    sheet.setColumnWidth(0, 24 * 256);
-    sheet.setColumnWidth(1, 20 * 256);
-    sheet.setColumnWidth(2, 36 * 256);
+    setGuideColumnWidths(sheet);
   }
 
   private void createValidationSheet(Workbook workbook) {
