@@ -263,7 +263,7 @@ public final class ConsoleExcelStyles {
    * <p>替代散落各处的硬编码 {@code sheet.setColumnWidth(0, 16000)} / {@code 18000}。
    */
   public static void setReadmeColumnWidth(Sheet sheet) {
-    ConsoleExcelStyles.setReadmeColumnWidth(sheet);
+    sheet.setColumnWidth(0, 16000);
   }
 
   /**
@@ -272,7 +272,9 @@ public final class ConsoleExcelStyles {
    * <p>替代散落各处的硬编码 {@code 24*256 / 20*256 / 36*256} 三件套。
    */
   public static void setGuideColumnWidths(Sheet sheet) {
-    ConsoleExcelStyles.setGuideColumnWidths(sheet);
+    sheet.setColumnWidth(0, 24 * 256);
+    sheet.setColumnWidth(1, 20 * 256);
+    sheet.setColumnWidth(2, 36 * 256);
   }
 
   /** 数据校验下拉默认作用行数:从第 2 行(数据区起点)到第 5001 行;批量导入超 5000 行需手动扩。 */

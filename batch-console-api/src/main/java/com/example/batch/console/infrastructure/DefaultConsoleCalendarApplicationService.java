@@ -98,7 +98,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     String resolved = tenantGuard.resolveTenant(tenantId);
     int rows = calendarMapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, ERR_CALENDAR_NOT_FOUND);
+      throw BizException.of(ResultCode.NOT_FOUND, "error.calendar.not_found");
     }
     Map<String, Object> calendar = calendarMapper.selectById(resolved, id);
     if (calendar != null) {

@@ -141,7 +141,7 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
     int rows = definitionMapper.toggleEnabled(resolvedTenant, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, ERR_WORKFLOW_NOT_FOUND + id);
+      throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.not_found", id);
     }
     WorkflowDefinitionEntity def = definitionMapper.selectById(resolvedTenant, id);
     if (def != null) {

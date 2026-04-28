@@ -72,7 +72,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
 
     assertThatThrownBy(() -> service.getChannel("tenant-a", "missing"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("notification channel not found");
+        .hasMessageContaining("not found");
   }
 
   @Test
@@ -115,7 +115,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
                         "channelName", "Email One",
                         "channelType", "EMAIL")))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("already exists");
+        .hasMessageContaining("code_already_exists");
   }
 
   @Test
@@ -186,7 +186,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
                         "channelCode", "missing",
                         "eventTypes", "JOB_SUCCESS")))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("notification channel not found");
+        .hasMessageContaining("not found");
   }
 
   @Test
@@ -224,7 +224,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
 
     assertThatThrownBy(() -> service.updateRule("tenant-a", 99L, Map.of()))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("subscription rule not found");
+        .hasMessageContaining("not found");
   }
 
   @Test

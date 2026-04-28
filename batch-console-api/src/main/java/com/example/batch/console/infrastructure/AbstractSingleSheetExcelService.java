@@ -456,7 +456,8 @@ public abstract class AbstractSingleSheetExcelService<ROW, RESP> {
       workbook.write(out);
       return out.toByteArray();
     } catch (IOException e) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "Excel 工作簿生成失败:" + e.getMessage(), e);
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR, "error.excel.workbook_generate_failed", e, e.getMessage());
     }
   }
 

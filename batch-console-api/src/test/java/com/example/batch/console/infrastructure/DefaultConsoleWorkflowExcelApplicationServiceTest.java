@@ -115,9 +115,9 @@ class DefaultConsoleWorkflowExcelApplicationServiceTest {
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("workflow_definition");
       assertThat(workbook.getSheetAt(1).getSheetName()).isEqualTo("workflow_node");
       assertThat(workbook.getSheetAt(2).getSheetName()).isEqualTo("workflow_edge");
-      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("README");
-      assertThat(workbook.getSheetAt(4).getSheetName()).isEqualTo("DICT");
-      assertThat(workbook.getSheetAt(5).getSheetName()).isEqualTo("VALIDATION");
+      assertThat(workbook.getSheetAt(3).getSheetName()).isEqualTo("说明");
+      assertThat(workbook.getSheetAt(4).getSheetName()).isEqualTo("字典");
+      assertThat(workbook.getSheetAt(5).getSheetName()).isEqualTo("校验");
       XSSFSheet sheet = (XSSFSheet) workbook.getSheetAt(0);
       XSSFSheet nodeSheet = (XSSFSheet) workbook.getSheetAt(1);
       XSSFSheet edgeSheet = (XSSFSheet) workbook.getSheetAt(2);

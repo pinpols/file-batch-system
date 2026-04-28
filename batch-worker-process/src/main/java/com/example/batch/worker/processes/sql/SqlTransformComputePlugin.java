@@ -306,7 +306,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   private String requireBatchKey(ProcessJobContext context) {
     String batchKey = context.getBatchKey();
     if (!Texts.hasText(batchKey)) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "process batchKey not set in context");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.process.batch_key_missing");
     }
     return batchKey;
   }

@@ -1,6 +1,5 @@
 package com.example.batch.console.support;
 
-import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +39,7 @@ public class ConsoleTenantGuard {
     // 全局角色（ADMIN / AUDITOR / CONFIG_ADMIN）：必须显式指定目标租户
     if (isCurrentUserGlobal()) {
       if (normalized == null) {
-        throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.TENANT_REQUIRED);
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
       }
       return normalized;
     }
@@ -58,10 +57,10 @@ public class ConsoleTenantGuard {
       effectiveTenantId = normalized;
     }
     if (effectiveTenantId == null || effectiveTenantId.isBlank()) {
-      throw new BizException(ResultCode.UNAUTHORIZED, CommonErrorMessages.TENANT_REQUIRED);
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.tenant.required");
     }
     if (normalized != null && !normalized.equals(effectiveTenantId)) {
-      throw new BizException(ResultCode.FORBIDDEN, CommonErrorMessages.TENANT_MISMATCH);
+      throw BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch");
     }
     return effectiveTenantId;
   }
@@ -76,7 +75,7 @@ public class ConsoleTenantGuard {
       return null;
     }
     if (!TENANT_ID_PATTERN.matcher(trimmed).matches()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.TENANT_REQUIRED);
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
     }
     return trimmed;
   }

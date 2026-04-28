@@ -1,6 +1,5 @@
 package com.example.batch.console.support;
 
-import com.example.batch.common.constants.CommonErrorMessages;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.utils.Guard;
@@ -106,7 +105,7 @@ public class ConsoleJwtService {
       String username, String tenantId, Set<String> authorities, long sessionVersion) {
     Guard.requireText(username, "username is required");
     if (!Texts.hasText(tenantId)) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.TENANT_REQUIRED);
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.tenant.required");
     }
     Instant issuedAt = Instant.now();
     Instant expiresAt = issuedAt.plus(properties.getJwtTtl());
@@ -141,11 +140,11 @@ public class ConsoleJwtService {
     Jwt jwt = decoder().decode(token);
     String issuer = jwt.getClaimAsString("iss");
     if (!properties.getJwtIssuer().equals(issuer)) {
-      throw new BizException(ResultCode.UNAUTHORIZED, CommonErrorMessages.INVALID_CONSOLE_JWT);
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
     }
     String tokenType = jwt.getClaimAsString(CLAIM_TOKEN_TYPE);
     if (!TOKEN_TYPE.equals(tokenType)) {
-      throw new BizException(ResultCode.UNAUTHORIZED, CommonErrorMessages.INVALID_CONSOLE_JWT);
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
     }
     String username = jwt.getSubject();
     String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
@@ -153,7 +152,7 @@ public class ConsoleJwtService {
     if (properties.isSingleSessionEnabled()) {
       if (sessionVersion == null
           || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion)) {
-        throw new BizException(ResultCode.UNAUTHORIZED, CommonErrorMessages.INVALID_CONSOLE_JWT);
+        throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
       }
     }
     List<String> authorities = jwt.getClaimAsStringList(CLAIM_AUTHORITIES);

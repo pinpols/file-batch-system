@@ -26,10 +26,10 @@ public class ConsoleAiPromptGuard {
           CommonErrorMessages.AI_ASSISTANT_DISABLED);
     }
     if (!Texts.hasText(prompt)) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_REQUIRED);
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.prompt.required");
     }
     if (prompt.length() > properties.getMaxPromptLength()) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, CommonErrorMessages.PROMPT_TOO_LONG);
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.prompt.too_long");
     }
     String normalized = prompt.trim();
     String lower = normalized.toLowerCase(Locale.ROOT);

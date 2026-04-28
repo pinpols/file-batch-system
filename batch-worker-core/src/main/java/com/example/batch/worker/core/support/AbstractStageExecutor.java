@@ -39,7 +39,8 @@ public abstract class AbstractStageExecutor<
     PipelineStepDefinition currentStep = PipelineStepFlowSupport.firstStep(configuredSteps);
     while (currentStep != null) {
       if (guard-- <= 0) {
-        throw new BizException(ResultCode.STATE_CONFLICT, cycleDetectedMessage());
+        throw BizException.of(
+            ResultCode.STATE_CONFLICT, "error.workflow.cycle_detected", cycleDetectedMessage());
       }
       String lastSuccessStage =
           (String) context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE);

@@ -54,7 +54,8 @@ final class ConsoleQuerySupport {
     try {
       return Instant.parse(value);
     } catch (DateTimeParseException exception) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must be ISO-8601 datetime");
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.field.iso_datetime_required", fieldName);
     }
   }
 
@@ -107,7 +108,7 @@ final class ConsoleQuerySupport {
     try {
       return LocalDate.parse(value);
     } catch (DateTimeParseException exception) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must use yyyy-MM-dd");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.biz_date_format", fieldName);
     }
   }
 
@@ -118,7 +119,7 @@ final class ConsoleQuerySupport {
     try {
       return Long.valueOf(value);
     } catch (NumberFormatException exception) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, fieldName + " must be a number");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.field.must_be_number", fieldName);
     }
   }
 

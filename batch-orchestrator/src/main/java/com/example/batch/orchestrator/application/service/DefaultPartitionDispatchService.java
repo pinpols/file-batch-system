@@ -118,7 +118,10 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       ResourceSchedulingDecision decision =
           resourceScheduler.schedule(buildSchedulingRequest(plan));
       if (decision.isFailFast()) {
-        throw new BizException(ResultCode.BUSINESS_ERROR, decision.getReasonMessage());
+        throw BizException.of(
+            ResultCode.BUSINESS_ERROR,
+            "error.partition.dispatch_business_error",
+            decision.getReasonMessage());
       }
       applySchedulingDecision(plan, decision);
       List<JobPartitionEntity> partitions =

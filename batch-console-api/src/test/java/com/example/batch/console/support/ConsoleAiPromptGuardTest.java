@@ -57,7 +57,7 @@ class ConsoleAiPromptGuardTest {
     String longPrompt = "a".repeat(201);
     assertThatThrownBy(() -> guard.check(longPrompt))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("too long");
+        .hasMessageContaining("too_long");
   }
 
   // --- blocked keywords ---
