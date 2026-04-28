@@ -71,14 +71,13 @@ public class DefaultConsoleFileDownloadApplicationService
     String effectiveTenant = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> fileRecord = fileRecordMapper.selectFileRecordById(effectiveTenant, fileId);
     if (fileRecord == null || fileRecord.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, "file record not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
     Map<String, Object> security = templateSecurity(effectiveTenant, fileId);
     if (requiresDownloadApproval(security)
         && !Texts.hasText(approvalId)
         && !batchSecurityProperties.isBypassMode()) {
-      throw new BizException(
-          ResultCode.BUSINESS_ERROR, "approvalId is required for download on this file template");
+      throw BizException.of(ResultCode.BUSINESS_ERROR, "error.approval.id_required_for_download");
     }
     if (Texts.hasText(approvalId)) {
       requireApprovedApproval(effectiveTenant, approvalId);
@@ -89,7 +88,7 @@ public class DefaultConsoleFileDownloadApplicationService
     }
     String objectName = stringValue(fileRecord.get("storage_path"));
     if (!Texts.hasText(objectName)) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "file storage path is missing");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
     String fileName = stringValue(fileRecord.get("file_name"));
     String contentType = stringValue(fileRecord.get("mime_type"));
@@ -215,7 +214,7 @@ public class DefaultConsoleFileDownloadApplicationService
             response == null ? null : response.record(), "approval request not found");
     String status = record.approvalStatus();
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
     }
   }
 

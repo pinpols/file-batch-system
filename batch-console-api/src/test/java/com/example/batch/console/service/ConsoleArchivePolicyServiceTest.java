@@ -69,7 +69,7 @@ class ConsoleArchivePolicyServiceTest {
                     new ArchivePolicyUpsertParam(
                         "t1", "job_instance", 0, true, false, 500, "desc", "admin")))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("retention_days must be >= 1");
+        .hasMessageContaining("retention_days_min");
   }
 
   @Test

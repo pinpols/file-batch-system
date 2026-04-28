@@ -52,7 +52,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     Guard.requireText(workerCode, "workerCode is required");
     WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
     if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "worker is decommissioned");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
     }
     int seconds =
         timeoutSeconds != null && timeoutSeconds > 0
@@ -80,7 +80,7 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     validateTenant(tenantId);
     WorkerRegistryRecord registry = requireRegistry(tenantId, workerCode);
     if (WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status())) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "worker is decommissioned");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.decommissioned");
     }
     takeoverTasks(tenantId, workerCode);
     return markDecommissioned(tenantId, workerCode);

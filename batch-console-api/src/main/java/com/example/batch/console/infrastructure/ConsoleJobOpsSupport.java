@@ -112,7 +112,7 @@ class ConsoleJobOpsSupport {
             .retrieve()
             .body(new ParameterizedTypeReference<CommonResponse<LaunchResponse>>() {});
     if (response == null || response.data() == null) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "trigger service returned empty response");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.trigger.empty_response");
     }
     return response.data().instanceNo();
   }
@@ -132,8 +132,7 @@ class ConsoleJobOpsSupport {
             .retrieve()
             .body(CompensationResponse.class);
     if (response == null || response.commandNo() == null) {
-      throw new BizException(
-          ResultCode.SYSTEM_ERROR, "orchestrator returned empty compensation response");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.orchestrator.empty_compensation");
     }
     return response.commandNo();
   }
@@ -156,8 +155,7 @@ class ConsoleJobOpsSupport {
             .retrieve()
             .body(new ParameterizedTypeReference<CommonResponse<RecoveryOperationResponse>>() {});
     if (response == null || response.data() == null) {
-      throw new BizException(
-          ResultCode.SYSTEM_ERROR, "orchestrator returned empty recovery response");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.orchestrator.empty_recovery");
     }
     return response.data().operationNo();
   }
@@ -188,7 +186,7 @@ class ConsoleJobOpsSupport {
             .retrieve()
             .body(ApprovalResponse.class);
     if (response == null || !hasText(response.approvalNo())) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "approval service returned empty response");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.empty_response");
     }
     return response.approvalNo();
   }
@@ -207,7 +205,7 @@ class ConsoleJobOpsSupport {
             response == null ? null : response.getRecord(), "approval request not found");
     String status = record.getApprovalStatus();
     if (!"APPROVED".equalsIgnoreCase(status) && !"EXECUTED".equalsIgnoreCase(status)) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "approval is not approved yet");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.not_approved_yet");
     }
   }
 
@@ -231,7 +229,7 @@ class ConsoleJobOpsSupport {
     try {
       return LocalDate.parse(bizDate);
     } catch (DateTimeParseException exception) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "bizDate must use yyyy-MM-dd");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.biz_date_format");
     }
   }
 
@@ -251,7 +249,7 @@ class ConsoleJobOpsSupport {
     if (payloadObject instanceof Map<?, ?> payloadMap) {
       return (Map<String, Object>) payloadMap;
     }
-    throw new BizException(ResultCode.INVALID_ARGUMENT, "payload must be a JSON object");
+    throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.payload_must_be_object");
   }
 
   private String resolveUrl(String url) {

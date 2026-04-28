@@ -169,7 +169,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     String operator = requestMetadataResolver.current().operatorId();
     int rows = jobDefinitionMapper.toggleEnabled(resolved, id, enabled, operator);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "job definition not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
     }
     JobDefinitionEntity entity = jobDefinitionMapper.selectById(resolved, id);
     if (entity != null) {

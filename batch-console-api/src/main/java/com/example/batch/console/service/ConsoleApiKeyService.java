@@ -34,7 +34,7 @@ public class ConsoleApiKeyService {
   public ApiKeyEntity detail(String tenantId, Long id) {
     return repository
         .findByTenantAndId(tenantGuard.resolveTenant(tenantId), id)
-        .orElseThrow(() -> new BizException(ResultCode.NOT_FOUND, "api key not found"));
+        .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.api_key.not_found"));
   }
 
   /** 创建 API Key，返回明文密钥（仅此一次可见）。 */
@@ -46,7 +46,7 @@ public class ConsoleApiKeyService {
         .findByTenantAndName(resolved, keyName)
         .ifPresent(
             existing -> {
-              throw new BizException(ResultCode.CONFLICT, "api key name already exists");
+              throw BizException.of(ResultCode.CONFLICT, "error.api_key.name_exists");
             });
 
     String rawKey = generateRawKey();
@@ -66,7 +66,9 @@ public class ConsoleApiKeyService {
         repository
             .findByTenantAndName(resolved, keyName)
             .orElseThrow(
-                () -> new BizException(ResultCode.SYSTEM_ERROR, "api key created but not found"));
+                () ->
+                    BizException.of(
+                        ResultCode.SYSTEM_ERROR, "error.api_key.created_but_not_found"));
     return new CreateResult(entity, rawKey);
   }
 
@@ -75,7 +77,7 @@ public class ConsoleApiKeyService {
     String resolved = tenantGuard.resolveTenant(tenantId);
     repository
         .findByTenantAndId(resolved, id)
-        .orElseThrow(() -> new BizException(ResultCode.NOT_FOUND, "api key not found"));
+        .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.api_key.not_found"));
     repository.revoke(resolved, id, operator);
   }
 

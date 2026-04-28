@@ -299,8 +299,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
     ParsedSession session = loadSession(uploadToken);
     ValidationResult validationResult = validate(session);
     if (validationResult.invalidRows() > 0) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "excel contains invalid job definition rows");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_job_definition_rows");
     }
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String updatedBy = metadata.operatorId();
@@ -347,7 +346,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       throws IOException {
     try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
       if (workbook.getNumberOfSheets() == 0) {
-        throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
       }
       List<JobDefinitionRow> rows = parseRows(findSheet(workbook, SHEET), tenantId);
       return new ParsedWorkbook(fileNameOrDefault(originalFileName), tenantId, rows);
@@ -565,7 +564,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       ConsoleExcelPreviewWorkbookSupport.addIssueComments(dataSheet, COLUMNS, workbookIssues, 1);
       return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
     } catch (IOException exception) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate preview excel workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_workbook_failed");
     }
   }
 
@@ -606,7 +605,7 @@ public class DefaultConsoleJobDefinitionExcelApplicationService
       workbook.write(out);
       return out.toByteArray();
     } catch (IOException exception) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.generate_failed");
     }
   }
 

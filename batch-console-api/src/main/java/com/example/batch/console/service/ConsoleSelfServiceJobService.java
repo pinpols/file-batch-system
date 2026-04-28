@@ -89,7 +89,7 @@ public class ConsoleSelfServiceJobService {
             .retrieve()
             .body(Map.class);
     if (response == null || !response.containsKey("approvalNo")) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "Failed to submit approval");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.approval.submit_failed");
     }
     return (String) response.get("approvalNo");
   }

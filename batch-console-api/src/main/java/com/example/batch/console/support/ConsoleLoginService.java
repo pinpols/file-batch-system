@@ -65,6 +65,6 @@ public class ConsoleLoginService {
   }
 
   private BizException invalidCredentials() {
-    return new BizException(ResultCode.UNAUTHORIZED, "invalid username or password");
+    return BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials");
   }
 }

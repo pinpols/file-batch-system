@@ -133,7 +133,7 @@ public class DefaultConsoleResourceQueueApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     int rows = resourceQueueMapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "resource queue not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.resource_queue.not_found");
     }
   }
 }

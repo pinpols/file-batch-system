@@ -111,7 +111,7 @@ public class DefaultConsoleQuotaPolicyApplicationService
     String resolved = tenantGuard.resolveTenant(tenantId);
     int rows = quotaPolicyMapper.toggleEnabled(resolved, id, enabled);
     if (rows == 0) {
-      throw new BizException(ResultCode.NOT_FOUND, "quota policy not found");
+      throw BizException.of(ResultCode.NOT_FOUND, "error.quota.policy_not_found");
     }
     cacheInvalidationService.evictQuotaPolicies(resolved);
   }

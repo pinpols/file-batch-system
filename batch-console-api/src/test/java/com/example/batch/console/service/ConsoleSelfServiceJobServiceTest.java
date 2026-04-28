@@ -93,6 +93,6 @@ class ConsoleSelfServiceJobServiceTest {
 
     assertThatThrownBy(() -> service.requestRerun(param, "operator-1", "idem-key-1"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("Failed to submit approval");
+        .hasMessageContaining("submit_failed");
   }
 }

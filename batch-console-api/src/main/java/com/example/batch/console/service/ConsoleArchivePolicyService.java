@@ -44,7 +44,7 @@ public class ConsoleArchivePolicyService {
           ResultCode.INVALID_ARGUMENT, "target_table must be one of: " + VALID_TABLES);
     }
     if (param.retentionDays() < 1) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "retention_days must be >= 1");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.retention_days_min");
     }
     repository.upsert(
         new ArchivePolicyUpsertParam(

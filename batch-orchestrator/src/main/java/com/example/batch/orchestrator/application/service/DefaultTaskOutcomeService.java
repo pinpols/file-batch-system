@@ -203,7 +203,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     // workerId 非空时校验 worker 归属，防止恶意/错误 worker 伪造回报。
     if (command.workerId() != null && !command.workerId().equals(task.getAssignedWorkerCode())) {
-      throw new BizException(ResultCode.FORBIDDEN, "worker not owner of this task");
+      throw BizException.of(ResultCode.FORBIDDEN, "error.worker.not_owner");
     }
     Instant finishedAt = finishedAtOrNow();
     JobPartitionEntity partition =
@@ -406,7 +406,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .expectedVersion(jobInstance.getVersion())
                 .build());
     if (progressUpdated <= 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "job instance progress conflict");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
     }
     jobInstance.setVersion(Optional.ofNullable(jobInstance.getVersion()).orElse(0L) + 1);
     // 若本作业由 DAG 中 JOB 节点子作业拉起，需回写父侧信号
@@ -523,7 +523,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .expectedVersion(stepInstance.getVersion())
                 .build());
     if (updated <= 0) {
-      throw new BizException(ResultCode.STATE_CONFLICT, "job step instance progress conflict");
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_progress_conflict");
     }
   }
 

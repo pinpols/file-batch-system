@@ -35,7 +35,7 @@ public class TaskControllerApplicationService {
             taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId()),
             "task not found");
     if (!isClaimedBy(task, request.workerId())) {
-      throw new BizException(ResultCode.CONFLICT, "task already claimed");
+      throw BizException.of(ResultCode.CONFLICT, "error.task.already_claimed");
     }
     // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
     return taskExecutionService.loadEffectiveConfig(request.tenantId(), taskId);
@@ -62,7 +62,7 @@ public class TaskControllerApplicationService {
     boolean renewed =
         taskExecutionService.renewTaskLease(request.tenantId(), taskId, request.workerId());
     if (!renewed) {
-      throw new BizException(ResultCode.CONFLICT, "task lease renew rejected");
+      throw BizException.of(ResultCode.CONFLICT, "error.task.lease_renew_rejected");
     }
   }
 

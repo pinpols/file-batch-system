@@ -150,8 +150,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                   .expectedVersion(jobInstance.getVersion())
                   .build());
       if (updated <= 0) {
-        throw new BizException(
-            ResultCode.STATE_CONFLICT, "job instance launch transition conflict");
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
       }
       jobInstance.setVersion(
           (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
@@ -176,8 +175,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
                   .expectedVersion(jobInstance.getVersion())
                   .build());
       if (updated <= 0) {
-        throw new BizException(
-            ResultCode.STATE_CONFLICT, "job instance waiting transition conflict");
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_waiting_conflict");
       }
       jobInstance.setVersion(
           (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);

@@ -96,7 +96,7 @@ class ConsoleLoginServiceTest {
 
     assertThatThrownBy(() -> loginService.login(request))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("invalid username or password");
+        .hasMessageContaining("invalid_credentials");
   }
 
   @Test
@@ -108,6 +108,6 @@ class ConsoleLoginServiceTest {
 
     assertThatThrownBy(() -> loginService.login(request))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("invalid username or password");
+        .hasMessageContaining("invalid_credentials");
   }
 }

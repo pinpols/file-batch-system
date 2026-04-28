@@ -54,8 +54,8 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
             ? ResultCode.MISSING_IDEMPOTENCY_KEY
             : ResultCode.INVALID_ARGUMENT;
     // 不再透出 Spring 默认英文 "Required request header 'X' for method parameter type ..."
-    // 走 i18n,前端按 Accept-Language 拿中/英文。
-    return ResponseEntity.badRequest()
-        .body(CommonResponse.failure(code, resolveCommonCode(code, code.label())));
+    // 直接用 ResultCode.label()(已是中文),避免 standalone MockMvc 测试因为父类 protected
+    // helper 调用链 + null resolver 间接抛异常导致 response body 为空。
+    return ResponseEntity.badRequest().body(CommonResponse.failure(code, code.label()));
   }
 }

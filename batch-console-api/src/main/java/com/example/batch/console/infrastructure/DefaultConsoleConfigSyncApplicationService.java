@@ -103,7 +103,7 @@ public class DefaultConsoleConfigSyncApplicationService
   public Map<String, Object> importBundle(ConfigSyncImportRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     if (request.getBundle() == null) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "bundle must not be null");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.bundle_required");
     }
     Long logId = createLog(tenantId, request, request.getBundle());
     try {

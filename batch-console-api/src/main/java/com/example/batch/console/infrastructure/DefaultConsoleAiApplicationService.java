@@ -108,7 +108,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
     ChatClient chatClient = chatClientProvider.getIfAvailable();
     if (chatClient == null) {
-      throw new BizException(ResultCode.FORBIDDEN, "ai assistant is not configured");
+      throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
     }
     String promptPayload =
         buildPrompt(tenantId, sessionId, prompt, request.getContext(), gateResult.category());
@@ -232,7 +232,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     if (StringUtils.isNotBlank(requestTenantId)
         && StringUtils.isNotBlank(headerTenantId)
         && !requestTenantId.equals(headerTenantId)) {
-      throw new BizException(ResultCode.FORBIDDEN, "tenantId mismatch with request context");
+      throw BizException.of(ResultCode.FORBIDDEN, "error.common.tenant_id_mismatch");
     }
     String tenantId = StringUtils.isNotBlank(requestTenantId) ? requestTenantId : headerTenantId;
     Guard.requireText(tenantId, "tenantId is required");

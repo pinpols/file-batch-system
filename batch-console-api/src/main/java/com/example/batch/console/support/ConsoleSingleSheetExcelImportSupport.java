@@ -108,7 +108,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
       Set<String> requiredHeaders) {
     try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
       if (workbook.getNumberOfSheets() == 0) {
-        throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
       }
       Sheet sheet = workbook.getSheetAt(0);
       String sheetName = sheet.getSheetName();
@@ -158,7 +158,7 @@ public final class ConsoleSingleSheetExcelImportSupport {
 
       XSSFReader.SheetIterator sheetIter = (XSSFReader.SheetIterator) reader.getSheetsData();
       if (!sheetIter.hasNext()) {
-        throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
       }
       String sheetName;
       List<Map<String, String>> rows = new ArrayList<>();

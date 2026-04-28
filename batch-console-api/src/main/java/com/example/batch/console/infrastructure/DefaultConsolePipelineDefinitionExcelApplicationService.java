@@ -316,7 +316,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
     ParsedSession session = loadSession(uploadToken);
     ValidationResult result = validateRows(session);
     if (result.invalidPipelineRows() > 0 || result.invalidStepRows() > 0) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, "excel contains invalid rows");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.invalid_rows");
     }
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String operatorId = metadata.operatorId();
@@ -388,7 +388,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       throws IOException {
     try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
       if (workbook.getNumberOfSheets() == 0) {
-        throw new BizException(ResultCode.INVALID_ARGUMENT, "excel workbook has no sheet");
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.excel.no_sheet");
       }
       List<Map<String, String>> pipelineRows =
           parseSheet(
@@ -700,7 +700,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
       workbook.write(out);
       return out.toByteArray();
     } catch (IOException exception) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate excel workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.generate_failed");
     }
   }
 
@@ -802,7 +802,7 @@ public class DefaultConsolePipelineDefinitionExcelApplicationService
 
       return ConsoleExcelPreviewWorkbookSupport.toBytes(workbook);
     } catch (IOException exception) {
-      throw new BizException(ResultCode.SYSTEM_ERROR, "failed to generate preview excel workbook");
+      throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_workbook_failed");
     }
   }
 
