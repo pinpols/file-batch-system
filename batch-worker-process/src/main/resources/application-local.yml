@@ -1,12 +1,74 @@
 server:
   port: 18086
 
+spring:
+  main:
+    # 关掉懒加载：@KafkaListener 的 container bean 在 lazy 模式下启动期不实例化，
+    # 导致 consumer 不订阅 topic、consumer group 永远不出现。
+    lazy-initialization: false
+  datasource:
+    url: jdbc:postgresql://localhost:15432/batch_platform
+    username: batch_user
+    password: batch_pass_123
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: localhost:19092
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
 batch:
+  shedlock:
+    auto-create: true
+  security:
+    bypass-mode: true
+    kms:
+      default-key-ref: DEFAULT_TEST
+      keys:
+        DEFAULT_TEST: AAAAAAAAAAAAAAAAAAAAAA==
+  orchestrator:
+    base-url: http://localhost:18082
   worker:
+    registry:
+      # 本地联调：orchestrator 可能比 worker 晚启动，不 fail-fast 改为心跳重试注册
+      fail-fast-on-startup: false
+    type: PROCESS
+    lease:
+      renew-interval-millis: 10000
+    task-client:
+      base-url: http://localhost:18082
     process:
-      worker-code: process-node-local
+      worker-code: process-node-1
       worker-type: PROCESS
       tenant-id: default-tenant
       heartbeat-interval-millis: 15000
       topic: batch.task.dispatch.process
-      consumer-group-id: batch-worker-process-local
+      consumer-group-id: batch-worker-process
+      # worker_registry.capability_tags；让 selector 能匹配带 resource_tag 的 queue（见 DefaultWorkerSelector）
+      capability-tags:
+        - process
+      sql-transform:
+        # 业务库 schema 白名单(允许 sqlTransformCompute 读写的 schema);staging 表始终允许
+        allowed-schemas:
+          - biz
+        # 禁 SELECT *,要求显式列清单
+        forbid-select-star: true
+        # 单条 SQL 超时秒
+        query-timeout-seconds: 60
+  datasource:
+    business:
+      url: jdbc:postgresql://localhost:15432/batch_business?stringtype=unspecified
+      username: batch_user
+      password: batch_pass_123
+      schema: biz
+  storage:
+    minio:
+      # PROCESS worker 不直接读写 MinIO,但 batch-common MinioAutoConfiguration 仍会装配
+      # MinioClient bean 并要求 access/secret 非空,这里给本地占位值即可。
+      endpoint: http://localhost:19000
+      access-key: minioadmin
+      secret-key: minioadmin123
+      bucket: batch-dev
