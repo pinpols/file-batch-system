@@ -22,6 +22,7 @@ import com.example.batch.console.support.ConsoleExcelStyles;
 import com.example.batch.console.support.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -452,7 +453,7 @@ class ConfigPackageExcelWorkbookWriter {
     // 上传时 Validator 会剥掉前缀比对 pipeline_type 与 module 是否匹配，不匹配会报错。
     // registry 空时不加下拉（首次部署没 worker 启动过也能下载模板）。
     if (registeredImplCodesByModule != null && !registeredImplCodesByModule.isEmpty()) {
-      List<String> options = new java.util.ArrayList<>();
+      List<String> options = new ArrayList<>();
       registeredImplCodesByModule.forEach(
           (module, beans) -> {
             for (String bean : beans) {

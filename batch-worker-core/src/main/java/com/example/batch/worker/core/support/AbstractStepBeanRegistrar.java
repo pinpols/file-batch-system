@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.support;
 
 import com.example.batch.worker.core.mapper.StepRegistryMapper;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +61,7 @@ public abstract class AbstractStepBeanRegistrar<T> {
       // 做 Map key（默认返回 "MODULE_STAGENAME" 比如 DISPATCH_PREPARE），而不是 Spring
       // camelCase 的 bean name（prepareDispatchStep）。登记必须对齐，否则 Excel 校验 /
       // 下拉的 impl_code 跟运行时脱节。
-      java.util.LinkedHashSet<String> registeredCodes = new java.util.LinkedHashSet<>();
+      LinkedHashSet<String> registeredCodes = new LinkedHashSet<>();
       beans
           .values()
           .forEach(

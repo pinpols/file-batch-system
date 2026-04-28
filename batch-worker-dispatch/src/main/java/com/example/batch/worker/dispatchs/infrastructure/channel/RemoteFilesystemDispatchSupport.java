@@ -10,6 +10,7 @@ import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -99,7 +100,7 @@ final class RemoteFilesystemDispatchSupport {
    *
    * <p>返回后续操作使用的真实路径。
    */
-  private static Path resolveNasDirectory(String remoteDir) throws java.io.IOException {
+  private static Path resolveNasDirectory(String remoteDir) throws IOException {
     Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
     Files.createDirectories(directory);
     Path realDirectory = directory.toRealPath();

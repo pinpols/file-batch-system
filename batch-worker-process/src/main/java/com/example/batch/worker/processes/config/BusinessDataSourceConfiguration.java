@@ -4,7 +4,6 @@ import com.example.batch.common.config.BusinessDataSourceProperties;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
-import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
@@ -12,13 +11,13 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /** 业务数据源配置，提供 PROCESS 配置驱动 SQL 加工访问业务库的连接池。 */
-@org.springframework.context.annotation.Configuration(
-    "processWorkerBusinessDataSourceConfiguration")
+@Configuration("processWorkerBusinessDataSourceConfiguration")
 @EnableConfigurationProperties(BusinessDataSourceProperties.class)
 public class BusinessDataSourceConfiguration {
 
@@ -64,7 +63,8 @@ public class BusinessDataSourceConfiguration {
     if (businessMappers.length > 0) {
       factoryBean.setMapperLocations(businessMappers);
     }
-    Configuration configuration = new Configuration();
+    org.apache.ibatis.session.Configuration configuration =
+        new org.apache.ibatis.session.Configuration();
     configuration.setMapUnderscoreToCamelCase(true);
     factoryBean.setConfiguration(configuration);
     return factoryBean.getObject();

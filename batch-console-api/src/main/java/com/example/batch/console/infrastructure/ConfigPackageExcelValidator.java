@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -856,7 +857,7 @@ class ConfigPackageExcelValidator {
 
   static String normalizeEnum(String value) {
     String n = normalize(value);
-    return n == null ? null : n.toUpperCase(java.util.Locale.ROOT);
+    return n == null ? null : n.toUpperCase(Locale.ROOT);
   }
 
   static boolean hasText(String value) {

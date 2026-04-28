@@ -19,6 +19,7 @@ import io.netty.util.Timeout;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -407,7 +408,7 @@ public class HashedWheelTriggerScheduler {
   private static String defaultLeaderInstanceId() {
     String host;
     try {
-      host = java.net.InetAddress.getLocalHost().getHostName();
+      host = InetAddress.getLocalHost().getHostName();
     } catch (Exception e) {
       host = "unknown";
     }

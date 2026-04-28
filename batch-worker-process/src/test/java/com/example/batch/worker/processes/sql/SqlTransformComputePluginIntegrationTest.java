@@ -10,6 +10,7 @@ import com.example.batch.worker.processes.metrics.ProcessMetrics;
 import com.example.batch.worker.processes.stage.ProcessRuntimeKeys;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
@@ -322,7 +323,7 @@ class SqlTransformComputePluginIntegrationTest {
     context.setWorkerId("process-test");
     context.setBatchKey("batch-test-1");
     context.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, 1L);
-    Map<String, Object> sqlTransformSpec = new java.util.LinkedHashMap<>();
+    Map<String, Object> sqlTransformSpec = new LinkedHashMap<>();
     sqlTransformSpec.put(
         "sourceSql",
         """
@@ -347,7 +348,7 @@ class SqlTransformComputePluginIntegrationTest {
             Map.of("source", "high_water_mark", "target", "high_water_mark")));
     sqlTransformSpec.put("conflictColumns", List.of("tenant_id", "account_id"));
     sqlTransformSpec.put("watermarkColumn", "high_water_mark");
-    Map<String, Object> stepParams = new java.util.LinkedHashMap<>();
+    Map<String, Object> stepParams = new LinkedHashMap<>();
     stepParams.put("sqlTransformCompute", sqlTransformSpec);
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, stepParams);
     return context;

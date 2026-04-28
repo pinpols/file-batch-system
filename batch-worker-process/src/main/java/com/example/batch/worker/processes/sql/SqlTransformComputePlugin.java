@@ -13,11 +13,13 @@ import com.example.batch.worker.processes.metrics.ProcessMetrics;
 import com.example.batch.worker.processes.stage.ProcessComputePlugin;
 import com.example.batch.worker.processes.stage.ProcessRuntimeKeys;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.temporal.TemporalAccessor;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -88,7 +90,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     Map<String, Object> sqlParams = buildSqlParams(context, spec);
     validateNamedParameters(validatedSourceSql, sqlParams);
     requireTargetTableExists(spec);
-    context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PARSED_SPEC, spec);
+    context.setPluginState(spec);
     log.info(
         "sqlTransformCompute prepare passed: tenantId={}, jobCode={}, target={}.{}, batchKey={}",
         context.getTenantId(),
@@ -294,8 +296,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   }
 
   private SqlTransformComputeSpec parsedSpec(ProcessJobContext context) {
-    Object value = context.getAttributes().get(ProcessRuntimeKeys.PROCESS_PARSED_SPEC);
-    if (value instanceof SqlTransformComputeSpec spec) {
+    if (context.getPluginState() instanceof SqlTransformComputeSpec spec) {
       return spec;
     }
     throw new BizException(
@@ -387,7 +388,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         && !(value instanceof String)
         && !(value instanceof Number)
         && !(value instanceof Boolean)
-        && !(value instanceof java.time.temporal.TemporalAccessor)) {
+        && !(value instanceof TemporalAccessor)) {
       // 复杂值(嵌套 Map / List)不直接绑定为 SQL 参数,业务需要先在 metadata 里展平。
       return;
     }
@@ -416,7 +417,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
                         + column.target()
                         + "', base."
                         + JdbcMappedSqlValidator.quotePg(column.source()))
-            .collect(java.util.stream.Collectors.joining(", "));
+            .collect(Collectors.joining(", "));
     return """
     INSERT INTO batch.process_staging (batch_key, tenant_id, target_schema, target_table, payload)
     SELECT :batchKey, :tenantId, :targetSchema, :targetTable, jsonb_build_object(%s)
@@ -437,11 +438,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         spec.columns().stream()
             .map(SqlTransformComputeSpec.ColumnMapping::target)
             .map(JdbcMappedSqlValidator::quotePg)
-            .collect(java.util.stream.Collectors.joining(", "));
+            .collect(Collectors.joining(", "));
     String selectColumns =
         spec.columns().stream()
             .map(column -> "(rec)." + JdbcMappedSqlValidator.quotePg(column.target()))
-            .collect(java.util.stream.Collectors.joining(", "));
+            .collect(Collectors.joining(", "));
     String sql =
         """
         INSERT INTO %s (%s)
@@ -462,7 +463,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     String conflictColumns =
         spec.conflictColumns().stream()
             .map(JdbcMappedSqlValidator::quotePg)
-            .collect(java.util.stream.Collectors.joining(", "));
+            .collect(Collectors.joining(", "));
     if (spec.writeMode() == SqlTransformComputeSpec.WriteMode.INSERT_IGNORE) {
       return sql + " ON CONFLICT (" + conflictColumns + ") DO NOTHING";
     }
@@ -475,7 +476,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
                   String quoted = JdbcMappedSqlValidator.quotePg(column);
                   return quoted + " = EXCLUDED." + quoted;
                 })
-            .collect(java.util.stream.Collectors.joining(", "));
+            .collect(Collectors.joining(", "));
     if (!Texts.hasText(update)) {
       return sql + " ON CONFLICT (" + conflictColumns + ") DO NOTHING";
     }

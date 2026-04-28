@@ -24,4 +24,13 @@ public class ProcessJobContext implements ExecutionContext {
 
   /** PREPARE 时生成的 staging 批次唯一键,COMPUTE/VALIDATE/COMMIT/FEEDBACK 都按它过滤 batch.process_staging 行。 */
   private String batchKey;
+
+  /**
+   * P2-3:plugin 在 PREPARE 阶段解析出的私有状态(例:sqlTransformCompute 把 SqlTransformComputeSpec 缓存这里), 后续 4
+   * 段从这里读回。具体类型由 plugin 决定,框架不解读;只有当事 plugin 自己 cast。
+   *
+   * <p>历史上塞在 {@code attributes} 里(key={@code PROCESS_PARSED_SPEC}),但 attributes 既是 stage step
+   * IO,也参与 step summary 构建,放强类型(且未必 JSON 可序列化)对象进去会污染该契约。
+   */
+  private Object pluginState;
 }

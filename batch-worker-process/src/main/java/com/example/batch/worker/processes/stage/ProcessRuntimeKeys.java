@@ -10,8 +10,8 @@ public final class ProcessRuntimeKeys {
    */
   public static final String PROCESS_COMPUTE_STEP_PARAMS = "processComputeStepParams";
 
-  /** plugin.prepare() 解析后的 spec(具体类型由 plugin 决定),保存供 compute/validate/commit/feedback 复用。 */
-  public static final String PROCESS_PARSED_SPEC = "processParsedSpec";
+  // P2-3:plugin 私有状态(原 PROCESS_PARSED_SPEC)已挪到 ProcessJobContext.pluginState 强类型 field,
+  // 不再走 attributes Map(避免污染 stage IO + summary 双重契约)。
 
   /** plugin.validate() 校验时聚合的 staging 行数。 */
   public static final String PROCESS_STAGED_COUNT = "stagedCount";

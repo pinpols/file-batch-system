@@ -4,7 +4,10 @@ import com.example.batch.worker.core.support.TaskExecutionClient;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
@@ -49,13 +52,12 @@ public class WorkerTaskLeaseRenewer {
 
   @Scheduled(fixedDelayString = "${batch.worker.lease.renew-interval-millis:10000}")
   public void renewActiveTaskLeases() {
-    java.util.Collection<ActiveTaskLeaseRegistry.ActiveTaskLease> active =
-        activeTaskLeaseRegistry.snapshot();
+    Collection<ActiveTaskLeaseRegistry.ActiveTaskLease> active = activeTaskLeaseRegistry.snapshot();
     // L-5：清理 consecutiveFailures 里已不在活跃 lease 集合的条目，避免
     // "失败达到阈值后任务被 orchestrator 驱逐不再 renew" 路径永驻 AtomicInteger。
     // 按 taskId 比对当前活跃集 → 差集即是可回收的失败计数条目。
     if (!consecutiveFailures.isEmpty()) {
-      java.util.Set<String> activeIds = new java.util.HashSet<>(active.size());
+      Set<String> activeIds = new HashSet<>(active.size());
       for (ActiveTaskLeaseRegistry.ActiveTaskLease lease : active) {
         activeIds.add(lease.getTaskId());
       }

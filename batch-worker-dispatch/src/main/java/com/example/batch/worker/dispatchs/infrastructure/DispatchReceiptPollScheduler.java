@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
+import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -115,7 +116,7 @@ public class DispatchReceiptPollScheduler {
       // L-4：之前 response.body().string() 把整个响应一次性读进堆内存，异常响应体（如
       // 上游误返回大量调试信息）可能打爆 JVM。改流式读取 + maxReceiptBodyBytes 硬上限
       JsonNode root;
-      try (java.io.InputStream bodyStream = response.body().byteStream()) {
+      try (InputStream bodyStream = response.body().byteStream()) {
         byte[] limited = bodyStream.readNBytes(MAX_RECEIPT_BODY_BYTES);
         if (limited.length == MAX_RECEIPT_BODY_BYTES && bodyStream.read() != -1) {
           log.warn(
