@@ -1,10 +1,10 @@
 package com.example.batch.worker.core.domain;
 
-import com.example.batch.common.i18n.LocalizedErrorCarrier;
+import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import lombok.Data;
 
 @Data
-public class TaskExecutionReport implements LocalizedErrorCarrier {
+public class TaskExecutionReport extends AbstractLocalizedErrorEntity {
 
   private Long taskId;
   private String tenantId;
@@ -18,16 +18,11 @@ public class TaskExecutionReport implements LocalizedErrorCarrier {
   private String message;
   private String resultSummary;
   private String errorCode;
-  private String errorMessage;
 
   /**
    * i18n message key (来自 BizException.of)。Worker 侧 BizException 命中 i18n key 时填入, orchestrator 持久化到
    * job_task.error_key,console 读路径按当前 Locale 重渲染。null 表示老 literal / 第三方异常,errorMessage 是唯一展示来源。
    */
-  private String errorKey;
-
-  /** i18n 占位符参数 JSON 数组,与 errorKey 一起跨进程传递。 */
-  private String errorArgs;
 
   /**
    * 增量执行模式(ExecutionMode.INCREMENTAL)下 worker 上报的新水位高点。业务逻辑通过 {@code

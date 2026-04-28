@@ -3,6 +3,7 @@ package com.example.batch.worker.core.domain;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.i18n.BizExceptionUtils;
 import com.example.batch.common.i18n.LocalizedError;
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -19,10 +20,30 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * </ul>
  */
 public record StepExecutionResponse(
-    boolean success, String code, String message, String errorKey, String errorArgs) {
+    boolean success, String code, String message, String errorKey, String errorArgs)
+    implements LocalizedErrorCarrier {
 
   public StepExecutionResponse(boolean success, String code, String message) {
     this(success, code, message, null, null);
+  }
+
+  // ─── LocalizedErrorCarrier 桥接 ────────────────────────────────────────────────
+  // record 字段命名变体:本类用 message 不用 errorMessage(成功路径也复用此字段);
+  // 失败时 message 即错误文本,carrier 视角等价 errorMessage。
+
+  @Override
+  public String getErrorMessage() {
+    return message;
+  }
+
+  @Override
+  public String getErrorKey() {
+    return errorKey;
+  }
+
+  @Override
+  public String getErrorArgs() {
+    return errorArgs;
   }
 
   public static StepExecutionResponse successResponse() {
