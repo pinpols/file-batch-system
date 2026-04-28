@@ -18,10 +18,10 @@ PROCESS Worker 的 happy path 已跑通：配置 `pipeline_step_definition.impl_
 
 本轮 hardening 状态（2026-04-28）：
 
-- 已修：P0-2 / P0-3 / P0-4 / P1-1 / P1-2 / P1-3 / P1-4 / P1-5 / P1-6 / P1-7 / **P2-4 / P2-5**。
+- 已修：P0-2 / P0-3 / P0-4 / P1-1 / P1-2 / P1-3 / P1-4 / P1-5 / P1-6 / P1-7 / P2-4 / P2-5 / **P2-3**。
 - 已缓解：P0-1 已把 `batch.process_staging` 纳入业务库初始化脚本；平台 Flyway 中的历史 V75 表保留兼容,后续仍建议补真双库 E2E。
 - 已文档化:**P2-1 / P2-2 / P2-7**(`system-flow-overview.md` §7.9.8 给出 writeMode 重跑表 / JSONB 类型矩阵 / 自定义 plugin SPI 边界与示例)。
-- 未修：P2-3 / P2-6 / 双库 E2E 待补。
+- 未修：P2-6(优先级 topic,业务驱动型留观察)/ 双库 E2E 待补。
 
 ## 1. P0 — 必须先修
 
@@ -293,9 +293,13 @@ V75 有 `staged_at` 索引，文档也承认 VALIDATE 失败会保留 staging，
 
 - 已文档化:`system-flow-overview.md` §7.9.8 列出已验证 / 待验证 / 不支持三档类型矩阵。运行时 PREPARE 类型白名单留到下一期评估。
 
-### P2-3. `ProcessRuntimeKeys.PROCESS_PARSED_SPEC` 在 attributes 中塞强类型对象
+### P2-3. `ProcessRuntimeKeys.PROCESS_PARSED_SPEC` 在 attributes 中塞强类型对象 ✅ 已修
 
-当前 attributes 既作为运行时 Map，也会参与 step summary 构建。强类型对象不一定可 JSON 序列化。建议将 plugin 私有状态放进 `ProcessJobContext` 的 typed field，或保证 summary 不会序列化该对象。
+`SqlTransformComputeSpec`(强类型 record,未必 JSON 可序列化)从 `attributes` Map 挪到 `ProcessJobContext.pluginState` 强类型 Object field。
+- `SqlTransformComputePlugin.prepare()` 用 `setPluginState(spec)` 替换 `attributes.put(PROCESS_PARSED_SPEC, spec)`
+- `SqlTransformComputePlugin.parsedSpec()` 用 `getPluginState()` 读回
+- 删除 `PROCESS_PARSED_SPEC` 常量,留 inline 注释指向新位置
+- attributes 重新只承载 stage IO + step summary 双重契约可序列化数据
 
 ### P2-4. 缺 Micrometer 指标 ✅ 已修
 
