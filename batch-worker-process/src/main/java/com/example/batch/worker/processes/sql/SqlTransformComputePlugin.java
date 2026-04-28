@@ -108,6 +108,40 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     context.getAttributes().put(ProcessRuntimeKeys.PROCESS_STAGED_COUNT, stagedRows);
     context.getAttributes().put("processedCount", stagedRows);
 
+    // P1-6:超过 maxStagedRows 立即清本批 staging,避免后续 stage 处理超大集合 / target 表雪崩。
+    // 在事务边界外删除即可,因 PR-3 P0-3 已让 commit+cleanup 同事务,这里只是补"提前刹车"。
+    if (stagedRows > spec.maxStagedRows()) {
+      Map<String, Object> cleanParams = new LinkedHashMap<>();
+      cleanParams.put("batchKey", batchKey);
+      cleanParams.put("tenantId", context.getTenantId());
+      cleanParams.put("targetSchema", spec.targetSchema());
+      cleanParams.put("targetTable", spec.targetTable());
+      jdbc.update(
+          "DELETE FROM batch.process_staging WHERE batch_key = :batchKey"
+              + " AND tenant_id = :tenantId"
+              + " AND target_schema = :targetSchema"
+              + " AND target_table = :targetTable",
+          cleanParams);
+      log.warn(
+          "sqlTransformCompute staged rows exceeded limit: tenantId={}, batchKey={}, target={}.{},"
+              + " stagedRows={}, maxStagedRows={}, cleaned",
+          context.getTenantId(),
+          batchKey,
+          spec.targetSchema(),
+          spec.targetTable(),
+          stagedRows,
+          spec.maxStagedRows());
+      return ProcessStageResult.failure(
+          ProcessStage.COMPUTE,
+          "PROCESS_STAGED_OVERFLOW",
+          "staged rows "
+              + stagedRows
+              + " exceeded maxStagedRows "
+              + spec.maxStagedRows()
+              + " for batchKey="
+              + batchKey);
+    }
+
     if (Texts.hasText(spec.watermarkColumn())) {
       Object highWaterMarkOut = queryMaxWatermark(spec, batchKey, context.getTenantId());
       if (highWaterMarkOut != null) {

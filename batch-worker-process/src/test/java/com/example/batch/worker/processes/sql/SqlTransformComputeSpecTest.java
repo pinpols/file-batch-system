@@ -188,4 +188,66 @@ class SqlTransformComputeSpecTest {
     assertThat(spec.emptyResultPolicy())
         .isEqualTo(SqlTransformComputeSpec.EmptyResultPolicy.SUCCESS);
   }
+
+  @Test
+  void parse_defaultsMaxStagedRows() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src",
+                "targetTable",
+                "summary",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount"))));
+
+    SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
+
+    assertThat(spec.maxStagedRows()).isEqualTo(SqlTransformComputeSpec.DEFAULT_MAX_STAGED_ROWS);
+  }
+
+  @Test
+  void parse_acceptsCustomMaxStagedRows() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src",
+                "targetTable",
+                "summary",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount")),
+                "maxStagedRows",
+                500));
+
+    SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
+
+    assertThat(spec.maxStagedRows()).isEqualTo(500);
+  }
+
+  @Test
+  void parse_rejectsInvalidMaxStagedRows() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id from biz.src",
+                "targetTable",
+                "summary",
+                "columns",
+                List.of(Map.of("source", "tenant_id", "target", "tenant_id")),
+                "maxStagedRows",
+                0));
+
+    assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("maxStagedRows");
+  }
 }
