@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
+import com.example.batch.worker.processes.metrics.ProcessMetrics;
 import com.example.batch.worker.processes.stage.ProcessRuntimeKeys;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -56,7 +57,9 @@ class SqlTransformComputePluginIntegrationTest {
     jdbcTemplate = new JdbcTemplate(dataSource);
     SqlTransformComputeSecurityProperties security = new SqlTransformComputeSecurityProperties();
     security.setAllowedSchemas(List.of("biz"));
-    plugin = new SqlTransformComputePlugin(dataSource, new ObjectMapper(), security);
+    plugin =
+        new SqlTransformComputePlugin(
+            dataSource, new ObjectMapper(), security, ProcessMetrics.noop());
 
     jdbcTemplate.execute("drop schema if exists biz cascade");
     jdbcTemplate.execute("drop schema if exists batch cascade");

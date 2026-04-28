@@ -13,6 +13,7 @@ import com.example.batch.worker.core.support.StageFailureCode;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
+import com.example.batch.worker.processes.metrics.ProcessMetrics;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,15 +31,18 @@ public class DefaultProcessStageExecutor
   private final Map<String, ProcessComputePlugin> pluginsByImplCode;
   private final Map<ProcessStage, ProcessStageStep> stepsByStage;
   private final List<PipelineStepTemplate> defaultStepDefinitions;
+  private final ProcessMetrics metrics;
 
   public DefaultProcessStageExecutor(
       List<ProcessStageStep> steps,
       List<ProcessComputePlugin> plugins,
-      PlatformFileRuntimeRepository runtimeRepository) {
+      PlatformFileRuntimeRepository runtimeRepository,
+      ProcessMetrics metrics) {
     super(runtimeRepository);
     this.pluginsByImplCode = indexPlugins(plugins);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
+    this.metrics = metrics;
   }
 
   @Override
@@ -75,7 +79,11 @@ public class DefaultProcessStageExecutor
     ProcessComputePlugin plugin = pluginsByImplCode.get(pluginCode);
     if (plugin != null) {
       context.setResolvedPlugin(plugin);
+      return;
     }
+    // P2-5:显式配的 impl_code(非默认 sentinel "PROCESS_COMPUTE")找不到对应 plugin 注册项时,fail-fast
+    // 标记给 PrepareStep 拒绝整个 task,避免 typo / 配置错误静默 success(processedCount=0)。
+    context.getAttributes().put(ProcessRuntimeKeys.PROCESS_PLUGIN_NOT_FOUND, pluginCode);
   }
 
   private PipelineStepDefinition findComputeStep(List<PipelineStepDefinition> steps) {
@@ -168,8 +176,10 @@ public class DefaultProcessStageExecutor
       return ProcessStageResult.failure(
           stage, StageFailureCode.STEP_NOT_FOUND.name(), "stage step bean missing for: " + stage);
     }
+    long startNanos = System.nanoTime();
+    ProcessStageResult result;
     try {
-      return stageStep.execute(context);
+      result = stageStep.execute(context);
     } catch (BizException exception) {
       log.error(
           "process stage business error: stage={}, stepCode={}, implCode={}, tenantId={}",
@@ -178,8 +188,9 @@ public class DefaultProcessStageExecutor
           step.implCode(),
           context.getTenantId(),
           exception);
-      return ProcessStageResult.failure(
-          stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+      result =
+          ProcessStageResult.failure(
+              stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
     } catch (Exception exception) {
       log.error(
           "process stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}",
@@ -188,9 +199,13 @@ public class DefaultProcessStageExecutor
           step.implCode(),
           context.getTenantId(),
           exception);
-      return ProcessStageResult.failure(
-          stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+      result =
+          ProcessStageResult.failure(
+              stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
     }
+    metrics.recordStageDuration(
+        stage.name(), context.getTenantId(), result.success(), System.nanoTime() - startNanos);
+    return result;
   }
 
   @Override

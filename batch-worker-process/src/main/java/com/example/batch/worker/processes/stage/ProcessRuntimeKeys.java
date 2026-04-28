@@ -19,5 +19,11 @@ public final class ProcessRuntimeKeys {
   /** plugin.commit() 实际写入 target 表的行数(可能与 stagedCount 不等,如 ON CONFLICT DO NOTHING)。 */
   public static final String PROCESS_PUBLISHED_COUNT = "publishedCount";
 
+  /**
+   * P2-5:显式配的 COMPUTE step impl_code 在 plugin 注册表里找不到时,DefaultProcessStageExecutor 把该 impl_code 标在
+   * attributes 上,PrepareStep 检测到即返回 PROCESS_COMPUTE_PLUGIN_NOT_FOUND failure。
+   */
+  public static final String PROCESS_PLUGIN_NOT_FOUND = "processPluginNotFound";
+
   private ProcessRuntimeKeys() {}
 }

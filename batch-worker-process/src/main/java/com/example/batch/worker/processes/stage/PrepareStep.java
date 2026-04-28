@@ -16,6 +16,15 @@ public class PrepareStep implements ProcessStageStep {
 
   @Override
   public ProcessStageResult execute(ProcessJobContext context) {
+    // P2-5:DefaultProcessStageExecutor 解析时发现 step_definition.impl_code 显式配了某 plugin code
+    // 但 plugin 注册表里找不到 → 这里 fail-fast 拒掉整个 task,避免 typo 静默 success。
+    Object missing = context.getAttributes().get(ProcessRuntimeKeys.PROCESS_PLUGIN_NOT_FOUND);
+    if (missing != null) {
+      return ProcessStageResult.failure(
+          stage(),
+          "PROCESS_COMPUTE_PLUGIN_NOT_FOUND",
+          "process compute plugin not found: " + missing);
+    }
     ProcessComputePlugin plugin = context.getResolvedPlugin();
     if (plugin == null) {
       return ProcessStageResult.success(stage());
