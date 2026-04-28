@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
 import com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -20,9 +21,27 @@ public interface TaskOutcomeService {
       String errorKey,
       String errorArgs,
       Instant startedAt,
-      Instant finishedAt) {}
+      Instant finishedAt)
+      implements LocalizedErrorCarrier {
 
-  final class NodeRunFinishCommand {
+    // 桥接 record accessor → JavaBean carrier 契约
+    @Override
+    public String getErrorMessage() {
+      return errorMessage;
+    }
+
+    @Override
+    public String getErrorKey() {
+      return errorKey;
+    }
+
+    @Override
+    public String getErrorArgs() {
+      return errorArgs;
+    }
+  }
+
+  final class NodeRunFinishCommand implements LocalizedErrorCarrier {
 
     private final NodeRunKey key;
     private final NodeRunOutcome outcome;
@@ -79,6 +98,24 @@ public interface TaskOutcomeService {
 
     public Instant finishedAt() {
       return outcome.finishedAt();
+    }
+
+    // ─── LocalizedErrorCarrier 桥接(已有 errorMessage()/errorKey()/errorArgs() accessor,
+    //     补 JavaBean getErrorXxx() 让 LocalizedErrorRenderer.render(this) 正常工作) ──────────
+
+    @Override
+    public String getErrorMessage() {
+      return outcome.errorMessage();
+    }
+
+    @Override
+    public String getErrorKey() {
+      return outcome.errorKey();
+    }
+
+    @Override
+    public String getErrorArgs() {
+      return outcome.errorArgs();
     }
   }
 

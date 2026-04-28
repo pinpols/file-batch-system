@@ -1,10 +1,11 @@
 package com.example.batch.orchestrator.domain.entity;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import java.time.Instant;
 import lombok.Data;
 
 @Data
-public class RetryScheduleEntity {
+public class RetryScheduleEntity implements LocalizedErrorCarrier {
 
   private Long id;
   private String tenantId;
@@ -27,4 +28,23 @@ public class RetryScheduleEntity {
 
   private Instant createdAt;
   private Instant updatedAt;
+
+  // ─── LocalizedErrorCarrier 桥接(字段命名变体:lastError* 而非 error*) ─────────────────
+  // 不能 extends AbstractLocalizedErrorEntity(列名 last_error_message 与父类 error_message 冲突),
+  // 直接 implements interface + 桥接 getter 让 LocalizedErrorRenderer.render(this) 正常工作。
+
+  @Override
+  public String getErrorMessage() {
+    return getLastErrorMessage();
+  }
+
+  @Override
+  public String getErrorKey() {
+    return getLastErrorKey();
+  }
+
+  @Override
+  public String getErrorArgs() {
+    return getLastErrorArgs();
+  }
 }

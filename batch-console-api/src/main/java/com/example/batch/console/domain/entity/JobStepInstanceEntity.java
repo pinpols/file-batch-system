@@ -1,11 +1,11 @@
 package com.example.batch.console.domain.entity;
 
-import com.example.batch.common.i18n.LocalizedErrorCarrier;
+import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import java.time.Instant;
 import lombok.Data;
 
 @Data
-public class JobStepInstanceEntity implements LocalizedErrorCarrier {
+public class JobStepInstanceEntity extends AbstractLocalizedErrorEntity {
 
   private Long id;
   private String tenantId;
@@ -19,13 +19,6 @@ public class JobStepInstanceEntity implements LocalizedErrorCarrier {
   private Long relatedFileId;
   private String resultSummary;
   private String errorCode;
-  private String errorMessage;
-
-  /** i18n message key,V78+ 写入;读路径按当前 Locale 渲染时优先于 errorMessage。 */
-  private String errorKey;
-
-  /** i18n 占位符参数 JSON 数组。 */
-  private String errorArgs;
 
   private Instant startedAt;
   private Instant finishedAt;

@@ -1,5 +1,7 @@
 package com.example.batch.orchestrator.domain.command;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
+
 public record TaskOutcomeCommand(
     String tenantId,
     Long taskId,
@@ -17,4 +19,22 @@ public record TaskOutcomeCommand(
      * job_instance.high_water_mark_out};非 INCREMENTAL 或 worker 没显式上报时为 null,持久化也跳过(保留旧值,下次实例的 IN
      * 不变即"无进展")。
      */
-    String highWaterMarkOut) {}
+    String highWaterMarkOut)
+    implements LocalizedErrorCarrier {
+
+  // record 默认 accessor 是 errorMessage() 无 get 前缀;桥接 carrier 契约的 getErrorXxx() bean 命名。
+  @Override
+  public String getErrorMessage() {
+    return errorMessage;
+  }
+
+  @Override
+  public String getErrorKey() {
+    return errorKey;
+  }
+
+  @Override
+  public String getErrorArgs() {
+    return errorArgs;
+  }
+}

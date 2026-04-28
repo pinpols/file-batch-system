@@ -1,12 +1,12 @@
 package com.example.batch.orchestrator.domain.entity;
 
-import com.example.batch.common.i18n.LocalizedErrorCarrier;
+import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
 import java.time.Instant;
 import java.time.LocalDate;
 import lombok.Data;
 
 @Data
-public class CompensationCommandEntity implements LocalizedErrorCarrier {
+public class CompensationCommandEntity extends AbstractLocalizedErrorEntity {
 
   private Long id;
   private String tenantId;
@@ -26,13 +26,6 @@ public class CompensationCommandEntity implements LocalizedErrorCarrier {
   private String traceId;
   private String resultSummary;
   private String errorCode;
-  private String errorMessage;
-
-  /** i18n message key,V78+ 写入;读路径按当前 Locale 渲染时优先于 errorMessage。 */
-  private String errorKey;
-
-  /** i18n 占位符参数 JSON 数组。 */
-  private String errorArgs;
 
   private Instant createdAt;
   private Instant finishedAt;
