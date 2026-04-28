@@ -6,6 +6,7 @@ import com.example.batch.common.jdbc.JdbcMappedSqlValidator;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
+import com.example.batch.worker.processes.domain.ProcessPayload;
 import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
 import com.example.batch.worker.processes.stage.ProcessComputePlugin;
@@ -14,7 +15,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
@@ -45,14 +45,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
 
   // 命名参数:`:name`,但排除 PostgreSQL cast 语法 `::type`(双冒号前缀)。
   private static final Pattern NAMED_PARAMETER = Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)");
-  private static final Set<String> STRUCTURED_RUNTIME_KEYS =
-      Set.of(
-          "payload",
-          PipelineRuntimeKeys.FILE_RECORD,
-          PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS,
-          PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS,
-          ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS,
-          ProcessRuntimeKeys.PROCESS_PARSED_SPEC);
+
+  /** 业务参数走 payload.metadata,展开为 :metadata_&lt;key&gt;。前缀公开,避免与内置参数冲突。 */
+  private static final String METADATA_PARAM_PREFIX = "metadata_";
 
   private final NamedParameterJdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
@@ -105,10 +100,8 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   public ProcessStageResult compute(ProcessJobContext context) {
     SqlTransformComputeSpec spec = parsedSpec(context);
     String batchKey = requireBatchKey(context);
+    // buildSqlParams 已经注入 batchKey / targetSchema / targetTable,这里不再重复 put。
     Map<String, Object> params = buildSqlParams(context, spec);
-    params.put("batchKey", batchKey);
-    params.put("targetSchema", spec.targetSchema());
-    params.put("targetTable", spec.targetTable());
 
     String stageSql = buildStagingInsertSql(spec);
     int stagedRows = jdbc.update(stageSql, params);
@@ -295,32 +288,68 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     }
   }
 
+  /**
+   * 构造 SQL 命名参数。三层来源,优先级 = 1 内置 > 2 metadata > 3 spec.params。
+   *
+   * <ol>
+   *   <li>内置(平台保留): tenantId / jobCode / workerId / traceId / stepCode / highWaterMarkIn / batchKey
+   *       / targetSchema / targetTable / bizDate。spec.params 不可覆盖(由 {@link
+   *       SqlTransformComputeSpec#validateIdentifiers()} 拦截);本方法也以"先 put 内置,后 putAll
+   *       spec.params"作为防御性双重保护。
+   *   <li>业务: 仅 {@code payload.metadata.<key>} 展开为 {@code :metadata_<key>},不再自动散开整个 attributes
+   *       map(避免 attribute 名碰巧与用户 SQL 命名参数同名导致绑定错值)。
+   *   <li>spec: {@code sqlTransformCompute.params} 显式定义的额外参数。
+   * </ol>
+   */
   private Map<String, Object> buildSqlParams(
       ProcessJobContext context, SqlTransformComputeSpec spec) {
     Map<String, Object> params = new LinkedHashMap<>();
+    // 1. 内置参数
     params.put("tenantId", context.getTenantId());
     params.put("jobCode", context.getJobCode());
     params.put("workerId", context.getWorkerId());
-    params.put(
-        "highWaterMarkIn", context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
     params.put("traceId", context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
     params.put(
         "stepCode", context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_CODE));
-    for (Map.Entry<String, Object> entry : context.getAttributes().entrySet()) {
-      if (STRUCTURED_RUNTIME_KEYS.contains(entry.getKey())) {
-        continue;
+    params.put(
+        "highWaterMarkIn", context.getAttributes().get(PipelineRuntimeKeys.HIGH_WATER_MARK_IN));
+    params.put("batchKey", context.getBatchKey());
+    params.put("targetSchema", spec.targetSchema());
+    params.put("targetTable", spec.targetTable());
+    // 2. 业务级 bizDate + payload.metadata 展开
+    if (context.getAttributes().get("processPayload") instanceof ProcessPayload typedPayload) {
+      if (Texts.hasText(typedPayload.bizDate())) {
+        params.put("bizDate", typedPayload.bizDate());
       }
-      Object value = entry.getValue();
-      if (value == null
-          || value instanceof String
-          || value instanceof Number
-          || value instanceof Boolean
-          || value instanceof java.time.temporal.TemporalAccessor) {
-        params.putIfAbsent(entry.getKey(), value);
+      if (typedPayload.metadata() != null) {
+        typedPayload.metadata().forEach((key, value) -> putMetadataParam(params, key, value));
+      }
+    } else {
+      // 兜底:某些路径(如插件单测)可能还没把 ProcessPayload 注入到 attributes,
+      // 直接从顶层 attributes 读 bizDate 字符串保持兼容(只读 bizDate 一项,不再全量散开)。
+      Object bizDate = context.getAttributes().get("bizDate");
+      if (bizDate != null) {
+        params.put("bizDate", bizDate);
       }
     }
+    // 3. spec.params 用户自定义(不可覆盖内置)
     params.putAll(spec.params());
     return params;
+  }
+
+  private void putMetadataParam(Map<String, Object> params, String key, Object value) {
+    if (key == null || key.isBlank()) {
+      return;
+    }
+    if (value != null
+        && !(value instanceof String)
+        && !(value instanceof Number)
+        && !(value instanceof Boolean)
+        && !(value instanceof java.time.temporal.TemporalAccessor)) {
+      // 复杂值(嵌套 Map / List)不直接绑定为 SQL 参数,业务需要先在 metadata 里展平。
+      return;
+    }
+    params.put(METADATA_PARAM_PREFIX + key, value);
   }
 
   private void validateNamedParameters(String sourceSql, Map<String, Object> params) {

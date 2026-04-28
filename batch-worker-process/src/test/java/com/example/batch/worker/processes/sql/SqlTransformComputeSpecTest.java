@@ -123,6 +123,50 @@ class SqlTransformComputeSpecTest {
   }
 
   @Test
+  void parse_rejectsParamsOverridingBizDate() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src where biz_date = cast(:bizDate as date)",
+                "targetTable",
+                "daily_summary",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount")),
+                "params",
+                Map.of("bizDate", "1970-01-01")));
+
+    assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("bizDate");
+  }
+
+  @Test
+  void parse_rejectsParamsUsingMetadataPrefix() {
+    Map<String, Object> stepParams =
+        Map.of(
+            "sqlTransformCompute",
+            Map.of(
+                "sourceSql",
+                "select tenant_id, amount from biz.src where x = :metadata_customer",
+                "targetTable",
+                "daily_summary",
+                "columns",
+                List.of(
+                    Map.of("source", "tenant_id", "target", "tenant_id"),
+                    Map.of("source", "amount", "target", "amount")),
+                "params",
+                Map.of("metadata_customer", "X")));
+
+    assertThatThrownBy(() -> SqlTransformComputeSpec.parse(stepParams, objectMapper))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("metadata_");
+  }
+
+  @Test
   void parse_acceptsEmptyResultPolicySuccess() {
     Map<String, Object> stepParams =
         Map.of(
