@@ -299,8 +299,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     if (context.getPluginState() instanceof SqlTransformComputeSpec spec) {
       return spec;
     }
-    throw new BizException(
-        ResultCode.SYSTEM_ERROR, "sqlTransformCompute spec missing in context (prepare not run?)");
+    throw BizException.of(ResultCode.SYSTEM_ERROR, "error.process.spec_missing_in_context");
   }
 
   private String requireBatchKey(ProcessJobContext context) {
