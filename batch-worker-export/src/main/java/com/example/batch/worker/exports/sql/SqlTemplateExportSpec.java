@@ -5,6 +5,7 @@ import com.example.batch.common.utils.Texts;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * 从模板配置解析而来的 SQL 模板导出规格。
@@ -77,9 +78,7 @@ public record SqlTemplateExportSpec(String detailSql, String cursorColumn) {
     if (sql == null || name == null) {
       return false;
     }
-    return java.util.regex.Pattern.compile(
-            "\\b" + java.util.regex.Pattern.quote(name) + "\\b",
-            java.util.regex.Pattern.CASE_INSENSITIVE)
+    return Pattern.compile("\\b" + Pattern.quote(name) + "\\b", Pattern.CASE_INSENSITIVE)
         .matcher(sql)
         .find();
   }
