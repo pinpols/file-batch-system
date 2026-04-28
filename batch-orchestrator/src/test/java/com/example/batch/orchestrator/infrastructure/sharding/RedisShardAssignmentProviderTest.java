@@ -124,8 +124,4 @@ class RedisShardAssignmentProviderTest {
     verify(zset, times(1))
         .removeRangeByScore(eq("batch:orchestrator:members"), eq(0D), anyDouble());
   }
-
-  private static double anyDouble() {
-    return anyDouble();
-  }
 }

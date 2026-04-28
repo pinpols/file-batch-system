@@ -16,6 +16,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -210,8 +211,7 @@ public class HttpTaskExecutionClient implements TaskExecutionClient {
     throw ex;
   }
 
-  private <T> ClaimOutcome<T> executeClaimLike(
-      String operation, java.util.function.Supplier<T> call) {
+  private <T> ClaimOutcome<T> executeClaimLike(String operation, Supplier<T> call) {
     RetryState state =
         RetryState.initial(
             properties.getClaimMaxAttempts(),
