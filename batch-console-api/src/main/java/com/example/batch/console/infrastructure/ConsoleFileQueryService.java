@@ -5,6 +5,7 @@ import static com.example.batch.console.infrastructure.ConsoleQuerySupport.*;
 import com.example.batch.common.config.BatchSecurityProperties;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.exception.BizException;
+import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.common.utils.ContentMaskingUtils;
@@ -59,6 +60,7 @@ class ConsoleFileQueryService {
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleFileQueryMappers fileMappers;
   private final BatchSecurityProperties batchSecurityProperties;
+  private final LocalizedErrorRenderer localizedErrorRenderer;
 
   PageResponse<ConsoleFileRecordResponse> fileChains(FileChainQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
@@ -351,7 +353,7 @@ class ConsoleFileQueryService {
         stringValue(row, "input_summary"),
         stringValue(row, "output_summary"),
         stringValue(row, "error_code"),
-        stringValue(row, "error_message"),
+        renderLocalizedError(row),
         intValue(row, "retry_count"),
         longValue(row, "duration_ms"),
         instantValue(row, "started_at"),
@@ -372,11 +374,22 @@ class ConsoleFileQueryService {
         stringValue(row, "receipt_status"),
         stringValue(row, "external_request_id"),
         stringValue(row, "error_code"),
-        stringValue(row, "error_message"),
+        renderLocalizedError(row),
         instantValue(row, "dispatched_at"),
         instantValue(row, "ack_at"),
         instantValue(row, KEY_CREATED_AT),
         instantValue(row, KEY_UPDATED_AT));
+  }
+
+  /**
+   * i18n 持久化:行有 error_key 时按当前 Locale 重渲染,否则透传 error_message。 用于所有 resultType="map" 行携带
+   * (error_key/error_args/error_message) 三元组的场景。
+   */
+  private String renderLocalizedError(Map<String, Object> row) {
+    return localizedErrorRenderer.render(
+        stringValue(row, "error_key"),
+        stringValue(row, "error_args"),
+        stringValue(row, "error_message"));
   }
 
   private ConsoleFileChannelResponse toFileChannelResponse(Map<String, Object> row) {
@@ -465,6 +478,7 @@ class ConsoleFileQueryService {
   }
 
   private ConsoleFileErrorRecordResponse toFileErrorRecordResponse(FileErrorRecordEntity entity) {
+    String errorMessage = localizedErrorRenderer.render(entity);
     return new ConsoleFileErrorRecordResponse(
         entity.getId(),
         display(entity.getTenantId()),
@@ -473,7 +487,7 @@ class ConsoleFileQueryService {
         entity.getPipelineStepRunId(),
         entity.getRecordNo(),
         display(entity.getErrorCode()),
-        display(entity.getErrorMessage()),
+        display(errorMessage),
         display(entity.getErrorStage()),
         entity.getSkipped(),
         display(entity.getSkipAction()),

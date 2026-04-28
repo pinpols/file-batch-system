@@ -1,9 +1,10 @@
 package com.example.batch.orchestrator.controller.request;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import lombok.Data;
 
 @Data
-public class TaskExecutionReportDto {
+public class TaskExecutionReportDto implements LocalizedErrorCarrier {
 
   private Long taskId;
   private String tenantId;

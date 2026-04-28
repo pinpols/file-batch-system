@@ -1,10 +1,11 @@
 package com.example.batch.console.domain.entity;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import java.time.Instant;
 import lombok.Data;
 
 @Data
-public class WorkflowNodeRunEntity {
+public class WorkflowNodeRunEntity implements LocalizedErrorCarrier {
 
   private Long id;
   private Long workflowRunId;

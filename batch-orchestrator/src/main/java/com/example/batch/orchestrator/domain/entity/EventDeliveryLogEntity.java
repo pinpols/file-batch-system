@@ -1,10 +1,11 @@
 package com.example.batch.orchestrator.domain.entity;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import java.time.Instant;
 import lombok.Data;
 
 @Data
-public class EventDeliveryLogEntity {
+public class EventDeliveryLogEntity implements LocalizedErrorCarrier {
 
   private Long id;
   private String tenantId;

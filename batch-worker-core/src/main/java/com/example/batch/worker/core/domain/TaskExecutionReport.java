@@ -1,9 +1,10 @@
 package com.example.batch.worker.core.domain;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import lombok.Data;
 
 @Data
-public class TaskExecutionReport {
+public class TaskExecutionReport implements LocalizedErrorCarrier {
 
   private Long taskId;
   private String tenantId;

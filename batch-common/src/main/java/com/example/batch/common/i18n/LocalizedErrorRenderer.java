@@ -64,4 +64,13 @@ public class LocalizedErrorRenderer {
     }
     return render(error.key(), error.argsJson(), error.renderedMessage(), locale);
   }
+
+  /** carrier 直渲染:从 entity / DTO / Mapper Param 上的 errorKey/errorArgs/errorMessage 三字段直接读。 */
+  public String render(LocalizedErrorCarrier carrier) {
+    return carrier == null ? null : render(carrier.toLocalizedError());
+  }
+
+  public String render(LocalizedErrorCarrier carrier, Locale locale) {
+    return carrier == null ? null : render(carrier.toLocalizedError(), locale);
+  }
 }

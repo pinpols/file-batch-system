@@ -1,10 +1,11 @@
 package com.example.batch.console.domain.entity;
 
+import com.example.batch.common.i18n.LocalizedErrorCarrier;
 import java.time.Instant;
 import lombok.Data;
 
 @Data
-public class FileErrorRecordEntity {
+public class FileErrorRecordEntity implements LocalizedErrorCarrier {
 
   private Long id;
   private String tenantId;

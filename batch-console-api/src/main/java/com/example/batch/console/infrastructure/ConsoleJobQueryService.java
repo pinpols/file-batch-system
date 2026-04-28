@@ -2,6 +2,7 @@ package com.example.batch.console.infrastructure;
 
 import static com.example.batch.console.infrastructure.ConsoleQuerySupport.*;
 
+import com.example.batch.common.i18n.LocalizedErrorRenderer;
 import com.example.batch.common.model.PageRequest;
 import com.example.batch.common.model.PageResponse;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
@@ -35,6 +36,7 @@ class ConsoleJobQueryService {
 
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleJobQueryMappers jobMappers;
+  private final LocalizedErrorRenderer localizedErrorRenderer;
 
   PageResponse<ConsoleJobDefinitionResponse> jobDefinitions(JobDefinitionQueryRequest request) {
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
@@ -203,6 +205,7 @@ class ConsoleJobQueryService {
   }
 
   private ConsoleJobStepInstanceResponse toJobStepInstanceResponse(JobStepInstanceEntity entity) {
+    String errorMessage = localizedErrorRenderer.render(entity);
     return new ConsoleJobStepInstanceResponse(
         entity.getId(),
         display(entity.getTenantId()),
@@ -216,7 +219,7 @@ class ConsoleJobQueryService {
         entity.getRelatedFileId(),
         entity.getResultSummary(),
         display(entity.getErrorCode()),
-        display(entity.getErrorMessage()),
+        display(errorMessage),
         entity.getStartedAt(),
         entity.getFinishedAt());
   }

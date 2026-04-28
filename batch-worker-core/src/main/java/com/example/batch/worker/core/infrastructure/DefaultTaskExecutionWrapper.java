@@ -88,6 +88,10 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       if (!response.success()) {
         report.setErrorCode(response.code());
         report.setErrorMessage(response.message());
+        // i18n 跨进程透传:plugin 用 StepExecutionResponse.failure(BizException, mapper)
+        // 时,key/args 会一直传到 orchestrator 持久化。第三方异常 / literal 失败时为 null,orchestrator 仅用 message。
+        report.setErrorKey(response.errorKey());
+        report.setErrorArgs(response.errorArgs());
       }
       // 将 traceId 传递给 Orchestrator，确保状态更新与重试/DLQ 全链路可追踪
       report.setTraceId(task.getTraceId());

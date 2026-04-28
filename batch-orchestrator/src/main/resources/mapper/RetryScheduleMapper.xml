@@ -47,7 +47,9 @@
             #{retryStatus},
             #{dedupKey},
             #{lastErrorCode},
-            #{lastErrorMessage}
+            #{lastErrorMessage},
+            #{lastErrorKey},
+            #{lastErrorArgs,jdbcType=VARCHAR}::jsonb
         )
     </insert>
 

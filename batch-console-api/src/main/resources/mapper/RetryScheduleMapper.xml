@@ -14,6 +14,8 @@
         <result column="dedup_key" property="dedupKey"/>
         <result column="last_error_code" property="lastErrorCode"/>
         <result column="last_error_message" property="lastErrorMessage"/>
+        <result column="last_error_key" property="lastErrorKey"/>
+        <result column="last_error_args" property="lastErrorArgs"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
