@@ -44,6 +44,13 @@ public record SqlTransformComputeSpec(
    */
   public record ValidationRule(String name, String checkSql) {}
 
+  /**
+   * 内置保留参数名:{@code spec.params} 不可使用。{@link SqlTransformComputePlugin#buildSqlParams}
+   * 将这些名字与平台运行时上下文绑定,避免被业务配置静默覆盖造成跨租户 / 错位 SQL 绑定。
+   *
+   * <p>{@code metadata_*} 前缀也保留,通过 {@code payload.metadata.&lt;key&gt;} 展开;{@code spec.params}
+   * 同样不允许以该前缀开头,避免与 metadata 命名空间碰撞。
+   */
   private static final Set<String> RESERVED_PARAMS =
       Set.of(
           "tenantId",
@@ -54,7 +61,10 @@ public record SqlTransformComputeSpec(
           "stepCode",
           "batchKey",
           "targetSchema",
-          "targetTable");
+          "targetTable",
+          "bizDate");
+
+  private static final String METADATA_PARAM_PREFIX = "metadata_";
 
   public static SqlTransformComputeSpec parse(
       Map<String, Object> stepParams, ObjectMapper objectMapper) {
@@ -146,6 +156,13 @@ public record SqlTransformComputeSpec(
       if (reserved.contains(paramName)) {
         throw new IllegalArgumentException(
             "sqlTransformCompute.params contains reserved parameter: " + paramName);
+      }
+      if (paramName != null && paramName.startsWith(METADATA_PARAM_PREFIX)) {
+        throw new IllegalArgumentException(
+            "sqlTransformCompute.params must not start with reserved prefix '"
+                + METADATA_PARAM_PREFIX
+                + "' (this namespace is for payload.metadata expansion): "
+                + paramName);
       }
     }
   }

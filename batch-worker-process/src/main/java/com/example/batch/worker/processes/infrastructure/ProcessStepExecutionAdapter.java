@@ -66,6 +66,14 @@ public class ProcessStepExecutionAdapter
     context.setRawPayload(String.valueOf(attributes.getOrDefault("payload", "")));
     enrichProcessAttributes(context.getRawPayload(), attributes);
     context.setAttributes(attributes);
+    // payload 显式指定 batchKey 时,保留它做补偿/重跑隔离;否则交给 DefaultProcessStageExecutor 生成。
+    // 注意:稳定 batchKey 配合 P0-2 staging tenant/target 强校验,跨 tenant 复用同 batchKey 仍会被
+    // commit/feedback 的 WHERE 过滤兜住。
+    if (attributes.get("processPayload") instanceof ProcessPayload typed
+        && typed.batchKey() != null
+        && !typed.batchKey().isBlank()) {
+      context.setBatchKey(typed.batchKey());
+    }
     return context;
   }
 
