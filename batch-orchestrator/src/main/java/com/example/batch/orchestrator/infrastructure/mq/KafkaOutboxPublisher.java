@@ -1,6 +1,9 @@
 package com.example.batch.orchestrator.infrastructure.mq;
 
 import com.example.batch.common.enums.OutboxPublishStatus;
+import com.example.batch.common.i18n.BizExceptionUtils;
+import com.example.batch.common.i18n.BizMessageResolver;
+import com.example.batch.common.i18n.LocalizedError;
 import com.example.batch.common.kafka.BatchEventMessage;
 import com.example.batch.common.kafka.BatchMessageType;
 import com.example.batch.common.kafka.BatchTopics;
@@ -11,6 +14,7 @@ import com.example.batch.orchestrator.config.governance.BatchOrchestratorGoverna
 import com.example.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.mapper.EventDeliveryLogMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +50,8 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private final BatchOrchestratorGovernanceProperties governance;
   private final EventDeliveryLogMapper eventDeliveryLogMapper;
   private final BatchTopicResolver topicResolver;
+  private final BizMessageResolver bizMessageResolver;
+  private final ObjectMapper objectMapper;
 
   /**
    * delivery-log 写库及回调上的 executor。不能使用 CompletableFuture 默认的 ForkJoinPool.commonPool（共享全局池，
@@ -59,11 +65,15 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
       BatchOrchestratorGovernanceProperties governance,
       EventDeliveryLogMapper eventDeliveryLogMapper,
       BatchTopicResolver topicResolver,
+      BizMessageResolver bizMessageResolver,
+      ObjectMapper objectMapper,
       @Qualifier("applicationTaskExecutor") Executor deliveryLogExecutor) {
     this.kafkaTemplate = kafkaTemplate;
     this.governance = governance;
     this.eventDeliveryLogMapper = eventDeliveryLogMapper;
     this.topicResolver = topicResolver;
+    this.bizMessageResolver = bizMessageResolver;
+    this.objectMapper = objectMapper;
     this.deliveryLogExecutor = deliveryLogExecutor;
   }
 
@@ -97,7 +107,11 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
               (result, ex) -> {
                 if (ex == null) {
                   recordDelivery(
-                      event, targetTopic, workerId, OutboxPublishStatus.PUBLISHED.code(), null);
+                      event,
+                      targetTopic,
+                      workerId,
+                      OutboxPublishStatus.PUBLISHED.code(),
+                      LocalizedError.EMPTY);
                   return true;
                 }
                 recordDelivery(
@@ -105,7 +119,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
                     targetTopic,
                     workerId,
                     OutboxPublishStatus.FAILED.code(),
-                    ex.getMessage());
+                    BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
                 throw new CompletionException(ex);
               },
               deliveryLogExecutor);
@@ -144,7 +158,11 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
                 return true;
               }
               recordDelivery(
-                  event, fallbackTopic, null, OutboxPublishStatus.FAILED.code(), ex.getMessage());
+                  event,
+                  fallbackTopic,
+                  null,
+                  OutboxPublishStatus.FAILED.code(),
+                  BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
               throw new CompletionException(ex);
             },
             deliveryLogExecutor);
@@ -154,12 +172,28 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
   private static final List<String> SENSITIVE_KEYS =
       List.of("password", "secret", "token", "credential", "apiKey", "api_key", "accessKey");
 
+  /** 成功路径调用:errorMessage 传 null, 没有 i18n key/args。 */
   private void recordDelivery(
       OutboxEventEntity event,
       String targetTopic,
       String targetWorkerId,
       String deliveryStatus,
       String errorMessage) {
+    recordDelivery(
+        event,
+        targetTopic,
+        targetWorkerId,
+        deliveryStatus,
+        BizExceptionUtils.ofLiteral(errorMessage));
+  }
+
+  /** 失败路径调用:从 Throwable 提取 i18n key/args + 渲染 message,持久化三元组。 */
+  private void recordDelivery(
+      OutboxEventEntity event,
+      String targetTopic,
+      String targetWorkerId,
+      String deliveryStatus,
+      LocalizedError error) {
     EventDeliveryLogEntity log = new EventDeliveryLogEntity();
     log.setTenantId(event.getTenantId());
     log.setOutboxEventId(event.getId());
@@ -174,7 +208,11 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     summary.put("aggregateId", event.getAggregateId());
     summary.put("payloadPreview", sanitizePayload(event.getPayloadJson()));
     log.setDeliverySummary(JsonUtils.toJson(summary));
-    log.setErrorMessage(errorMessage);
+    if (error != null) {
+      log.setErrorMessage(error.renderedMessage());
+      log.setErrorKey(error.key());
+      log.setErrorArgs(error.argsJson());
+    }
     log.setTraceId(event.getTraceId());
     eventDeliveryLogMapper.insert(log);
   }
