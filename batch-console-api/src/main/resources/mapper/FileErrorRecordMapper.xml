@@ -10,6 +10,8 @@
         <result column="record_no" property="recordNo"/>
         <result column="error_code" property="errorCode"/>
         <result column="error_message" property="errorMessage"/>
+        <result column="error_key" property="errorKey"/>
+        <result column="error_args" property="errorArgs"/>
         <result column="error_stage" property="errorStage"/>
         <result column="is_skipped" property="skipped"/>
         <result column="skip_action" property="skipAction"/>

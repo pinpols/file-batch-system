@@ -17,6 +17,8 @@ public interface TaskOutcomeService {
       boolean success,
       String errorCode,
       String errorMessage,
+      String errorKey,
+      String errorArgs,
       Instant startedAt,
       Instant finishedAt) {}
 
@@ -36,7 +38,7 @@ public interface TaskOutcomeService {
 
     public static NodeRunFinishCommand success(
         NodeRunKey key, Instant startedAt, Instant finishedAt) {
-      return of(key, new NodeRunOutcome(true, null, null, startedAt, finishedAt));
+      return of(key, new NodeRunOutcome(true, null, null, null, null, startedAt, finishedAt));
     }
 
     public Long workflowRunId() {
@@ -61,6 +63,14 @@ public interface TaskOutcomeService {
 
     public String errorMessage() {
       return outcome.errorMessage();
+    }
+
+    public String errorKey() {
+      return outcome.errorKey();
+    }
+
+    public String errorArgs() {
+      return outcome.errorArgs();
     }
 
     public Instant startedAt() {

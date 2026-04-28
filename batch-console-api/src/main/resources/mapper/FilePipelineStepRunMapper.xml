@@ -13,6 +13,8 @@
             output_summary,
             error_code,
             error_message,
+            error_key,
+            error_args,
             retry_count,
             duration_ms,
             started_at,

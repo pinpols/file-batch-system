@@ -19,6 +19,12 @@ public class TaskExecutionReportDto {
   private String errorCode;
   private String errorMessage;
 
+  /** Worker 上报的 i18n message key,跨进程传递到 orchestrator 持久化。 */
+  private String errorKey;
+
+  /** Worker 上报的 i18n 占位符参数 JSON 数组。 */
+  private String errorArgs;
+
   /** 增量执行模式下 worker 上报的新水位高点。仅在成功路径回写 {@code job_instance.high_water_mark_out}; null 表示无变化。 */
   private String highWaterMarkOut;
 }

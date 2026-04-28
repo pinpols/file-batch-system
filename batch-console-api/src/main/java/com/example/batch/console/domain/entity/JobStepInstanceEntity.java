@@ -19,6 +19,13 @@ public class JobStepInstanceEntity {
   private String resultSummary;
   private String errorCode;
   private String errorMessage;
+
+  /** i18n message key,V78+ 写入;读路径按当前 Locale 渲染时优先于 errorMessage。 */
+  private String errorKey;
+
+  /** i18n 占位符参数 JSON 数组。 */
+  private String errorArgs;
+
   private Instant startedAt;
   private Instant finishedAt;
 }
