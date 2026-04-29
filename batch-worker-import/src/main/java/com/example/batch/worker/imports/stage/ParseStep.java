@@ -52,6 +52,8 @@ public class ParseStep implements ImportStageStep {
   private static final String KEY_PARSED_COUNT = "parsedCount";
   private static final String FORMAT_EXCEL = "EXCEL";
 
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ParseSupport support;
   private final Map<String, FormatParser> parsers;
@@ -117,12 +119,23 @@ public class ParseStep implements ImportStageStep {
       if (totalCount == 0
           && support.numberValue(context.getAttributes().get("skippedCount")) == 0) {
         deleteQuietly(stagingFile);
-        return ImportStageResult.failure(stage(), "IMPORT_PARSE_EMPTY", "no records parsed");
+        return ImportStageResult.failure(
+            stage(),
+            "IMPORT_PARSE_EMPTY",
+            "error.import.parse.empty",
+            new Object[0],
+            "no records parsed",
+            ERROR_OBJECT_MAPPER);
       }
       if (!support.withinThreshold(context)) {
         deleteQuietly(stagingFile);
         return ImportStageResult.failure(
-            stage(), "IMPORT_SKIP_THRESHOLD_EXCEEDED", "skip threshold exceeded");
+            stage(),
+            "IMPORT_SKIP_THRESHOLD_EXCEEDED",
+            "error.import.skip_threshold_exceeded",
+            new Object[0],
+            "skip threshold exceeded",
+            ERROR_OBJECT_MAPPER);
       }
       runtimeRepository.updateFileStatus(
           runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
@@ -149,7 +162,13 @@ public class ParseStep implements ImportStageStep {
           context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           ex.getMessage(),
           ex);
-      return ImportStageResult.failure(stage(), "IMPORT_PARSE_FAILED", ex.getMessage());
+      return ImportStageResult.failure(
+          stage(),
+          "IMPORT_PARSE_FAILED",
+          "error.import.parse.failed",
+          new Object[] {ex.getMessage()},
+          ex.getMessage(),
+          ERROR_OBJECT_MAPPER);
     } finally {
       // spool 临时文件生命周期结束于 PARSE：下游 VALIDATE / LOAD 只消费 parsed records staging file。
       if (spoolFile != null) {

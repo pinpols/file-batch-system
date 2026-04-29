@@ -10,6 +10,7 @@ import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class RetryDispatchStep implements DispatchStageStep {
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
@@ -49,7 +52,12 @@ public class RetryDispatchStep implements DispatchStageStep {
           .getAttributes()
           .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_RETRY_NO_PAYLOAD", "dispatch payload missing");
+          stage(),
+          "DISPATCH_RETRY_NO_PAYLOAD",
+          "error.dispatch.payload_missing",
+          new Object[0],
+          "dispatch payload missing",
+          ERROR_OBJECT_MAPPER);
     }
     if (!Boolean.TRUE.equals(context.getAttributes().get("retryRequested"))) {
       context
@@ -91,13 +99,23 @@ public class RetryDispatchStep implements DispatchStageStep {
             .getAttributes()
             .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
         return DispatchStageResult.failure(
-            stage(), "DISPATCH_RETRY_FAILED", "failed to mark failed");
+            stage(),
+            "DISPATCH_RETRY_FAILED",
+            "error.dispatch.retry.failed",
+            new Object[] {"failed to mark failed"},
+            "failed to mark failed",
+            ERROR_OBJECT_MAPPER);
       }
       context
           .getAttributes()
           .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_RETRY_FAILED", dispatchResult.message());
+          stage(),
+          "DISPATCH_RETRY_FAILED",
+          "error.dispatch.retry.failed",
+          new Object[] {dispatchResult.message()},
+          dispatchResult.message(),
+          ERROR_OBJECT_MAPPER);
     }
     int updated =
         fileDispatchRepository.markSent(
@@ -114,7 +132,12 @@ public class RetryDispatchStep implements DispatchStageStep {
           .getAttributes()
           .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPENSATE.name());
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_RETRY_FAILED", "failed to mark retry sent");
+          stage(),
+          "DISPATCH_RETRY_FAILED",
+          "error.dispatch.retry.failed",
+          new Object[] {"failed to mark retry sent"},
+          "failed to mark retry sent",
+          ERROR_OBJECT_MAPPER);
     }
     context.getAttributes().put("retryRecovered", Boolean.TRUE);
     context

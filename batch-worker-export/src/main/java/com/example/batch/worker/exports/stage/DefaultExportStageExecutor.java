@@ -81,33 +81,14 @@ public class DefaultExportStageExecutor
   }
 
   @Override
-  protected List<PipelineStepDefinition> loadConfiguredSteps(ExportJobContext context) {
-    // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
-    // 无内联定义时降级到 DB 按 pipelineDefinitionId 加载（Job 级别默认配置）。
-    Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
-    if (definitions instanceof List<?> list) {
-      List<PipelineStepDefinition> resolved = new ArrayList<>();
-      for (Object item : list) {
-        if (item instanceof PipelineStepDefinition definition) {
-          resolved.add(definition);
-        }
-      }
-      if (!resolved.isEmpty()) {
-        return List.copyOf(resolved);
-      }
-    }
-    Long pipelineDefinitionId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
-    return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
-  }
-
-  @Override
   protected ExportStageResult stepMissingFailure() {
     return ExportStageResult.failure(
         ExportStage.PREPARE,
         StageFailureCode.PIPELINE_STEP_MISSING.name(),
-        "pipeline step definition missing");
+        "error.worker.pipeline_step_missing",
+        new Object[0],
+        "pipeline step definition missing",
+        ERROR_OBJECT_MAPPER);
   }
 
   @Override
@@ -118,7 +99,12 @@ public class DefaultExportStageExecutor
     try {
       return stageStep == null
           ? ExportStageResult.failure(
-              stage, StageFailureCode.STEP_NOT_FOUND.name(), "找不到步骤实现: " + step.implCode())
+              stage,
+              StageFailureCode.STEP_NOT_FOUND.name(),
+              "error.worker.step_impl_not_found",
+              new Object[] {step.implCode()},
+              "找不到步骤实现: " + step.implCode(),
+              ERROR_OBJECT_MAPPER)
           : stageStep.execute(context);
     } catch (BizException exception) {
       log.error(
@@ -130,7 +116,7 @@ public class DefaultExportStageExecutor
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception);
       return ExportStageResult.failure(
-          stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+          stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
       log.error(
           "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
@@ -141,7 +127,12 @@ public class DefaultExportStageExecutor
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception);
       return ExportStageResult.failure(
-          stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+          stage,
+          StageFailureCode.INFRA_ERROR.name(),
+          "error.worker.stage_infra_error",
+          new Object[] {exception.getMessage()},
+          exception.getMessage(),
+          ERROR_OBJECT_MAPPER);
     }
   }
 
@@ -183,8 +174,11 @@ public class DefaultExportStageExecutor
     try {
       return ExportStage.valueOf(stageCode);
     } catch (IllegalArgumentException exception) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "unsupported export stage code: " + stageCode, exception);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          exception,
+          "unsupported export stage code: " + stageCode);
     }
   }
 

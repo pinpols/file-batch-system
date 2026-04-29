@@ -13,6 +13,7 @@ import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessException;
 import com.example.batch.worker.imports.preprocess.ImportPreprocessPipeline;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -45,6 +46,8 @@ public class PreprocessStep implements ImportStageStep {
   private static final int SPOOL_THRESHOLD_BYTES =
       Integer.getInteger("batch.worker.import.preprocess-spool-bytes", 16 * 1024 * 1024);
 
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final BatchSecurityProperties batchSecurityProperties;
   private final BatchObjectCryptoService cryptoService;
@@ -66,7 +69,13 @@ public class PreprocessStep implements ImportStageStep {
   @Override
   public ImportStageResult execute(ImportJobContext context) {
     if (context == null) {
-      return ImportStageResult.failure(stage(), "IMPORT_PREPROCESS_INVALID", "context is null");
+      return ImportStageResult.failure(
+          stage(),
+          "IMPORT_PREPROCESS_INVALID",
+          "error.import.preprocess.invalid",
+          new Object[] {"context is null"},
+          "context is null",
+          ERROR_OBJECT_MAPPER);
     }
     ImportPayload importPayload =
         context.getAttributes().get("importPayload") instanceof ImportPayload payload
@@ -77,7 +86,12 @@ public class PreprocessStep implements ImportStageStep {
             || (!Texts.hasText(importPayload.content())
                 && !Texts.hasText(importPayload.contentBase64())))) {
       return ImportStageResult.failure(
-          stage(), "IMPORT_PREPROCESS_INVALID", "raw payload is blank");
+          stage(),
+          "IMPORT_PREPROCESS_INVALID",
+          "error.import.preprocess.invalid",
+          new Object[] {"raw payload is blank"},
+          "raw payload is blank",
+          ERROR_OBJECT_MAPPER);
     }
     try {
       if (importPayload != null && Texts.hasText(importPayload.templateCode())) {
@@ -138,7 +152,13 @@ public class PreprocessStep implements ImportStageStep {
           fileMetadata);
       return ImportStageResult.success(stage());
     } catch (ImportPreprocessException ex) {
-      return ImportStageResult.failure(stage(), ex.errorCode(), ex.getMessage());
+      return ImportStageResult.failure(
+          stage(),
+          ex.errorCode(),
+          "error.import.preprocess.failed",
+          new Object[] {ex.getMessage()},
+          ex.getMessage(),
+          ERROR_OBJECT_MAPPER);
     }
   }
 

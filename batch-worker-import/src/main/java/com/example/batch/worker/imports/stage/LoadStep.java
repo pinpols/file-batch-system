@@ -149,7 +149,13 @@ public class LoadStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           ex.getMessage(),
           ex);
-      return ImportStageResult.failure(stage(), "IMPORT_LOAD_FAILED", ex.getMessage());
+      return ImportStageResult.failure(
+          stage(),
+          "IMPORT_LOAD_FAILED",
+          "error.import.load.failed",
+          new Object[] {ex.getMessage()},
+          ex.getMessage(),
+          objectMapper);
     }
   }
 
@@ -167,7 +173,12 @@ public class LoadStep implements ImportStageStep {
         return markLoaded(context, 0L);
       }
       return ImportStageResult.failure(
-          stage(), "IMPORT_LOAD_NO_PAYLOAD", "no records to load (legacy path)");
+          stage(),
+          "IMPORT_LOAD_NO_PAYLOAD",
+          "error.import.load.no_payload",
+          new Object[0],
+          "no records to load (legacy path)",
+          objectMapper);
     }
     @SuppressWarnings("unchecked")
     List<CustomerImportPayload> customerPayloads = (List<CustomerImportPayload>) payloads;
@@ -223,7 +234,13 @@ public class LoadStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           ex.getMessage(),
           ex);
-      return ImportStageResult.failure(stage(), "IMPORT_LOAD_FAILED", ex.getMessage());
+      return ImportStageResult.failure(
+          stage(),
+          "IMPORT_LOAD_FAILED",
+          "error.import.load.failed",
+          new Object[] {ex.getMessage()},
+          ex.getMessage(),
+          objectMapper);
     }
   }
 

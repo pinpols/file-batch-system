@@ -50,6 +50,7 @@ public class ValidateStep implements ImportStageStep {
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String ERR_SKIP_THRESHOLD_EXCEEDED = "IMPORT_SKIP_THRESHOLD_EXCEEDED";
   private static final String MSG_SKIP_THRESHOLD_EXCEEDED = "skip threshold exceeded";
+  private static final String I18N_SKIP_THRESHOLD_EXCEEDED = "error.import.skip_threshold_exceeded";
 
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
@@ -70,7 +71,12 @@ public class ValidateStep implements ImportStageStep {
         stringValue(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH));
     if (!Texts.hasText(parsedRecordsPath)) {
       return ImportStageResult.failure(
-          stage(), "IMPORT_VALIDATE_NO_STREAM", "parsed records path missing");
+          stage(),
+          "IMPORT_VALIDATE_NO_STREAM",
+          "error.import.validate.no_stream",
+          new Object[] {"parsed records path missing"},
+          "parsed records path missing",
+          objectMapper);
     }
     return executeStreaming(context, Path.of(parsedRecordsPath));
   }
@@ -78,7 +84,12 @@ public class ValidateStep implements ImportStageStep {
   private ImportStageResult executeStreaming(ImportJobContext context, Path parsedRecordsPath) {
     if (!Files.exists(parsedRecordsPath)) {
       return ImportStageResult.failure(
-          stage(), "IMPORT_VALIDATE_NO_STREAM", "parsed records file missing");
+          stage(),
+          "IMPORT_VALIDATE_NO_STREAM",
+          "error.import.validate.no_stream",
+          new Object[] {"parsed records file missing"},
+          "parsed records file missing",
+          objectMapper);
     }
     Path validatedRecordsPath = null;
     ImportStageResult result;
@@ -110,7 +121,12 @@ public class ValidateStep implements ImportStageStep {
       if (!recordGovernanceService.withinThreshold(context)) {
         deleteQuietly(validatedRecordsPath);
         return ImportStageResult.failure(
-            stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED);
+            stage(),
+            ERR_SKIP_THRESHOLD_EXCEEDED,
+            I18N_SKIP_THRESHOLD_EXCEEDED,
+            new Object[0],
+            MSG_SKIP_THRESHOLD_EXCEEDED,
+            objectMapper);
       }
       result = ImportStageResult.success(stage());
       return result;
@@ -124,7 +140,13 @@ public class ValidateStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception.getMessage(),
           exception);
-      return ImportStageResult.failure(stage(), "IMPORT_VALIDATE_FAILED", exception.getMessage());
+      return ImportStageResult.failure(
+          stage(),
+          "IMPORT_VALIDATE_FAILED",
+          "error.import.validate.failed",
+          new Object[] {exception.getMessage()},
+          exception.getMessage(),
+          objectMapper);
     }
   }
 
@@ -150,7 +172,12 @@ public class ValidateStep implements ImportStageStep {
           issue.rawRecord());
       if (!recordGovernanceService.withinThreshold(context)) {
         return ImportStageResult.failure(
-            stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED);
+            stage(),
+            ERR_SKIP_THRESHOLD_EXCEEDED,
+            I18N_SKIP_THRESHOLD_EXCEEDED,
+            new Object[0],
+            MSG_SKIP_THRESHOLD_EXCEEDED,
+            objectMapper);
       }
     }
     return null;
@@ -211,7 +238,13 @@ public class ValidateStep implements ImportStageStep {
             return new StreamingValidationResult(
                 validatedCount,
                 loadedCandidateCount,
-                ImportStageResult.failure(stage(), result.errorCode(), result.errorMessage()));
+                ImportStageResult.failure(
+                    stage(),
+                    result.errorCode(),
+                    "error.import.validate.row_invalid",
+                    new Object[] {result.errorMessage()},
+                    result.errorMessage(),
+                    objectMapper));
           }
           chunk.clear();
         }
@@ -225,7 +258,13 @@ public class ValidateStep implements ImportStageStep {
           return new StreamingValidationResult(
               validatedCount,
               loadedCandidateCount,
-              ImportStageResult.failure(stage(), result.errorCode(), result.errorMessage()));
+              ImportStageResult.failure(
+                  stage(),
+                  result.errorCode(),
+                  "error.import.validate.row_invalid",
+                  new Object[] {result.errorMessage()},
+                  result.errorMessage(),
+                  objectMapper));
         }
       }
     }

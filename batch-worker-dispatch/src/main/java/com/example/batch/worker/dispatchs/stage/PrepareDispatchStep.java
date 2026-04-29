@@ -46,7 +46,12 @@ public class PrepareDispatchStep implements DispatchStageStep {
         || !Texts.hasText(context.getTenantId())
         || !Texts.hasText(context.getRawPayload())) {
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_PREPARE_INVALID", "tenantId or payload is blank");
+          stage(),
+          "DISPATCH_PREPARE_INVALID",
+          "error.dispatch.prepare.invalid",
+          new Object[0],
+          "tenantId or payload is blank",
+          objectMapper);
     }
     try {
       DispatchPayload payload =
@@ -60,19 +65,34 @@ public class PrepareDispatchStep implements DispatchStageStep {
               : Long.valueOf(payload.fileId());
       if (fileId == null) {
         return DispatchStageResult.failure(
-            stage(), "DISPATCH_PREPARE_FILE_MISSING", "fileId missing");
+            stage(),
+            "DISPATCH_PREPARE_FILE_MISSING",
+            "error.dispatch.prepare.file_missing",
+            new Object[0],
+            "fileId missing",
+            objectMapper);
       }
       Map<String, Object> fileRecord =
           fileDispatchRepository.loadFile(context.getTenantId(), fileId);
       if (fileRecord.isEmpty()) {
         return DispatchStageResult.failure(
-            stage(), "DISPATCH_PREPARE_FILE_NOT_FOUND", "file record not found");
+            stage(),
+            "DISPATCH_PREPARE_FILE_NOT_FOUND",
+            "error.dispatch.prepare.file_not_found",
+            new Object[0],
+            "file record not found",
+            objectMapper);
       }
       Map<String, Object> channelRow =
           fileDispatchRepository.loadChannel(context.getTenantId(), payload.channelCode());
       if (channelRow.isEmpty()) {
         return DispatchStageResult.failure(
-            stage(), "DISPATCH_PREPARE_CHANNEL_NOT_FOUND", "channel config not found");
+            stage(),
+            "DISPATCH_PREPARE_CHANNEL_NOT_FOUND",
+            "error.dispatch.prepare.channel_not_found",
+            new Object[0],
+            "channel config not found",
+            objectMapper);
       }
       Map<String, Object> channelConfig = ChannelConfigMerge.merge(channelRow, objectMapper);
       context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
@@ -87,7 +107,13 @@ public class PrepareDispatchStep implements DispatchStageStep {
               context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
           fileId);
     } catch (Exception ex) {
-      return DispatchStageResult.failure(stage(), "DISPATCH_PREPARE_PARSE_FAILED", ex.getMessage());
+      return DispatchStageResult.failure(
+          stage(),
+          "DISPATCH_PREPARE_PARSE_FAILED",
+          "error.dispatch.prepare.parse_failed",
+          new Object[] {ex.getMessage()},
+          ex.getMessage(),
+          objectMapper);
     }
     return DispatchStageResult.success(stage());
   }

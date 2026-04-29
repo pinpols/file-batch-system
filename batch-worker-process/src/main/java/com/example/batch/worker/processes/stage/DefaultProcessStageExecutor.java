@@ -140,31 +140,14 @@ public class DefaultProcessStageExecutor
   }
 
   @Override
-  protected List<PipelineStepDefinition> loadConfiguredSteps(ProcessJobContext context) {
-    Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
-    if (definitions instanceof List<?> list) {
-      List<PipelineStepDefinition> resolved = new ArrayList<>();
-      for (Object item : list) {
-        if (item instanceof PipelineStepDefinition definition) {
-          resolved.add(definition);
-        }
-      }
-      if (!resolved.isEmpty()) {
-        return List.copyOf(resolved);
-      }
-    }
-    Long pipelineDefinitionId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
-    return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
-  }
-
-  @Override
   protected ProcessStageResult stepMissingFailure() {
     return ProcessStageResult.failure(
         ProcessStage.PREPARE,
         StageFailureCode.PIPELINE_STEP_MISSING.name(),
-        "pipeline step definition missing");
+        "error.worker.pipeline_step_missing",
+        new Object[0],
+        "pipeline step definition missing",
+        ERROR_OBJECT_MAPPER);
   }
 
   @Override
@@ -174,7 +157,12 @@ public class DefaultProcessStageExecutor
     ProcessStageStep stageStep = stepsByStage.get(stage);
     if (stageStep == null) {
       return ProcessStageResult.failure(
-          stage, StageFailureCode.STEP_NOT_FOUND.name(), "stage step bean missing for: " + stage);
+          stage,
+          StageFailureCode.STEP_NOT_FOUND.name(),
+          "error.worker.step_impl_not_found",
+          new Object[] {stage.name()},
+          "stage step bean missing for: " + stage,
+          ERROR_OBJECT_MAPPER);
     }
     long startNanos = System.nanoTime();
     ProcessStageResult result;
@@ -190,7 +178,7 @@ public class DefaultProcessStageExecutor
           exception);
       result =
           ProcessStageResult.failure(
-              stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+              stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
       log.error(
           "process stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}",
@@ -201,7 +189,12 @@ public class DefaultProcessStageExecutor
           exception);
       result =
           ProcessStageResult.failure(
-              stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+              stage,
+              StageFailureCode.INFRA_ERROR.name(),
+              "error.worker.stage_infra_error",
+              new Object[] {exception.getMessage()},
+              exception.getMessage(),
+              ERROR_OBJECT_MAPPER);
     }
     metrics.recordStageDuration(
         stage.name(), context.getTenantId(), result.success(), System.nanoTime() - startNanos);
@@ -250,8 +243,11 @@ public class DefaultProcessStageExecutor
     try {
       return ProcessStage.valueOf(stageCode);
     } catch (IllegalArgumentException exception) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "unsupported process stage code: " + stageCode, exception);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          exception,
+          "unsupported process stage code: " + stageCode);
     }
   }
 

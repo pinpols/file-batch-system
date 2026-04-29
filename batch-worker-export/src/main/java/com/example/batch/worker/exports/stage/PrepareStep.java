@@ -45,7 +45,12 @@ public class PrepareStep implements ExportStageStep {
         || !Texts.hasText(context.getTenantId())
         || !Texts.hasText(context.getRawPayload())) {
       return ExportStageResult.failure(
-          stage(), "EXPORT_PREPARE_INVALID", "tenantId or payload is blank");
+          stage(),
+          "EXPORT_PREPARE_INVALID",
+          "error.export.prepare.invalid",
+          new Object[0],
+          "tenantId or payload is blank",
+          objectMapper);
     }
     try {
       ExportPayload payload =
@@ -75,7 +80,13 @@ public class PrepareStep implements ExportStageStep {
       context.getAttributes().put("objectName", finalObjectName);
       context.getAttributes().put("tempObjectName", tempObjectName);
     } catch (Exception ex) {
-      return ExportStageResult.failure(stage(), "EXPORT_PREPARE_PARSE_FAILED", ex.getMessage());
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_PREPARE_PARSE_FAILED",
+          "error.export.prepare.parse_failed",
+          new Object[] {ex.getMessage()},
+          ex.getMessage(),
+          objectMapper);
     }
     return ExportStageResult.success(stage());
   }

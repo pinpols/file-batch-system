@@ -13,6 +13,7 @@ import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.plugin.ExportDataPluginRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -28,6 +29,8 @@ public class RegisterStep implements ExportStageStep {
 
   private static final Set<String> RESERVED_METADATA_KEYS =
       Set.of("recordCount", "totalAmount", "templateCode", KEY_OBJECT_NAME, "exportSnapshot");
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final PlatformFileRuntimeRepository runtimeRepository;
   private final ExportDataPluginRegistry exportDataPluginRegistry;
@@ -50,14 +53,25 @@ public class RegisterStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
-      return ExportStageResult.failure(stage(), "EXPORT_REGISTER_INVALID", "objectName missing");
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_REGISTER_INVALID",
+          "error.export.register.invalid",
+          new Object[] {"objectName missing"},
+          "objectName missing",
+          ERROR_OBJECT_MAPPER);
     }
     Object payload = context.getAttributes().get("exportPayload");
     Object batchObject = context.getAttributes().get("exportBatch");
     if (!(payload instanceof ExportPayload exportPayload)
         || !(batchObject instanceof Map<?, ?> batch)) {
       return ExportStageResult.failure(
-          stage(), "EXPORT_REGISTER_INVALID", "export context missing");
+          stage(),
+          "EXPORT_REGISTER_INVALID",
+          "error.export.register.invalid",
+          new Object[] {"export context missing"},
+          "export context missing",
+          ERROR_OBJECT_MAPPER);
     }
     String objectName = String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME));
     String fileName = String.valueOf(context.getAttributes().get("fileName"));
@@ -75,7 +89,12 @@ public class RegisterStep implements ExportStageStep {
           && Texts.hasText(existingChecksum)
           && !expectedChecksum.equalsIgnoreCase(existingChecksum)) {
         return ExportStageResult.failure(
-            stage(), "EXPORT_REGISTER_CHECKSUM_CONFLICT", "已有 file_record 的校验值不一致");
+            stage(),
+            "EXPORT_REGISTER_CHECKSUM_CONFLICT",
+            "error.export.register.checksum_conflict",
+            new Object[0],
+            "已有 file_record 的校验值不一致",
+            ERROR_OBJECT_MAPPER);
       }
       return reuseExistingFileRecord(context, batch, existing);
     }
@@ -146,7 +165,12 @@ public class RegisterStep implements ExportStageStep {
     Long fileId = runtimeRepository.toLong(existing.get("id"));
     if (fileId == null) {
       return ExportStageResult.failure(
-          stage(), "EXPORT_REGISTER_REUSE_INVALID", "existing file id missing");
+          stage(),
+          "EXPORT_REGISTER_REUSE_INVALID",
+          "error.export.register.reuse_invalid",
+          new Object[0],
+          "existing file id missing",
+          ERROR_OBJECT_MAPPER);
     }
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, existing);

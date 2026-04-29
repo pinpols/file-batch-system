@@ -7,6 +7,7 @@ import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportPayload;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,8 @@ public class CompleteStep implements ExportStageStep {
 
   private static final String KEY_RECORD_COUNT = "recordCount";
   private static final String KEY_OBJECT_NAME = "objectName";
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final PlatformFileRuntimeRepository runtimeRepository;
 
@@ -32,7 +35,13 @@ public class CompleteStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
-      return ExportStageResult.failure(stage(), "EXPORT_COMPLETE_INVALID", "objectName missing");
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_COMPLETE_INVALID",
+          "error.export.complete.invalid",
+          new Object[0],
+          "objectName missing",
+          ERROR_OBJECT_MAPPER);
     }
     ExportPayload exportPayload =
         context.getAttributes().get("exportPayload") instanceof ExportPayload payload
