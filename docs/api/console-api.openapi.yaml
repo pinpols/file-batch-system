@@ -117,7 +117,6 @@ tags:
     description: Event type catalog and Kafka topic directory.
 security:
   - bearerAuth: []
-  - consoleToken: []
 paths:
   /api/console/auth/login:
     post:
@@ -146,7 +145,6 @@ paths:
       security:
         - basicAuth: []
         - bearerAuth: []
-        - consoleToken: []
       responses:
         '200':
           description: JWT token payload
@@ -7688,10 +7686,6 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-    consoleToken:
-      type: apiKey
-      in: header
-      name: X-Console-Token
   parameters:
     RequestIdHeader:
       name: X-Request-Id

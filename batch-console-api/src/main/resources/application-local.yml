@@ -56,18 +56,15 @@ batch:
     instance-id: ${BATCH_CONSOLE_INSTANCE_ID:batch-console-api-local}
     security:
       enabled: true
-      shared-secret: console-secret
       tenant-header: X-Tenant-Id
       user-header: X-Console-User
       role-header: X-Console-Roles
-      token-header: X-Console-Token
       default-tenant-id: ""
       allowed-tenants: []
       default-authorities:
         - ROLE_ADMIN
         - ROLE_AUDITOR
         - ROLE_CONFIG_ADMIN
-      legacy-header-auth-enabled: true
       single-session-enabled: true
       jwt-issuer: batch-console-api
       jwt-secret: console-jwt-secret-change-me
