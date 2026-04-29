@@ -18,6 +18,14 @@
 | **新发现（v5 新增）** | 2 | 0 | 0 | 0 | 2 |
 | **合计** | **19** | **2** | **0** | **2** | **23** |
 
+> **2026-04-30 第七轮 — 评估口径校正(对齐 `project-assessment-2026-04-29.md`)**:
+> - **deep-issue §5.1**(Trigger Spring Security):🟢 已修。`cd389a0b`(2026-04-22 v4 闭环)加 `TriggerSecurityConfiguration:42-46` 真起 SecurityFilterChain。本 backlog 把这条移出"未完成"。
+> - **deep-issue §5.2**(X-Console-Token 共享密钥):🟡 部分修。`legacyHeaderAuthEnabled` 在 `application.yml:67` env 默认 `false`,deprecated + opt-in compat;真删动作排在 S5-d。
+> - **deep-issue §5.12**(Console Job 过胖):🟢 已修。`DefaultConsoleJobApplicationService` 现 90 LOC 纯 delegate,拆出 6 兄弟类(Trigger/Recovery/Approval/Query/Ops 共 1278 LOC)。ADR-008 god-class-decomposition 事实落地。
+> - **V5-P1-1 ADR-009 进度更新**:Stage 1.2 也已落 — worker→orchestrator outputs 上报管线已通(`TaskExecutionReport.outputs` + `DefaultTaskExecutionWrapper:108-117` 透传 + `WorkflowNodeRunMapper.xml:84-85` 写 jsonb;`ImportStepExecutionAdapter:112` 已填 NODE_OUTPUTS,Export/Dispatch/Process 按需后补)。剩余 Stage 2(WorkflowParamResolver)/ Stage 3(集成 SchedulePlanBuilder)/ Stage 4(7 workflow 配 DSL)。
+> - **deep-issue §5.7**(trigger → orchestrator 同步 HTTP):仍未修,排期推到 ADR-010(trigger 异步化主体)。
+> - 修订动机:本评估文档 `project-assessment-2026-04-29.md` 原标 §1+§2+§6 为"未完成"是评估口径滞后于代码事实,本轮把三者状态同步到此处。
+
 > **2026-04-27 第六轮 — P2-3 / P2-4 补完 + P1-1 Stage 1 落地 + P2-1/P2-9 标"不做"**：
 > - **V5-P2-4** compensation happy-path（4/6 类）：`DefaultCompensationServiceTest` 加 PARTITION / STEP / DLQ / FILE 4 个 happy path（13 tests 通过）；JOB/BATCH 留 P2-4-ext
 > - **V5-P2-3** quota 压测 smoke：跑 JobLaunchSimulation 105 reqs / 25s，p95=112ms，0 失败；报告归档 `testing/load-test-report.md`；真打满 quota 留 P2-3-ext（需先配低 quota policy）
