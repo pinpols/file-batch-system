@@ -21,6 +21,15 @@
             <artifactId>batch-orchestrator</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- ADR-010 Stage 5 Layer 2: trigger 模块依赖,供 E2eTriggerApplication scaffold 拉 trigger bean
+             (TriggerOutboxRelay / KafkaTriggerEventPublisher / TriggerOutboxEventMapper 等)。
+             本次仅落 scaffold + Kafka→consumer→job_instance 验证;真起 trigger fire→outbox 全链路
+             留作 follow-up(双 ApplicationContext 同 JVM 装配的复杂度)。 -->
+        <dependency>
+            <groupId>com.example.batch</groupId>
+            <artifactId>batch-trigger</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.example.batch</groupId>
             <artifactId>batch-console-api</artifactId>
