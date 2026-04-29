@@ -246,22 +246,32 @@
 
 **完成标志**:开关切到 true 后,trigger 重启不丢任何 launch;orchestrator 短暂宕机不阻塞 trigger。
 
-### S4 — ADR-009 Workflow DSL Stage 2-4(~2 天)
+### S4 — ADR-009 Workflow DSL(基础设施全部完成,业务配置 deferred)
 
-**已落地**(2026-04-30 复查发现):
-- **Stage 1** ✅ V72 migration 加 `workflow_node_run.output` JSONB 列
-- **Stage 1.2** ✅ worker → orchestrator outputs 上报管线已通:
-  - `TaskExecutionReport.outputs` 字段 + `DefaultTaskExecutionWrapper.java:108-117` 从 `attributes[NODE_OUTPUTS]` 抽 map 透传
-  - `WorkflowNodeRunMapper.xml:84-85` 写 `output = #{output}::jsonb`
-  - `ImportStepExecutionAdapter.java:112` 已填 `NODE_OUTPUTS`(E/D/P 按需后补,按 Stage 4 业务需要再补)
+**实地核查后修订**(2026-04-30):S4 Stage 1 / 1.2 / 2 / 3 已全部落地,基础设施完备;Stage 4(给现有 workflow 配 DSL)实际是业务方按需触发的配置工作,不是基础设施 todo。
 
-**剩余 Stage(子任务)**:
-- **Stage 2**(~0.5 天):`WorkflowParamResolver` 类 + 单测 — 解析 `$.nodes.<code>.output.<key>` / `$.workflowRun.<key>` 引用语法,4 类引用 + 3 类 fail-fast 场景的单测;**不挂主链路**,孤立 resolver。
-- **Stage 3**(~1 天):把 resolver 集成到 `DefaultSchedulePlanBuilder`,partition payload 派发前调用 resolver 把 `node_params` 里的 `$.xxx` 替换为实际值;加 E2E 测试;`docs/architecture/workflow-dependency-guide.md` 加"§节点间参数串联"。
-  - 解锁 P2-9(PIPELINE / MIXED workflow + GATEWAY join_mode)
-- **Stage 4**(~0.5 天):给现有 `wf_eod_process` 等 7 个 workflow 配 DSL(让 SETTLE → DISPATCH 的 fileId 通过 `$.nodes.SETTLE.output.fileId` 自动流转,不再 fileId missing);按需补 Export/Dispatch/Process worker 在 buildSuccessResponse 时填 `NODE_OUTPUTS`。
+**已落地**:
 
-**完成标志**:E2E 中 `wf_eod_process` 这种含 SETTLE → EXPORT → DISPATCH 的 workflow 完整跑通,各节点参数靠 DSL 串联,无需在 console 手写 templating。
+| Stage | 状态 | 实地证据 |
+|---|---|---|
+| **Stage 1** ✅ | DDL: V72 migration 加 `workflow_node_run.output` JSONB 列 | `db/migration/V72__add_workflow_node_run_output.sql` |
+| **Stage 1.2** ✅ | worker → orchestrator outputs 上报管线 | `TaskExecutionReport.outputs` + `DefaultTaskExecutionWrapper.java:108-117` 透传 + `WorkflowNodeRunMapper.xml:84-85` 写 jsonb;`ImportStepExecutionAdapter.java:112` 已填 NODE_OUTPUTS,E/D/P 按需后补 |
+| **Stage 2** ✅ | `WorkflowParamResolver` 类 + 单测 | `WorkflowParamResolver.java` 160 行实现完整(支持 `$.nodes.<code>.output.<key>` / `$.workflowRun.<key>` 引用 + 3 类 fail-fast + 嵌套路径下钻 + Map/List 递归);`WorkflowParamResolverTest` 10/10 单测全绿 |
+| **Stage 3** ✅ | resolver 集成 + 文档 | `DefaultWorkflowNodeDispatchService.mergeNodeParams` (line 723) 在派发前调用 resolver;`loadWorkflowRunContext` (line 755) selectByWorkflowRunId 加载兄弟节点 output 构造 context;`workflow-dependency-guide.md §10` 节点间参数串联文档 |
+
+**Stage 4 — 业务配置 deferred**:
+
+ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓库 seed 实际只有 3 个 workflow(`finance_recon_flow` / `import_pipeline_flow` / `mixed_orchestration_flow`),且现有节点间通过 `mergeUpstreamPartitionOutputs` 已自动透传 fileId 等规约字段,**没有当下需要 DSL 的场景**。Stage 4 的真实定位是"未来业务方设计需要跨节点参数显式串联的 workflow 时,按 §10 文档配 `node_params` 含 `$.xxx` 引用"——是配置规范使用,不是基础设施 todo。
+
+**已具备能力**:任何 workflow 设计者现在就可以在 `workflow_node.node_params` 配 `{"fileId": "$.nodes.SETTLE.output.fileId"}` 这样的引用,resolver 会在派发前自动解析。
+
+**业务方触发条件**(出现以下任一即应配 DSL):
+
+- 跨节点字段名不同(上游产 `settledFileId`,下游期望 `fileId`)
+- `mergeUpstreamPartitionOutputs` 自动透传不够(超出 fileId/fileCode 等规约 key)
+- workflow 跨多个 jobInstance(如 JOB 节点链),`mergeUpstreamPartitionOutputs` 同 jobInstance 边界外的字段透传
+
+**配置例**:见 `docs/architecture/workflow-dependency-guide.md §10.3`。
 
 ### S5 — 次级清单(随手优化,不阻塞主线)
 
@@ -272,16 +282,27 @@
 | c | trigger SecurityIntegrationTest 守护补齐 | 1 天 | S1 已落 Security,但若 CI 还没有"无 token → 401"守护测试,补一个;同款扩到 console/orchestrator |
 | d | 真删 `X-Console-Token` 兼容路径 | 1-2 天 | 当所有前端都切到 JWT 后,从 `ConsoleSecurityProperties` / 应用 yaml / OpenAPI 彻底删除 legacy header 分支(不再 deprecated 而是物理删除) |
 
-### 节奏建议(校正后)
+### 节奏建议(2026-04-30 第二轮校正,大量"原标未完成实际已完成"清账后)
 
 ```
-Day 1 [必做]:S0 评估口径校正(deep-issue/backlog/fix-report 滚版),解锁后续判断
-Day 2-3:     S5-d 真删 X-Console-Token + S5-c 加 SecurityIntegrationTest
-Day 4-5:     S4 Stage 2-4(WorkflowParamResolver 类 + 集成 SchedulePlanBuilder + 7 个 workflow 配 DSL)
-Week 2-3:    S3 trigger 异步化(立 ADR-010 → 加 trigger_outbox → Kafka topic → 灰度切换)
-S5 a/b 见缝插针,任意 1 天空档可清
+✅ DONE:
+  S0  - 评估口径校正(deep-issue/backlog/fix-report 滚 v6/v7) — 8ac1ea2d
+  S5-d - 真删 X-Console-Token compat 路径(主代码 + yaml + OpenAPI + 测试) — ff20c36f
+  S5-c - TriggerSecurityFilterTest 守护 5 类边界 — e8e48a6e
+  S4 Stage 1/1.2/2/3 - DSL 基础设施全栈(DDL + worker outputs 上报 + resolver + 集成 + 文档)
+  半完成基类重构 + i18n 业务路径收口 - 4e634c7c / 23137b2c
+
+🔴 仍未完成:
+  S3 - trigger → orchestrator 异步化(2-3 周, 立 ADR-010 + trigger_outbox 表 + Relay
+       + Kafka topic + 灰度开关 + E2E 守护)
+
+🟡 deferred(基础设施完备,触发条件出现再做):
+  S4 Stage 4 - 给具体 workflow 配 DSL(目前 seed 3 个 workflow 没需要,业务设计跨节点
+              参数串联时按 §10 文档配置)
+  S5-a I4 buildContext 模板抽取(等 4 个 *JobContext 出现共同基类时再做)
+  S5-b i18n 测试债二轮扫(23137b2c 已收 9 处,剩余按需)
 ```
 
-> **注**:S4 原估 2-3 sprint,2026-04-30 复查发现 Stage 1+1.2 已落,剩余只 ~2 天。先 S4 后 S3 — S4 解锁 7 个 workflow 业务,S3 是基础设施稳定性。
+> **注**:本评估三轮校正(2026-04-30 起)累计发现 5 项原标"未完成"实际已落地(S1 trigger Security / S2 god service 拆分 / S4 Stage 1.2 / S4 Stage 2 / S4 Stage 3),原报告评估口径滞后于代码事实约 2-4 周。下次评估**强制要求**同步滚 deep-issue / hardening-backlog,避免再次发生口径漂移。
 
 每个里程碑结束更新 `hardening-backlog.md` + 在本目录追加新评估快照(命名 `project-assessment-YYYY-MM-DD.md`)。下次评估应同时滚 deep-issue-analysis 和 hardening-backlog,避免本次"评估口径滞后于代码"再发生。
