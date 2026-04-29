@@ -152,6 +152,12 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- ADR-010 Stage 5 Layer 2: 保留原始 jar 不变,便于 batch-e2e-tests 作为库依赖
+                         拉取 trigger 类(BatchTriggerApplication / config 包等);可执行 fat jar 改用
+                         classifier "exec" 单独产出,与 batch-orchestrator pom 同款风格。 -->
+                    <classifier>exec</classifier>
+                </configuration>
             </plugin>
         </plugins>
     </build>
