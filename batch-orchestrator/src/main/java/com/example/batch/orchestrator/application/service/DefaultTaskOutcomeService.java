@@ -181,6 +181,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             .errorArgs(command.errorArgs())
             .durationMs(duration)
             .finishedAt(command.finishedAt())
+            // ADR-009 Stage 1.2: success 路径写 worker 上报的 outputs JSON,失败路径保持 null。
+            .output(command.success() ? command.outputJson() : null)
             .build());
     return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
         command.workflowRunId(), command.nodeCode());
@@ -450,7 +452,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                     ctx.currentNodeCode(),
                     ctx.workflowRun().getStartedAt(),
                     ctx.finishedAt()),
-                ctx.finishedAt())));
+                ctx.finishedAt(),
+                serializeOutputs(ctx.command().outputs()))));
     List<WorkflowDagService.DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodes(
             ctx.workflowRun().getWorkflowDefinitionId(),
@@ -483,7 +486,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                       ctx.command().errorKey(),
                       ctx.command().errorArgs(),
                       ctx.finishedAt(),
-                      ctx.finishedAt())));
+                      ctx.finishedAt(),
+                      // END 节点没有 worker 上报,output 永远 null
+                      null)));
         }
         continue;
       }
@@ -582,6 +587,17 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     return JsonUtils.toJson(summary);
   }
 
+  /**
+   * ADR-009 Stage 1.2: 把 worker 上报的 outputs Map 序列化为 JSON 字符串,写入 workflow_node_run.output JSONB
+   * 列。null/empty 直接返回 null(不写空对象),让 DSL 解析按"无产出"语义 fallback。
+   */
+  private String serializeOutputs(Map<String, Object> outputs) {
+    if (outputs == null || outputs.isEmpty()) {
+      return null;
+    }
+    return JsonUtils.toJson(outputs);
+  }
+
   /** 当 JOB 节点启动的子 Job 到达终态时，将结果应用到父 Job 中的虚拟任务， 由标准的基于分区的 DAG 推进逻辑接管后续流转。 */
   private void signalParentVirtualTask(
       JobInstanceEntity childJobInstance,
@@ -605,7 +621,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
             nodeSuccess ? null : childCommand.errorArgs(),
             // 父虚拟任务不直接推父水位:子作业自己的 outcome 已经写过对应实例的
             // high_water_mark_out;父侧不与子作业共享水位。
-            null));
+            null,
+            // ADR-009: JOB 节点把子作业的 outputs 透传到父 workflow 节点(供下游 DSL 引用)
+            nodeSuccess ? childCommand.outputs() : null));
   }
 
   @SuppressWarnings("unchecked")

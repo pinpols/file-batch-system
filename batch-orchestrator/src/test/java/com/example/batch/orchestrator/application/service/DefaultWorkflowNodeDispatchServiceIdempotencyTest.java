@@ -75,7 +75,8 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
             resourceScheduler,
             taskExecutionServiceProvider,
             launchServiceProvider,
-            namedParameterJdbcTemplate);
+            namedParameterJdbcTemplate,
+            new com.example.batch.orchestrator.application.workflow.WorkflowParamResolver());
   }
 
   @Test

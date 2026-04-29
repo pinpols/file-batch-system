@@ -133,6 +133,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
             null,
             null,
             null,
+            null,
             null));
 
     // 5) Verify task SUCCESS

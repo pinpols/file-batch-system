@@ -1,6 +1,7 @@
 package com.example.batch.orchestrator.domain.command;
 
 import com.example.batch.common.i18n.LocalizedErrorCarrier;
+import java.util.Map;
 
 public record TaskOutcomeCommand(
     String tenantId,
@@ -19,7 +20,13 @@ public record TaskOutcomeCommand(
      * job_instance.high_water_mark_out};非 INCREMENTAL 或 worker 没显式上报时为 null,持久化也跳过(保留旧值,下次实例的 IN
      * 不变即"无进展")。
      */
-    String highWaterMarkOut)
+    String highWaterMarkOut,
+    /**
+     * ADR-009 Stage 1.2: worker 上报的节点产出 Map(JSON 原生类型)。orchestrator 在 success 路径下序列化为 JSON 写入
+     * workflow_node_run.output,供下游 workflow 节点 $.nodes.&lt;X&gt;.output.&lt;key&gt; DSL 引用。null
+     * 等价无产出。
+     */
+    Map<String, Object> outputs)
     implements LocalizedErrorCarrier {
 
   // record 默认 accessor 是 errorMessage() 无 get 前缀;桥接 carrier 契约的 getErrorXxx() bean 命名。

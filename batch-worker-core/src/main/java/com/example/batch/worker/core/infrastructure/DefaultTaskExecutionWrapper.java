@@ -106,6 +106,16 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       if (highWaterMarkOut != null) {
         report.setHighWaterMarkOut(String.valueOf(highWaterMarkOut));
       }
+      // ADR-009 Stage 1.2: worker adapter 在 attributes 写 NODE_OUTPUTS → 透传给 orchestrator,
+      // success 路径持久化到 workflow_node_run.output。仅成功路径上报,失败路径不附带 outputs(语义不清)。
+      if (response.success()) {
+        Object nodeOutputs = executionContext.get(PipelineRuntimeKeys.NODE_OUTPUTS);
+        if (nodeOutputs instanceof Map<?, ?> outputsMap && !outputsMap.isEmpty()) {
+          @SuppressWarnings("unchecked")
+          Map<String, Object> typed = (Map<String, Object>) outputsMap;
+          report.setOutputs(typed);
+        }
+      }
       taskExecutionClient.report(report);
       return new WorkerExecutionResult(task.getTaskId(), response.success(), response.message());
     } finally {

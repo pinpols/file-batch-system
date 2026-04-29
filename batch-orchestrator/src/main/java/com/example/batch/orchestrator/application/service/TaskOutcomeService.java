@@ -14,6 +14,10 @@ public interface TaskOutcomeService {
 
   record NodeRunKey(Long workflowRunId, String nodeCode, String nodeType) {}
 
+  /**
+   * @param outputJson ADR-009 Stage 1.2: worker SUCCESS 时上报的产出 JSON(已序列化字符串),写入
+   *     workflow_node_run.output JSONB,供下游 workflow 节点 DSL 引用。null 表示无产出。
+   */
   record NodeRunOutcome(
       boolean success,
       String errorCode,
@@ -21,7 +25,8 @@ public interface TaskOutcomeService {
       String errorKey,
       String errorArgs,
       Instant startedAt,
-      Instant finishedAt)
+      Instant finishedAt,
+      String outputJson)
       implements LocalizedErrorCarrier {
 
     // 桥接 record accessor → JavaBean carrier 契约
@@ -57,7 +62,11 @@ public interface TaskOutcomeService {
 
     public static NodeRunFinishCommand success(
         NodeRunKey key, Instant startedAt, Instant finishedAt) {
-      return of(key, new NodeRunOutcome(true, null, null, null, null, startedAt, finishedAt));
+      return of(key, new NodeRunOutcome(true, null, null, null, null, startedAt, finishedAt, null));
+    }
+
+    public String outputJson() {
+      return outcome.outputJson();
     }
 
     public Long workflowRunId() {

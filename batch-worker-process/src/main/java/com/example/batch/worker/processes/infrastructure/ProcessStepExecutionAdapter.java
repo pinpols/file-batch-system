@@ -3,6 +3,7 @@ package com.example.batch.worker.processes.infrastructure;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
@@ -13,6 +14,7 @@ import com.example.batch.worker.processes.domain.ProcessWorkerType;
 import com.example.batch.worker.processes.stage.ComputeStep;
 import com.example.batch.worker.processes.stage.ProcessStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Primary;
@@ -126,7 +128,28 @@ public class ProcessStepExecutionAdapter
   @Override
   protected StepExecutionResponse buildSuccessResponse(
       ProcessJobContext context, List<ProcessStageResult> results, Map<String, Object> attributes) {
+    // ADR-009 Stage 1.2: 把 PROCESS 的关键产出暴露给下游 workflow 节点 DSL 引用
+    Map<String, Object> outputs = new LinkedHashMap<>();
+    putIfPresent(outputs, "processedCount", attributes.get("processedCount"));
+    putIfPresent(outputs, "stagedCount", attributes.get("stagedCount"));
+    putIfPresent(outputs, "publishedCount", attributes.get("publishedCount"));
+    putIfPresent(outputs, "batchKey", context.getBatchKey());
+    putIfPresent(
+        outputs, "highWaterMarkOut", attributes.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT));
+    if (!outputs.isEmpty()) {
+      attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+    }
     return new StepExecutionResponse(true, "SUCCESS", "加工阶段执行完成");
+  }
+
+  private static void putIfPresent(Map<String, Object> target, String key, Object value) {
+    if (value == null) {
+      return;
+    }
+    if (value instanceof String text && text.isBlank()) {
+      return;
+    }
+    target.put(key, value);
   }
 
   @Override

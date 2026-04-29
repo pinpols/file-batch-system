@@ -3,6 +3,7 @@ package com.example.batch.worker.exports.infrastructure;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.exports.domain.ExportJobContext;
@@ -12,6 +13,7 @@ import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.domain.ExportWorkerType;
 import com.example.batch.worker.exports.stage.ExportStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Primary;
@@ -105,7 +107,29 @@ public class ExportStepExecutionAdapter
   protected StepExecutionResponse buildSuccessResponse(
       ExportJobContext context, List<ExportStageResult> results, Map<String, Object> attributes) {
     String objectName = String.valueOf(context.getAttributes().getOrDefault("objectName", ""));
+    // ADR-009 Stage 1.2: 把 EXPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
+    Map<String, Object> outputs = new LinkedHashMap<>();
+    putIfPresent(outputs, "fileId", attributes.get(PipelineRuntimeKeys.FILE_ID));
+    putIfPresent(outputs, "objectName", attributes.get("objectName"));
+    putIfPresent(outputs, "recordCount", attributes.get("recordCount"));
+    putIfPresent(outputs, "fileSizeBytes", attributes.get("fileSizeBytes"));
+    putIfPresent(outputs, "checksumValue", attributes.get("checksumValue"));
+    putIfPresent(outputs, "checksumType", attributes.get("checksumType"));
+    putIfPresent(outputs, "bizDate", context.getBizDate());
+    if (!outputs.isEmpty()) {
+      attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+    }
     return new StepExecutionResponse(
         true, "SUCCESS", objectName.isBlank() ? "导出阶段执行完成" : objectName);
+  }
+
+  private static void putIfPresent(Map<String, Object> target, String key, Object value) {
+    if (value == null) {
+      return;
+    }
+    if (value instanceof String text && text.isBlank()) {
+      return;
+    }
+    target.put(key, value);
   }
 }

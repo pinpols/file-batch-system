@@ -111,6 +111,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
             null,
             null,
             null,
+            null,
             null));
 
     // 4) Verify final task status
@@ -163,6 +164,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
             null,
             "TEST_FAILURE",
             "simulated error",
+            null,
             null,
             null,
             null));

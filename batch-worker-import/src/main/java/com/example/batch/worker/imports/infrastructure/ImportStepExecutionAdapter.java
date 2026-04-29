@@ -3,6 +3,7 @@ package com.example.batch.worker.imports.infrastructure;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -10,6 +11,7 @@ import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.stage.ImportStageExecutor;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Primary;
@@ -98,6 +100,27 @@ public class ImportStepExecutionAdapter
   protected StepExecutionResponse buildSuccessResponse(
       ImportJobContext context, List<ImportStageResult> results, Map<String, Object> attributes) {
     Object importedCount = context.getAttributes().getOrDefault("loadedCount", 0);
+    // ADR-009 Stage 1.2: 把 IMPORT 的关键产出暴露给下游 workflow 节点 DSL 引用
+    Map<String, Object> outputs = new LinkedHashMap<>();
+    putIfPresent(outputs, "fileId", attributes.get(PipelineRuntimeKeys.FILE_ID));
+    putIfPresent(outputs, "recordCount", attributes.get("loadedCount"));
+    putIfPresent(outputs, "parsedCount", attributes.get("parsedCount"));
+    putIfPresent(outputs, "validatedCount", attributes.get("validatedCount"));
+    putIfPresent(outputs, "skippedCount", attributes.get("skippedCount"));
+    putIfPresent(outputs, "bizDate", context.getBizDate());
+    if (!outputs.isEmpty()) {
+      attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+    }
     return new StepExecutionResponse(true, "SUCCESS", "imported " + importedCount + " row(s)");
+  }
+
+  private static void putIfPresent(Map<String, Object> target, String key, Object value) {
+    if (value == null) {
+      return;
+    }
+    if (value instanceof String text && text.isBlank()) {
+      return;
+    }
+    target.put(key, value);
   }
 }
