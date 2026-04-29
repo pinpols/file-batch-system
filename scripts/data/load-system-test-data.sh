@@ -114,6 +114,8 @@ UPDATE batch.job_task SET task_status='TERMINATED', finished_at=COALESCE(finishe
   WHERE task_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
 UPDATE batch.job_step_instance SET step_status='TERMINATED', finished_at=COALESCE(finished_at, now())
   WHERE step_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
+UPDATE batch.pipeline_instance SET run_status='TERMINATED', finished_at=COALESCE(finished_at, now())
+  WHERE run_status IN ('CREATED','RUNNING','COMPENSATING');
 UPDATE batch.workflow_run SET run_status='TERMINATED', finished_at=COALESCE(finished_at, now())
   WHERE run_status IN ('CREATED','WAITING','READY','RUNNING','RETRYING');
 -- workflow_node_run.node_status 的 CHECK 约束(ck_workflow_node_run_status)只允许
