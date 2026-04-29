@@ -3,7 +3,9 @@ package com.example.batch.trigger.config;
 import com.example.batch.common.config.ShedLockProviderFactory;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -39,5 +41,15 @@ public class ShedLockConfiguration {
         provider.getClass().getSimpleName(),
         autoCreateTable);
     return provider;
+  }
+
+  /**
+   * ADR-010 Stage 2: 显式声明 {@link LockingTaskExecutor} bean,供 {@link
+   * com.example.batch.trigger.application.TriggerOutboxRelay} 程式化持锁(非 {@code @SchedulerLock} 注解
+   * 路径)。orchestrator 同款风格(参考 {@code orchestrator.ShedLockConfiguration})。
+   */
+  @Bean
+  public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
+    return new DefaultLockingTaskExecutor(lockProvider);
   }
 }
