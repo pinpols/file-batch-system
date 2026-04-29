@@ -8,6 +8,7 @@ import com.example.batch.worker.exports.domain.ExportJobContext;
 import com.example.batch.worker.exports.domain.ExportStage;
 import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.infrastructure.MinioExportStorage;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -19,6 +20,8 @@ import org.springframework.stereotype.Component;
 /** 导出存储阶段：将生成的临时文件上传至对象存储（先写 .part 再 copy 提升），并完成 SHA-256 校验。 */
 @Component
 public class StoreStep implements ExportStageStep {
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final MinioExportStorage minioExportStorage;
   private final BatchObjectCryptoService cryptoService;
@@ -38,7 +41,13 @@ public class StoreStep implements ExportStageStep {
     Object generatedFilePath =
         context == null ? null : context.getAttributes().get("generatedFilePath");
     if (!(generatedFilePath instanceof String pathText) || !Texts.hasText(pathText)) {
-      return ExportStageResult.failure(stage(), "EXPORT_STORE_INVALID", "export data missing");
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_STORE_INVALID",
+          "error.export.store.invalid",
+          new Object[] {"export data missing"},
+          "export data missing",
+          ERROR_OBJECT_MAPPER);
     }
     try {
       String objectName = resolveObjectName(context);
@@ -46,7 +55,13 @@ public class StoreStep implements ExportStageStep {
       String contentType = resolveContentType(context);
       Path generatedFile = Path.of(pathText);
       if (!Files.exists(generatedFile)) {
-        return ExportStageResult.failure(stage(), "EXPORT_STORE_INVALID", "generated file missing");
+        return ExportStageResult.failure(
+            stage(),
+            "EXPORT_STORE_INVALID",
+            "error.export.store.invalid",
+            new Object[] {"generated file missing"},
+            "generated file missing",
+            ERROR_OBJECT_MAPPER);
       }
 
       EncryptionOutcome encryption = encryptIfNeeded(context, generatedFile);
@@ -76,7 +91,13 @@ public class StoreStep implements ExportStageStep {
 
       return commitStoredObject(context, objectName, tempKey, generatedFile, encryptedPath);
     } catch (Exception ex) {
-      return ExportStageResult.failure(stage(), "EXPORT_STORE_FAILED", ex.getMessage());
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_STORE_FAILED",
+          "error.export.store.failed",
+          new Object[] {ex.getMessage()},
+          ex.getMessage(),
+          ERROR_OBJECT_MAPPER);
     }
   }
 
@@ -139,7 +160,12 @@ public class StoreStep implements ExportStageStep {
         Files.deleteIfExists(encryptedPath);
       }
       return ExportStageResult.failure(
-          stage(), "EXPORT_STORE_PART_DIGEST_MISMATCH", "temp object digest mismatch after upload");
+          stage(),
+          "EXPORT_STORE_PART_DIGEST_MISMATCH",
+          "error.export.store.part_digest_mismatch",
+          new Object[0],
+          "temp object digest mismatch after upload",
+          ERROR_OBJECT_MAPPER);
     }
     return null;
   }
@@ -157,7 +183,10 @@ public class StoreStep implements ExportStageStep {
       return ExportStageResult.failure(
           stage(),
           "EXPORT_STORE_FINAL_DIGEST_MISMATCH",
-          "final object digest mismatch after promote");
+          "error.export.store.final_digest_mismatch",
+          new Object[0],
+          "final object digest mismatch after promote",
+          ERROR_OBJECT_MAPPER);
     }
     minioExportStorage.removeObject(tempKey);
     return null;

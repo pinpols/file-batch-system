@@ -51,7 +51,12 @@ public class GenerateStep implements ExportStageStep {
     if (!(payload instanceof ExportPayload exportPayload)
         || !Texts.hasText(exportPayload.batchNo())) {
       return ExportStageResult.failure(
-          stage(), "EXPORT_GENERATE_NO_PAYLOAD", "export payload missing");
+          stage(),
+          "EXPORT_GENERATE_NO_PAYLOAD",
+          "error.export.generate.no_payload",
+          new Object[0],
+          "export payload missing",
+          objectMapper);
     }
     Path generatedFile = null;
     try {
@@ -62,7 +67,12 @@ public class GenerateStep implements ExportStageStep {
       Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
       if (batch.isEmpty()) {
         return ExportStageResult.failure(
-            stage(), "EXPORT_BATCH_NOT_FOUND", "export batch not found");
+            stage(),
+            "EXPORT_BATCH_NOT_FOUND",
+            "error.export.batch_not_found",
+            new Object[0],
+            "export batch not found",
+            objectMapper);
       }
       Object batchId = batch.get("id");
       // H-8: 生成前强制检查最大行数限制，防止 OOM
@@ -75,7 +85,10 @@ public class GenerateStep implements ExportStageStep {
         return ExportStageResult.failure(
             stage(),
             "EXPORT_EXCEEDS_MAX_ROWS",
-            "export row count " + totalCount + " exceeds limit " + maxRows);
+            "error.export.exceeds_max_rows",
+            new Object[] {totalCount, maxRows},
+            "export row count " + totalCount + " exceeds limit " + maxRows,
+            objectMapper);
       }
       int pageSize = resolvePageSize(context);
       int chunkSize = resolveChunkSize(context);
@@ -108,7 +121,13 @@ public class GenerateStep implements ExportStageStep {
       return ExportStageResult.success(stage());
     } catch (Exception ex) {
       deleteQuietly(generatedFile);
-      return ExportStageResult.failure(stage(), "EXPORT_GENERATE_FAILED", ex.getMessage());
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_GENERATE_FAILED",
+          "error.export.generate.failed",
+          new Object[] {ex.getMessage()},
+          ex.getMessage(),
+          objectMapper);
     }
   }
 

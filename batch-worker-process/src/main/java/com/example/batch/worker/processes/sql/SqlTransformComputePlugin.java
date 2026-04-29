@@ -141,12 +141,15 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       return ProcessStageResult.failure(
           ProcessStage.COMPUTE,
           "PROCESS_STAGED_OVERFLOW",
+          "error.process.staged.overflow",
+          new Object[] {stagedRows, spec.maxStagedRows(), batchKey},
           "staged rows "
               + stagedRows
               + " exceeded maxStagedRows "
               + spec.maxStagedRows()
               + " for batchKey="
-              + batchKey);
+              + batchKey,
+          objectMapper);
     }
 
     if (Texts.hasText(spec.watermarkColumn())) {
@@ -180,7 +183,12 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         return ProcessStageResult.success(ProcessStage.VALIDATE);
       }
       return ProcessStageResult.failure(
-          ProcessStage.VALIDATE, "PROCESS_STAGED_EMPTY", "no rows staged for batchKey=" + batchKey);
+          ProcessStage.VALIDATE,
+          "PROCESS_STAGED_EMPTY",
+          "error.process.staged.empty",
+          new Object[] {batchKey},
+          "no rows staged for batchKey=" + batchKey,
+          objectMapper);
     }
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchKey", batchKey);
@@ -198,7 +206,10 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         return ProcessStageResult.failure(
             ProcessStage.VALIDATE,
             "PROCESS_VALIDATION_NO_ROW",
-            "validation '" + rule.name() + "' returned no row");
+            "error.process.validation.no_row",
+            new Object[] {rule.name()},
+            "validation '" + rule.name() + "' returned no row",
+            objectMapper);
       }
       Object pass = row.get("pass");
       if (!(pass instanceof Boolean booleanPass) || !booleanPass) {
@@ -207,10 +218,13 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
         return ProcessStageResult.failure(
             ProcessStage.VALIDATE,
             "PROCESS_VALIDATION_FAILED",
+            "error.process.validation.failed",
+            new Object[] {rule.name(), message == null ? "(no message)" : message},
             "validation '"
                 + rule.name()
                 + "' failed: "
-                + (message == null ? "(no message)" : message));
+                + (message == null ? "(no message)" : message),
+            objectMapper);
       }
     }
     return ProcessStageResult.success(ProcessStage.VALIDATE);
@@ -286,10 +300,11 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       try {
         return objectMapper.readValue(text, Map.class);
       } catch (Exception e) {
-        throw new BizException(
+        throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
-            "sqlTransformCompute step_params is not a JSON object: " + e.getMessage(),
-            e);
+            "error.common.invalid_argument_detail",
+            e,
+            "sqlTransformCompute step_params is not a JSON object: " + e.getMessage());
       }
     }
     return Map.of();
@@ -321,8 +336,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
             params,
             Boolean.class);
     if (exists == null || !exists) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           "sqlTransformCompute target table not found: "
               + spec.targetSchema()
               + "."
@@ -399,8 +415,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     while (matcher.find()) {
       String name = matcher.group(1);
       if (!params.containsKey(name)) {
-        throw new BizException(
+        throw BizException.of(
             ResultCode.INVALID_ARGUMENT,
+            "error.common.invalid_argument_detail",
             "sqlTransformCompute SQL references unknown named parameter :" + name);
       }
     }

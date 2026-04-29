@@ -82,33 +82,14 @@ public class DefaultDispatchStageExecutor
   }
 
   @Override
-  protected List<PipelineStepDefinition> loadConfiguredSteps(DispatchJobContext context) {
-    // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
-    // 无内联定义时降级到 DB 按 pipelineDefinitionId 加载（Job 级别默认配置）。
-    Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
-    if (definitions instanceof List<?> list) {
-      List<PipelineStepDefinition> resolved = new ArrayList<>();
-      for (Object item : list) {
-        if (item instanceof PipelineStepDefinition definition) {
-          resolved.add(definition);
-        }
-      }
-      if (!resolved.isEmpty()) {
-        return List.copyOf(resolved);
-      }
-    }
-    Long pipelineDefinitionId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
-    return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
-  }
-
-  @Override
   protected DispatchStageResult stepMissingFailure() {
     return DispatchStageResult.failure(
         DispatchStage.PREPARE,
         StageFailureCode.PIPELINE_STEP_MISSING.name(),
-        "pipeline step definition missing");
+        "error.worker.pipeline_step_missing",
+        new Object[0],
+        "pipeline step definition missing",
+        ERROR_OBJECT_MAPPER);
   }
 
   @Override
@@ -121,7 +102,10 @@ public class DefaultDispatchStageExecutor
           ? DispatchStageResult.failure(
               stage,
               StageFailureCode.STEP_NOT_FOUND.name(),
-              "step impl not found: " + step.implCode())
+              "error.worker.step_impl_not_found",
+              new Object[] {step.implCode()},
+              "step impl not found: " + step.implCode(),
+              ERROR_OBJECT_MAPPER)
           : stageStep.execute(context);
     } catch (BizException exception) {
       log.error(
@@ -134,7 +118,7 @@ public class DefaultDispatchStageExecutor
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception);
       return DispatchStageResult.failure(
-          stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+          stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
       log.error(
           "dispatch stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
@@ -145,7 +129,12 @@ public class DefaultDispatchStageExecutor
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception);
       return DispatchStageResult.failure(
-          stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+          stage,
+          StageFailureCode.INFRA_ERROR.name(),
+          "error.worker.stage_infra_error",
+          new Object[] {exception.getMessage()},
+          exception.getMessage(),
+          ERROR_OBJECT_MAPPER);
     }
   }
 
@@ -187,8 +176,11 @@ public class DefaultDispatchStageExecutor
     try {
       return DispatchStage.valueOf(stageCode);
     } catch (IllegalArgumentException exception) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "unsupported dispatch stage code: " + stageCode, exception);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          exception,
+          "unsupported dispatch stage code: " + stageCode);
     }
   }
 

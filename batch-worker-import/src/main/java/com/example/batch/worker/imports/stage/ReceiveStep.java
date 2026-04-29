@@ -96,7 +96,12 @@ public class ReceiveStep implements ImportStageStep {
         || !Texts.hasText(context.getTenantId())
         || !Texts.hasText(context.getRawPayload())) {
       return ImportStageResult.failure(
-          stage(), "IMPORT_RECEIVE_INVALID", "tenantId or payload is blank");
+          stage(),
+          "IMPORT_RECEIVE_INVALID",
+          "error.import.receive.invalid",
+          new Object[0],
+          "tenantId or payload is blank",
+          objectMapper);
     }
     // C-5/D-4: 在任何堆内存分配前拒绝超大 payload
     long payloadLength = context.getRawPayload().length();
@@ -104,11 +109,14 @@ public class ReceiveStep implements ImportStageStep {
       return ImportStageResult.failure(
           stage(),
           "IMPORT_RECEIVE_TOO_LARGE",
+          "error.import.receive.too_large",
+          new Object[] {payloadLength, maxPayloadSizeBytes},
           "payload size "
               + payloadLength
               + " bytes exceeds limit "
               + maxPayloadSizeBytes
-              + " bytes");
+              + " bytes",
+          objectMapper);
     }
     ImportPayload importPayload = resolvePayload(context);
     Long existingFileId =

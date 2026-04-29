@@ -8,6 +8,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Component;
 /** 分发 ACK 阶段：处理回执确认，更新分发记录及文件状态为 DISPATCHED。 */
 @Component
 public class AckDispatchStep implements DispatchStageStep {
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final FileDispatchRepository fileDispatchRepository;
   private final PlatformFileRuntimeRepository runtimeRepository;
@@ -36,7 +39,12 @@ public class AckDispatchStep implements DispatchStageStep {
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_ACK_NO_PAYLOAD", "dispatch payload missing");
+          stage(),
+          "DISPATCH_ACK_NO_PAYLOAD",
+          "error.dispatch.payload_missing",
+          new Object[0],
+          "dispatch payload missing",
+          ERROR_OBJECT_MAPPER);
     }
     Long fileId =
         runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
@@ -65,7 +73,13 @@ public class AckDispatchStep implements DispatchStageStep {
                 Boolean.TRUE.equals(context.getAttributes().get("retryRequested"))
                     ? DispatchStage.RETRY.name()
                     : DispatchStage.COMPENSATE.name());
-        return DispatchStageResult.failure(stage(), "DISPATCH_ACK_FAILED", "failed to mark acked");
+        return DispatchStageResult.failure(
+            stage(),
+            "DISPATCH_ACK_FAILED",
+            "error.dispatch.ack.failed",
+            new Object[0],
+            "failed to mark acked",
+            ERROR_OBJECT_MAPPER);
       }
       runtimeRepository.updateFileStatus(
           fileId, "DISPATCHED", buildFileMetadata(dispatchPayload, context, receiptCode));

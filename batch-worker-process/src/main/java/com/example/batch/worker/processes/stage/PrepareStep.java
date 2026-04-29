@@ -3,11 +3,14 @@ package com.example.batch.worker.processes.stage;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 /** PROCESS PREPARE 阶段:Pre-flight 校验,委托到 plugin.prepare()。 */
 @Component
 public class PrepareStep implements ProcessStageStep {
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   @Override
   public ProcessStage stage() {
@@ -23,7 +26,10 @@ public class PrepareStep implements ProcessStageStep {
       return ProcessStageResult.failure(
           stage(),
           "PROCESS_COMPUTE_PLUGIN_NOT_FOUND",
-          "process compute plugin not found: " + missing);
+          "error.process.compute.plugin_not_found",
+          new Object[] {missing},
+          "process compute plugin not found: " + missing,
+          ERROR_OBJECT_MAPPER);
     }
     ProcessComputePlugin plugin = context.getResolvedPlugin();
     if (plugin == null) {

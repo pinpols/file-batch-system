@@ -8,6 +8,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchPayload;
 import com.example.batch.worker.dispatchs.domain.DispatchStage;
 import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Component;
 /** 分发补偿阶段：在投递彻底失败后将分发记录标记为 COMPENSATED，并写入审计日志。 */
 @Component
 public class CompensateDispatchStep implements DispatchStageStep {
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final FileDispatchRepository fileDispatchRepository;
   private final PlatformFileRuntimeRepository runtimeRepository;
@@ -36,7 +39,12 @@ public class CompensateDispatchStep implements DispatchStageStep {
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_COMPENSATE_NO_PAYLOAD", "dispatch payload missing");
+          stage(),
+          "DISPATCH_COMPENSATE_NO_PAYLOAD",
+          "error.dispatch.payload_missing",
+          new Object[0],
+          "dispatch payload missing",
+          ERROR_OBJECT_MAPPER);
     }
     Long fileId =
         runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
@@ -49,7 +57,12 @@ public class CompensateDispatchStep implements DispatchStageStep {
             "compensated");
     if (updated <= 0) {
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_COMPENSATE_FAILED", "failed to mark compensated");
+          stage(),
+          "DISPATCH_COMPENSATE_FAILED",
+          "error.dispatch.compensate.failed",
+          new Object[0],
+          "failed to mark compensated",
+          ERROR_OBJECT_MAPPER);
     }
     runtimeRepository.updateFileStatus(
         fileId, "FAILED", Map.of("channelCode", dispatchPayload.channelCode()));

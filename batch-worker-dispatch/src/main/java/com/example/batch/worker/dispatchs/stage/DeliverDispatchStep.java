@@ -10,6 +10,7 @@ import com.example.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchCommand;
 import com.example.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class DeliverDispatchStep implements DispatchStageStep {
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
@@ -48,7 +51,12 @@ public class DeliverDispatchStep implements DispatchStageStep {
     Object payload = context == null ? null : context.getAttributes().get("dispatchPayload");
     if (!(payload instanceof DispatchPayload dispatchPayload)) {
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_LOAD_NO_PAYLOAD", "dispatch payload missing");
+          stage(),
+          "DISPATCH_LOAD_NO_PAYLOAD",
+          "error.dispatch.payload_missing",
+          new Object[0],
+          "dispatch payload missing",
+          ERROR_OBJECT_MAPPER);
     }
     Long fileId =
         runtimeRepository.toLong(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
@@ -60,7 +68,12 @@ public class DeliverDispatchStep implements DispatchStageStep {
         (Map<String, Object>) context.getAttributes().get(PipelineRuntimeKeys.CHANNEL_CONFIG);
     if (fileId == null || fileRecord == null || channelConfig == null) {
       return DispatchStageResult.failure(
-          stage(), "DISPATCH_PREPARE_MISSING", "file or channel context missing");
+          stage(),
+          "DISPATCH_PREPARE_MISSING",
+          "error.dispatch.deliver.context_missing",
+          new Object[0],
+          "file or channel context missing",
+          ERROR_OBJECT_MAPPER);
     }
     Map<String, Object> latestRecord =
         fileDispatchRepository.loadLatestDispatchRecord(
@@ -80,7 +93,12 @@ public class DeliverDispatchStep implements DispatchStageStep {
                   dispatchPayload.externalRequestId()));
       if (inserted <= 0) {
         return DispatchStageResult.failure(
-            stage(), "DISPATCH_INSERT_FAILED", "failed to create dispatch record");
+            stage(),
+            "DISPATCH_INSERT_FAILED",
+            "error.dispatch.deliver.insert_failed",
+            new Object[0],
+            "failed to create dispatch record",
+            ERROR_OBJECT_MAPPER);
       }
     } else {
       fileDispatchRepository.incrementAttempt(
@@ -121,7 +139,13 @@ public class DeliverDispatchStep implements DispatchStageStep {
           dispatchPayload.channelCode(),
           "DISPATCH_DELIVERY_FAILED",
           dispatchResult.message());
-      return DispatchStageResult.failure(stage(), "DISPATCH_SEND_FAILED", dispatchResult.message());
+      return DispatchStageResult.failure(
+          stage(),
+          "DISPATCH_SEND_FAILED",
+          "error.dispatch.deliver.send_failed",
+          new Object[] {dispatchResult.message()},
+          dispatchResult.message(),
+          ERROR_OBJECT_MAPPER);
     }
     int updated =
         fileDispatchRepository.markSent(
@@ -134,7 +158,13 @@ public class DeliverDispatchStep implements DispatchStageStep {
                 ? "SUCCESS"
                 : dispatchResult.receiptPending() ? "PENDING" : "NONE");
     if (updated <= 0) {
-      return DispatchStageResult.failure(stage(), "DISPATCH_SEND_FAILED", "failed to mark sent");
+      return DispatchStageResult.failure(
+          stage(),
+          "DISPATCH_SEND_FAILED",
+          "error.dispatch.deliver.send_failed",
+          new Object[] {"failed to mark sent"},
+          "failed to mark sent",
+          ERROR_OBJECT_MAPPER);
     }
     context.getAttributes().put("dispatchRecord", dispatchPayload);
     return DispatchStageResult.success(stage());

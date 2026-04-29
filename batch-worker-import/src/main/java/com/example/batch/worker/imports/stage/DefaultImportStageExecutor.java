@@ -12,6 +12,7 @@ import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +40,8 @@ import org.springframework.stereotype.Service;
 public class DefaultImportStageExecutor
     extends AbstractStageExecutor<ImportJobContext, ImportStageResult>
     implements ImportStageExecutor {
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final Map<String, ImportStageStep> stepsByImplCode;
   private final Map<ImportStage, ImportStageStep> stepsByStage;
@@ -76,34 +79,14 @@ public class DefaultImportStageExecutor
   }
 
   @Override
-  protected List<PipelineStepDefinition> loadConfiguredSteps(ImportJobContext context) {
-    // 优先使用 task 下发时内联的步骤定义（运行时按任务级别覆盖），
-    // 无内联定义时降级到 DB 按 pipelineDefinitionId 加载（Job 级别默认配置）。
-    // 两级设计允许在不改动 Job 定义的情况下，对单次任务动态注入自定义 pipeline。
-    Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
-    if (definitions instanceof List<?> list) {
-      List<PipelineStepDefinition> resolved = new ArrayList<>();
-      for (Object item : list) {
-        if (item instanceof PipelineStepDefinition definition) {
-          resolved.add(definition);
-        }
-      }
-      if (!resolved.isEmpty()) {
-        return List.copyOf(resolved);
-      }
-    }
-    Long pipelineDefinitionId =
-        runtimeRepository.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
-    return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
-  }
-
-  @Override
   protected ImportStageResult stepMissingFailure() {
     return ImportStageResult.failure(
         ImportStage.RECEIVE,
         StageFailureCode.PIPELINE_STEP_MISSING.name(),
-        "pipeline step definition missing");
+        "error.worker.pipeline_step_missing",
+        new Object[0],
+        "pipeline step definition missing",
+        ERROR_OBJECT_MAPPER);
   }
 
   @Override
@@ -116,7 +99,10 @@ public class DefaultImportStageExecutor
           ? ImportStageResult.failure(
               stage,
               StageFailureCode.STEP_NOT_FOUND.name(),
-              "step impl not found: " + step.implCode())
+              "error.worker.step_impl_not_found",
+              new Object[] {step.implCode()},
+              "step impl not found: " + step.implCode(),
+              ERROR_OBJECT_MAPPER)
           : stageStep.execute(context);
     } catch (BizException exception) {
       log.error(
@@ -128,7 +114,7 @@ public class DefaultImportStageExecutor
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception);
       return ImportStageResult.failure(
-          stage, StageFailureCode.BUSINESS_ERROR.name(), exception.getMessage());
+          stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
       log.error(
           "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
@@ -139,7 +125,12 @@ public class DefaultImportStageExecutor
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           exception);
       return ImportStageResult.failure(
-          stage, StageFailureCode.INFRA_ERROR.name(), exception.getMessage());
+          stage,
+          StageFailureCode.INFRA_ERROR.name(),
+          "error.worker.stage_infra_error",
+          new Object[] {exception.getMessage()},
+          exception.getMessage(),
+          ERROR_OBJECT_MAPPER);
     }
   }
 
@@ -181,8 +172,11 @@ public class DefaultImportStageExecutor
     try {
       return ImportStage.valueOf(stageCode);
     } catch (IllegalArgumentException exception) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "unsupported import stage code: " + stageCode, exception);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          exception,
+          "unsupported import stage code: " + stageCode);
     }
   }
 

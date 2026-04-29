@@ -3,6 +3,7 @@ package com.example.batch.worker.processes.stage;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStage;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 /** PROCESS COMPUTE 阶段:写 staging,委托到 plugin.compute()。 */
@@ -11,6 +12,8 @@ public class ComputeStep implements ProcessStageStep {
 
   /** Payload 中可选字段,允许业务通过 task params 临时指定 plugin 实现码(用于自定义插件按需 opt-in)。 */
   public static final String ATTR_PROCESS_IMPL_CODE = "processImplCode";
+
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   @Override
   public ProcessStage stage() {
@@ -28,7 +31,12 @@ public class ComputeStep implements ProcessStageStep {
     ProcessStageResult result = plugin.compute(context);
     return result == null
         ? ProcessStageResult.failure(
-            stage(), "PROCESS_COMPUTE_EMPTY_RESULT", "process compute returned null")
+            stage(),
+            "PROCESS_COMPUTE_EMPTY_RESULT",
+            "error.process.compute.empty_result",
+            new Object[0],
+            "process compute returned null",
+            ERROR_OBJECT_MAPPER)
         : result;
   }
 }
