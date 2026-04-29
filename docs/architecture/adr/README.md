@@ -15,6 +15,7 @@
 | 007 | [ADR-007-dual-datasource.md](./ADR-007-dual-datasource.md) | 单 PG 实例双 schema 隔离 platform / business |
 | 008 | [ADR-008-god-class-decomposition.md](./ADR-008-god-class-decomposition.md) | God Class 分解为子服务 + Facade 模式（实例：`DefaultLaunchApplicationService`）|
 | 009 | [ADR-009-workflow-param-dsl.md](./ADR-009-workflow-param-dsl.md) | Workflow 节点间参数串联 DSL（JSONPath-like `$.nodes.X.output.fileId`，分 4 stage 落地，~3 人天） |
+| 010 | [ADR-010-trigger-async-decoupling.md](./ADR-010-trigger-async-decoupling.md) | Trigger → Orchestrator 异步解耦（trigger_outbox + Kafka，复用 ADR-002 模式，~7-8 人天分 7 stage） |
 
 ## 写新 ADR 的姿势
 
