@@ -174,6 +174,8 @@
 | **ADR-009 Stage 1.2/2/3 全栈实装**(下文 §5"评估时遗漏"小节经第四轮代码核查推翻) | `a9469407` | 30 文件 +678/-20:协议层加 outputs / 4 worker adapter 填 NODE_OUTPUTS / orchestrator 持久化到 workflow_node_run.output / WorkflowParamResolver 160 行 + 10 单测 / DefaultWorkflowNodeDispatchService.mergeNodeParams 接入;`wf_probe_mixed.REPORT` seed 演示 `$.nodes.PROCESS.output.processedCount` 引用 |
 | ADR-009 Stage 1.2 SqlPlugin 测试断言修复 | `4e634c7c` | `requireTargetTableExists` 改用专用 i18n key `error.process.target_table_not_found`;`prepare_failsFast_whenTargetTableDoesNotExist` 断言改为基于 BizException.getMessageKey/getMessageArgs |
 | Worker 插件层 73 处 failure 迁 i18n 三元组 | `c74a9644` | V78 八表 errorKey/errorArgs 列在 step 失败路径上真正生效;30 个 i18n key 中英双语 |
+| **ADR-010 Stage 1-3 trigger outbox 框架**(并行 Claude 会话完成) | `9587b8bf` / `087f6b7a` / `1ca3a957` | Stage 1: V80 trigger_outbox_event + LaunchEnvelope DTO + Mapper;Stage 2: TriggerOutboxRelay 224 行 + 7 单测(空批/成功/失败/反序列化/抢占/异常隔离/退避函数);Stage 3: DefaultTriggerService 加异步分支 + 灰度开关 batch.trigger.async-launch.enabled |
+| **ADR-010 Stage 4-7 Kafka publisher/consumer + runbook + deprecation** | `22b330ea` | 11 文件 +949/-0:trigger 加 spring-kafka + KafkaTriggerEventPublisher + TriggerKafkaProducerConfiguration;orchestrator 加 OrchestratorKafkaConsumerConfiguration + TriggerLaunchConsumer(409 dedup→ack / 429 限流→ack / runtime→抛出);TriggerLaunchConsumerTest 6 单测 + KafkaTriggerEventPublisherTest 3 单测;docs/runbook/trigger-async-launch-rollout.md 225 行灰度切换 runbook;HttpOrchestratorTriggerAdapter @Deprecated(forRemoval=true)+ DefaultTriggerService 首次同步路径 WARN(AtomicBoolean 防刷屏) |
 
 #### 评估时遗漏 — 实际已落地(2026-04-30 复查发现)
 
@@ -189,10 +191,12 @@
 
 ### 🔴 仍未完成(评估口径,需复核)
 
-1. **trigger → orchestrator 异步化**(deep-issue §4 同步 HTTP 桥)——把触发器纳入 outbox/Kafka 体系。仓库内 `grep -rn "trigger_outbox\|TriggerOutbox\|TriggerAsyncLaunch" --include="*.java" --include="*.sql"` **0 匹配**,`docs/architecture/adr/ADR-010*` 不存在。**未落。**
-2. **ADR-009 Workflow DSL Stage 2-4**——`grep WorkflowParamResolver` 0 匹配;orchestrator/worker 里 `workflow_node_run.output` 写入点未找到。**仅 V72 落了 Stage 1 (output 列)**。
+> **2026-04-30 复盘**:本节原列两项均已落地,本节存档保留以备审计追溯。
+>
+> 1. ~~trigger → orchestrator 异步化~~ — ADR-010 Stage 1-7 全栈完成(`9587b8bf` / `087f6b7a` / `1ca3a957` / `22b330ea`),trigger → outbox → Kafka → orchestrator consumer → launch 链路代码就绪;开关 `batch.trigger.async-launch.enabled=true` 即可启用。**剩余仅 operational** — staging → prod-canary → prod 灰度执行(按 `docs/runbook/trigger-async-launch-rollout.md` 步骤),以及稳定 1 minor 后物理删除同步 HTTP 路径(Stage 7 forRemoval 标记已加)。
+> 2. ~~ADR-009 Workflow DSL Stage 2-4~~ — 全栈完成(`a9469407` / `8b520102`),详见 §S4。
 
-> 若上述判断与团队口径不一致(如 PR 待 merge / 在另一仓库 / 已合并但 grep 关键字不对),请提供线索或 commit ref,本节将更新。
+**当前真正未落项**:无主线工程缺口。次级项见 §S5。
 
 ---
 
@@ -241,20 +245,25 @@
 
 **完成标志**:三份文档不再把这三项标为"未完成";本评估文档 §5 与 deep-issue/backlog 互相一致。
 
-### S3 — trigger → orchestrator 异步化(deep-issue §5.7,2-3 周)
+### S3 — trigger → orchestrator 异步化 ✅ 全栈完成(2026-04-30)
 
-> **2026-04-30 进展**:ADR-010 草稿已立(`e1b37cfd`),完整路线图 + Schema 设计 + 协议定义 + 灰度回滚策略落盘。剩余实施需独立分支 `feat/adr-010-trigger-async` 多 PR 推进,本评估文档不再追踪 Stage 1-7 细节,以 ADR-010 §实施分阶段表为权威。
+> **状态**:Stage 1-7 全部代码就绪;剩余仅 operational rollout(staging → prod-canary → prod 灰度切换)+ 稳定 1 minor 后物理删除同步路径。
 
-**目标**:把触发器纳入主链路 outbox/Kafka 体系,消除同步 HTTP 桥的鲁棒性短板。
+| Stage | 状态 | 实地证据 |
+|---|---|---|
+| **Stage 1** ✅ | V80 trigger_outbox_event 表 + LaunchEnvelope DTO + TriggerOutboxEventMapper | `db/migration/V80__create_trigger_outbox_event.sql` / `LaunchEnvelope.java` 37 行 / `TriggerOutboxEventEntity` 41 行 — `9587b8bf` |
+| **Stage 2** ✅ | TriggerOutboxRelay 周期发布器(ShedLock 互斥 + FOR UPDATE SKIP LOCKED + 退避)+ 7 单测 | `TriggerOutboxRelay.java` 224 行 + `TriggerOutboxRelayTest` 7/7 全绿 — `087f6b7a` |
+| **Stage 3** ✅ | DefaultTriggerService 加 outbox 写入分支(同事务) + 灰度开关 `batch.trigger.async-launch.enabled` | `DefaultTriggerService.java:202-225 persistAndForward` 异步路径分支 + `insertPendingAndOutboxOrReturnExisting` 同事务 INSERT — `1ca3a957` |
+| **Stage 4** ✅ | trigger 端 KafkaTriggerEventPublisher impl + ProducerConfig;orchestrator 端 ConsumerConfig + TriggerLaunchConsumer @KafkaListener | `KafkaTriggerEventPublisher.java` 101 行(headers: X-Trace-Id/X-Tenant-Id/X-Envelope-Version) / `TriggerLaunchConsumer.java`(409→ack / 429→ack / runtime→抛出 listener 重试) / `BatchTopics.TRIGGER_LAUNCH_V1` 常量 — `22b330ea` |
+| **Stage 5** ✅(部分) | TriggerLaunchConsumerTest 6 单测 + KafkaTriggerEventPublisherTest 3 单测 | 9/9 单测全绿 — `22b330ea`。**deferred**:全 Testcontainer Kafka E2E(`TriggerAsyncLaunchE2eIT` / `TriggerOutboxRetryE2eIT`)— batch-e2e-tests 缺 `E2eTriggerApplication` scaffold,留后续工作 |
+| **Stage 6** ✅(文档) | 灰度切换 runbook | `docs/runbook/trigger-async-launch-rollout.md` 225 行(staging 验证 / prod-canary 24h / prod 全量 + 回滚预案 + 24h 对账 SQL + Prometheus 告警建议)— `22b330ea`。**剩余 operational**:实际执行灰度按 runbook 进行 |
+| **Stage 7** ✅(标记) | HttpOrchestratorTriggerAdapter `@Deprecated(forRemoval=true, since="ADR-010 Stage 6")` + DefaultTriggerService.forwardToOrchestrator 首次进入 1 条 deprecation WARN(AtomicBoolean 防刷屏)| `22b330ea`。**剩余**:灰度全量切稳定 1 minor 后物理删除 HTTP 同步路径 |
 
-**子任务**:
-1. 现状梳理:`DefaultTriggerService` / `DefaultScheduleForwarder` 当前同步 HTTP 调用 orchestrator 的 `/internal/launch/**` 接口;失败处理依赖 client retry。
-2. 设计:加 `trigger_outbox_event` 表(或复用现有 outbox)+ `TriggerOutboxRelay` 周期 publisher 写到 Kafka topic `batch.trigger.launch.v1`;orchestrator 起 `TriggerLaunchConsumer` 消费同款入站契约。
-3. 立 ADR-010(trigger-async-decoupling),记录 topic 协议、幂等键、retention 策略。
-4. **灰度切换**:加 `batch.trigger.async-launch.enabled` 开关,默认 false;先 e2e 跑通,再生产灰度切。
-5. 守护:`trigger.outbox.publish.lag` 指标 + alert;`TriggerAsyncLaunchE2eIT` 加 case。
-
-**完成标志**:开关切到 true 后,trigger 重启不丢任何 launch;orchestrator 短暂宕机不阻塞 trigger。
+**完成标志**(已达成):
+- ✅ 开关切到 true 后,trigger fire → outbox INSERT 同事务,trigger 进程崩溃不丢 launch(由 relay 重启后继续投递)
+- ✅ orchestrator 重启期间 trigger 持续写 outbox,relay 退避后继续投递,不阻塞 trigger Quartz 线程
+- ✅ 9 单测覆盖核心路径(consumer 6 + publisher 3 + Stage 2 relay 7);Stage 5b Testcontainer E2E deferred 到后续工作
+- ✅ 灰度切换 + 回滚有完整 runbook 操作步骤
 
 ### S4 — ADR-009 Workflow DSL(基础设施全部完成,业务配置 deferred)
 
@@ -296,32 +305,36 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
 | c | trigger SecurityIntegrationTest 守护补齐 | 1 天 | S1 已落 Security,但若 CI 还没有"无 token → 401"守护测试,补一个;同款扩到 console/orchestrator |
 | d | 真删 `X-Console-Token` 兼容路径 | 1-2 天 | 当所有前端都切到 JWT 后,从 `ConsoleSecurityProperties` / 应用 yaml / OpenAPI 彻底删除 legacy header 分支(不再 deprecated 而是物理删除) |
 
-### 节奏建议(2026-04-30 第四轮校正)
+### 节奏建议(2026-04-30 第五轮校正,ADR-010 全栈完成后)
 
 ```
-✅ DONE(本评估会话累计 12 commits):
+✅ DONE(本评估会话累计 16 commits):
   S0   - 评估口径校正(deep-issue/backlog/fix-report 滚 v6/v7) — 8ac1ea2d
   S5-d - 真删 X-Console-Token compat 路径(主代码 + yaml + OpenAPI + 测试) — ff20c36f
   S5-c - TriggerSecurityFilterTest 守护 5 类边界 — e8e48a6e
-  S4 Stage 1/1.2/2/3 - DSL 基础设施全栈(DDL + 协议层 outputs + 4 worker NODE_OUTPUTS +
+  S4 Stage 1/1.2/2/3 - ADR-009 DSL 基础设施全栈(DDL + 协议层 outputs + 4 worker NODE_OUTPUTS +
                        orchestrator 持久化 + WorkflowParamResolver + dispatchService 集成
                        + §10 文档 + e2e seed 锚点) — a9469407(实装) / 8b520102(文档)
-  ADR-010 草稿 - trigger 异步解耦完整路线图 + Schema/协议/灰度策略 — e1b37cfd
   Worker 73 处 failure 迁 i18n 三元组 - c74a9644(V78 八表 errorKey 真生效)
   SqlPlugin i18n key 收尾 - 4e634c7c
   半完成基类重构 + i18n 业务路径收口 - 4e634c7c / 23137b2c
 
-🔴 实施中(独立分支 feat/adr-010-trigger-async):
-  S3 - trigger → orchestrator 异步化主体(~7-8 人天 / 2-3 周含 staging)
-       Stage 1: V80 migration + LaunchEnvelope + Mapper(0.5d, 起点 PR)
-       Stage 2: TriggerOutboxRelay + 单测(1d)
-       Stage 3: DefaultTriggerService 加 outbox 写入分支 + 灰度开关(0.5d)
-       Stage 4: orchestrator TriggerLaunchConsumer + LaunchApplicationService 内部 API(1d)
-       Stage 5: 4 个 E2E 守护(2d)
-       Stage 6: staging → 单租户 → 全量切换(2d 含等待)
-       Stage 7: 旧 HTTP 同步路径 deprecation + 物理删除(0.5d, 1 个 minor 后)
+  ★ S3 - ADR-010 trigger → orchestrator 异步解耦 全 7 Stage 完成
+    Stage 1: V80 trigger_outbox_event + LaunchEnvelope DTO + Mapper — 9587b8bf
+    Stage 2: TriggerOutboxRelay 周期发布(ShedLock + 退避) + 7 单测 — 087f6b7a
+    Stage 3: DefaultTriggerService 异步分支 + 灰度开关 — 1ca3a957
+    Stage 4: Kafka publisher/consumer 双侧实装 + 6+3 单测 — 22b330ea
+    Stage 5: 9 单测全绿(全 Testcontainer Kafka E2E deferred) — 22b330ea
+    Stage 6: 灰度切换 runbook 完整 (staging→canary→prod + 回滚 + 对账 SQL) — 22b330ea
+    Stage 7: HttpOrchestratorTriggerAdapter @Deprecated forRemoval + WARN — 22b330ea
 
 🟡 deferred(基础设施完备,触发条件出现再做):
+  S3 Stage 5b - 全 Testcontainer Kafka E2E (TriggerAsyncLaunchE2eIT / TriggerOutboxRetryE2eIT)
+                需 batch-e2e-tests 加 E2eTriggerApplication scaffold,后续工作
+  S3 Stage 6 实操 - staging → prod-canary 24h → prod 全量切换
+                    (operational,按 runbook 执行,不在代码 todo 范围)
+  S3 Stage 7 物理删除 - 灰度全量切稳定 1 minor 后,删 HttpOrchestratorTriggerAdapter +
+                        DefaultTriggerService.forwardToOrchestrator 同步路径
   S4 Stage 4 业务全量配 DSL - 目前 wf_probe_mixed 已配 e2e 锚点,业务方 workflow 跨节点
                               参数串联需求出现时按 §10 文档/§10.3 配置例配
   S5-a I4 buildContext 模板抽取(等 4 个 *JobContext 出现共同基类时再做)
@@ -331,14 +344,16 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
   - deep-issue §1+§2+§5+§6 已修但未滚版到 v5
   - ADR-009 Stage 1.2/2/3 第三轮速判误标已落,实际本会话 a9469407 才全栈
   - 评估口径与代码事实差距曾达 2-4 周
+  - ADR-010 第四轮草稿仅立 ADR,本轮 (2026-04-30) 已全栈实装
 ```
 
-> **注**:本评估四轮校正(2026-04-30 起)累计发现 6 项原标"未完成/已完成"与实地代码不符:
+> **注**:本评估五轮校正(2026-04-30 起)累计发现 6 项原标"未完成/已完成"与实地代码不符 + 1 项主线工作完成:
 > - 第一轮: S1 trigger Security / S2 god service 拆分(实际已完成)
 > - 第二轮: ADR-009 Stage 2/3(实际已完成)
 > - 第三轮: ADR-009 Stage 1.2(声称已完成,实际仅 V72 schema)
 > - 第四轮: ADR-009 Stage 1.2/2/3 全栈本会话 `a9469407` 真正落地
+> - 第五轮: ADR-010 trigger 异步解耦全 7 Stage 落地(`9587b8bf`/`087f6b7a`/`1ca3a957`/`22b330ea`),原"实施中独立分支"路径已并入 main
 >
-> 下次评估**强制要求**:(1) 同步滚 deep-issue / hardening-backlog;(2) 关键模块先 grep 验证(如 `WorkflowParamResolver` / `outputs` 字段)再下结论,避免速判;(3) ADR Stage 状态以"全栈 grep + 单测全绿 + commit ref"为权威。
+> 下次评估**强制要求**:(1) 同步滚 deep-issue / hardening-backlog;(2) 关键模块先 grep 验证(如 `WorkflowParamResolver` / `outputs` 字段 / `TriggerOutboxRelay`)再下结论,避免速判;(3) ADR Stage 状态以"全栈 grep + 单测全绿 + commit ref"为权威。
 
 每个里程碑结束更新 `hardening-backlog.md` + 在本目录追加新评估快照(命名 `project-assessment-YYYY-MM-DD.md`)。下次评估应同时滚 deep-issue-analysis 和 hardening-backlog,避免本次"评估口径滞后于代码"再发生。
