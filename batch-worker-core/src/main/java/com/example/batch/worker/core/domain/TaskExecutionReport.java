@@ -1,6 +1,7 @@
 package com.example.batch.worker.core.domain;
 
 import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
+import java.util.Map;
 import lombok.Data;
 
 @Data
@@ -30,4 +31,11 @@ public class TaskExecutionReport extends AbstractLocalizedErrorEntity {
    * 写入;框架不自动推进。null 表示本次执行无水位变化,orchestrator 不更新 job_instance.high_water_mark_out。
    */
   private String highWaterMarkOut;
+
+  /**
+   * ADR-009 Stage 1.2: 节点产出 Map(供下游 workflow 节点 $.nodes.&lt;X&gt;.output.&lt;key&gt; 引用)。Worker 侧仅放
+   * JSON 原生类型(String/Number/Boolean/List/Map);orchestrator 在 SUCCESS 路径写入 workflow_node_run.output
+   * JSONB。null/empty 等价"无产出",DSL 引用按 null fallback。
+   */
+  private Map<String, Object> outputs;
 }

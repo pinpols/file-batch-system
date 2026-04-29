@@ -1,8 +1,12 @@
 package com.example.batch.orchestrator.controller.request;
 
 import com.example.batch.common.i18n.AbstractLocalizedErrorEntity;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.util.Map;
 import lombok.Data;
 
+// 防滚动升级期间 worker / orchestrator 版本不一致时未识别字段 fail。
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Data
 public class TaskExecutionReportDto extends AbstractLocalizedErrorEntity {
 
@@ -21,4 +25,11 @@ public class TaskExecutionReportDto extends AbstractLocalizedErrorEntity {
 
   /** 增量执行模式下 worker 上报的新水位高点。仅在成功路径回写 {@code job_instance.high_water_mark_out}; null 表示无变化。 */
   private String highWaterMarkOut;
+
+  /**
+   * ADR-009 Stage 1.2: 节点产出 Map。orchestrator 在 success 路径序列化为 JSON 写到
+   * workflow_node_run.output,供下游节点 $.nodes.&lt;X&gt;.output.&lt;key&gt; 引用。旧 worker 不上报时为
+   * null,workflow_node_run.output 保持 null。
+   */
+  private Map<String, Object> outputs;
 }

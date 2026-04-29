@@ -32,6 +32,12 @@ public class WorkflowNodeRunEntity extends AbstractLocalizedErrorEntity implemen
   private Instant finishedAt;
   private Long durationMs;
 
+  /**
+   * ADR-009 Stage 1.2: 节点产出 JSON(由 worker 在 SUCCESS 时上报，供下游节点 $.nodes.&lt;X&gt;.output.&lt;key&gt;
+   * 引用)。读取时反序列化为 Map。
+   */
+  private String output;
+
   @Override
   public String getStatus() {
     return nodeStatus;

@@ -74,7 +74,8 @@ class DefaultTaskOutcomeServiceTest {
 
     var result =
         service.applyTaskOutcome(
-            new TaskOutcomeCommand("t1", 99L, null, true, null, null, null, null, null, null));
+            new TaskOutcomeCommand(
+                "t1", 99L, null, true, null, null, null, null, null, null, null));
     assertThat(result).isNull();
   }
 
@@ -84,7 +85,7 @@ class DefaultTaskOutcomeServiceTest {
 
     var result =
         service.applyTaskOutcome(
-            new TaskOutcomeCommand(null, 1L, null, true, null, null, null, null, null, null));
+            new TaskOutcomeCommand(null, 1L, null, true, null, null, null, null, null, null, null));
     assertThat(result).isNull();
   }
 

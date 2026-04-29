@@ -16,6 +16,7 @@
         <result column="started_at" property="startedAt"/>
         <result column="finished_at" property="finishedAt"/>
         <result column="duration_ms" property="durationMs"/>
+        <result column="output" property="output"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.example.batch.orchestrator.domain.entity.WorkflowNodeRunEntity"
@@ -79,7 +80,9 @@
             error_key = #{errorKey},
             error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
             duration_ms = #{durationMs},
-            finished_at = #{finishedAt}
+            finished_at = #{finishedAt},
+            <!-- ADR-009 Stage 1.2: 写 worker 上报的产出 JSON 到 output JSONB 列 -->
+            output = #{output,jdbcType=VARCHAR}::jsonb
         where id = #{id}
     </update>
 

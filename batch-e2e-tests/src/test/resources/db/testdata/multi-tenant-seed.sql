@@ -555,7 +555,9 @@ SELECT wd.id, v.nc, v.nn, v.nt, v.rjc, v.no_, 'NONE', 0, 0, true, v.np::jsonb, n
 FROM batch.workflow_definition wd, (VALUES
   ('wf_probe_mixed','START','Start','START',NULL::text,0,'{"entry":true}'),
   ('wf_probe_mixed','PROCESS','Process Task','TASK','exp_settlement_daily',1,'{"step":"process"}'),
-  ('wf_probe_mixed','REPORT','Generate Report','FILE_STEP','exp_settlement_daily',2,'{"step":"report"}'),
+  -- ADR-009: REPORT 节点演示用 $.nodes.<X>.output.<key> DSL 引用上游 PROCESS 节点产出
+  ('wf_probe_mixed','REPORT','Generate Report','FILE_STEP','exp_settlement_daily',2,
+   '{"step":"report","upstreamProcessedCount":"$.nodes.PROCESS.output.processedCount","bizDate":"$.workflowRun.bizDate"}'),
   ('wf_probe_mixed','END','End','END',NULL::text,3,'{"entry":false}')
 ) AS v(wc,nc,nn,nt,rjc,no_,np)
 WHERE wd.tenant_id='default-tenant' AND wd.workflow_code=v.wc AND wd.version=1

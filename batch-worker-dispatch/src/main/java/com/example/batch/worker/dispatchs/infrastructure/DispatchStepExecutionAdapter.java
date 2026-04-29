@@ -3,6 +3,7 @@ package com.example.batch.worker.dispatchs.infrastructure;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
+import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -12,6 +13,7 @@ import com.example.batch.worker.dispatchs.domain.DispatchStageResult;
 import com.example.batch.worker.dispatchs.domain.DispatchWorkerType;
 import com.example.batch.worker.dispatchs.stage.DispatchStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Primary;
@@ -108,6 +110,28 @@ public class DispatchStepExecutionAdapter
       DispatchJobContext context,
       List<DispatchStageResult> results,
       Map<String, Object> attributes) {
+    // ADR-009 Stage 1.2: 把 DISPATCH 的关键产出暴露给下游 workflow 节点 DSL 引用
+    Map<String, Object> outputs = new LinkedHashMap<>();
+    putIfPresent(outputs, "fileId", attributes.get(PipelineRuntimeKeys.FILE_ID));
+    putIfPresent(outputs, "receiptCode", attributes.get("receiptCode"));
+    putIfPresent(outputs, "receiptStatus", attributes.get("receiptStatus"));
+    putIfPresent(outputs, "externalRequestId", attributes.get("externalRequestId"));
+    if (attributes.get("dispatchPayload") instanceof DispatchPayload dispatchPayload) {
+      putIfPresent(outputs, "channelCode", dispatchPayload.channelCode());
+    }
+    if (!outputs.isEmpty()) {
+      attributes.put(PipelineRuntimeKeys.NODE_OUTPUTS, outputs);
+    }
     return new StepExecutionResponse(true, "SUCCESS", "分发阶段执行完毕");
+  }
+
+  private static void putIfPresent(Map<String, Object> target, String key, Object value) {
+    if (value == null) {
+      return;
+    }
+    if (value instanceof String text && text.isBlank()) {
+      return;
+    }
+    target.put(key, value);
   }
 }

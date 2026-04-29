@@ -196,6 +196,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             "boundary test",
             null,
             null,
+            null,
             null));
     return job;
   }
@@ -368,6 +369,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
             null,
             "EXHAUST_ERROR",
             "exhaust retries",
+            null,
             null,
             null,
             null));

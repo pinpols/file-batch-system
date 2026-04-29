@@ -69,5 +69,13 @@ public final class PipelineRuntimeKeys {
    */
   public static final String HIGH_WATER_MARK_OUT = "highWaterMarkOut";
 
+  /**
+   * ADR-009 Stage 1.2: worker 上报的节点产出 Map(key=业务字段名, value=JSON 原生类型)。各 worker adapter 在
+   * buildSuccessResponse 时收集 attributes 中的关键产出键(如 fileId/recordCount/objectName/receiptCode)填入此
+   * map;DefaultTaskExecutionWrapper 提取后透传给 orchestrator,持久化到 workflow_node_run.output JSONB, 供下游
+   * workflow 节点 $.nodes.&lt;X&gt;.output.&lt;key&gt; DSL 引用。
+   */
+  public static final String NODE_OUTPUTS = "nodeOutputs";
+
   private PipelineRuntimeKeys() {}
 }

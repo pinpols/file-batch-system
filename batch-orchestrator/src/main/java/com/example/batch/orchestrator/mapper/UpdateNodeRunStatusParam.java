@@ -21,4 +21,10 @@ public class UpdateNodeRunStatusParam implements LocalizedErrorCarrier {
 
   private final Long durationMs;
   private final Instant finishedAt;
+
+  /**
+   * ADR-009 Stage 1.2: 节点 SUCCESS 时由 worker 上报的产出 JSON(已序列化字符串),写入 workflow_node_run.output JSONB
+   * 列,供下游节点 DSL 引用。null 表示无产出。
+   */
+  private final String output;
 }

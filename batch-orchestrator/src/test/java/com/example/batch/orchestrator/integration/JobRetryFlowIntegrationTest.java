@@ -167,6 +167,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
             "retry flow test",
             null,
             null,
+            null,
             null));
 
     // 验证已为该分区创建了 WAITING 状态的 retry_schedule 行

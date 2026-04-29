@@ -17,6 +17,8 @@ import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import com.example.batch.orchestrator.application.plan.SchedulePlanCommand;
 import com.example.batch.orchestrator.application.scheduler.ResourceScheduler;
+import com.example.batch.orchestrator.application.workflow.WorkflowParamResolver;
+import com.example.batch.orchestrator.application.workflow.WorkflowRunContext;
 import com.example.batch.orchestrator.domain.entity.JobInstanceEntity;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -73,6 +75,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
   private final ObjectProvider<LaunchService> launchServiceProvider;
   private final NamedParameterJdbcTemplate jdbcTemplate;
+  // ADR-009 Stage 3: 派发前把 node_params 中的 $.nodes.<X>.output.<key> 引用替换为上游节点 output 实际值
+  private final WorkflowParamResolver workflowParamResolver;
 
   /**
    * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code
@@ -173,7 +177,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         partitionLifecycleService.createPartitions(
             plan, jobInstance.getId(), decision.getPartitionStatus());
     String taskPayload =
-        buildTaskPayload(sourcePayload, node, targetJobCode, workflowNode, jobInstance);
+        buildTaskPayload(
+            sourcePayload, node, targetJobCode, workflowNode, jobInstance, workflowRun);
     int sequence = 1;
     for (JobPartitionEntity partition : newPartitions) {
       JobTaskEntity task = new JobTaskEntity();
@@ -444,7 +449,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     // 与 TASK 节点的 buildTaskPayload 对齐：把 workflow_node.node_params 合并进子作业 launch
     // params。否则 JOB 节点在设计器里配的 templateCode / channelCode / seed payload 等字段
     // 永远无法传到子作业 job_instance.params_snapshot → worker 看不到 → import/export 凭空失败。
-    mergeNodeParams(childParams, ctx.workflowNode());
+    mergeNodeParams(childParams, ctx.workflowNode(), ctx.workflowRun());
     childParams.put("parentInstanceId", ctx.jobInstance().getId());
     childParams.put("_parentVirtualTaskId", ctx.virtualTask().getId());
     childParams.put("_parentWorkflowRunId", ctx.workflowRun().getId());
@@ -588,7 +593,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       WorkflowDagService.DagNodeResolution node,
       String targetJobCode,
       WorkflowNodeEntity workflowNode,
-      JobInstanceEntity jobInstance) {
+      JobInstanceEntity jobInstance,
+      WorkflowRunEntity workflowRun) {
     Map<String, Object> payload = new LinkedHashMap<>();
     if (sourcePayload != null && !sourcePayload.isBlank()) {
       try {
@@ -603,7 +609,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       }
     }
     mergeUpstreamPartitionOutputs(payload, jobInstance);
-    mergeNodeParams(payload, workflowNode);
+    mergeNodeParams(payload, workflowNode, workflowRun);
     payload.put("workflowNodeCode", node.nodeCode());
     payload.put("workflowNodeType", node.nodeType());
     payload.put("targetJobCode", targetJobCode);
@@ -711,9 +717,14 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   /**
    * 合并当前节点的 {@code workflow_node.node_params}（JSON 对象）到 payload。用户在 workflow 设计器 配的 templateCode /
    * channelCode 等静态字段由此流入 worker，无需每次触发时手工重复。
+   *
+   * <p>ADR-009 Stage 3: node_params 中形如 {@code $.nodes.<X>.output.<key>} / {@code
+   * $.workflowRun.<key>} 的引用,会先经 {@link WorkflowParamResolver} 用 {@code workflow_run} 上下文替换为
+   * 实际值,再合并到 payload。
    */
   @SuppressWarnings("unchecked")
-  private void mergeNodeParams(Map<String, Object> payload, WorkflowNodeEntity workflowNode) {
+  private void mergeNodeParams(
+      Map<String, Object> payload, WorkflowNodeEntity workflowNode, WorkflowRunEntity workflowRun) {
     if (workflowNode == null || workflowNode.getNodeParams() == null) {
       return;
     }
@@ -724,11 +735,91 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     try {
       Object parsed = JsonUtils.fromJson(raw, Object.class);
       if (parsed instanceof Map<?, ?> map) {
-        ((Map<String, Object>) map).forEach(payload::putIfAbsent);
+        Object resolved = workflowParamResolver.resolve(map, loadWorkflowRunContext(workflowRun));
+        if (resolved instanceof Map<?, ?> resolvedMap) {
+          ((Map<String, Object>) resolvedMap).forEach(payload::putIfAbsent);
+        }
       }
     } catch (IllegalArgumentException ignored) {
       // node_params 非 Map 或畸形——静默跳过，不让坏数据阻断派发
     }
+  }
+
+  /**
+   * ADR-009 Stage 3: 加载 workflow_run 内所有已完成节点的 output → 构造 {@link WorkflowRunContext}。 派发前调用,不持久化;
+   * 仅为本次派发的 node_params DSL 解析提供 {@code $.nodes.<X>.output.<key>} 数据源。
+   *
+   * <p>workflowRun 为 null 时返回空 context(老路径不走 workflow,resolver 见到 nodes/workflowRun 引用会 fail-fast,
+   * 但实际只有 workflow 派发路径会调到 mergeNodeParams,所以这里 null-safe 仅作防御)。
+   */
+  private WorkflowRunContext loadWorkflowRunContext(WorkflowRunEntity workflowRun) {
+    if (workflowRun == null) {
+      return new WorkflowRunContext() {
+        @Override
+        public boolean hasNode(String nodeCode) {
+          return false;
+        }
+
+        @Override
+        public Map<String, Object> nodeOutput(String nodeCode) {
+          return null;
+        }
+
+        @Override
+        public Map<String, Object> workflowRunFields() {
+          return Map.of();
+        }
+      };
+    }
+    List<WorkflowNodeRunEntity> nodeRuns =
+        workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId());
+    Map<String, Map<String, Object>> nodeOutputs = new LinkedHashMap<>();
+    for (WorkflowNodeRunEntity run : nodeRuns) {
+      String code = run.getNodeCode();
+      // 同 nodeCode 多次执行(retry / 循环)取最新一次的 output;selectByWorkflowRunId 按 run_seq asc 返回,
+      // 后续覆盖前面 → 自然结果 = 最新 run_seq 的 output。
+      Map<String, Object> parsedOutput = parseOutputJson(run.getOutput());
+      nodeOutputs.put(code, parsedOutput);
+    }
+    Map<String, Object> workflowRunFields = new LinkedHashMap<>();
+    if (workflowRun.getBizDate() != null) {
+      workflowRunFields.put("bizDate", workflowRun.getBizDate().toString());
+    }
+    if (workflowRun.getTraceId() != null) {
+      workflowRunFields.put("traceId", workflowRun.getTraceId());
+    }
+    return new WorkflowRunContext() {
+      @Override
+      public boolean hasNode(String nodeCode) {
+        return nodeOutputs.containsKey(nodeCode);
+      }
+
+      @Override
+      public Map<String, Object> nodeOutput(String nodeCode) {
+        return nodeOutputs.get(nodeCode);
+      }
+
+      @Override
+      public Map<String, Object> workflowRunFields() {
+        return workflowRunFields;
+      }
+    };
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> parseOutputJson(String outputJson) {
+    if (outputJson == null || outputJson.isBlank()) {
+      return null;
+    }
+    try {
+      Object parsed = JsonUtils.fromJson(outputJson, Object.class);
+      if (parsed instanceof Map<?, ?> map) {
+        return new LinkedHashMap<>((Map<String, Object>) map);
+      }
+    } catch (IllegalArgumentException ignored) {
+      // 数据库里 output 列异常,不影响派发,按"无产出"语义返回 null
+    }
+    return null;
   }
 
   @SuppressWarnings("unchecked")
