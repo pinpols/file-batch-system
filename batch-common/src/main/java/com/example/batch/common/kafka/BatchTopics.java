@@ -12,6 +12,9 @@ public final class BatchTopics {
   public static final String OUTBOX_EVENT = "batch.outbox.event";
   public static final String WORKER_HEARTBEAT = "batch.worker.heartbeat";
 
+  /** ADR-010: trigger → orchestrator 异步 launch 事件 topic(版本化,协议演进时升 v2)。 */
+  public static final String TRIGGER_LAUNCH_V1 = "batch.trigger.launch.v1";
+
   private BatchTopics() {}
 
   public static String directDispatchTopic(String baseTopic, String workerId) {
