@@ -301,7 +301,18 @@ public class DefaultTriggerService implements TriggerService {
     return entity;
   }
 
+  // ADR-010 Stage 7: 旧同步 HTTP 路径 deprecation,首次进入打 1 条 WARN 提醒切换到 async,
+  // 之后静默执行(避免每次 launch 都刷日志)。物理删除前用作运维提示。
+  private final java.util.concurrent.atomic.AtomicBoolean syncPathDeprecationLogged =
+      new java.util.concurrent.atomic.AtomicBoolean(false);
+
   private LaunchResponse forwardToOrchestrator(LaunchRequest launchRequest) {
+    if (syncPathDeprecationLogged.compareAndSet(false, true)) {
+      log.warn(
+          "[ADR-010 deprecation] trigger 走同步 HTTP 路径(batch.trigger.async-launch.enabled=false);"
+              + "本路径将在 ADR-010 灰度全量切换稳定后的下一个 minor 版本物理删除,"
+              + "建议尽快切换到异步 outbox 路径,详见 docs/runbook/trigger-async-launch-rollout.md");
+    }
     try {
       LaunchResponse response = orchestratorTriggerAdapter.sendTrigger(launchRequest);
       // H-4: 仅在 Orchestrator 确认接收后标记为 ACCEPTED
