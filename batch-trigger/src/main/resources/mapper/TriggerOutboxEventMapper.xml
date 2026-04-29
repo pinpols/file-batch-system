@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.batch.trigger.mapper.TriggerOutboxEventMapper">
+
+    <resultMap id="TriggerOutboxEventResultMap"
+               type="com.example.batch.common.persistence.entity.TriggerOutboxEventEntity">
+        <id     column="id"               property="id"/>
+        <result column="tenant_id"        property="tenantId"/>
+        <result column="request_id"       property="requestId"/>
+        <result column="topic"            property="topic"/>
+        <result column="payload"          property="payload"/>
+        <result column="publish_status"   property="publishStatus"/>
+        <result column="publish_attempt"  property="publishAttempt"/>
+        <result column="last_error"       property="lastError"/>
+        <result column="trace_id"         property="traceId"/>
+        <result column="next_publish_at"  property="nextPublishAt"/>
+        <result column="published_at"     property="publishedAt"/>
+        <result column="created_at"       property="createdAt"/>
+        <result column="updated_at"       property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.example.batch.common.persistence.entity.TriggerOutboxEventEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO batch.trigger_outbox_event (
+            tenant_id, request_id, topic, payload, publish_status, publish_attempt,
+            trace_id, next_publish_at
+        ) VALUES (
+            #{tenantId},
+            #{requestId},
+            <choose>
+                <when test="topic != null">#{topic}</when>
+                <otherwise>'batch.trigger.launch.v1'</otherwise>
+            </choose>,
+            #{payload,jdbcType=VARCHAR}::jsonb,
+            <choose>
+                <when test="publishStatus != null">#{publishStatus}</when>
+                <otherwise>'PENDING'</otherwise>
+            </choose>,
+            #{publishAttempt},
+            #{traceId},
+            <choose>
+                <when test="nextPublishAt != null">#{nextPublishAt}</when>
+                <otherwise>CURRENT_TIMESTAMP</otherwise>
+            </choose>
+        )
+    </insert>
+
+    <select id="selectPending" resultMap="TriggerOutboxEventResultMap">
+        SELECT *
+          FROM batch.trigger_outbox_event
+         WHERE publish_status IN (#{pendingStatus1}, #{pendingStatus2})
+           AND next_publish_at &lt;= #{now}
+         ORDER BY created_at ASC
+         LIMIT #{limit}
+         FOR UPDATE SKIP LOCKED
+    </select>
+
+    <update id="markPublishing">
+        UPDATE batch.trigger_outbox_event
+           SET publish_status = #{publishingStatus},
+               updated_at     = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+           AND publish_status IN (#{pendingStatus1}, #{pendingStatus2})
+    </update>
+
+    <update id="markPublished">
+        UPDATE batch.trigger_outbox_event
+           SET publish_status = #{status},
+               published_at   = CURRENT_TIMESTAMP,
+               updated_at     = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+    </update>
+
+    <update id="markFailed">
+        UPDATE batch.trigger_outbox_event
+           SET publish_status   = #{status},
+               publish_attempt  = publish_attempt + 1,
+               last_error       = #{lastError,jdbcType=VARCHAR},
+               next_publish_at  = #{nextPublishAt},
+               updated_at       = CURRENT_TIMESTAMP
+         WHERE id = #{id}
+    </update>
+
+    <select id="selectByTenantAndRequest" resultMap="TriggerOutboxEventResultMap">
+        SELECT *
+          FROM batch.trigger_outbox_event
+         WHERE tenant_id  = #{tenantId}
+           AND request_id = #{requestId}
+    </select>
+
+</mapper>
