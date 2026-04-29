@@ -1,7 +1,10 @@
 package com.example.batch.worker.core.support;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.common.logging.BatchMdc;
 import com.example.batch.common.logging.StructuredLogField;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
@@ -9,6 +12,8 @@ import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.annotation.Timed;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +46,8 @@ import java.util.UUID;
  */
 public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements StepExecutionAdapter {
 
+  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
+
   private final PlatformFileRuntimeRepository runtimeRepository;
 
   protected AbstractPipelineStepExecutionAdapter(PlatformFileRuntimeRepository runtimeRepository) {
@@ -48,6 +55,10 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
   }
 
   @Override
+  @Timed(
+      value = "batch.pipeline.step.execution.duration",
+      description = "Worker pipeline step execution latency",
+      histogram = true)
   public final StepExecutionResponse execute(StepExecutionRequest request) {
     Map<String, Object> sourceAttributes = request.context();
     Map<String, Object> attributes =
@@ -105,14 +116,16 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
             pipelineDescription(),
             defaultPipelineSteps());
     if (pipelineDefinitionId == null) {
-      return new StepExecutionResponse(
-          false, "PIPELINE_DEFINITION_MISSING", "pipeline definition missing");
+      BizException exception =
+          BizException.of(ResultCode.NOT_FOUND, "error.pipeline.definition_not_found");
+      return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
     }
     List<PipelineStepDefinition> pipelineSteps =
         runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
     if (pipelineSteps.isEmpty()) {
-      return new StepExecutionResponse(
-          false, "PIPELINE_STEP_DEFINITION_MISSING", "pipeline step definition missing");
+      BizException exception =
+          BizException.of(ResultCode.NOT_FOUND, "error.pipeline.step_definition_missing");
+      return StepExecutionResponse.failure(exception, ERROR_OBJECT_MAPPER);
     }
     Long pipelineInstanceId =
         runtimeRepository.createPipelineInstance(
@@ -150,12 +163,33 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
       String failureStage = resultStage(failed);
       runtimeRepository.markPipelineFailed(
           pipelineInstanceId, failureStage, lastSuccessfulStage(attributes));
-      handlePipelineFailure(attributes, resultCode(failed), resultMessage(failed));
-      return new StepExecutionResponse(false, resultCode(failed), resultMessage(failed));
+      handlePipelineFailure(
+          attributes,
+          resultCode(failed),
+          resultMessage(failed),
+          resultErrorKey(failed),
+          resultErrorArgs(failed));
+      return new StepExecutionResponse(
+          false,
+          resultCode(failed),
+          resultMessage(failed),
+          resultErrorKey(failed),
+          resultErrorArgs(failed));
     } catch (Exception exception) {
       runtimeRepository.markPipelineFailed(
           pipelineInstanceId, initialStage(), lastSuccessfulStage(attributes));
-      handlePipelineFailure(attributes, unexpectedErrorCode(), exception.getMessage());
+      if (exception instanceof BizException bizException) {
+        StepExecutionResponse failure =
+            StepExecutionResponse.failure(bizException, ERROR_OBJECT_MAPPER);
+        handlePipelineFailure(
+            attributes,
+            failure.code(),
+            failure.message(),
+            failure.getErrorKey(),
+            failure.getErrorArgs());
+        return failure;
+      }
+      handlePipelineFailure(attributes, unexpectedErrorCode(), exception.getMessage(), null, null);
       return new StepExecutionResponse(false, unexpectedErrorCode(), exception.getMessage());
     }
   }
@@ -229,7 +263,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
       return null;
     }
     try {
-      Object parsed = com.example.batch.common.utils.JsonUtils.fromJson(payload, Object.class);
+      Object parsed = JsonUtils.fromJson(payload, Object.class);
       if (parsed instanceof Map<?, ?> map) {
         Object v = ((Map<String, Object>) map).get(fieldName);
         if (v instanceof String s && Texts.hasText(s)) {
@@ -291,9 +325,37 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
 
   protected abstract String resultMessage(R result);
 
+  protected String resultErrorKey(R result) {
+    return result instanceof StageExecutionResult stageResult ? stageResult.errorKey() : null;
+  }
+
+  protected String resultErrorArgs(R result) {
+    return result instanceof StageExecutionResult stageResult ? stageResult.errorArgs() : null;
+  }
+
   protected abstract StepExecutionResponse buildSuccessResponse(
       C context, List<R> results, Map<String, Object> attributes);
 
-  protected abstract void handlePipelineFailure(
-      Map<String, Object> attributes, String errorCode, String errorMessage);
+  /**
+   * pipeline 失败后的补偿钩子。默认实现：当 attributes 中存在 {@code fileId} 时，把 file_record 状态推进为 FAILED
+   * 并把错误三元组（code / message / errorKey / errorArgs）写进 metadata；不绑定 file_record 的链路（如 PROCESS）应覆盖为
+   * no-op。
+   */
+  protected void handlePipelineFailure(
+      Map<String, Object> attributes,
+      String errorCode,
+      String errorMessage,
+      String errorKey,
+      String errorArgs) {
+    Long fileId = runtimeRepository().toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+    if (fileId == null) {
+      return;
+    }
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("errorCode", errorCode);
+    metadata.put("errorMessage", errorMessage);
+    metadata.put("errorKey", errorKey);
+    metadata.put("errorArgs", errorArgs);
+    runtimeRepository().updateFileStatus(fileId, "FAILED", metadata);
+  }
 }

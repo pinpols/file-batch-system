@@ -338,11 +338,9 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
     if (exists == null || !exists) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
-          "error.common.invalid_argument_detail",
-          "sqlTransformCompute target table not found: "
-              + spec.targetSchema()
-              + "."
-              + spec.targetTable());
+          "error.process.target_table_not_found",
+          spec.targetSchema(),
+          spec.targetTable());
     }
   }
 
