@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS batch.trigger_outbox_event (
     request_id      VARCHAR(128) NOT NULL,
     topic           VARCHAR(128) NOT NULL DEFAULT 'batch.trigger.launch.v1',
     payload         JSONB        NOT NULL,
-    publish_status  VARCHAR(16)  NOT NULL DEFAULT 'PENDING',
+    publish_status  VARCHAR(16)  NOT NULL DEFAULT 'NEW',
     publish_attempt INTEGER      NOT NULL DEFAULT 0,
     last_error      VARCHAR(2048),
     trace_id        VARCHAR(128),
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS batch.trigger_outbox_event (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT ck_trigger_outbox_status CHECK (
-        publish_status IN ('PENDING', 'PUBLISHING', 'PUBLISHED', 'FAILED', 'GIVE_UP')
+        publish_status IN ('NEW', 'PUBLISHING', 'PUBLISHED', 'FAILED', 'GIVE_UP')
     )
 );
 
@@ -45,9 +45,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_trigger_outbox_event_tenant_request
 -- relay 扫描热点:status + next_publish_at,partial index 只覆盖待发状态
 CREATE INDEX IF NOT EXISTS idx_trigger_outbox_event_pending
     ON batch.trigger_outbox_event (publish_status, next_publish_at)
-    WHERE publish_status IN ('PENDING', 'FAILED');
+    WHERE publish_status IN ('NEW', 'FAILED');
 
 COMMENT ON TABLE  batch.trigger_outbox_event IS 'ADR-010: trigger 异步发布事件表,与 trigger_request 同事务写入';
 COMMENT ON COLUMN batch.trigger_outbox_event.payload IS 'LaunchEnvelope JSON: {launchRequest, dedupKey, traceId, sourceFireTime}';
-COMMENT ON COLUMN batch.trigger_outbox_event.publish_status IS 'PENDING/PUBLISHING/PUBLISHED/FAILED/GIVE_UP, 对齐 OutboxPublishStatus';
+COMMENT ON COLUMN batch.trigger_outbox_event.publish_status IS 'NEW/PUBLISHING/PUBLISHED/FAILED/GIVE_UP, 对齐 OutboxPublishStatus enum';
 COMMENT ON COLUMN batch.trigger_outbox_event.next_publish_at IS '退避用,最早可被 relay 扫到的时刻';
