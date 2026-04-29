@@ -150,19 +150,27 @@
 | 维度 | 评分 | 说明 |
 |---|---|---|
 | 架构与模块边界 | **8/10** | 硬约束零越权,ADR 在用;有几个 god class |
-| 代码质量 | **7/10** | 1 硬违规 + 半完成重构 |
+| 代码质量 | **7→7.5/10** | 半完成重构已收尾(↓ 见已完成);仍有 god service 待拆 |
 | 测试体系 | **8/10** | E2E 覆盖罕见地全 |
 | 运维就绪度 | **8/10** | 三套部署 + 23 runbook + 完整观测栈;trigger 缺 Security |
 
-**整体 7.8/10**——这是一个**有持续工程纪律的中型平台**:架构边界、ADR、E2E、runbook、Flyway、observability、i18n 都在动且互相对齐,backlog 真清账。但还**没到生产就绪**:trigger 缺 Security、X-Console-Token 直通、Console God Service、trigger→orchestrator 同步桥、半完成重构,这些都是"离量产差一步"的典型表现。
+**整体 7.8/10**——这是一个**有持续工程纪律的中型平台**:架构边界、ADR、E2E、runbook、Flyway、observability、i18n 都在动且互相对齐,backlog 真清账。但还**没到生产就绪**:trigger 缺 Security、X-Console-Token 直通、Console God Service、trigger→orchestrator 同步桥,这些都是"离量产差一步"的典型表现。
 
-### 优先 5 件事(按价值/成本排序)
+### ✅ 已完成(本次评估后)
 
-1. **修 trigger Spring Security + 删 X-Console-Token**(deep-issue §1+§2)——上线前必修,2-3 天工作量,不修就是边界漏洞。
-2. **完成 `AbstractPipelineStepExecutionAdapter` / `AbstractStageExecutor` 半完成重构**(代码质量 I1-I4 + FQN)——1 天搞定,消除 4 模块 ~150 行复制,顺手把 FQN 违规一并修。
-3. **拆 `DefaultConsoleJobApplicationService`**(ADR-008 god-class-decomposition)——已立 ADR,排期推进,console-api 593 文件这个体量必须分了。
-4. **trigger → orchestrator 异步化**(目前 deep-issue §4 同步 HTTP 桥)——把触发器纳入 outbox/Kafka 体系,跟主链路同款。
-5. **ADR-009 Workflow DSL Stage 2-4**(目前只 V72 落了 Stage 1)——已规划,继续推。
+| 项 | Commit | 说明 |
+|---|---|---|
+| 半完成重构 #2 | `4e634c7c` | 4×`ERROR_OBJECT_MAPPER` + 4×`loadConfiguredSteps` + 3×`handlePipelineFailure` 上提到基类,消除 ~150 行复制;`AbstractPipelineStepExecutionAdapter:265` 一处 FQN 违规修了 |
+| i18n 业务路径收口 | `23137b2c` | 56 文件横扫 console / orchestrator / trigger / worker 业务路径,BizException 全量从 literal message 迁到 i18n key + args 三元组(配套 9 个 test 同步成 messageKey/messageArgs 行为断言);承接 `c74a9644`(plugin)+ `4e634c7c`(SqlPlugin)同流水线 |
+| ops 增量 | `f0eff4ae` | prometheus 告警规则 + seed/load 脚本同步 |
+| 评估快照 | `d325e44a` | 本文档落盘 |
+
+### 🔴 仍未完成(原 #1 / #3 / #4 / #5)
+
+1. **修 trigger Spring Security + 删 X-Console-Token**(deep-issue §1+§2)——上线前必修,2-3 天,不修就是边界漏洞。
+2. **拆 `DefaultConsoleJobApplicationService`**(ADR-008 god-class-decomposition)——已立 ADR,console-api 593 文件这个体量必须分。
+3. **trigger → orchestrator 异步化**(deep-issue §4 同步 HTTP 桥)——把触发器纳入 outbox/Kafka 体系,跟主链路同款。
+4. **ADR-009 Workflow DSL Stage 2-4**(目前只 V72 落了 Stage 1)——已规划,继续推。
 
 ---
 
@@ -189,3 +197,77 @@
 | `docs/architecture/maturity-assessment.md` | 单维度成熟度,本报告做横向综合评分 |
 
 本报告是**点状项目快照**,不替代上述滚动文档。下次评估建议在主链路或 console-api 出现重大重构后再做。
+
+---
+
+## 8. 下一步计划
+
+按价值/成本/解锁关系排序,**S1 必须先做**(上线前阻塞);S2-S4 可并行排期。
+
+### S1 — trigger 安全收口(2-3 天,上线前阻塞)
+
+**目标**:消除 deep-issue §1+§2 边界漏洞。
+
+**子任务**:
+1. **batch-trigger 加 Spring Security**:复用 console-api 的 `BatchSecurityProperties` + `bypass-mode` 总开关;controller 全量加 `@PreAuthorize` 或方法级守卫;**至少**对 `/internal/**` 触发接口和 Quartz 管理接口要求认证。
+2. **删 `X-Console-Token` 共享密钥直通**:全仓 grep `X-Console-Token` / `consoleToken` 找清调用点;改用现有 JWT / Internal-Auth 头。
+3. **守护测试**:加一个 `TriggerSecurityIntegrationTest`,无 token 访问写接口必须 401/403;开 `bypass-mode` 时放行(贴生产配置)。
+4. **runbook 同步**:`docs/runbook/local-development.md` 加 token 配置示例;`SECURITY.md` 标注 `X-Console-Token` 已废弃。
+
+**完成标志**:批量重启 trigger,无 token 不能下任务;CI `pr-gate` 加 SecurityIntegrationTest 守卫。
+
+### S2 — `DefaultConsoleJobApplicationService` 拆分(ADR-008,2-3 周)
+
+**目标**:console-api 593 文件、最大 god service 解构,降耦合 + 让代码 review 可承受。
+
+**子任务**:
+1. 先 grep 该类所有 public 方法,按"业务领域"分桶:job 定义查询 / 启动 / 取消 / 重跑 / 历史 / 审批 等。
+2. 按 ADR-008 §拆分策略 提 1 个新 ADR 或更新 ADR-008,记录拆分边界(domain-driven 还是 use-case-driven)。
+3. **逐子领域拆**:每拆一个建一个 PR,先把方法搬到新 service,old service 委托(不破现有调用),新增测试,后清理旧入口。
+4. 拆完后 `ConsoleMetaQueryService.REGISTRATIONS` 和 OpenAPI 应零变化(纯结构重构,不改对外契约)。
+
+**完成标志**:`DefaultConsoleJobApplicationService` LOC 缩到原 1/3 以下;console-api 顶层文件数 ≤ 480。
+
+### S3 — trigger → orchestrator 异步化(deep-issue §4,2-3 周)
+
+**目标**:把触发器纳入主链路 outbox/Kafka 体系,消除同步 HTTP 桥的鲁棒性短板。
+
+**子任务**:
+1. 现状梳理:`DefaultTriggerService` / `DefaultScheduleForwarder` 当前同步 HTTP 调用 orchestrator 的 `/internal/launch/**` 接口;失败处理依赖 client retry。
+2. 设计:加 `trigger_outbox_event` 表(或复用现有 outbox)+ `TriggerOutboxRelay` 周期 publisher 写到 Kafka topic `batch.trigger.launch.v1`;orchestrator 起 `TriggerLaunchConsumer` 消费同款入站契约。
+3. 立 ADR-010(trigger-async-decoupling),记录 topic 协议、幂等键、retention 策略。
+4. **灰度切换**:加 `batch.trigger.async-launch.enabled` 开关,默认 false;先 e2e 跑通,再生产灰度切。
+5. 守护:`trigger.outbox.publish.lag` 指标 + alert;`TriggerAsyncLaunchE2eIT` 加 case。
+
+**完成标志**:开关切到 true 后,trigger 重启不丢任何 launch;orchestrator 短暂宕机不阻塞 trigger。
+
+### S4 — ADR-009 Workflow DSL Stage 2-4(2-3 sprint)
+
+**目标**:已落 Stage 1(V72 加 `workflow_node_run.output` 列),继续 Stage 2-4。
+
+**子任务**(按 ADR-009 路线图):
+- **Stage 2**:worker 各 stage 把 output 写到 `workflow_node_run.output`(Map → JSONB);现在多数走 attributes,需要在 `AbstractStageExecutor.runStageLoop` 收口处统一刷出。
+- **Stage 3**:`WorkflowParamResolver` 从 upstream node output 取值的 DSL(`{{node.<id>.output.<field>}}`),配套 grammar + parser + 单测。
+- **Stage 4**:`SchedulePlanBuilder` 集成 resolver,把 DSL 在 launch T2 阶段解析成具体 task_payload;触发 e2e 跨节点参数传递场景。
+
+**完成标志**:E2E 中可用 `wf_eod_process` 这种含 SETTLE → EXPORT → DISPATCH 的 workflow 完整跑通,各节点参数靠 DSL 串联,无需在 console 手写 templating。
+
+### S5 — 次级清单(随手优化,不阻塞主线)
+
+| # | 项 | 估时 | 触发 |
+|---|---|---|---|
+| a | I4 `buildContext` 模板抽取 | 0.5 天 | 等 4 个 `*JobContext` 出现共同基类时再做(避免现在强抽 scope creep) |
+| b | i18n 测试债二轮扫荡 | 1 天 | 23137b2c 已收 9 处,但 `assertThat.hasMessageContaining` 这类断言全仓再扫一遍兜底 |
+| c | 主链路 SecurityIntegrationTest 横向铺开 | 1-2 天 | S1 之后,把同款守护扩到 console / orchestrator / worker |
+| d | hardening-backlog v6 滚版 | 0.5 天 | S1 完成后触发,把 deep-issue §1+§2 移到"已完成" |
+
+### 节奏建议
+
+```
+Week 1 [必做]:S1 trigger Security(并发 S5-a,半天搞定)
+Week 2-3:    S2 console-api god service 拆分(并行启 S3 spike)
+Week 4-5:    S3 trigger 异步化全量推
+Week 6+:     S4 Workflow DSL Stage 2-4 按 sprint 节奏推进
+```
+
+每个里程碑结束更新 `hardening-backlog.md` + 在本目录追加新评估快照(命名 `project-assessment-YYYY-MM-DD.md`)。
