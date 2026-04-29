@@ -5,6 +5,7 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,9 @@ import java.util.Map;
  */
 public abstract class AbstractStageExecutor<
     C extends ExecutionContext, R extends StageExecutionResult> {
+
+  /** 共享的错误序列化 mapper：用于 BizException → StageExecutionResult.failure 转换。 */
+  protected static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   protected final PlatformFileRuntimeRepository runtimeRepository;
 
@@ -65,7 +69,12 @@ public abstract class AbstractStageExecutor<
         runtimeRepository.finishStepRunSuccess(stepRunId, buildOutputSummary(context, result));
       } else {
         runtimeRepository.finishStepRunFailure(
-            stepRunId, result.code(), result.message(), buildOutputSummary(context, result));
+            stepRunId,
+            result.code(),
+            result.message(),
+            result.errorKey(),
+            result.errorArgs(),
+            buildOutputSummary(context, result));
       }
       currentStep =
           PipelineStepFlowSupport.resolveNextStep(
@@ -85,8 +94,33 @@ public abstract class AbstractStageExecutor<
     attributes.put(PipelineRuntimeKeys.PIPELINE_CURRENT_STEP_PARAMS, currentStep.stepParams());
   }
 
-  /** 加载本次 pipeline 运行的有序步骤定义列表。 */
-  protected abstract List<PipelineStepDefinition> loadConfiguredSteps(C context);
+  /**
+   * 加载本次 pipeline 运行的有序步骤定义列表。
+   *
+   * <p>默认两级解析：优先使用 task 下发时内联在 attributes 中的 {@link
+   * PipelineRuntimeKeys#PIPELINE_STEP_DEFINITIONS}（运行时按任务级别覆盖），否则降级到按 {@link
+   * PipelineRuntimeKeys#PIPELINE_DEFINITION_ID} 从 DB 加载（Job 级别默认配置）。
+   *
+   * <p>特殊场景需要其它解析逻辑（例如基于 stage code 反查）时子类可覆盖。
+   */
+  protected List<PipelineStepDefinition> loadConfiguredSteps(C context) {
+    Object definitions = context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS);
+    if (definitions instanceof List<?> list) {
+      List<PipelineStepDefinition> resolved = new ArrayList<>();
+      for (Object item : list) {
+        if (item instanceof PipelineStepDefinition definition) {
+          resolved.add(definition);
+        }
+      }
+      if (!resolved.isEmpty()) {
+        return List.copyOf(resolved);
+      }
+    }
+    Long pipelineDefinitionId =
+        runtimeRepository.toLong(
+            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
+    return runtimeRepository.loadPipelineSteps(pipelineDefinitionId);
+  }
 
   /** 返回无步骤定义时的失败结果。 */
   protected abstract R stepMissingFailure();

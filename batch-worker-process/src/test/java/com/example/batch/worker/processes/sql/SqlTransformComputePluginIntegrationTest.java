@@ -3,6 +3,7 @@ package com.example.batch.worker.processes.sql;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.batch.common.exception.BizException;
 import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.processes.domain.ProcessJobContext;
 import com.example.batch.worker.processes.domain.ProcessStageResult;
@@ -270,7 +271,13 @@ class SqlTransformComputePluginIntegrationTest {
     spec.put("targetTable", "nonexistent_target");
 
     assertThatThrownBy(() -> plugin.prepare(context))
-        .hasMessageContaining("target table not found");
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            t -> {
+              BizException ex = (BizException) t;
+              assertThat(ex.getMessageKey()).isEqualTo("error.process.target_table_not_found");
+              assertThat(ex.getMessageArgs()).contains("nonexistent_target");
+            });
     // staging 完全空(prepare 早停)
     assertThat(
             jdbcTemplate.queryForObject(

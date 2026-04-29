@@ -3,7 +3,6 @@ package com.example.batch.worker.imports.infrastructure;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
-import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.imports.domain.ImportJobContext;
@@ -11,7 +10,6 @@ import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.domain.ImportWorkerType;
 import com.example.batch.worker.imports.stage.ImportStageExecutor;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Primary;
@@ -101,18 +99,5 @@ public class ImportStepExecutionAdapter
       ImportJobContext context, List<ImportStageResult> results, Map<String, Object> attributes) {
     Object importedCount = context.getAttributes().getOrDefault("loadedCount", 0);
     return new StepExecutionResponse(true, "SUCCESS", "imported " + importedCount + " row(s)");
-  }
-
-  @Override
-  protected void handlePipelineFailure(
-      Map<String, Object> attributes, String errorCode, String errorMessage) {
-    Long fileId = runtimeRepository().toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-    if (fileId == null) {
-      return;
-    }
-    Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("errorCode", errorCode);
-    metadata.put("errorMessage", errorMessage);
-    runtimeRepository().updateFileStatus(fileId, "FAILED", metadata);
   }
 }

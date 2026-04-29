@@ -131,7 +131,11 @@ public class ProcessStepExecutionAdapter
 
   @Override
   protected void handlePipelineFailure(
-      Map<String, Object> attributes, String errorCode, String errorMessage) {
-    // PROCESS 不默认绑定 file_record,失败只由 pipeline/task report 承载。
+      Map<String, Object> attributes,
+      String errorCode,
+      String errorMessage,
+      String errorKey,
+      String errorArgs) {
+    // PROCESS 不默认绑定 file_record,失败只由 pipeline/task report 承载;显式 no-op 覆盖父类默认实现。
   }
 }

@@ -12,7 +12,6 @@ import com.example.batch.worker.imports.domain.ImportJobContext;
 import com.example.batch.worker.imports.domain.ImportStage;
 import com.example.batch.worker.imports.domain.ImportStageResult;
 import com.example.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,8 +39,6 @@ import org.springframework.stereotype.Service;
 public class DefaultImportStageExecutor
     extends AbstractStageExecutor<ImportJobContext, ImportStageResult>
     implements ImportStageExecutor {
-
-  private static final ObjectMapper ERROR_OBJECT_MAPPER = new ObjectMapper();
 
   private final Map<String, ImportStageStep> stepsByImplCode;
   private final Map<ImportStage, ImportStageStep> stepsByStage;

@@ -3,7 +3,6 @@ package com.example.batch.worker.exports.infrastructure;
 import com.example.batch.worker.core.domain.PipelineStepTemplate;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
-import com.example.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepository;
 import com.example.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import com.example.batch.worker.exports.domain.ExportJobContext;
@@ -13,7 +12,6 @@ import com.example.batch.worker.exports.domain.ExportStageResult;
 import com.example.batch.worker.exports.domain.ExportWorkerType;
 import com.example.batch.worker.exports.stage.ExportStageExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Primary;
@@ -109,18 +107,5 @@ public class ExportStepExecutionAdapter
     String objectName = String.valueOf(context.getAttributes().getOrDefault("objectName", ""));
     return new StepExecutionResponse(
         true, "SUCCESS", objectName.isBlank() ? "导出阶段执行完成" : objectName);
-  }
-
-  @Override
-  protected void handlePipelineFailure(
-      Map<String, Object> attributes, String errorCode, String errorMessage) {
-    Long fileId = runtimeRepository().toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
-    if (fileId == null) {
-      return;
-    }
-    Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("errorCode", errorCode);
-    metadata.put("errorMessage", errorMessage);
-    runtimeRepository().updateFileStatus(fileId, "FAILED", metadata);
   }
 }
