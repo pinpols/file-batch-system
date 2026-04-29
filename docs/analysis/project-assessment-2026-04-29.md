@@ -171,6 +171,9 @@
 | S0 deep-issue/backlog/fix-report 滚版 | `8ac1ea2d` | §5.1 / §5.2 / §5.12 标已修;ADR-009 Stage 1.2 标已落;deep-issue 与 backlog 口径同步 |
 | ADR-009 Stage 2/3 校正 + §10 文档 | `8b520102` | 实地查代码发现 Stage 2/3 已落;workflow-dependency-guide §10 节点间参数串联文档落盘 |
 | **ADR-010 trigger 异步解耦草稿** | `e1b37cfd` | 立 ADR-010(202 行,7 阶段 ~7-8 人天路线图);复用 ADR-002 模式 + V80 schema + Kafka topic v1 + 灰度开关 + 4 类 E2E 守护 |
+| **ADR-009 Stage 1.2/2/3 全栈实装**(下文 §5"评估时遗漏"小节经第四轮代码核查推翻) | `a9469407` | 30 文件 +678/-20:协议层加 outputs / 4 worker adapter 填 NODE_OUTPUTS / orchestrator 持久化到 workflow_node_run.output / WorkflowParamResolver 160 行 + 10 单测 / DefaultWorkflowNodeDispatchService.mergeNodeParams 接入;`wf_probe_mixed.REPORT` seed 演示 `$.nodes.PROCESS.output.processedCount` 引用 |
+| ADR-009 Stage 1.2 SqlPlugin 测试断言修复 | `4e634c7c` | `requireTargetTableExists` 改用专用 i18n key `error.process.target_table_not_found`;`prepare_failsFast_whenTargetTableDoesNotExist` 断言改为基于 BizException.getMessageKey/getMessageArgs |
+| Worker 插件层 73 处 failure 迁 i18n 三元组 | `c74a9644` | V78 八表 errorKey/errorArgs 列在 step 失败路径上真正生效;30 个 i18n key 中英双语 |
 
 #### 评估时遗漏 — 实际已落地(2026-04-30 复查发现)
 
@@ -259,16 +262,20 @@
 
 **已落地**:
 
-| Stage | 状态 | 实地证据 |
+> **2026-04-30 第四轮校正**:本节原标"Stage 1.2/2/3 ✅"系第三轮速判,当时 grep 命中 `TaskExecutionReport.outputs` 等字符串以为已实装;实地 `a9469407` 提交前 grep 验证发现 `TaskOutcomeCommand` 仅 10 字段(无 outputs)、`WorkflowParamResolver.java` 不存在、`mergeNodeParams` 仅 17 行无 resolver 调用——**实际只有 V72 schema 落了 Stage 1**。Stage 1.2/2/3 全栈实装落于本会话 commit `a9469407`(详见上表)。
+
+| Stage | 状态 | 实地证据(post-`a9469407`) |
 |---|---|---|
 | **Stage 1** ✅ | DDL: V72 migration 加 `workflow_node_run.output` JSONB 列 | `db/migration/V72__add_workflow_node_run_output.sql` |
-| **Stage 1.2** ✅ | worker → orchestrator outputs 上报管线 | `TaskExecutionReport.outputs` + `DefaultTaskExecutionWrapper.java:108-117` 透传 + `WorkflowNodeRunMapper.xml:84-85` 写 jsonb;`ImportStepExecutionAdapter.java:112` 已填 NODE_OUTPUTS,E/D/P 按需后补 |
-| **Stage 2** ✅ | `WorkflowParamResolver` 类 + 单测 | `WorkflowParamResolver.java` 160 行实现完整(支持 `$.nodes.<code>.output.<key>` / `$.workflowRun.<key>` 引用 + 3 类 fail-fast + 嵌套路径下钻 + Map/List 递归);`WorkflowParamResolverTest` 10/10 单测全绿 |
-| **Stage 3** ✅ | resolver 集成 + 文档 | `DefaultWorkflowNodeDispatchService.mergeNodeParams` (line 723) 在派发前调用 resolver;`loadWorkflowRunContext` (line 755) selectByWorkflowRunId 加载兄弟节点 output 构造 context;`workflow-dependency-guide.md §10` 节点间参数串联文档 |
+| **Stage 1.2** ✅ | 协议层 outputs 字段全栈 + 4 worker adapter populate + orchestrator 持久化 | `TaskExecutionReport.outputs` / `TaskExecutionReportDto.outputs` (+`@JsonIgnoreProperties` 保护滚动升级) / `TaskOutcomeCommand.outputs` 11 字段 record / `UpdateNodeRunStatusParam.output` / 4 `*StepExecutionAdapter.buildSuccessResponse` 填 `NODE_OUTPUTS` (Import: fileId/recordCount/parsedCount/...; Export: fileId/objectName/checksumValue/...; Process: processedCount/batchKey/...; Dispatch: receiptCode/channelCode/...) / `DefaultTaskExecutionWrapper` 提取透传 / `DefaultTaskOutcomeService.serializeOutputs` 写 JSONB / JOB 节点 `signalParentVirtualTask` 透传子作业 outputs |
+| **Stage 2** ✅ | `WorkflowParamResolver` 类(160 行)+ `WorkflowRunContext` 接口 + 10 单测 | `application/workflow/WorkflowParamResolver.java`(`$.nodes.<code>.output.<key>` / `$.workflowRun.<key>` 引用 + 3 类 fail-fast + 嵌套路径下钻 + Map/List 递归);`WorkflowParamResolverTest.java` 10/10 全绿 |
+| **Stage 3** ✅ | resolver 集成 + 文档 | `DefaultWorkflowNodeDispatchService.mergeNodeParams` 注入 resolver + `loadWorkflowRunContext`(`selectByWorkflowRunId` 加载兄弟节点 output 反序列化构造 ctx,不持久化);TASK + JOB 双派发路径都接入;`error.workflow.param_ref_invalid` 中英双语 i18n;`workflow-dependency-guide.md §10` 节点间参数串联文档 |
 
-**Stage 4 — 业务配置 deferred**:
+**Stage 4 — seed 演示锚点已落,业务配置随业务推进**:
 
-ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓库 seed 实际只有 3 个 workflow(`finance_recon_flow` / `import_pipeline_flow` / `mixed_orchestration_flow`),且现有节点间通过 `mergeUpstreamPartitionOutputs` 已自动透传 fileId 等规约字段,**没有当下需要 DSL 的场景**。Stage 4 的真实定位是"未来业务方设计需要跨节点参数显式串联的 workflow 时,按 §10 文档配 `node_params` 含 `$.xxx` 引用"——是配置规范使用,不是基础设施 todo。
+`a9469407` 在 `wf_probe_mixed.REPORT` 节点 `node_params` 加 `$.nodes.PROCESS.output.processedCount` + `$.workflowRun.bizDate` 引用,作为 e2e 烟测锚点。
+
+ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓库 seed 实际只有 6 个 workflow(`TA_WF_SETTLEMENT` / `TB_WF_RECONCILE` / `TC_WF_RISK_PIPELINE` / `wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed`),其中前 3 个仅 START→END 骨架,后 3 个 probe 系列仅 `wf_probe_mixed` 是真实跨节点链;`wf_eod_process` 在仓库不存在。**无 SETTLE→DISPATCH 真实跨 workflow 链路**——`mergeUpstreamPartitionOutputs` 已自动透传 fileId/fileCode 等规约字段满足现状。
 
 **已具备能力**:任何 workflow 设计者现在就可以在 `workflow_node.node_params` 配 `{"fileId": "$.nodes.SETTLE.output.fileId"}` 这样的引用,resolver 会在派发前自动解析。
 
@@ -278,7 +285,7 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
 - `mergeUpstreamPartitionOutputs` 自动透传不够(超出 fileId/fileCode 等规约 key)
 - workflow 跨多个 jobInstance(如 JOB 节点链),`mergeUpstreamPartitionOutputs` 同 jobInstance 边界外的字段透传
 
-**配置例**:见 `docs/architecture/workflow-dependency-guide.md §10.3`。
+**配置例**:见 `docs/architecture/workflow-dependency-guide.md §10.3` + `multi-tenant-seed.sql:558-559`(wf_probe_mixed.REPORT 节点 e2e 锚点)。
 
 ### S5 — 次级清单(随手优化,不阻塞主线)
 
@@ -289,15 +296,19 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
 | c | trigger SecurityIntegrationTest 守护补齐 | 1 天 | S1 已落 Security,但若 CI 还没有"无 token → 401"守护测试,补一个;同款扩到 console/orchestrator |
 | d | 真删 `X-Console-Token` 兼容路径 | 1-2 天 | 当所有前端都切到 JWT 后,从 `ConsoleSecurityProperties` / 应用 yaml / OpenAPI 彻底删除 legacy header 分支(不再 deprecated 而是物理删除) |
 
-### 节奏建议(2026-04-30 第二轮校正,大量"原标未完成实际已完成"清账后)
+### 节奏建议(2026-04-30 第四轮校正)
 
 ```
-✅ DONE(本评估会话累计 9 commits):
+✅ DONE(本评估会话累计 12 commits):
   S0   - 评估口径校正(deep-issue/backlog/fix-report 滚 v6/v7) — 8ac1ea2d
   S5-d - 真删 X-Console-Token compat 路径(主代码 + yaml + OpenAPI + 测试) — ff20c36f
   S5-c - TriggerSecurityFilterTest 守护 5 类边界 — e8e48a6e
-  S4 Stage 1/1.2/2/3 - DSL 基础设施全栈(DDL + worker outputs 上报 + resolver + 集成 + §10 文档)
+  S4 Stage 1/1.2/2/3 - DSL 基础设施全栈(DDL + 协议层 outputs + 4 worker NODE_OUTPUTS +
+                       orchestrator 持久化 + WorkflowParamResolver + dispatchService 集成
+                       + §10 文档 + e2e seed 锚点) — a9469407(实装) / 8b520102(文档)
   ADR-010 草稿 - trigger 异步解耦完整路线图 + Schema/协议/灰度策略 — e1b37cfd
+  Worker 73 处 failure 迁 i18n 三元组 - c74a9644(V78 八表 errorKey 真生效)
+  SqlPlugin i18n key 收尾 - 4e634c7c
   半完成基类重构 + i18n 业务路径收口 - 4e634c7c / 23137b2c
 
 🔴 实施中(独立分支 feat/adr-010-trigger-async):
@@ -311,12 +322,23 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
        Stage 7: 旧 HTTP 同步路径 deprecation + 物理删除(0.5d, 1 个 minor 后)
 
 🟡 deferred(基础设施完备,触发条件出现再做):
-  S4 Stage 4 - 给具体 workflow 配 DSL(目前 seed 3 个 workflow 没需要,业务设计跨节点
-              参数串联时按 §10 文档配置)
+  S4 Stage 4 业务全量配 DSL - 目前 wf_probe_mixed 已配 e2e 锚点,业务方 workflow 跨节点
+                              参数串联需求出现时按 §10 文档/§10.3 配置例配
   S5-a I4 buildContext 模板抽取(等 4 个 *JobContext 出现共同基类时再做)
   S5-b i18n 测试债二轮扫(23137b2c 已收 9 处,剩余按需)
+
+🟠 下次评估必须复核(累计发现的口径漂移):
+  - deep-issue §1+§2+§5+§6 已修但未滚版到 v5
+  - ADR-009 Stage 1.2/2/3 第三轮速判误标已落,实际本会话 a9469407 才全栈
+  - 评估口径与代码事实差距曾达 2-4 周
 ```
 
-> **注**:本评估三轮校正(2026-04-30 起)累计发现 5 项原标"未完成"实际已落地(S1 trigger Security / S2 god service 拆分 / S4 Stage 1.2 / S4 Stage 2 / S4 Stage 3),原报告评估口径滞后于代码事实约 2-4 周。下次评估**强制要求**同步滚 deep-issue / hardening-backlog,避免再次发生口径漂移。
+> **注**:本评估四轮校正(2026-04-30 起)累计发现 6 项原标"未完成/已完成"与实地代码不符:
+> - 第一轮: S1 trigger Security / S2 god service 拆分(实际已完成)
+> - 第二轮: ADR-009 Stage 2/3(实际已完成)
+> - 第三轮: ADR-009 Stage 1.2(声称已完成,实际仅 V72 schema)
+> - 第四轮: ADR-009 Stage 1.2/2/3 全栈本会话 `a9469407` 真正落地
+>
+> 下次评估**强制要求**:(1) 同步滚 deep-issue / hardening-backlog;(2) 关键模块先 grep 验证(如 `WorkflowParamResolver` / `outputs` 字段)再下结论,避免速判;(3) ADR Stage 状态以"全栈 grep + 单测全绿 + commit ref"为权威。
 
 每个里程碑结束更新 `hardening-backlog.md` + 在本目录追加新评估快照(命名 `project-assessment-YYYY-MM-DD.md`)。下次评估应同时滚 deep-issue-analysis 和 hardening-backlog,避免本次"评估口径滞后于代码"再发生。
