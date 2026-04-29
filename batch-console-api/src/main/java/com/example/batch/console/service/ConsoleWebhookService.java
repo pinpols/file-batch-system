@@ -36,49 +36,47 @@ public class ConsoleWebhookService {
             () -> BizException.of(ResultCode.NOT_FOUND, "error.webhook.subscription_not_found"));
   }
 
-  public WebhookSubscriptionEntity createSubscription(
-      String tenantId,
-      String name,
-      String callbackUrl,
-      String eventTypes,
-      String secret,
-      boolean enabled,
-      String operator) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    callbackUrlValidator.validate(callbackUrl);
+  public WebhookSubscriptionEntity createSubscription(CreateSubscriptionCommand command) {
+    String resolved = tenantGuard.resolveTenant(command.tenantId());
+    callbackUrlValidator.validate(command.callbackUrl());
     subscriptionRepository
-        .findByTenantAndName(resolved, name)
+        .findByTenantAndName(resolved, command.name())
         .ifPresent(
             existing -> {
               throw BizException.of(ResultCode.CONFLICT, "error.webhook.subscription_exists");
             });
     subscriptionRepository.insert(
-        resolved, name, callbackUrl, normalizeEventTypes(eventTypes), secret, enabled, operator);
+        resolved,
+        command.name(),
+        command.callbackUrl(),
+        normalizeEventTypes(command.eventTypes()),
+        command.secret(),
+        command.enabled(),
+        command.operator());
     return subscriptionRepository
-        .findByTenantAndName(resolved, name)
+        .findByTenantAndName(resolved, command.name())
         .orElseThrow(
             () ->
                 BizException.of(
                     ResultCode.SYSTEM_ERROR, "error.webhook.subscription_created_but_not_found"));
   }
 
-  public WebhookSubscriptionEntity updateSubscription(
-      String tenantId,
-      Long id,
-      String callbackUrl,
-      String eventTypes,
-      String secret,
-      boolean enabled,
-      String operator) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    if (subscriptionRepository.findByTenantAndId(resolved, id).isEmpty()) {
+  public WebhookSubscriptionEntity updateSubscription(UpdateSubscriptionCommand command) {
+    String resolved = tenantGuard.resolveTenant(command.tenantId());
+    if (subscriptionRepository.findByTenantAndId(resolved, command.id()).isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.webhook.subscription_not_found");
     }
-    callbackUrlValidator.validate(callbackUrl);
+    callbackUrlValidator.validate(command.callbackUrl());
     subscriptionRepository.update(
-        resolved, id, callbackUrl, normalizeEventTypes(eventTypes), secret, enabled, operator);
+        resolved,
+        command.id(),
+        command.callbackUrl(),
+        normalizeEventTypes(command.eventTypes()),
+        command.secret(),
+        command.enabled(),
+        command.operator());
     return subscriptionRepository
-        .findByTenantAndId(resolved, id)
+        .findByTenantAndId(resolved, command.id())
         .orElseThrow(
             () ->
                 BizException.of(
@@ -121,4 +119,22 @@ public class ConsoleWebhookService {
     }
     return normalized;
   }
+
+  public record CreateSubscriptionCommand(
+      String tenantId,
+      String name,
+      String callbackUrl,
+      String eventTypes,
+      String secret,
+      boolean enabled,
+      String operator) {}
+
+  public record UpdateSubscriptionCommand(
+      String tenantId,
+      Long id,
+      String callbackUrl,
+      String eventTypes,
+      String secret,
+      boolean enabled,
+      String operator) {}
 }

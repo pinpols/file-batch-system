@@ -91,8 +91,10 @@ public class DefaultConsoleWorkflowDefinitionApplicationService
     WorkflowDefinitionEntity existing =
         definitionMapper.selectByUniqueKey(resolvedTenant, request.getWorkflowCode(), 1);
     if (existing != null) {
-      throw new BizException(
-          ResultCode.CONFLICT, "Workflow definition already exists: " + request.getWorkflowCode());
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.common.conflict_detail",
+          "Workflow definition already exists: " + request.getWorkflowCode());
     }
 
     WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();

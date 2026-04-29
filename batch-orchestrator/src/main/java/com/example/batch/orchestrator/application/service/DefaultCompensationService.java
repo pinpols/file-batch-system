@@ -198,8 +198,9 @@ public class DefaultCompensationService implements CompensationService {
     String compensationType = normalizeType(command.compensationType());
     CompensationHandler handler = handlersByType.get(compensationType);
     if (handler == null) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           "unsupported compensationType: " + command.compensationType());
     }
     return handler.handle(command, commandNo, traceId, entity);

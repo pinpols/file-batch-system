@@ -47,8 +47,10 @@ public class DefaultConsoleResourceQueueApplicationService
     Map<String, Object> existing =
         resourceQueueMapper.selectByUniqueKey(tenantId, request.getQueueCode());
     if (existing != null) {
-      throw new BizException(
-          ResultCode.CONFLICT, "queue code already exists: " + request.getQueueCode());
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.common.conflict_detail",
+          "queue code already exists: " + request.getQueueCode());
     }
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);

@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.batch.common.enums.ResultCode;
+import com.example.batch.common.exception.BizException;
 import com.example.batch.worker.core.domain.PipelineStepDefinition;
 import com.example.batch.worker.core.domain.StepExecutionRequest;
 import com.example.batch.worker.core.domain.StepExecutionResponse;
@@ -65,6 +67,43 @@ class ProcessStepExecutionAdapterTest {
     assertThat(contextCaptor.getValue().getAttributes())
         .containsEntry("processImplCode", "dailySummary");
     verify(runtimeRepository).markPipelineSuccess(20L, "PREPARE", "PREPARE");
+  }
+
+  @Test
+  void execute_preservesLocalizedErrorFromFailedStageResult() {
+    ObjectMapper objectMapper = new ObjectMapper();
+    ProcessStepExecutionAdapter adapter =
+        new ProcessStepExecutionAdapter(processStageExecutor, objectMapper, runtimeRepository);
+    when(runtimeRepository.ensurePipelineDefinition(
+            eq("tenant-a"),
+            eq("job-process"),
+            eq("PROCESS"),
+            eq("worker-process"),
+            any(),
+            anyList()))
+        .thenReturn(10L);
+    when(runtimeRepository.loadPipelineSteps(10L)).thenReturn(List.of(processStep()));
+    when(runtimeRepository.createPipelineInstance(any())).thenReturn(20L);
+    when(processStageExecutor.execute(any()))
+        .thenReturn(
+            List.of(
+                ProcessStageResult.failure(
+                    ProcessStage.PREPARE,
+                    "PROCESS_PREPARE_FAILED",
+                    BizException.of(
+                        ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"),
+                    objectMapper)));
+    StepExecutionRequest request =
+        new StepExecutionRequest(
+            "tenant-a", "job-process", "PROCESS", "worker-1", Map.of("payload", "{}"));
+
+    StepExecutionResponse response = adapter.execute(request);
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo("PROCESS_PREPARE_FAILED");
+    assertThat(response.message()).isEqualTo("error.common.invalid_argument");
+    assertThat(response.errorKey()).isEqualTo("error.common.invalid_argument");
+    assertThat(response.errorArgs()).isEqualTo("[\"bad spec\"]");
   }
 
   private PipelineStepDefinition processStep() {

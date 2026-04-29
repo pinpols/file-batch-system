@@ -43,8 +43,10 @@ public class DefaultConsoleBatchWindowApplicationService
     Map<String, Object> existing =
         batchWindowMapper.selectByUniqueKey(tenantId, request.getWindowCode());
     if (existing != null) {
-      throw new BizException(
-          ResultCode.CONFLICT, "window code already exists: " + request.getWindowCode());
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.common.conflict_detail",
+          "window code already exists: " + request.getWindowCode());
     }
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);

@@ -50,8 +50,10 @@ public class WorkflowRunManagementApplicationService {
   public Map<String, Object> terminate(String tenantId, Long id) {
     WorkflowRunEntity run = findRun(tenantId, id);
     if (!TERMINABLE.contains(run.getRunStatus())) {
-      throw new BizException(
-          ResultCode.STATE_CONFLICT, "cannot terminate from " + run.getRunStatus());
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
+          "cannot terminate from " + run.getRunStatus());
     }
     workflowRunMapper.updateStatus(
         tenantId, id, STATUS_TERMINATED, run.getCurrentNodeCode(), Instant.now());
@@ -68,8 +70,9 @@ public class WorkflowRunManagementApplicationService {
             workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(id, nodeCode),
             "node run not found: " + nodeCode);
     if (!"FAILED".equals(nodeRun.getNodeStatus())) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
           "can only skip FAILED nodes, current: " + nodeRun.getNodeStatus());
     }
     workflowNodeRunMapper.updateStatus(

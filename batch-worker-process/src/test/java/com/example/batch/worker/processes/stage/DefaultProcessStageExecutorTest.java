@@ -142,7 +142,9 @@ class DefaultProcessStageExecutorTest {
   void execute_returnsBusinessError_whenPluginPrepareThrowsBizException() {
     ProcessComputePlugin plugin = mock(ProcessComputePlugin.class);
     when(plugin.implCode()).thenReturn("p1");
-    willThrow(new BizException(ResultCode.INVALID_ARGUMENT, "bad spec"))
+    willThrow(
+            BizException.of(
+                ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad spec"))
         .given(plugin)
         .prepare(any());
 
@@ -160,8 +162,17 @@ class DefaultProcessStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.BUSINESS_ERROR.name());
-    assertThat(results.get(0).message()).isEqualTo("bad spec");
-    verify(runtimeRepository).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any());
+    assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
+    assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
+    assertThat(results.get(0).errorArgs()).isEqualTo("[\"bad spec\"]");
+    verify(runtimeRepository)
+        .finishStepRunFailure(
+            eq(STEP_RUN_ID),
+            eq(StageFailureCode.BUSINESS_ERROR.name()),
+            eq("error.common.invalid_argument"),
+            eq("error.common.invalid_argument"),
+            eq("[\"bad spec\"]"),
+            any());
   }
 
   @Test

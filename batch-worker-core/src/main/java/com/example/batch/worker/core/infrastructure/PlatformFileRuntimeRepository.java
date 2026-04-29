@@ -300,11 +300,32 @@ public class PlatformFileRuntimeRepository {
 
   public void finishStepRunFailure(
       Long stepRunId, String errorCode, String errorMessage, Object outputSummary) {
-    finishStepRun(stepRunId, "FAILED", errorCode, errorMessage, outputSummary);
+    finishStepRunFailure(stepRunId, errorCode, errorMessage, null, null, outputSummary);
+  }
+
+  public void finishStepRunFailure(
+      Long stepRunId,
+      String errorCode,
+      String errorMessage,
+      String errorKey,
+      String errorArgs,
+      Object outputSummary) {
+    finishStepRun(stepRunId, "FAILED", errorCode, errorMessage, errorKey, errorArgs, outputSummary);
   }
 
   private void finishStepRun(
       Long stepRunId, String status, String errorCode, String errorMessage, Object outputSummary) {
+    finishStepRun(stepRunId, status, errorCode, errorMessage, null, null, outputSummary);
+  }
+
+  private void finishStepRun(
+      Long stepRunId,
+      String status,
+      String errorCode,
+      String errorMessage,
+      String errorKey,
+      String errorArgs,
+      Object outputSummary) {
     if (stepRunId == null) {
       return;
     }
@@ -314,7 +335,9 @@ public class PlatformFileRuntimeRepository {
             "status", status,
             "outputSummaryJson", toJson(outputSummary),
             "errorCode", errorCode,
-            "errorMessage", truncate(errorMessage, 1024)));
+            "errorMessage", truncate(errorMessage, 1024),
+            "errorKey", errorKey,
+            "errorArgs", errorArgs));
   }
 
   @Transactional

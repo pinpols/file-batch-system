@@ -133,8 +133,9 @@ public class ConsoleTenantApplicationService {
     long workflows = workflowRunMapper.countByStatuses(tenantId, ACTIVE_WORKFLOW_STATUSES);
     long total = jobs + pipelines + workflows;
     if (total > 0) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.BUSINESS_ERROR,
+          "error.common.business_error_detail",
           "cannot suspend tenant with active instances"
               + " (jobs="
               + jobs

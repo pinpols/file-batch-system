@@ -58,9 +58,10 @@ public final class ChannelConfigMerge {
           // ── NAS ──
           "nas_remote_directory",
           "nas_remote_file_name",
-          // ── API / API_PUSH ──
+          // ── API / API_PUSH / async receipt polling ──
           "api_push_api_key",
-          "authorization");
+          "authorization",
+          "receipt_poll_url");
 
   /**
    * 兼容历史 seed / 手工录入的短键名；merge 时统一折叠为运行时消费的规范键。

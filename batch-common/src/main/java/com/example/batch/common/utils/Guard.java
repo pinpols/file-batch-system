@@ -27,7 +27,7 @@ public final class Guard {
    * <pre>{@code
    * // Before
    * JobInstanceEntity entity = mapper.selectById(tenantId, id);
-   * if (entity == null) throw new BizException(ResultCode.NOT_FOUND, "job instance not found");
+   * if (entity == null) throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", "job instance not found");
    *
    * // After
    * JobInstanceEntity entity = Guard.requireFound(mapper.selectById(tenantId, id), "job instance not found");
@@ -35,7 +35,7 @@ public final class Guard {
    */
   public static <T> T requireFound(T entity, String message) {
     if (entity == null) {
-      throw new BizException(ResultCode.NOT_FOUND, message);
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", message);
     }
     return entity;
   }
@@ -43,14 +43,16 @@ public final class Guard {
   /** 字符串非空断言（用于 Command/内部参数，不替代 Controller 层的 @Valid）。 */
   public static void requireText(String str, String message) {
     if (!Texts.hasText(str)) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, message);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", message);
     }
   }
 
   /** 通用业务条件断言。 */
   public static void require(boolean condition, String message) {
     if (!condition) {
-      throw new BizException(ResultCode.INVALID_ARGUMENT, message);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument_detail", message);
     }
   }
 
@@ -60,16 +62,35 @@ public final class Guard {
    */
   public static void require(boolean condition, ResultCode resultCode, String message) {
     if (!condition) {
-      throw new BizException(
-          resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode, message);
+      ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
+      throw BizException.of(code, detailKey(code), message);
     }
   }
 
   /** S-1.9：带错误码的字符串非空断言。 */
   public static void requireText(String str, ResultCode resultCode, String message) {
     if (!Texts.hasText(str)) {
-      throw new BizException(
-          resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode, message);
+      ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
+      throw BizException.of(code, detailKey(code), message);
     }
+  }
+
+  private static String detailKey(ResultCode code) {
+    return switch (code) {
+      case NOT_FOUND -> "error.common.not_found_detail";
+      case CONFLICT -> "error.common.conflict_detail";
+      case STATE_CONFLICT -> "error.common.state_conflict_detail";
+      case UNAUTHORIZED -> "error.common.unauthorized_detail";
+      case FORBIDDEN -> "error.common.forbidden_detail";
+      case RATE_LIMITED -> "error.common.rate_limited_detail";
+      case BUSINESS_ERROR -> "error.common.business_error_detail";
+      case NOT_IMPLEMENTED -> "error.common.not_implemented_detail";
+      case SERVICE_UNAVAILABLE -> "error.common.service_unavailable_detail";
+      case SYSTEM_ERROR -> "error.common.system_error_detail";
+      case INVALID_ARGUMENT -> "error.common.invalid_argument_detail";
+      case VALIDATION_ERROR -> "error.common.validation_failed_detail";
+      case MISSING_IDEMPOTENCY_KEY -> "error.common.missing_idempotency_key_detail";
+      case SUCCESS -> "error.common.success_detail";
+    };
   }
 }

@@ -11,6 +11,8 @@ import com.example.batch.common.exception.BizException;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.repository.ConsoleWebhookDeliveryLogRepository;
 import com.example.batch.console.repository.ConsoleWebhookSubscriptionRepository;
+import com.example.batch.console.service.ConsoleWebhookService.CreateSubscriptionCommand;
+import com.example.batch.console.service.ConsoleWebhookService.UpdateSubscriptionCommand;
 import com.example.batch.console.support.CallbackUrlValidator;
 import com.example.batch.console.support.ConsoleTenantGuard;
 import java.util.List;
@@ -83,7 +85,14 @@ class ConsoleWebhookServiceTest {
 
     WebhookSubscriptionEntity result =
         service.createSubscription(
-            "t1", "hook-new", "https://example.com/hook", "JOB_SUCCESS", "secret", true, "admin");
+            new CreateSubscriptionCommand(
+                "t1",
+                "hook-new",
+                "https://example.com/hook",
+                "JOB_SUCCESS",
+                "secret",
+                true,
+                "admin"));
 
     assertThat(result.getName()).isEqualTo("hook-new");
     verify(subscriptionRepository)
@@ -101,13 +110,14 @@ class ConsoleWebhookServiceTest {
     assertThatThrownBy(
             () ->
                 service.createSubscription(
-                    "t1",
-                    "hook-dup",
-                    "https://example.com/hook",
-                    "JOB_SUCCESS",
-                    "secret",
-                    true,
-                    "admin"))
+                    new CreateSubscriptionCommand(
+                        "t1",
+                        "hook-dup",
+                        "https://example.com/hook",
+                        "JOB_SUCCESS",
+                        "secret",
+                        true,
+                        "admin")))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("subscription_exists");
   }
@@ -129,7 +139,8 @@ class ConsoleWebhookServiceTest {
 
     WebhookSubscriptionEntity result =
         service.updateSubscription(
-            "t1", 1L, "https://new-url.com", "JOB_FAILED", "new-secret", false, "admin");
+            new UpdateSubscriptionCommand(
+                "t1", 1L, "https://new-url.com", "JOB_FAILED", "new-secret", false, "admin"));
 
     assertThat(result).isNotNull();
     verify(subscriptionRepository)
@@ -143,7 +154,8 @@ class ConsoleWebhookServiceTest {
     assertThatThrownBy(
             () ->
                 service.updateSubscription(
-                    "t1", 99L, "https://example.com", "JOB_SUCCESS", "s", true, "admin"))
+                    new UpdateSubscriptionCommand(
+                        "t1", 99L, "https://example.com", "JOB_SUCCESS", "s", true, "admin")))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("not_found");
   }
@@ -167,13 +179,14 @@ class ConsoleWebhookServiceTest {
         .thenReturn(Optional.of(created));
 
     service.createSubscription(
-        "t1",
-        "hook-norm",
-        "https://example.com/hook",
-        "job-success, JOB_FAILED",
-        "secret",
-        true,
-        "admin");
+        new CreateSubscriptionCommand(
+            "t1",
+            "hook-norm",
+            "https://example.com/hook",
+            "job-success, JOB_FAILED",
+            "secret",
+            true,
+            "admin"));
 
     verify(subscriptionRepository)
         .insert(

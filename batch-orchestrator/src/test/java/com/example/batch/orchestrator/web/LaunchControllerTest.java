@@ -67,12 +67,14 @@ class LaunchControllerTest {
   void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
     when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
     when(launchService.launch(any()))
-        .thenThrow(new BizException(ResultCode.INVALID_ARGUMENT, "bad request"));
+        .thenThrow(
+            BizException.of(
+                ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument", "bad request"));
 
     mockMvc
         .perform(post("/internal/orchestrator/launch").contentType(APPLICATION_JSON).content("{}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value(ResultCode.INVALID_ARGUMENT.name()))
-        .andExpect(jsonPath("$.message").value("bad request"));
+        .andExpect(jsonPath("$.message").value("error.common.invalid_argument"));
   }
 }

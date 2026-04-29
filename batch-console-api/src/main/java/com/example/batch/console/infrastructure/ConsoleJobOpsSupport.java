@@ -220,8 +220,10 @@ class ConsoleJobOpsSupport {
     try {
       return TriggerType.valueOf(triggerTypeValue.trim().toUpperCase());
     } catch (IllegalArgumentException exception) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "unsupported triggerType: " + triggerTypeValue);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "unsupported triggerType: " + triggerTypeValue);
     }
   }
 

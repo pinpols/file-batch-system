@@ -281,8 +281,10 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     } catch (BizException e) {
       throw e;
     } catch (Exception e) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "failed to read excel workbook: " + e.getMessage());
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "failed to read excel workbook: " + e.getMessage());
     }
   }
 
@@ -810,8 +812,9 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
       String sheetName, Map<String, Integer> headerIndex, Set<String> required) {
     List<String> missing = required.stream().filter(h -> !headerIndex.containsKey(h)).toList();
     if (!missing.isEmpty()) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           "sheet [" + sheetName + "] missing required headers: " + missing);
     }
   }

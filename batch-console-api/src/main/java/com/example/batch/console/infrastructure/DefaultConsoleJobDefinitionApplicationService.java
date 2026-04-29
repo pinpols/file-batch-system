@@ -62,8 +62,10 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity existing =
         jobDefinitionMapper.selectByUniqueKey(tenantId, request.getJobCode());
     if (existing != null) {
-      throw new BizException(
-          ResultCode.CONFLICT, "job code already exists: " + request.getJobCode());
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.common.conflict_detail",
+          "job code already exists: " + request.getJobCode());
     }
     JobDefinitionEntity entity = new JobDefinitionEntity();
     entity.setTenantId(tenantId);
@@ -209,8 +211,10 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionEntity existing =
         jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode());
     if (existing != null) {
-      throw new BizException(
-          ResultCode.CONFLICT, "job code already exists: " + request.getNewJobCode());
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.common.conflict_detail",
+          "job code already exists: " + request.getNewJobCode());
     }
     String operator = requestMetadataResolver.current().operatorId();
     jobDefinitionMapper.copyJobDefinition(resolved, id, request.getNewJobCode(), operator);

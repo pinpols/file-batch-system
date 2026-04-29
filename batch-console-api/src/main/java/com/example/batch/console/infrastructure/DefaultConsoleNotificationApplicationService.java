@@ -87,8 +87,10 @@ public class DefaultConsoleNotificationApplicationService
     Guard.requireText(channelName, "channelName is required");
     String channelType = str(params, KEY_CHANNEL_TYPE);
     if (!CHANNEL_TYPES.contains(channelType)) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "channelType must be one of " + CHANNEL_TYPES);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "channelType must be one of " + CHANNEL_TYPES);
     }
     if (channelMapper.selectByCode(resolved, channelCode) != null) {
       throw BizException.of(
@@ -123,8 +125,10 @@ public class DefaultConsoleNotificationApplicationService
         channelMapper.selectByCode(resolved, channelCode), ERR_CHANNEL_NOT_FOUND + channelCode);
     String channelType = str(params, KEY_CHANNEL_TYPE);
     if (channelType != null && !CHANNEL_TYPES.contains(channelType)) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "channelType must be one of " + CHANNEL_TYPES);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "channelType must be one of " + CHANNEL_TYPES);
     }
     String operator = metadataResolver.current().operatorId();
     channelMapper.update(

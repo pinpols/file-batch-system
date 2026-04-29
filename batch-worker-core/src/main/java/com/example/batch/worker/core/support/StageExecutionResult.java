@@ -14,4 +14,14 @@ public interface StageExecutionResult {
   String code();
 
   String message();
+
+  /** i18n message key;null 表示老 literal / 第三方异常。 */
+  default String errorKey() {
+    return null;
+  }
+
+  /** i18n args JSON array;与 {@link #errorKey()} 一起持久化。 */
+  default String errorArgs() {
+    return null;
+  }
 }

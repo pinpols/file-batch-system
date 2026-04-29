@@ -608,8 +608,9 @@ public class DefaultConsoleWorkflowExcelApplicationService
     DataFormatter formatter = new DataFormatter();
     Row headerRow = sheet.getRow(sheet.getFirstRowNum());
     if (headerRow == null) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           "excel header row is missing for sheet: " + sheet.getSheetName());
     }
     Map<String, Integer> headerIndex = readHeaderIndex(headerRow, formatter);
@@ -1230,8 +1231,9 @@ public class DefaultConsoleWorkflowExcelApplicationService
     Set<String> missing = new LinkedHashSet<>(requiredHeaders);
     missing.removeAll(headerIndex.keySet());
     if (!missing.isEmpty()) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           "excel header missing for sheet " + sheetName + ": " + String.join(", ", missing));
     }
   }
@@ -1314,8 +1316,10 @@ public class DefaultConsoleWorkflowExcelApplicationService
     } catch (BizException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "failed to read excel workbook: " + exception.getMessage());
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "failed to read excel workbook: " + exception.getMessage());
     }
   }
 

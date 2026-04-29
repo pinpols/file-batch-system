@@ -11,6 +11,7 @@ import com.example.batch.orchestrator.domain.entity.OutboxEventEntity;
 import com.example.batch.orchestrator.domain.query.OutboxEventQuery;
 import com.example.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import com.example.batch.orchestrator.mapper.OutboxEventMapper;
+import io.micrometer.core.annotation.Timed;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,6 +61,10 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
   private final BatchOrchestratorGovernanceProperties governance;
 
   @Override
+  @Timed(
+      value = "batch.outbox.publish.duration",
+      description = "Outbox batch publish latency including Kafka acknowledgements",
+      histogram = true)
   @Retryable(
       retryFor = {
         CannotAcquireLockException.class,

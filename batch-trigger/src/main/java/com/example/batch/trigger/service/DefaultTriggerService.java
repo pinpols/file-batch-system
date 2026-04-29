@@ -391,16 +391,20 @@ public class DefaultTriggerService implements TriggerService {
   private void assertTenantActive(String tenantId) {
     String status = tenantStatusMapper.selectStatus(tenantId);
     if ("SUSPENDED".equals(status)) {
-      throw new BizException(
-          ResultCode.BUSINESS_ERROR, "tenant is suspended, triggers are not allowed: " + tenantId);
+      throw BizException.of(
+          ResultCode.BUSINESS_ERROR,
+          "error.common.business_error_detail",
+          "tenant is suspended, triggers are not allowed: " + tenantId);
     }
   }
 
   private void validateRequest(TriggerLaunchCommand command) {
     Guard.require(command != null, "launch command is required");
     if (command.idempotencyKey() == null || command.idempotencyKey().isBlank()) {
-      throw new BizException(
-          ResultCode.MISSING_IDEMPOTENCY_KEY, ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
+      throw BizException.of(
+          ResultCode.MISSING_IDEMPOTENCY_KEY,
+          "error.common.missing_idempotency_key_detail",
+          ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
     }
     if (command.request() == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");

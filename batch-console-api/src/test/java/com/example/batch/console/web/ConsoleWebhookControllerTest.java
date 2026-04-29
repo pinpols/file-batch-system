@@ -1,7 +1,6 @@
 package com.example.batch.console.web;
 
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -15,6 +14,7 @@ import com.example.batch.common.dto.ResponseMeta;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleWebhookService;
+import com.example.batch.console.service.ConsoleWebhookService.CreateSubscriptionCommand;
 import com.example.batch.console.support.ConsoleApiExceptionHandler;
 import com.example.batch.console.support.ConsoleRequestMetadata;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
@@ -85,14 +85,7 @@ class ConsoleWebhookControllerTest {
     entity.setCallbackUrl("https://callback.example/webhook");
     entity.setEventTypes("JOB-INSTANCE-UPDATED");
     entity.setEnabled(true);
-    when(webhookService.createSubscription(
-            anyString(),
-            anyString(),
-            anyString(),
-            anyString(),
-            anyString(),
-            anyBoolean(),
-            anyString()))
+    when(webhookService.createSubscription(any(CreateSubscriptionCommand.class)))
         .thenReturn(entity);
 
     mockMvc

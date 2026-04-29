@@ -40,8 +40,10 @@ public class ConsoleArchivePolicyService {
     String resolved = tenantGuard.resolveTenant(param.tenantId());
     String normalized = param.targetTable().toLowerCase(Locale.ROOT);
     if (!VALID_TABLES.contains(normalized)) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "target_table must be one of: " + VALID_TABLES);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "target_table must be one of: " + VALID_TABLES);
     }
     if (param.retentionDays() < 1) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.retention_days_min");

@@ -49,8 +49,10 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     long existing = calendarMapper.countByQuery(tenantId, request.getCalendarCode(), null);
     if (existing > 0) {
-      throw new BizException(
-          ResultCode.CONFLICT, "calendar code already exists: " + request.getCalendarCode());
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.common.conflict_detail",
+          "calendar code already exists: " + request.getCalendarCode());
     }
     Map<String, Object> params = new HashMap<>();
     params.put("tenantId", tenantId);

@@ -332,8 +332,10 @@ public class FileGovernanceRepository {
                 "metadataJson",
                 toJson(metadata)));
     if (updated <= 0) {
-      throw new BizException(
-          ResultCode.STATE_CONFLICT, "file status changed concurrently, expected " + currentStatus);
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
+          "file status changed concurrently, expected " + currentStatus);
     }
   }
 

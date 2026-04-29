@@ -85,7 +85,11 @@ class DefaultExportStageExecutorTest {
   @Test
   void execute_returnsBusinessError_whenStepThrowsBizException() {
     when(prepareStep.execute(any()))
-        .thenThrow(new BizException(ResultCode.INVALID_ARGUMENT, "invalid export config"));
+        .thenThrow(
+            BizException.of(
+                ResultCode.INVALID_ARGUMENT,
+                "error.common.invalid_argument",
+                "invalid export config"));
     ExportJobContext context = buildContext();
 
     List<ExportStageResult> results = executor.execute(context);
@@ -93,8 +97,16 @@ class DefaultExportStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.BUSINESS_ERROR.name());
-    assertThat(results.get(0).message()).isEqualTo("invalid export config");
-    verify(runtimeRepository).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any());
+    assertThat(results.get(0).message()).isEqualTo("error.common.invalid_argument");
+    assertThat(results.get(0).errorKey()).isEqualTo("error.common.invalid_argument");
+    verify(runtimeRepository)
+        .finishStepRunFailure(
+            eq(STEP_RUN_ID),
+            eq(StageFailureCode.BUSINESS_ERROR.name()),
+            eq("error.common.invalid_argument"),
+            eq("error.common.invalid_argument"),
+            eq("[\"invalid export config\"]"),
+            any());
   }
 
   @Test
@@ -108,7 +120,8 @@ class DefaultExportStageExecutorTest {
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
     assertThat(results.get(0).message()).isEqualTo("connection timeout");
-    verify(runtimeRepository).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any());
+    verify(runtimeRepository)
+        .finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
   }
 
   @Test

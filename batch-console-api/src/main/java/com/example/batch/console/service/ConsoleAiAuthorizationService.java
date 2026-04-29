@@ -28,8 +28,10 @@ public class ConsoleAiAuthorizationService {
     if (authentication == null
         || !authentication.isAuthenticated()
         || authentication instanceof AnonymousAuthenticationToken) {
-      throw new BizException(
-          ResultCode.FORBIDDEN, CommonErrorMessages.AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER);
+      throw BizException.of(
+          ResultCode.FORBIDDEN,
+          "error.common.forbidden_detail",
+          CommonErrorMessages.AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER);
     }
     String username = authentication.getName();
     Set<String> authorities = authorities(authentication.getAuthorities());
@@ -38,8 +40,10 @@ public class ConsoleAiAuthorizationService {
     boolean allowedByAuthority =
         properties.getAllowedAuthorities().stream().anyMatch(authorities::contains);
     if (!allowedByUser && !allowedByAuthority) {
-      throw new BizException(
-          ResultCode.FORBIDDEN, CommonErrorMessages.AI_ASSISTANT_ACCESS_NOT_GRANTED);
+      throw BizException.of(
+          ResultCode.FORBIDDEN,
+          "error.common.forbidden_detail",
+          CommonErrorMessages.AI_ASSISTANT_ACCESS_NOT_GRANTED);
     }
   }
 

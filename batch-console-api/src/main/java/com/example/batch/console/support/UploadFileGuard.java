@@ -98,8 +98,10 @@ public final class UploadFileGuard {
         reject(file, "file too short to determine type (< " + n + " bytes)");
       }
     } catch (IOException ex) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "failed to read upload: " + ex.getMessage());
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "failed to read upload: " + ex.getMessage());
     }
     return head;
   }
@@ -117,8 +119,9 @@ public final class UploadFileGuard {
   }
 
   private static void reject(MultipartFile file, String reason) {
-    throw new BizException(
+    throw BizException.of(
         ResultCode.INVALID_ARGUMENT,
+        "error.common.invalid_argument_detail",
         "file rejected: name=" + file.getOriginalFilename() + ", reason=" + reason);
   }
 }

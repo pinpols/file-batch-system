@@ -31,14 +31,14 @@ final class ConsoleQuerySupport {
 
   static <T> T requireNotNull(T value, String message) {
     if (value == null) {
-      throw new BizException(ResultCode.NOT_FOUND, message);
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", message);
     }
     return value;
   }
 
   static Map<String, Object> requireRow(Map<String, Object> row, String message) {
     if (row == null || row.isEmpty()) {
-      throw new BizException(ResultCode.NOT_FOUND, message);
+      throw BizException.of(ResultCode.NOT_FOUND, "error.common.not_found_detail", message);
     }
     return row;
   }
@@ -76,8 +76,9 @@ final class ConsoleQuerySupport {
     try {
       return LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant();
     } catch (DateTimeParseException exception) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           fieldName + " must be ISO-8601 datetime, yyyy-MM-dd HH:mm:ss, or yyyy-MM-dd");
     }
   }

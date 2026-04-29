@@ -245,8 +245,10 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
           case "SKIP_BATCH" -> "TIMEOUT";
           case "EMPTY_RUN", "TRIGGER_NOW" -> "TRIGGERED";
           default ->
-              throw new BizException(
-                  ResultCode.INVALID_ARGUMENT, "unsupported arrival action: " + command.action());
+              throw BizException.of(
+                  ResultCode.INVALID_ARGUMENT,
+                  "error.common.invalid_argument_detail",
+                  "unsupported arrival action: " + command.action());
         };
     if ("EMPTY_RUN".equals(action) && !toBoolean(groupFiles.get(0).get("allow_empty_run"))) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.arrival_group.empty_run_not_allowed");

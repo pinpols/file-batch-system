@@ -42,8 +42,10 @@ public class DefaultConsoleQuotaPolicyApplicationService
     Map<String, Object> existing =
         quotaPolicyMapper.selectByUniqueKey(tenantId, request.getPolicyCode());
     if (existing != null) {
-      throw new BizException(
-          ResultCode.CONFLICT, "policy code already exists: " + request.getPolicyCode());
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.common.conflict_detail",
+          "policy code already exists: " + request.getPolicyCode());
     }
     Map<String, Object> params = new HashMap<>();
     params.put("tenant_id", tenantId);
