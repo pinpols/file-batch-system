@@ -81,6 +81,39 @@ groups:
           summary: "Kafka consumer lag is high for {{ $labels.consumergroup }}"
           description: "Consumer group {{ $labels.consumergroup }} topic {{ $labels.topic }} partition {{ $labels.partition }} lag exceeds 1000 messages for 10 minutes."
 
+      - alert: BatchTaskClaimLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(batch_task_claim_duration_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: task
+        annotations:
+          summary: "Task claim latency is high for {{ $labels.job }}"
+          description: "P95 worker claim latency stayed above 2 seconds for 10 minutes. Check DB locks, worker_registry, and task assignment contention."
+
+      - alert: BatchOutboxPublishLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(batch_outbox_publish_duration_seconds_bucket[5m]))) > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: outbox
+        annotations:
+          summary: "Outbox publish latency is high"
+          description: "P95 outbox publish batch latency stayed above 5 seconds for 10 minutes. Check Kafka acknowledgements, producer pool saturation, and DB update latency."
+
+      - alert: BatchPipelineStepExecutionLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le, job) (rate(batch_pipeline_step_execution_duration_seconds_bucket[5m]))) > 60
+        for: 15m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: worker
+        annotations:
+          summary: "Pipeline step execution latency is high for {{ $labels.job }}"
+          description: "P95 worker pipeline step execution stayed above 60 seconds for 15 minutes. Inspect slow plugins, datasource latency, and file/object storage dependencies."
+
       - alert: BatchRedisMemoryUsageHigh
         expr: redis_memory_max_bytes > 0 and redis_memory_used_bytes / redis_memory_max_bytes > 0.80
         for: 10m
