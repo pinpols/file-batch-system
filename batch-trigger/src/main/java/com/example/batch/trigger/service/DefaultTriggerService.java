@@ -1,14 +1,18 @@
 package com.example.batch.trigger.service;
 
+import com.example.batch.common.dto.LaunchEnvelope;
 import com.example.batch.common.dto.LaunchRequest;
 import com.example.batch.common.dto.LaunchResponse;
+import com.example.batch.common.enums.OutboxPublishStatus;
 import com.example.batch.common.enums.ResultCode;
 import com.example.batch.common.enums.TriggerType;
 import com.example.batch.common.exception.BizException;
 import com.example.batch.common.exception.SystemException;
+import com.example.batch.common.persistence.entity.TriggerOutboxEventEntity;
 import com.example.batch.common.persistence.entity.TriggerRequestEntity;
 import com.example.batch.common.utils.CodeNormalizer;
 import com.example.batch.common.utils.Guard;
+import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.trigger.domain.OrchestratorTriggerAdapter;
 import com.example.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
@@ -16,10 +20,12 @@ import com.example.batch.trigger.domain.command.ScheduledTriggerCommand;
 import com.example.batch.trigger.domain.command.TriggerLaunchCommand;
 import com.example.batch.trigger.mapper.BusinessCalendarMapper;
 import com.example.batch.trigger.mapper.TenantStatusMapper;
+import com.example.batch.trigger.mapper.TriggerOutboxEventMapper;
 import com.example.batch.trigger.mapper.TriggerRequestMapper;
 import com.example.batch.trigger.support.CalendarBizDateDefinition;
 import com.example.batch.trigger.support.CalendarHolidayRule;
 import com.example.batch.trigger.support.TriggerCalendarConfig;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -28,6 +34,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -71,9 +78,18 @@ public class DefaultTriggerService implements TriggerService {
   private final LaunchAdapterService launchAdapterService;
   private final OrchestratorTriggerAdapter orchestratorTriggerAdapter;
   private final TriggerRequestMapper triggerRequestMapper;
+  private final TriggerOutboxEventMapper triggerOutboxEventMapper;
   private final BusinessCalendarMapper businessCalendarMapper;
   private final TenantStatusMapper tenantStatusMapper;
   private final PlatformTransactionManager transactionManager;
+
+  /**
+   * ADR-010 灰度开关。{@code true} 时 trigger 转发改走异步路径(同事务写 trigger_request + trigger_outbox_event,relay
+   * 异步发 Kafka,orchestrator 端 consumer 消费);{@code false} 时走原同步 HTTP 路径(deprecation 留 ADR-010 Stage
+   * 7)。
+   */
+  @Value("${batch.trigger.async-launch.enabled:false}")
+  private boolean asyncLaunchEnabled;
 
   @Override
   public LaunchResponse launch(TriggerLaunchCommand command) {
@@ -184,11 +200,65 @@ public class DefaultTriggerService implements TriggerService {
   }
 
   private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
+    if (asyncLaunchEnabled) {
+      // ADR-010: 异步路径 — 同事务写 trigger_request + trigger_outbox_event,
+      // relay 周期发 Kafka,orchestrator 端 consumer 消费 → /internal/launch 内部逻辑。
+      // trigger 立即返回 ACCEPTED,不走 HTTP 调用,完全不阻塞 Quartz fire 线程。
+      TriggerRequestEntity existing =
+          insertPendingAndOutboxOrReturnExisting(launchRequest, dedupKey);
+      if (existing != null) {
+        return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
+      }
+      // 同步路径下 forwardToOrchestrator 会把状态推到 ACCEPTED;异步路径下立即标 ACCEPTED 表示
+      // "已落库 outbox,业务侧视为已接收";真正 launch 由 orchestrator 端 consumer 异步完成
+      // 后由其它机制(例:对账定时器读 trigger_request status / consumer 回调)推进到 LAUNCHED。
+      triggerRequestMapper.updateRequestStatus(
+          launchRequest.tenantId(), launchRequest.requestId(), "ACCEPTED");
+      return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
+    }
+    // 同步 HTTP 路径(原行为)
     TriggerRequestEntity existing = insertPendingOrReturnExisting(launchRequest, dedupKey);
     if (existing != null) {
       return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
     }
     return forwardToOrchestrator(launchRequest);
+  }
+
+  /**
+   * ADR-010 异步路径:在 REQUIRES_NEW 单事务内 SELECT 去重 + INSERT trigger_request + INSERT
+   * trigger_outbox_event。两表一起提交,任何一步失败整体回滚 → 不会出现 "trigger_request 落库但 outbox 缺失" 的不一致。
+   */
+  private TriggerRequestEntity insertPendingAndOutboxOrReturnExisting(
+      LaunchRequest launchRequest, String dedupKey) {
+    TransactionTemplate tx = new TransactionTemplate(transactionManager);
+    tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    final TriggerRequestEntity[] existingHolder = new TriggerRequestEntity[1];
+    tx.execute(
+        _ -> {
+          TriggerRequestEntity existing =
+              triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
+          if (existing != null) {
+            existingHolder[0] = existing;
+            return null;
+          }
+          triggerRequestMapper.insert(buildPendingEntity(launchRequest, dedupKey));
+          triggerOutboxEventMapper.insert(buildOutboxEntity(launchRequest, dedupKey));
+          return null;
+        });
+    return existingHolder[0];
+  }
+
+  private TriggerOutboxEventEntity buildOutboxEntity(LaunchRequest r, String dedupKey) {
+    TriggerOutboxEventEntity entity = new TriggerOutboxEventEntity();
+    entity.setTenantId(r.tenantId());
+    entity.setRequestId(r.requestId());
+    entity.setTopic("batch.trigger.launch.v1");
+    entity.setPayload(JsonUtils.toJson(LaunchEnvelope.of(r, dedupKey, Instant.now())));
+    entity.setPublishStatus(OutboxPublishStatus.NEW.code());
+    entity.setPublishAttempt(0);
+    entity.setTraceId(r.traceId());
+    entity.setNextPublishAt(Instant.now());
+    return entity;
   }
 
   /**

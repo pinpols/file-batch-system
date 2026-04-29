@@ -42,6 +42,7 @@ class DefaultTriggerServiceTest {
   @Mock private LaunchAdapterService launchAdapterService;
   @Mock private OrchestratorTriggerAdapter orchestratorTriggerAdapter;
   @Mock private TriggerRequestMapper triggerRequestMapper;
+  @Mock private com.example.batch.trigger.mapper.TriggerOutboxEventMapper triggerOutboxEventMapper;
   @Mock private BusinessCalendarMapper businessCalendarMapper;
   @Mock private TenantStatusMapper tenantStatusMapper;
   @Mock private PlatformTransactionManager transactionManager;
@@ -58,6 +59,7 @@ class DefaultTriggerServiceTest {
             launchAdapterService,
             orchestratorTriggerAdapter,
             triggerRequestMapper,
+            triggerOutboxEventMapper,
             businessCalendarMapper,
             tenantStatusMapper,
             transactionManager);
@@ -230,7 +232,9 @@ class DefaultTriggerServiceTest {
                     new TriggerLaunchCommand(
                         validRequest(), "idem-susp", "req-susp", "trace-susp")))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("suspended");
+        .extracting(e -> ((BizException) e).getMessageArgs())
+        .satisfies(
+            args -> assertThat(java.util.Arrays.toString((Object[]) args)).contains("suspended"));
 
     verify(triggerRequestMapper, never()).insert(any());
     verify(orchestratorTriggerAdapter, never()).sendTrigger(any());
@@ -250,7 +254,9 @@ class DefaultTriggerServiceTest {
 
     assertThatThrownBy(() -> service.launchScheduled(command))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("suspended");
+        .extracting(e -> ((BizException) e).getMessageArgs())
+        .satisfies(
+            args -> assertThat(java.util.Arrays.toString((Object[]) args)).contains("suspended"));
   }
 
   private TriggerLaunchRequest validRequest() {
