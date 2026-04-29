@@ -69,8 +69,9 @@ public class DefaultConsoleFileTemplateApplicationService
     Map<String, Object> existing =
         mapper.selectByUniqueKey(tenantId, request.getTemplateCode(), version);
     if (existing != null) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.CONFLICT,
+          "error.common.conflict_detail",
           "template code + version already exists: " + request.getTemplateCode() + "/" + version);
     }
     String operator = requestMetadataResolver.current().operatorId();

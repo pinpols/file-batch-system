@@ -245,8 +245,11 @@ public class DefaultConsoleReportExcelApplicationService
       workbook.write(out);
       return out.toByteArray();
     } catch (Exception exception) {
-      throw new BizException(
-          ResultCode.SYSTEM_ERROR, "导出报表生成失败:" + exception.getMessage(), exception);
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR,
+          "error.common.system_error_detail",
+          exception,
+          "导出报表生成失败:" + exception.getMessage());
     }
   }
 
@@ -269,8 +272,11 @@ public class DefaultConsoleReportExcelApplicationService
           .sorted()
           .collect(Collectors.toCollection(ArrayList::new));
     } catch (Exception exception) {
-      throw new BizException(
-          ResultCode.SYSTEM_ERROR, "导出报表表头解析失败:" + exception.getMessage(), exception);
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR,
+          "error.common.system_error_detail",
+          exception,
+          "导出报表表头解析失败:" + exception.getMessage());
     }
   }
 
@@ -295,8 +301,11 @@ public class DefaultConsoleReportExcelApplicationService
           values.add(component == null ? null : component.getAccessor().invoke(row));
         }
       } catch (Exception exception) {
-        throw new BizException(
-            ResultCode.SYSTEM_ERROR, "导出报表 record 字段读取失败:" + exception.getMessage(), exception);
+        throw BizException.of(
+            ResultCode.SYSTEM_ERROR,
+            "error.common.system_error_detail",
+            exception,
+            "导出报表 record 字段读取失败:" + exception.getMessage());
       }
       return values;
     }
@@ -315,8 +324,11 @@ public class DefaultConsoleReportExcelApplicationService
                 : descriptor.getReadMethod().invoke(row));
       }
     } catch (Exception exception) {
-      throw new BizException(
-          ResultCode.SYSTEM_ERROR, "导出报表 bean 字段读取失败:" + exception.getMessage(), exception);
+      throw BizException.of(
+          ResultCode.SYSTEM_ERROR,
+          "error.common.system_error_detail",
+          exception,
+          "导出报表 bean 字段读取失败:" + exception.getMessage());
     }
     return values;
   }

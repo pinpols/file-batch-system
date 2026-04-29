@@ -57,8 +57,10 @@ public class DefaultConsoleFileChannelApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     Map<String, Object> existing = mapper.selectByUniqueKey(tenantId, request.getChannelCode());
     if (existing != null) {
-      throw new BizException(
-          ResultCode.CONFLICT, "channel code already exists: " + request.getChannelCode());
+      throw BizException.of(
+          ResultCode.CONFLICT,
+          "error.common.conflict_detail",
+          "channel code already exists: " + request.getChannelCode());
     }
     String operator = requestMetadataResolver.current().operatorId();
     FileChannelConfigUpsertParam param = new FileChannelConfigUpsertParam();

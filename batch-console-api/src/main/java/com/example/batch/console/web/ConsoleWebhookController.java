@@ -5,6 +5,8 @@ import com.example.batch.console.domain.entity.WebhookDeliveryLogEntity;
 import com.example.batch.console.domain.entity.WebhookSubscriptionEntity;
 import com.example.batch.console.service.ConsoleResponseFactory;
 import com.example.batch.console.service.ConsoleWebhookService;
+import com.example.batch.console.service.ConsoleWebhookService.CreateSubscriptionCommand;
+import com.example.batch.console.service.ConsoleWebhookService.UpdateSubscriptionCommand;
 import com.example.batch.console.support.ConsoleRequestMetadataResolver;
 import com.example.batch.console.support.Idempotent;
 import com.example.batch.console.web.request.CreateWebhookRequest;
@@ -63,13 +65,14 @@ public class ConsoleWebhookController {
     String operator = requestMetadataResolver.current().operatorId();
     return responseFactory.success(
         webhookService.createSubscription(
-            tenantId,
-            request.name(),
-            request.callbackUrl(),
-            String.join(",", request.eventTypes()),
-            request.secret(),
-            request.enabled() == null || request.enabled(),
-            operator));
+            new CreateSubscriptionCommand(
+                tenantId,
+                request.name(),
+                request.callbackUrl(),
+                String.join(",", request.eventTypes()),
+                request.secret(),
+                request.enabled() == null || request.enabled(),
+                operator)));
   }
 
   @PutMapping("/{id}")
@@ -80,13 +83,14 @@ public class ConsoleWebhookController {
     String operator = requestMetadataResolver.current().operatorId();
     return responseFactory.success(
         webhookService.updateSubscription(
-            tenantId,
-            id,
-            request.callbackUrl(),
-            String.join(",", request.eventTypes()),
-            request.secret(),
-            request.enabled() == null || request.enabled(),
-            operator));
+            new UpdateSubscriptionCommand(
+                tenantId,
+                id,
+                request.callbackUrl(),
+                String.join(",", request.eventTypes()),
+                request.secret(),
+                request.enabled() == null || request.enabled(),
+                operator)));
   }
 
   @DeleteMapping("/{id}")

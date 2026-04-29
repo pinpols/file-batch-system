@@ -43,8 +43,9 @@ public final class CodeNormalizer {
     }
     String upper = trimmed.toUpperCase(Locale.ROOT);
     if (!GROUP_PATTERN.matcher(upper).matches()) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           "invalid "
               + fieldName
               + " '"
@@ -64,8 +65,9 @@ public final class CodeNormalizer {
     }
     String lower = trimmed.toLowerCase(Locale.ROOT).replace('-', '_');
     if (!CONFIG_PATTERN.matcher(lower).matches()) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           "invalid "
               + fieldName
               + " '"

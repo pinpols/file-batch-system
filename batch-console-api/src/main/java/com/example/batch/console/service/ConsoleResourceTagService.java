@@ -77,8 +77,10 @@ public class ConsoleResourceTagService {
     Guard.requireText(resourceType, "resourceType is required");
     String normalized = resourceType.toUpperCase(Locale.ROOT);
     if (!VALID_RESOURCE_TYPES.contains(normalized)) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "resourceType must be one of: " + VALID_RESOURCE_TYPES);
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "resourceType must be one of: " + VALID_RESOURCE_TYPES);
     }
     return normalized;
   }

@@ -47,8 +47,10 @@ public final class FileStateMachine {
   public static void assertInitialStatus(String statusCode) {
     FileStatus status = parse(statusCode);
     if (!INITIAL_STATES.contains(status)) {
-      throw new BizException(
-          ResultCode.STATE_CONFLICT, "unsupported initial file status: " + statusCode);
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
+          "unsupported initial file status: " + statusCode);
     }
   }
 
@@ -61,8 +63,9 @@ public final class FileStateMachine {
     EnumSet<FileStatus> allowed =
         TRANSITIONS.getOrDefault(current, EnumSet.noneOf(FileStatus.class));
     if (!allowed.contains(next)) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
           "illegal file status transition: " + current.name() + " -> " + next.name());
     }
   }

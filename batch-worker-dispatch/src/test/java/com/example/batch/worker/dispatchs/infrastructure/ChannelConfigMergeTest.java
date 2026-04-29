@@ -33,6 +33,7 @@ class ChannelConfigMergeTest {
     cj.put("tenant_id", "should-not-override-column"); // 非白名单：忽略
     cj.put("enabled", false); // 策略字段：必须忽略（原黑名单漏了这个）
     cj.put("receipt_policy", "ASYNC"); // 策略字段：必须忽略
+    cj.put("receipt_poll_url", "http://callback.example/receipt"); // 回执轮询端点：允许
     cj.put("random_key", "x"); // 未注册：忽略
     row.put("config_json", cj);
 
@@ -40,6 +41,7 @@ class ChannelConfigMergeTest {
     assertThat(merged.get("tenant_id")).isEqualTo("t1");
     assertThat(merged.get("sftp_host")).isEqualTo("override.example.com");
     assertThat(merged.get("sftp_port")).isEqualTo(2222);
+    assertThat(merged.get("receipt_poll_url")).isEqualTo("http://callback.example/receipt");
     assertThat(merged).doesNotContainKeys("enabled", "receipt_policy", "random_key");
   }
 

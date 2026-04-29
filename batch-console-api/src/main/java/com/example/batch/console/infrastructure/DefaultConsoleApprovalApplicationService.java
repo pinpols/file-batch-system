@@ -98,8 +98,10 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             yield consoleJobApplicationService.approveCatchUp(request, approvalNo);
           }
           default ->
-              throw new BizException(
-                  ResultCode.INVALID_ARGUMENT, "unsupported approval action: " + actionType);
+              throw BizException.of(
+                  ResultCode.INVALID_ARGUMENT,
+                  "error.common.invalid_argument_detail",
+                  "unsupported approval action: " + actionType);
         };
     markExecutedRemote(tenantId, approvalNo);
     return result;

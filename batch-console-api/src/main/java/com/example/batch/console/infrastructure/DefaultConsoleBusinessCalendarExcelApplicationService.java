@@ -403,8 +403,10 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     } catch (BizException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw new BizException(
-          ResultCode.INVALID_ARGUMENT, "failed to read excel workbook: " + exception.getMessage());
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
+          "failed to read excel workbook: " + exception.getMessage());
     }
   }
 
@@ -656,8 +658,9 @@ public class DefaultConsoleBusinessCalendarExcelApplicationService
     Set<String> missing = new LinkedHashSet<>(requiredHeaders);
     missing.removeAll(headerIndex.keySet());
     if (!missing.isEmpty()) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
+          "error.common.invalid_argument_detail",
           "excel header missing in sheet " + sheetName + ": " + String.join(", ", missing));
     }
   }

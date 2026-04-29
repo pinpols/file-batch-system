@@ -235,8 +235,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .expectedVersion(task.getVersion())
                 .build());
     if (updated <= 0) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
           "task already finished by concurrent update: taskId=" + command.taskId());
     }
 

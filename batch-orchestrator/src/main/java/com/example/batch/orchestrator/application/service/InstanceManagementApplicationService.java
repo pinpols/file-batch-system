@@ -42,8 +42,9 @@ public class InstanceManagementApplicationService {
   public Map<String, Object> cancelPartition(String tenantId, Long id) {
     JobPartitionEntity partition = findPartition(tenantId, id);
     if (!PARTITION_CANCELLABLE.contains(partition.getPartitionStatus())) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
           "cannot cancel partition from " + partition.getPartitionStatus());
     }
     int rows =
@@ -58,8 +59,9 @@ public class InstanceManagementApplicationService {
   public Map<String, Object> retryPartition(String tenantId, Long id) {
     JobPartitionEntity partition = findPartition(tenantId, id);
     if (!"FAILED".equals(partition.getPartitionStatus())) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
           "can only retry FAILED partitions, current: " + partition.getPartitionStatus());
     }
     int rows =
@@ -80,8 +82,9 @@ public class InstanceManagementApplicationService {
     JobInstanceEntity instance =
         Guard.requireFound(jobInstanceMapper.selectById(tenantId, id), "job instance not found");
     if (!allowedFrom.contains(instance.getInstanceStatus())) {
-      throw new BizException(
+      throw BizException.of(
           ResultCode.STATE_CONFLICT,
+          "error.common.state_conflict_detail",
           "cannot transition from " + instance.getInstanceStatus() + " to " + targetStatus);
     }
     int rows =

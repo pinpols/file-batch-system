@@ -65,12 +65,12 @@ class ApprovalControllerTest {
   @Test
   void shouldMapBizExceptionToCommonResponseFailure() throws Exception {
     when(approvalWorkflowService.get("t1", "appr-404"))
-        .thenThrow(new BizException(ResultCode.NOT_FOUND, "not found"));
+        .thenThrow(BizException.of(ResultCode.NOT_FOUND, "error.common.not_found", "not found"));
 
     mockMvc
         .perform(get("/internal/approvals/appr-404").param("tenantId", "t1"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value(ResultCode.NOT_FOUND.name()))
-        .andExpect(jsonPath("$.message").value("not found"));
+        .andExpect(jsonPath("$.message").value("error.common.not_found"));
   }
 }

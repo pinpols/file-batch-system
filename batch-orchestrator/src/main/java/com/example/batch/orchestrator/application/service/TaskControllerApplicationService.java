@@ -10,6 +10,7 @@ import com.example.batch.orchestrator.controller.TaskController.TaskClaimRequest
 import com.example.batch.orchestrator.controller.request.TaskExecutionReportDto;
 import com.example.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.micrometer.core.annotation.Timed;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +30,10 @@ public class TaskControllerApplicationService {
 
   private final TaskExecutionService taskExecutionService;
 
+  @Timed(
+      value = "batch.task.claim.duration",
+      description = "Worker task claim latency on orchestrator",
+      histogram = true)
   public EffectiveTaskConfig claim(Long taskId, TaskClaimRequest request) {
     JobTaskEntity task =
         Guard.requireFound(

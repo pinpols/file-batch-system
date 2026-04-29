@@ -37,6 +37,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,7 +72,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final ResourceScheduler resourceScheduler;
   private final ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
   private final ObjectProvider<LaunchService> launchServiceProvider;
-  private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbcTemplate;
+  private final NamedParameterJdbcTemplate jdbcTemplate;
 
   /**
    * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code
@@ -681,9 +683,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         "select id from batch.file_record where tenant_id = :tenantId"
             + " and trace_id = :traceId and source_type = 'GENERATED'"
             + " order by id desc limit 1",
-        new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
-            .addValue("tenantId", tenantId)
-            .addValue("traceId", traceId));
+        new MapSqlParameterSource().addValue("tenantId", tenantId).addValue("traceId", traceId));
   }
 
   private Long lookupFileIdBySourceRef(String tenantId, String sourceRef) {
@@ -691,13 +691,12 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
         "select id from batch.file_record where tenant_id = :tenantId"
             + " and source_ref = :sourceRef and source_type = 'GENERATED'"
             + " order by id desc limit 1",
-        new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+        new MapSqlParameterSource()
             .addValue("tenantId", tenantId)
             .addValue("sourceRef", sourceRef));
   }
 
-  private Long queryFileIdSingle(
-      String sql, org.springframework.jdbc.core.namedparam.MapSqlParameterSource params) {
+  private Long queryFileIdSingle(String sql, MapSqlParameterSource params) {
     try {
       return jdbcTemplate.queryForObject(sql, params, Long.class);
     } catch (EmptyResultDataAccessException ignored) {
