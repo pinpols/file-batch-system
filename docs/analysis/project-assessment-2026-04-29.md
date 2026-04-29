@@ -246,16 +246,22 @@
 
 **完成标志**:开关切到 true 后,trigger 重启不丢任何 launch;orchestrator 短暂宕机不阻塞 trigger。
 
-### S4 — ADR-009 Workflow DSL Stage 2-4(2-3 sprint)
+### S4 — ADR-009 Workflow DSL Stage 2-4(~2 天)
 
-**目标**:已落 Stage 1(V72 加 `workflow_node_run.output` 列),继续 Stage 2-4。
+**已落地**(2026-04-30 复查发现):
+- **Stage 1** ✅ V72 migration 加 `workflow_node_run.output` JSONB 列
+- **Stage 1.2** ✅ worker → orchestrator outputs 上报管线已通:
+  - `TaskExecutionReport.outputs` 字段 + `DefaultTaskExecutionWrapper.java:108-117` 从 `attributes[NODE_OUTPUTS]` 抽 map 透传
+  - `WorkflowNodeRunMapper.xml:84-85` 写 `output = #{output}::jsonb`
+  - `ImportStepExecutionAdapter.java:112` 已填 `NODE_OUTPUTS`(E/D/P 按需后补,按 Stage 4 业务需要再补)
 
-**子任务**(按 ADR-009 路线图):
-- **Stage 2**:worker 各 stage 把 output 写到 `workflow_node_run.output`(Map → JSONB);现在多数走 attributes,需要在 `AbstractStageExecutor.runStageLoop` 收口处统一刷出。
-- **Stage 3**:`WorkflowParamResolver` 从 upstream node output 取值的 DSL(`{{node.<id>.output.<field>}}`),配套 grammar + parser + 单测。
-- **Stage 4**:`SchedulePlanBuilder` 集成 resolver,把 DSL 在 launch T2 阶段解析成具体 task_payload;触发 e2e 跨节点参数传递场景。
+**剩余 Stage(子任务)**:
+- **Stage 2**(~0.5 天):`WorkflowParamResolver` 类 + 单测 — 解析 `$.nodes.<code>.output.<key>` / `$.workflowRun.<key>` 引用语法,4 类引用 + 3 类 fail-fast 场景的单测;**不挂主链路**,孤立 resolver。
+- **Stage 3**(~1 天):把 resolver 集成到 `DefaultSchedulePlanBuilder`,partition payload 派发前调用 resolver 把 `node_params` 里的 `$.xxx` 替换为实际值;加 E2E 测试;`docs/architecture/workflow-dependency-guide.md` 加"§节点间参数串联"。
+  - 解锁 P2-9(PIPELINE / MIXED workflow + GATEWAY join_mode)
+- **Stage 4**(~0.5 天):给现有 `wf_eod_process` 等 7 个 workflow 配 DSL(让 SETTLE → DISPATCH 的 fileId 通过 `$.nodes.SETTLE.output.fileId` 自动流转,不再 fileId missing);按需补 Export/Dispatch/Process worker 在 buildSuccessResponse 时填 `NODE_OUTPUTS`。
 
-**完成标志**:E2E 中可用 `wf_eod_process` 这种含 SETTLE → EXPORT → DISPATCH 的 workflow 完整跑通,各节点参数靠 DSL 串联,无需在 console 手写 templating。
+**完成标志**:E2E 中 `wf_eod_process` 这种含 SETTLE → EXPORT → DISPATCH 的 workflow 完整跑通,各节点参数靠 DSL 串联,无需在 console 手写 templating。
 
 ### S5 — 次级清单(随手优化,不阻塞主线)
 
@@ -269,10 +275,13 @@
 ### 节奏建议(校正后)
 
 ```
-Day 1 [必做]:S0 评估口径校正(deep-issue/backlog 滚版),解锁后续判断
-Week 1-2:    S3 trigger 异步化(立 ADR-010 → 加 trigger_outbox → Kafka topic → 灰度切换)
-Week 3-5:    S4 Workflow DSL Stage 2-4 按 sprint 节奏推进
-S5 a/b/c/d 见缝插针,任意 1 天空档可清
+Day 1 [必做]:S0 评估口径校正(deep-issue/backlog/fix-report 滚版),解锁后续判断
+Day 2-3:     S5-d 真删 X-Console-Token + S5-c 加 SecurityIntegrationTest
+Day 4-5:     S4 Stage 2-4(WorkflowParamResolver 类 + 集成 SchedulePlanBuilder + 7 个 workflow 配 DSL)
+Week 2-3:    S3 trigger 异步化(立 ADR-010 → 加 trigger_outbox → Kafka topic → 灰度切换)
+S5 a/b 见缝插针,任意 1 天空档可清
 ```
+
+> **注**:S4 原估 2-3 sprint,2026-04-30 复查发现 Stage 1+1.2 已落,剩余只 ~2 天。先 S4 后 S3 — S4 解锁 7 个 workflow 业务,S3 是基础设施稳定性。
 
 每个里程碑结束更新 `hardening-backlog.md` + 在本目录追加新评估快照(命名 `project-assessment-YYYY-MM-DD.md`)。下次评估应同时滚 deep-issue-analysis 和 hardening-backlog,避免本次"评估口径滞后于代码"再发生。

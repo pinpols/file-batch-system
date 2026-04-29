@@ -172,7 +172,22 @@ SecurityContextHolder.getContext().setAuthentication(auth);
 
 ## 仍未闭环的问题
 
-见 **`docs/analysis/hardening-backlog-v4.md`**。三大块：
-1. Workflow DAG 节点间参数/文件自动串联（SETTLE→DISPATCH 卡在这）
-2. 种子治理（7 个空壳 workflow、本次 DB 改动未入 Flyway）
-3. 未覆盖场景（非 SFTP dispatch、calendar、quota 压测、compensation 独立、workflow PIPELINE/MIXED 等）
+见 **`docs/analysis/hardening-backlog.md`**(v5 滚到 v6)。三大块:
+1. Workflow DAG 节点间参数/文件自动串联(SETTLE→DISPATCH 卡在这) — 已部分修(Stage 1+1.2),剩 Stage 2-4
+2. 种子治理(7 个空壳 workflow、本次 DB 改动未入 Flyway)
+3. 未覆盖场景(非 SFTP dispatch、calendar、quota 压测、compensation 独立、workflow PIPELINE/MIXED 等)
+
+---
+
+## 八、2026-04-30 校正补录(从 deep-issue v4 口径滚到 v6)
+
+| 项 | 状态 | 证据 / commit |
+|---|---|---|
+| deep-issue §5.1 Trigger Security | 🟢 已修 | `cd389a0b`(2026-04-22 v4 闭环);`TriggerSecurityConfiguration.java:42-46` 真起 `SecurityFilterChain` 把 `/actuator/**` 之外强制 `authenticated()` |
+| deep-issue §5.2 X-Console-Token | 🟡 部分修 | `application.yml:67` `BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:false` 默认关闭 compat 路径;真删动作在 `project-assessment-2026-04-29.md` §8 S5-d |
+| deep-issue §5.12 Console Job 过胖 | 🟢 已修 | `DefaultConsoleJobApplicationService` 现 90 LOC 纯 delegate,拆出 `ConsoleJobOpsSupport`(407)/`ConsoleJobQueryService`(226)/`DefaultConsoleJobApprovalService`(192)/`DefaultConsoleJobRecoveryService`(230)/`DefaultConsoleJobTriggerService`(133)共 6 个兄弟类 |
+| ADR-009 Stage 1.2 worker outputs 上报管线 | 🟢 已修 | `TaskExecutionReport.outputs` + `DefaultTaskExecutionWrapper.java:108-117` 透传 + `WorkflowNodeRunMapper.xml:84-85` 写 jsonb;`ImportStepExecutionAdapter.java:112` 已填 `NODE_OUTPUTS`(E/D/P 按需后补) |
+| 半完成基类重构 | 🟢 已修 | `4e634c7c`(2026-04-29):4×`ERROR_OBJECT_MAPPER` + 4×`loadConfiguredSteps` + 3×`handlePipelineFailure` 上提到基类,消除 ~150 行复制;FQN 违规修了 |
+| i18n 业务路径收口 | 🟢 已修 | `23137b2c`(2026-04-29):56 文件 BizException 全量从 literal message 迁到 i18n key + args 三元组;9 个 test 同步 |
+
+修订动机:`project-assessment-2026-04-29.md` 评估时 §5 把 §5.1 / §5.2 / §5.12 标"未完成",实际仓库代码已落地。本节把校正落在 fix-report,deep-issue / hardening-backlog 同步。下次评估应同步滚 deep-issue / backlog,避免口径再滞后。
