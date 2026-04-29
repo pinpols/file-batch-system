@@ -331,7 +331,66 @@ return switch (joinRule.joinMode()) {
 
 ---
 
-## 10. 进一步阅读
+## 10. 节点间参数串联(ADR-009 DSL)
+
+### 10.1 解决什么问题
+
+DAG 上游节点(如 SETTLE)产出 `fileId`、`recordCount` 等运行时字段,下游节点(如 DISPATCH)需要这些字段做后续处理。**默认行为**:`mergeUpstreamPartitionOutputs` 自动把同 jobInstance 兄弟分区的 `output_summary` 中 `fileId/fileCode` 等"已知少量字段"塞到下游 payload。**这适合 fileId 这类规约字段**;但**业务字段 / 多分支节点 / 跨节点字段名不同**时不够用——需要 workflow 设计者**显式声明引用**。
+
+ADR-009 引入受限 JSONPath 子集做这种显式引用。
+
+### 10.2 引用语法
+
+`workflow_node.node_params`(JSONB)的 value 支持 `$.xxx` 形式的引用:
+
+| 语法 | 语义 | 例 |
+|---|---|---|
+| `$.nodes.<nodeCode>.output.<key>` | 引用同 workflow_run 内某节点 output 的某字段 | `$.nodes.SETTLE.output.fileId` |
+| `$.nodes.<nodeCode>.output.<a>.<b>` | 嵌套字段下钻 | `$.nodes.SETTLE.output.summary.totalAmount` |
+| `$.workflowRun.<key>` | workflow 级共享字段 | `$.workflowRun.bizDate` |
+
+**不支持**:通配符 `*`、过滤 `[?]`、函数 `length()`、表达式 `$ + 1`。
+
+### 10.3 例子
+
+```json
+{
+  "fileId": "$.nodes.SETTLE.output.fileId",
+  "channelCode": "ftp_outbound",
+  "_meta": {
+    "expectedSizeBytes": "$.nodes.SETTLE.output.size"
+  },
+  "bizDate": "$.workflowRun.bizDate"
+}
+```
+
+只把 `$.xxx` 形式的 String 替换为实际值;非 String / 非 `$.` 开头的字段原样保留。嵌套 Map / List 中的引用递归解析。
+
+### 10.4 fail 模式
+
+| 场景 | 行为 |
+|---|---|
+| 上游节点未跑(output 整体 null) | resolver 返回 null,下游业务自己 null 检查 |
+| 上游节点已跑但缺引用的 key | resolver 返回 null,同上 |
+| 引用未知 nodeCode(typo / 节点未在 workflow 定义中) | **fail-fast**:抛 `BizException(WORKFLOW_PARAM_REF_INVALID)`,节点拒绝启动 |
+| 路径语法非法(不匹配 `$.nodes.X.output.Y` 也不匹配 `$.workflowRun.Z`) | **fail-fast**:同上 |
+
+### 10.5 解析时机
+
+`DefaultWorkflowNodeDispatchService.mergeNodeParams` 在派发下游 task payload 时调用 `WorkflowParamResolver.resolve(parsed, workflowRunContext)`。WorkflowRunContext 由 `loadWorkflowRunContext(workflowRun)` 在派发前一次性 select `workflow_node_run` 表所有兄弟节点的 `output JSONB` 反序列化构造,不持久化。**重试场景**:同 nodeCode 多次执行取最新 run_seq 的 output。
+
+### 10.6 实现位置
+
+| 文件 | 角色 |
+|---|---|
+| `WorkflowParamResolver.java` | 解析器(160 行,10 单测) |
+| `WorkflowRunContext.java` | 上下文接口 |
+| `DefaultWorkflowNodeDispatchService.java:mergeNodeParams` | 集成点(line 723-) |
+| Flyway `V72__add_workflow_node_run_output.sql` | output JSONB 列 |
+
+---
+
+## 11. 进一步阅读
 
 - [`system-flow-overview.md`](./system-flow-overview.md) — 系统总流程，看 workflow 在整体架构中的位置
 - [`core-model.md`](./core-model.md) — workflow_run / workflow_node_run 等运行态实体
