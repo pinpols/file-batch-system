@@ -10,10 +10,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Console-API 安全配置（{@code batch.console.security}）。
  *
- * <p>覆盖：JWT 颁发 + Header 兼容认证 + 多租户路由 + session 单点。
+ * <p>覆盖：JWT 颁发 + 多租户路由 + session 单点 + bypass-mode 测试钩子。
  *
- * <p>JWT 是主认证方式，Header 认证为旧前端兼容期保留（{@link #legacyHeaderAuthEnabled}）。 详见
- * design/multi-tenant-and-security.md §3。
+ * <p>主认证方式 = JWT（Authorization Bearer）；旧 X-Console-Token 共享密钥兼容路径已于 2026-04-30 物理删除（详见
+ * docs/analysis/project-assessment-2026-04-29.md §8 S5-d）。
+ *
+ * <p>详见 design/multi-tenant-and-security.md §3。
  */
 @Data
 @ConfigurationProperties(prefix = "batch.console.security")
@@ -22,20 +24,14 @@ public class ConsoleSecurityProperties {
   /** 安全总开关。关闭 → 所有 console API 不做认证（仅本地调试）。 */
   private boolean enabled = true;
 
-  /** 共享密钥（旧 Header 认证用）。生产必须通过 secret manager 注入强密钥。 */
-  private String sharedSecret = "console-secret";
-
   /** 租户标识 header 名。前端 / 网关在请求里带 → 后端按此值路由。 */
   private String tenantHeader = "X-Tenant-Id";
 
-  /** 用户标识 header 名（旧前端兼容）。 */
+  /** 用户标识 header 名（bypass-mode 测试钩子，便于按 header 注入测试用户身份）。 */
   private String userHeader = "X-Console-User";
 
-  /** 角色 header 名（旧前端兼容，逗号分隔多角色）。 */
+  /** 角色 header 名（bypass-mode 测试钩子，逗号分隔多角色）。 */
   private String roleHeader = "X-Console-Roles";
-
-  /** JWT token header 名。前端 login 后续请求带这个 header。 */
-  private String tokenHeader = "X-Console-Token";
 
   /** 默认租户 ID。当请求未带 tenant header 时使用；空 = 强制要求 header。 */
   private String defaultTenantId = "";
@@ -43,12 +39,9 @@ public class ConsoleSecurityProperties {
   /** 允许的租户白名单。空 list = 不限制。 */
   private List<String> allowedTenants = new ArrayList<>();
 
-  /** 默认授权角色（旧 Header 认证模式下，请求未带 role header 时的兜底角色）。 */
+  /** 默认授权角色（SSE ticket / bypass-mode 未带 role header 时的兜底）。 */
   private List<String> defaultAuthorities =
       new ArrayList<>(List.of(ConsoleRoles.ADMIN, ConsoleRoles.AUDITOR, ConsoleRoles.CONFIG_ADMIN));
-
-  /** 旧 Header 认证开关。生产应关闭，仅 JWT。 */
-  private boolean legacyHeaderAuthEnabled = true;
 
   /** 单点登录（同一用户后登录踢前一个 session）。 */
   private boolean singleSessionEnabled = true;

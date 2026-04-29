@@ -53,30 +53,23 @@ batch:
     # Redis Pub/Sub、SSE：实例标识。未设置环境变量时使用固定默认值，避免随机 UUID 与启动 WARN。
     instance-id: ${BATCH_CONSOLE_INSTANCE_ID:batch-console-api}
     security:
-      # Console 鉴权开关（开启后按 shared-secret + header 解析租户/用户/角色）
+      # Console 鉴权开关（开启后走 JWT + 多租户路由）
       enabled: ${BATCH_CONSOLE_SECURITY_ENABLED:true}
-      # 控制台与上游（或网关）共享密钥，用于签名/校验（按实现约定）
-      shared-secret: ${BATCH_CONSOLE_SHARED_SECRET:console-secret}
       # 多租户 header 名称（租户隔离）
       tenant-header: ${BATCH_CONSOLE_TENANT_HEADER:X-Tenant-Id}
-      # 用户 header 名称（展示/审计）
+      # 用户 header 名称（bypass-mode 测试钩子）
       user-header: ${BATCH_CONSOLE_USER_HEADER:X-Console-User}
-      # 角色/权限 header 名称（RBAC）
+      # 角色/权限 header 名称（bypass-mode 测试钩子，RBAC）
       role-header: ${BATCH_CONSOLE_ROLE_HEADER:X-Console-Roles}
-      # Token header 名称（会话/签名 token）
-      token-header: ${BATCH_CONSOLE_TOKEN_HEADER:X-Console-Token}
       # 默认租户（未显式传入时使用；留空表示不设默认值，请求必须携带 X-Tenant-Id header）
       default-tenant-id: ${BATCH_CONSOLE_DEFAULT_TENANT_ID:}
       # 允许访问的租户白名单（空列表表示不限制；生产建议通过 BATCH_CONSOLE_ALLOWED_TENANTS 显式指定）
       allowed-tenants: ${BATCH_CONSOLE_ALLOWED_TENANTS:}
-      # 默认授权列表（未显式传入 roles 时使用）
+      # 默认授权列表（SSE ticket / bypass-mode 未带 role header 时的兜底）
       default-authorities:
         - ROLE_ADMIN
         - ROLE_AUDITOR
         - ROLE_CONFIG_ADMIN
-      # 是否保留旧的 X-Console-Token 鉴权兼容路径
-      # 5.2: 默认关闭旧式 X-Console-Token 鉴权，需要时显式开启
-      legacy-header-auth-enabled: ${BATCH_CONSOLE_LEGACY_HEADER_AUTH_ENABLED:false}
       # 单账号单会话：新登录会顶掉旧 JWT
       single-session-enabled: ${BATCH_CONSOLE_SINGLE_SESSION_ENABLED:true}
       # JWT 签发者

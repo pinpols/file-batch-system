@@ -40,7 +40,6 @@ class ConsoleSecurityConfigurationTest {
   void setUp() {
     properties = new ConsoleSecurityProperties();
     properties.setEnabled(true);
-    properties.setSharedSecret("console-secret");
     properties.setJwtIssuer("batch-console-api");
     properties.setJwtSecret("console-jwt-secret");
     properties.setDefaultTenantId("tenant-a");
@@ -64,24 +63,9 @@ class ConsoleSecurityConfigurationTest {
   }
 
   @Test
-  void shouldRejectInvalidLegacyTokenWhenTestingOpenIsDisabled() throws Exception {
+  void shouldRejectTenantOutsideAllowedListInBypassMode() throws Exception {
+    batchSecurityProperties.setBypassMode(true);
     MockHttpServletRequest request = baseRequest();
-    request.addHeader(properties.getTokenHeader(), "wrong-secret");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    AtomicBoolean chainCalled = new AtomicBoolean(false);
-
-    filter.doFilter(request, response, noOpChain(chainCalled));
-
-    assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
-    assertThat(readBody(response)).contains("\"code\":\"UNAUTHORIZED\"");
-    assertThat(chainCalled).isFalse();
-    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-  }
-
-  @Test
-  void shouldRejectTenantOutsideAllowedList() throws Exception {
-    MockHttpServletRequest request = baseRequest();
-    request.addHeader(properties.getTokenHeader(), properties.getSharedSecret());
     request.addHeader(properties.getTenantHeader(), "tenant-b");
     MockHttpServletResponse response = new MockHttpServletResponse();
     AtomicBoolean chainCalled = new AtomicBoolean(false);
@@ -91,36 +75,6 @@ class ConsoleSecurityConfigurationTest {
     assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
     assertThat(readBody(response)).contains("\"code\":\"FORBIDDEN\"");
     assertThat(chainCalled).isFalse();
-    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-  }
-
-  @Test
-  void shouldAuthenticateWithLegacyTokenWhenTokenIsValid() throws Exception {
-    MockHttpServletRequest request = baseRequest();
-    request.addHeader(properties.getTokenHeader(), properties.getSharedSecret());
-    request.addHeader(properties.getUserHeader(), "alice");
-    request.addHeader(properties.getRoleHeader(), "ROLE_ADMIN,ROLE_AUDITOR");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    AtomicBoolean chainCalled = new AtomicBoolean(false);
-
-    filter.doFilter(
-        request,
-        response,
-        new FilterChain() {
-          @Override
-          public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
-            chainCalled.set(true);
-            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
-            ConsolePrincipal principal =
-                (ConsolePrincipal)
-                    SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-            assertThat(principal.username()).isEqualTo("alice");
-            assertThat(principal.tenantId()).isEqualTo(properties.getDefaultTenantId());
-          }
-        });
-
-    assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-    assertThat(chainCalled).isTrue();
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
   }
 

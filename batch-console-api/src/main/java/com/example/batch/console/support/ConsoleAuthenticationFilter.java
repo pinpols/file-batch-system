@@ -22,19 +22,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * 控制台请求认证过滤器：按优先级依次匹配 4 条认证链，首个命中即填充 {@link ConsolePrincipal}，都不命中则放行给下游 （下游的 {@code @PreAuthorize}
+ * 控制台请求认证过滤器：按优先级依次匹配 3 条认证链，首个命中即填充 {@link ConsolePrincipal}，都不命中则放行给下游 （下游的 {@code @PreAuthorize}
  * 会拒绝未认证请求）。
  *
  * <ol>
  *   <li><b>SSE ticket</b>（{@code ?ticket=xxx}）：{@link SseTicketService} 签发的一次性凭证， 专为浏览器 EventSource
  *       而设（EventSource 不能带 Authorization header）。
  *   <li><b>JWT</b>（{@code Authorization: Bearer}）：主认证方式，走 {@link ConsoleJwtService#authenticate}。
- *   <li><b>Legacy shared-secret</b>（{@code properties.tokenHeader}）：仅当 {@code
- *       legacyHeaderAuthEnabled} 为 true 时启用——<b>本分支忽略请求里的角色 header</b>，角色一律用服务端 {@code
- *       defaultAuthorities}， 防止共享密钥泄露后调用方自提权。
  *   <li><b>bypass-mode</b>：仅测试 profile 使用，可从 header 读 username/tenant/roles，放行任意角色 （生产禁用，由 {@code
  *       batchSecurityProperties.bypass-mode} 控制）。
  * </ol>
+ *
+ * <p>历史：第 3 条 Legacy X-Console-Token 共享密钥路径已于 2026-04-30 物理删除（S5-d）。详见
+ * docs/analysis/project-assessment-2026-04-29.md §8 S5-d 修订记录。
  *
  * <p>{@code finally clearContext()} 兜底：不论哪条认证链执行或抛异常，都清理 {@code SecurityContextHolder}， 防止容器线程池复用时
  * ThreadLocal 污染下一个请求。
@@ -92,45 +92,6 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
               HttpStatus.UNAUTHORIZED,
               com.example.batch.common.enums.ResultCode.UNAUTHORIZED,
               CommonErrorMessages.INVALID_CONSOLE_JWT);
-          return;
-        }
-      }
-
-      String sharedToken = request.getHeader(properties.getTokenHeader());
-      if (properties.isLegacyHeaderAuthEnabled() && Texts.hasText(sharedToken)) {
-        if (!batchSecurityProperties.isBypassMode()
-            && !sharedToken.equals(properties.getSharedSecret())) {
-          responseWriter.write(
-              response,
-              HttpStatus.UNAUTHORIZED,
-              com.example.batch.common.enums.ResultCode.UNAUTHORIZED,
-              CommonErrorMessages.INVALID_CONSOLE_TOKEN);
-          return;
-        }
-        try {
-          String username = resolveUsername(request);
-          String tenantId = resolveTenant(request);
-          // 生产 legacy 模式：角色由服务端配置决定，不信任请求侧 X-Console-Roles header
-          Set<SimpleGrantedAuthority> authorities =
-              properties.getDefaultAuthorities().stream()
-                  .map(SimpleGrantedAuthority::new)
-                  .collect(Collectors.toCollection(LinkedHashSet::new));
-          ConsolePrincipal principal =
-              new ConsolePrincipal(
-                  username,
-                  tenantId,
-                  authorities.stream()
-                      .map(SimpleGrantedAuthority::getAuthority)
-                      .collect(Collectors.toCollection(LinkedHashSet::new)));
-          setAuthentication(principal, sharedToken);
-          filterChain.doFilter(request, response);
-          return;
-        } catch (IllegalArgumentException exception) {
-          responseWriter.write(
-              response,
-              HttpStatus.FORBIDDEN,
-              com.example.batch.common.enums.ResultCode.FORBIDDEN,
-              CommonErrorMessages.TENANT_MISMATCH);
           return;
         }
       }

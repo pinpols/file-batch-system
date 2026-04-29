@@ -46,8 +46,6 @@ class ConsoleAuthenticationFilterTest {
   void setUp() {
     properties = new ConsoleSecurityProperties();
     properties.setEnabled(true);
-    properties.setSharedSecret("secret");
-    properties.setLegacyHeaderAuthEnabled(true);
     properties.setDefaultTenantId("default-tenant");
     properties.setAllowedTenants(List.of("default-tenant", "t1"));
     properties.setDefaultAuthorities(List.of("ROLE_ADMIN"));
@@ -124,41 +122,11 @@ class ConsoleAuthenticationFilterTest {
   }
 
   @Test
-  void filter_authenticatesViaLegacySharedTokenHeader() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader(properties.getTokenHeader(), "secret");
-    request.addHeader(properties.getTenantHeader(), "t1");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    FilterChain chain = mock(FilterChain.class);
-
-    filter.doFilterInternal(request, response, chain);
-
-    verify(chain).doFilter(request, response);
-    verify(jwtService, never()).authenticate(anyString());
-  }
-
-  @Test
-  void filter_returns401WhenLegacySharedTokenMismatch() throws Exception {
+  void filter_returns403WhenTenantNotAllowedInBypassMode() throws Exception {
+    batchProperties.setBypassMode(true);
     doNothing().when(responseWriter).write(any(), any(), any(), anyString());
 
     MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader(properties.getTokenHeader(), "wrong-secret");
-    request.addHeader(properties.getTenantHeader(), "t1");
-    MockHttpServletResponse response = new MockHttpServletResponse();
-    FilterChain chain = mock(FilterChain.class);
-
-    filter.doFilterInternal(request, response, chain);
-
-    verify(responseWriter).write(eq(response), eq(HttpStatus.UNAUTHORIZED), any(), anyString());
-    verify(chain, never()).doFilter(any(), any());
-  }
-
-  @Test
-  void filter_returns403WhenTenantNotAllowed() throws Exception {
-    doNothing().when(responseWriter).write(any(), any(), any(), anyString());
-
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    request.addHeader(properties.getTokenHeader(), "secret");
     request.addHeader(properties.getTenantHeader(), "not-allowed-tenant");
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);

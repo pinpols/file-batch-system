@@ -13,7 +13,6 @@ public final class CommonErrorMessages {
   public static final String MISSING_IDEMPOTENCY_KEY = "缺少幂等键";
   public static final String AUTHENTICATION_REQUIRED = "需要登录认证";
   public static final String ACCESS_DENIED = "访问被拒绝";
-  public static final String INVALID_CONSOLE_TOKEN = "Console 令牌无效";
   public static final String INVALID_CONSOLE_JWT = "Console 令牌无效";
   public static final String CONSOLE_JWT_EXPIRED = "Console 令牌已过期";
   public static final String TENANT_REQUIRED = "必须指定租户";
