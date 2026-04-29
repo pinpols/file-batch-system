@@ -166,6 +166,11 @@
 | i18n 业务路径收口 | `23137b2c` | 56 文件横扫 console / orchestrator / trigger / worker 业务路径,BizException 全量从 literal message 迁到 i18n key + args 三元组(配套 9 个 test 同步成 messageKey/messageArgs 行为断言);承接 `c74a9644`(plugin)+ `4e634c7c`(SqlPlugin)同流水线 |
 | ops 增量 | `f0eff4ae` | prometheus 告警规则 + seed/load 脚本同步 |
 | 评估快照 | `d325e44a` / `79e3a35b` | 本文档落盘 + 后续追加下一步计划 |
+| S5-d 真删 X-Console-Token compat | `ff20c36f` | 主代码 + yaml + OpenAPI + 测试全量物理删除(9 文件 +20/-168);只留 JWT + SSE ticket + bypass-mode 三条认证链 |
+| S5-c trigger SecurityIntegrationTest | `e8e48a6e` | `TriggerSecurityFilterTest` 5 类边界守护(无 header/错 header/对 header/actuator 跳过/bypass-mode);CI pr-gate 自动覆盖 |
+| S0 deep-issue/backlog/fix-report 滚版 | `8ac1ea2d` | §5.1 / §5.2 / §5.12 标已修;ADR-009 Stage 1.2 标已落;deep-issue 与 backlog 口径同步 |
+| ADR-009 Stage 2/3 校正 + §10 文档 | `8b520102` | 实地查代码发现 Stage 2/3 已落;workflow-dependency-guide §10 节点间参数串联文档落盘 |
+| **ADR-010 trigger 异步解耦草稿** | `e1b37cfd` | 立 ADR-010(202 行,7 阶段 ~7-8 人天路线图);复用 ADR-002 模式 + V80 schema + Kafka topic v1 + 灰度开关 + 4 类 E2E 守护 |
 
 #### 评估时遗漏 — 实际已落地(2026-04-30 复查发现)
 
@@ -233,7 +238,9 @@
 
 **完成标志**:三份文档不再把这三项标为"未完成";本评估文档 §5 与 deep-issue/backlog 互相一致。
 
-### S3 — trigger → orchestrator 异步化(deep-issue §4,2-3 周)
+### S3 — trigger → orchestrator 异步化(deep-issue §5.7,2-3 周)
+
+> **2026-04-30 进展**:ADR-010 草稿已立(`e1b37cfd`),完整路线图 + Schema 设计 + 协议定义 + 灰度回滚策略落盘。剩余实施需独立分支 `feat/adr-010-trigger-async` 多 PR 推进,本评估文档不再追踪 Stage 1-7 细节,以 ADR-010 §实施分阶段表为权威。
 
 **目标**:把触发器纳入主链路 outbox/Kafka 体系,消除同步 HTTP 桥的鲁棒性短板。
 
@@ -285,16 +292,23 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
 ### 节奏建议(2026-04-30 第二轮校正,大量"原标未完成实际已完成"清账后)
 
 ```
-✅ DONE:
-  S0  - 评估口径校正(deep-issue/backlog/fix-report 滚 v6/v7) — 8ac1ea2d
+✅ DONE(本评估会话累计 9 commits):
+  S0   - 评估口径校正(deep-issue/backlog/fix-report 滚 v6/v7) — 8ac1ea2d
   S5-d - 真删 X-Console-Token compat 路径(主代码 + yaml + OpenAPI + 测试) — ff20c36f
   S5-c - TriggerSecurityFilterTest 守护 5 类边界 — e8e48a6e
-  S4 Stage 1/1.2/2/3 - DSL 基础设施全栈(DDL + worker outputs 上报 + resolver + 集成 + 文档)
+  S4 Stage 1/1.2/2/3 - DSL 基础设施全栈(DDL + worker outputs 上报 + resolver + 集成 + §10 文档)
+  ADR-010 草稿 - trigger 异步解耦完整路线图 + Schema/协议/灰度策略 — e1b37cfd
   半完成基类重构 + i18n 业务路径收口 - 4e634c7c / 23137b2c
 
-🔴 仍未完成:
-  S3 - trigger → orchestrator 异步化(2-3 周, 立 ADR-010 + trigger_outbox 表 + Relay
-       + Kafka topic + 灰度开关 + E2E 守护)
+🔴 实施中(独立分支 feat/adr-010-trigger-async):
+  S3 - trigger → orchestrator 异步化主体(~7-8 人天 / 2-3 周含 staging)
+       Stage 1: V80 migration + LaunchEnvelope + Mapper(0.5d, 起点 PR)
+       Stage 2: TriggerOutboxRelay + 单测(1d)
+       Stage 3: DefaultTriggerService 加 outbox 写入分支 + 灰度开关(0.5d)
+       Stage 4: orchestrator TriggerLaunchConsumer + LaunchApplicationService 内部 API(1d)
+       Stage 5: 4 个 E2E 守护(2d)
+       Stage 6: staging → 单租户 → 全量切换(2d 含等待)
+       Stage 7: 旧 HTTP 同步路径 deprecation + 物理删除(0.5d, 1 个 minor 后)
 
 🟡 deferred(基础设施完备,触发条件出现再做):
   S4 Stage 4 - 给具体 workflow 配 DSL(目前 seed 3 个 workflow 没需要,业务设计跨节点
