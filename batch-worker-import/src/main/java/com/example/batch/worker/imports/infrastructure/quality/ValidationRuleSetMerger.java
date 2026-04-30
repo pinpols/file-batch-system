@@ -21,11 +21,11 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-class ValidationRuleSetMerger {
+public class ValidationRuleSetMerger {
 
   private final ValidationConfigSupport configSupport;
 
-  Map<String, Object> merge(Object templateConfigObject) {
+  public Map<String, Object> merge(Object templateConfigObject) {
     Map<String, Object> templateConfig = configSupport.toMap(templateConfigObject);
     Map<String, Object> merged = new LinkedHashMap<>();
     Map<String, Object> derived = deriveRequiredRulesFromFieldMappings(templateConfig);
