@@ -8,7 +8,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,13 +73,33 @@ public class DispatchReceiptPollScheduler {
         pollOne(row);
       } catch (Exception exception) {
         pollFailures.incrementAndGet();
-        log.warn(
-            "dispatch receipt poll failed: error={}, row={}",
-            exception.getMessage(),
-            row,
-            exception);
+        if (isTransientConnectivityFailure(exception)) {
+          // 已知瞬时连通性异常 (上游不可达 / 超时 / DNS) — 仅 message,不打 stack。
+          // 否则每分钟同一个 PENDING 受体会刷一次 ~66 行 stack trace 把日志淹掉。
+          log.warn(
+              "dispatch receipt poll failed (transient): error={}, row={}",
+              exception.getMessage(),
+              row);
+        } else {
+          log.warn(
+              "dispatch receipt poll failed: error={}, row={}",
+              exception.getMessage(),
+              row,
+              exception);
+        }
       }
     }
+  }
+
+  static boolean isTransientConnectivityFailure(Throwable t) {
+    for (Throwable cur = t; cur != null; cur = cur.getCause()) {
+      if (cur instanceof ConnectException
+          || cur instanceof SocketTimeoutException
+          || cur instanceof UnknownHostException) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private void pollOne(Map<String, Object> row) throws Exception {
