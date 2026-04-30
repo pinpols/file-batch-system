@@ -156,11 +156,44 @@ flowchart LR
 
 ### 一句话叙事
 
-1. **触发**：定时（`SCHEDULED` — **默认 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`** 走 Quartz；切到 `wheel` 走新 HashedWheel；二者**严格互斥**，由 `QuartzPauseWhenWheelEnabledCustomizer` 在 wheel 模式下把 Quartz `autoStartup=false` 让其挂着不 fire）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 写 `trigger_request` → HTTP 调 orchestrator。
+1. **触发**：定时（`SCHEDULED` — **默认 `BATCH_TRIGGER_SCHEDULER_IMPL=quartz`** 走 Quartz；切到 `wheel` 走新 HashedWheel；二者**严格互斥**，由 `QuartzPauseWhenWheelEnabledCustomizer` 在 wheel 模式下把 Quartz `autoStartup=false` 让其挂着不 fire）或前端 `POST /api/triggers/launch`（`MANUAL`）→ trigger 写 `trigger_request` → 调 orchestrator（**默认同步 HTTP 桥；可切异步 outbox+Kafka 模式，见 §1.4 ADR-010**）。
 2. **调度**：orchestrator `LaunchService` 写入 `job_instance` + `job_partition` + `outbox_event`（同一事务）。
 3. **派发**：`OutboxPollScheduler` 把 outbox 事件发到 Kafka `batch.task.dispatch.{import|export|dispatch}` topic。
-4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态 → orchestrator 推进状态机。
+4. **执行**：对应类型 worker 消费 task → claim partition → 跑 pipeline 各 stage → 通过 HTTP 上报状态（含 i18n 三元组 + ADR-009 节点 outputs）→ orchestrator 推进状态机 + 落 `workflow_node_run.output` JSONB 列。
 5. **落地**：IMPORT 写 `batch_business.biz.*` 表；EXPORT 把生成的文件 PUT 到 MinIO 并登记 `file_record`；DISPATCH 把 `file_record` 派到外部通道（LOCAL / SFTP / NAS / OSS / API）。
+
+### 1.4 Trigger → Orchestrator 异步路径（ADR-010，可选切换）
+
+灰度开关 `batch.trigger.async-launch.enabled=true` 时,trigger → orchestrator 调度链从同步 HTTP 桥换成 outbox + Kafka 异步模式（trigger + orchestrator **两边模块必须一致**）：
+
+```mermaid
+flowchart LR
+  TR[trigger]
+  TOX[(trigger_outbox_event<br/>V80, JSONB payload)]
+  RELAY[TriggerOutboxRelay<br/>@Scheduled 200ms<br/>ShedLock 互斥]
+  KT[Kafka topic<br/>batch.trigger.launch.v1<br/>key=tenantId:requestId]
+  TLC[TriggerLaunchConsumer<br/>MANUAL_IMMEDIATE ack]
+  LS[orchestrator<br/>LaunchApplicationService.launch]
+
+  TR ==>|"同事务 INSERT<br/>trigger_request + trigger_outbox_event"| TOX
+  RELAY -. "SELECT FOR UPDATE SKIP LOCKED" .-> TOX
+  RELAY ==>|"KafkaTriggerEventPublisher<br/>acks=all + idempotence"| KT
+  RELAY -. "UPDATE PUBLISHED / FAILED+退避" .-> TOX
+  KT ==>|"@KafkaListener consume"| TLC
+  TLC ==>|"调内部 launch API"| LS
+  LS -. "uk_job_instance_tenant_dedup 兜底重复" .-> LS
+
+  classDef sync fill:#e3f2fd,stroke:#1565c0;
+  classDef async fill:#fff3e0,stroke:#ef6c00;
+  class TR,LS sync
+  class TOX,RELAY,KT,TLC async
+```
+
+**收益**：trigger 重启不丢已 fire 的 launch（Quartz fire 后第一时间落 outbox，relay 重启续传）；orchestrator 短暂宕机不阻塞 trigger Quartz worker thread。
+
+**消息载荷**：`LaunchEnvelope` JSON `{ launchRequest, dedupKey, sourceFireTime, envelopeVersion }`，headers 携带 `X-Trace-Id` / `X-Tenant-Id` / `X-Envelope-Version`。
+
+**回滚**：开关切回 `false` → trigger 立刻走 HTTP；已落库 outbox 由 relay 继续投递（不阻塞）。详见 [`docs/runbook/trigger-async-launch-rollout.md`](../runbook/trigger-async-launch-rollout.md)。
 
 ---
 

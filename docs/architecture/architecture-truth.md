@@ -303,6 +303,9 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | SQL 一致性无自动守卫 | SqlConsistencyIT（Flyway + 约束断言 + upsert 探针） |
 | God Class 技术债 | 三服务拆分 + Facade（见第 8 节） |
 | T1/T2 大事务 | launch() 拆分（见 ADR-003） |
+| 业务异常无 i18n（zh/en 双语持久化） | i18n 全栈(Phase 1-F + Phase 2):`BizException.of(key, args)` + 11 表 `error_key`/`error_args` JSONB 列 + `LocalizedErrorRenderer` 按 Locale 重渲染。详 `docs/design/i18n.md` |
+| Workflow 节点间参数无显式串联 | ADR-009 受限 JSONPath DSL: `$.nodes.<X>.output.<key>` + V72 `workflow_node_run.output` 列 + `WorkflowParamResolver`。详 `docs/architecture/workflow-dependency-guide.md §10` |
+| trigger → orchestrator 同步 HTTP 桥（鲁棒性短板） | ADR-010 trigger_outbox + Kafka 异步路径：V80 `trigger_outbox_event` + `TriggerOutboxRelay` + `KafkaTriggerEventPublisher` + `TriggerLaunchConsumer`；灰度开关 `batch.trigger.async-launch.enabled`，原 HTTP 路径 `@Deprecated forRemoval=true` 等 1 minor 物理删除 |
 
 ### 未关闭（P2，当前优先级）
 
@@ -337,3 +340,5 @@ batch-e2e-tests            ← 端到端测试套件（TestContainers）
 | [ADR-006](./adr/ADR-006-compensation-requires-new.md) | 补偿重试方法使用 REQUIRES_NEW 防死锁级联 | Accepted | 2026-03-25 |
 | [ADR-007](./adr/ADR-007-dual-datasource.md) | 单 PostgreSQL 双 Schema 隔离（platform + quartz） | Accepted | 2026-03-01 |
 | [ADR-008](./adr/ADR-008-god-class-decomposition.md) | God Class 拆分：子服务 + Facade 保持接口稳定 | Accepted | 2026-03-25 |
+| [ADR-009](./adr/ADR-009-workflow-param-dsl.md) | Workflow 节点间参数串联 DSL（受限 JSONPath: `$.nodes.<X>.output.<key>` + `$.workflowRun.<key>`） | Accepted | 2026-04-29 |
+| [ADR-010](./adr/ADR-010-trigger-async-decoupling.md) | Trigger → Orchestrator 异步解耦（trigger_outbox + Kafka，复用 ADR-002 模式） | Accepted | 2026-04-30 |

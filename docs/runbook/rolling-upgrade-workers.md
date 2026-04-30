@@ -40,6 +40,33 @@
 
 对多副本 Worker：**逐副本**重复上述流程，或按池分批，保证任意时刻集群仍有足够容量处理负载。
 
+### DB 迁移前置条件（2026-04-30 起强制）
+
+新 worker 拉起前必须确保 **orchestrator 已对接以下 Flyway 迁移**，否则 schema mismatch 会导致 worker 启动 / 上报失败：
+
+| Migration | 表 / 列变化 | 影响范围 | 不应用的故障 |
+|---|---|---|---|
+| **V72** | `batch.workflow_node_run` 加 `output JSONB` 列(ADR-009) | orchestrator `WorkflowNodeRunMapper.updateStatus` 写 `#{output}::jsonb` | 列缺失时 `column "output" does not exist`,所有 workflow 节点 finish 报错 |
+| **V77** | `job_task` / `workflow_node_run` / `event_delivery_log` 加 `error_key VARCHAR(128)` + `error_args JSONB`(i18n Phase F) | orchestrator i18n 三元组持久化路径 | 列缺失时 worker 上报 errorKey 时落库失败 |
+| **V78** | 8 表加 `error_key`/`error_args`(i18n Phase 2):`pipeline_step_run` / `job_step_instance` / `compensation_command` / `compensation_checkpoint` / `file_dispatch_record` / `file_error_record` / `retry_schedule`(`last_error_key`/`last_error_args`)/`notification_delivery_log` | orchestrator + console-api 读路径过 `LocalizedErrorRenderer` | 同 V77 |
+| **V79** | archive.* 冷表同步加 `error_key`/`error_args`(与 batch.* 对齐) | `ArchiveSchemaDriftCheck` 启动自检 | drift 不匹配时 orchestrator **启动失败**,因此必须先 V79 后 orchestrator 重启 |
+| **V80** | `batch.trigger_outbox_event` 表(ADR-010 trigger 异步) | trigger 异步路径(仅 `batch.trigger.async-launch.enabled=true` 时使用) | 表缺失时 trigger 异步 INSERT 失败;同步路径不受影响 |
+
+**滚动顺序**(强烈建议):
+
+```
+1. 先在 staging apply V72/V77/V78/V79/V80 → 验证 schema drift check 通过
+2. orchestrator 重启,确认 ArchiveSchemaDriftCheck PASS
+3. 确认所有 worker 镜像版本对齐(都已含 i18n + ADR-009 outputs 字段)
+4. 按本节"推荐滚动步骤"逐副本替换 worker
+5. 滚动期间避免新旧 worker 混合超过 30 分钟(JsonIgnoreProperties 兜底未识别字段,但语义上仍建议短窗口)
+```
+
+**滚动期间兼容性矩阵**:
+
+- **新 orchestrator + 旧 worker**:✅ 安全。worker 不上报 outputs/errorKey,orchestrator 落库 NULL,DSL 引用按 null fallback。
+- **旧 orchestrator + 新 worker**:⚠️ worker 上报的 outputs/errorKey 字段被 orchestrator 忽略(`@JsonIgnoreProperties(ignoreUnknown = true)` 保护),但 V72/V77/V78/V79 列若未 apply 则 worker → orchestrator 上报后 mapper 写库会失败。**所以 V72/V77/V78/V79 必须先于 worker 升级**。
+
 ## Worker 进程侧（建议）
 
 本仓库在 Orchestrator/Console 侧提供了排空状态与 API；Worker 进程若需在 `DRAINING` 时 **停止拉取新任务**，应在心跳或配置拉取结果中识别 `DRAINING` 并停止 claim（若尚未实现，请在发布说明中注明当前行为）。
