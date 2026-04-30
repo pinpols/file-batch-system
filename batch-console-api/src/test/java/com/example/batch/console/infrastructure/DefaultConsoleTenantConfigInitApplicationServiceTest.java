@@ -70,20 +70,21 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   void setUp() {
     service =
         new DefaultConsoleTenantConfigInitApplicationService(
-            jobDefinitionMapper,
-            workflowDefinitionMapper,
-            workflowNodeMapper,
-            workflowEdgeMapper,
-            pipelineDefinitionMapper,
-            pipelineStepDefinitionMapper,
-            fileChannelConfigMapper,
-            fileTemplateConfigMapper,
-            resourceQueueMapper,
-            batchWindowMapper,
-            businessCalendarMapper,
-            calendarHolidayMapper,
-            tenantQuotaPolicyMapper,
-            alertRoutingConfigMapper);
+            new TenantConfigInitApplyHandlers(
+                jobDefinitionMapper,
+                workflowDefinitionMapper,
+                workflowNodeMapper,
+                workflowEdgeMapper,
+                pipelineDefinitionMapper,
+                pipelineStepDefinitionMapper,
+                fileChannelConfigMapper,
+                fileTemplateConfigMapper,
+                resourceQueueMapper,
+                batchWindowMapper,
+                businessCalendarMapper,
+                calendarHolidayMapper,
+                tenantQuotaPolicyMapper,
+                alertRoutingConfigMapper));
   }
 
   // ------------------------------------------------------------------ job definitions
