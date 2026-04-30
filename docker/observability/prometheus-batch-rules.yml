@@ -228,3 +228,50 @@ groups:
         annotations:
           summary: "Dead letter tasks backlog is growing"
           description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Investigate root cause before running scripts/ops/heal-dead-letters.sh."
+
+      # ── ADR-010 trigger 异步解耦专项告警 ────────────────────────────────────
+      # 配合 docs/runbook/trigger-async-launch-rollout.md §灰度切换 SOP, 告警阈值与
+      # 验收指标(batch.trigger.outbox.publish.lag p99 < 5s)对齐. 三条告警覆盖:
+      #   - 投递管道堆积(产出 > 消费)
+      #   - consumer 失败暴增
+      #   - GIVE_UP 数据 — 任意 1 条都需运维介入
+
+      # relay 投出去的速率 > orchestrator 消费速率超过 5/s 持续 10min,
+      # 说明 trigger_outbox 在堆积或 consumer 反压.
+      - alert: TriggerOutboxBacklogGrowing
+        expr: rate(batch_trigger_launch_published_total[5m])
+              - rate(batch_trigger_launch_consumed_total[5m]) > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger outbox backlog is growing (publish > consume)"
+          description: "trigger publish 速率超过 consumer {{ $value | humanize }}/s 持续 10min. orchestrator consumer 可能滞后 / lag 过大. 检查 batch.trigger.outbox.publish.lag 指标 + Kafka consumer group orchestrator-trigger-launch."
+
+      # consumer 端 launch 失败(非 rate_limited)率超过 1/s 持续 5min — 可能是
+      # LaunchApplicationService 内部异常 / DB 连接池耗尽 / orchestrator 崩溃风暴.
+      - alert: TriggerLaunchFailureSpike
+        expr: rate(batch_trigger_launch_failed_total{reason!="rate_limited"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger launch failure rate is high"
+          description: "trigger launch 失败率 {{ $value | humanize }}/s (非限流原因) 持续 5min. 检查 orchestrator 日志 + DB / Kafka 健康. 失败的 envelope 会留在 Kafka topic 不丢, 但 trigger_request 状态可能错乱."
+
+      # outbox 行被标 GIVE_UP — 通常是 payload 反序列化失败 / 重试上限耗尽,
+      # 任意 1 条都需要运维介入(数据问题, 等不到自愈).
+      - alert: TriggerOutboxGiveUp
+        expr: increase(batch_trigger_outbox_give_up_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger outbox events marked GIVE_UP"
+          description: "{{ $value | humanize }} trigger_outbox_event(s) 在过去 1h 进入 GIVE_UP 状态. 通常是 payload 反序列化失败或重试上限耗尽 — 需要人工查 last_error + 修源端配置 / 删 zombie 行. 参考 docs/runbook/trigger-async-launch-rollout.md §回滚."
