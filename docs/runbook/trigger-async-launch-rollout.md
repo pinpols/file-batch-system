@@ -16,6 +16,60 @@
   - `batch.trigger.launch.failed.total`
   - trigger outbox 监控参考 `batch.outbox.publish.duration`(orchestrator outbox 同款指标命名)
 
+## 0.1 本地 docker-compose 实测验证记录(2026-04-30)
+
+> 切换默认 `enabled=true` 后,在本地 docker-compose 全栈跑了 smoke test,记录在此供运维参考预期行为与已知坑。
+
+### 验证清单
+
+| 环节 | 结果 | 证据 |
+|---|---|---|
+| V80 migration 自动 apply | ✅ | trigger 启动期 flyway 跑过,`batch.trigger_outbox_event` 表已建 |
+| Kafka topic `batch.trigger.launch.v1` 存在 | ✅ | `kafka-topics.sh --list` 命中(由 kafka-init 默认 KAFKA_TOPICS 创建) |
+| trigger TriggerOutboxRelay bean 启动 | ✅ | 日志:`TriggerOutboxRelay 已启动:poll=200ms batch=100 backoff_max=60s` |
+| trigger Kafka producer config 用容器名 | ✅ | 日志:`bootstrap.servers = [kafka:29092]`(非 `localhost:19092`) |
+| orchestrator TriggerLaunchConsumer 订阅 | ✅ | 日志:`Subscribed to topic(s): batch.trigger.launch.v1` + 3 partitions assignment |
+| 1 条 manual launch 全链路 | ✅ | trigger HTTP 200 → outbox PUBLISHED → consumer 消费 → job_instance INSERT |
+
+### 端到端延迟实测
+
+| 阶段 | 耗时 |
+|---|---|
+| trigger HTTP 接收 → trigger_request + outbox INSERT(同事务) | < 100ms |
+| outbox INSERT → relay 抢占 → Kafka publish → status=PUBLISHED | **~680ms**(含 200ms relay 轮询周期) |
+| Kafka publish → orchestrator consumer 消费 → job_instance CREATED | < 1s |
+| **总端到端**(trigger HTTP → job_instance INSERT) | **< 1s** |
+
+> 与 ADR-010 设计预期吻合:同步 HTTP 桥 < 50ms 单次延迟换 outbox ~200ms 轮询 + Kafka send,总体仍亚秒级。
+
+### 已知 race + 自愈机制
+
+第一次消费时偶发 `TriggerLaunchConsumer launch 失败`,listener 抛异常 → spring-kafka 默认 SeekToCurrentErrorHandler 重试 → 第二次消费成功。原因:trigger 异步路径下 trigger_request 事务可能在 outbox 已 publish 但还没对 orchestrator 可见(read-after-write race)。orchestrator 端 `uk_job_instance_tenant_dedup` + listener 重试机制兜底,**业务层面不会双跑也不会丢失**,仅在 metric 上看到 `batch.trigger.launch.failed.total{reason="runtime"}` 偶发增量(后随重试 success 抹平)。
+
+### 容器配置必备项(2026-04-30 切换发现)
+
+切默认 `true` 后通过 smoke test 暴露的关键配置 bug,**已修但灰度环境 / 生产部署清单要复核**:
+
+```yaml
+# docker-compose.app.yml trigger service 必须有:
+trigger:
+  environment:
+    BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}  # ← 容器内必须用网络名,不能 localhost
+  depends_on:
+    kafka:
+      condition: service_healthy  # ← trigger 启动时 Kafka 必须先就绪
+```
+
+不加这两条 → trigger 启动后 producer 用 batch-defaults.yml fallback `localhost:19092` → 容器内 localhost = trigger 自己 → 连不上 Kafka → outbox 永远卡 PUBLISHING(`last_error` 也为空,因为 publish call 还在 Kafka 客户端内部 retry 没返回失败)。
+
+**生产部署的 K8s manifest / Helm values 必须等价配齐**:`BATCH_KAFKA_BOOTSTRAP_SERVERS` 指向集群内 Kafka service DNS,trigger Pod startup probe / readiness probe 等 Kafka 可达后再放流量。
+
+### 切换后 fallback 路径仍有效
+
+显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` + 重启 trigger + orchestrator → 立刻走原 HTTP 同步桥(`HttpOrchestratorTriggerAdapter`),`DefaultTriggerService.forwardToOrchestrator` 首次调用打 1 条 deprecation WARN(AtomicBoolean 防刷屏)。已落库的 `trigger_outbox_event` 由 relay 继续投递(回滚不丢),orchestrator consumer 仍在跑(由于 `@ConditionalOnProperty matchIfMissing=true`,缺 env 也起 listener,需要显式 `false` 才不起)。
+
+---
+
 ## 1. Staging 全量验证(D-7 ~ D-3)
 
 **目标**:在 staging 环境跑通完整 fire→outbox→relay→Kafka→consumer→launch 链路。
