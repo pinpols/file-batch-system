@@ -209,7 +209,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (command.workerId() != null && !command.workerId().equals(task.getAssignedWorkerCode())) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.worker.not_owner");
     }
-    Instant finishedAt = finishedAtOrNow();
+    Instant finishedAt = Instant.now();
     JobPartitionEntity partition =
         jobMappers.jobPartitionMapper.selectById(command.tenantId(), task.getJobPartitionId());
     JobInstanceEntity jobInstance =
@@ -256,7 +256,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     }
     if (partition != null) {
       jobMappers.jobPartitionMapper.updateOutputSummary(
-          command.tenantId(), partition.getId(), buildOutputSummary(command, task));
+          command.tenantId(),
+          partition.getId(),
+          TaskOutcomeSummaryBuilder.buildOutputSummary(command, task));
     }
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
     updateStepInstanceProgress(command, task, retryScheduled, finishedAt);
@@ -408,7 +410,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .instanceStatus(instanceStatus)
                 .successPartitionCount((int) successCount)
                 .failedPartitionCount((int) failedCount)
-                .resultSummary(buildJobInstanceResultSummary(jobInstance, partitions, command))
+                .resultSummary(
+                    TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
+                        jobInstance, partitions, command))
                 .finishedAt(jobFullyComplete ? finishedAt : null)
                 .expectedVersion(jobInstance.getVersion())
                 .build());
@@ -453,7 +457,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                     ctx.workflowRun().getStartedAt(),
                     ctx.finishedAt()),
                 ctx.finishedAt(),
-                serializeOutputs(ctx.command().outputs()))));
+                TaskOutcomeSummaryBuilder.serializeOutputs(ctx.command().outputs()))));
     List<WorkflowDagService.DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodes(
             ctx.workflowRun().getWorkflowDefinitionId(),
@@ -529,8 +533,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
                 .id(stepInstance.getId())
                 .stepStatus(nextStatus)
                 .retryCount(nextRetryCount)
-                .relatedFileId(resolveRelatedFileId(task, command))
-                .resultSummary(buildOutputSummary(command, task))
+                .relatedFileId(TaskOutcomePayloadSupport.resolveRelatedFileId(task, command))
+                .resultSummary(TaskOutcomeSummaryBuilder.buildOutputSummary(command, task))
                 .errorCode(command.errorCode())
                 .errorMessage(command.errorMessage())
                 .errorKey(command.errorKey())
@@ -541,61 +545,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (updated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.step_progress_conflict");
     }
-  }
-
-  private String buildOutputSummary(TaskOutcomeCommand command, JobTaskEntity task) {
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("taskId", command == null ? null : command.taskId());
-    summary.put("tenantId", command == null ? null : command.tenantId());
-    summary.put("success", command != null && command.success());
-    summary.put("resultSummary", command == null ? null : command.resultSummary());
-    summary.put("errorCode", command == null ? null : command.errorCode());
-    summary.put("errorMessage", command == null ? null : command.errorMessage());
-    summary.put("taskPayload", task == null ? null : task.getTaskPayload());
-    summary.put("recordedAt", Instant.now().toString());
-    return JsonUtils.toJson(summary);
-  }
-
-  private String buildJobInstanceResultSummary(
-      JobInstanceEntity jobInstance,
-      List<JobPartitionEntity> partitions,
-      TaskOutcomeCommand command) {
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("jobInstanceId", jobInstance == null ? null : jobInstance.getId());
-    summary.put("lastTaskId", command == null ? null : command.taskId());
-    summary.put(
-        "successPartitions",
-        partitions == null
-            ? 0L
-            : partitions.stream()
-                .filter(
-                    partition ->
-                        PartitionStatus.SUCCESS.code().equals(partition.getPartitionStatus()))
-                .count());
-    summary.put(
-        "failedPartitions",
-        partitions == null
-            ? 0L
-            : partitions.stream()
-                .filter(
-                    partition ->
-                        PartitionStatus.FAILED.code().equals(partition.getPartitionStatus()))
-                .count());
-    summary.put("lastErrorCode", command == null ? null : command.errorCode());
-    summary.put("lastErrorMessage", command == null ? null : command.errorMessage());
-    summary.put("updatedAt", Instant.now().toString());
-    return JsonUtils.toJson(summary);
-  }
-
-  /**
-   * ADR-009 Stage 1.2: 把 worker 上报的 outputs Map 序列化为 JSON 字符串,写入 workflow_node_run.output JSONB
-   * 列。null/empty 直接返回 null(不写空对象),让 DSL 解析按"无产出"语义 fallback。
-   */
-  private String serializeOutputs(Map<String, Object> outputs) {
-    if (outputs == null || outputs.isEmpty()) {
-      return null;
-    }
-    return JsonUtils.toJson(outputs);
   }
 
   /** 当 JOB 节点启动的子 Job 到达终态时，将结果应用到父 Job 中的虚拟任务， 由标准的基于分区的 DAG 推进逻辑接管后续流转。 */
@@ -641,7 +590,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         return null;
       }
       Object value = ((Map<String, Object>) effectiveMap).get("_parentVirtualTaskId");
-      return toPositiveLong(value);
+      return TaskOutcomePayloadSupport.toPositiveLong(value);
     } catch (Exception ignored) {
       return null;
     }
@@ -657,7 +606,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   private String resolveCurrentNodeCode(JobTaskEntity task, WorkflowRunEntity workflowRun) {
     String nodeCode =
-        payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeCode");
+        TaskOutcomePayloadSupport.payloadStringValue(
+            task == null ? null : task.getTaskPayload(), "workflowNodeCode");
     if (nodeCode != null && !nodeCode.isBlank()) {
       return nodeCode;
     }
@@ -671,7 +621,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
 
   private String resolveCurrentNodeType(JobTaskEntity task) {
     String nodeType =
-        payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeType");
+        TaskOutcomePayloadSupport.payloadStringValue(
+            task == null ? null : task.getTaskPayload(), "workflowNodeType");
     return nodeType == null || nodeType.isBlank() ? WorkflowNodeType.TASK.code() : nodeType;
   }
 
@@ -719,7 +670,8 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private String resolveTaskNodeCode(
       JobTaskEntity task, WorkflowRunEntity workflowRun, String fallbackNodeCode) {
     String taskNodeCode =
-        payloadStringValue(task == null ? null : task.getTaskPayload(), "workflowNodeCode");
+        TaskOutcomePayloadSupport.payloadStringValue(
+            task == null ? null : task.getTaskPayload(), "workflowNodeCode");
     if (taskNodeCode != null && !taskNodeCode.isBlank()) {
       return taskNodeCode;
     }
@@ -817,87 +769,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     return WorkflowRunStatus.SUCCESS.code().equals(workflowStatus)
         || WorkflowRunStatus.FAILED.code().equals(workflowStatus)
         || WorkflowRunStatus.TERMINATED.code().equals(workflowStatus);
-  }
-
-  private Instant finishedAtOrNow() {
-    return Instant.now();
-  }
-
-  private Long resolveRelatedFileId(JobTaskEntity task, TaskOutcomeCommand command) {
-    return firstPositiveLong(
-        resolveRelatedFileId(task),
-        payloadLongValue(command == null ? null : command.resultSummary(), "relatedFileId"),
-        payloadLongValue(command == null ? null : command.resultSummary(), "fileId"));
-  }
-
-  private Long resolveRelatedFileId(JobTaskEntity task) {
-    return firstPositiveLong(
-        payloadLongValue(task == null ? null : task.getTaskPayload(), "relatedFileId"),
-        payloadLongValue(task == null ? null : task.getTaskPayload(), "fileId"),
-        payloadLongValue(task == null ? null : task.getTaskPayload(), "sourceFileId"));
-  }
-
-  @SuppressWarnings("unchecked")
-  private String payloadStringValue(String payloadJson, String fieldName) {
-    if (payloadJson == null || payloadJson.isBlank() || fieldName == null || fieldName.isBlank()) {
-      return null;
-    }
-    try {
-      Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        Object value = ((Map<String, Object>) payloadMap).get(fieldName);
-        return value == null ? null : String.valueOf(value);
-      }
-    } catch (IllegalArgumentException exception) {
-      return null;
-    }
-    return null;
-  }
-
-  @SuppressWarnings("unchecked")
-  private Long payloadLongValue(String payloadJson, String fieldName) {
-    if (payloadJson == null || payloadJson.isBlank() || fieldName == null || fieldName.isBlank()) {
-      return null;
-    }
-    try {
-      Object payloadObject = JsonUtils.fromJson(payloadJson, Object.class);
-      if (payloadObject instanceof Map<?, ?> payloadMap) {
-        Object value = ((Map<String, Object>) payloadMap).get(fieldName);
-        return toPositiveLong(value);
-      }
-    } catch (IllegalArgumentException exception) {
-      return null;
-    }
-    return null;
-  }
-
-  private Long toPositiveLong(Object candidate) {
-    if (candidate instanceof Number number) {
-      long value = number.longValue();
-      return value > 0 ? value : null;
-    }
-    if (candidate == null) {
-      return null;
-    }
-    String text = String.valueOf(candidate).trim();
-    if (text.isEmpty()) {
-      return null;
-    }
-    try {
-      long value = Long.parseLong(text);
-      return value > 0 ? value : null;
-    } catch (NumberFormatException ignored) {
-      return null;
-    }
-  }
-
-  private Long firstPositiveLong(Long... candidates) {
-    for (Long candidate : candidates) {
-      if (candidate != null && candidate > 0) {
-        return candidate;
-      }
-    }
-    return null;
   }
 
   private int nextRunSeq(Long workflowRunId, String nodeCode) {

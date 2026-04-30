@@ -1,5 +1,7 @@
 package com.example.batch.console.repository;
 
+import java.time.Instant;
+
 public record WebhookDeliveryLogInsertParam(
     String tenantId,
     Long subscriptionId,
@@ -8,4 +10,5 @@ public record WebhookDeliveryLogInsertParam(
     Integer httpStatus,
     String responseBody,
     String deliveryStatus,
-    int attempt) {}
+    int attempt,
+    Instant nextRetryAt) {}

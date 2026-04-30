@@ -275,3 +275,17 @@ groups:
         annotations:
           summary: "Trigger outbox events marked GIVE_UP"
           description: "{{ $value | humanize }} trigger_outbox_event(s) 在过去 1h 进入 GIVE_UP 状态. 通常是 payload 反序列化失败或重试上限耗尽 — 需要人工查 last_error + 修源端配置 / 删 zombie 行. 参考 docs/runbook/trigger-async-launch-rollout.md §回滚."
+
+      # ── ADR §5.11 webhook durability ────────────────────────────────────
+      # WebhookDeliveryRelay 把 EXHAUSTED 行重投到 absolute-max-attempts 仍失败 → GIVE_UP,
+      # 任意 1 条都需运维介入(订阅 URL 失效 / 持续 5xx / payload 数据问题).
+      - alert: WebhookDeliveryGiveUp
+        expr: increase(batch_webhook_delivery_give_up_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: webhook
+        annotations:
+          summary: "Webhook delivery rows marked GIVE_UP"
+          description: "{{ $value | humanize }} webhook_delivery_log 行在过去 1h 进入 GIVE_UP 状态. 检查对应 subscription_id 的 callback URL 健康 + last response_body. 必要时 disable 订阅或修业务方接收端."
