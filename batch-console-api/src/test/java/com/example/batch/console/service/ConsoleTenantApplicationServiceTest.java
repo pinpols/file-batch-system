@@ -1,5 +1,6 @@
 package com.example.batch.console.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -69,8 +70,14 @@ class ConsoleTenantApplicationServiceTest {
 
     assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("cannot suspend tenant with active instances")
-        .hasMessageContaining("jobs=2");
+        // i18n: messageKey 不含原文,改用 messageArgs 检查
+        .satisfies(
+            ex -> {
+              String joined = String.join(" | ", argsAsStrings((BizException) ex));
+              assertThat(joined)
+                  .contains("cannot suspend tenant with active instances")
+                  .contains("jobs=2");
+            });
 
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
@@ -84,7 +91,10 @@ class ConsoleTenantApplicationServiceTest {
 
     assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("pipelines=3");
+        .satisfies(
+            ex ->
+                assertThat(String.join(" | ", argsAsStrings((BizException) ex)))
+                    .contains("pipelines=3"));
 
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
@@ -98,9 +108,22 @@ class ConsoleTenantApplicationServiceTest {
 
     assertThatThrownBy(() -> service.suspendTenant("tenant-a"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("workflows=1");
+        .satisfies(
+            ex ->
+                assertThat(String.join(" | ", argsAsStrings((BizException) ex)))
+                    .contains("workflows=1"));
 
     verify(tenantMapper, never()).updateStatus(any(), any());
+  }
+
+  private static java.util.List<String> argsAsStrings(BizException ex) {
+    Object[] args = ex.getMessageArgs();
+    if (args == null) return java.util.List.of();
+    java.util.List<String> result = new java.util.ArrayList<>(args.length);
+    for (Object a : args) {
+      result.add(a == null ? "null" : a.toString());
+    }
+    return result;
   }
 
   @Test

@@ -150,7 +150,12 @@ class DefaultConsoleFileTemplateExcelApplicationServiceTest {
 
     assertThatThrownBy(() -> service.upload(file))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("excel missing required headers");
+        // i18n: messageKey 不含原文,改用 messageArgs 检查
+        .satisfies(
+            ex ->
+                assertThat(((BizException) ex).getMessageArgs())
+                    .anyMatch(
+                        a -> a != null && a.toString().contains("excel missing required headers")));
   }
 
   private List<String> templateHeaders() {

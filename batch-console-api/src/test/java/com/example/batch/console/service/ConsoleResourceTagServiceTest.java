@@ -94,7 +94,12 @@ class ConsoleResourceTagServiceTest {
   void shouldRejectInvalidResourceType() {
     assertThatThrownBy(() -> service.upsert("t1", "UNKNOWN", "res-1", "key", "val", "admin"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("resourceType must be one of");
+        // i18n: messageKey 不含原文,改用 messageArgs 检查
+        .satisfies(
+            ex ->
+                assertThat(((BizException) ex).getMessageArgs())
+                    .anyMatch(
+                        a -> a != null && a.toString().contains("resourceType must be one of")));
   }
 
   @Test
@@ -108,6 +113,9 @@ class ConsoleResourceTagServiceTest {
   void shouldRejectBlankResourceType() {
     assertThatThrownBy(() -> service.upsert("t1", "  ", "res-1", "key", "val", "admin"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("resourceType is required");
+        .satisfies(
+            ex ->
+                assertThat(((BizException) ex).getMessageArgs())
+                    .anyMatch(a -> a != null && a.toString().contains("resourceType is required")));
   }
 }

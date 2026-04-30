@@ -44,7 +44,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       "batch.orchestrator.base-url=http://localhost:8082",
       // 关 QuartzMetricsConfiguration：本测试用 mock(Scheduler) 而非真 Quartz，
       // 否则 mock 的 getListenerManager() 返回 null 在 @PostConstruct 触发 NPE
-      "batch.trigger.quartz-metrics.enabled=false"
+      "batch.trigger.quartz-metrics.enabled=false",
+      // ADR-010: 默认 true 切异步路径后,本测试断言"orchestrator RPC 失败时 PENDING 行仍持久化",
+      // 异步路径不走 RPC,显式覆盖回 false 复用原同步桥语义
+      "batch.trigger.async-launch.enabled=false"
     })
 @Import(TriggerDedupRequiresNewIntegrationTest.TestConfig.class)
 class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
