@@ -26,11 +26,13 @@
 - **V6-Q-1** ✅:9 处 FQN 违规(`BizExceptionUtils:69` / `ConsoleAuthenticationFilter:93+116` / `ConfigPackageExcelValidator:855` / `PartitionLifecycleService:17` / `PlatformFileRuntimeRepository:209+251+268+290`)5 文件批量改 — `8dc6eac1`,全仓 grep 残留 0
 - **V6-NOISE-1** ✅:运行日志噪声治理 — ChannelConfigMerge `LEGACY_REDUNDANT_KEYS` + FileGovernance `processingDelayMaxAgeSeconds` 默认 7 天 zombie 上限 + `heal-zombie-pipelines.sh` 闭环 — `aa249bf8` / `0d650fab`
 
-🔴 **v6 仍未完成 4 项**(P2 主线,需独立 sprint):
-- **V6-P2-EXCEL-GODCLASS**:console-api Excel god class 群 7 个 800+ LOC 类待拆(最大 1512 LOC `DefaultConsoleWorkflowExcelApplicationService`),ADR-008 god-class-decomposition 第二战场
-- **V6-P2-ORCHESTRATOR-GODCLASS**:`DefaultTaskOutcomeService`(926)+ `DefaultWorkflowNodeDispatchService`(840)拆分
-- **V6-P2-WEBHOOK-DURABILITY**(deep-issue §5.11):`WebhookDeliveryLogEntity.nextRetryAt` 字段存在但无 `@Scheduled` driver 重试,只审计不重投 — 参 ADR-002 outbox 模式加 `WebhookDeliveryRelay`,2-3 天
-- **V6-P2-CONSOLE-IDEMPOTENCY**(deep-issue §5.5):console / trigger / db 三层幂等责任边界不一致
+🟢 **v6 P2 部分清账**(2026-04-30 14:55 `b74e0a0c` "feat(p2): 4 个 P2 项一把过"):
+- ✅ **V6-P2-WEBHOOK-DURABILITY**(deep-issue §5.11)— **已完成**。V81 migration `delivery_status` CHECK 加 `GIVE_UP` + `(status, next_retry_at)` 部分索引;`WebhookDeliveryRelay.java` 278 行(@ConditionalOnProperty 默认开 + ShedLock 互斥 + 5min/10min/20min/30min cap 退避 + absolute-max-attempts=8 后 GIVE_UP);抽 `WebhookEventPayload` + `WebhookDeliveryResult` 顶级类;新 `batch_webhook_delivery_give_up_total` counter + `WebhookDeliveryGiveUp` Prometheus 告警;7 个 `WebhookDeliveryRelayTest` 单测全绿
+- 🟡 **V6-P2-ORCHESTRATOR-GODCLASS** — **部分**。`DefaultTaskOutcomeService` 926 → 795 LOC (-14%):抽 `TaskOutcomePayloadSupport` (104 LOC) + `TaskOutcomeSummaryBuilder` (76 LOC) + 内联 helper。**`DefaultWorkflowNodeDispatchService` 840 LOC 未触**,留下次
+- 🟡 **V6-P2-EXCEL-GODCLASS** — **部分**。`DefaultConsoleWorkflowExcelApplicationService` 1512 → 1074 LOC (-29%):抽 `WorkflowExcelColumnMetadata` (187) + `WorkflowExcelWorkbookWriter` (406)。**主 service 还未到 600-800 目标**(余 parser + validator cluster 待抽,涉及内嵌 record 迁移);**另 6 个 Excel god class 未触**(PipelineDef 1061 / BusinessCalendar 1009 / JobDef 887 / ConfigPackage 873 / TenantConfigPackage 846 / TenantConfigInit 823),同款拆法可复用,留下次
+
+🔴 **v6 仍未完成 1 项**:
+- **V6-P2-CONSOLE-IDEMPOTENCY**(deep-issue §5.5):console / trigger / db 三层幂等责任边界不一致 — 设计层工作,需独立 ADR + 1 周
 
 🟡 **deferred(基础设施完备,触发条件出现再做)**:
 - **V6-D-1** ADR-009 Stage 4 业务配 DSL — 现有 seed 节点间 `mergeUpstreamPartitionOutputs` 自动透传 fileId 已够用,业务方设计跨节点参数串联时按 §10 文档配
@@ -47,11 +49,11 @@
 |---|:---:|:---:|:---:|:---:|:---:|
 | **deep-issue §5 6 项** | **4**(§5.1 Sec / §5.2 token / §5.7 异步 / §5.12 god) | **1**(§5.2 X-Token compat 物删) | **2**(§5.5 幂等 / §5.11 webhook) | 0 | 6 |
 | **ADR 路线图** | **2**(ADR-009 / ADR-010 代码 100%) | 0 | **2**(ADR-009 Stage 4 业务配置 / ADR-010 Stage 6+7 灰度+物删) | 0 | 4 |
-| **v2 评估硬化** | **4**(OPS-1 / OPS-2 / Q-1 / NOISE-1) | 0 | **4**(EXCEL-GOD / ORCH-GOD / WEBHOOK-DUR / IDEMP) | 0 | 8 |
+| **v2 评估硬化** | **5**(OPS-1 / OPS-2 / Q-1 / NOISE-1 / **WEBHOOK-DUR**) | **2**(ORCH-GOD / EXCEL-GOD 各部分) | **1**(IDEMP) | 0 | 8 |
 | v5 历史 P0-P3 | 19 | 2 | 0 | 2 | 23 |
-| **合计** | **29** | **3** | **8** | **2** | **41** |
+| **合计** | **30** | **5** | **5** | **2** | **41** |
 
-> **总览解读**:v5 时声称 P0/P1 全完成但有 5 项未实测对齐;v6 把 ADR-009/010 全栈、deep-issue §1+§2+§7+§12 实地核验为已完成,新增 v2 评估的 4 项硬化条目,新加未完成的 god class 系列 + Webhook durability + 幂等不一致 4 项 P2 主线。完成率 **29/41 = 71%**(v5 实测口径 19/23 = 83%,但 v6 把范围扩到含 v2 新发现 18 项,绝对完成数 +10)。
+> **总览解读**:v5 时声称 P0/P1 全完成但有 5 项未实测对齐;v6 把 ADR-009/010 全栈、deep-issue §1+§2+§7+§12 实地核验为已完成,新增 v2 评估的 4 项硬化条目。**2026-04-30 14:55 `b74e0a0c` 一把过**清掉 V6-P2-WEBHOOK-DURABILITY(全栈)+ V6-P2-ORCH-GODCLASS 部分(TaskOutcomeService 926→795)+ V6-P2-EXCEL-GODCLASS 部分(WorkflowExcel 1512→1074)。完成率从 29/41 = 71% 升到 **30/41 = 73%**(部分完成 +2 还未计入);余 5 项 follow-up 是各 god class 拆分剩余 + 1 项 idempotency 设计工作,均独立 sprint 排期。
 
 ## v5 历史总览(归档)
 
