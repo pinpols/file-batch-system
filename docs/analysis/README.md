@@ -9,7 +9,8 @@
 | 01 | [deep-issue-analysis.md](./deep-issue-analysis.md) | 系统级深度问题分析（v4，2026-04-23）：Bug / 漏洞 / 设计缺陷全景 | 想知道"目前有哪些坑" |
 | 02 | [fix-report.md](./fix-report.md) | 修复报告（v4，2026-04-22）：哪些已修、谁改的、commit 引用 | 验收 / 复盘 |
 | 03 | [hardening-backlog.md](./hardening-backlog.md) | 硬化 backlog（v4，2026-04-20）：剩下的 P0/P1/P2 优先级排序 | 决定下个 sprint 干什么 |
-| 04 | [project-assessment-2026-04-29.md](./project-assessment-2026-04-29.md) | 项目工程深度评估快照（2026-04-29）：架构/代码/测试/运维四维评分 + 优先建议 | 想要"项目当前整体水准"一页式判断 |
+| 04 | [project-assessment-2026-04-29.md](./project-assessment-2026-04-29.md) | 项目工程深度评估快照 v1（2026-04-29）:四维评分 + 7 轮校正历史 | 历史基线参考 |
+| 05 | [project-assessment-2026-04-30.md](./project-assessment-2026-04-30.md) | 项目工程深度评估快照 v2（2026-04-30）:24h 演进 delta + 实地 grep 复评 + P1 ops 缺口锁定 | **当前权威**,看"项目今天整体水准"一页式判断 |
 
 ## 工作循环
 
