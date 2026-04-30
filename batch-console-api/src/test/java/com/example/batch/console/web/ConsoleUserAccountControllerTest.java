@@ -1,5 +1,6 @@
 package com.example.batch.console.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -72,7 +73,11 @@ class ConsoleUserAccountControllerTest {
 
     assertThatThrownBy(() -> service.disable(99L))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("user account not found");
+        // i18n: messageKey 不含原文,改用 messageArgs 检查
+        .satisfies(
+            ex ->
+                assertThat(((BizException) ex).getMessageArgs())
+                    .anyMatch(a -> a != null && a.toString().contains("user account not found")));
 
     verify(userAccountMapper, never()).updateEnabled(anyLong(), any(Boolean.class));
     verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());
@@ -95,7 +100,11 @@ class ConsoleUserAccountControllerTest {
 
     assertThatThrownBy(() -> service.resetPassword(99L, "newSecurePass"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("user account not found");
+        // i18n: messageKey 不含原文,改用 messageArgs 检查
+        .satisfies(
+            ex ->
+                assertThat(((BizException) ex).getMessageArgs())
+                    .anyMatch(a -> a != null && a.toString().contains("user account not found")));
 
     verify(userAccountMapper, never()).updatePasswordHash(anyLong(), anyString());
     verify(sessionRegistry, never()).invalidateSession(anyString(), anyString());

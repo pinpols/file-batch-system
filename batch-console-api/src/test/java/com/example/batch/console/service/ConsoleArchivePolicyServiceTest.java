@@ -58,7 +58,12 @@ class ConsoleArchivePolicyServiceTest {
                     new ArchivePolicyUpsertParam(
                         "t1", "unknown_table", 30, true, false, 500, "desc", "admin")))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("target_table must be one of");
+        // i18n: BizException.getMessage() 返回 messageKey,改用 messageArgs 检查渲染前的 args 文本
+        .satisfies(
+            ex ->
+                assertThat(((BizException) ex).getMessageArgs())
+                    .anyMatch(
+                        a -> a != null && a.toString().contains("target_table must be one of")));
   }
 
   @Test
@@ -69,7 +74,9 @@ class ConsoleArchivePolicyServiceTest {
                     new ArchivePolicyUpsertParam(
                         "t1", "job_instance", 0, true, false, 500, "desc", "admin")))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("retention_days_min");
+        // 此 case key 本身含 retention_days_min(无 args),检查 messageKey
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getMessageKey()).contains("retention_days_min"));
   }
 
   @Test

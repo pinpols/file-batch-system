@@ -31,7 +31,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       "spring.autoconfigure.exclude=org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration",
       // 关 QuartzMetricsConfiguration：本测试用 mock(Scheduler) 而非真 Quartz，
       // 否则 mock 的 getListenerManager() 返回 null 在 @PostConstruct 触发 NPE
-      "batch.trigger.quartz-metrics.enabled=false"
+      "batch.trigger.quartz-metrics.enabled=false",
+      // ADR-010: 默认 true 切异步路径后,本测试期望走原同步 HTTP 桥(直接调 OrchestratorAdapter),
+      // 显式覆盖回 false 走 forwardToOrchestrator 路径
+      "batch.trigger.async-launch.enabled=false"
     })
 @Import(QuartzLaunchJobIntegrationTest.TestConfig.class)
 class QuartzLaunchJobIntegrationTest extends AbstractIntegrationTest {

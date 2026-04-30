@@ -43,7 +43,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    // ADR-010: 关 trigger async-launch 的 Kafka consumer bean,本测试不需要 trigger 路径,
+    // 起 listener 但没 Kafka 容器会引入额外 race / 启动副作用
+    properties = {"batch.trigger.async-launch.enabled=false"})
 class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";

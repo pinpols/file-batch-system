@@ -24,10 +24,15 @@ class CodeNormalizerTest {
 
   @Test
   void groupCode_rejectsInvalidChars() {
+    // i18n 后 BizException.getMessage() 返回 messageKey,不渲染文本;断言改为基于 messageArgs(原文本)
     assertThatThrownBy(() -> CodeNormalizer.normalizeGroupCode("im-port", "worker_group"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("worker_group")
-        .hasMessageContaining("im-port");
+        .satisfies(
+            ex -> {
+              Object[] args = ((BizException) ex).getMessageArgs();
+              assertThat(args).hasSize(1);
+              assertThat(args[0].toString()).contains("worker_group").contains("im-port");
+            });
     assertThatThrownBy(() -> CodeNormalizer.normalizeGroupCode("1import", "worker_group"))
         .isInstanceOf(BizException.class); // 不允许以数字开头
   }
@@ -52,9 +57,15 @@ class CodeNormalizerTest {
 
   @Test
   void configCode_rejectsSpecialChars() {
+    // i18n 后 BizException.getMessage() 返回 messageKey,不渲染文本;断言改为基于 messageArgs(原文本)
     assertThatThrownBy(() -> CodeNormalizer.normalizeConfigCode("window.code", "window_code"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("window_code");
+        .satisfies(
+            ex -> {
+              Object[] args = ((BizException) ex).getMessageArgs();
+              assertThat(args).hasSize(1);
+              assertThat(args[0].toString()).contains("window_code");
+            });
     assertThatThrownBy(() -> CodeNormalizer.normalizeConfigCode("win space", "window_code"))
         .isInstanceOf(BizException.class);
   }

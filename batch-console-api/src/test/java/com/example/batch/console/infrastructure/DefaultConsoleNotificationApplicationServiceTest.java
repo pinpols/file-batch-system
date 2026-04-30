@@ -72,7 +72,21 @@ class DefaultConsoleNotificationApplicationServiceTest {
 
     assertThatThrownBy(() -> service.getChannel("tenant-a", "missing"))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("not found");
+        // i18n: messageKey 仅 key,改为基于 messageKey 含 not_found 或 messageArgs 含 not found
+        .satisfies(
+            ex -> {
+              BizException bx = (BizException) ex;
+              boolean keyMatch =
+                  bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
+              boolean argsMatch =
+                  bx.getMessageArgs() != null
+                      && java.util.Arrays.stream(bx.getMessageArgs())
+                          .anyMatch(
+                              a -> a != null && a.toString().toLowerCase().contains("not found"));
+              assertThat(keyMatch || argsMatch)
+                  .as("messageKey or args should imply not_found")
+                  .isTrue();
+            });
   }
 
   @Test
@@ -186,7 +200,21 @@ class DefaultConsoleNotificationApplicationServiceTest {
                         "channelCode", "missing",
                         "eventTypes", "JOB_SUCCESS")))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("not found");
+        // i18n: messageKey 仅 key,改为基于 messageKey 含 not_found 或 messageArgs 含 not found
+        .satisfies(
+            ex -> {
+              BizException bx = (BizException) ex;
+              boolean keyMatch =
+                  bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
+              boolean argsMatch =
+                  bx.getMessageArgs() != null
+                      && java.util.Arrays.stream(bx.getMessageArgs())
+                          .anyMatch(
+                              a -> a != null && a.toString().toLowerCase().contains("not found"));
+              assertThat(keyMatch || argsMatch)
+                  .as("messageKey or args should imply not_found")
+                  .isTrue();
+            });
   }
 
   @Test
@@ -224,7 +252,21 @@ class DefaultConsoleNotificationApplicationServiceTest {
 
     assertThatThrownBy(() -> service.updateRule("tenant-a", 99L, Map.of()))
         .isInstanceOf(BizException.class)
-        .hasMessageContaining("not found");
+        // i18n: messageKey 仅 key,改为基于 messageKey 含 not_found 或 messageArgs 含 not found
+        .satisfies(
+            ex -> {
+              BizException bx = (BizException) ex;
+              boolean keyMatch =
+                  bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
+              boolean argsMatch =
+                  bx.getMessageArgs() != null
+                      && java.util.Arrays.stream(bx.getMessageArgs())
+                          .anyMatch(
+                              a -> a != null && a.toString().toLowerCase().contains("not found"));
+              assertThat(keyMatch || argsMatch)
+                  .as("messageKey or args should imply not_found")
+                  .isTrue();
+            });
   }
 
   @Test
