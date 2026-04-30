@@ -69,11 +69,11 @@
    - ✅ `DefaultConsoleBusinessCalendarExcelApplicationService` 1009 → **763 LOC** — 抽 writer (含 SheetSpec 模板)
    - ✅ `DefaultConsoleJobDefinitionExcelApplicationService` 887 → **663 LOC** — 抽 writer
    - ✅ `DefaultConsoleTenantConfigPackageExcelApplicationService` 846 → **728 LOC** — 抽 row projections
-   - ⏸️ **`ConfigPackageExcelValidator` 874 LOC 保留**(原始 873 几乎一致):本身已是从父类抽出的 single-purpose validator,内部 8 个 `validateXxxRows` 共享 cross-reference 数据,split 8 文件反而 fragment + overhead
+   - ⏸️ **`ConfigPackageExcelValidator` 874 LOC 决定保留**:9 个 `validateXxxRows` 方法共享 cross-reference 数据(workflow node ↔ pipeline step ↔ file channel 跨 sheet 比对),split 9 文件反而 fragment + 跨类传参 overhead > 收益
 
-2. **`DefaultTaskOutcomeService` 926 → 795 LOC** (-14%, `b74e0a0c`):抽 `TaskOutcomePayloadSupport` (104) + `TaskOutcomeSummaryBuilder` (76)。**`DefaultWorkflowNodeDispatchService` 840 LOC 未触**,留下次。
+2. **`DefaultTaskOutcomeService` 926 → 797 LOC** (-14%, `b74e0a0c`):抽 `TaskOutcomePayloadSupport` (104) + `TaskOutcomeSummaryBuilder` (76)。**`DefaultWorkflowNodeDispatchService` 840 LOC 未触** → §6 F1。
 
-3. **`ImportDataQualityService` 809 LOC**:worker-import 内,质量校验逻辑集中度高,留独立 sprint。
+3. **`ImportDataQualityService` 809 LOC**:worker-import 内,质量校验逻辑集中度高 → §6 F2。
 
 ---
 
@@ -88,24 +88,14 @@
 | 运行日志噪声治理 | `aa249bf8` ChannelConfigMerge `LEGACY_REDUNDANT_KEYS` + FileGovernance `processingDelayMaxAgeSeconds` |
 | ADR-010 实施代码新增 | trigger +600 LOC main + +800 LOC test;orchestrator +600 LOC main + ~400 LOC test;无新违规 |
 
-### 🔴 残留违规(本次 v2 grep 实测)
+### ✅ 残留违规清零(本次 v2 grep 实测,经 `8dc6eac1` 收口)
 
-**FQN 违规 9 处**(4-29 时 1 处,本次扫到 9 — 部分是 4-29 漏扫,部分是 i18n 迁移期间引入):
-
-| 文件:行 | 违规 |
+| 项 | 状态 |
 |---|---|
-| `BizExceptionUtils.java:69` | `com.example.batch.common.enums.ResultCode.SYSTEM_ERROR` |
-| `ConsoleAuthenticationFilter.java:93` | `com.example.batch.common.enums.ResultCode.UNAUTHORIZED` |
-| `ConsoleAuthenticationFilter.java:116` | `com.example.batch.common.enums.ResultCode.FORBIDDEN` |
-| `ConfigPackageExcelValidator.java:855` | `com.example.batch.common.utils.ConsoleTextSanitizer.normalize` |
-| `PartitionLifecycleService.java:17` | `com.example.batch.common.enums.PartitionStatus.CREATED` |
-| `PlatformFileRuntimeRepository.java:209/251/268/290` | 4 处 `com.example.batch.common.enums.PipelineRunStatus.*` |
-
-**`ZoneId.systemDefault()` 真违规 1 处**:`QuotaResetPolicy.java:36`(已 `@Deprecated`,但仍在用);其它 4 处都是 `BatchTimezoneProperties/Provider` 的 javadoc 注释,不算违规。
-
-**`Charset.forName("UTF-8")` 真违规 0 处**:唯一匹配是 `EncodingUtils.java:15` 的注释"禁用 Charset.forName"指引,非违规。
-
-**JPA / Hibernate**:0 ✅
+| FQN 违规 | **0**(原 9 处 5 文件已批量改:`BizExceptionUtils` / `ConsoleAuthenticationFilter` / `ConfigPackageExcelValidator` / `PartitionLifecycleService` / `PlatformFileRuntimeRepository`)|
+| `ZoneId.systemDefault()` | 1 处历史豁免:`QuotaResetPolicy.java:36`(已 `@Deprecated`,仅遗留测试在用,新代码走 `BatchTimezoneProvider`)|
+| `Charset.forName("UTF-8")` | 0 ✅(`EncodingUtils.java:15` 仅是注释禁用指引)|
+| JPA / Hibernate | 0 ✅ |
 
 ### 🟡 复杂度热点(>500 LOC class 共 10 个)
 
@@ -147,15 +137,16 @@
 - V80 `trigger_outbox_event` schema 含 UK 防重 + partial index `(status, next_publish_at)` 热点
 - `docker-compose` trigger 段补 `BATCH_KAFKA_BOOTSTRAP_SERVERS` env + `depends_on: kafka`(smoke test 发现的 bug 已修)
 
-### 🔴 高优先 ops 缺口(运维 agent 锁定 5 项)
+### ops 缺口现状(原 P1+P2 5 项,4-30 当日大半清账)
 
-| 优先级 | 缺口 | 证据 |
+| 优先级 | 缺口 | 状态 |
 |---|---|---|
-| **P1** | `.env.prod:16` 的 `KAFKA_TOPICS` **缺 `batch.trigger.launch.v1`**(只有 6 topic) | 与 `.env.example:59` 不一致;生产切异步开关后 relay 全 FAILED |
-| **P1** | Prometheus 3 条 ADR-010 告警未落 | `TriggerOutboxBacklogGrowing` / `TriggerLaunchFailureSpike` / `TriggerOutboxGiveUp` 仅在 runbook §建议;`prometheus-batch-rules.yml` 第 231 行结束 |
-| **P2** | Helm trigger deployment 未显式声明 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED` | 依赖 yml fallback 静默激活;helm diff 看不到开关变化 |
-| **P2** | `hardening-backlog.md` 仍 v5(2026-04-26)未滚 v6 | ADR-009 / ADR-010 全栈完成不反映;重蹈 v4→v5 顶部已完成但明细不对齐的历史错误 |
-| **P3** | `.github/workflows/pr-gate.yml:94-127` **缺 `batch-worker-process` case 分支** | process worker 变更无精确作用域检测,在最活跃路径上 CI 配置漂移 |
+| ~~P1~~ | `.env.prod:16` 的 `KAFKA_TOPICS` 缺 `batch.trigger.launch.v1` | ✅ 本地修了 + **`scripts/ci/validate-kafka-topics.sh` 守护**(三向 diff:.env.prod ↔ BatchTopics.java ↔ .env.example/.env.local;格式 + 跨文件一致性 + 双向缺失检测;wired 入 pr-gate.yml)|
+| ~~P1~~ | Prometheus 3 条 ADR-010 告警未落 | ✅ `0c623eb0` 落 `prometheus-batch-rules.yml` |
+| **P2** | Helm trigger deployment 未显式声明 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED` | 🟡 依赖 yml fallback 静默激活;helm diff 看不到开关变化 |
+| ~~P2~~ | `hardening-backlog.md` 滚 v6 | ✅ `6d977766` / 后续多轮,完成率 33/42 = 79% |
+| ~~P3~~ | `.github/workflows/pr-gate.yml` 缺 `batch-worker-process` case 分支 | ✅ 本日修 — pr-gate.yml `all_modules` + `module_order` + case 三处补 `batch-worker-process`,scope detection 完整 9 模块覆盖 |
+| ~~P3~~ | SQL CI schema-diff 守护缺失 | ✅ 新增 `scripts/ci/validate-flyway-schema.sh`(文件名规范 + 唯一性 + 单调性 + 0 字节防 ParseException + BOM/CRLF + 已 commit V## 改动 = checksum drift 检测) wired 入 pr-gate.yml |
 
 ### 文档体系
 
@@ -171,7 +162,7 @@
 | 维度 | 4-29 v1 | 4-30 v2 | Δ | 关键变化 |
 |---|---|---|---|---|
 | 架构与模块边界 | 8 | **8.5** | +0.5 | ADR-010 消除最后一处同步桥;但发现 console-api Excel 系列 god class 群 |
-| 代码质量 | 7→7.5 | **7.7** | +0.2 | 半完成重构收尾 + i18n + 噪声治理;残留 9 处 FQN 违规需修 |
+| 代码质量 | 7→7.5 | **7.7** | +0.2 | 半完成重构收尾 + i18n + 噪声治理 + FQN 9 处全清(`8dc6eac1`)|
 | 测试体系 | 8 | **8.2** | +0.2 | trigger 异步链路双层 E2E 闭合;worker 单测密度仍稀,真容器比 16% |
 | 运维就绪度 | 8 | **8.5** | +0.5 | ADR-010 runbook + zombie 脚本;`.env.prod` topic 缺 + Prometheus 告警未落是阻塞项 |
 
@@ -199,13 +190,17 @@
 
 ### 🔴 剩余 follow-up(权威 2 项硬剩余 + 2 项 operational)
 
-#### F1 — `ConfigPackageExcelValidator` 873 → ~400(半周)
-
-7 个 Excel god class 中 6 个已拆完(`b9eefb47`),只剩这 1 个**几乎没动**(实测 874 LOC,基本与原始一致)。`ConfigPackageExcelValidator` 含 9 个 sheet 的 row 验证逻辑混在一个类,该按 sheet 拆 9 个 SheetValidator(JobDefinition / FileChannelConfig / AlertRouting / PipelineDefinition / PipelineStepDefinition / WorkflowDefinition / WorkflowNode / WorkflowEdge / 通用基础校验),主 validator 转 facade 委派。可复用同战场 ColumnMetadata 模板。
-
-#### F2 — `DefaultWorkflowNodeDispatchService` 840 拆(orchestrator 核心,1-2 周)
+#### F1 — `DefaultWorkflowNodeDispatchService` 840 拆(orchestrator 核心,1-2 周)
 
 实测仍 840 LOC 未触。ADR-008 god-class-decomposition 范围内,影响面大需谨慎:抽 NodeDispatchPayloadBuilder + NodeRunStateMachine + UpstreamOutputCollector(参 ADR-009 集成)。需独立 PR + 严守原状态机不变量。**这是 orchestrator 核心 service,改动需 E2E 完整回归。**
+
+#### F2 — `ImportDataQualityService` 809(worker-import 内部质检,3-5 天)
+
+worker-import 内,数据质量校验逻辑集中度高。可按 rule type(format / required / range / referential / custom)拆 5 类 RuleEvaluator + 主 service 转 facade。
+
+#### ⏸️ 决定保留 — `ConfigPackageExcelValidator` 874 LOC
+
+7 个 Excel god class 中 6 个已拆完(`b9eefb47`),最后这 1 个**经决策保留**:本身已是从父类抽出的 single-purpose validator,9 个 `validateXxxRows` 方法共享 cross-reference 数据(workflow node ↔ pipeline step ↔ file channel 跨 sheet 比对),拆 9 个 SheetValidator 反而 fragment + 跨类传参 overhead > 收益。
 
 #### F3 — ADR-010 Stage 6 灰度切换 operational
 
@@ -224,21 +219,21 @@
 11. **修 `pr-gate.yml` `batch-worker-process` case 分支**
 12. **CI 检查 `.env.prod` 与 `.env.example` 同步**(P1-a 治本,加 GitHub Action)
 
-### 节奏建议(v4)
+### 节奏建议(v5)
 
 ```
-Week 1:    F1 ConfigPackageExcelValidator 874 → ~400 拆 9 SheetValidator
-Week 2-3:  F2 DefaultWorkflowNodeDispatchService 840 拆(ADR-008 范围,需 E2E 回归)
+Week 1-2:  F1 DefaultWorkflowNodeDispatchService 840 拆(ADR-008 范围,需 E2E 回归)
+Week 3:    F2 ImportDataQualityService 809 拆(worker-import 内,3-5 天)
 Week 4+:   F3 ADR-010 灰度切换(operational, 需真环境)
 Minor+:    F4 ADR-010 物理删除(灰度全量稳定 1 minor 后)
 P3 7-12:   背景渐进,每 sprint 抽 1-2 项
 ```
 
-**v4 终态评估**:**代码工作只剩 2 项**(F1 1 周 + F2 1-2 周),其余都是时间约束(F3/F4 灰度+物删)。原 v3 的 6 项 follow-up 中:
-- ❌ F1 6 个 Excel god class → ✅ 5/6 完成(`b9eefb47`),只剩 ConfigPackageExcelValidator
+**v5 终态评估**:**代码工作只剩 2 项硬 follow-up**(F1 1-2 周 + F2 3-5 天),其余都是时间约束(F3/F4 灰度+物删)。原 v3 的 6 项 follow-up 中:
+- ❌ F1 6 个 Excel god class → ✅ 6/7 完成(`b9eefb47`),`ConfigPackageExcelValidator` 经决策保留
 - ❌ F3 WorkflowExcel 收尾 → ✅ 1074 → **452 超额完成**(目标 600-800)
 - ❌ F4 Console idempotency → ✅ ADR-011 定稿 + 3 层实施完整
-- ❌ F2 DefaultWorkflowNodeDispatchService → 仍 pending(本次没碰)
+- ❌ F2 DefaultWorkflowNodeDispatchService → 仍 pending(本次没碰,接 v5 F1)
 - ❌ F5/F6 ADR-010 灰度 → 仍 deferred(operational + 时间)
 
 ---
@@ -282,7 +277,7 @@ P3 7-12:   背景渐进,每 sprint 抽 1-2 项
 |---|---|
 | `project-assessment-2026-04-29.md` | v1 基线;本 v2 引用其结构 + 7 轮校正历史 |
 | `deep-issue-analysis.md` | §5.1/§5.2/§5.12 头部已标已修;§5.5/§5.11 仍标 |
-| `hardening-backlog.md` | 仍 v5,需滚 v6(列在 §6 P2-5) |
+| `hardening-backlog.md` | ✅ 已滚 v6(`6d977766` / 后续多轮),完成率 33/42 = 79% |
 | `fix-report.md` | §八 2026-04-30 校正补录已记录 |
 | `ADR-010-trigger-async-decoupling.md` | 7 stage 路线图实施事实源 |
 | `runbook/trigger-async-launch-rollout.md` | 灰度切换 SOP |

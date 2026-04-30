@@ -44,13 +44,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          all_modules="batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-dispatch,batch-console-api,batch-e2e-tests"
+          all_modules="batch-common,batch-trigger,batch-orchestrator,batch-worker-core,batch-worker-import,batch-worker-export,batch-worker-process,batch-worker-dispatch,batch-console-api,batch-e2e-tests"
           module_order=(
             batch-trigger
             batch-orchestrator
             batch-worker-core
             batch-worker-import
             batch-worker-export
+            batch-worker-process
             batch-worker-dispatch
             batch-console-api
             batch-e2e-tests
@@ -112,6 +113,9 @@ jobs:
               batch-worker-export/*)
                 selected_modules[batch-worker-export]=1
                 ;;
+              batch-worker-process/*)
+                selected_modules[batch-worker-process]=1
+                ;;
               batch-worker-dispatch/*)
                 selected_modules[batch-worker-dispatch]=1
                 ;;
@@ -167,6 +171,14 @@ jobs:
             echo "- Maven modules: $maven_modules"
             echo "- load-tests: $run_load_tests_build"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate KAFKA_TOPICS sync (.env.prod ↔ BatchTopics.java ↔ .env.example/.env.local)
+        shell: bash
+        run: bash scripts/ci/validate-kafka-topics.sh
+
+      - name: Validate Flyway schema (parse + checksum drift detection)
+        shell: bash
+        run: bash scripts/ci/validate-flyway-schema.sh
 
       - name: Run PR gate for full reactor
         if: steps.scope.outputs.maven_scope == 'full'
