@@ -55,7 +55,8 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(
     prefix = "batch.trigger.async-launch",
     name = "enabled",
-    havingValue = "true")
+    havingValue = "true",
+    matchIfMissing = true)
 public class TriggerOutboxRelay {
 
   private static final Duration LOCK_AT_MOST = Duration.ofMinutes(1);

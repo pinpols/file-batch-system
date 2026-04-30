@@ -113,7 +113,7 @@ public enum XxxType implements DictEnum {
 - **默认**：IDE local=`true`（调试方便）、docker-compose=`false`（贴近生产）、prod profile 强制拒绝 `true`（@PostConstruct 守护）
 - **调用**：业务代码一律 `isBypassMode()`；旧键 `testing-open` / `isTestingOpen()` 已 deprecated，下一 minor 版本移除
 
-**ADR-010 trigger 异步解耦总开关 `batch.trigger.async-launch.enabled`**（默认 `false`）：开启后 trigger fire → 同事务写 `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch；关闭走原同步 HTTP 路径(`HttpOrchestratorTriggerAdapter`，已标 `@Deprecated forRemoval=true`)。**两边开关必须一致**(trigger 不发但 orchestrator 起 listener 浪费连接;trigger 发了但 orchestrator 不接更危险)。灰度切换 / 回滚 / 24h 对账步骤见 `docs/runbook/trigger-async-launch-rollout.md`。
+**ADR-010 trigger 异步解耦总开关 `batch.trigger.async-launch.enabled`**（**默认 `true`**，2026-04-30 起切换）：trigger fire → 同事务写 `trigger_outbox_event` → `TriggerOutboxRelay` 周期发到 Kafka topic `batch.trigger.launch.v1` → orchestrator `TriggerLaunchConsumer` 消费触发 launch。回退到原同步 HTTP 路径(`HttpOrchestratorTriggerAdapter`，已标 `@Deprecated forRemoval=true`)：显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false`。**两边开关必须一致**(trigger 不发但 orchestrator 起 listener 浪费连接；trigger 发了但 orchestrator 不接更危险)。灰度切换 / 回滚 / 24h 对账步骤见 `docs/runbook/trigger-async-launch-rollout.md`。
 
 详见 `docs/coding-conventions.md §21` + `docs/runbook/feature-switches.md`。
 

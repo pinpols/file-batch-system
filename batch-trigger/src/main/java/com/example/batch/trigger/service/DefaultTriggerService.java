@@ -88,7 +88,9 @@ public class DefaultTriggerService implements TriggerService {
    * 异步发 Kafka,orchestrator 端 consumer 消费);{@code false} 时走原同步 HTTP 路径(deprecation 留 ADR-010 Stage
    * 7)。
    */
-  @Value("${batch.trigger.async-launch.enabled:false}")
+  // ADR-010: 默认开异步路径(2026-04-30 起)。同步 HTTP 桥仅作 incident 回退,显式
+  // BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false
+  @Value("${batch.trigger.async-launch.enabled:true}")
   private boolean asyncLaunchEnabled;
 
   @Override

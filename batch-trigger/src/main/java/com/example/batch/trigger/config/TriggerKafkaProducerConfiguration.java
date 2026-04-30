@@ -26,7 +26,8 @@ import org.springframework.kafka.core.ProducerFactory;
 @ConditionalOnProperty(
     prefix = "batch.trigger.async-launch",
     name = "enabled",
-    havingValue = "true")
+    havingValue = "true",
+    matchIfMissing = true)
 public class TriggerKafkaProducerConfiguration {
 
   @Value("${spring.kafka.bootstrap-servers}")

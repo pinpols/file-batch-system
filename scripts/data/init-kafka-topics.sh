@@ -25,7 +25,7 @@
 set -eu
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-kafka:29092}"
-topics_csv="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter}"
+topics_csv="${KAFKA_TOPICS:-batch.task.dispatch.import,batch.task.dispatch.export,batch.task.dispatch.process,batch.task.dispatch.dispatch,batch.task.result,batch.task.retry,batch.task.dead-letter,batch.trigger.launch.v1}"
 default_partitions="${KAFKA_TOPIC_PARTITIONS:-3}"
 replication_factor="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 
