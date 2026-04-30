@@ -1,5 +1,6 @@
 package com.example.batch.worker.dispatchs.infrastructure;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -12,6 +13,10 @@ import com.example.batch.worker.core.infrastructure.PlatformFileRuntimeRepositor
 import com.example.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -148,5 +153,30 @@ class DispatchReceiptPollSchedulerTest {
 
     verify(fileDispatchRepository, never())
         .markAcked(anyString(), anyLong(), anyString(), anyString());
+  }
+
+  @Test
+  void isTransientConnectivityFailure_classifiesNetExceptions() {
+    // 直/嵌套 connect-refused / 超时 / DNS 都算瞬时连通性失败 (仅 message 日志, 不打 stack)。
+    assertThat(DispatchReceiptPollScheduler.isTransientConnectivityFailure(new ConnectException()))
+        .isTrue();
+    assertThat(
+            DispatchReceiptPollScheduler.isTransientConnectivityFailure(
+                new SocketTimeoutException()))
+        .isTrue();
+    assertThat(
+            DispatchReceiptPollScheduler.isTransientConnectivityFailure(new UnknownHostException()))
+        .isTrue();
+    assertThat(
+            DispatchReceiptPollScheduler.isTransientConnectivityFailure(
+                new RuntimeException("wrap", new ConnectException("refused"))))
+        .isTrue();
+    // 非连通性 — 业务异常应保留 stack
+    assertThat(
+            DispatchReceiptPollScheduler.isTransientConnectivityFailure(
+                new IllegalStateException("bad payload")))
+        .isFalse();
+    assertThat(DispatchReceiptPollScheduler.isTransientConnectivityFailure(new IOException("io")))
+        .isFalse();
   }
 }
