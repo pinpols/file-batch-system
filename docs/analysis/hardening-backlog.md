@@ -1,15 +1,61 @@
-# 🛡 硬化与遗留问题 Backlog · v5
+# 🛡 硬化与遗留问题 Backlog · v6
 
-> 产出日期：2026-04-26
-> 上一版：[`../archive/analysis/hardening-backlog-v4.md`](../archive/analysis/hardening-backlog-v4.md)（2026-04-21）
-> 校准方法：v4 18 条逐条对照本日代码 / 数据库 / 日志现状重新评估
-> 修订历史：v4 顶部声称"P0/P1/P3 全部完成"，实测有 5 项未完成或部分完成；本版按真实状态重新分类
+> 产出日期:2026-04-30
+> 上一版:[`./hardening-backlog.md@v5`](./hardening-backlog.md)(2026-04-26 — 本文件直接覆盖,v5 不再单独保留;历史诊断详见 git log)
+> 校准方法:v5 后 4 天密集开发 17+ 个主线 commit,逐条核 ADR-009 / ADR-010 全栈 + deep-issue 6 项现状 + v2 评估 P1/P2 项
+> 修订历史:v5 顶部"P0/P1/P3 全部完成"在 ADR-009/010 全栈实装 + console god service 拆完后已是事实,v6 把 v5 误标"未完成"的项移到"已完成",新增 v2 评估锁定的 4 项硬化条目
 
 ---
 
-## 总览
+## v6 滚版变更要点(2026-04-30)
 
-| 优先级 | 已完成 | 部分完成 | 待办 | 不做（标） | 合计 |
+✅ **新增"已完成"4 项**(v5 误标"未完成"或本会话刚清账):
+- **deep-issue §5.1** trigger Spring Security:`cd389a0b`(2026-04-22 v4 闭环)`TriggerSecurityConfiguration.java:42-46`
+- **deep-issue §5.2** X-Console-Token 物理删除:`ff20c36f` 主代码 + yaml + OpenAPI + 测试 9 文件 +20/-168
+- **deep-issue §5.7** trigger → orchestrator 异步化:ADR-010 全栈 7 stage(`9587b8bf` / `087f6b7a` / `1ca3a957` / `22b330ea` / `788b637d` / `68bc49e8`),含 22 测试全绿(单测 9 + relay 7 + Layer 1 trigger E2E 4 + Layer 2 跨模块 E2E 2)
+- **deep-issue §5.12** Console Job 过胖:`DefaultConsoleJobApplicationService` 现 90 LOC + 6 兄弟类 1278 LOC
+
+🟢 **ADR 路线图全栈完成**:
+- **ADR-009 Workflow DSL**:Stage 1(V72 列)/ 1.2(worker outputs 上报)/ 2(`WorkflowParamResolver` 160 LOC + 10 单测)/ 3(`DefaultWorkflowNodeDispatchService.mergeNodeParams` 集成)全栈,Stage 4(7 workflow 配 DSL)是业务方按需触发 deferred
+- **ADR-010 trigger 异步解耦**:Stage 1-5 代码 100%,Stage 6 灰度 operational,Stage 7 物理删除等 1 minor
+- 配套 V80 `trigger_outbox_event` schema + `docs/runbook/trigger-async-launch-rollout.md` 280 行 SOP + `heal-zombie-pipelines.sh` ops 脚本
+
+🆕 **v2 评估锁定的 4 项硬化条目**(2026-04-30):
+- **V6-OPS-1** ✅(部分):`.env.prod` `KAFKA_TOPICS` 缺 `batch.trigger.launch.v1` + `batch.task.dispatch.process` — 本会话本地修;治本要 CI 加 `.env.prod` 与 `.env.example` 同步检查
+- **V6-OPS-2** ✅:Prometheus 3 条 ADR-010 告警(`TriggerOutboxBacklogGrowing` / `TriggerLaunchFailureSpike` / `TriggerOutboxGiveUp`)从 runbook §建议落 `prometheus-batch-rules.yml` — `0c623eb0`
+- **V6-Q-1** ✅:9 处 FQN 违规(`BizExceptionUtils:69` / `ConsoleAuthenticationFilter:93+116` / `ConfigPackageExcelValidator:855` / `PartitionLifecycleService:17` / `PlatformFileRuntimeRepository:209+251+268+290`)5 文件批量改 — `8dc6eac1`,全仓 grep 残留 0
+- **V6-NOISE-1** ✅:运行日志噪声治理 — ChannelConfigMerge `LEGACY_REDUNDANT_KEYS` + FileGovernance `processingDelayMaxAgeSeconds` 默认 7 天 zombie 上限 + `heal-zombie-pipelines.sh` 闭环 — `aa249bf8` / `0d650fab`
+
+🔴 **v6 仍未完成 4 项**(P2 主线,需独立 sprint):
+- **V6-P2-EXCEL-GODCLASS**:console-api Excel god class 群 7 个 800+ LOC 类待拆(最大 1512 LOC `DefaultConsoleWorkflowExcelApplicationService`),ADR-008 god-class-decomposition 第二战场
+- **V6-P2-ORCHESTRATOR-GODCLASS**:`DefaultTaskOutcomeService`(926)+ `DefaultWorkflowNodeDispatchService`(840)拆分
+- **V6-P2-WEBHOOK-DURABILITY**(deep-issue §5.11):`WebhookDeliveryLogEntity.nextRetryAt` 字段存在但无 `@Scheduled` driver 重试,只审计不重投 — 参 ADR-002 outbox 模式加 `WebhookDeliveryRelay`,2-3 天
+- **V6-P2-CONSOLE-IDEMPOTENCY**(deep-issue §5.5):console / trigger / db 三层幂等责任边界不一致
+
+🟡 **deferred(基础设施完备,触发条件出现再做)**:
+- **V6-D-1** ADR-009 Stage 4 业务配 DSL — 现有 seed 节点间 `mergeUpstreamPartitionOutputs` 自动透传 fileId 已够用,业务方设计跨节点参数串联时按 §10 文档配
+- **V6-D-2** ADR-010 Stage 6 灰度 operational — staging → canary → prod 按 `trigger-async-launch-rollout.md` SOP 执行(需真部署环境)
+- **V6-D-3** ADR-010 Stage 7 物理删除旧 HTTP 路径 — 灰度全量切稳定 1 minor 后
+- **V6-D-4** I4 `buildContext` 模板抽取 — 等 4 个 `*JobContext` 出现共同基类时再做
+- **V6-D-5** Worker 4 模块单测密度补齐 — 各 Default*StageExecutor + *StepExecutionAdapter 加 5-10 个单测
+
+---
+
+## 总览(v6)
+
+| 优先级 | 已完成 | 部分完成 | 待办 | 不做(标) | 合计 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **deep-issue §5 6 项** | **4**(§5.1 Sec / §5.2 token / §5.7 异步 / §5.12 god) | **1**(§5.2 X-Token compat 物删) | **2**(§5.5 幂等 / §5.11 webhook) | 0 | 6 |
+| **ADR 路线图** | **2**(ADR-009 / ADR-010 代码 100%) | 0 | **2**(ADR-009 Stage 4 业务配置 / ADR-010 Stage 6+7 灰度+物删) | 0 | 4 |
+| **v2 评估硬化** | **4**(OPS-1 / OPS-2 / Q-1 / NOISE-1) | 0 | **4**(EXCEL-GOD / ORCH-GOD / WEBHOOK-DUR / IDEMP) | 0 | 8 |
+| v5 历史 P0-P3 | 19 | 2 | 0 | 2 | 23 |
+| **合计** | **29** | **3** | **8** | **2** | **41** |
+
+> **总览解读**:v5 时声称 P0/P1 全完成但有 5 项未实测对齐;v6 把 ADR-009/010 全栈、deep-issue §1+§2+§7+§12 实地核验为已完成,新增 v2 评估的 4 项硬化条目,新加未完成的 god class 系列 + Webhook durability + 幂等不一致 4 项 P2 主线。完成率 **29/41 = 71%**(v5 实测口径 19/23 = 83%,但 v6 把范围扩到含 v2 新发现 18 项,绝对完成数 +10)。
+
+## v5 历史总览(归档)
+
+| 优先级 | 已完成 | 部分完成 | 待办 | 不做(标) | 合计 |
 |---|:---:|:---:|:---:|:---:|:---:|
 | P0 立即止血 | 3 | 0 | 0 | 0 | 3 |
 | P1 结构性 | 4 | 1 | 0 | 0 | 5 |
