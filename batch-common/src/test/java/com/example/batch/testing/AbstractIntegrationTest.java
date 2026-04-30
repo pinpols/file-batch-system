@@ -71,12 +71,11 @@ public abstract class AbstractIntegrationTest {
   static void registerDynamicProperties(DynamicPropertyRegistry registry) {
     IntegrationTestInfrastructure.registerDynamicProperties(
         registry, PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, MINIO, REDIS);
-    // ADR-010: 默认 true 切异步路径后,集成测试默认关掉 trigger async-launch,避免
-    // (a) trigger 测试依赖同步 OrchestratorAdapter mock 调用次数被异步路径绕开
-    // (b) orchestrator 集成测试启动 Kafka consumer bean 引入 race / 启动副作用
-    // 真要测异步路径的 IT 在子类用 @SpringBootTest(properties = {"batch.trigger.async-launch.enabled=true"})
-    // 显式覆盖。
-    registry.add("batch.trigger.async-launch.enabled", () -> "false");
+    // 注意:不要在此处全局覆盖 batch.trigger.async-launch.enabled —— @DynamicPropertySource 优先级
+    // 高于子类 @SpringBootTest(properties=),会把"显式想测异步路径"的 IT(如 TriggerAsyncLaunchFullChainE2eIT)
+    // 强制拉回同步桥,导致 KafkaListener 不实例化、test 超时。需要同步路径的 IT 在自己的 @SpringBootTest
+    // properties 里显式声明 enabled=false (见 TriggerService/TriggerDedupRequiresNew/QuartzLaunchJob/
+    // ConcurrentTaskClaim 等)。
   }
 
   protected static String platformJdbcUrl() {

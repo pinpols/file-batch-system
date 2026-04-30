@@ -54,12 +54,14 @@ public abstract class AbstractPipelineStepExecutionAdapter<C, R> implements Step
     this.runtimeRepository = runtimeRepository;
   }
 
+  // 不能加 final:Spring CGLIB 用 Objenesis 实例化代理(跳过构造器→ runtimeRepository 字段为 null);
+  // 若 execute final, CGLIB 无法 override,代理直接跑 final 方法 → 触发 NPE。@Timed AOP 织入需要可覆盖。
   @Override
   @Timed(
       value = "batch.pipeline.step.execution.duration",
       description = "Worker pipeline step execution latency",
       histogram = true)
-  public final StepExecutionResponse execute(StepExecutionRequest request) {
+  public StepExecutionResponse execute(StepExecutionRequest request) {
     Map<String, Object> sourceAttributes = request.context();
     Map<String, Object> attributes =
         new LinkedHashMap<>(sourceAttributes == null ? Map.of() : sourceAttributes);

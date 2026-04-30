@@ -1,5 +1,6 @@
 package com.example.batch.common.i18n;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Locale;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -19,6 +20,19 @@ import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
  */
 @AutoConfiguration
 public class BatchI18nAutoConfiguration {
+
+  @Bean
+  @ConditionalOnMissingBean
+  public BizMessageResolver bizMessageResolver(MessageSource messageSource) {
+    return new BizMessageResolver(messageSource);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  public LocalizedErrorRenderer localizedErrorRenderer(
+      MessageSource messageSource, ObjectMapper objectMapper) {
+    return new LocalizedErrorRenderer(messageSource, objectMapper);
+  }
 
   @Bean
   @ConditionalOnMissingBean(name = "messageSource")
