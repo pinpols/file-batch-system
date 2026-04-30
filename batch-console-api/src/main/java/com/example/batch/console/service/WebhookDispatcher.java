@@ -54,6 +54,12 @@ public class WebhookDispatcher {
   /** 有界队列容量 — 防止流量尖峰下内存积压。 */
   private static final int QUEUE_CAPACITY = 1024;
 
+  /**
+   * EXHAUSTED 行 → relay 接力的初始退避:5 分钟后允许 {@link WebhookDeliveryRelay} 重投。 与 ADR §5.11 配合,本类只做 进程内
+   * best-effort burst,持久化重试由 relay 接管。
+   */
+  private static final long INITIAL_RELAY_DELAY_SECONDS = 5L * 60L;
+
   private final ConsoleWebhookService webhookService;
   private final ConsoleWebhookDeliveryLogRepository deliveryLogRepository;
   private final RestClient.Builder restClientBuilder;
@@ -137,31 +143,51 @@ public class WebhookDispatcher {
       WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson) {
     long backoffMillis = 250L;
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      Integer httpStatus = null;
-      String responseBody = null;
-      boolean success = false;
-      try {
-        deliver(subscription, payload, payloadJson);
-        success = true;
-      } catch (RestClientResponseException ex) {
-        httpStatus = ex.getStatusCode().value();
-        responseBody = sanitize(ex.getResponseBodyAsString());
-      } catch (Exception ex) {
-        responseBody = sanitize(ex.getMessage());
-      }
+      WebhookDeliveryResult result = attemptDelivery(subscription, payload, payloadJson);
 
-      if (success) {
-        insertLog(subscription, payload, payloadJson, null, null, "SUCCESS", attempt);
+      if (result.success()) {
+        insertLog(subscription, payload, payloadJson, null, null, "SUCCESS", attempt, null);
         return;
       }
 
-      String deliveryStatus = attempt >= MAX_ATTEMPTS ? "EXHAUSTED" : "FAILED";
+      boolean exhausted = attempt >= MAX_ATTEMPTS;
+      String deliveryStatus = exhausted ? "EXHAUSTED" : "FAILED";
+      // ADR §5.11: 仅 EXHAUSTED 行设 next_retry_at,relay 据此扫描接力重投;
+      // FAILED 行属本轮 burst 中间态,不需要 relay 介入。
+      Instant nextRetryAt =
+          exhausted ? Instant.now().plusSeconds(INITIAL_RELAY_DELAY_SECONDS) : null;
       insertLog(
-          subscription, payload, payloadJson, httpStatus, responseBody, deliveryStatus, attempt);
+          subscription,
+          payload,
+          payloadJson,
+          result.httpStatus(),
+          result.errorSummary(),
+          deliveryStatus,
+          attempt,
+          nextRetryAt);
       if (attempt < MAX_ATTEMPTS) {
         sleep(backoffMillis);
         backoffMillis *= 2;
       }
+    }
+  }
+
+  /**
+   * 单次 HTTP 投递,捕获所有异常并返回结构化结果。
+   *
+   * <p>同时供 {@link WebhookDispatcher#deliverWithRetry burst-retry} 与 {@link WebhookDeliveryRelay} 共用
+   * — 两侧都不应自己 catch 网络异常,统一从 {@link WebhookDeliveryResult} 决策。
+   */
+  public WebhookDeliveryResult attemptDelivery(
+      WebhookSubscriptionEntity subscription, WebhookEventPayload payload, String payloadJson) {
+    try {
+      deliver(subscription, payload, payloadJson);
+      return WebhookDeliveryResult.ok();
+    } catch (RestClientResponseException ex) {
+      return WebhookDeliveryResult.failure(
+          ex.getStatusCode().value(), sanitize(ex.getResponseBodyAsString()));
+    } catch (Exception ex) {
+      return WebhookDeliveryResult.failure(null, sanitize(ex.getMessage()));
     }
   }
 
@@ -204,7 +230,8 @@ public class WebhookDispatcher {
       Integer httpStatus,
       String responseBody,
       String deliveryStatus,
-      int attempt) {
+      int attempt,
+      Instant nextRetryAt) {
     deliveryLogRepository.insert(
         new WebhookDeliveryLogInsertParam(
             payload.tenantId(),
@@ -214,7 +241,8 @@ public class WebhookDispatcher {
             httpStatus,
             responseBody,
             deliveryStatus,
-            attempt));
+            attempt,
+            nextRetryAt));
   }
 
   private boolean matches(String configuredEventTypes, String eventType) {
@@ -257,12 +285,4 @@ public class WebhookDispatcher {
       Thread.currentThread().interrupt();
     }
   }
-
-  private record WebhookEventPayload(
-      String tenantId,
-      String eventType,
-      String stream,
-      String cursor,
-      Instant emittedAt,
-      Object data) {}
 }

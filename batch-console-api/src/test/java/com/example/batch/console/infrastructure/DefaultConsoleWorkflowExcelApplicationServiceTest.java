@@ -60,7 +60,8 @@ class DefaultConsoleWorkflowExcelApplicationServiceTest {
             workflowNodeMapper,
             workflowEdgeMapper,
             configChangeLogMapper,
-            importStore);
+            importStore,
+            new WorkflowExcelWorkbookWriter(workflowNodeMapper, workflowEdgeMapper));
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-1", "trace-1", "t1", "u1", "idem-1", "127.0.0.1"));
