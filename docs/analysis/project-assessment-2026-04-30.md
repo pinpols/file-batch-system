@@ -242,8 +242,9 @@ P3:         背景渐进,每 sprint 抽 1-2 项
 6. ADR-010 Stage 5 双层 E2E 清账(本会话 22 测试全绿)
 7. 运行日志噪声治理(本会话 ChannelConfigMerge + FileGovernance)
 8. **本次 v2 全维实地 grep 复评** — 锁定 P1 ops 缺口 / Excel god class 群 / 9 FQN 违规
+9. **v2 P1+P2 一把过清账**(2026-04-30 下午):本会话 + 并发 session 协作 — `0c623eb0` Prometheus 3 条 ADR-010 告警从 runbook §建议落 `prometheus-batch-rules.yml`;`8dc6eac1` 9 处 FQN 违规 5 文件批量改;`6d977766` `hardening-backlog` 滚 v6;**并发 `b74e0a0c`** 一把过 V6-P2-WEBHOOK-DURABILITY 全栈(V81 + Relay 278 行 + 7 单测 + Prometheus 告警) + V6-P2-ORCH-GODCLASS 部分(`DefaultTaskOutcomeService` 926→795 LOC -14%)+ V6-P2-EXCEL-GODCLASS 部分(`DefaultConsoleWorkflowExcelApplicationService` 1512→1074 LOC -29%)。**剩余 follow-up**:6 个 Excel god class(PipelineDef 1061 / BusinessCalendar 1009 / JobDef 887 / ConfigPackage 873 / TenantConfigPackage 846 / TenantConfigInit 823)+ `DefaultWorkflowNodeDispatchService` 840 拆分 + Console idempotency 三层边界设计
 
-> **教训**:评估口径必须以"全栈 grep + 单测全绿 + commit ref"为权威,不能依赖滚动文档单向声称。下次评估应在 ADR-010 灰度全量切完 + Excel god class 拆完后再做(预计 2026-05-中旬)。
+> **教训**:评估口径必须以"全栈 grep + 单测全绿 + commit ref"为权威,不能依赖滚动文档单向声称。下次评估应在剩余 6 个 Excel god class + `DefaultWorkflowNodeDispatchService` 拆完 + Console idempotency 设计落地后再做(预计 2026-05-中旬)。
 
 ---
 
