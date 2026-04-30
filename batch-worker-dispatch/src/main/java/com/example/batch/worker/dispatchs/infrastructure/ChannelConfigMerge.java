@@ -74,6 +74,18 @@ public final class ChannelConfigMerge {
           "bucket", "oss_bucket",
           "prefix", "oss_object_prefix");
 
+  /**
+   * 已是 {@code file_channel_config} 表独立列,JSON 里 redundant 出现时静默忽略,不告警。
+   *
+   * <p>设计意图:列是策略权威源,JSON overlay 不允许覆盖(S-1.5 安全)。但历史 seed / 老租户配置在 config_json 里 redundant
+   * 重复了同名字段(列 + JSON 同时存在,值通常相同),触发原 WARN 持续刷屏(每次 dispatch 都一条, 240 条 / 30min)。
+   *
+   * <p>本集合标记"已知 redundant 列字段"——既不允许 overlay 覆盖列(列优先,通过 line 119 normalized 不加入这些 key 实现),也不告警。运维
+   * audit 时识别真正的策略攻击,不应被这种已知 redundant 噪声淹没。新增控制类列字段时同步加入。
+   */
+  private static final Set<String> LEGACY_REDUNDANT_KEYS =
+      Set.of("receipt_policy", "receipt_polling_window_seconds", "enabled", "channel_type");
+
   private ChannelConfigMerge() {}
 
   public static Map<String, Object> merge(Map<String, Object> row, ObjectMapper objectMapper) {
@@ -106,6 +118,10 @@ public final class ChannelConfigMerge {
     for (Map.Entry<?, ?> entry : parsed.entrySet()) {
       String rawKey = String.valueOf(entry.getKey());
       String key = KEY_ALIASES.getOrDefault(rawKey, rawKey);
+      if (LEGACY_REDUNDANT_KEYS.contains(key)) {
+        // 已是表独立列(策略字段),JSON 里 redundant 不告警 — 列保持权威,直接静默跳过
+        continue;
+      }
       if (!ALLOWED_CONFIG_KEYS.contains(key)) {
         // S-1.5：白名单未登记的键忽略；记 WARN 便于运维发现模板异常或攻击尝试。
         // 尤其要阻止 enabled / receipt_policy 等策略字段被 overlay 覆盖。

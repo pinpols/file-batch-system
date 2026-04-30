@@ -76,6 +76,7 @@ public class FileGovernanceScheduler {
             tenantId,
             properties.getLatency().getArrivalDelayThresholdSeconds(),
             properties.getLatency().getProcessingDelayThresholdSeconds(),
+            properties.getLatency().getProcessingDelayMaxAgeSeconds(),
             properties.getLatency().getSampleSize());
     long arrivalCount = asLong(metrics.get("arrivalDelayViolations"));
     long arrivalMax = asLong(metrics.get("maxArrivalDelaySeconds"));
@@ -115,6 +116,7 @@ public class FileGovernanceScheduler {
         tenantId,
         properties.getLatency().getArrivalDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayThresholdSeconds(),
+        properties.getLatency().getProcessingDelayMaxAgeSeconds(),
         properties.getLatency().getSampleSize());
   }
 

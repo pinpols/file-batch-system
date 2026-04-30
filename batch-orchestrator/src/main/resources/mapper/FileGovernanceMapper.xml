@@ -209,6 +209,8 @@
           and run_status = #{runningStatus}
           and started_at is not null
           and started_at &lt; current_timestamp - (#{thresholdSeconds} * interval '1 second')
+          <!-- zombie 排除:超过 maxAgeSeconds 的 stale pipeline 视为 dead, 由独立 sweep job 处置, 不再持续 WARN -->
+          and started_at &gt; current_timestamp - (#{maxAgeSeconds} * interval '1 second')
     </select>
 
     <select id="selectMaxProcessingDelaySeconds" resultType="java.lang.Long">
@@ -217,6 +219,7 @@
         where tenant_id = #{tenantId}
           and run_status = #{runningStatus}
           and started_at is not null
+          and started_at &gt; current_timestamp - (#{maxAgeSeconds} * interval '1 second')
     </select>
 
     <select id="selectProcessingDelaySamples" resultType="map">
@@ -232,6 +235,7 @@
           and run_status = #{runningStatus}
           and started_at is not null
           and started_at &lt; current_timestamp - (#{thresholdSeconds} * interval '1 second')
+          and started_at &gt; current_timestamp - (#{maxAgeSeconds} * interval '1 second')
         order by processing_delay_seconds desc
         limit #{limit}
     </select>

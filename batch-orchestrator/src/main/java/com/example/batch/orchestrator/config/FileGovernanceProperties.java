@@ -43,6 +43,13 @@ public class FileGovernanceProperties {
     /** 处理延迟告警阈值（秒）。文件已到达但未完成处理超过该值 → WARN 指标。 */
     private long processingDelayThresholdSeconds = 900L;
 
+    /**
+     * 处理延迟"zombie"上限阈值（秒）。超过该值的 stale pipeline 视为 zombie（卡死/进程崩溃后未恢复/测试数据 残留），从延迟告警查询中排除,避免每 30s 反复
+     * WARN 同一条早就 dead 的 pipeline 持续刷屏。zombie 应由独立的 dead-letter / sweep job 处理(置为 FAILED 终态)。默认 7 天
+     * = 604800 秒。
+     */
+    private long processingDelayMaxAgeSeconds = 604800L;
+
     /** 单次扫描采样数，平衡精度与开销。 */
     private int sampleSize = 20;
   }
