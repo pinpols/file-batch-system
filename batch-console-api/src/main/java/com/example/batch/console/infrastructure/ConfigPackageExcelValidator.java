@@ -13,6 +13,7 @@ import com.example.batch.common.enums.WorkflowEdgeType;
 import com.example.batch.common.enums.WorkflowNodeType;
 import com.example.batch.common.enums.WorkflowType;
 import com.example.batch.common.model.PageRequest;
+import com.example.batch.common.utils.ConsoleTextSanitizer;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
 import com.example.batch.console.mapper.JobDefinitionMapper;
@@ -852,7 +853,7 @@ class ConfigPackageExcelValidator {
   }
 
   static String normalize(String value) {
-    return com.example.batch.common.utils.ConsoleTextSanitizer.normalize(value);
+    return ConsoleTextSanitizer.normalize(value);
   }
 
   static String normalizeEnum(String value) {

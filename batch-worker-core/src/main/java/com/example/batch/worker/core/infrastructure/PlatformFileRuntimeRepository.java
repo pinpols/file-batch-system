@@ -1,5 +1,6 @@
 package com.example.batch.worker.core.infrastructure;
 
+import com.example.batch.common.enums.PipelineRunStatus;
 import com.example.batch.common.utils.FileStateMachine;
 import com.example.batch.common.utils.JsonUtils;
 import com.example.batch.common.utils.Texts;
@@ -206,7 +207,7 @@ public class PlatformFileRuntimeRepository {
             "traceId",
             p.traceId(),
             "runStatus",
-            com.example.batch.common.enums.PipelineRunStatus.RUNNING.name());
+            PipelineRunStatus.RUNNING.name());
     platformFileRuntimeMapper.insertPipelineInstance(paramMap);
     return toLong(paramMap.get(KEY_ID));
   }
@@ -248,7 +249,7 @@ public class PlatformFileRuntimeRepository {
             "lastSuccessStage",
             lastSuccessStage,
             "runStatus",
-            com.example.batch.common.enums.PipelineRunStatus.SUCCESS.name()));
+            PipelineRunStatus.SUCCESS.name()));
   }
 
   public void markPipelineFailed(
@@ -265,7 +266,7 @@ public class PlatformFileRuntimeRepository {
             "lastSuccessStage",
             lastSuccessStage,
             "runStatus",
-            com.example.batch.common.enums.PipelineRunStatus.FAILED.name()));
+            PipelineRunStatus.FAILED.name()));
   }
 
   public Long startStepRun(
@@ -287,7 +288,7 @@ public class PlatformFileRuntimeRepository {
             "runSeq",
             nextExecutionSeq == null ? 1 : nextExecutionSeq,
             "stepStatus",
-            com.example.batch.common.enums.PipelineRunStatus.RUNNING.name(),
+            PipelineRunStatus.RUNNING.name(),
             "inputSummaryJson",
             toJson(inputSummary));
     platformFileRuntimeMapper.insertStepRun(paramMap);

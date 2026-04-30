@@ -1,5 +1,6 @@
 package com.example.batch.orchestrator.application.service;
 
+import com.example.batch.common.enums.PartitionStatus;
 import com.example.batch.orchestrator.application.plan.SchedulePlan;
 import com.example.batch.orchestrator.domain.entity.JobPartitionEntity;
 import com.example.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -13,8 +14,7 @@ import java.util.List;
 public interface PartitionLifecycleService {
 
   default List<JobPartitionEntity> createPartitions(SchedulePlan plan, Long jobInstanceId) {
-    return createPartitions(
-        plan, jobInstanceId, com.example.batch.common.enums.PartitionStatus.CREATED.code());
+    return createPartitions(plan, jobInstanceId, PartitionStatus.CREATED.code());
   }
 
   List<JobPartitionEntity> createPartitions(
