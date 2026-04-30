@@ -6,6 +6,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -52,8 +53,7 @@ public class OrchestratorSecretPreflightCheck {
               .getStatusCode();
       log.info(
           "orchestrator preflight ok: status={} — internal-secret alignment confirmed", status);
-    } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized
-        | org.springframework.web.client.HttpClientErrorException.Forbidden authErr) {
+    } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden authErr) {
       log.error(
           "orchestrator preflight FAILED (auth): status={} — batch.security.internal-secret"
               + " likely mismatched between trigger and orchestrator; trigger dispatch will"
