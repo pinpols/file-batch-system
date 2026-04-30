@@ -146,7 +146,17 @@ public class WebhookDispatcher {
       WebhookDeliveryResult result = attemptDelivery(subscription, payload, payloadJson);
 
       if (result.success()) {
-        insertLog(subscription, payload, payloadJson, null, null, "SUCCESS", attempt, null);
+        deliveryLogRepository.insert(
+            new WebhookDeliveryLogInsertParam(
+                payload.tenantId(),
+                subscription.getId(),
+                payload.eventType(),
+                payloadJson,
+                null,
+                null,
+                "SUCCESS",
+                attempt,
+                null));
         return;
       }
 
@@ -156,15 +166,17 @@ public class WebhookDispatcher {
       // FAILED 行属本轮 burst 中间态,不需要 relay 介入。
       Instant nextRetryAt =
           exhausted ? Instant.now().plusSeconds(INITIAL_RELAY_DELAY_SECONDS) : null;
-      insertLog(
-          subscription,
-          payload,
-          payloadJson,
-          result.httpStatus(),
-          result.errorSummary(),
-          deliveryStatus,
-          attempt,
-          nextRetryAt);
+      deliveryLogRepository.insert(
+          new WebhookDeliveryLogInsertParam(
+              payload.tenantId(),
+              subscription.getId(),
+              payload.eventType(),
+              payloadJson,
+              result.httpStatus(),
+              result.errorSummary(),
+              deliveryStatus,
+              attempt,
+              nextRetryAt));
       if (attempt < MAX_ATTEMPTS) {
         sleep(backoffMillis);
         backoffMillis *= 2;
@@ -221,28 +233,6 @@ public class WebhookDispatcher {
       spec = spec.header("X-Batch-Signature", sign(payloadJson, subscription.getSecret()));
     }
     spec.body(payloadJson).retrieve().toBodilessEntity();
-  }
-
-  private void insertLog(
-      WebhookSubscriptionEntity subscription,
-      WebhookEventPayload payload,
-      String payloadJson,
-      Integer httpStatus,
-      String responseBody,
-      String deliveryStatus,
-      int attempt,
-      Instant nextRetryAt) {
-    deliveryLogRepository.insert(
-        new WebhookDeliveryLogInsertParam(
-            payload.tenantId(),
-            subscription.getId(),
-            payload.eventType(),
-            payloadJson,
-            httpStatus,
-            responseBody,
-            deliveryStatus,
-            attempt,
-            nextRetryAt));
   }
 
   private boolean matches(String configuredEventTypes, String eventType) {

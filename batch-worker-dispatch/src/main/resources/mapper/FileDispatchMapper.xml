@@ -88,6 +88,7 @@
         from batch.file_dispatch_record
         where dispatch_status = #{dispatchStatus}
           and receipt_status = #{receiptStatus}
+          and dispatched_at &gt; now() - make_interval(secs =&gt; #{maxAgeSeconds})
         order by dispatched_at asc nulls last
         limit #{limit}
     </select>

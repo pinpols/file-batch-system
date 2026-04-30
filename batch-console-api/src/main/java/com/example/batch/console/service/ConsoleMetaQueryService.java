@@ -201,10 +201,7 @@ public class ConsoleMetaQueryService {
 
     List<ConsoleMetaEnumItem> toItems(MessageSource messageSource, Locale locale) {
       return Arrays.stream(enumClass.getEnumConstants())
-          .map(
-              e ->
-                  new ConsoleMetaEnumItem(
-                      e.code(), ConsoleMetaQueryService.localizedLabel(e, messageSource, locale)))
+          .map(e -> new ConsoleMetaEnumItem(e.code(), localizedLabel(e, messageSource, locale)))
           .toList();
     }
   }
