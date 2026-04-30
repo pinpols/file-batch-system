@@ -103,7 +103,7 @@ public class DefaultExportStageExecutor
               StageFailureCode.STEP_NOT_FOUND.name(),
               "error.worker.step_impl_not_found",
               new Object[] {step.implCode()},
-              "找不到步骤实现: " + step.implCode(),
+              "step impl not found: " + step.implCode(),
               ERROR_OBJECT_MAPPER)
           : stageStep.execute(context);
     } catch (BizException exception) {
