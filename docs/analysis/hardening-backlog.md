@@ -31,8 +31,12 @@
 - 🟡 **V6-P2-ORCHESTRATOR-GODCLASS** — **部分**。`DefaultTaskOutcomeService` 926 → 795 LOC (-14%):抽 `TaskOutcomePayloadSupport` (104 LOC) + `TaskOutcomeSummaryBuilder` (76 LOC) + 内联 helper。**`DefaultWorkflowNodeDispatchService` 840 LOC 未触**,留下次
 - 🟡 **V6-P2-EXCEL-GODCLASS** — **部分**。`DefaultConsoleWorkflowExcelApplicationService` 1512 → 1074 LOC (-29%):抽 `WorkflowExcelColumnMetadata` (187) + `WorkflowExcelWorkbookWriter` (406)。**主 service 还未到 600-800 目标**(余 parser + validator cluster 待抽,涉及内嵌 record 迁移);**另 6 个 Excel god class 未触**(PipelineDef 1061 / BusinessCalendar 1009 / JobDef 887 / ConfigPackage 873 / TenantConfigPackage 846 / TenantConfigInit 823),同款拆法可复用,留下次
 
-🔴 **v6 仍未完成 1 项**:
-- **V6-P2-CONSOLE-IDEMPOTENCY**(deep-issue §5.5):console / trigger / db 三层幂等责任边界不一致 — 设计层工作,需独立 ADR + 1 周
+✅ **v6 全部 P2 已闭环**(2026-04-30):
+- **V6-P2-CONSOLE-IDEMPOTENCY**(deep-issue §5.5 / §5.6 / §5.10)— **已完成**。代码 3 层各自归位:
+  - **Layer 1** `ConsoleIdempotencyInterceptor` 全文重写 — key 绑定 (tenant+method+uri+idempotencyKey),两阶段占坑(`PENDING` 30s → 2xx 升 `DONE` 24h / 非 2xx DELETE 释放),Redis fail-closed (503)
+  - **Layer 2** `DefaultTriggerService.approvePendingCatchUp` (`:134-142`) 用 `idempotencyKey` 查 `trigger_request` 已 `LAUNCHED` 短路返回;类 Javadoc (`:60-71`) 明示"trigger 层只做尽力去重,最终去重由 orchestrator 兜底"
+  - **Layer 3** `db/migration/V37` 删 `uk_trigger_request_tenant_dedup` + `uk_job_instance_tenant_dedup` 作为最终事实源
+  - 设计定稿 `docs/architecture/adr/ADR-011-idempotency-boundary-alignment.md`
 
 🟡 **deferred(基础设施完备,触发条件出现再做)**:
 - **V6-D-1** ADR-009 Stage 4 业务配 DSL — 现有 seed 节点间 `mergeUpstreamPartitionOutputs` 自动透传 fileId 已够用,业务方设计跨节点参数串联时按 §10 文档配
@@ -47,13 +51,13 @@
 
 | 优先级 | 已完成 | 部分完成 | 待办 | 不做(标) | 合计 |
 |---|:---:|:---:|:---:|:---:|:---:|
-| **deep-issue §5 6 项** | **4**(§5.1 Sec / §5.2 token / §5.7 异步 / §5.12 god) | **1**(§5.2 X-Token compat 物删) | **2**(§5.5 幂等 / §5.11 webhook) | 0 | 6 |
-| **ADR 路线图** | **2**(ADR-009 / ADR-010 代码 100%) | 0 | **2**(ADR-009 Stage 4 业务配置 / ADR-010 Stage 6+7 灰度+物删) | 0 | 4 |
-| **v2 评估硬化** | **5**(OPS-1 / OPS-2 / Q-1 / NOISE-1 / **WEBHOOK-DUR**) | **2**(ORCH-GOD / EXCEL-GOD 各部分) | **1**(IDEMP) | 0 | 8 |
+| **deep-issue §5 6 项** | **5**(§5.1 Sec / §5.2 token / §5.5 幂等 / §5.7 异步 / §5.11 webhook / §5.12 god) | **1**(§5.2 X-Token compat 物删) | 0 | 0 | 6 |
+| **ADR 路线图** | **3**(ADR-009 / ADR-010 代码 100% / ADR-011 幂等边界定稿) | 0 | **2**(ADR-009 Stage 4 业务配置 / ADR-010 Stage 6+7 灰度+物删) | 0 | 5 |
+| **v2 评估硬化** | **6**(OPS-1 / OPS-2 / Q-1 / NOISE-1 / **WEBHOOK-DUR** / **IDEMP**) | **2**(ORCH-GOD / EXCEL-GOD 各部分) | 0 | 0 | 8 |
 | v5 历史 P0-P3 | 19 | 2 | 0 | 2 | 23 |
-| **合计** | **30** | **5** | **5** | **2** | **41** |
+| **合计** | **33** | **5** | **2** | **2** | **42** |
 
-> **总览解读**:v5 时声称 P0/P1 全完成但有 5 项未实测对齐;v6 把 ADR-009/010 全栈、deep-issue §1+§2+§7+§12 实地核验为已完成,新增 v2 评估的 4 项硬化条目。**2026-04-30 14:55 `b74e0a0c` 一把过**清掉 V6-P2-WEBHOOK-DURABILITY(全栈)+ V6-P2-ORCH-GODCLASS 部分(TaskOutcomeService 926→795)+ V6-P2-EXCEL-GODCLASS 部分(WorkflowExcel 1512→1074)。完成率从 29/41 = 71% 升到 **30/41 = 73%**(部分完成 +2 还未计入);余 5 项 follow-up 是各 god class 拆分剩余 + 1 项 idempotency 设计工作,均独立 sprint 排期。
+> **总览解读**:v5 时声称 P0/P1 全完成但有 5 项未实测对齐;v6 把 ADR-009/010 全栈、deep-issue §1+§2+§5+§7+§11+§12 实地核验为已完成,新增 v2 评估的 4 项硬化条目。**2026-04-30 14:55 `b74e0a0c` 清掉 V6-P2-WEBHOOK-DURABILITY 全栈** + 16:42 `b9eefb47` 完结 P2-3 EXCEL-GODCLASS 战场全 7 类(主 service 平均 -67% LOC,新增 13 个收口类) + 同日定稿 **ADR-011 幂等三层边界**(deep-issue §5.5/§5.6/§5.10 三处一并闭环,3 层代码已实施,本 ADR 是事后定稿)。完成率 **33/42 = 79%**(部分完成 +2 还未计入);余 2 项 follow-up 都是各 god class 拆分剩余,独立 sprint 排期。
 
 ## v5 历史总览(归档)
 
