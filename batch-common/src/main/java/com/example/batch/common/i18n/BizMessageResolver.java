@@ -6,14 +6,15 @@ import java.util.Locale;
 import org.springframework.context.MessageSource;
 import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.i18n.LocaleContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
  * 各模块 ExceptionHandler 共用的 i18n 解析器:把 BizException(messageKey + args) 翻译成当前 Locale 的文案, 老 literal
  * 异常原样透出。集中在一处避免每个 handler 重复 `messageSource.getMessage(...)` 模板。
+ *
+ * <p>由 {@link BatchI18nAutoConfiguration} 装配为 bean, 无需依赖 @ComponentScan basePackage 覆盖
+ * com.example.batch.common.i18n —— e2e/独立模块只 import 本 auto-config 即拿到。
  */
-@Component
 public class BizMessageResolver {
 
   private final MessageSource messageSource;

@@ -5,7 +5,6 @@ import java.util.Locale;
 import org.springframework.context.MessageSource;
 import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.i18n.LocaleContextHolder;
-import org.springframework.stereotype.Component;
 
 /**
  * 读路径渲染器:把持久化的 {@code (error_key, error_args, error_message)} 三元组按当前 Locale 渲染成字符串。
@@ -20,8 +19,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>callsite 可以传入 db 行的三个值,无需自行组装异常。直接走 {@link MessageSource} 而非 {@link BizMessageResolver},因为
  * resolver 在 NoSuchMessage 时会回退到 ResultCode.label(),不适合持久化场景的 "key 未注册时回到原始 message" 语义。
+ *
+ * <p>由 {@link BatchI18nAutoConfiguration} 装配为 bean, 与 {@link BizMessageResolver} 同款理由:
+ * 不依赖业务模块 @ComponentScan 覆盖 com.example.batch.common.i18n。
  */
-@Component
 public class LocalizedErrorRenderer {
 
   private final MessageSource messageSource;
