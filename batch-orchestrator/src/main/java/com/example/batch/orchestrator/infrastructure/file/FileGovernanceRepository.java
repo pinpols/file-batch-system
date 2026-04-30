@@ -31,6 +31,7 @@ public class FileGovernanceRepository {
   private static final String KEY_RUNNING_STATUS = "runningStatus";
   private static final String KEY_LIMIT = "limit";
   private static final String KEY_THRESHOLD_SECONDS = "thresholdSeconds";
+  private static final String KEY_MAX_AGE_SECONDS = "maxAgeSeconds";
   private static final String KEY_TENANT_ID = "tenantId";
   private static final String KEY_FILE_ID = "fileId";
 
@@ -219,7 +220,8 @@ public class FileGovernanceRepository {
             KEY_LIMIT, limit));
   }
 
-  public long countProcessingDelayViolations(String tenantId, long thresholdSeconds) {
+  public long countProcessingDelayViolations(
+      String tenantId, long thresholdSeconds, long maxAgeSeconds) {
     if (!Texts.hasText(tenantId)) {
       return 0L;
     }
@@ -228,23 +230,26 @@ public class FileGovernanceRepository {
             params(
                 KEY_TENANT_ID, tenantId,
                 KEY_THRESHOLD_SECONDS, thresholdSeconds,
+                KEY_MAX_AGE_SECONDS, maxAgeSeconds,
                 KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
     return count == null ? 0L : count;
   }
 
-  public long maxProcessingDelaySeconds(String tenantId) {
+  public long maxProcessingDelaySeconds(String tenantId, long maxAgeSeconds) {
     if (!Texts.hasText(tenantId)) {
       return 0L;
     }
     Long maxDelay =
         fileGovernanceMapper.selectMaxProcessingDelaySeconds(
             params(
-                KEY_TENANT_ID, tenantId, KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
+                KEY_TENANT_ID, tenantId,
+                KEY_MAX_AGE_SECONDS, maxAgeSeconds,
+                KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
     return maxDelay == null ? 0L : maxDelay;
   }
 
   public List<Map<String, Object>> selectProcessingDelaySamples(
-      String tenantId, long thresholdSeconds, int limit) {
+      String tenantId, long thresholdSeconds, long maxAgeSeconds, int limit) {
     if (!Texts.hasText(tenantId)) {
       return List.of();
     }
@@ -252,6 +257,7 @@ public class FileGovernanceRepository {
         params(
             KEY_TENANT_ID, tenantId,
             KEY_THRESHOLD_SECONDS, thresholdSeconds,
+            KEY_MAX_AGE_SECONDS, maxAgeSeconds,
             KEY_LIMIT, limit,
             KEY_RUNNING_STATUS, FileDispatchRunStatus.RUNNING.code()));
   }

@@ -34,6 +34,7 @@ public class FileGovernanceMetricsCacheService {
       String tenantId,
       long arrivalThresholdSeconds,
       long processingThresholdSeconds,
+      long processingMaxAgeSeconds,
       int sampleSize) {
     if (!Texts.hasText(tenantId)) {
       return Map.of();
@@ -44,7 +45,12 @@ public class FileGovernanceMetricsCacheService {
       return toResponse(cached);
     }
     Map<String, Object> computed =
-        compute(tenantId, arrivalThresholdSeconds, processingThresholdSeconds, sampleSize);
+        compute(
+            tenantId,
+            arrivalThresholdSeconds,
+            processingThresholdSeconds,
+            processingMaxAgeSeconds,
+            sampleSize);
     write(tenantId, computed);
     return computed;
   }
@@ -53,14 +59,16 @@ public class FileGovernanceMetricsCacheService {
       String tenantId,
       long arrivalThresholdSeconds,
       long processingThresholdSeconds,
+      long processingMaxAgeSeconds,
       int sampleSize) {
     long arrivalCount =
         fileGovernanceRepository.countArrivalDelayViolations(tenantId, arrivalThresholdSeconds);
     long arrivalMax = fileGovernanceRepository.maxArrivalDelaySeconds(tenantId);
     long processingCount =
         fileGovernanceRepository.countProcessingDelayViolations(
-            tenantId, processingThresholdSeconds);
-    long processingMax = fileGovernanceRepository.maxProcessingDelaySeconds(tenantId);
+            tenantId, processingThresholdSeconds, processingMaxAgeSeconds);
+    long processingMax =
+        fileGovernanceRepository.maxProcessingDelaySeconds(tenantId, processingMaxAgeSeconds);
     List<Map<String, Object>> arrivalSamples =
         arrivalCount > 0
             ? fileGovernanceRepository.selectArrivalDelaySamples(
@@ -69,7 +77,7 @@ public class FileGovernanceMetricsCacheService {
     List<Map<String, Object>> processingSamples =
         processingCount > 0
             ? fileGovernanceRepository.selectProcessingDelaySamples(
-                tenantId, processingThresholdSeconds, sampleSize)
+                tenantId, processingThresholdSeconds, processingMaxAgeSeconds, sampleSize)
             : List.of();
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("tenantId", tenantId);

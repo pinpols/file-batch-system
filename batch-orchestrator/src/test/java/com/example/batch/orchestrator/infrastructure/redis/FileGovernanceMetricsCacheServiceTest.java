@@ -35,7 +35,7 @@ class FileGovernanceMetricsCacheServiceTest {
 
   @Test
   void blankTenantIdReturnsEmptyMap() {
-    Map<String, Object> result = service.load("", 600, 900, 10);
+    Map<String, Object> result = service.load("", 600, 900, 604800, 10);
 
     assertThat(result).isEmpty();
     verify(redis, never()).entries(anyString());
@@ -54,7 +54,7 @@ class FileGovernanceMetricsCacheServiceTest {
             "processingDelaySamples", "[]");
     when(redis.entries(anyString())).thenReturn(cached);
 
-    Map<String, Object> result = service.load("t1", 600, 900, 10);
+    Map<String, Object> result = service.load("t1", 600, 900, 604800, 10);
 
     assertThat(result).isNotEmpty();
     verify(fileGovernanceRepository, never()).countArrivalDelayViolations(anyString(), anyLong());
@@ -66,13 +66,13 @@ class FileGovernanceMetricsCacheServiceTest {
     when(fileGovernanceRepository.countArrivalDelayViolations(anyString(), anyLong()))
         .thenReturn(1L);
     when(fileGovernanceRepository.maxArrivalDelaySeconds(anyString())).thenReturn(7200L);
-    when(fileGovernanceRepository.countProcessingDelayViolations(anyString(), anyLong()))
+    when(fileGovernanceRepository.countProcessingDelayViolations(anyString(), anyLong(), anyLong()))
         .thenReturn(0L);
-    when(fileGovernanceRepository.maxProcessingDelaySeconds(anyString())).thenReturn(0L);
+    when(fileGovernanceRepository.maxProcessingDelaySeconds(anyString(), anyLong())).thenReturn(0L);
     when(fileGovernanceRepository.selectArrivalDelaySamples(anyString(), anyLong(), anyInt()))
         .thenReturn(List.of(Map.of("file_name", "f.csv")));
 
-    Map<String, Object> result = service.load("t1", 600, 900, 10);
+    Map<String, Object> result = service.load("t1", 600, 900, 604800, 10);
 
     assertThat(result).containsKey("arrivalDelayViolations");
     assertThat(((Number) result.get("arrivalDelayViolations")).longValue()).isEqualTo(1L);
