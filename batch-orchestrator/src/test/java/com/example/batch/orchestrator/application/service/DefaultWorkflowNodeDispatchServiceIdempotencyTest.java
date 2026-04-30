@@ -21,14 +21,12 @@ import com.example.batch.orchestrator.mapper.TriggerRequestMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeMapper;
 import com.example.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import com.example.batch.orchestrator.mapper.WorkflowRunMapper;
-import com.example.batch.orchestrator.service.LaunchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
@@ -47,8 +45,8 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
   @Mock WorkflowDagService workflowDagService;
   @Mock ResourceScheduler resourceScheduler;
   @Mock ObjectProvider<TaskExecutionService> taskExecutionServiceProvider;
-  @Mock ObjectProvider<LaunchService> launchServiceProvider;
-  @Mock NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+  @Mock WorkflowNodePayloadBuilder payloadBuilder;
+  @Mock ChildJobLaunchSupport childJobLaunchSupport;
 
   private DefaultWorkflowNodeDispatchService service;
 
@@ -74,9 +72,8 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
             workflowDagService,
             resourceScheduler,
             taskExecutionServiceProvider,
-            launchServiceProvider,
-            namedParameterJdbcTemplate,
-            new com.example.batch.orchestrator.application.workflow.WorkflowParamResolver());
+            payloadBuilder,
+            childJobLaunchSupport);
   }
 
   @Test
