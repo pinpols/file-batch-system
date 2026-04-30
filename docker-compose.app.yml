@@ -90,6 +90,9 @@ services:
       BATCH_PLATFORM_DB_USERNAME: ${BATCH_PLATFORM_DB_USERNAME:-batch_user}
       BATCH_PLATFORM_DB_PASSWORD: ${BATCH_PLATFORM_DB_PASSWORD:?BATCH_PLATFORM_DB_PASSWORD is required}
       BATCH_ORCHESTRATOR_BASE_URL: ${BATCH_ORCHESTRATOR_BASE_URL:-http://orchestrator:8082}
+      # ADR-010 Stage 4: trigger 通过 Kafka topic batch.trigger.launch.v1 异步发布 launch 事件,
+      # 容器内必须用容器网络名 kafka:29092 而非宿主机 localhost:19092。
+      BATCH_KAFKA_BOOTSTRAP_SERVERS: ${BATCH_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       LOGGING_FILE_NAME: /app/logs/batch-trigger.log
       SERVER_PORT: 8081
       MANAGEMENT_SERVER_PORT: 8081
@@ -110,6 +113,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
       orchestrator:
         condition: service_healthy

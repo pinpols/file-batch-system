@@ -22,7 +22,7 @@
 | ~~`batch.trigger.quartz-datasource.enabled`~~ | ~~trigger~~ | **已移除**（2026-04-25 清理 Phase 2 半成品） | — | — | — |
 | `batch.quota.runtime-store` | orchestrator | **redis** | **redis** | 🟢 低 | `BATCH_QUOTA_RUNTIME_STORE` |
 | `batch.quota.snapshot.enabled` | orchestrator | **true** | **true** | 🟢 低 | `BATCH_QUOTA_SNAPSHOT_ENABLED` |
-| `batch.trigger.async-launch.enabled` | trigger + orchestrator | **false** | **false** | 🟡 中 | `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED`（**两边模块必须一致**） |
+| `batch.trigger.async-launch.enabled` | trigger + orchestrator | **true**（2026-04-30 起改默认开） | **true** | 🟡 中 | `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED`（**两边模块必须一致**） |
 
 > 风险等级判定：🔴 高 = 启用前需起独立基础设施，否则启动失败；🟡 中 = 启用后行为变化明显，需要监控验证；🟢 低 = fail-open 兜底，故障自动降级。
 
@@ -203,7 +203,7 @@ docker exec batch-redis redis-cli --scan --pattern "batch:quota:*" | head
 
 **作用**：trigger → orchestrator 调度链路从同步 HTTP 桥（`HttpOrchestratorTriggerAdapter` 已 `@Deprecated forRemoval=true`）切换到 outbox + Kafka 异步路径。开启后 trigger fire 在同事务内写 `trigger_request` + `trigger_outbox_event`（V80 表），`TriggerOutboxRelay`（@Scheduled，ShedLock 互斥）周期发到 Kafka topic `batch.trigger.launch.v1`，orchestrator 端 `TriggerLaunchConsumer` 消费后调 `LaunchApplicationService.launch`；trigger 不再阻塞 Quartz worker thread。
 
-**默认**：`false`（走原同步 HTTP 路径，零行为变化）。**两边模块（trigger + orchestrator）必须一致**——单边激活会导致消息堆积或 listener 空跑。
+**默认**：`true`（2026-04-30 起切换为默认开）。**两边模块（trigger + orchestrator）必须一致**——单边激活会导致消息堆积或 listener 空跑。**如需回退到原同步 HTTP 路径**：显式 `BATCH_TRIGGER_ASYNC_LAUNCH_ENABLED=false` + 重启 trigger + orchestrator。
 
 **配套依赖**：
 - V80 migration 必须 apply 到目标环境（`SELECT 1 FROM batch.trigger_outbox_event LIMIT 1` 不报错）

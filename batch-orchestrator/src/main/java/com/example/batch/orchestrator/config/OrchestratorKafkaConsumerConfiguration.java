@@ -29,7 +29,8 @@ import org.springframework.kafka.listener.ContainerProperties;
 @ConditionalOnProperty(
     prefix = "batch.trigger.async-launch",
     name = "enabled",
-    havingValue = "true")
+    havingValue = "true",
+    matchIfMissing = true)
 public class OrchestratorKafkaConsumerConfiguration {
 
   /** Listener factory bean 名称 — 给 @KafkaListener(containerFactory=...) 引用。 */

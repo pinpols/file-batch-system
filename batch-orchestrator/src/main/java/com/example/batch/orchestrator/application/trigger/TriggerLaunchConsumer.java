@@ -41,7 +41,8 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnProperty(
     prefix = "batch.trigger.async-launch",
     name = "enabled",
-    havingValue = "true")
+    havingValue = "true",
+    matchIfMissing = true)
 public class TriggerLaunchConsumer {
 
   private static final String METRIC_CONSUMED = "batch.trigger.launch.consumed.total";
