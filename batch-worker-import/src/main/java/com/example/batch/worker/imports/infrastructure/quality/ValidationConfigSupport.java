@@ -11,11 +11,11 @@ import org.springframework.stereotype.Component;
 /** 依赖 ObjectMapper 的 Map 转换辅助。 */
 @Component
 @RequiredArgsConstructor
-class ValidationConfigSupport {
+public class ValidationConfigSupport {
 
   private final ObjectMapper objectMapper;
 
-  Map<String, Object> toMap(Object value) {
+  public Map<String, Object> toMap(Object value) {
     if (value instanceof Map<?, ?> map) {
       Map<String, Object> converted = new LinkedHashMap<>();
       for (Map.Entry<?, ?> entry : map.entrySet()) {
@@ -33,7 +33,7 @@ class ValidationConfigSupport {
     }
   }
 
-  Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
+  public Map<String, Object> firstMap(Map<String, Object> container, String... keys) {
     for (String key : keys) {
       Map<String, Object> rule = toMap(container.get(key));
       if (!rule.isEmpty()) {
@@ -43,7 +43,7 @@ class ValidationConfigSupport {
     return Map.of();
   }
 
-  Map<String, Object> payloadToMap(CustomerImportPayload payload) {
+  public Map<String, Object> payloadToMap(CustomerImportPayload payload) {
     return objectMapper.convertValue(payload, new TypeReference<>() {});
   }
 }
