@@ -2,7 +2,7 @@
 .PHONY: test test-unit test-it test-e2e test-all test-build test-parallel
 .PHONY: data-system data-kafka data-minio
 .PHONY: db-reset-flyway
-.PHONY: ops-inspect ops-heal-stuck ops-heal-dead ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate
+.PHONY: ops-inspect ops-heal-stuck ops-heal-dead ops-heal-drain ops-heal-retry ops-heal-partitions ops-compensate ops-heal-zombie-pipelines
 .PHONY: ci ci-pr ci-module
 .PHONY: check-openapi check-deps-boundary check-version-alignment bump-version
 .PHONY: pmd spotless spotless-fix coverage
@@ -131,6 +131,11 @@ ops-heal-partitions:
 # 触发补偿
 ops-compensate:
 	bash scripts/ops/trigger-compensation.sh
+
+# 转化超期 stale pipeline_instance(默认 7 天)为 FAILED 终态; 配合
+# FileGovernanceProperties.processingDelayMaxAgeSeconds 收敛 latency scheduler 噪声
+ops-heal-zombie-pipelines:
+	bash scripts/ops/heal-zombie-pipelines.sh
 
 ## ── CI 回归 ──────────────────────────────────────────────────────────────────
 
