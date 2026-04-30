@@ -29,7 +29,14 @@
 🟢 **v6 P2 部分清账**(2026-04-30 14:55 `b74e0a0c` "feat(p2): 4 个 P2 项一把过"):
 - ✅ **V6-P2-WEBHOOK-DURABILITY**(deep-issue §5.11)— **已完成**。V81 migration `delivery_status` CHECK 加 `GIVE_UP` + `(status, next_retry_at)` 部分索引;`WebhookDeliveryRelay.java` 278 行(@ConditionalOnProperty 默认开 + ShedLock 互斥 + 5min/10min/20min/30min cap 退避 + absolute-max-attempts=8 后 GIVE_UP);抽 `WebhookEventPayload` + `WebhookDeliveryResult` 顶级类;新 `batch_webhook_delivery_give_up_total` counter + `WebhookDeliveryGiveUp` Prometheus 告警;7 个 `WebhookDeliveryRelayTest` 单测全绿
 - 🟡 **V6-P2-ORCHESTRATOR-GODCLASS** — **部分**。`DefaultTaskOutcomeService` 926 → 795 LOC (-14%):抽 `TaskOutcomePayloadSupport` (104 LOC) + `TaskOutcomeSummaryBuilder` (76 LOC) + 内联 helper。**`DefaultWorkflowNodeDispatchService` 840 LOC 未触**,留下次
-- 🟡 **V6-P2-EXCEL-GODCLASS** — **部分**。`DefaultConsoleWorkflowExcelApplicationService` 1512 → 1074 LOC (-29%):抽 `WorkflowExcelColumnMetadata` (187) + `WorkflowExcelWorkbookWriter` (406)。**主 service 还未到 600-800 目标**(余 parser + validator cluster 待抽,涉及内嵌 record 迁移);**另 6 个 Excel god class 未触**(PipelineDef 1061 / BusinessCalendar 1009 / JobDef 887 / ConfigPackage 873 / TenantConfigPackage 846 / TenantConfigInit 823),同款拆法可复用,留下次
+- 🟢 **V6-P2-EXCEL-GODCLASS** — **6/7 完成**(2026-04-30 `002b8864` + `bd0f0532` + `b9eefb47`)。P2-3 战场 7 个 god class 主 service 平均 **-67% LOC**,新增 13 个收口类:
+  - `DefaultConsoleWorkflowExcelApplicationService` 1512 → **497** (-67%) [`002b8864`]:抽 8 类(metadata/writer/parser/validator/keys/text-utils/parsed-session/validation-result)
+  - `DefaultConsoleTenantConfigInitApplicationService` 823 → **120** (-85%) [`b9eefb47`]:抽 `TenantConfigInitApplyHandlers` 集中 10 类 spec apply + insert/update/upsert
+  - `DefaultConsoleJobDefinitionExcelApplicationService` 887 → **663** (-25%) [`bd0f0532`]:抽 writer
+  - `DefaultConsoleBusinessCalendarExcelApplicationService` 1009 → **763** (-24%) [`bd0f0532`]:抽 writer (含 SheetSpec 模板)
+  - `DefaultConsolePipelineDefinitionExcelApplicationService` 1061 → **822** (-22%) [`bd0f0532`]:抽 writer
+  - `DefaultConsoleTenantConfigPackageExcelApplicationService` 846 → **728** (-14%) [`bd0f0532`]:抽 row projections
+  - `ConfigPackageExcelValidator` 874 LOC **保留**(已是 single-purpose validator,内部 8 个 validateXxxRows 共享 cross-reference 数据,split 8 文件反而 fragment + overhead)
 
 ✅ **v6 全部 P2 已闭环**(2026-04-30):
 - **V6-P2-CONSOLE-IDEMPOTENCY**(deep-issue §5.5 / §5.6 / §5.10)— **已完成**。代码 3 层各自归位:

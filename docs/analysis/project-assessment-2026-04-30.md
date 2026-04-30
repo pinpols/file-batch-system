@@ -60,22 +60,20 @@
 
 **4-29 评估累计 4 处口径滞后(漏看 + 误判),本次 v2 已实地 grep 全部核查**。
 
-### ⚠️ 风险点
+### ⚠️ 风险点(2026-04-30 当日尾更新)
 
-1. **新发现 console-api Excel god class 系列**(4-29 未点名):
-   - `DefaultConsoleWorkflowExcelApplicationService` **1512 LOC**
-   - `DefaultConsolePipelineDefinitionExcelApplicationService` **1061 LOC**
-   - `DefaultConsoleBusinessCalendarExcelApplicationService` **1009 LOC**
-   - `DefaultConsoleJobDefinitionExcelApplicationService` 887 LOC
-   - `ConfigPackageExcelValidator` 873 LOC
-   - `DefaultConsoleTenantConfigPackageExcelApplicationService` 846 LOC
-   - `DefaultConsoleTenantConfigInitApplicationService` 823 LOC
+1. **console-api Excel god class 系列 — 6/7 已拆**(本日 `002b8864` + `bd0f0532` + `b9eefb47` 三 commit 落地):
+   - ✅ `DefaultConsoleWorkflowExcelApplicationService` 1512 → **497 LOC** (-67%) — 抽 metadata/writer/parser/validator/keys/text-utils/parsed-session/validation-result 共 8 类
+   - ✅ `DefaultConsoleTenantConfigInitApplicationService` 823 → **120 LOC** (-85%) — 抽 `TenantConfigInitApplyHandlers` 集中 10 类 spec apply
+   - ✅ `DefaultConsolePipelineDefinitionExcelApplicationService` 1061 → **822 LOC** — 抽 writer
+   - ✅ `DefaultConsoleBusinessCalendarExcelApplicationService` 1009 → **763 LOC** — 抽 writer (含 SheetSpec 模板)
+   - ✅ `DefaultConsoleJobDefinitionExcelApplicationService` 887 → **663 LOC** — 抽 writer
+   - ✅ `DefaultConsoleTenantConfigPackageExcelApplicationService` 846 → **728 LOC** — 抽 row projections
+   - ⏸️ **`ConfigPackageExcelValidator` 874 LOC 保留**(原始 873 几乎一致):本身已是从父类抽出的 single-purpose validator,内部 8 个 `validateXxxRows` 共享 cross-reference 数据,split 8 文件反而 fragment + overhead
 
-   一组 7 个 800+ LOC 的 Excel 处理类。原 `DefaultConsoleJobApplicationService` god class 已拆,但 Excel 系列没动 → **下一轮 ADR-008 god-class-decomposition 工作的主战场**。
+2. **`DefaultTaskOutcomeService` 926 → 795 LOC** (-14%, `b74e0a0c`):抽 `TaskOutcomePayloadSupport` (104) + `TaskOutcomeSummaryBuilder` (76)。**`DefaultWorkflowNodeDispatchService` 840 LOC 未触**,留下次。
 
-2. **`DefaultTaskOutcomeService` 926 LOC** + **`DefaultWorkflowNodeDispatchService` 840 LOC**:orchestrator 内业务编排核心,持续胀大,需排期拆。
-
-3. **`ImportDataQualityService` 809 LOC**:worker-import 内,质量校验逻辑集中度高。
+3. **`ImportDataQualityService` 809 LOC**:worker-import 内,质量校验逻辑集中度高,留独立 sprint。
 
 ---
 
