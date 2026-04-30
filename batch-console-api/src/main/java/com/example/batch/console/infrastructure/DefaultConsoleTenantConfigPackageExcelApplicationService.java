@@ -12,12 +12,8 @@ import com.example.batch.common.utils.Texts;
 import com.example.batch.console.application.ConsoleTenantConfigPackageExcelApplicationService;
 import com.example.batch.console.domain.entity.JobDefinitionEntity;
 import com.example.batch.console.domain.entity.WorkflowDefinitionEntity;
-import com.example.batch.console.domain.entity.WorkflowEdgeEntity;
-import com.example.batch.console.domain.entity.WorkflowNodeEntity;
 import com.example.batch.console.domain.query.JobDefinitionQuery;
 import com.example.batch.console.domain.query.WorkflowDefinitionQuery;
-import com.example.batch.console.domain.query.WorkflowEdgeQuery;
-import com.example.batch.console.domain.query.WorkflowNodeQuery;
 import com.example.batch.console.infrastructure.ConfigPackageExcelValidator.PackageValidationResult;
 import com.example.batch.console.infrastructure.ConfigPackageExcelValidator.SheetResult;
 import com.example.batch.console.mapper.AlertRoutingConfigMapper;
@@ -126,6 +122,7 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   // 保留注入：供 WorkbookWriter 在下载模板 / 导出时用来生成 targetColumn 下拉；
   // Validator 不再硬拦业务 schema 漂移（真正的错交给 LoadStep 运行时抛）。
   private final BizTableSchemaQueryMapper bizTableSchemaQueryMapper;
+  private final TenantConfigPackageRowProjections rowProjections;
 
   private ConfigPackageExcelValidator validator() {
     return new ConfigPackageExcelValidator(
@@ -139,19 +136,20 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
   public ResponseEntity<InputStreamResource> exportPackage(String tenantId) {
     String tid = tenantGuard.resolveTenant(tenantId);
     List<Map<String, Object>> jobs =
-        toJobRows(jobDefinitionMapper.selectByQuery(JobDefinitionQuery.ofTenant(tid, null)));
+        rowProjections.toJobRows(
+            jobDefinitionMapper.selectByQuery(JobDefinitionQuery.ofTenant(tid, null)));
     List<Map<String, Object>> channels =
         fileChannelConfigMapper.selectByQuery(tid, null, null, null, null);
     List<Map<String, Object>> routings =
         alertRoutingConfigMapper.selectByQuery(tid, null, null, null, null, null);
     List<Map<String, Object>> pipelines =
         pipelineDefinitionMapper.selectByQuery(tid, null, null, null, null);
-    List<Map<String, Object>> steps = collectPipelineSteps(pipelines);
+    List<Map<String, Object>> steps = rowProjections.collectPipelineSteps(pipelines);
     List<WorkflowDefinitionEntity> wfEntities =
         workflowDefinitionMapper.selectByQuery(WorkflowDefinitionQuery.ofTenant(tid, null));
-    List<Map<String, Object>> wfDefs = toWfDefRows(wfEntities);
-    List<Map<String, Object>> wfNodes = collectWorkflowNodes(tid, wfEntities);
-    List<Map<String, Object>> wfEdges = collectWorkflowEdges(tid, wfEntities);
+    List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities);
+    List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
+    List<Map<String, Object>> wfEdges = rowProjections.collectWorkflowEdges(tid, wfEntities);
     workbookWriter.setRegisteredImplCodesByModule(loadRegisteredImplCodesByModule());
     byte[] bytes =
         workbookWriter.buildExportWorkbook(
@@ -602,126 +600,6 @@ public class DefaultConsoleTenantConfigPackageExcelApplicationService
     p.put("retry_max_count", parseInteger(step.get(COL_RETRY_MAX_COUNT)));
     p.put(COL_ENABLED, parseBoolean(step.get(COL_ENABLED), true));
     return p;
-  }
-
-  private List<Map<String, Object>> toJobRows(List<JobDefinitionEntity> entities) {
-    return entities.stream()
-        .map(
-            e -> {
-              Map<String, Object> m = new LinkedHashMap<>();
-              m.put(COL_TENANT_ID, e.getTenantId());
-              m.put(COL_JOB_CODE, e.getJobCode());
-              m.put(COL_JOB_NAME, e.getJobName());
-              m.put(COL_JOB_TYPE, e.getJobType());
-              m.put(COL_BIZ_TYPE, e.getBizType());
-              m.put(COL_QUEUE_CODE, e.getQueueCode());
-              m.put(COL_WORKER_GROUP, e.getWorkerGroup());
-              m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
-              m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
-              m.put(COL_CALENDAR_CODE, e.getCalendarCode());
-              m.put(COL_WINDOW_CODE, e.getWindowCode());
-              m.put(COL_RETRY_POLICY, e.getRetryPolicy());
-              m.put(COL_RETRY_MAX_COUNT, e.getRetryMaxCount());
-              m.put(COL_TIMEOUT_SECONDS, e.getTimeoutSeconds());
-              m.put(COL_SHARD_STRATEGY, e.getShardStrategy());
-              m.put(COL_EXECUTION_HANDLER, e.getExecutionHandler());
-              m.put(COL_PARAM_SCHEMA, e.getParamSchema());
-              m.put(COL_DEFAULT_PARAMS, e.getDefaultParams());
-              m.put(COL_ENABLED, e.getEnabled());
-              m.put(COL_DESCRIPTION, e.getDescription());
-              return m;
-            })
-        .collect(Collectors.toList());
-  }
-
-  private List<Map<String, Object>> collectPipelineSteps(List<Map<String, Object>> pipelines) {
-    List<Map<String, Object>> allSteps = new ArrayList<>();
-    for (Map<String, Object> pipeline : pipelines) {
-      Long pipelineId = ((Number) pipeline.get(KEY_ID)).longValue();
-      String jobCode = String.valueOf(pipeline.get(COL_JOB_CODE));
-      String version = String.valueOf(pipeline.get(COL_VERSION));
-      for (Map<String, Object> step :
-          pipelineStepDefinitionMapper.selectByPipelineDefinitionId(pipelineId)) {
-        Map<String, Object> enriched = new LinkedHashMap<>(step);
-        enriched.put(COL_JOB_CODE, jobCode);
-        enriched.put(COL_VERSION, version);
-        allSteps.add(enriched);
-      }
-    }
-    return allSteps;
-  }
-
-  private List<Map<String, Object>> toWfDefRows(List<WorkflowDefinitionEntity> entities) {
-    return entities.stream()
-        .map(
-            e -> {
-              Map<String, Object> m = new LinkedHashMap<>();
-              m.put(COL_TENANT_ID, e.getTenantId());
-              m.put(COL_WORKFLOW_CODE, e.getWorkflowCode());
-              m.put(COL_WORKFLOW_NAME, e.getWorkflowName());
-              m.put(COL_WORKFLOW_TYPE, e.getWorkflowType());
-              m.put(COL_VERSION, e.getVersion());
-              m.put(COL_ENABLED, e.getEnabled());
-              m.put(COL_DESCRIPTION, e.getDescription());
-              return m;
-            })
-        .collect(Collectors.toList());
-  }
-
-  private List<Map<String, Object>> collectWorkflowNodes(
-      String tenantId, List<WorkflowDefinitionEntity> defs) {
-    List<Map<String, Object>> result = new ArrayList<>();
-    for (WorkflowDefinitionEntity def : defs) {
-      List<WorkflowNodeEntity> nodes =
-          workflowNodeMapper.selectByQuery(
-              new WorkflowNodeQuery(
-                  tenantId, def.getId(), def.getWorkflowCode(), null, null, null, null));
-      for (WorkflowNodeEntity node : nodes) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put(COL_TENANT_ID, tenantId);
-        m.put(COL_WORKFLOW_CODE, def.getWorkflowCode());
-        m.put(COL_WORKFLOW_VERSION, def.getVersion());
-        m.put(COL_NODE_CODE, node.getNodeCode());
-        m.put(COL_NODE_NAME, node.getNodeName());
-        m.put(COL_NODE_TYPE, node.getNodeType());
-        m.put(COL_RELATED_JOB_CODE, node.getRelatedJobCode());
-        m.put(COL_RELATED_PIPELINE_CODE, node.getRelatedPipelineCode());
-        m.put(COL_WORKER_GROUP, node.getWorkerGroup());
-        m.put(COL_WINDOW_CODE, node.getWindowCode());
-        m.put(COL_NODE_ORDER, node.getNodeOrder());
-        m.put(COL_RETRY_POLICY, node.getRetryPolicy());
-        m.put(COL_RETRY_MAX_COUNT, node.getRetryMaxCount());
-        m.put(COL_TIMEOUT_SECONDS, node.getTimeoutSeconds());
-        m.put(COL_NODE_PARAMS, node.getNodeParams());
-        m.put(COL_ENABLED, node.getEnabled());
-        result.add(m);
-      }
-    }
-    return result;
-  }
-
-  private List<Map<String, Object>> collectWorkflowEdges(
-      String tenantId, List<WorkflowDefinitionEntity> defs) {
-    List<Map<String, Object>> result = new ArrayList<>();
-    for (WorkflowDefinitionEntity def : defs) {
-      List<WorkflowEdgeEntity> edges =
-          workflowEdgeMapper.selectByQuery(
-              new WorkflowEdgeQuery(
-                  tenantId, def.getId(), def.getWorkflowCode(), null, null, null, null, null));
-      for (WorkflowEdgeEntity edge : edges) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put(COL_TENANT_ID, tenantId);
-        m.put(COL_WORKFLOW_CODE, def.getWorkflowCode());
-        m.put(COL_WORKFLOW_VERSION, def.getVersion());
-        m.put(COL_FROM_NODE_CODE, edge.getFromNodeCode());
-        m.put(COL_TO_NODE_CODE, edge.getToNodeCode());
-        m.put(COL_EDGE_TYPE, edge.getEdgeType());
-        m.put(COL_CONDITION_EXPR, edge.getConditionExpr());
-        m.put(COL_ENABLED, edge.getEnabled());
-        result.add(m);
-      }
-    }
-    return result;
   }
 
   private TenantConfigPackageExcelPreviewResponse toPreviewResponse(
