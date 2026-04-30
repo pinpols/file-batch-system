@@ -181,55 +181,39 @@
 
 ---
 
-## 6. 下一步计划(优先级 v3 — 2026-04-30 终态)
+## 6. 下一步计划(优先级 v4 — 2026-04-30 当日尾)
 
-> **本节自第一次产出后历经 2 轮重写**:v1 列 P1+P2 12 项,v2 加 §6.5 webhook 补录,**v3(本节)** 反映 P1+P2 大部分清账后的真实剩余清单 — 4 项 P1/P2-quick 已 done(`0c623eb0` Prometheus 告警 / `8dc6eac1` 9 FQN / `6d977766` backlog v6 / `b74e0a0c` 一把过 webhook+orch+excel 部分),原 12 项缩到 6 项 follow-up + 2 项 ADR-010 operational。
+> **本节自第一次产出后历经 3 轮重写**:v1 列 P1+P2 12 项;v2 加 §6.5 webhook 补录;v3 反映 P1+P2 大部分清账后剩 6 项 follow-up;**v4(本节)** 反映 `b9eefb47`(16:42 Excel god class 第二批一把过)+ ADR-011 幂等三层边界定稿后的真实剩余清单 — 原 v3 6 项 follow-up 缩到 **2 项硬剩余 + 2 项 operational**。
 
 ### ✅ 已完成(本会话 + 并发 session 累计)
 
-| 原项 | Commit | 备注 |
+| 原项 | Commit | 实测最终态 |
 |---|---|---|
-| P1-a `.env.prod` 加 trigger topic | 本地 / `b74e0a0c` 实测确认 | gitignored, ops 同步要靠 CI 检查(P3-15)|
+| P1-a `.env.prod` 加 trigger topic | 本地 / `b74e0a0c` 实测确认 | gitignored, ops 同步要靠 CI 检查(P3-12)|
 | P1-b Prometheus 3 条 ADR-010 告警 | `0c623eb0` | 从 runbook §建议落 `prometheus-batch-rules.yml` |
-| P2-5 滚 hardening-backlog v6 | `6d977766` + `7e104c89` + `56d74690` | 完成率 30/41 = 73% |
+| P2-5 滚 hardening-backlog v6 | `6d977766` / `7e104c89` / `56d74690` / 后续多轮 | **完成率 33/42 = 79%** |
 | P2-6 修 9 处 FQN 违规 | `8dc6eac1` | 5 文件 +14/-11, 全仓 grep 残留 0 |
-| P2-WEBHOOK-DURABILITY(原 §6.5)| `b74e0a0c` | V81 + Relay 278 行 + 7 单测 + Prometheus 告警 — deep-issue §5.11 闭环 |
-| P2-ORCH-GODCLASS(部分)| `b74e0a0c` | `DefaultTaskOutcomeService` 926→795 LOC (-14%) |
-| P2-EXCEL-GODCLASS(部分)| `b74e0a0c` | `DefaultConsoleWorkflowExcelApplicationService` 1512→1074 LOC (-29%) |
+| **P2-WEBHOOK-DURABILITY** | `b74e0a0c` | V81 + Relay 278 行 + 7 单测 + Prometheus 告警 — deep-issue §5.11 闭环 |
+| **P2-ORCH-GODCLASS**(部分)| `b74e0a0c` | `DefaultTaskOutcomeService` 926→795 LOC (-14%) |
+| **P2-EXCEL-GODCLASS** ✅ 6/7 | `b74e0a0c` + `b9eefb47` | WorkflowExcel 1512→**452**(-70%);PipelineDef 1061→**804**;BusinessCalendar 1009→**743**;JobDef 887→**644**;TenantConfigPackage 846→**724**;TenantConfigInit 823→**120**(-85%);**`ConfigPackageExcelValidator` 873→874 几乎没动**(留 F1)|
+| **P2-IDEMPOTENCY** ✅ | ADR-011 + 3 层实施 | `ADR-011-idempotency-boundary-alignment.md` 定稿;Layer 1 `ConsoleIdempotencyInterceptor` 197 行(PENDING 30s → DONE 24h, Redis fail-closed);Layer 2 `DefaultTriggerService.approvePendingCatchUp` idempotencyKey 短路;Layer 3 `V37` `uk_job_instance_tenant_dedup` 兜底 — deep-issue §5.5+§5.6+§5.10 三处一并闭环 |
 | Export 中文 fallback 改英文 | `247f7f4e` | 与 Import/Dispatch 一致 |
 
-### 🔴 剩余 follow-up(权威 6 项 + 2 项 operational,均独立 sprint)
+### 🔴 剩余 follow-up(权威 2 项硬剩余 + 2 项 operational)
 
-#### F1 — Excel god class 第二批拆分(2-3 周)
+#### F1 — `ConfigPackageExcelValidator` 873 → ~400(半周)
 
-剩 **6 个 800+ LOC Excel god class** 同款拆法可复用(`b74e0a0c` 已落 ColumnMetadata + WorkbookWriter 抽法模板):
-
-| Class | LOC | 同款拆法 |
-|---|---|---|
-| `DefaultConsolePipelineDefinitionExcelApplicationService` | 1061 | 抽 ColumnMetadata + WorkbookWriter |
-| `DefaultConsoleBusinessCalendarExcelApplicationService` | 1009 | 同上 |
-| `DefaultConsoleJobDefinitionExcelApplicationService` | 887 | 同上 |
-| `ConfigPackageExcelValidator` | 873 | 抽 SheetValidator chain |
-| `DefaultConsoleTenantConfigPackageExcelApplicationService` | 846 | 抽 ColumnMetadata + WorkbookWriter |
-| `DefaultConsoleTenantConfigInitApplicationService` | 823 | 抽 InitOrchestrator |
+7 个 Excel god class 中 6 个已拆完(`b9eefb47`),只剩这 1 个**几乎没动**(实测 874 LOC,基本与原始一致)。`ConfigPackageExcelValidator` 含 9 个 sheet 的 row 验证逻辑混在一个类,该按 sheet 拆 9 个 SheetValidator(JobDefinition / FileChannelConfig / AlertRouting / PipelineDefinition / PipelineStepDefinition / WorkflowDefinition / WorkflowNode / WorkflowEdge / 通用基础校验),主 validator 转 facade 委派。可复用同战场 ColumnMetadata 模板。
 
 #### F2 — `DefaultWorkflowNodeDispatchService` 840 拆(orchestrator 核心,1-2 周)
 
-ADR-008 god-class-decomposition 范围内,影响面大需谨慎:抽 NodeDispatchPayloadBuilder + NodeRunStateMachine + UpstreamOutputCollector(参 ADR-009 集成)。需独立 PR + 严守原状态机不变量。
+实测仍 840 LOC 未触。ADR-008 god-class-decomposition 范围内,影响面大需谨慎:抽 NodeDispatchPayloadBuilder + NodeRunStateMachine + UpstreamOutputCollector(参 ADR-009 集成)。需独立 PR + 严守原状态机不变量。**这是 orchestrator 核心 service,改动需 E2E 完整回归。**
 
-#### F3 — `DefaultConsoleWorkflowExcelApplicationService` 1074 → 600-800(半周)
-
-`b74e0a0c` 已抽 ColumnMetadata + WorkbookWriter,主 service 还未到目标。剩余抽 parser cluster (~150 LOC) + validator cluster (~250 LOC),涉及 `ParsedSession` / `ValidationResult` 内嵌 records 移到顶级类,需独立 PR。
-
-#### F4 — Console idempotency 三层边界设计(ADR + 1 周)
-
-deep-issue §5.5:console / trigger / db 三层幂等责任不一致。需立 ADR-011 idempotency-boundary 明确:console 入口拦截器 vs trigger 端 dedup 计算 vs DB UK 约束三者职责;实施 1 周。
-
-#### F5 — ADR-010 Stage 6 灰度切换 operational
+#### F3 — ADR-010 Stage 6 灰度切换 operational
 
 按 `docs/runbook/trigger-async-launch-rollout.md` 执行 staging → canary 24h → prod 全量切换。**需真部署环境**,不在代码 sprint 范围。
 
-#### F6 — ADR-010 Stage 7 物理删除旧 HTTP 路径
+#### F4 — ADR-010 Stage 7 物理删除旧 HTTP 路径
 
 灰度全量切稳定 1 minor 版本后,删 `HttpOrchestratorTriggerAdapter` + `DefaultTriggerService.forwardToOrchestrator` 同步路径。0.5 天工作但需时间窗口。
 
@@ -242,17 +226,22 @@ deep-issue §5.5:console / trigger / db 三层幂等责任不一致。需立 ADR
 11. **修 `pr-gate.yml` `batch-worker-process` case 分支**
 12. **CI 检查 `.env.prod` 与 `.env.example` 同步**(P1-a 治本,加 GitHub Action)
 
-### 节奏建议(v3)
+### 节奏建议(v4)
 
 ```
-Week 1-3:  F1 Excel god class 第二批 6 个同款拆(并行 2-3 个 PR/sprint)
-Week 2-3:  F3 WorkflowExcel 收尾(parser + validator cluster,可与 F1 并行)
-Week 4-5:  F2 DefaultWorkflowNodeDispatchService 拆(ADR-008 范围)
-Week 4+:   F4 Console idempotency ADR + 实施
-Week 6+:   F5 ADR-010 灰度切换(operational, 需真环境)
-Minor+:    F6 ADR-010 物理删除(灰度全量稳定 1 minor 后)
+Week 1:    F1 ConfigPackageExcelValidator 874 → ~400 拆 9 SheetValidator
+Week 2-3:  F2 DefaultWorkflowNodeDispatchService 840 拆(ADR-008 范围,需 E2E 回归)
+Week 4+:   F3 ADR-010 灰度切换(operational, 需真环境)
+Minor+:    F4 ADR-010 物理删除(灰度全量稳定 1 minor 后)
 P3 7-12:   背景渐进,每 sprint 抽 1-2 项
 ```
+
+**v4 终态评估**:**代码工作只剩 2 项**(F1 1 周 + F2 1-2 周),其余都是时间约束(F3/F4 灰度+物删)。原 v3 的 6 项 follow-up 中:
+- ❌ F1 6 个 Excel god class → ✅ 5/6 完成(`b9eefb47`),只剩 ConfigPackageExcelValidator
+- ❌ F3 WorkflowExcel 收尾 → ✅ 1074 → **452 超额完成**(目标 600-800)
+- ❌ F4 Console idempotency → ✅ ADR-011 定稿 + 3 层实施完整
+- ❌ F2 DefaultWorkflowNodeDispatchService → 仍 pending(本次没碰)
+- ❌ F5/F6 ADR-010 灰度 → 仍 deferred(operational + 时间)
 
 ---
 
@@ -282,7 +271,8 @@ P3 7-12:   背景渐进,每 sprint 抽 1-2 项
 6. ADR-010 Stage 5 双层 E2E 清账(本会话 22 测试全绿)
 7. 运行日志噪声治理(本会话 ChannelConfigMerge + FileGovernance)
 8. **本次 v2 全维实地 grep 复评** — 锁定 P1 ops 缺口 / Excel god class 群 / 9 FQN 违规
-9. **v2 P1+P2 一把过清账**(2026-04-30 下午):本会话 + 并发 session 协作 — `0c623eb0` Prometheus 3 条 ADR-010 告警从 runbook §建议落 `prometheus-batch-rules.yml`;`8dc6eac1` 9 处 FQN 违规 5 文件批量改;`6d977766` `hardening-backlog` 滚 v6;**并发 `b74e0a0c`** 一把过 V6-P2-WEBHOOK-DURABILITY 全栈(V81 + Relay 278 行 + 7 单测 + Prometheus 告警) + V6-P2-ORCH-GODCLASS 部分(`DefaultTaskOutcomeService` 926→795 LOC -14%)+ V6-P2-EXCEL-GODCLASS 部分(`DefaultConsoleWorkflowExcelApplicationService` 1512→1074 LOC -29%)。**剩余 follow-up**:6 个 Excel god class(PipelineDef 1061 / BusinessCalendar 1009 / JobDef 887 / ConfigPackage 873 / TenantConfigPackage 846 / TenantConfigInit 823)+ `DefaultWorkflowNodeDispatchService` 840 拆分 + Console idempotency 三层边界设计
+9. **v2 P1+P2 一把过清账**(2026-04-30 下午):本会话 + 并发 session 协作 — `0c623eb0` Prometheus 3 条 ADR-010 告警从 runbook §建议落 `prometheus-batch-rules.yml`;`8dc6eac1` 9 处 FQN 违规 5 文件批量改;`6d977766` `hardening-backlog` 滚 v6;**并发 `b74e0a0c`** 一把过 V6-P2-WEBHOOK-DURABILITY 全栈(V81 + Relay 278 行 + 7 单测 + Prometheus 告警) + V6-P2-ORCH-GODCLASS 部分(`DefaultTaskOutcomeService` 926→795 LOC -14%)+ V6-P2-EXCEL-GODCLASS 部分(`DefaultConsoleWorkflowExcelApplicationService` 1512→1074 LOC -29%)
+10. **第二批 P2 god class + ADR-011 一把过**(2026-04-30 16:42):**`b9eefb47`** 完结 P2-3 EXCEL-GODCLASS 战场 6/7 类(WorkflowExcel 1074→**452** -70% / PipelineDef 1061→**804** / BusinessCalendar 1009→**743** / JobDef 887→**644** / TenantConfigPackage 846→**724** / TenantConfigInit 823→**120** -85%);**ADR-011 idempotency-boundary-alignment** 定稿 + 3 层实施(`ConsoleIdempotencyInterceptor` 197 行 + `DefaultTriggerService.approvePendingCatchUp` idempotencyKey 短路 + V37 `uk_job_instance_tenant_dedup` DB 兜底)— deep-issue §5.5+§5.6+§5.10 三处一并闭环。**剩余仅 2 项硬 follow-up**:`ConfigPackageExcelValidator` 873(7/7 中唯一未拆)+ `DefaultWorkflowNodeDispatchService` 840(orchestrator 核心未触)
 
 > **教训**:评估口径必须以"全栈 grep + 单测全绿 + commit ref"为权威,不能依赖滚动文档单向声称。下次评估应在剩余 6 个 Excel god class + `DefaultWorkflowNodeDispatchService` 拆完 + Console idempotency 设计落地后再做(预计 2026-05-中旬)。
 
