@@ -354,6 +354,7 @@ ADR-009 原文提到"给现有 wf_eod_process 等 7 个 workflow 配 DSL",但仓
 > - 第四轮: ADR-009 Stage 1.2/2/3 全栈本会话 `a9469407` 真正落地
 > - 第五轮: ADR-010 trigger 异步解耦全 7 Stage 落地(`9587b8bf`/`087f6b7a`/`1ca3a957`/`22b330ea`),原"实施中独立分支"路径已并入 main
 > - 第六轮: ADR-010 Stage 5 全 Testcontainer E2E 双层覆盖(`788b637d` Layer 1 trigger 端 4/4 + `68bc49e8` Layer 2 跨模块 2/2),原 deferred 项清账;ADR-010 代码工作 100% 完成
+> - 第七轮: 运行日志噪声治理 — `aa249bf8` 收敛 ChannelConfigMerge `receipt_policy/enabled/channel_type` redundant key WARN(240/30min → ~0)+ FileGovernance `processingDelayMaxAgeSeconds` 排除 zombie pipeline(60/30min → ~0);`0d650fab` 加 `heal-zombie-pipelines.sh` + `make ops-heal-zombie-pipelines` target 闭环 zombie 转 FAILED 终态。docker daemon 重启验证留 user ops 执行
 >
 > 下次评估**强制要求**:(1) 同步滚 deep-issue / hardening-backlog;(2) 关键模块先 grep 验证(如 `WorkflowParamResolver` / `outputs` 字段 / `TriggerOutboxRelay`)再下结论,避免速判;(3) ADR Stage 状态以"全栈 grep + 单测全绿 + commit ref"为权威。
 
