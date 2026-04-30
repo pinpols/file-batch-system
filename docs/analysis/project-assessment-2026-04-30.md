@@ -216,6 +216,20 @@ P3:         背景渐进,每 sprint 抽 1-2 项
 
 ---
 
+## 6.5 第三方 agent 复评新发现(本次 v2 补录)
+
+架构/代码质量 agent(后台跑 ~21 分钟才回)报告 3 个 4-29 v1 与本次 §1-§4 grep 都漏的项:
+
+| # | 发现 | 核实 | 处理 |
+|---|---|---|---|
+| 1 | `messages.properties` 缺 3 个 worker i18n key | ❌ **误报** — 实际两个 properties 文件都已补齐 | 不修 |
+| 2 | `DefaultExportStageExecutor.java:107` 中文 fallback `"找不到步骤实现:"` 与 Import/Dispatch 英文不一致 | ✅ 真问题 | 本次 commit 直接修(5s 改) |
+| 3 | **Webhook 无 scheduler 重试** — `WebhookDeliveryLogEntity.nextRetryAt` 字段存在但无 `@Scheduled` driver,delivery_log 只审计不驱动重投 | ✅ 真问题 | deferred 到下个 sprint(deep-issue §5.11 闭环候选) |
+
+**Webhook durability 升级建议**:参照 ADR-002 outbox 模式或 ADR-010 trigger_outbox 模式,加 `WebhookDeliveryRelay @Scheduled` 周期扫 `next_retry_at <= now()` 的失败行重投,达到上限标 GIVE_UP + alert。预估 2-3 天工作。本项 deep-issue §5.11 应同时滚到 hardening-backlog v6 + 排独立 PR。
+
+---
+
 ## 7. 校正历史(累计第 8 轮)
 
 > 本评估文档自 2026-04-29 v1 至 2026-04-30 v2 累计 8 轮校正,平均每天 1+ 轮:
