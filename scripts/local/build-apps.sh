@@ -5,7 +5,8 @@
 # 1) 仅打包六个 Java 应用模块，不启动 Docker、不启动本地进程。
 # 2) 默认执行 Maven package -DskipTests，供 start-all.sh / 手工联调复用。
 # 3) 默认增量构建（不 clean），Maven 自身会基于 mtime 决定是否重编；
-#    改了 parent pom / 资源结构异常时，用 CLEAN=1 ./build-apps.sh 强制清理。
+#    若出现「类文件在偏移 0 处截断」、repackage 失败、或 *-exec.jar 体积极小，
+#    多为 target/ 写入不完整（中断构建、磁盘或并行竞态），请用 CLEAN=1 强制清理后重编。
 # =========================================================
 set -euo pipefail
 
@@ -59,6 +60,11 @@ for i in "${!MODULES[@]}"; do
   fi
   if [[ -z "$jar" || ! -f "$jar" ]]; then
     echo "ERROR: 未找到可执行 jar: $module/target/${module}-*.jar" >&2
+    exit 1
+  fi
+  _bytes="$(wc -c <"$jar" | awk '{print $1}')"
+  if [[ "${_bytes:-0}" -lt 4096 ]]; then
+    echo "ERROR: $jar 仅 ${_bytes} 字节，疑似损坏（正常 exec jar 至少数 MB）。请执行: CLEAN=1 bash scripts/local/build-apps.sh" >&2
     exit 1
   fi
   cp -f "$jar" "$RUNTIME_JAR_DIR/${name}.jar"
